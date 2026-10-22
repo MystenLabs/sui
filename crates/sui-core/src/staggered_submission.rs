@@ -26,16 +26,19 @@
 //! variants still share the sender's address balance and stay visible to sender-level
 //! accounting.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use fastcrypto::hash::HashFunction;
 use mysten_common::debug_fatal;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use prometheus::{Histogram, IntCounter, IntCounterVec, IntGauge};
+use rand::Rng as _;
 use rand::SeedableRng as _;
 use rand::rngs::StdRng;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::committee::{Committee, CommitteeTrait as _, EpochId};
 use sui_types::crypto::DefaultHash;
@@ -43,13 +46,15 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::transaction::{Transaction, TransactionDataAPI as _, paid_proposer_count};
+use tracing::info;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 
-/// Default delay between consecutive slots beyond the free slots.
-const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(350);
-/// Default upper bound on any submission delay.
-const DEFAULT_STAGGER_MAX_DELAY: Duration = Duration::from_secs(5);
+/// Default delay between consecutive slots beyond the free slots. It exceeds the median
+/// commit latency of about 350ms, so one step's copy commits before the next step fires
+/// and the later copies are dropped. A shorter step would turn honest fan-out into
+/// duplicate copies.
+const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(400);
 /// Held (staggered) submissions may occupy at most `capacity / this` of the owner's
 /// pending-transaction capacity; see [`StaggerQuota`].
 const STAGGERED_HELD_QUOTA_DIVISOR: usize = 4;
@@ -94,14 +99,223 @@ pub fn proposers_metric_label(
     }
 }
 
+const DEFAULT_SIGNAL_WINDOW_COMMITS: usize = 300;
+const DEFAULT_SIGNAL_MIN_EXCESS_COPIES_PER_COMMIT: u64 = 2;
+/// Twenty windows, about 7 minutes on mainnet. Mainnet duplication is continuous, so
+/// each de-escalation lets a burst of copies through before the signal escalates again.
+/// A long dwell makes this rare. Its cost is that staggering stays on for the dwell
+/// after an attack stops.
+const DEFAULT_SIGNAL_EXIT_DWELL_COMMITS: usize = 20 * DEFAULT_SIGNAL_WINDOW_COMMITS;
+
+/// Number of signal bands above "off".
+const NUM_SIGNAL_BANDS: usize = 2;
+
+/// Labels of the band levels, indexed by level. Level 0 is "off".
+const SIGNAL_BAND_LABELS: [&str; NUM_SIGNAL_BANDS + 1] = ["off", "band1", "band2"];
+
+/// One level of the signal's response. See [`SignalConfig`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SignalBand {
+    /// The signal enters this band when the ratio reaches this value.
+    pub enter_ratio: f64,
+    /// The signal may leave this band when the ratio falls below this value.
+    pub exit_ratio: f64,
+    /// The hold cap that staggering uses while this band is active.
+    pub max_delay: Duration,
+}
+
+/// Honest duplication from driver backups and retries is about 1.5% of mainnet traffic,
+/// well under band 1's 10%. Mainnet's measured unpaid duplication is 2 to 16 times the
+/// unique traffic, which clears band 2's 50% within seconds.
+///
+/// Only the hold cap varies across bands. A held transaction waits about half the cap
+/// on average. About `committee * step / max_delay` validators share each firing time,
+/// which bounds how much a fan-out aimed at one firing time can amplify. A cheap attack
+/// that only trips band 1 therefore causes only short holds. Each cap is a whole
+/// multiple of the step. The caps are compiled in, and the ratios come from the protocol
+/// config.
+const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
+    SignalBand {
+        enter_ratio: 0.10,
+        exit_ratio: 0.05,
+        max_delay: Duration::from_millis(1600),
+    },
+    SignalBand {
+        enter_ratio: 0.50,
+        exit_ratio: 0.25,
+        max_delay: Duration::from_millis(4800),
+    },
+];
+
+/// Thresholds of the duplication signal, which turns staggering on and off.
+///
+/// The signal looks at the last `window_commits` commits. Its ratio is the number of
+/// excess duplicate copies divided by the number of unique user transactions in that
+/// window. The ratio exceeds 1.0 when copies outnumber unique transactions.
+///
+/// The signal has a level: 0 is off, and level `b > 0` is `bands[b - 1]`. It escalates
+/// to the highest band whose enter ratio the window meets. Leaving level 0 also
+/// requires at least `min_excess_copies` in the window. On a quiet network the ratio
+/// has a small denominator, and this floor keeps that noise from turning staggering on.
+///
+/// Staggering suppresses the duplication that the window measures. The ratio therefore
+/// drops soon after activation even when the attack continues, and an exit ratio alone
+/// cannot keep the band active. The signal de-escalates only after the ratio stays
+/// below the active band's exit ratio for `exit_dwell_commits` consecutive commits.
+/// This wait is the exit dwell. The signal then drops to the highest band whose exit
+/// ratio the ratio still meets, or to off.
+///
+/// The inputs come from the commit history and the protocol config, so all validators
+/// compute the same level. A restarted validator starts at level 0. It catches up
+/// within about one window plus one dwell, unless the ratio sits between a band's exit
+/// and enter ratios.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignalConfig {
+    pub window_commits: usize,
+    pub min_excess_copies: u64,
+    pub exit_dwell_commits: usize,
+    /// The bands, weakest first. `assert_valid` checks the order.
+    pub bands: [SignalBand; NUM_SIGNAL_BANDS],
+}
+
+impl Default for SignalConfig {
+    fn default() -> Self {
+        Self {
+            window_commits: DEFAULT_SIGNAL_WINDOW_COMMITS,
+            min_excess_copies: DEFAULT_SIGNAL_MIN_EXCESS_COPIES_PER_COMMIT
+                * DEFAULT_SIGNAL_WINDOW_COMMITS as u64,
+            exit_dwell_commits: DEFAULT_SIGNAL_EXIT_DWELL_COMMITS,
+            bands: DEFAULT_SIGNAL_BANDS,
+        }
+    }
+}
+
+impl SignalConfig {
+    /// Reads the thresholds from the protocol config. A protocol version without a value
+    /// uses the default for that field.
+    pub fn from_protocol_config(config: &ProtocolConfig) -> Self {
+        let defaults = Self::default();
+        let window_commits = config
+            .staggered_submission_signal_window_commits_as_option()
+            .map_or(defaults.window_commits, |commits| commits as usize)
+            .max(1);
+        let min_excess_copies = config
+            .staggered_submission_signal_min_excess_copies_per_commit_as_option()
+            .map_or(defaults.min_excess_copies, |per_commit| {
+                per_commit * window_commits as u64
+            });
+        let exit_dwell_commits = config
+            .staggered_submission_signal_exit_dwell_commits_as_option()
+            .map_or(defaults.exit_dwell_commits, |commits| commits as usize);
+        let ratio =
+            |bps: Option<u64>, default: f64| bps.map_or(default, |bps| bps as f64 / 10_000.0);
+        let bands = [
+            SignalBand {
+                enter_ratio: ratio(
+                    config.staggered_submission_signal_band1_enter_ratio_bps_as_option(),
+                    defaults.bands[0].enter_ratio,
+                ),
+                exit_ratio: ratio(
+                    config.staggered_submission_signal_band1_exit_ratio_bps_as_option(),
+                    defaults.bands[0].exit_ratio,
+                ),
+                max_delay: defaults.bands[0].max_delay,
+            },
+            SignalBand {
+                enter_ratio: ratio(
+                    config.staggered_submission_signal_band2_enter_ratio_bps_as_option(),
+                    defaults.bands[1].enter_ratio,
+                ),
+                exit_ratio: ratio(
+                    config.staggered_submission_signal_band2_exit_ratio_bps_as_option(),
+                    defaults.bands[1].exit_ratio,
+                ),
+                max_delay: defaults.bands[1].max_delay,
+            },
+        ];
+        let signal_config = Self {
+            window_commits,
+            min_excess_copies,
+            exit_dwell_commits,
+            bands,
+        };
+        signal_config.assert_valid();
+        signal_config
+    }
+
+    /// Panics unless the bands are ordered weakest first. `record_commit` relies on this
+    /// order to find the target band. Protocol config values are fixed per version, so a
+    /// bad table fails on every validator and in tests.
+    fn assert_valid(&self) {
+        // De-escalation from band 0 would underflow with a zero dwell.
+        assert!(
+            self.exit_dwell_commits > 0,
+            "signal exit dwell must be at least one commit: {self:?}"
+        );
+        for (i, band) in self.bands.iter().enumerate() {
+            assert!(
+                band.exit_ratio > 0.0,
+                "signal band {} exit ratio must be positive: {band:?}",
+                i + 1
+            );
+            assert!(
+                band.exit_ratio < band.enter_ratio,
+                "signal band {} exit ratio must be below its enter ratio: {band:?}",
+                i + 1
+            );
+        }
+        for (i, pair) in self.bands.windows(2).enumerate() {
+            let (lower, higher) = (&pair[0], &pair[1]);
+            assert!(
+                higher.enter_ratio > lower.enter_ratio,
+                "signal band {} enter ratio must exceed band {}'s: {self:?}",
+                i + 2,
+                i + 1
+            );
+            assert!(
+                higher.max_delay >= lower.max_delay,
+                "signal band {} max delay must not be below band {}'s: {self:?}",
+                i + 2,
+                i + 1
+            );
+        }
+    }
+}
+
+/// The effect of one commit on the duplication signal.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CommitSignal {
+    /// The level the signal moved to, if it moved.
+    pub transition: Option<usize>,
+    /// The level before this commit.
+    pub previous_band: usize,
+    /// Commits spent at `previous_band`, including this one.
+    pub commits_in_previous_band: u64,
+    pub duplication_ratio: f64,
+}
+
+impl CommitSignal {
+    #[cfg(test)]
+    fn pair(&self) -> (Option<usize>, f64) {
+        (self.transition, self.duplication_ratio)
+    }
+}
+
+/// Label of a signal level, for logs and metrics.
+pub fn signal_band_label(band: usize) -> &'static str {
+    SIGNAL_BAND_LABELS.get(band).copied().unwrap_or("unknown")
+}
+
 /// Parameters of the staggering schedule.
 #[derive(Debug, Clone)]
 pub struct StaggerParams {
-    /// Delay between consecutive slots beyond the free slots.
+    /// Delay between consecutive slots beyond the free slots. Jitter adds at most half
+    /// of it.
     pub step: Duration,
-    /// Upper bound on any submission delay: slots wrap around the `max_delay/step`
-    /// firing steps (see `compute_delay`), so a submitter never waits longer than
-    /// this regardless of committee size.
+    /// Upper bound on the delay before jitter: slots wrap around the `max_delay/step`
+    /// firing steps (see `compute_delay`), so a submitter never waits longer than this
+    /// plus half a step, regardless of committee size. Each signal transition sets it to
+    /// the active band's cap. It starts at band 1's cap, which `set_active(true)` uses.
     pub max_delay: Duration,
 }
 
@@ -109,37 +323,192 @@ impl Default for StaggerParams {
     fn default() -> Self {
         Self {
             step: DEFAULT_STAGGER_STEP,
-            max_delay: DEFAULT_STAGGER_MAX_DELAY,
+            max_delay: DEFAULT_SIGNAL_BANDS[0].max_delay,
         }
     }
 }
 
 /// Decides whether this validator should delay submitting a given user transaction to
-/// consensus, and by how much. Inactive by default;
+/// consensus, and by how much. It is inactive by default. The duplication signal in
+/// `record_commit` turns it on and off. A validator that restarts mid-epoch rebuilds its
+/// signal window from the commits after recovery, so its mode can lag its peers for a
+/// while. This is acceptable because staggering is a local policy.
 pub struct StaggeredSubmission {
     active: AtomicBool,
     params: RwLock<StaggerParams>,
+    config: SignalConfig,
+    /// True when both the `staggered_submission_signal` protocol flag and
+    /// `NodeConfig::enable_staggered_submission_signal` are set. When false, the signal
+    /// still runs and reports transitions but does not change staggering.
+    enabled: bool,
+    signal: Mutex<SignalState>,
+}
+
+/// State of the duplication signal. It is kept apart from `active` so that transitions
+/// are logged and counted even when the signal is not enabled.
+struct SignalState {
+    /// `(excess copies, unique user transactions)` for each commit in the window,
+    /// newest last.
+    window: VecDeque<(u64, u64)>,
+    /// The signal level: 0 is off, and `b > 0` is `SignalConfig::bands[b - 1]`.
+    band: usize,
+    /// Consecutive commits with the ratio below the active band's exit ratio. Any
+    /// commit at or above the exit ratio resets it, and so does every transition.
+    below_exit_commits: usize,
+    /// Commits since the last transition.
+    commits_in_band: u64,
 }
 
 impl StaggeredSubmission {
-    pub fn new() -> Self {
+    pub fn new(config: SignalConfig, enabled: bool) -> Self {
         Self {
             active: AtomicBool::new(false),
             params: RwLock::new(StaggerParams::default()),
+            config,
+            enabled,
+            signal: Mutex::new(SignalState {
+                window: VecDeque::new(),
+                band: 0,
+                below_exit_commits: 0,
+                commits_in_band: 0,
+            }),
         }
+    }
+
+    pub fn config(&self) -> &SignalConfig {
+        &self.config
     }
 
     pub fn is_active(&self) -> bool {
         self.active.load(Ordering::Relaxed)
     }
 
+    /// The signal level. It changes even when the signal is not enabled.
+    pub fn signal_band(&self) -> usize {
+        self.signal.lock().band
+    }
+
+    /// Turns staggering on or off by hand, for tests and operator overrides. The next
+    /// transition of an enabled signal overrides this setting.
     pub fn set_active(&self, active: bool) {
         self.active.store(active, Ordering::Relaxed);
+    }
+
+    /// Adds one commit to the signal window and updates the signal level.
+    /// `excess_copies` counts the copies of unrestricted transactions beyond their paid
+    /// allowance, and `unique_user_txns` counts the unique user transactions in the
+    /// commit. When the signal is enabled, a transition also sets staggering on or off
+    /// and sets the hold cap to the new band's.
+    ///
+    /// Under a sustained attack the signal still cycles, because staggering suppresses
+    /// the duplication it measures. The ratio falls, the dwell runs out, and the signal
+    /// drops, usually to off. The copies that then get through escalate it again within
+    /// a few commits. The dwell sets how often this happens.
+    pub fn record_commit(&self, excess_copies: u64, unique_user_txns: u64) -> CommitSignal {
+        let config = &self.config;
+        let mut signal = self.signal.lock();
+        signal.commits_in_band += 1;
+        signal.window.push_back((excess_copies, unique_user_txns));
+        while signal.window.len() > config.window_commits {
+            signal.window.pop_front();
+        }
+        let (excess, total) = signal
+            .window
+            .iter()
+            .fold((0u64, 0u64), |(excess, total), (e, t)| {
+                (excess + e, total + t)
+            });
+        // First copies can leave the window while late copies keep arriving. A window
+        // with no unique transactions uses a denominator of one so that the late copies
+        // still count.
+        let duplication_ratio = excess as f64 / total.max(1) as f64;
+
+        let target_band = config
+            .bands
+            .iter()
+            .take_while(|band| duplication_ratio >= band.enter_ratio)
+            .count();
+        let current_band = signal.band;
+        // Leaving level 0 also requires `min_excess_copies`.
+        let escalate =
+            target_band > current_band && (current_band > 0 || excess >= config.min_excess_copies);
+        // De-escalation drops to the highest band whose exit ratio the ratio still meets,
+        // not one band down. Dropping one band at a time would make a collapsed ratio
+        // wait out a second dwell in a lower band.
+        let below_exit =
+            current_band > 0 && duplication_ratio < config.bands[current_band - 1].exit_ratio;
+        signal.below_exit_commits = if below_exit {
+            signal.below_exit_commits + 1
+        } else {
+            0
+        };
+        let de_escalate = signal.below_exit_commits >= config.exit_dwell_commits;
+        let new_band = if escalate {
+            target_band
+        } else if de_escalate {
+            config
+                .bands
+                .iter()
+                .take_while(|band| duplication_ratio >= band.exit_ratio)
+                .count()
+                .min(current_band - 1)
+        } else {
+            current_band
+        };
+
+        debug_assert!(
+            !(escalate && de_escalate),
+            "escalate and de_escalate cannot be true at the same time"
+        );
+
+        let transition = (new_band != current_band).then_some(new_band);
+        let commits_in_previous_band = signal.commits_in_band;
+        if let Some(band) = transition {
+            signal.band = band;
+            signal.below_exit_commits = 0;
+            signal.commits_in_band = 0;
+            if self.enabled {
+                if band > 0 {
+                    // Set the cap before activating so that no submission uses the
+                    // previous band's cap.
+                    self.params.write().max_delay = config.bands[band - 1].max_delay;
+                }
+                self.set_active(band > 0);
+            }
+            info!(
+                "Duplication signal moved to {} (from {}): window duplication ratio \
+                 {duplication_ratio:.4} ({excess} excess copies over {total} unique user \
+                 transactions in the window){}",
+                signal_band_label(band),
+                signal_band_label(current_band),
+                if self.enabled {
+                    ""
+                } else {
+                    " — staggering not adjusted, disabled by protocol flag or node config"
+                },
+            );
+        }
+        CommitSignal {
+            transition,
+            previous_band: current_band,
+            commits_in_previous_band,
+            duplication_ratio,
+        }
     }
 
     #[cfg(test)]
     pub fn set_params_for_testing(&self, params: StaggerParams) {
         *self.params.write() = params;
+    }
+
+    /// Returns `(transition, duplication_ratio)` from `record_commit`.
+    #[cfg(test)]
+    fn record_commit_pair(
+        &self,
+        excess_copies: u64,
+        unique_user_txns: u64,
+    ) -> (Option<usize>, f64) {
+        self.record_commit(excess_copies, unique_user_txns).pair()
     }
 
     /// What this validator does with a group of user transactions — a single transaction
@@ -208,7 +577,9 @@ impl StaggeredSubmission {
             .expect("txs is non-empty");
         let free_slots = paid_proposer_count(gas_price, epoch_store.reference_gas_price());
 
-        compute_delay(&self.params.read(), slot, proposer_slots, free_slots)
+        let params = self.params.read();
+        let jitter = sample_jitter(params.step);
+        compute_delay(&params, slot, proposer_slots, free_slots, jitter)
     }
 }
 
@@ -385,17 +756,28 @@ impl Drop for StaggeredSlot {
     }
 }
 
+/// Returns a uniform random jitter in `[0, step/2)`, drawn from local entropy for each
+/// submission. Anyone can compute every validator's slot, and the jitter hides the exact
+/// submission time. It stays below one step, so it never reorders adjacent slots.
+fn sample_jitter(step: Duration) -> Duration {
+    step.mul_f64(rand::thread_rng().r#gen::<f64>() / 2.0)
+}
+
 /// The decision for `slot`, given the `free_slots` immediate slots the gas price pays for
 /// and the `proposer_slots` of the transaction's proposer set. The first held slot waits
 /// one step; later ones wrap around the `max_delay / step` firing steps rather than
 /// saturating at `max_delay`, so no stretch of the (public) order fires simultaneously at
 /// the cap, where a fan-out aimed at it would amplify by its whole size with no earlier
 /// copy to dedup it.
+///
+/// `jitter` is added to the hold, so the hold never falls below its scheduled delay.
+/// Free slots get no jitter.
 fn compute_delay(
     params: &StaggerParams,
     slot: u64,
     proposer_slots: u64,
     free_slots: u64,
+    jitter: Duration,
 ) -> StaggerDecision {
     if slot < free_slots {
         return StaggerDecision::Free;
@@ -414,13 +796,13 @@ fn compute_delay(
         debug_fatal!("stagger step count {steps} overflows u32");
     }
     let steps = steps.min(u32::MAX as u128) as u32;
-    StaggerDecision::Hold(params.step.saturating_mul(steps).min(params.max_delay))
-}
-
-impl Default for StaggeredSubmission {
-    fn default() -> Self {
-        Self::new()
-    }
+    StaggerDecision::Hold(
+        params
+            .step
+            .saturating_mul(steps)
+            .min(params.max_delay)
+            .saturating_add(jitter),
+    )
 }
 
 /// Seed of the slot permutation for one logical transaction or soft bundle.
@@ -499,6 +881,166 @@ fn stagger_proposer_slots(order: &[AuthorityName], committee: &Committee) -> u64
 mod tests {
     use super::*;
 
+    /// Fixed thresholds for the tests, so that protocol config changes do not change the
+    /// test arithmetic.
+    const TEST_SIGNAL_WINDOW_COMMITS: usize = 300;
+    const TEST_SIGNAL_MIN_EXCESS_COPIES: u64 = 2 * TEST_SIGNAL_WINDOW_COMMITS as u64;
+    const TEST_SIGNAL_EXIT_DWELL_COMMITS: usize = 2 * TEST_SIGNAL_WINDOW_COMMITS;
+    const TEST_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
+        SignalBand {
+            enter_ratio: 0.05,
+            exit_ratio: 0.03,
+            max_delay: Duration::from_millis(1600),
+        },
+        SignalBand {
+            enter_ratio: 0.20,
+            exit_ratio: 0.15,
+            max_delay: Duration::from_millis(4800),
+        },
+    ];
+
+    fn test_signal_config() -> SignalConfig {
+        SignalConfig {
+            window_commits: TEST_SIGNAL_WINDOW_COMMITS,
+            min_excess_copies: TEST_SIGNAL_MIN_EXCESS_COPIES,
+            exit_dwell_commits: TEST_SIGNAL_EXIT_DWELL_COMMITS,
+            bands: TEST_SIGNAL_BANDS,
+        }
+    }
+
+    #[test]
+    fn signal_config_is_valid_for_every_protocol_version() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        SignalConfig::default().assert_valid();
+        test_signal_config().assert_valid();
+        for chain in [Chain::Mainnet, Chain::Testnet, Chain::Unknown] {
+            for version in ProtocolVersion::MIN.as_u64()..=ProtocolVersion::MAX.as_u64() {
+                let protocol_config =
+                    ProtocolConfig::get_for_version(ProtocolVersion::new(version), chain);
+                SignalConfig::from_protocol_config(&protocol_config);
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "enter ratio must exceed")]
+    fn signal_config_rejects_misordered_bands() {
+        let mut config = test_signal_config();
+        config.bands.swap(0, 1);
+        config.assert_valid();
+    }
+
+    #[test]
+    #[should_panic(expected = "exit ratio must be below")]
+    fn signal_config_rejects_exit_ratio_above_enter_ratio() {
+        let mut config = test_signal_config();
+        config.bands[0].exit_ratio = config.bands[0].enter_ratio;
+        config.assert_valid();
+    }
+
+    #[test]
+    #[should_panic(expected = "max delay must not be below")]
+    fn signal_config_rejects_decreasing_max_delay() {
+        let mut config = test_signal_config();
+        config.bands[1].max_delay = config.bands[0].max_delay / 2;
+        config.assert_valid();
+    }
+
+    #[test]
+    #[should_panic(expected = "exit dwell must be at least one commit")]
+    fn signal_config_rejects_zero_exit_dwell() {
+        let mut config = test_signal_config();
+        config.exit_dwell_commits = 0;
+        config.assert_valid();
+    }
+
+    #[test]
+    fn signal_band_labels_cover_every_level() {
+        assert_eq!(signal_band_label(0), "off");
+        assert_eq!(signal_band_label(NUM_SIGNAL_BANDS), "band2");
+        assert_eq!(signal_band_label(NUM_SIGNAL_BANDS + 1), "unknown");
+    }
+
+    #[test]
+    fn signal_config_reads_protocol_config_with_defaults_for_older_versions() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        let latest = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+        let config = SignalConfig::from_protocol_config(&latest);
+        assert_eq!(
+            config.window_commits,
+            latest.staggered_submission_signal_window_commits() as usize
+        );
+        assert_eq!(
+            config.min_excess_copies,
+            latest.staggered_submission_signal_min_excess_copies_per_commit()
+                * latest.staggered_submission_signal_window_commits()
+        );
+        assert_eq!(
+            config.exit_dwell_commits,
+            latest.staggered_submission_signal_exit_dwell_commits() as usize
+        );
+        use itertools::Itertools as _;
+        for (band, (enter, exit)) in config.bands.iter().zip_eq([
+            (
+                latest.staggered_submission_signal_band1_enter_ratio_bps(),
+                latest.staggered_submission_signal_band1_exit_ratio_bps(),
+            ),
+            (
+                latest.staggered_submission_signal_band2_enter_ratio_bps(),
+                latest.staggered_submission_signal_band2_exit_ratio_bps(),
+            ),
+        ]) {
+            assert_eq!(band.enter_ratio, enter as f64 / 10_000.0);
+            assert_eq!(band.exit_ratio, exit as f64 / 10_000.0);
+            assert!(band.exit_ratio < band.enter_ratio);
+        }
+        // The hold caps do not come from the protocol config.
+        assert_eq!(config.bands[0].max_delay, DEFAULT_SIGNAL_BANDS[0].max_delay);
+        assert_eq!(config.bands[1].max_delay, DEFAULT_SIGNAL_BANDS[1].max_delay);
+
+        // A version without the values falls back to the defaults.
+        let older = ProtocolConfig::get_for_version(ProtocolVersion::new(139), Chain::Mainnet);
+        assert!(
+            older
+                .staggered_submission_signal_window_commits_as_option()
+                .is_none()
+        );
+        assert_eq!(
+            SignalConfig::from_protocol_config(&older),
+            SignalConfig::default()
+        );
+    }
+
+    #[test]
+    fn record_commit_reports_the_dwell_of_the_band_left() {
+        let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        let first = staggered.record_commit(1000, 2000);
+        assert_eq!(first.transition, Some(2));
+        assert_eq!(first.previous_band, 0);
+        assert_eq!(first.commits_in_previous_band, 1);
+
+        // The activating commit counts towards band 0.
+        let mut recorded_in_band2 = 0;
+        let mut left = None;
+        for _ in 0..=TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
+            let outcome = staggered.record_commit(0, 100);
+            recorded_in_band2 += 1;
+            assert_eq!(outcome.previous_band, 2);
+            if outcome.transition.is_some() {
+                left = Some(outcome);
+                break;
+            }
+        }
+        let left = left.expect("signal never left band 2");
+        assert_eq!(left.transition, Some(0));
+        // The count includes every commit after the activation and the commit that
+        // de-escalated.
+        assert_eq!(left.commits_in_previous_band, recorded_in_band2);
+        assert!(left.commits_in_previous_band > TEST_SIGNAL_EXIT_DWELL_COMMITS as u64);
+    }
+
     fn test_seed(byte: u8) -> [u8; 32] {
         [byte; 32]
     }
@@ -572,8 +1114,13 @@ mod tests {
     }
 
     /// `compute_delay` with an unbounded proposer set, as `Option` for the schedule tests.
-    fn schedule_delay(params: &StaggerParams, slot: u64, free_slots: u64) -> Option<Duration> {
-        match compute_delay(params, slot, u64::MAX, free_slots) {
+    fn schedule_delay(
+        params: &StaggerParams,
+        slot: u64,
+        free_slots: u64,
+        jitter: Duration,
+    ) -> Option<Duration> {
+        match compute_delay(params, slot, u64::MAX, free_slots, jitter) {
             StaggerDecision::Free => None,
             StaggerDecision::Hold(delay) => Some(delay),
             StaggerDecision::Reject => panic!("slot {slot} rejected by an unbounded proposer set"),
@@ -586,20 +1133,42 @@ mod tests {
             step: Duration::from_millis(250),
             max_delay: Duration::from_secs(2),
         };
+        let no_jitter = Duration::ZERO;
         // Five proposer slots: three free, two held, everything past them rejected.
-        assert_eq!(compute_delay(&params, 2, 5, 3), StaggerDecision::Free);
         assert_eq!(
-            compute_delay(&params, 4, 5, 3),
+            compute_delay(&params, 2, 5, 3, no_jitter),
+            StaggerDecision::Free
+        );
+        assert_eq!(
+            compute_delay(&params, 4, 5, 3, no_jitter),
             StaggerDecision::Hold(Duration::from_millis(500))
         );
-        assert_eq!(compute_delay(&params, 5, 5, 3), StaggerDecision::Reject);
-        assert_eq!(compute_delay(&params, 200, 5, 3), StaggerDecision::Reject);
+        assert_eq!(
+            compute_delay(&params, 5, 5, 3, no_jitter),
+            StaggerDecision::Reject
+        );
+        assert_eq!(
+            compute_delay(&params, 200, 5, 3, no_jitter),
+            StaggerDecision::Reject
+        );
         // Paid amplification widening the free slots past the cut still proposes.
-        assert_eq!(compute_delay(&params, 6, 5, 7), StaggerDecision::Free);
-        assert_eq!(compute_delay(&params, 7, 5, 7), StaggerDecision::Reject);
+        assert_eq!(
+            compute_delay(&params, 6, 5, 7, no_jitter),
+            StaggerDecision::Free
+        );
+        assert_eq!(
+            compute_delay(&params, 7, 5, 7, no_jitter),
+            StaggerDecision::Reject
+        );
         // A cut inside the free slots never shrinks them.
-        assert_eq!(compute_delay(&params, 2, 1, 3), StaggerDecision::Free);
-        assert_eq!(compute_delay(&params, 3, 1, 3), StaggerDecision::Reject);
+        assert_eq!(
+            compute_delay(&params, 2, 1, 3, no_jitter),
+            StaggerDecision::Free
+        );
+        assert_eq!(
+            compute_delay(&params, 3, 1, 3, no_jitter),
+            StaggerDecision::Reject
+        );
     }
 
     #[test]
@@ -648,34 +1217,351 @@ mod tests {
             step: Duration::from_millis(250),
             max_delay: Duration::from_secs(2),
         };
+        let no_jitter = Duration::ZERO;
         // Free slots submit immediately; the first held slot waits one step.
-        assert_eq!(schedule_delay(&params, 0, 3), None);
-        assert_eq!(schedule_delay(&params, 2, 3), None);
+        assert_eq!(schedule_delay(&params, 0, 3, no_jitter), None);
+        assert_eq!(schedule_delay(&params, 2, 3, no_jitter), None);
         assert_eq!(
-            schedule_delay(&params, 3, 3),
+            schedule_delay(&params, 3, 3, no_jitter),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            schedule_delay(&params, 4, 3),
+            schedule_delay(&params, 4, 3, no_jitter),
             Some(Duration::from_millis(500))
         );
         // 2s / 250ms = 8 firing steps: the last one fires exactly at max_delay, then the
         // schedule wraps instead of piling further slots onto the cap.
-        assert_eq!(schedule_delay(&params, 10, 3), Some(Duration::from_secs(2)));
         assert_eq!(
-            schedule_delay(&params, 11, 3),
+            schedule_delay(&params, 10, 3, no_jitter),
+            Some(Duration::from_secs(2))
+        );
+        assert_eq!(
+            schedule_delay(&params, 11, 3, no_jitter),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            schedule_delay(&params, 120, 3),
+            schedule_delay(&params, 120, 3, no_jitter),
             Some(Duration::from_millis(1500))
         );
         // Paid amplification widens the free slots.
-        assert_eq!(schedule_delay(&params, 4, 5), None);
+        assert_eq!(schedule_delay(&params, 4, 5, no_jitter), None);
         assert_eq!(
-            schedule_delay(&params, 5, 5),
+            schedule_delay(&params, 5, 5, no_jitter),
             Some(Duration::from_millis(250))
         );
+        assert_eq!(schedule_delay(&params, 2, 3, no_jitter), None);
+
+        // Jitter adds to held slots and does not apply to free slots.
+        let jitter = Duration::from_millis(100);
+        assert_eq!(schedule_delay(&params, 2, 3, jitter), None);
+        assert_eq!(
+            schedule_delay(&params, 3, 3, jitter),
+            Some(Duration::from_millis(350))
+        );
+        assert_eq!(
+            schedule_delay(&params, 120, 3, jitter),
+            Some(Duration::from_millis(1600))
+        );
+    }
+
+    #[test]
+    fn sampled_jitter_stays_under_half_a_step_and_varies() {
+        let step = Duration::from_millis(250);
+        let samples: Vec<Duration> = (0..64).map(|_| sample_jitter(step)).collect();
+        assert!(samples.iter().all(|jitter| *jitter < step / 2));
+        assert!(
+            samples.iter().any(|jitter| *jitter != samples[0]),
+            "jitter never varied"
+        );
+    }
+
+    mod signal {
+        use super::*;
+
+        // The tests use TEST_SIGNAL_BANDS. Band 1 enters at 5% and exits below 3%.
+        // Band 2 enters at 20% and exits below 15%. Leaving off requires two excess
+        // copies per window commit.
+
+        #[test]
+        fn duplication_ratio_tracks_the_window() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(10, 100).duplication_ratio, 0.1);
+            assert_eq!(staggered.record_commit(0, 100).duplication_ratio, 0.05);
+            // A full window of quiet commits removes the spike.
+            let mut ratio = f64::NAN;
+            for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
+                ratio = staggered.record_commit(0, 100).duplication_ratio;
+            }
+            assert_eq!(ratio, 0.0);
+        }
+
+        #[tokio::test]
+        async fn late_copies_activate_without_new_unique_transactions() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            staggered.record_commit(0, 1);
+            for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
+                assert_eq!(staggered.record_commit(0, 0).pair(), (None, 0.0));
+            }
+
+            // `min_excess_copies` still applies when the ratio is large.
+            assert_eq!(
+                staggered
+                    .record_commit(TEST_SIGNAL_MIN_EXCESS_COPIES - 1, 0)
+                    .pair(),
+                (None, (TEST_SIGNAL_MIN_EXCESS_COPIES - 1) as f64),
+            );
+            assert!(!staggered.is_active());
+            assert_eq!(
+                staggered.record_commit(1, 0).pair(),
+                (Some(2), TEST_SIGNAL_MIN_EXCESS_COPIES as f64),
+            );
+            assert!(staggered.is_active());
+            assert_eq!(
+                staggered.params.read().max_delay,
+                TEST_SIGNAL_BANDS[1].max_delay
+            );
+        }
+
+        #[test]
+        fn burst_escalates_to_the_matching_band() {
+            // A 7% burst enters band 1.
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(700, 10000).transition, Some(1));
+            assert!(staggered.is_active());
+            // A 50% burst enters band 2 directly.
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(1000, 2000).transition, Some(2));
+            assert!(staggered.is_active());
+        }
+
+        #[test]
+        fn escalates_further_as_the_ratio_climbs() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(700, 10000).transition, Some(1));
+            // More copies in band 1 push the ratio over band 2's enter ratio.
+            assert_eq!(staggered.record_commit(3000, 1000).transition, Some(2));
+            assert!(staggered.is_active());
+        }
+
+        #[test]
+        fn applied_transitions_retune_the_max_delay() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(
+                staggered.params.read().max_delay,
+                TEST_SIGNAL_BANDS[0].max_delay
+            );
+            assert_eq!(staggered.record_commit(1000, 2000).transition, Some(2));
+            assert_eq!(
+                staggered.params.read().max_delay,
+                TEST_SIGNAL_BANDS[1].max_delay
+            );
+            // A steady 4% brings the ratio into band 1's range. After the dwell the
+            // signal moves to band 1 and lowers the cap.
+            let mut transitions = Vec::new();
+            for _ in 0..TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record_commit(4, 100).transition);
+                if !transitions.is_empty() {
+                    break;
+                }
+            }
+            assert_eq!(transitions, vec![1]);
+            assert!(staggered.is_active());
+            assert_eq!(
+                staggered.params.read().max_delay,
+                TEST_SIGNAL_BANDS[0].max_delay
+            );
+        }
+
+        #[test]
+        fn band_table_is_ordered_and_step_aligned() {
+            let step = StaggerParams::default().step;
+            let mut previous_enter = 0.0;
+            for band in &TEST_SIGNAL_BANDS {
+                assert!(band.exit_ratio < band.enter_ratio);
+                // `record_commit` relies on enter ratios that strictly increase.
+                assert!(band.enter_ratio > previous_enter);
+                previous_enter = band.enter_ratio;
+                // The last firing step lands exactly on the cap.
+                assert_eq!(band.max_delay.as_millis() % step.as_millis(), 0);
+            }
+            assert!(TEST_SIGNAL_BANDS[0].max_delay < TEST_SIGNAL_BANDS[1].max_delay);
+            assert_eq!(
+                TEST_SIGNAL_BANDS[0].max_delay.as_millis() / step.as_millis(),
+                4
+            );
+            assert_eq!(
+                TEST_SIGNAL_BANDS[1].max_delay.as_millis() / step.as_millis(),
+                12
+            );
+        }
+
+        #[test]
+        fn ratio_below_threshold_does_not_activate() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            // At 4% per commit the excess copies pass `min_excess_copies`, but the
+            // ratio stays below band 1.
+            for _ in 0..30 {
+                assert_eq!(staggered.record_commit(40, 1000).transition, None);
+            }
+            assert!(!staggered.is_active());
+        }
+
+        #[test]
+        fn floor_blocks_high_ratio_at_low_volume() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            // The ratio is 20%, with two excess copies per commit. The signal waits
+            // until a full window reaches `min_excess_copies` and then enters band 2.
+            for _ in 0..TEST_SIGNAL_WINDOW_COMMITS - 1 {
+                assert_eq!(staggered.record_commit(2, 10).transition, None);
+                assert!(!staggered.is_active());
+            }
+            assert_eq!(staggered.record_commit(2, 10).transition, Some(2));
+        }
+
+        #[test]
+        fn old_spikes_slide_out_of_window() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            // 500 excess copies at 50% stay below `min_excess_copies`.
+            assert_eq!(staggered.record_commit(500, 1000).transition, None);
+            // After a full window of quiet commits, a second spike does not add to
+            // the first.
+            for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
+                assert_eq!(staggered.record_commit(0, 100).transition, None);
+            }
+            assert_eq!(staggered.record_commit(500, 1000).transition, None);
+            assert!(!staggered.is_active());
+        }
+
+        #[test]
+        fn deescalates_straight_to_off_once_quiet_traffic_dilutes_the_spike() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(1000, 2000).transition, Some(2));
+            // Quiet traffic brings the ratio to zero. After the dwell the signal drops
+            // from band 2 straight to off, without visiting band 1.
+            let mut transitions = Vec::new();
+            for _ in 0..=TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record_commit(0, 100).transition);
+                assert_eq!(staggered.is_active(), transitions.is_empty());
+            }
+            assert_eq!(transitions, vec![0]);
+        }
+
+        #[test]
+        fn threshold_gaps_hold_the_band_between_exit_and_enter() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(1000, 2000).transition, Some(2));
+            // A steady 4% lies between band 1's exit and enter ratios. The signal
+            // moves to band 1 and stays there.
+            let mut transitions = Vec::new();
+            for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record_commit(4, 100).transition);
+                assert!(staggered.is_active());
+            }
+            assert_eq!(transitions, vec![1]);
+            // After 2% turns the signal off, 4% does not turn it back on.
+            let mut transitions = Vec::new();
+            for _ in 0..TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record_commit(2, 100).transition);
+            }
+            assert_eq!(transitions, vec![0]);
+            for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
+                assert_eq!(staggered.record_commit(4, 100).transition, None);
+                assert!(!staggered.is_active());
+            }
+        }
+
+        #[test]
+        fn gap_holds_band2_between_exit_and_enter() {
+            // A steady 17% lies between band 2's exit and enter ratios. It keeps
+            // band 2 active.
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(1000, 2000).transition, Some(2));
+            for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
+                assert_eq!(staggered.record_commit(17, 100).transition, None);
+            }
+            // It also does not move band 1 up to band 2.
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(700, 10000).transition, Some(1));
+            for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
+                assert_eq!(staggered.record_commit(17, 100).transition, None);
+            }
+        }
+
+        #[test]
+        fn dry_run_tracks_transitions_without_flipping_staggering() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), false);
+            // A disabled signal reports transitions.
+            assert_eq!(staggered.record_commit(1000, 2000).transition, Some(2));
+            // Staggering and its hold cap do not change.
+            assert!(!staggered.is_active());
+            assert_eq!(
+                staggered.params.read().max_delay,
+                TEST_SIGNAL_BANDS[0].max_delay
+            );
+            // De-escalation is also reported without changing staggering.
+            let mut transitions = Vec::new();
+            for _ in 0..=TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record_commit(0, 100).transition);
+                assert!(!staggered.is_active());
+            }
+            assert_eq!(transitions, vec![0]);
+            assert_eq!(
+                staggered.params.read().max_delay,
+                TEST_SIGNAL_BANDS[0].max_delay
+            );
+        }
+
+        #[test]
+        fn exit_dwell_absorbs_transient_dips() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record_commit(1000, 2000).transition, Some(2));
+            let exit_ratio = TEST_SIGNAL_BANDS[1].exit_ratio;
+
+            // Quiet traffic takes the ratio below band 2's exit ratio. The band stays
+            // active for half the dwell.
+            let mut below_exit = 0;
+            while below_exit < TEST_SIGNAL_EXIT_DWELL_COMMITS / 2 {
+                let (transition, ratio) = staggered.record_commit_pair(0, 100);
+                assert_eq!(transition, None);
+                if ratio < exit_ratio {
+                    below_exit += 1;
+                }
+            }
+            // One heavy commit lifts the ratio above the exit ratio and restarts the
+            // dwell.
+            let (transition, ratio) = staggered.record_commit_pair(10_000, 100);
+            assert_eq!(transition, None);
+            assert!(ratio >= exit_ratio);
+            assert_eq!(staggered.signal_band(), 2);
+
+            let mut below_exit = 0;
+            loop {
+                let (transition, ratio) = staggered.record_commit_pair(0, 100);
+                if ratio < exit_ratio {
+                    below_exit += 1;
+                }
+                if below_exit < TEST_SIGNAL_EXIT_DWELL_COMMITS {
+                    assert_eq!(transition, None, "de-escalated before the dwell elapsed");
+                } else {
+                    assert_eq!(transition, Some(0), "dwell elapsed without de-escalating");
+                    break;
+                }
+            }
+            assert!(!staggered.is_active());
+            assert_eq!(staggered.signal_band(), 0);
+        }
+
+        #[test]
+        fn signal_state_is_independent_of_manual_activation() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            staggered.set_active(true);
+            // The signal starts at off, so quiet commits cause no transition and the
+            // manual setting stays.
+            for _ in 0..50 {
+                assert_eq!(staggered.record_commit(0, 100).transition, None);
+            }
+            assert!(staggered.is_active());
+        }
     }
 
     #[test]
@@ -688,14 +1574,15 @@ mod tests {
         // Every held slot waits at least one step and at most max_delay, and the
         // schedule cycles with the firing-step period, so tail slots spread across all
         // firing times instead of sharing the cap.
+        let no_jitter = Duration::ZERO;
         let mut tail_delays = std::collections::HashSet::new();
         for slot in 3..200u64 {
-            let delay = schedule_delay(&params, slot, 3).unwrap();
+            let delay = schedule_delay(&params, slot, 3, no_jitter).unwrap();
             assert!(delay >= params.step, "slot {slot} waited {delay:?}");
             assert!(delay <= params.max_delay, "slot {slot} waited {delay:?}");
             assert_eq!(
                 delay,
-                schedule_delay(&params, slot + firing_steps, 3).unwrap(),
+                schedule_delay(&params, slot + firing_steps, 3, no_jitter).unwrap(),
                 "schedule does not cycle at slot {slot}"
             );
             if slot >= 3 + firing_steps {
@@ -705,7 +1592,7 @@ mod tests {
         assert_eq!(tail_delays.len() as u64, firing_steps);
         // Paid amplification shifts the wrap origin with the free slots.
         assert_eq!(
-            schedule_delay(&params, 5 + firing_steps, 5),
+            schedule_delay(&params, 5 + firing_steps, 5, no_jitter),
             Some(Duration::from_millis(250))
         );
         // Degenerate params (one firing step) still respect the max_delay bound.
@@ -715,7 +1602,7 @@ mod tests {
         };
         for slot in 1..10u64 {
             assert_eq!(
-                schedule_delay(&degenerate, slot, 1),
+                schedule_delay(&degenerate, slot, 1, no_jitter),
                 Some(Duration::from_secs(2))
             );
         }
@@ -932,8 +1819,8 @@ mod pool_tests {
         drop(ack);
         assert_eq!(pool.queue_depth("user"), 1);
 
-        // Past the (bounded) delay the entry is proposed as usual.
-        tokio::time::sleep(Duration::from_millis(600)).await;
+        // After the delay plus the maximum jitter, the entry is proposed.
+        tokio::time::sleep(Duration::from_millis(900)).await;
         let (transactions, ack, _) = pool.take(10, usize::MAX);
         assert_eq!(transactions.len(), 1, "eligible entry was not proposed");
         // The dropped ack requeues the entry; close() resolves it before the pool drops.
@@ -1059,8 +1946,8 @@ mod pool_tests {
         );
         drop(ack);
 
-        // Past the (bounded) delay the bundle is proposed atomically.
-        tokio::time::sleep(Duration::from_millis(600)).await;
+        // After the delay plus the maximum jitter, the bundle is proposed atomically.
+        tokio::time::sleep(Duration::from_millis(900)).await;
         let (transactions, ack, _) = pool.take(10, usize::MAX);
         assert_eq!(
             transactions.len(),
