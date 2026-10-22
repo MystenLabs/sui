@@ -3,6 +3,7 @@
 
 mod lifecycle;
 mod operations;
+mod owned;
 mod party;
 mod receive;
 mod shared_deletion;
@@ -14,10 +15,11 @@ use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
-    AllowanceWithdraw, AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX,
-    ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF,
-    PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
+    AllowanceWithdraw, AuthenticatedEventEmit, COIN_MERGE, CoinReservationWithdraw,
+    INVALID_ALIAS_TX, ImmutableObjectRead, OWNED_CREATE, OWNED_DELETE, OWNED_FREEZE,
+    ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor,
+    PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE,
+    PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
     PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
     RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
     SHARED_DELETE_RACING, SHARED_DELETE_STALE, SharedCounterIncrement, SharedCounterRead,
@@ -43,6 +45,7 @@ use operations::{
     AllowanceInfo, InitRequirement, Operation, OperationResources, PayloadAllowances,
     ResourceRequest, add_allowance_issue_commands,
 };
+use owned::{CoinMergeLifecycle, OwnedLifecycle};
 use party::PartyLifecycle;
 use rand::Rng;
 use receive::ReceiveLifecycle;
@@ -335,6 +338,10 @@ pub struct CompositeWorkloadConfig {
     /// Per-batch probability that the payload holding the composite package's upgrade cap
     /// upgrades the package. Zero disables upgrades.
     pub upgrade_probability: f32,
+    /// Per-batch probability that a payload with no owned-object lifecycle in progress starts
+    /// one. The coin-merge lifecycle uses the same probability and also needs the TestCoinCap.
+    /// Zero disables both.
+    pub owned_object_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -367,6 +374,7 @@ impl CompositeWorkloadConfig {
             shared_deletion_probability: 0.1,
             receive_probability: 0.1,
             upgrade_probability: 0.05,
+            owned_object_probability: 0.1,
             ..Default::default()
         }
     }
@@ -440,6 +448,7 @@ impl Default for CompositeWorkloadConfig {
             shared_deletion_probability: 0.0,
             receive_probability: 0.0,
             upgrade_probability: 0.0,
+            owned_object_probability: 0.0,
             metrics: None,
         }
     }
@@ -1551,6 +1560,7 @@ impl CompositeWorkload {
     fn make_lifecycles(
         config: &CompositeWorkloadConfig,
         sender: SuiAddress,
+        test_coin_cap: Option<(ObjectID, SequenceNumber)>,
         upgrade: Option<UpgradeLifecycle>,
     ) -> Vec<Box<dyn Lifecycle>> {
         let mut lifecycles: Vec<Box<dyn Lifecycle>> = vec![];
@@ -1569,6 +1579,13 @@ impl CompositeWorkload {
                 sender,
                 config.receive_probability as f64,
             )));
+        }
+        if config.owned_object_probability > 0.0 {
+            let probability = config.owned_object_probability as f64;
+            lifecycles.push(Box::new(OwnedLifecycle::new(probability)));
+            if let Some(cap) = test_coin_cap {
+                lifecycles.push(Box::new(CoinMergeLifecycle::new(probability, cap)));
+            }
         }
         if let Some(upgrade) = upgrade {
             lifecycles.push(Box::new(upgrade));
@@ -2298,7 +2315,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 alias_state,
                 partner_address,
                 allowances,
-                lifecycles: Self::make_lifecycles(&config, sender, upgrade),
+                lifecycles: Self::make_lifecycles(&config, sender, self.test_coin_cap, upgrade),
             }));
         }
 

@@ -18,6 +18,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{Identifier, base_types::SequenceNumber};
 
+use super::owned::{CoinStep, OwnedStep};
 use super::party::PartyStep;
 use super::receive::ReceiveStep;
 use super::shared_deletion::SharedDeletionStep;
@@ -32,6 +33,8 @@ pub(super) enum LifecycleStep {
     SharedDeletion(SharedDeletionStep),
     Receive(ReceiveStep),
     Upgrade(UpgradeStep),
+    Owned(OwnedStep),
+    CoinMerge(CoinStep),
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +44,11 @@ pub(super) enum LifecycleCommand {
         module: &'static str,
         function: &'static str,
         args: Vec<CallArg>,
+    },
+    /// Merge `coins` into `target`, which deletes `coins`.
+    MergeCoins {
+        target: ObjectRef,
+        coins: Vec<ObjectRef>,
     },
     /// Upgrade `package` by republishing the composite package's modules.
     Upgrade {
@@ -120,6 +128,9 @@ impl LifecycleCall {
                         args.clone(),
                     )
                     .unwrap();
+            }
+            LifecycleCommand::MergeCoins { target, coins } => {
+                builder.merge_coins(*target, coins.clone()).unwrap();
             }
             LifecycleCommand::Upgrade {
                 cap,

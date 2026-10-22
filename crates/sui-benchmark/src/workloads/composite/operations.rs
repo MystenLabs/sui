@@ -79,6 +79,19 @@ pub const RECEIVE_TOUCH_PARENT: &str = "receive_touch_parent";
 
 pub const PACKAGE_UPGRADE: &str = "package_upgrade";
 
+pub const OWNED_CREATE: &str = "owned_create";
+pub const OWNED_MUTATE: &str = "owned_mutate";
+pub const OWNED_FREEZE: &str = "owned_freeze";
+pub const OWNED_DELETE: &str = "owned_delete";
+pub const OWNED_CONFLICTING_MUTATE: &str = "owned_conflicting_mutate";
+pub const OWNED_FROZEN_READ: &str = "owned_frozen_read";
+pub const OWNED_FROZEN_MUTATE: &str = "owned_frozen_mutate";
+pub const OWNED_STALE_MUTATE: &str = "owned_stale_mutate";
+
+pub const COIN_MINT: &str = "coin_mint";
+pub const COIN_MERGE: &str = "coin_merge";
+pub const COIN_STALE_MERGE: &str = "coin_stale_merge";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,

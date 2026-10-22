@@ -2183,6 +2183,7 @@ mod test {
             shared_deletion_probability: 0.3,
             receive_probability: 0.3,
             upgrade_probability: 0.3,
+            owned_object_probability: 0.3,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -2318,6 +2319,7 @@ mod test {
             RECEIVE_CREATE_PARENT,
             RECEIVE_CHILD,
             PACKAGE_UPGRADE,
+            OWNED_CREATE,
         ] {
             let success_count: u64 = metrics
                 .iter_stats()
