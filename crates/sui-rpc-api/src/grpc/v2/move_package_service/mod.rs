@@ -19,7 +19,7 @@ mod list_package_versions;
 pub use get_datatype::get_datatype_response;
 pub use get_function::get_function_response;
 pub use get_package::get_package_response;
-pub use list_package_versions::{PageToken, at_checkpoint_not_indexed_error};
+pub use list_package_versions::PageToken;
 
 #[tonic::async_trait]
 impl MovePackageService for RpcService {

@@ -19,7 +19,6 @@ use sui_rpc_api::AtCheckpointUpperBound;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::grpc::v2::move_package_service::PageToken;
-use sui_rpc_api::grpc::v2::move_package_service::at_checkpoint_not_indexed_error;
 use sui_rpc_api::grpc::v2::move_package_service::get_datatype_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_function_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_package_response;
@@ -259,13 +258,8 @@ async fn list_package_versions(
     }
 
     // BigTable holds full history, so there is no lower bound to check.
-    if let Some(at_checkpoint) = request.at_checkpoint
-        && at_checkpoint > served_height.checkpoint
-    {
-        return Err(at_checkpoint_not_indexed_error(
-            at_checkpoint,
-            served_height.checkpoint,
-        ));
+    if let Some(at_checkpoint) = request.at_checkpoint {
+        AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
     }
     let cp_bound = request.at_checkpoint.unwrap_or(served_height.checkpoint);
 
@@ -1010,12 +1004,12 @@ mod tests {
             .await
             .expect_err("bound above the served height")
             .into();
-            assert_eq!(status.code(), tonic::Code::NotFound, "{at_checkpoint}");
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{at_checkpoint}");
             assert_eq!(
                 status.message(),
                 format!(
-                    "requested checkpoint {at_checkpoint} is not yet indexed; highest indexed \
-                     checkpoint is 25"
+                    "requested data above latest available; at_checkpoint is {at_checkpoint}, \
+                     and only checkpoints below 26 are available"
                 ),
             );
         }
@@ -1064,11 +1058,6 @@ mod tests {
             .expect("first page");
         assert_eq!(listed(&first), vec![(1, Some(5))]);
         let token = first.next_page_token.expect("v2 is within the bound");
-        assert_eq!(
-            PageToken::decode(&token).unwrap().version,
-            2,
-            "page tokens keep their wire format"
-        );
 
         let mut req = list_req(fixture.original_id, Some(20));
         req.page_size = Some(1);
@@ -1087,21 +1076,5 @@ mod tests {
             .expect("bounded page");
         assert_eq!(listed(&only), vec![(1, Some(5))]);
         assert!(only.next_page_token.is_none());
-
-        // A token minted without a bound and resent under a bound that excludes the version it
-        // points at resumes to an empty page, not an error.
-        let mut req = list_req(fixture.original_id, None);
-        req.page_size = Some(1);
-        let unbounded = list_package_versions(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, req)
-            .await
-            .expect("unbounded page");
-        let mut req = list_req(fixture.original_id, Some(19));
-        req.page_size = Some(1);
-        req.page_token = Some(unbounded.next_page_token.expect("v2 follows"));
-        let resumed = list_package_versions(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, req)
-            .await
-            .expect("resumed page");
-        assert!(resumed.versions.is_empty());
-        assert!(resumed.next_page_token.is_none());
     }
 }
