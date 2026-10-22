@@ -330,6 +330,20 @@ async fn assert_checkpoint_order_with_effects_dependencies(
     );
 
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
+
+    // Each commit's prologue also waits out this delay, and prologues execute serially because
+    // each advances the Clock. While the delay is registered, prologues execute slower than
+    // commits arrive and checkpoint lag grows. Registering it after setup keeps that lag out of
+    // the bounded checkpoint waits above; the settlement wait below has no timeout.
+    register_fail_point_async("transaction_execution_delay", move || async move {
+        let delay = {
+            let dist = rand::distributions::Uniform::new(0, 1000);
+            let mut rng = rand::thread_rng();
+            dist.sample(&mut rng)
+        };
+        sleep(Duration::from_millis(delay)).await;
+    });
+
     let package_id = package.0;
     let counter_id = counter.0;
     let counter_initial_shared_version = counter.1;
@@ -348,8 +362,8 @@ async fn assert_checkpoint_order_with_effects_dependencies(
     let gas = &accounts_and_gas[0].1;
     let rgp = test_cluster.get_reference_gas_price().await;
 
-    // The soft bundle submits this shared schedule in one consensus request. The failpoint in the
-    // caller delays execution, so the independent transfer can finish in a different order.
+    // The soft bundle submits this shared schedule in one consensus request. The failpoint
+    // delays execution, so the independent transfer can finish in a different order.
     let read_a = TestTransactionBuilder::new(sender, gas[0], rgp)
         .move_call(
             package_id,
@@ -501,15 +515,6 @@ async fn assert_checkpoint_order_with_effects_dependencies(
 /// order; checkpoint construction and settlement must nevertheless retain the shared schedule.
 #[sim_test]
 async fn shared_checkpoint_order_without_effects_dependencies() {
-    register_fail_point_async("transaction_execution_delay", move || async move {
-        let delay = {
-            let dist = rand::distributions::Uniform::new(0, 1000);
-            let mut rng = rand::thread_rng();
-            dist.sample(&mut rng)
-        };
-        sleep(Duration::from_millis(delay)).await;
-    });
-
     assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::MAX, true).await;
 }
 
