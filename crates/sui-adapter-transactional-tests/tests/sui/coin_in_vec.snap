@@ -24,10 +24,12 @@ task 3, line 34:
 //# run test::coin_in_vec::deposit --args object(1,1) object(2,0) --sender A
 mutated: object(0,0), object(1,1)
 wrapped: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2629600,  storage_rebate: 3313269, non_refundable_storage_fee: 331
 
 task 4, line 36:
 //# run test::coin_in_vec::withdraw --args object(1,1) --sender A
 mutated: object(0,0), object(1,1)
 unwrapped: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3313600,  storage_rebate: 2629337, non_refundable_storage_fee: 263

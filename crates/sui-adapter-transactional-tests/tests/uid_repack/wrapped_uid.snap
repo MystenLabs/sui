@@ -19,6 +19,7 @@ task 2, line 62:
 //# run ex::m::mint --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3503600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 64:
@@ -40,6 +41,7 @@ task 4, lines 66-67:
 created: object(4,0)
 mutated: object(0,0)
 wrapped: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2477600,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 5, lines 69-70:
@@ -48,6 +50,7 @@ task 5, lines 69-70:
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2477352, non_refundable_storage_fee: 248
 
 task 6, line 72:
@@ -68,6 +71,7 @@ task 7, lines 74-75:
 created: object(7,0)
 mutated: object(0,0), object(2,1)
 wrapped: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 4218000,  storage_rebate: 3442456, non_refundable_storage_fee: 344
 
 task 8, lines 77-78:
@@ -76,6 +80,7 @@ task 8, lines 77-78:
 mutated: object(0,0), object(2,1)
 unwrapped: object(2,0)
 deleted: object(7,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3503600,  storage_rebate: 4217578, non_refundable_storage_fee: 422
 
 task 9, line 80:
@@ -95,6 +100,7 @@ task 10, lines 82-83:
 // Wrapping and unwrapping within a transaction is a plain mutation
 //# run ex::m::wrap_then_delete --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 11, line 85:
@@ -113,6 +119,7 @@ task 12, line 87:
 //# run ex::m::mint --sender A
 created: object(12,0), object(12,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3503600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 13, line 89:
@@ -120,6 +127,7 @@ task 13, line 89:
 created: object(13,0)
 mutated: object(0,0)
 wrapped: object(12,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2477600,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 14, lines 91-92:
@@ -128,4 +136,5 @@ task 14, lines 91-92:
 mutated: object(0,0)
 deleted: object(13,0)
 unwrapped_then_deleted: object(12,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2477352, non_refundable_storage_fee: 248

@@ -20,6 +20,7 @@ task 2, lines 38-40:
 //> ex::m::deposit(Result(0))
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 42:
@@ -40,6 +41,7 @@ Contents: ex::m::A {
 task 4, line 44:
 //# run ex::m::a_to_b --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 5, line 46:
@@ -61,6 +63,7 @@ task 6, line 48:
 //# run ex::m::b_to_a_split --args object(2,0) 400 --sender A
 created: object(6,0)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3245200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 7, line 50:

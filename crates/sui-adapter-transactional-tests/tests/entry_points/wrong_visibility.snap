@@ -25,10 +25,12 @@ task 4, lines 32-33:
 // Used to be disallowed
 //# run Test::M::t4 --args 0
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 35-36:
 // Used to be disallowed
 //# run Test::M::t5 --args 0
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

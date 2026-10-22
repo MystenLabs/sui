@@ -1,0 +1,57 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+// Calling BaseV1 after enrolling its package family should run BaseV2. This must work the same way
+// in committed execution, dry-run, and dev-inspect: all three modes must read the same PackageConfig
+// state and report the event emitted by BaseV2.
+//
+// The runner defaults to the current maximum protocol version (140), where selection is enabled.
+init:
+A: object(0,0)
+
+task 1, lines 11-14:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 16-19:
+//# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 21-23:
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(3,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 25-27:
+// Committed execution selects BaseV2.
+//# programmable --sender A
+//> BaseV1::base::ping();
+events: Event { package_id: BaseV2, transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV1, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 29-31:
+// Dry-run selects BaseV2 without committing effects.
+//# programmable --sender A --dry-run
+//> BaseV1::base::ping();
+events: Event { package_id: BaseV2, transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV1, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, lines 33-35:
+// Dev-inspect also selects BaseV2.
+//# programmable --sender A --dev-inspect
+//> BaseV1::base::ping();
+events: Event { package_id: BaseV2, transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV1, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

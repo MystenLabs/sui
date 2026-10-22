@@ -1,0 +1,76 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+// Consumer was published against BaseV1, which has no dependencies. Selecting BaseV2 changes the
+// graph by adding NewV1:
+//
+//   published graph:   Consumer -> BaseV1
+//   selected graph:    Consumer -> BaseV2 -> NewV1
+//
+// Linkage analysis must load and validate this newly introduced package. The first call proves that
+// NewV1 executes; the second proves that the same call is rejected after NewV1 is forbidden.
+
+init:
+A: object(0,0)
+
+task 1, lines 15-18:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-22:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5069200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 24-27:
+//# upgrade --package BaseV1 --upgrade-capability 2,1 --dependencies NewV1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6042000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 29-32:
+//# publish --dependencies BaseV1 --sender A
+created: object(4,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4392800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 34-36:
+//# programmable --sender A --inputs object(2,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(5,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 38-39:
+// BaseV1 selects BaseV2, whose newly introduced NewV1 dependency executes observably.
+//# run Consumer::consumer::call --sender A
+events: Event { package_id: Consumer, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: NewV1, module: Identifier("new_dependency"), name: Identifier("Ping"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 41-45:
+// Make NewV1 historical, then forbid the exact version introduced by BaseV2's selected table.
+//# upgrade --package NewV1 --upgrade-capability 1,1 --sender A
+created: object(7,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 8, line 47:
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 1 --sender A
+created: object(8,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+
+task 9, line 49:
+//# run Consumer::consumer::call --sender A
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }

@@ -1,0 +1,155 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+// A package records a flattened linkage table when it is published: one concrete package version
+// for every dependency family in its transitive closure. Publication policy must validate that
+// table because it describes the versions the new package will actually use. It must not recurse
+// into each dependency's own historical table and validate those stale edges as well.
+//
+// For example, MidMin was published with LeafV1, but StaleMin explicitly declares LeafV2:
+//
+//   MidMin's table:       MidMin -> LeafV1  (now below the minimum)
+//   StaleMin's table:     StaleMin -> MidMin
+//                                  -> LeafV2
+//
+// StaleMin's effective flattened linkage uses LeafV2, so its publication is valid. Recursing into
+// MidMin's table would incorrectly reject StaleMin because of LeafV1, even though LeafV1 is not in
+// the new package's effective linkage.
+//
+// The opposite direction must use the same rule:
+//
+//   MidLatest's table:         MidLatest -> LeafV2
+//   EffectiveStale's table:    EffectiveStale -> MidLatest
+//                                             -> LeafV1  (below the minimum)
+//
+// EffectiveStale must be rejected because its own flattened linkage says it will use LeafV1. The
+// LeafV2 entry in MidLatest's stored table does not replace the command's effective LeafV1 entry.
+// This fixture covers both directions, forbidden versions, and both publish and upgrade commands.
+
+init:
+A: object(0,0)
+
+task 1, lines 31-33:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 35-37:
+//# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 39-41:
+//# publish --upgradeable --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, lines 43-45:
+//# upgrade --package ForbiddenV1 --upgrade-capability 3,1 --sender A
+created: object(4,0)
+mutated: object(0,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 5, lines 47-50:
+//# publish --dependencies LeafV1 --sender A
+created: object(5,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4339600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, lines 52-55:
+//# publish --dependencies ForbiddenV1 --sender A
+created: object(6,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4377600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 57-60:
+//# publish --upgradeable --dependencies LeafV1 --sender A
+created: object(7,0), object(7,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6034400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 8, lines 62-64:
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(8,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 9, line 66:
+//# run sui::package_config::forbid_version --args object(0xcf6) object(3,1) 1 --sender A
+created: object(9,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+
+task 10, lines 68-72:
+// A no-init publish declaring the enrolled family's latest version succeeds.
+//# publish --dependencies LeafV2 --sender A
+created: object(10,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4430800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 11, lines 74-81:
+// A publish with init also succeeds and observably executes against the latest dependency.
+//# publish --dependencies LeafV2 --sender A
+events: Event { package_id: LatestWithInit, transaction_module: Identifier("publisher"), sender: A, type_: StructTag { address: LatestWithInit, module: Identifier("publisher"), name: Identifier("Init"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+created: object(11,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 5715200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 83-88:
+// MidMin's own table names below-minimum LeafV1, but this command's flattened linkage explicitly
+// replaces it with LeafV2, so publication succeeds.
+//# publish --dependencies MidMin LeafV2 --sender A
+created: object(12,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4970400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 13, lines 90-94:
+// The same rule applies to a stale forbidden edge owned by MidForbidden.
+//# publish --dependencies MidForbidden ForbiddenV2 --sender A
+created: object(13,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4970400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 14, lines 96-100:
+// An upgrade with no new init is still publication policy and rejects a below-min dependency.
+//# upgrade --package UpgradeV1 --upgrade-capability 7,1 --dependencies LeafV1 --sender A
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
+
+task 15, lines 102-106:
+// The failed upgrade is atomic; declaring the latest enrolled dependency succeeds.
+//# upgrade --package UpgradeV1 --upgrade-capability 7,1 --dependencies LeafV2 --sender A
+created: object(15,0)
+mutated: object(0,0), object(7,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6110400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 16, lines 108-112:
+// MidLatest's own linkage uses the enrolled LeafV2.
+//# publish --dependencies LeafV2 --sender A
+created: object(16,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4339600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 17, lines 114-120:
+// The new package explicitly flattens the Leaf family back to LeafV1. Policy checks the new
+// package's effective table, so this publish is rejected even though MidLatest's stored table uses
+// LeafV2.
+//# publish --dependencies MidLatest LeafV1 --sender A
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }

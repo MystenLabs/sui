@@ -1,0 +1,58 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+// Enrolled upgrades use the ordinary commit function, but only after their new selection has been
+// recorded. A failed unrecorded commit leaves both the cap and PackageConfig unchanged.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-15:
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(2,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 22-26:
+// The receipt cannot be committed until PackageConfig has recorded the upgrade.
+//# programmable --sender A --inputs object(1,1) 0u8 digest(BaseV2)
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: Upgrade(BaseV2, [sui,std], BaseV1, Result(0));
+//> sui::package::commit_upgrade(Input(0), Result(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::commit_upgrade (function index 31) at offset 35, Abort Code: 8
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 31, instruction: 35, function_name: Some("commit_upgrade") }, 8), source: Some(VMError { major_status: ABORTED, sub_status: Some(8), message: Some("sui::package::commit_upgrade at offset 35"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(31), 35)] }), command: Some(2) } }
+
+task 5, lines 28-29:
+// The failed transaction rolled back: the historical v1 package still executes its original code.
+//# run BaseV1::base::ping --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: BaseV1::base::ping (function index 0) at offset 1, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: BaseV1, name: Identifier("base") }, function: 0, instruction: 1, function_name: Some("ping") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("BaseV1::base::ping at offset 1"), exec_state: None, location: Module(ModuleId { address: BaseV1, name: Identifier("base") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 6, lines 31-36:
+// The same cap can then complete the upgrade correctly.
+//# programmable --sender A --inputs object(1,1) object(0xcf6) 0u8 digest(BaseV2)
+//> 0: sui::package::authorize_upgrade(Input(0), Input(2), Input(3));
+//> 1: Upgrade(BaseV2, [sui,std], BaseV1, Result(0));
+//> 2: sui::package_config::record_minversion_upgrade(Input(1), Input(0), Result(1));
+//> sui::package::commit_upgrade(Input(0), Result(1));
+created: object(6,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 10374000,  storage_rebate: 6831717, non_refundable_storage_fee: 683
+
+task 7, lines 38-39:
+// The historical package ID now selects the upgraded package.
+//# run BaseV1::base::ping --sender A
+events: Event { package_id: fake(6,0), transaction_module: Identifier("base"), sender: A, type_: StructTag { address: fake(6,0), module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

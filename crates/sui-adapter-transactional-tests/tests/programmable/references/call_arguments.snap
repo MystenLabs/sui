@@ -26,6 +26,7 @@ task 2, lines 59-64:
 //> 2: test::m::two_imm_inner(Result(1), Result(1));
 //> 3: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, lines 66-71:
@@ -36,6 +37,7 @@ task 3, lines 66-71:
 //> 2: test::m::two_imm_inner(Result(1), Result(1));
 //> 3: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 73-75:
@@ -43,6 +45,7 @@ task 4, lines 73-75:
 // VALID: one pure input at two types is two locations, so both `&mut` borrows are fine
 //> 0: test::m::two_views<u8, bool>(Input(0), Input(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 77-82:
@@ -53,6 +56,7 @@ task 5, lines 77-82:
 //> 2: test::m::write_u8(Result(1), Input(1));
 //> 3: test::m::use_mut<bool>(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- siblings ---
@@ -68,6 +72,7 @@ task 6, lines 86-94:
 //> 5: test::m::check(NestedResult(2,1), Input(0));
 //> 6: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, lines 96-103:
@@ -80,6 +85,7 @@ task 7, lines 96-103:
 //> 4: test::m::check(NestedResult(2,0), Input(0));
 //> 5: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 105-116:
@@ -96,6 +102,7 @@ task 8, lines 105-116:
 //> 8: test::m::delete(Result(0));
 //> 9: test::m::delete(Result(1));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 9, lines 118-126:
@@ -109,6 +116,7 @@ task 9, lines 118-126:
 //> 5: test::m::write(Result(4), Input(1));
 //> 6: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 10, lines 128-136:
@@ -122,6 +130,7 @@ task 10, lines 128-136:
 //> 5: test::m::check(Result(4), Input(0));
 //> 6: test::m::delete(Result(0));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 // --- descendants of sibling results ---
@@ -135,6 +144,7 @@ task 11, lines 140-146:
 //> 3: test::m::replace(NestedResult(1,0));
 //> 4: test::m::check(Result(2), Input(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 12, lines 148-157:
@@ -149,6 +159,7 @@ task 12, lines 148-157:
 //> 6: test::m::replace(NestedResult(1,0));
 //> 7: test::m::check(Result(5), Input(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 13, lines 159-166:
@@ -161,6 +172,7 @@ task 13, lines 159-166:
 //> 4: test::m::replace(NestedResult(1,1));
 //> 5: test::m::check_len(NestedResult(1,1), Input(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 14, lines 168-175:
@@ -173,6 +185,7 @@ task 14, lines 168-175:
 //> 4: test::m::replace(NestedResult(1,0));
 //> 5: test::m::check(Result(3), Input(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 15, lines 177-183:
@@ -184,6 +197,7 @@ task 15, lines 177-183:
 //> 3: test::m::use_imm<u64>(Result(2));
 //> 4: test::m::replace_pair(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- dynamic fields ---
@@ -201,6 +215,7 @@ task 16, lines 187-197:
 //> 7: sui::dynamic_field::remove<u64, vector<u64>>(Result(1), Input(0));
 //> 8: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 17, lines 199-209:
@@ -216,6 +231,7 @@ task 17, lines 199-209:
 //> 7: sui::dynamic_field::remove<u64, vector<u64>>(Result(1), Input(0));
 //> 8: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- parents after children die ---
@@ -229,6 +245,7 @@ task 18, lines 213-219:
 //> 3: test::m::use_mut<test::m::Obj>(Result(0));
 //> 4: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 19, lines 221-227:
@@ -240,6 +257,7 @@ task 19, lines 221-227:
 //> 3: test::m::use_mut<test::m::Obj>(Result(0));
 //> 4: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 20, lines 229-239:
@@ -255,6 +273,7 @@ task 20, lines 229-239:
 //> 7: test::m::use_mut<test::m::Obj>(Result(0));
 //> 8: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- immutable views of a parent while a mutable child is live ---
@@ -268,6 +287,7 @@ task 21, lines 243-249:
 //> 3: test::m::use_mut<test::m::Inner>(Result(1));
 //> 4: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 22, lines 251-258:
@@ -280,6 +300,7 @@ task 22, lines 251-258:
 //> 4: test::m::write(Result(2), Input(0));
 //> 5: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 23, lines 260-268:
@@ -293,6 +314,7 @@ task 23, lines 260-268:
 //> 5: test::m::use_imm<test::m::Inner>(Result(1));
 //> 6: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 24, lines 270-277:
@@ -305,6 +327,7 @@ task 24, lines 270-277:
 //> 4: test::m::use_mut<test::m::Inner>(Result(1));
 //> 5: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- a last-use read releases its reference inside the argument list ---
@@ -316,6 +339,7 @@ task 25, lines 281-285:
 //> 1: test::m::value_ref(Result(0));
 //> 2: test::m::read_then_mut(Result(1), Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 26, lines 287-291:
@@ -325,6 +349,7 @@ task 26, lines 287-291:
 //> 1: test::m::value_ref(Result(0));
 //> 2: test::m::mut_then_read(Result(0), Result(1));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- vector natives ---
@@ -339,6 +364,7 @@ task 27, lines 295-302:
 //> 4: std::vector::push_back<u64>(Result(0), Input(3));
 //> 5: test::m::check_len(Result(0), Input(4));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 28, lines 304-310:
@@ -350,4 +376,5 @@ task 28, lines 304-310:
 //> 3: test::m::check(Result(1), Input(0));
 //> 4: test::m::check(Result(2), Input(1));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
