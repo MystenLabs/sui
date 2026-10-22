@@ -12,8 +12,9 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BigTableProcessor;
+use crate::object_status::ObjectStatus;
+use crate::object_status::removed_objects;
 use crate::tables;
-use crate::tables::object_versions_by_checkpoint::ObjectStatus;
 
 /// Pipeline that writes, for every object a checkpoint changes, the object's version and status
 /// at the end of that checkpoint to the `object_versions_by_checkpoint` table.
@@ -32,25 +33,13 @@ impl Processor for ObjectVersionsByCheckpointPipeline {
         // object determines its state at the end of the checkpoint.
         let mut final_states: HashMap<ObjectID, (SequenceNumber, ObjectStatus)> = HashMap::new();
         for txn in &checkpoint.transactions {
-            let effects = &txn.effects;
-            for change in effects.object_changes() {
+            for change in txn.effects.object_changes() {
                 if let Some(version) = change.output_version {
                     final_states.insert(change.id, (version, ObjectStatus::Live));
                 }
             }
-
-            // Take the removal version from each ref rather than `effects.lamport_version()`: for
-            // V1 effects, that recomputes the lamport version from the modified inputs only, which
-            // can be lower than the version the transaction was executed at.
-            for (id, version, _) in effects
-                .deleted()
-                .into_iter()
-                .chain(effects.unwrapped_then_deleted())
-            {
-                final_states.insert(id, (version, ObjectStatus::Deleted));
-            }
-            for (id, version, _) in effects.wrapped() {
-                final_states.insert(id, (version, ObjectStatus::Wrapped));
+            for (id, version, status) in removed_objects(&txn.effects) {
+                final_states.insert(id, (version, status));
             }
         }
 
