@@ -9,16 +9,19 @@
 use mysten_common::random::get_rng;
 use rand::Rng;
 use rand::seq::SliceRandom;
-use sui_types::TypeTag;
+use std::sync::Arc;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::move_package::UpgradePolicy;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::CallArg;
+use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{Identifier, base_types::SequenceNumber};
 
 use super::party::PartyStep;
 use super::receive::ReceiveStep;
 use super::shared_deletion::SharedDeletionStep;
+use super::upgrade::UpgradeStep;
 use crate::ExecutionEffects;
 use crate::workloads::payload::BatchedTransactionStatus;
 
@@ -28,17 +31,30 @@ pub(super) enum LifecycleStep {
     Party(PartyStep),
     SharedDeletion(SharedDeletionStep),
     Receive(ReceiveStep),
+    Upgrade(UpgradeStep),
 }
 
 #[derive(Clone, Debug)]
 pub(super) enum LifecycleCommand {
+    /// A call into the composite package. The tx builder picks the package version.
     MoveCall {
-        package: ObjectID,
         module: &'static str,
         function: &'static str,
-        type_args: Vec<TypeTag>,
         args: Vec<CallArg>,
     },
+    /// Upgrade `package` by republishing the composite package's modules.
+    Upgrade {
+        cap: ObjectRef,
+        package: ObjectID,
+        upgrade: Arc<UpgradeData>,
+    },
+}
+
+#[derive(Debug)]
+pub(super) struct UpgradeData {
+    pub modules: Vec<Vec<u8>>,
+    pub dependencies: Vec<ObjectID>,
+    pub digest: Vec<u8>,
 }
 
 #[derive(Clone, Debug)]
@@ -55,21 +71,26 @@ pub(super) struct LifecycleCall {
 
 impl LifecycleCall {
     pub fn move_call(
-        package: ObjectID,
         module: &'static str,
         function: &'static str,
         args: Vec<CallArg>,
         op: &'static str,
         step: LifecycleStep,
     ) -> Self {
-        Self {
-            command: LifecycleCommand::MoveCall {
-                package,
+        Self::new(
+            LifecycleCommand::MoveCall {
                 module,
                 function,
-                type_args: vec![],
                 args,
             },
+            op,
+            step,
+        )
+    }
+
+    pub fn new(command: LifecycleCommand, op: &'static str, step: LifecycleStep) -> Self {
+        Self {
+            command,
             op,
             step,
             bare: false,
@@ -81,24 +102,53 @@ impl LifecycleCall {
         self
     }
 
-    pub fn apply(&self, builder: &mut ProgrammableTransactionBuilder) {
+    /// Adds the call to `builder`. Move calls target `package`, the composite package version
+    /// that the rest of the tx uses, because a tx cannot call two versions of one package.
+    pub fn apply(&self, builder: &mut ProgrammableTransactionBuilder, package: ObjectID) {
         match &self.command {
             LifecycleCommand::MoveCall {
-                package,
                 module,
                 function,
-                type_args,
                 args,
             } => {
                 builder
                     .move_call(
-                        *package,
+                        package,
                         Identifier::new(*module).unwrap(),
                         Identifier::new(*function).unwrap(),
-                        type_args.clone(),
+                        vec![],
                         args.clone(),
                     )
                     .unwrap();
+            }
+            LifecycleCommand::Upgrade {
+                cap,
+                package,
+                upgrade,
+            } => {
+                let cap = builder.obj(ObjectArg::ImmOrOwnedObject(*cap)).unwrap();
+                let policy = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
+                let digest = builder.pure(upgrade.digest.clone()).unwrap();
+                let ticket = builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("package").unwrap(),
+                    Identifier::new("authorize_upgrade").unwrap(),
+                    vec![],
+                    vec![cap, policy, digest],
+                );
+                let receipt = builder.upgrade(
+                    *package,
+                    ticket,
+                    upgrade.dependencies.clone(),
+                    upgrade.modules.clone(),
+                );
+                builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("package").unwrap(),
+                    Identifier::new("commit_upgrade").unwrap(),
+                    vec![],
+                    vec![cap, receipt],
+                );
             }
         }
     }
@@ -150,7 +200,7 @@ pub(super) fn find_object(effects: &ExecutionEffects, id: ObjectID) -> Option<(O
 }
 
 pub(super) fn shared_mut(id: ObjectID, initial_shared_version: SequenceNumber) -> CallArg {
-    CallArg::Object(sui_types::transaction::ObjectArg::SharedObject {
+    CallArg::Object(ObjectArg::SharedObject {
         id,
         initial_shared_version,
         mutability: sui_types::transaction::SharedObjectMutability::Mutable,

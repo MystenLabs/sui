@@ -6,6 +6,7 @@ mod operations;
 mod party;
 mod receive;
 mod shared_deletion;
+mod upgrade;
 
 use derive_more::Add;
 use mysten_common::random::get_rng;
@@ -15,8 +16,8 @@ pub use operations::{
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
     AllowanceWithdraw, AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX,
     ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE,
-    PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
+    OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF,
+    PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
     PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
     RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
     SHARED_DELETE_RACING, SHARED_DELETE_STALE, SharedCounterIncrement, SharedCounterRead,
@@ -35,7 +36,9 @@ use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams, 
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
-use lifecycle::{Lifecycle, LifecycleCall, LifecycleStep, StepContext, choose_lifecycle};
+use lifecycle::{
+    Lifecycle, LifecycleCall, LifecycleStep, StepContext, UpgradeData, choose_lifecycle,
+};
 use operations::{
     AllowanceInfo, InitRequirement, Operation, OperationResources, PayloadAllowances,
     ResourceRequest, add_allowance_issue_commands,
@@ -46,14 +49,14 @@ use receive::ReceiveLifecycle;
 use shared_deletion::SharedDeletionLifecycle;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use sui_protocol_config::ProtocolConfig;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::digests::TransactionDigest;
@@ -68,6 +71,7 @@ use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 use tracing::{debug, info, trace};
+use upgrade::UpgradeLifecycle;
 
 use super::MultiGas;
 
@@ -328,6 +332,9 @@ pub struct CompositeWorkloadConfig {
     /// Per-batch probability that a payload with no transfer-to-object lifecycle in progress
     /// starts one. Zero disables it.
     pub receive_probability: f32,
+    /// Per-batch probability that the payload holding the composite package's upgrade cap
+    /// upgrades the package. Zero disables upgrades.
+    pub upgrade_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -359,6 +366,7 @@ impl CompositeWorkloadConfig {
             party_object_probability: 0.1,
             shared_deletion_probability: 0.1,
             receive_probability: 0.1,
+            upgrade_probability: 0.05,
             ..Default::default()
         }
     }
@@ -431,6 +439,7 @@ impl Default for CompositeWorkloadConfig {
             party_object_probability: 0.0,
             shared_deletion_probability: 0.0,
             receive_probability: 0.0,
+            upgrade_probability: 0.0,
             metrics: None,
         }
     }
@@ -439,7 +448,10 @@ impl Default for CompositeWorkloadConfig {
 #[derive(Debug)]
 pub struct OperationPool {
     pub shared_counters: Vec<(ObjectID, SequenceNumber)>,
+    /// The original composite package id, which defines its types.
     pub package_id: ObjectID,
+    /// Every version of the composite package, oldest first.
+    pub package_versions: Arc<RwLock<Vec<ObjectID>>>,
     pub randomness_initial_shared_version: SequenceNumber,
     pub accumulator_root_initial_shared_version: SequenceNumber,
     pub hotness: f32,
@@ -451,6 +463,17 @@ pub struct OperationPool {
 }
 
 impl OperationPool {
+    /// Picks the composite package version that a tx calls: the original, the latest, or any.
+    pub fn select_package_version(&self) -> ObjectID {
+        let versions = self.package_versions.read().unwrap();
+        let mut rng = get_rng();
+        match rng.gen_range(0..3) {
+            0 => versions[0],
+            1 => *versions.last().unwrap(),
+            _ => *versions.choose(&mut rng).unwrap(),
+        }
+    }
+
     pub fn select_counter(&self) -> (ObjectID, SequenceNumber) {
         let mut rng = get_rng();
         if self.shared_counters.is_empty() {
@@ -579,6 +602,7 @@ impl CompositePayload {
     fn resolve_resources_for_op(
         op: &dyn Operation,
         pool: &OperationPool,
+        package_version: ObjectID,
         config: &CompositeWorkloadConfig,
         current_epoch: u64,
         payload_allowances: Option<PayloadAllowances>,
@@ -626,7 +650,7 @@ impl CompositePayload {
             counter,
             randomness,
             accumulator_root,
-            package_id: pool.package_id,
+            package_id: package_version,
             address_balance_amount: config.address_balance_amount,
             balance_pool,
             test_coin_cap,
@@ -718,15 +742,17 @@ impl CompositePayload {
         );
 
         {
+            let package_version = self.pool.select_package_version();
             let builder = tx_builder.ptb_builder_mut();
             // The lifecycle call goes first because some ops must be the last shared access.
             if let Some(call) = lifecycle_call {
-                call.apply(builder);
+                call.apply(builder, package_version);
             }
             for op in &ops {
                 let resources = Self::resolve_resources_for_op(
                     op.as_ref(),
                     &self.pool,
+                    package_version,
                     &self.config,
                     current_epoch,
                     self.allowances,
@@ -1488,6 +1514,8 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             chain_identifier: None,
             alias_infos: vec![],
             allowances: vec![],
+            upgrade_data: None,
+            upgrade_cap: None,
         }))
     }
 }
@@ -1510,6 +1538,9 @@ pub struct CompositeWorkload {
     alias_infos: Vec<Option<AliasInitInfo>>,
     /// Indexed by the spending payload.
     allowances: Vec<PayloadAllowances>,
+    upgrade_data: Option<Arc<UpgradeData>>,
+    /// The composite package's upgrade cap, owned by payload 0.
+    upgrade_cap: Option<ObjectRef>,
 }
 
 impl CompositeWorkload {
@@ -1519,28 +1550,28 @@ impl CompositeWorkload {
 
     fn make_lifecycles(
         config: &CompositeWorkloadConfig,
-        package_id: ObjectID,
         sender: SuiAddress,
+        upgrade: Option<UpgradeLifecycle>,
     ) -> Vec<Box<dyn Lifecycle>> {
         let mut lifecycles: Vec<Box<dyn Lifecycle>> = vec![];
         if config.party_object_probability > 0.0 {
             lifecycles.push(Box::new(PartyLifecycle::new(
-                package_id,
                 config.party_object_probability as f64,
             )));
         }
         if config.shared_deletion_probability > 0.0 {
             lifecycles.push(Box::new(SharedDeletionLifecycle::new(
-                package_id,
                 config.shared_deletion_probability as f64,
             )));
         }
         if config.receive_probability > 0.0 {
             lifecycles.push(Box::new(ReceiveLifecycle::new(
-                package_id,
                 sender,
                 config.receive_probability as f64,
             )));
+        }
+        if let Some(upgrade) = upgrade {
+            lifecycles.push(Box::new(upgrade));
         }
         lifecycles
     }
@@ -1615,8 +1646,18 @@ impl Workload<dyn Payload> for CompositeWorkload {
         info!("Publishing composite package for composite workload");
         let mut path = crate::workloads::benchmark_move_base_dir();
         path.push("src/workloads/data/composite");
+        let compiled_package = sui_move_build::BuildConfig::new_for_testing()
+            .build_async(&path)
+            .await
+            .expect("composite package should build");
+        // An upgrade republishes the same modules, which is a compatible upgrade.
+        self.upgrade_data = Some(Arc::new(UpgradeData {
+            modules: compiled_package.get_package_bytes(false),
+            dependencies: compiled_package.get_dependency_storage_package_ids(),
+            digest: compiled_package.get_package_digest(false).to_vec(),
+        }));
         let transaction = TestTransactionBuilder::new(head.1, head.0, gas_price)
-            .publish_async(path)
+            .publish_with_data_async(PublishData::CompiledPackage(compiled_package))
             .await
             .ensure_unique()
             .build_and_sign(head.2.as_ref());
@@ -1624,6 +1665,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         let effects = execution_result.expect("Package publish should succeed");
 
         let mut treasury_cap_ref = None;
+        let mut upgrade_cap_ref = None;
         let mut owned_refs = vec![];
         for (obj_ref, owner) in effects.created() {
             match owner {
@@ -1643,7 +1685,8 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 if obj_type.contains("TreasuryCap") {
                     treasury_cap_ref = Some(obj.compute_object_reference());
                     info!("Found TreasuryCap {:?}", treasury_cap_ref);
-                    break;
+                } else if obj_type.contains("UpgradeCap") {
+                    upgrade_cap_ref = Some(obj.compute_object_reference());
                 }
             }
         }
@@ -1669,6 +1712,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             });
         }
         self.shared_counters = join_all(futures).await;
+        self.init_gas[0].0 = updated_gas;
         info!("Created {} shared counters", self.shared_counters.len());
 
         let obj = execution_proxy
@@ -1866,8 +1910,8 @@ impl Workload<dyn Payload> for CompositeWorkload {
         if init_requirements.contains(&InitRequirement::CreateTestCoinCap) {
             if let Some(cap_ref) = treasury_cap_ref {
                 info!("Creating TestCoinCap for multi-currency operations");
-                let (_, sender, keypair) = &self.init_gas[0];
-                let tx = TestTransactionBuilder::new(*sender, updated_gas, gas_price)
+                let (gas, sender, keypair) = &self.init_gas[0];
+                let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
                     .move_call(
                         self.package_id.unwrap(),
                         "test_coin",
@@ -1991,6 +2035,30 @@ impl Workload<dyn Payload> for CompositeWorkload {
             } else {
                 info!("TestCoinCap not available - skipping TEST_COIN address balance seeding");
             }
+        }
+
+        if self.config.upgrade_probability > 0.0 {
+            let cap = upgrade_cap_ref.expect("the publish tx creates an upgrade cap");
+            let (gas, sender, keypair) = &mut self.init_gas[0];
+            let recipient = self.payload_gas[0].1;
+            let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
+                .transfer(FullObjectRef::from_fastpath_ref(cap), recipient)
+                .ensure_unique()
+                .build_and_sign(keypair.as_ref());
+            let effects = execution_proxy
+                .execute_transaction_block(tx)
+                .await
+                .expect("Upgrade cap transfer should succeed");
+            update_gas!(gas, effects);
+            self.upgrade_cap = Some(
+                effects
+                    .mutated()
+                    .into_iter()
+                    .find(|(obj_ref, _)| obj_ref.0 == cap.0)
+                    .expect("the transfer mutates the upgrade cap")
+                    .0,
+            );
+            info!("Transferred the composite upgrade cap to {recipient}");
         }
 
         if init_requirements.contains(&InitRequirement::EnableAddressAlias) {
@@ -2142,9 +2210,11 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }))
         });
 
+        let package_versions = Arc::new(RwLock::new(vec![self.package_id.unwrap()]));
         let operation_pool = Arc::new(OperationPool {
             shared_counters: self.shared_counters.clone(),
             package_id: self.package_id.unwrap(),
+            package_versions: package_versions.clone(),
             randomness_initial_shared_version: self.randomness_initial_shared_version.unwrap(),
             accumulator_root_initial_shared_version: self
                 .accumulator_root_initial_shared_version
@@ -2188,6 +2258,18 @@ impl Workload<dyn Payload> for CompositeWorkload {
         for i in 0..self.num_payloads {
             let gas = self.payload_gas[i as usize].clone();
             let sender = gas.1;
+            let upgrade = if i == 0
+                && let Some(cap) = self.upgrade_cap
+            {
+                Some(UpgradeLifecycle::new(
+                    config.upgrade_probability as f64,
+                    cap,
+                    self.upgrade_data.clone().unwrap(),
+                    package_versions.clone(),
+                ))
+            } else {
+                None
+            };
             let alias_state = self
                 .alias_infos
                 .get(i as usize)
@@ -2216,7 +2298,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 alias_state,
                 partner_address,
                 allowances,
-                lifecycles: Self::make_lifecycles(&config, self.package_id.unwrap(), sender),
+                lifecycles: Self::make_lifecycles(&config, sender, upgrade),
             }));
         }
 

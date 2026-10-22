@@ -98,7 +98,6 @@ enum ReceivePhase {
 
 #[derive(Debug)]
 pub(super) struct ReceiveLifecycle {
-    package_id: ObjectID,
     sender: SuiAddress,
     start_probability: f64,
     phase: ReceivePhase,
@@ -108,9 +107,8 @@ impl ReceiveLifecycle {
     /// The parent is abandoned after this many receives so that each parent kind is used.
     const MAX_RECEIVES: u32 = 3;
 
-    pub fn new(package_id: ObjectID, sender: SuiAddress, start_probability: f64) -> Self {
+    pub fn new(sender: SuiAddress, start_probability: f64) -> Self {
         Self {
-            package_id,
             sender,
             start_probability,
             phase: ReceivePhase::NeedParent,
@@ -124,14 +122,7 @@ impl ReceiveLifecycle {
         op: &'static str,
         step: ReceiveStep,
     ) -> LifecycleCall {
-        LifecycleCall::move_call(
-            self.package_id,
-            "receiver",
-            function,
-            args,
-            op,
-            LifecycleStep::Receive(step),
-        )
+        LifecycleCall::move_call("receiver", function, args, op, LifecycleStep::Receive(step))
     }
 
     fn parent_from_effects(effects: &ExecutionEffects, sender: SuiAddress) -> Option<Parent> {

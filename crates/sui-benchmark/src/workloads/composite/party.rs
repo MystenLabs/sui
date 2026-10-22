@@ -96,7 +96,6 @@ enum PartyPhase {
 
 #[derive(Debug)]
 pub(super) struct PartyLifecycle {
-    package_id: ObjectID,
     start_probability: f64,
     phase: PartyPhase,
 }
@@ -105,9 +104,8 @@ impl PartyLifecycle {
     /// The stream ends after at most this many mutations so the lifecycle keeps progressing.
     const MAX_MUTATIONS: u32 = 3;
 
-    pub fn new(package_id: ObjectID, start_probability: f64) -> Self {
+    pub fn new(start_probability: f64) -> Self {
         Self {
-            package_id,
             start_probability,
             phase: PartyPhase::NeedCreate,
         }
@@ -120,14 +118,8 @@ impl PartyLifecycle {
         op: &'static str,
         step: PartyStep,
     ) -> LifecycleCall {
-        let call = LifecycleCall::move_call(
-            self.package_id,
-            "party_obj",
-            function,
-            args,
-            op,
-            LifecycleStep::Party(step),
-        );
+        let call =
+            LifecycleCall::move_call("party_obj", function, args, op, LifecycleStep::Party(step));
         // Txs after a stream ends carry no sampled ops. Sampled ops would raise the owned
         // object's versions past the ended stream's assigned versions, and they would never
         // collide. The wrap tx carries none so that the holder is the only object it creates.

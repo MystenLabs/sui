@@ -77,6 +77,8 @@ pub const RECEIVE_SEND_CHILD: &str = "receive_send_child";
 pub const RECEIVE_CHILD: &str = "receive_child";
 pub const RECEIVE_TOUCH_PARENT: &str = "receive_touch_parent";
 
+pub const PACKAGE_UPGRADE: &str = "package_upgrade";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,

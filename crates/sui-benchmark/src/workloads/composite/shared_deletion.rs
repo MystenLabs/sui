@@ -51,7 +51,6 @@ enum SharedDeletionPhase {
 
 #[derive(Debug)]
 pub(super) struct SharedDeletionLifecycle {
-    package_id: ObjectID,
     start_probability: f64,
     phase: SharedDeletionPhase,
 }
@@ -61,9 +60,8 @@ impl SharedDeletionLifecycle {
     /// progressing.
     const MAX_INCREMENTS: u32 = 3;
 
-    pub fn new(package_id: ObjectID, start_probability: f64) -> Self {
+    pub fn new(start_probability: f64) -> Self {
         Self {
-            package_id,
             start_probability,
             phase: SharedDeletionPhase::NeedCreate,
         }
@@ -77,7 +75,6 @@ impl SharedDeletionLifecycle {
         step: SharedDeletionStep,
     ) -> LifecycleCall {
         LifecycleCall::move_call(
-            self.package_id,
             "counter",
             function,
             args,
