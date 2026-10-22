@@ -53,7 +53,7 @@ use sui_types::{
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
         InputObjectKind, PlainTransactionWithClaims, SenderSignedData, TransactionDataAPI,
-        TransactionKey, VerifiedTransaction, WithAliases,
+        TransactionKey, VerifiedTransaction, WithAliases, paid_proposer_count,
     },
 };
 use tokio::task::JoinSet;
@@ -1845,7 +1845,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let tx_digest = *transaction.tx().digest();
 
         // Check for unpaid amplification before other deferral checks.
-        // SIP-45: Paid amplification allows (gas_price / RGP + 1) submissions.
+        // SIP-45: the gas price pays for `paid_proposer_count` submissions.
         // Transactions with more duplicates than paid for are deferred.
         //
         // A transaction that names its proposers has already had its amplification bounded by
@@ -1865,9 +1865,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .copied()
                 .unwrap_or(0);
 
-            let rgp = self.epoch_store.reference_gas_price();
-            let gas_price = transaction.tx().transaction_data().gas_price();
-            let allowed_count = (gas_price / rgp.max(1)) + 1;
+            let allowed_count = paid_proposer_count(
+                transaction.tx().transaction_data().gas_price(),
+                self.epoch_store.reference_gas_price(),
+            );
 
             if occurrence_count as u64 > allowed_count {
                 self.metrics
