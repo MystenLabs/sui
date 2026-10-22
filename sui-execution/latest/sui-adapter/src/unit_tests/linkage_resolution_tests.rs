@@ -81,6 +81,30 @@ impl PackageStore for TestStore {
     }
 }
 
+struct CountingStore<'a> {
+    store: &'a TestStore,
+    package_reads: Cell<usize>,
+}
+
+impl PackageStore for CountingStore<'_> {
+    type Package = TestPackage;
+
+    fn get_package(&self, id: &ObjectID) -> SuiResult<Option<Self::Package>> {
+        self.package_reads.set(self.package_reads.get() + 1);
+        self.store.get_package(id)
+    }
+
+    fn resolve_type_to_defining_id(
+        &self,
+        module_address: ObjectID,
+        module_name: &IdentStr,
+        type_name: &IdentStr,
+    ) -> SuiResult<Option<ObjectID>> {
+        self.store
+            .resolve_type_to_defining_id(module_address, module_name, type_name)
+    }
+}
+
 #[test]
 fn minversion_resolution_records_referenced_and_selected_packages() {
     let original_id = ObjectID::from_single_byte(1);
@@ -759,6 +783,88 @@ fn selected_cyclic_linkage_is_rejected() {
                 .kind(),
             &ExecutionErrorKind::InvalidLinkage
         );
+    }
+}
+
+#[test]
+fn cross_version_cycles_without_minversion_are_rejected_regardless_of_id_order() {
+    for a_original_first in [true, false] {
+        for a_selected_first in [true, false] {
+            let (a_original_id, b_original_id) = if a_original_first {
+                (ObjectID::from_single_byte(1), ObjectID::from_single_byte(2))
+            } else {
+                (ObjectID::from_single_byte(2), ObjectID::from_single_byte(1))
+            };
+            let (a_order, b_order) = if a_selected_first { (1, 2) } else { (2, 1) };
+            let a_v1_id = package_id(a_order, 1);
+            let a_v2_id = package_id(a_order, 2);
+            let b_v1_id = package_id(b_order, 1);
+            let b_v2_id = package_id(b_order, 2);
+            let store = TestStore(BTreeMap::from([
+                (
+                    a_v1_id,
+                    TestPackage {
+                        id: a_v1_id,
+                        original_id: a_original_id,
+                        linkage: BTreeMap::new(),
+                    },
+                ),
+                (
+                    a_v2_id,
+                    TestPackage {
+                        id: a_v2_id,
+                        original_id: a_original_id,
+                        linkage: BTreeMap::from([(b_original_id.into(), b_v1_id.into())]),
+                    },
+                ),
+                (
+                    b_v1_id,
+                    TestPackage {
+                        id: b_v1_id,
+                        original_id: b_original_id,
+                        linkage: BTreeMap::new(),
+                    },
+                ),
+                (
+                    b_v2_id,
+                    TestPackage {
+                        id: b_v2_id,
+                        original_id: b_original_id,
+                        linkage: BTreeMap::from([(a_original_id.into(), a_v1_id.into())]),
+                    },
+                ),
+            ]));
+            let config =
+                ResolutionConfig::new(LinkageConfig::new(None, false), BinaryConfig::standard());
+            let mut resolution_table = ResolutionTable::empty(config);
+            let mut resolver = LinkageStoreResolver::<_, ExecutionError>::new(&store, None);
+            for package_id in [a_v2_id, b_v2_id] {
+                resolver
+                    .resolve_package(
+                        &mut resolution_table,
+                        package_id,
+                        ConstraintKind::AtLeast,
+                        ConstraintKind::AtLeast,
+                    )
+                    .unwrap();
+            }
+
+            let counting_store = CountingStore {
+                store: &store,
+                package_reads: Cell::new(0),
+            };
+            let resolver = LinkageStoreResolver::<_, ExecutionError>::new(&counting_store, None);
+            assert_eq!(
+                resolver
+                    .validate_acyclic_linkage(&resolution_table)
+                    .unwrap_err()
+                    .kind(),
+                &ExecutionErrorKind::InvalidLinkage
+            );
+            // Validation loads each selected package once, but obtains dependency original IDs
+            // directly from linkage-table keys rather than loading the dependency versions.
+            assert_eq!(counting_store.package_reads.get(), 2);
+        }
     }
 }
 

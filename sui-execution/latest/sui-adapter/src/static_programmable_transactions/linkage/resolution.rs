@@ -5,7 +5,6 @@ use crate::{
     data_store::{PackageMetadata, PackageStore},
     static_programmable_transactions::linkage::config::ResolutionConfig,
 };
-use petgraph::{algo::toposort, graphmap::DiGraphMap};
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
@@ -446,37 +445,65 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
     /// Reject cycles after package selection. Selection can combine edges from different package
     /// versions into a cycle even though every version was valid when published.
     ///
-    /// Build a graph with one edge for each dependency. Use the iterative topological sort rather
-    /// than recursive cycle detection.
+    /// Use an explicit stack to avoid recursive traversal. Linkage-table keys are dependency
+    /// original IDs, so cycle validation does not need to load each dependency package.
     pub(crate) fn validate_acyclic_linkage(
         &self,
         resolution_table: &ResolutionTable,
     ) -> Result<(), E> {
-        let mut graph = DiGraphMap::<ObjectID, ()>::new();
-        for (original_id, constraint) in &resolution_table.resolution_table {
-            let package = get_package(&constraint.object_id(), self.store)?;
-            for dependency_id in resolution_table
-                .config
-                .linkage_table(&package)
-                .into_values()
-                .map(ObjectID::from)
-            {
-                let dependency = get_package(&dependency_id, self.store)?;
-                let dependency_original_id = dependency.original_id();
-                // An upgraded package's table includes the package itself to identify its version.
-                // That entry is metadata, not a dependency edge. `add_edge` adds nodes if they are
-                // not already present in the graph.
-                if dependency_original_id != *original_id {
-                    graph.add_edge(*original_id, dependency_original_id, ());
-                }
-            }
+        enum Visit {
+            Enter(ObjectID),
+            Exit(ObjectID),
         }
 
-        if toposort(&graph, None).is_err() {
-            return Err(E::new_with_source(
-                ExecutionErrorKind::InvalidLinkage,
-                "cyclic package dependency in resolved linkage".to_owned(),
-            ));
+        let mut visiting = BTreeSet::new();
+        let mut visited = BTreeSet::new();
+        for root in resolution_table.resolution_table.keys().copied() {
+            if visited.contains(&root) {
+                continue;
+            }
+            let mut pending = vec![Visit::Enter(root)];
+            while let Some(visit) = pending.pop() {
+                match visit {
+                    Visit::Exit(original_id) => {
+                        visiting.remove(&original_id);
+                        visited.insert(original_id);
+                    }
+                    Visit::Enter(original_id) if visited.contains(&original_id) => {}
+                    Visit::Enter(original_id) => {
+                        if !visiting.insert(original_id) {
+                            return Err(E::new_with_source(
+                                ExecutionErrorKind::InvalidLinkage,
+                                "cyclic package dependency in resolved linkage".to_owned(),
+                            ));
+                        }
+
+                        pending.push(Visit::Exit(original_id));
+                        let Some(constraint) = resolution_table.resolution_table.get(&original_id)
+                        else {
+                            invariant_violation!(
+                                "package linkage graph contains original ID {original_id} that is \
+                                 missing from the resolution table"
+                            )
+                        };
+                        let package = get_package(&constraint.object_id(), self.store)?;
+                        pending.extend(
+                            resolution_table
+                                .config
+                                .linkage_table(&package)
+                                .into_keys()
+                                .map(ObjectID::from)
+                                // A package's table includes the package itself to identify its
+                                // version. That entry is metadata, not a dependency edge so filter
+                                // it out.
+                                .filter(|dependency_original_id| {
+                                    *dependency_original_id != original_id
+                                })
+                                .map(Visit::Enter),
+                        );
+                    }
+                }
+            }
         }
         Ok(())
     }
