@@ -34,6 +34,11 @@ pub struct CheckpointsPosition {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TransactionsPosition {
     /// Checkpoint containing or bounding the transaction sequence position.
+    /// Item cursors carry the checkpoint containing the transaction. Boundary
+    /// cursors carry that checkpoint or the one before or after it, depending
+    /// on the scan that issued them; readers must not let it exclude a
+    /// position that `tx_seq` and the cursor kind admit. Readers must accept
+    /// a cursor without it.
     #[prost(uint64, optional, tag = "1")]
     pub checkpoint: ::core::option::Option<u64>,
     /// Global transaction sequence number. Item cursors resume strictly after it;
@@ -43,7 +48,8 @@ pub struct TransactionsPosition {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct EventsPosition {
-    /// Checkpoint containing or bounding the event position.
+    /// Checkpoint containing or bounding the event position, with the same
+    /// guarantees as `TransactionsPosition.checkpoint`.
     #[prost(uint64, optional, tag = "1")]
     pub checkpoint: ::core::option::Option<u64>,
     /// Global transaction sequence number.

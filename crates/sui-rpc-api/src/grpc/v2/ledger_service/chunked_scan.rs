@@ -16,12 +16,15 @@ use crate::metrics::ListStreamMetrics;
 
 /// Chunk terminal for a scan that either exhausted its request scan budget
 /// (authoritative frontier watermark, built lazily) or ended at the resolved
-/// range boundary. Chunks only run over nonempty intervals, so the range
-/// terminal is never `interval_empty`.
+/// range boundary, where it claims `natural_end_claim` (see
+/// [`ResolvedScan::natural_end_claim`]).
+///
+/// [`ResolvedScan::natural_end_claim`]: crate::ledger_history::query_options::ResolvedScan::natural_end_claim
 pub(crate) fn scan_limit_or_range<Frontier>(
     request_scan_limit_reached: bool,
     exhaustion: RangeExhaustion,
     position: Position,
+    natural_end_claim: Option<u64>,
     frontier_watermark: Frontier,
 ) -> Result<ScanTerminal, RpcError>
 where
@@ -33,7 +36,9 @@ where
         })
     } else {
         Ok(ScanTerminal::from_range_exhaustion(
-            exhaustion, position, false,
+            exhaustion,
+            position,
+            natural_end_claim,
         ))
     }
 }
@@ -262,7 +267,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                        false,
+                        None,
                     ),
                     remaining_scan_budget: scan_budget - 1,
                 })
@@ -283,7 +288,7 @@ mod tests {
                     checkpoint: 0,
                     tx_seq: 0,
                 },
-                interval_empty: false,
+                claimed_checkpoint: None,
             })
         );
         assert_eq!(
@@ -309,7 +314,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                        false,
+                        None,
                     ),
                     remaining_scan_budget: args.scan_budget,
                 })
@@ -445,7 +450,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
-                        false,
+                        None,
                     ),
                     remaining_scan_budget: args.scan_budget - buckets_evaluated,
                 })

@@ -9,6 +9,7 @@ use sui_types::storage::LedgerTxSeqDigest;
 
 use crate::RpcError;
 use crate::RpcService;
+use crate::ledger_history::query_options::below_serving_floor;
 
 pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
@@ -54,12 +55,7 @@ fn missing_checkpoint_error(
     checkpoint: CheckpointSequenceNumber,
 ) -> RpcError {
     match service.reader.get_lowest_available_checkpoint() {
-        Ok(floor) if checkpoint < floor => RpcError::new(
-            tonic::Code::OutOfRange,
-            format!(
-                "requested data below earliest available; lowest available checkpoint is {floor}"
-            ),
-        ),
+        Ok(floor) if checkpoint < floor => below_serving_floor(floor),
         _ => RpcError::new(
             tonic::Code::Internal,
             format!(
@@ -125,24 +121,72 @@ pub(super) struct ServingFloor {
     pub(super) checkpoint: u64,
 }
 
+/// Whether the request sets its own lower bound: a `start_checkpoint` or an `after` cursor. Data
+/// below the serving floor is pruned and permanently gone, so such a bound below the floor is
+/// `OutOfRange`, while an open-ended low end is raised to the floor.
+fn has_explicit_lower_bound(
+    start_checkpoint: Option<u64>,
+    options: &crate::ledger_history::query_options::QueryOptions,
+) -> bool {
+    start_checkpoint.is_some() || options.has_after_cursor()
+}
+
+/// Rejects a request with no lower bound of its own whose checkpoint `window` lies wholly below
+/// the serving floor: every checkpoint it names is pruned and permanently gone, as for an explicit
+/// lower bound below the floor, so the request is `OutOfRange` rather than an empty page. A window
+/// reaching the floor passes. [`ResolvedScan::apply_serving_floor`] then raises a remaining scan to
+/// the floor, or rejects one that lies wholly below it; a scan the request's cursors alone leave
+/// empty is served as an empty page. An empty window names no checkpoint to reject. `floor` is
+/// read only when the window could lie below it.
+///
+/// [`ResolvedScan::apply_serving_floor`]: crate::ledger_history::query_options::ResolvedScan::apply_serving_floor
+fn reject_window_below_floor(
+    window: &Range<u64>,
+    explicit_lower_bound: bool,
+    floor: impl FnOnce() -> Result<u64, RpcError>,
+) -> Result<(), RpcError> {
+    if window.is_empty() || explicit_lower_bound {
+        return Ok(());
+    }
+    let floor = floor()?;
+    if window.end <= floor {
+        return Err(below_serving_floor(floor));
+    }
+    Ok(())
+}
+
+/// [`reject_window_below_floor`] against this server's serving floor, for the request's resolved
+/// checkpoint `window` (half-open, already clamped to the indexed tip).
+pub(super) fn reject_window_below_serving_floor(
+    service: &RpcService,
+    window: &Range<u64>,
+    start_checkpoint: Option<u64>,
+    options: &crate::ledger_history::query_options::QueryOptions,
+) -> Result<(), RpcError> {
+    reject_window_below_floor(
+        window,
+        has_explicit_lower_bound(start_checkpoint, options),
+        || service.reader.get_lowest_available_checkpoint(),
+    )
+}
+
 /// Clamp a resolved scan's low end (`start_tx`, tx-seq space) to the serving
 /// floor. Returns the resolved floor only when it actually moved the low end
 /// (an implicit-genesis low); an explicitly requested low below the floor
 /// (`start_checkpoint` or `after` cursor) errors `OutOfRange` instead, and an
 /// untouched low returns `None`. Callers MUST reconcile their interval and
-/// watermark metadata from the returned floor, so no watermark ever claims
-/// pruned, never-scanned checkpoints: for a nonempty retained intersection,
-/// ascending scans raise their entry claim to `checkpoint` and descending
-/// scans pin their terminal to it; a floor that consumes the interval leaves
-/// the request-derived terminal boundary in place and marks the interval
-/// empty.
+/// watermark metadata from the returned floor through
+/// [`ResolvedScan::apply_serving_floor`], so no watermark ever claims pruned,
+/// never-scanned checkpoints.
+///
+/// [`ResolvedScan::apply_serving_floor`]: crate::ledger_history::query_options::ResolvedScan::apply_serving_floor
 pub(super) fn clamp_to_serving_floor(
     service: &RpcService,
     start_tx: u64,
     start_checkpoint: Option<u64>,
     options: &crate::ledger_history::query_options::QueryOptions,
 ) -> Result<Option<ServingFloor>, RpcError> {
-    let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
+    let explicit_lower = has_explicit_lower_bound(start_checkpoint, options);
     let floor = lowest_available_tx_seq(service)?;
     let clamped = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
     if clamped == start_tx {
@@ -174,18 +218,13 @@ pub(super) fn clamp_checkpoints_to_serving_floor(
     start_checkpoint: Option<u64>,
     options: &crate::ledger_history::query_options::QueryOptions,
 ) -> Result<Option<u64>, RpcError> {
-    let explicit_lower = start_checkpoint.is_some() || options.has_after_cursor();
+    let explicit_lower = has_explicit_lower_bound(start_checkpoint, options);
     let floor = service.reader.get_lowest_available_checkpoint()?;
     if start >= floor {
         return Ok(None);
     }
     if explicit_lower {
-        return Err(RpcError::new(
-            tonic::Code::OutOfRange,
-            format!(
-                "requested data below earliest available; lowest available checkpoint is {floor}"
-            ),
-        ));
+        return Err(below_serving_floor(floor));
     }
     Ok(Some(floor))
 }
@@ -361,5 +400,56 @@ mod tests {
         assert_eq!(apply_tx_seq_floor(0, true, 0).unwrap(), 0);
         assert_eq!(apply_tx_seq_floor(0, false, 0).unwrap(), 0);
         assert_eq!(apply_tx_seq_floor(123, true, 0).unwrap(), 123);
+    }
+
+    fn window_below_floor(
+        window: Range<u64>,
+        explicit_lower_bound: bool,
+        floor: u64,
+    ) -> Result<(), RpcError> {
+        reject_window_below_floor(&window, explicit_lower_bound, || Ok(floor))
+    }
+
+    #[test]
+    fn window_wholly_below_floor_without_lower_bound_is_out_of_range() {
+        // The window's exclusive end at or below the floor: every checkpoint it names is pruned.
+        for window in [0..10, 0..5, 3..10] {
+            let status =
+                tonic::Status::from(window_below_floor(window.clone(), false, 10).unwrap_err());
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{window:?}");
+            assert_eq!(
+                status.message(),
+                "requested data below earliest available; lowest available checkpoint is 10"
+            );
+        }
+    }
+
+    #[test]
+    fn window_reaching_floor_is_served() {
+        // The window's last checkpoint is the floor itself, or lies above it.
+        for window in [0..11, 9..11, 10..20, 15..20] {
+            assert!(
+                window_below_floor(window.clone(), false, 10).is_ok(),
+                "{window:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn window_below_floor_rule_skips_empty_windows_and_explicit_lower_bounds() {
+        // An empty window names no checkpoint; an explicit lower bound below the floor is
+        // rejected by the serving-floor clamp instead.
+        for window in [0..0, 5..5, 10..10] {
+            assert!(
+                window_below_floor(window.clone(), false, 10).is_ok(),
+                "{window:?}"
+            );
+        }
+        window_below_floor(0..10, true, 10).unwrap();
+
+        // Neither reads the floor.
+        let unread_floor = || -> Result<u64, RpcError> { panic!("floor read") };
+        reject_window_below_floor(&(5..5), false, unread_floor).unwrap();
+        reject_window_below_floor(&(0..10), true, unread_floor).unwrap();
     }
 }

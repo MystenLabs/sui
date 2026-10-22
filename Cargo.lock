@@ -14361,6 +14361,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-rpc",
  "sui-rpc-api",
+ "sui-rpc-cursor",
  "sui-sdk",
  "sui-sdk-types",
  "sui-simulator",

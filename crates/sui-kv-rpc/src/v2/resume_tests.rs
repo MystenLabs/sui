@@ -10,6 +10,11 @@
 //! on a limit, the second. Both cut and uncut paging must return exactly the
 //! items the ledger was built with, within the request's bounds.
 //!
+//! Cursors also resume in the other direction: every cursor a paging returns,
+//! sent back with the opposite ordering, yields exactly the items its position
+//! and kind admit. These scenarios do not pace `ReadRows` (see below), so
+//! their cursors come mostly from page ends rather than progress beacons.
+//!
 //! Every response is also checked against the ledger: each item frame's
 //! cursor and the item's own checkpoint field name the checkpoint the ledger
 //! put the item in, and each frame's checkpoint coverage claim is sound (every
@@ -25,17 +30,18 @@
 //! scans assume every transaction has a row, so they run over a dense ledger
 //! built from real checkpoints.
 //!
-//! Every `ReadRows` returns its rows one message at a time, `READ_LATENCY`
-//! apart, so scans advance row by row. The bitmap-query evaluator paces
-//! progress watermarks by bucket rows charged to the scan budget, and the
-//! filtered scenarios set that threshold to one bucket: a watermark follows
-//! every bucket row charged without an item, so progress beacons appear
-//! throughout the filtered streams and cuts after beacons are exercised as
-//! well as cuts after items. Some filtered response of each endpoint must
-//! carry at least two beacons at strictly advancing positions, so beacons
-//! after the scan's first watermark reach the client. The clock is real: a
-//! paused clock jumps to the next timer whenever the runtime waits on the
-//! mock's socket, which bunches rows together and hides the gaps between them.
+//! In the cut-and-resume scenarios, every `ReadRows` returns its rows one
+//! message at a time, `READ_LATENCY` apart, so scans advance row by row. The
+//! bitmap-query evaluator paces progress watermarks by bucket rows charged to
+//! the scan budget, and the filtered scenarios set that threshold to one
+//! bucket: a watermark follows every bucket row charged without an item, so
+//! progress beacons appear throughout the filtered streams and cuts after
+//! beacons are exercised as well as cuts after items. Some filtered response
+//! of each endpoint must carry at least two beacons at strictly advancing
+//! positions, so beacons after the scan's first watermark reach the client.
+//! The clock is real: a paused clock jumps to the next timer whenever the
+//! runtime waits on the mock's socket, which bunches rows together and hides
+//! the gaps between them.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -888,6 +894,13 @@ fn advancing_beacons(response: &[Frame], ascending: bool) -> usize {
     advancing
 }
 
+/// How paging a request to its end went: the reason the last page ended, and every frame's
+/// cursor, in order.
+struct PagedToEnd {
+    reason: QueryEndReason,
+    cursors: Vec<Bytes>,
+}
+
 /// Page from `resume` until the range is exhausted, following each page's
 /// last cursor. Appends the items to `received`, and checks each response's
 /// coverage claims against `expected` and the items received before it.
@@ -897,15 +910,17 @@ async fn page_to_end(
     expected: &[(u64, u32)],
     received: &mut Vec<(u64, u32)>,
     mut resume: Option<Bytes>,
-) {
+) -> PagedToEnd {
+    let mut cursors = Vec::new();
     for _ in 0..1_000 {
         let frames = run(ctx, request, resume).await;
         assert_claims_sound(request, expected, received, &frames);
         received.extend(items(&frames));
+        cursors.extend(frames.iter().map(|frame| frame.cursor.clone()));
         let last = frames.last().expect("every response has a frame");
         let reason = last.end.expect("every response ends with a terminal frame");
         if is_natural_end(reason) {
-            return;
+            return PagedToEnd { reason, cursors };
         }
         assert!(
             matches!(
@@ -1281,4 +1296,186 @@ async fn list_transactions_resumes_after_any_frame() {
 #[tokio::test]
 async fn list_checkpoints_resumes_after_any_frame() {
     assert_all_modes(Endpoint::Checkpoints).await;
+}
+
+/// Every cursor a response carries, sent back in the opposite ordering, returns exactly the
+/// items its position and kind admit: strictly after an item, from a boundary, and below either
+/// as `before`. The cursors come from paging the endpoint to its end in both orderings, with and
+/// without a far cursor bound (whose terminal restates the bound), over filtered scans whose
+/// small bucket budget ends pages on scan-limit frontiers inside checkpoints, and over the dense
+/// ledger, where the unfiltered event scan's transaction cap does the same. Each opposite request
+/// is paged to its end, with its coverage claims checked against the items it returns. The
+/// bounded paging's closing cursor also resumes in its own ordering, without the far bound, with
+/// exactly the items the bound excluded.
+async fn assert_opposite_direction_resumes(endpoint: Endpoint) {
+    let sparse = MockBigtableServer::new();
+    sparse_ledger(&sparse).await;
+    let dense = MockBigtableServer::new();
+    dense_ledger(&dense).await;
+    let method = endpoint.method();
+    for filter in [Filter::Sender, Filter::AndSenders, Filter::None] {
+        let (mock, checkpoint_hi_exclusive) = if filter == Filter::None {
+            (&dense, DENSE_CHECKPOINTS)
+        } else {
+            (&sparse, SPARSE_CHECKPOINTS)
+        };
+        // Small pages: two buckets per literal, or three items, which caps the unfiltered event
+        // scan's transactions.
+        let (minting_limits, limit) = if filter == Filter::None {
+            let limits = Limits {
+                bucket_budget: 10_000,
+                max_limit_items: 3,
+                beacon_buckets: NonZeroU64::MIN,
+            };
+            (limits, 3)
+        } else {
+            let limits = Limits {
+                bucket_budget: 2 * filter.senders().len() as u64,
+                max_limit_items: 100,
+                beacon_buckets: NonZeroU64::MIN,
+            };
+            (limits, 100)
+        };
+        let (minting, minting_server) =
+            context(mock, checkpoint_hi_exclusive, method, minting_limits).await;
+        let (paging, paging_server) = context(
+            mock,
+            checkpoint_hi_exclusive,
+            method,
+            Limits {
+                bucket_budget: 10_000,
+                max_limit_items: 100,
+                beacon_buckets: NonZeroU64::MIN,
+            },
+        )
+        .await;
+        for ascending in [true, false] {
+            let base = Request {
+                endpoint,
+                filter,
+                ascending,
+                start_checkpoint: None,
+                end_checkpoint: None,
+                limit,
+                far_bound: None,
+            };
+            let all = expected_items(
+                &Request {
+                    ascending: true,
+                    ..base.clone()
+                },
+                checkpoint_hi_exclusive,
+            );
+            let far_bound = item_cursor(&minting, &base, 3).await;
+            let far_key = scan_key(
+                CursorToken::decode(&far_bound)
+                    .expect("cursor decodes")
+                    .position,
+            );
+            let bounded = Request {
+                far_bound: Some(far_bound),
+                ..base.clone()
+            };
+            let within_far_bound = |item: (u64, u32)| {
+                if ascending {
+                    item < far_key
+                } else {
+                    item > far_key
+                }
+            };
+            let mut cursors = Vec::new();
+            let mut closing = None;
+            for request in [&base, &bounded] {
+                let in_bounds: Vec<_> = expected_items(request, checkpoint_hi_exclusive)
+                    .into_iter()
+                    .filter(|&item| request.far_bound.is_none() || within_far_bound(item))
+                    .collect();
+                let mut received = Vec::new();
+                let paged = page_to_end(&minting, request, &in_bounds, &mut received, None).await;
+                assert_eq!(received, in_bounds, "{request:?}");
+                closing = paged.cursors.last().cloned();
+                cursors.extend(paged.cursors);
+            }
+
+            // The bounded paging's closing cursor, sent back in the same ordering without the
+            // far bound (an item), resumes with exactly the items the bound excluded: from the
+            // item on ascending, where `before` excludes it, and from the item down descending,
+            // where `after` excludes it.
+            let excluded: Vec<_> = if ascending {
+                all.iter()
+                    .copied()
+                    .filter(|&item| item >= far_key)
+                    .collect()
+            } else {
+                all.iter()
+                    .rev()
+                    .copied()
+                    .filter(|&item| item <= far_key)
+                    .collect()
+            };
+            let unbounded = Request {
+                limit: 100,
+                ..base.clone()
+            };
+            let mut received = Vec::new();
+            page_to_end(&paging, &unbounded, &excluded, &mut received, closing).await;
+            assert_eq!(received, excluded, "closing cursor of {bounded:?}");
+
+            let opposite = Request {
+                ascending: !ascending,
+                limit: 100,
+                ..base.clone()
+            };
+            for cursor in cursors {
+                let token = CursorToken::decode(&cursor).expect("cursor decodes");
+                let key = scan_key(token.position);
+                let expected: Vec<_> = if opposite.ascending {
+                    all.iter()
+                        .copied()
+                        .filter(|&item| match token.kind {
+                            sui_rpc_cursor::CursorKind::Item => item > key,
+                            sui_rpc_cursor::CursorKind::Boundary => item >= key,
+                        })
+                        .collect()
+                } else {
+                    all.iter()
+                        .rev()
+                        .copied()
+                        .filter(|&item| item < key)
+                        .collect()
+                };
+                let mut received = Vec::new();
+                let reason =
+                    page_to_end(&paging, &opposite, &expected, &mut received, Some(cursor))
+                        .await
+                        .reason;
+                assert_eq!(received, expected, "{token:?} sent back: {opposite:?}");
+                if !expected.is_empty() {
+                    let natural_end = if opposite.ascending {
+                        QueryEndReason::LedgerTip
+                    } else {
+                        QueryEndReason::CheckpointBound
+                    };
+                    assert_eq!(reason, natural_end, "{token:?} sent back: {opposite:?}");
+                }
+            }
+        }
+        minting_server.abort();
+        paging_server.abort();
+    }
+}
+
+#[tokio::test]
+async fn list_events_resumes_in_the_opposite_direction() {
+    assert_opposite_direction_resumes(Endpoint::Events).await;
+}
+
+#[tokio::test]
+async fn list_transactions_resumes_in_the_opposite_direction() {
+    assert_opposite_direction_resumes(Endpoint::Transactions).await;
+}
+
+#[tokio::test]
+async fn list_checkpoints_resumes_in_the_opposite_direction() {
+    assert_opposite_direction_resumes(Endpoint::Checkpoints).await;
 }
