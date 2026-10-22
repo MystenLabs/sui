@@ -1,8 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 960
 ---
-processed 12 tasks
+processed 16 tasks
 
 // Version-forbid ranges are inclusive and only accept historical versions.
 
@@ -38,39 +37,89 @@ task 5, lines 28-29:
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 2 --sender A
 created: object(5,0), object(5,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 8474000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 6, line 31:
+task 6, lines 31-32:
+// The bitmap and watermark both record the inclusive range through v2.
+//# view-object 5,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 6
+Contents: sui::dynamic_field::Field<sui::package_config::VersionForbiddenKey, u256> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    name: sui::package_config::VersionForbiddenKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+        chunk: 0u64,
+    },
+    value: 3u256,
+}
+
+task 7, line 34:
+//# view-object 5,1
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 6
+Contents: sui::dynamic_field::Field<sui::package_config::VersionsForbiddenThroughKey, u64> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,1),
+        },
+    },
+    name: sui::package_config::VersionsForbiddenThroughKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+    },
+    value: 2u64,
+}
+
+task 8, line 36:
 //# run BaseV1::base::ping --sender A
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
 
-task 7, line 33:
+task 9, line 38:
 //# run BaseV2::base::ping --sender A
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
 
-task 8, lines 35-36:
+task 10, lines 40-41:
 // The adjacent historical version remains allowed.
 //# run BaseV3::base::ping --sender A
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 38-39:
+task 11, lines 43-44:
 // A range with its start above its end is invalid.
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 3 2 --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::forbid_version_range (function index 1) at offset 10, Abort Code: 2
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 1, instruction: 10, function_name: Some("forbid_version_range") }, 2) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_valid_forbid_range (function index 11) at offset 6, Abort Code: 2
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 11, instruction: 6, function_name: Some("assert_valid_forbid_range") }, 2) at command Some(0)
 
-task 10, lines 41-42:
+task 12, lines 46-47:
 // Version zero is not historical. The range must reject it rather than install a v0 entry.
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 0 1 --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::forbid_version_range (function index 1) at offset 24, Abort Code: 1
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 1, instruction: 24, function_name: Some("forbid_version_range") }, 1) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::forbid_version_range (function index 1) at offset 22, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 1, instruction: 22, function_name: Some("forbid_version_range") }, 1) at command Some(0)
 
-task 11, lines 44-45:
+task 13, lines 49-50:
 // The current version is not historical, so it cannot be forbidden.
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 4 --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_historical_version (function index 11) at offset 15, Abort Code: 1
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 11, instruction: 15, function_name: Some("assert_historical_version") }, 1) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_historical_version (function index 10) at offset 15, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 10, instruction: 15, function_name: Some("assert_historical_version") }, 1) at command Some(0)
+
+task 14, lines 52-53:
+// A 512-version range passes the size check before failing historical-version validation.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 512 --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_historical_version (function index 10) at offset 15, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 10, instruction: 15, function_name: Some("assert_historical_version") }, 1) at command Some(0)
+
+task 15, lines 55-56:
+// A 513-version range is rejected before package-version validation.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 513 --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_valid_forbid_range (function index 11) at offset 15, Abort Code: 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 11, instruction: 15, function_name: Some("assert_valid_forbid_range") }, 4) at command Some(0)

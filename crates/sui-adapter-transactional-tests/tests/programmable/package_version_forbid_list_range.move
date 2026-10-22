@@ -28,6 +28,11 @@ public fun ping() {}
 // Both endpoints of the inclusive range are forbidden.
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 2 --sender A
 
+// The bitmap and watermark both record the inclusive range through v2.
+//# view-object 5,0
+
+//# view-object 5,1
+
 //# run BaseV1::base::ping --sender A
 
 //# run BaseV2::base::ping --sender A
@@ -43,3 +48,9 @@ public fun ping() {}
 
 // The current version is not historical, so it cannot be forbidden.
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 4 --sender A
+
+// A 512-version range passes the size check before failing historical-version validation.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 512 --sender A
+
+// A 513-version range is rejected before package-version validation.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 513 --sender A

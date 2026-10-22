@@ -1,8 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 960
 ---
-processed 8 tasks
+processed 17 tasks
 
 // Recording an enrolled upgrade atomically forbids its replaced version and updates minversion
 // selection for the next transaction.
@@ -30,11 +29,72 @@ task 4, lines 22-26:
 //> 1: Upgrade(BaseV2, [sui,std], BaseV1, Result(0));
 //> 2: sui::package_config::record_minversion_upgrade_and_forbid_previous_versions(Input(1), Input(0), Result(1));
 //> sui::package::commit_upgrade(Input(0), Result(1));
-created: object(4,0), object(4,1)
+created: object(4,0), object(4,1), object(4,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 12600800,  storage_rebate: 6831717, non_refundable_storage_fee: 683
+gas summary: computation_cost: 1000000, storage_cost: 15010000,  storage_rebate: 6831717, non_refundable_storage_fee: 683
 
 task 5, lines 28-29:
+// The first upgrade selects v2 and records v1 in both the bitmap and watermark.
+//# view-object 2,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::package_config::MinVersionKey, sui::package_config::MinVersion> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::package_config::MinVersionKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+    },
+    value: sui::package_config::MinVersion {
+        version: 2u64,
+        package_id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+}
+
+task 6, line 31:
+//# view-object 4,1
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::package_config::VersionForbiddenKey, u256> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,1),
+        },
+    },
+    name: sui::package_config::VersionForbiddenKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+        chunk: 0u64,
+    },
+    value: 1u256,
+}
+
+task 7, line 33:
+//# view-object 4,2
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::package_config::VersionsForbiddenThroughKey, u64> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,2),
+        },
+    },
+    name: sui::package_config::VersionsForbiddenThroughKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+    },
+    value: 1u64,
+}
+
+task 8, lines 35-36:
 // v1 immediately resolves to v2, so the v1 forbid no longer applies.
 //# run BaseV1::base::ping --sender A
 events: Event { package_id: fake(4,0), transaction_module: Identifier("base"), sender: A, type_: StructTag { address: fake(4,0), module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
@@ -42,10 +102,90 @@ mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 33-34:
+task 10, lines 40-41:
 // The newly upgraded package remains directly usable.
 //# run BaseV2::base::ping --sender A
 events: Event { package_id: BaseV2, transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV2, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 48-53:
+// The watermark means this upgrade only needs to add the newly historical v2 forbid entry.
+//# programmable --sender A --inputs object(1,1) object(0xcf6) 0u8 digest(BaseV3)
+//> 0: sui::package::authorize_upgrade(Input(0), Input(2), Input(3));
+//> 1: Upgrade(BaseV3, [sui,std], BaseV2, Result(0));
+//> 2: sui::package_config::record_minversion_upgrade_and_forbid_previous_versions(Input(1), Input(0), Result(1));
+//> sui::package::commit_upgrade(Input(0), Result(1));
+created: object(12,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1), object(2,0), object(4,1), object(4,2)
+gas summary: computation_cost: 1000000, storage_cost: 15010000,  storage_rebate: 11467253, non_refundable_storage_fee: 1147
+
+task 13, lines 55-56:
+// The second upgrade selects v3 and extends both forbidden-version records through v2.
+//# view-object 2,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 7
+Contents: sui::dynamic_field::Field<sui::package_config::MinVersionKey, sui::package_config::MinVersion> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::package_config::MinVersionKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+    },
+    value: sui::package_config::MinVersion {
+        version: 3u64,
+        package_id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+}
+
+task 14, line 58:
+//# view-object 4,1
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 7
+Contents: sui::dynamic_field::Field<sui::package_config::VersionForbiddenKey, u256> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,1),
+        },
+    },
+    name: sui::package_config::VersionForbiddenKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+        chunk: 0u64,
+    },
+    value: 3u256,
+}
+
+task 15, line 60:
+//# view-object 4,2
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000cf6 )
+Version: 7
+Contents: sui::dynamic_field::Field<sui::package_config::VersionsForbiddenThroughKey, u64> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,2),
+        },
+    },
+    name: sui::package_config::VersionsForbiddenThroughKey {
+        original_id: sui::object::ID {
+            bytes: BaseV1,
+        },
+    },
+    value: 2u64,
+}
+
+task 16, lines 62-63:
+// The historical v1 reference now resolves to v3.
+//# run BaseV1::base::ping --sender A
+events: Event { package_id: fake(12,0), transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV2, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
