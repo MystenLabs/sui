@@ -13,8 +13,9 @@ use super::lifecycle::{
     Lifecycle, LifecycleCall, LifecycleStep, StepContext, find_object, pure, shared_mut,
 };
 use super::operations::{
-    PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE, PARTY_OLD_STREAM,
-    PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM, PARTY_RETRANSFER,
+    PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_HOLDER_READ, PARTY_MUTATE,
+    PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
+    PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP,
 };
 use crate::workloads::payload::BatchedTransactionStatus;
 
@@ -39,10 +40,17 @@ pub(super) enum PartyStep {
     Retransfer,
     /// End a party object's stream by transferring it to the partner as a party owner.
     HandOff,
+    /// End a party object's stream by wrapping it in an address-owned `Holder`.
+    Wrap,
+    /// Unwrap a party object from its `Holder` to a party owner or an address.
+    Unwrap,
+    /// Read a `Holder`, submitted alongside the unwrap tx that consumes it.
+    HolderRead,
 }
 
 /// A payload's party-object lifecycle. Each acting batch advances it one step:
-/// `NeedCreate -> Live -> (StreamEnded -> Owned -> (Live | NeedCreate) | HandedOff -> NeedCreate)`.
+/// `NeedCreate -> Live -> (StreamEnded -> Owned -> (Live | NeedCreate) | HandedOff -> NeedCreate
+/// | Wrapped -> (Live | StreamEnded))`.
 /// The steps after `Live` submit txs that reference the ended stream together with txs that
 /// use the same object id under its current ownership. Their versions can collide, which
 /// exercises the check that an ended-stream input waits for its stream-ended marker.
@@ -76,6 +84,13 @@ enum PartyPhase {
     HandedOff {
         id: ObjectID,
         ended_start_version: SequenceNumber,
+    },
+    /// The object is wrapped in the address-owned `holder_ref`. The next step unwraps it to a
+    /// new stream or to an address, together with txs on the ended stream.
+    Wrapped {
+        id: ObjectID,
+        ended_start_version: SequenceNumber,
+        holder_ref: ObjectRef,
     },
 }
 
@@ -115,10 +130,15 @@ impl PartyLifecycle {
         );
         // Txs after a stream ends carry no sampled ops. Sampled ops would raise the owned
         // object's versions past the ended stream's assigned versions, and they would never
-        // collide.
+        // collide. The wrap tx carries none so that the holder is the only object it creates.
         if matches!(
             step,
-            PartyStep::OldStream | PartyStep::OwnedMutate | PartyStep::RestartStream
+            PartyStep::OldStream
+                | PartyStep::OwnedMutate
+                | PartyStep::RestartStream
+                | PartyStep::Wrap
+                | PartyStep::Unwrap
+                | PartyStep::HolderRead
         ) {
             call.bare()
         } else {
@@ -172,20 +192,25 @@ impl Lifecycle for PartyLifecycle {
                 if mutations >= Self::MAX_MUTATIONS || rng.gen_bool(0.5) {
                     // A single payload is its own partner, and a transfer to itself would
                     // not end the stream.
-                    let end = if ctx.partner != ctx.sender && rng.gen_bool(0.5) {
-                        self.call(
+                    let end = match rng.gen_range(0..3) {
+                        0 if ctx.partner != ctx.sender => self.call(
                             "to_party",
                             vec![obj.clone(), partner_arg],
                             PARTY_HAND_OFF,
                             PartyStep::HandOff,
-                        )
-                    } else {
-                        self.call(
+                        ),
+                        1 => self.call(
+                            "wrap",
+                            vec![obj.clone(), sender_arg],
+                            PARTY_WRAP,
+                            PartyStep::Wrap,
+                        ),
+                        _ => self.call(
                             "to_address",
                             vec![obj.clone(), sender_arg],
                             PARTY_END_STREAM,
                             PartyStep::EndStream,
-                        )
+                        ),
                     };
                     let mut calls = vec![end];
                     if rng.gen_bool(0.5) {
@@ -228,6 +253,50 @@ impl Lifecycle for PartyLifecycle {
                     ),
                     self.set_value(old_stream, 6, PARTY_OLD_STREAM, PartyStep::OldStream),
                 ]
+            }
+            PartyPhase::Wrapped {
+                id,
+                ended_start_version,
+                holder_ref,
+            } => {
+                let holder = CallArg::Object(ObjectArg::ImmOrOwnedObject(holder_ref));
+                let unwrap = if rng.gen_bool(0.5) {
+                    "unwrap_to_party"
+                } else {
+                    "unwrap_to_address"
+                };
+                let old_stream = shared_mut(id, ended_start_version);
+                let mut calls = vec![
+                    self.call(
+                        unwrap,
+                        vec![holder.clone(), sender_arg],
+                        PARTY_UNWRAP,
+                        PartyStep::Unwrap,
+                    ),
+                    self.set_value(
+                        old_stream.clone(),
+                        8,
+                        PARTY_OLD_STREAM,
+                        PartyStep::OldStream,
+                    ),
+                ];
+                if rng.gen_bool(0.5) {
+                    // Both txs use the holder at the same version, so at most one executes.
+                    calls.push(self.call(
+                        "holder_value",
+                        vec![holder],
+                        PARTY_HOLDER_READ,
+                        PartyStep::HolderRead,
+                    ));
+                } else {
+                    calls.push(self.set_value(
+                        old_stream,
+                        9,
+                        PARTY_OLD_STREAM,
+                        PartyStep::OldStream,
+                    ));
+                }
+                calls
             }
             PartyPhase::StreamEnded {
                 id,
@@ -292,6 +361,9 @@ impl Lifecycle for PartyLifecycle {
                         | PartyStep::HandOff
                         | PartyStep::OwnedMutate
                         | PartyStep::RestartStream
+                        | PartyStep::Wrap
+                        | PartyStep::Unwrap
+                        | PartyStep::HolderRead
                 ) {
                     debug!(?step, "party tx outcome unknown, resetting lifecycle");
                     self.phase = PartyPhase::NeedCreate;
@@ -377,6 +449,78 @@ impl Lifecycle for PartyLifecycle {
                 // The tx aborted or was cancelled, so the stream is still live.
                 _ => return,
             },
+            (
+                PartyStep::Wrap,
+                PartyPhase::Live {
+                    id, start_version, ..
+                },
+            ) => {
+                if !effects.wrapped().iter().any(|obj_ref| obj_ref.0 == *id) {
+                    // The tx was cancelled, so the stream is still live.
+                    return;
+                }
+                assert_reachable!("party object wrapped");
+                let holder_ref = effects
+                    .created()
+                    .into_iter()
+                    .find_map(|(obj_ref, owner)| {
+                        matches!(owner, Owner::AddressOwner(_)).then_some(obj_ref)
+                    })
+                    .expect("the wrap tx creates the holder");
+                Some(PartyPhase::Wrapped {
+                    id: *id,
+                    ended_start_version: *start_version,
+                    holder_ref,
+                })
+            }
+            (
+                PartyStep::HolderRead,
+                PartyPhase::Wrapped {
+                    id,
+                    ended_start_version,
+                    holder_ref,
+                },
+            ) => {
+                // The read bumped the holder's version, and the unwrap that raced it was
+                // rejected.
+                let Some((holder_ref, _)) = find_object(effects, holder_ref.0) else {
+                    return;
+                };
+                Some(PartyPhase::Wrapped {
+                    id: *id,
+                    ended_start_version: *ended_start_version,
+                    holder_ref,
+                })
+            }
+            (
+                PartyStep::Unwrap,
+                PartyPhase::Wrapped {
+                    id,
+                    ended_start_version,
+                    ..
+                },
+            ) => match find_object(effects, *id) {
+                Some((addr_ref, Owner::AddressOwner(_))) => {
+                    assert_reachable!("party object unwrapped to an address");
+                    Some(PartyPhase::StreamEnded {
+                        id: *id,
+                        ended_start_version: *ended_start_version,
+                        addr_ref,
+                    })
+                }
+                Some((_, owner)) => owner.start_version().map(|start_version| {
+                    assert_reachable!("party object unwrapped onto a new stream");
+                    PartyPhase::Live {
+                        id: *id,
+                        start_version,
+                        mutations: 0,
+                    }
+                }),
+                // The tx was cancelled, so the object is still wrapped.
+                None => return,
+            },
+            // The unwrap executed first and consumed the holder.
+            (PartyStep::HolderRead, _) => return,
             (
                 PartyStep::EndStream,
                 PartyPhase::Live {

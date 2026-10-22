@@ -16,9 +16,10 @@ pub use operations::{
     ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
     OperationDescriptor, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE,
     PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
-    PARTY_RETRANSFER, RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
-    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SharedCounterIncrement, SharedCounterRead,
-    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
+    PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RandomnessRead, SHARED_DELETE,
+    SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT, SHARED_DELETE_RACING, SHARED_DELETE_STALE,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 

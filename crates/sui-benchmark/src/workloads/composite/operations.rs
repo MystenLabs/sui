@@ -61,6 +61,9 @@ pub const PARTY_RACING_MUTATE: &str = "party_racing_mutate";
 pub const PARTY_RESTART_STREAM: &str = "party_restart_stream";
 pub const PARTY_RETRANSFER: &str = "party_retransfer";
 pub const PARTY_HAND_OFF: &str = "party_hand_off";
+pub const PARTY_WRAP: &str = "party_wrap";
+pub const PARTY_UNWRAP: &str = "party_unwrap";
+pub const PARTY_HOLDER_READ: &str = "party_holder_read";
 
 pub const SHARED_DELETE_CREATE: &str = "shared_delete_create";
 pub const SHARED_DELETE_INCREMENT: &str = "shared_delete_increment";
