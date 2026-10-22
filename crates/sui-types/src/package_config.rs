@@ -3,29 +3,28 @@
 
 use crate::base_types::{ObjectID, SequenceNumber};
 use crate::dynamic_field::DynamicFieldKey;
-use crate::error::SuiResult;
+use crate::error::{SuiErrorKind, SuiResult};
 use crate::storage::RuntimeObjectResolver;
 use crate::{MoveTypeTagTrait, SUI_FRAMEWORK_PACKAGE_ID, SUI_PACKAGE_CONFIG_OBJECT_ID, id::ID};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::u256::U256;
 use serde::{Deserialize, Serialize};
 
 pub const PACKAGE_CONFIG_MODULE_NAME: &IdentStr = ident_str!("package_config");
+const VERSIONS_PER_FORBID_CHUNK: u64 = 256;
 
 /// Rust representation of the Move type 0x2::package_config::VersionForbiddenKey.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VersionForbiddenKey {
     original_id: ObjectID,
-    version: u64,
+    chunk: u64,
 }
 
 impl VersionForbiddenKey {
-    pub fn new(original_id: ObjectID, version: u64) -> Self {
-        Self {
-            original_id,
-            version,
-        }
+    pub fn new(original_id: ObjectID, chunk: u64) -> Self {
+        Self { original_id, chunk }
     }
 
     pub fn type_() -> StructTag {
@@ -110,21 +109,26 @@ pub fn read_minversion(
 }
 
 /// Returns whether `package_version` is forbidden for `original_id` at `root_version`. Missing
-/// fields are allowed. Unknown non-zero values fail closed.
+/// fields are allowed; malformed fields return an error so execution can fail closed.
 pub fn is_version_forbidden(
     original_id: ObjectID,
     package_version: u64,
     root_version: SequenceNumber,
     object_store: &dyn RuntimeObjectResolver,
 ) -> SuiResult<bool> {
-    let key = VersionForbiddenKey::new(original_id, package_version);
+    let Some(index) = package_version.checked_sub(1) else {
+        return Err(SuiErrorKind::UnexpectedVersion("package version 0".to_owned()).into());
+    };
+    let chunk = index / VERSIONS_PER_FORBID_CHUNK;
+    let bit = (index % VERSIONS_PER_FORBID_CHUNK) as u8;
+    let key = VersionForbiddenKey::new(original_id, chunk);
     Ok(read_field(
         key,
         VersionForbiddenKey::get_type_tag(),
         root_version,
         object_store,
     )?
-    .is_some_and(|value: u64| value != 0))
+    .is_some_and(|bits: U256| bits & (U256::one() << bit) != U256::zero()))
 }
 
 #[cfg(test)]
@@ -133,7 +137,6 @@ mod tests {
     use crate::{
         digests::TransactionDigest,
         dynamic_field::DynamicFieldKey,
-        error::SuiErrorKind,
         in_memory_storage::InMemoryStorage,
         object::{Object, Owner},
     };
@@ -149,7 +152,54 @@ mod tests {
             read_minversion(original_id, ROOT_VERSION, &store).unwrap(),
             None
         );
+        assert!(matches!(
+            *is_version_forbidden(original_id, 0, ROOT_VERSION, &store)
+                .unwrap_err()
+                .0,
+            SuiErrorKind::UnexpectedVersion(_)
+        ));
         assert!(!is_version_forbidden(original_id, 1, ROOT_VERSION, &store).unwrap());
+    }
+
+    #[test]
+    fn forbidden_version_chunks_are_read_by_bit() {
+        let original_id = ObjectID::random();
+        let first_chunk = DynamicFieldKey(
+            SUI_PACKAGE_CONFIG_OBJECT_ID,
+            VersionForbiddenKey::new(original_id, 0),
+            VersionForbiddenKey::get_type_tag(),
+        )
+        .into_field((U256::one() << 0u8) | (U256::one() << 255u8))
+        .unwrap()
+        .into_move_object_unsafe_for_testing(ROOT_VERSION)
+        .unwrap();
+        let second_chunk = DynamicFieldKey(
+            SUI_PACKAGE_CONFIG_OBJECT_ID,
+            VersionForbiddenKey::new(original_id, 1),
+            VersionForbiddenKey::get_type_tag(),
+        )
+        .into_field(U256::one())
+        .unwrap()
+        .into_move_object_unsafe_for_testing(ROOT_VERSION)
+        .unwrap();
+        let store = InMemoryStorage::new(vec![
+            Object::new_move(
+                first_chunk,
+                Owner::ObjectOwner(SUI_PACKAGE_CONFIG_OBJECT_ID.into()),
+                TransactionDigest::genesis_marker(),
+            ),
+            Object::new_move(
+                second_chunk,
+                Owner::ObjectOwner(SUI_PACKAGE_CONFIG_OBJECT_ID.into()),
+                TransactionDigest::genesis_marker(),
+            ),
+        ]);
+
+        assert!(is_version_forbidden(original_id, 1, ROOT_VERSION, &store).unwrap());
+        assert!(!is_version_forbidden(original_id, 2, ROOT_VERSION, &store).unwrap());
+        assert!(is_version_forbidden(original_id, 256, ROOT_VERSION, &store).unwrap());
+        assert!(is_version_forbidden(original_id, 257, ROOT_VERSION, &store).unwrap());
+        assert!(!is_version_forbidden(original_id, 258, ROOT_VERSION, &store).unwrap());
     }
 
     #[test]
@@ -166,10 +216,10 @@ mod tests {
         .unwrap();
         let forbidden = DynamicFieldKey(
             SUI_PACKAGE_CONFIG_OBJECT_ID,
-            VersionForbiddenKey::new(original_id, 1),
+            VersionForbiddenKey::new(original_id, 0),
             VersionForbiddenKey::get_type_tag(),
         )
-        .into_field(ObjectID::random())
+        .into_field(0u64)
         .unwrap()
         .into_move_object_unsafe_for_testing(ROOT_VERSION)
         .unwrap();

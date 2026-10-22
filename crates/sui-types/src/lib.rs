@@ -255,6 +255,12 @@ impl MoveTypeTagTrait for u64 {
     }
 }
 
+impl MoveTypeTagTrait for move_core_types::u256::U256 {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::U256
+    }
+}
+
 impl MoveTypeTagTrait for ObjectID {
     fn get_type_tag() -> TypeTag {
         TypeTag::Address
