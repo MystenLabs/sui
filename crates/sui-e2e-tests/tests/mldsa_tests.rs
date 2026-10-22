@@ -105,6 +105,30 @@ async fn test_mldsa65_feature_deny() {
 }
 
 #[sim_test]
+async fn test_mldsa65_feature_deny_via_fullnode() {
+    // The fullnode verifies signatures before `validity_check`, so the
+    // verifier's own gate has to refuse first; nothing may reach the ML-DSA
+    // verifier on a network that has not enabled the scheme.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_mldsa65_auth_for_testing(false);
+        config
+    });
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let kp = mldsa_keypair();
+    let tx_data = funded_transfer(&test_cluster, &kp).await;
+    let err = test_cluster
+        .wallet
+        .execute_transaction_may_fail(sign(tx_data, &kp))
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("ML-DSA-65 signatures not supported"),
+        "{err}"
+    );
+}
+
+#[sim_test]
 async fn test_mldsa65_wrong_signer_fails() {
     let _guard = enable_mldsa();
     let test_cluster = TestClusterBuilder::new().build().await;
