@@ -43,6 +43,8 @@ COPY --from=builder /sui/target/release/sui      /opt/sui/bin/sui-th
 COPY --from=builder /sui/target/release/sui-tool /opt/sui/bin/sui-tool-th
 COPY --from=builder /sui/target/release/stress   /opt/sui/bin/stress-th
 
+ENV PATH="$PATH:/opt/sui/bin"
+
 ARG BUILD_DATE
 ARG GIT_REVISION
 LABEL build-date=$BUILD_DATE
