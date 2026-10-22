@@ -166,4 +166,6 @@ fn get_sui_package_dir() -> PathBuf {
 datatest_stable::harness!(shell_tests, TEST_DIR, TEST_PATTERN);
 
 #[cfg(msim)]
-fn main() {}
+fn main() {
+    let _ = (shell_tests, TEST_DIR, TEST_PATTERN);
+}

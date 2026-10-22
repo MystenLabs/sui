@@ -324,6 +324,7 @@ pub enum RosettaEndpoint {
 }
 
 impl RosettaEndpoint {
+    #[allow(dead_code)]
     pub fn endpoint(&self) -> &str {
         match self {
             RosettaEndpoint::Derive => "construction/derive",

@@ -177,7 +177,7 @@ pub(crate) trait ValidatorNetworkClient: Send + Sync + Sized + 'static {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 
     /// Sends a serialized SignedBlock to a peer.
-    #[cfg(test)]
+    #[cfg(all(test, not(msim)))]
     async fn send_block(
         &self,
         peer: AuthorityIndex,
