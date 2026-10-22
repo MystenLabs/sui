@@ -1,0 +1,158 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Per-payload object lifecycles. A lifecycle tracks an object through state transitions
+//! (a consensus stream ends, an object is deleted or wrapped) and submits txs that reference
+//! the object's old and new states in the same batch. Each call of a step goes into its own
+//! composite tx.
+
+use mysten_common::random::get_rng;
+use rand::Rng;
+use rand::seq::SliceRandom;
+use sui_types::TypeTag;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::CallArg;
+use sui_types::{Identifier, base_types::SequenceNumber};
+
+use super::party::PartyStep;
+use crate::ExecutionEffects;
+use crate::workloads::payload::BatchedTransactionStatus;
+
+/// Identifies the step that built a tx, so its result can be routed back to the lifecycle.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum LifecycleStep {
+    Party(PartyStep),
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum LifecycleCommand {
+    MoveCall {
+        package: ObjectID,
+        module: &'static str,
+        function: &'static str,
+        type_args: Vec<TypeTag>,
+        args: Vec<CallArg>,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct LifecycleCall {
+    pub command: LifecycleCommand,
+    /// The op name recorded in the tx's `OperationSet`.
+    pub op: &'static str,
+    pub step: LifecycleStep,
+    /// A bare call's tx carries no sampled ops, so its lamport version is determined by the
+    /// call's inputs and the gas coin alone. Inputs with higher versions would move the
+    /// versions of objects it writes away from the versions under test.
+    pub bare: bool,
+}
+
+impl LifecycleCall {
+    pub fn move_call(
+        package: ObjectID,
+        module: &'static str,
+        function: &'static str,
+        args: Vec<CallArg>,
+        op: &'static str,
+        step: LifecycleStep,
+    ) -> Self {
+        Self {
+            command: LifecycleCommand::MoveCall {
+                package,
+                module,
+                function,
+                type_args: vec![],
+                args,
+            },
+            op,
+            step,
+            bare: false,
+        }
+    }
+
+    pub fn bare(mut self) -> Self {
+        self.bare = true;
+        self
+    }
+
+    pub fn apply(&self, builder: &mut ProgrammableTransactionBuilder) {
+        match &self.command {
+            LifecycleCommand::MoveCall {
+                package,
+                module,
+                function,
+                type_args,
+                args,
+            } => {
+                builder
+                    .move_call(
+                        *package,
+                        Identifier::new(*module).unwrap(),
+                        Identifier::new(*function).unwrap(),
+                        type_args.clone(),
+                        args.clone(),
+                    )
+                    .unwrap();
+            }
+        }
+    }
+}
+
+pub(super) struct StepContext {
+    pub sender: SuiAddress,
+    pub partner: SuiAddress,
+}
+
+pub(super) trait Lifecycle: Send + Sync + std::fmt::Debug {
+    /// True once the lifecycle has started and until it returns to its initial state.
+    fn in_progress(&self) -> bool;
+
+    /// Per-batch probability that an idle lifecycle starts.
+    fn start_probability(&self) -> f64;
+
+    /// Advances the lifecycle one step and returns that step's calls. The caller submits all
+    /// of them concurrently in one batch.
+    fn next_step(&mut self, ctx: &StepContext) -> Vec<LifecycleCall>;
+
+    /// Updates the lifecycle from the result of a tx that carried one of its calls. Sampled
+    /// ops in the same PTB can abort or reject the tx, so implementations should advance from
+    /// the effects on the tracked objects rather than from the tx status.
+    fn handle_result(&mut self, step: LifecycleStep, status: &BatchedTransactionStatus);
+}
+
+/// Picks at most one lifecycle to step this batch, uniformly among the lifecycles in progress
+/// and the idle lifecycles that decide to start. One step per batch keeps lifecycle txs from
+/// displacing the shared-counter load of the sampled ops.
+pub(super) fn choose_lifecycle(lifecycles: &[Box<dyn Lifecycle>]) -> Option<usize> {
+    let mut rng = get_rng();
+    let candidates: Vec<usize> = lifecycles
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.in_progress() || rng.gen_bool(l.start_probability()))
+        .map(|(i, _)| i)
+        .collect();
+    candidates.choose(&mut rng).copied()
+}
+
+pub(super) fn find_object(effects: &ExecutionEffects, id: ObjectID) -> Option<(ObjectRef, Owner)> {
+    effects
+        .created()
+        .into_iter()
+        .chain(effects.mutated())
+        .chain(effects.unwrapped())
+        .find(|(obj_ref, _)| obj_ref.0 == id)
+}
+
+pub(super) fn shared_mut(id: ObjectID, initial_shared_version: SequenceNumber) -> CallArg {
+    CallArg::Object(sui_types::transaction::ObjectArg::SharedObject {
+        id,
+        initial_shared_version,
+        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
+    })
+}
+
+pub(super) fn pure<T: serde::Serialize>(value: &T) -> CallArg {
+    CallArg::Pure(bcs::to_bytes(value).unwrap())
+}

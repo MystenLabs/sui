@@ -139,6 +139,22 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn unwrapped(&self) -> Vec<(ObjectRef, Owner)> {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().unwrapped()
+            }
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.unwrapped(),
+        }
+    }
+
+    pub fn wrapped(&self) -> Vec<ObjectRef> {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().wrapped(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.wrapped(),
+        }
+    }
+
     pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
