@@ -190,10 +190,12 @@ mod tests {
     use super::*;
     use crate::task::streaming::test_utils::FetcherBehavior;
     use crate::task::streaming::test_utils::MockFetcher;
-    use crate::task::watermark::KV_PACKAGES_PIPELINE;
 
     /// Pipeline name under which `WatermarkTask` tracks the kv-rpc / LedgerService source.
     const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
+
+    /// A Postgres pipeline GraphQL also reads from.
+    const KV_PACKAGES_PIPELINE: &str = "kv_packages";
 
     fn fetcher(setup: &[(u64, FetcherBehavior)]) -> MockFetcher {
         MockFetcher::from_setup(setup)
@@ -398,8 +400,8 @@ mod tests {
         });
 
         // ledger_grpc has caught up but kv_packages is still at 0. Recovery must
-        // not progress because subscribers would resolve packages from a DB that
-        // hasn't indexed them yet.
+        // not progress because nested queries could read from a pipeline that
+        // hasn't indexed these checkpoints yet.
         tx.send(Arc::new(Watermarks::for_test(&[
             (LEDGER_GRPC_PIPELINE, 3),
             (KV_PACKAGES_PIPELINE, 0),
