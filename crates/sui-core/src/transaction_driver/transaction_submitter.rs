@@ -8,10 +8,10 @@ use std::{
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
-    base_types::AuthorityName,
-    error::ErrorCategory,
+    base_types::{AuthorityName, ObjectID},
+    error::{ErrorCategory, SuiError, SuiErrorKind},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
-    transaction::TransactionDataAPI as _,
+    transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, TransactionDataAPI as _},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -20,13 +20,14 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
+    staggered_submission::{stagger_order, stagger_proposer_slots, stagger_seed},
     transaction_driver::{
         SubmitTransactionOptions, TransactionDriverMetrics,
         error::{
             AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
             aggregate_request_errors,
         },
-        request_retrier::RequestRetrier,
+        request_retrier::{RequestRetrier, StaggerTargets},
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -75,7 +76,6 @@ impl TransactionSubmitter {
                 .allowed_proposers(authority_aggregator.committee.epoch())
         });
 
-        // Pings carry no transaction, so they are neither restricted nor unrestricted.
         if request.transaction.is_some() {
             self.metrics
                 .submitted_txns_with_allowed_proposers
@@ -96,12 +96,45 @@ impl TransactionSubmitter {
             .submit_amplification_factor
             .observe(amplification_factor as f64);
 
+        // While validators stagger unrestricted transactions, target the transaction's
+        // own free-slot validators: they propose it immediately, everyone else would
+        // hold it. Harmless if the view is stale — a mistargeted submission is still
+        // sequenced, only slower.
+        let stagger_targets = request
+            .transaction
+            .as_ref()
+            .filter(|_| allowed_proposers.is_none() && client_monitor.staggering_active())
+            .map(|tx| {
+                // The same inputs the validators seed the schedule with.
+                let gas_payment: Vec<ObjectID> = tx
+                    .transaction_data()
+                    .gas_data()
+                    .payment
+                    .iter()
+                    .map(|(id, _, _)| *id)
+                    .collect();
+                let seed = stagger_seed(
+                    &gas_payment,
+                    &[tx.digest()],
+                    authority_aggregator.committee.epoch(),
+                );
+                let order = stagger_order(&seed, &authority_aggregator.committee);
+                let proposer_slots =
+                    stagger_proposer_slots(&order, &authority_aggregator.committee) as usize;
+                StaggerTargets {
+                    order,
+                    free_slots: MAX_UNPAID_ALLOWED_PROPOSERS.max(amplification_factor) as usize,
+                    proposer_slots,
+                }
+            });
+
         let mut retrier = RequestRetrier::new(
             authority_aggregator,
             client_monitor,
             options.allowed_validators.clone(),
             options.blocked_validators.clone(),
             allowed_proposers,
+            stagger_targets,
         );
 
         let ping_label = if request.ping_type.is_some() {
@@ -280,7 +313,9 @@ impl TransactionSubmitter {
             TransactionRequestError::TimedOutSubmittingTransaction
         })?
         .map_err(|error| {
-            if is_validator_error(error.categorize()) {
+            if is_staggered_rejection(&error) {
+                client_monitor.request_health_check();
+            } else if is_validator_error(&error) {
                 client_monitor.record_interaction_result(OperationFeedback {
                     authority_name: validator,
                     display_name: display_name.clone(),
@@ -302,7 +337,9 @@ impl TransactionSubmitter {
 
         // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
         if let SubmitTxResult::Rejected { error } = &result {
-            if is_validator_error(error.categorize()) {
+            if is_staggered_rejection(error) {
+                client_monitor.request_health_check();
+            } else if is_validator_error(error) {
                 client_monitor.record_interaction_result(OperationFeedback {
                     authority_name: validator,
                     display_name,
@@ -326,10 +363,26 @@ impl TransactionSubmitter {
     }
 }
 
-// Whether the failure is caused by the peer validator, as opposed to the user or this node.
-fn is_validator_error(category: ErrorCategory) -> bool {
+/// A non-proposer declining a staggered submission. The schedule working, not a fault
+/// of that validator, so it never counts against its score — and the first such
+/// rejection is the driver's earliest sign that validators started staggering, which
+/// only its preferred few would ever tell it in-band: it asks the monitor for an
+/// immediate health round so the view flips on f+1 stake's own reports instead of
+/// waiting out the health interval.
+fn is_staggered_rejection(error: &SuiError) -> bool {
     matches!(
-        category,
+        error.as_inner(),
+        SuiErrorKind::StaggeredSubmissionNotProposer
+    )
+}
+
+// Whether the failure is caused by the peer validator, as opposed to the user or this node.
+fn is_validator_error(error: &SuiError) -> bool {
+    if is_staggered_rejection(error) {
+        return false;
+    }
+    matches!(
+        error.categorize(),
         ErrorCategory::Aborted
             | ErrorCategory::Internal
             | ErrorCategory::ValidatorOverloaded
