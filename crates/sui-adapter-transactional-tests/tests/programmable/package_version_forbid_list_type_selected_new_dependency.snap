@@ -1,0 +1,95 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Root was published against BaseV1, which has no dependencies. A type argument introduced by
+// BaseV2 raises Root's executable Base dependency to v2, changing the runtime graph:
+//
+//   published graph:   Root -> BaseV1
+//   selected graph:    Root -> BaseV2 -> NewV1
+//
+// The first combined call proves that NewV1 executes. After NewV1 is forbidden, using BaseV2 only
+// as a type remains allowed, but combining that type with Root's call must reject the newly
+// introduced executable dependency.
+
+init:
+A: object(0,0)
+
+task 1, lines 16-19:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-23:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5069200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 25-29:
+//# upgrade --package BaseV1 --upgrade-capability 2,1 --dependencies NewV1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6627200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 31-34:
+//# publish --dependencies BaseV1 --sender A
+created: object(4,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4332000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 36-38:
+//# publish --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3518800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, lines 40-43:
+// The type argument raises Root's Base dependency to v2, so BaseV2 calls NewV1.
+//# programmable --sender A
+//> 0: Root::root::call();
+//> 1: Generic::generic::use_type<BaseV2::base::Marker>();
+events: Event { package_id: Root, transaction_module: Identifier("root"), sender: A, type_: StructTag { address: NewV1, module: Identifier("new_dependency"), name: Identifier("Ping"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 45-49:
+// Make NewV1 historical, then forbid the version introduced only by BaseV2's dependency table.
+//# upgrade --package NewV1 --upgrade-capability 1,1 --sender A
+created: object(7,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 8, line 51:
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 1 --sender A
+created: object(8,0), object(8,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 9, lines 53-54:
+// BaseV2 and its dependencies are type-only here, so the forbidden NewV1 remains allowed.
+//# run Generic::generic::use_type --type-args BaseV2::base::Marker --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 10, lines 56-57:
+// Root alone retains BaseV1, which has no New dependency.
+//# run Root::root::call --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 11, lines 59-63:
+// The same type argument now selects BaseV2 for Root. BaseV2 would execute forbidden NewV1, so the
+// transaction must be rejected as InvalidLinkage.
+//# programmable --sender A
+//> 0: Root::root::call();
+//> 1: Generic::generic::use_type<BaseV2::base::Marker>();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
