@@ -1390,8 +1390,11 @@ impl Payload for CompositePayload {
                     TestTransactionBuilder::new(sender, coin, rgp)
                 }
             } else if !address_balance_gas_disabled
-                && rng.gen_bool(self.config.address_balance_gas_probability as f64)
+                && (lifecycle_call.is_some_and(|call| call.bare)
+                    || rng.gen_bool(self.config.address_balance_gas_probability as f64))
             {
+                // A bare tx pays from the address balance, so that no gas coin version raises
+                // the versions it assigns or writes.
                 let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
                 TestTransactionBuilder::new_with_address_balance_gas(
                     sender,

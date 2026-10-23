@@ -73,9 +73,10 @@ pub(super) struct LifecycleCall {
     /// The op name recorded in the tx's `OperationSet`.
     pub op: &'static str,
     pub step: LifecycleStep,
-    /// A bare call's tx carries no sampled ops, so its lamport version is determined by the
-    /// call's inputs and the gas coin alone. Inputs with higher versions would move the
-    /// versions of objects it writes away from the versions under test.
+    /// A bare call's tx carries no sampled ops and pays gas from the address balance when
+    /// address-balance gas is enabled, so its lamport version is determined by the call's
+    /// inputs alone. Inputs with higher versions would move the versions of objects it writes
+    /// away from the versions under test.
     pub bare: bool,
 }
 
