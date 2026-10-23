@@ -2246,15 +2246,15 @@ mod test {
             // insufficient_funds_count requires AddressBalanceOverdraw operations
             assert!(metrics_sum.insufficient_funds_count > 2);
 
-            let accum_read_stats = metrics
-                .get_stats(&OperationSet::new().with(AccumulatorBalanceRead::NAME))
-                .expect("expected accumulator balance read stats");
-            info!(
-                "accumulator balance read metrics: success={}",
-                accum_read_stats.success_count
-            );
+            // Lifecycle ops share txs with sampled ops, so count every op set with a read.
+            let accum_read_success_count: u64 = metrics
+                .iter_stats()
+                .filter(|(op_set, _)| op_set.contains(AccumulatorBalanceRead::NAME))
+                .map(|(_, stats)| stats.success_count)
+                .sum();
+            info!("accumulator balance read metrics: success={accum_read_success_count}");
             assert!(
-                accum_read_stats.success_count > 0,
+                accum_read_success_count > 0,
                 "expected at least one accumulator balance read"
             );
 
