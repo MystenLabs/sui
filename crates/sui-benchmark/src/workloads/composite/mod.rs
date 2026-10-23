@@ -1312,8 +1312,9 @@ impl Payload for CompositePayload {
         };
         let mut lifecycle_calls = vec![];
         for index in choose_lifecycles(&self.lifecycles, max_normal_batch) {
+            let max_calls = self.lifecycles[index].max_step_calls();
             let calls = self.lifecycles[index].next_step(&ctx);
-            assert!(calls.len() <= self.lifecycles[index].max_step_calls());
+            assert!(calls.len() <= max_calls);
             lifecycle_calls.extend(calls.into_iter().map(|call| (index, call)));
         }
         let batch_size = {
