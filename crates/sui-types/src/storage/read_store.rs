@@ -31,7 +31,21 @@ use typed_store_error::TypedStoreError;
 
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
-    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+    Box<dyn Iterator<Item = Result<IndexedPackageVersion, TypedStoreError>> + 'a>;
+
+/// One published version of a package, as listed by
+/// [`RpcIndexes::package_versions_iter`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct IndexedPackageVersion {
+    pub version: u64,
+    /// The storage id under which this version lives.
+    pub storage_id: ObjectID,
+    /// The checkpoint this version was published in, or `None` when the
+    /// index does not know it: a pruned store restored from a live-object
+    /// snapshot records no publish checkpoint for versions published before
+    /// its lowest available checkpoint.
+    pub checkpoint: Option<CheckpointSequenceNumber>,
+}
 
 pub trait ReadStore: ObjectStore {
     //
@@ -804,6 +818,9 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> Result<BalanceIterator<'_>>;
 
+    /// Iterate the versions of the package originally published at
+    /// `original_id` in ascending version order, starting at version `cursor`
+    /// (inclusive) when set. Publish checkpoints are non-decreasing in version.
     fn package_versions_iter(
         &self,
         original_id: ObjectID,

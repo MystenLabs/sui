@@ -24,18 +24,15 @@ use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
+use sui_types::storage::IndexedPackageVersion;
 use sui_types::storage::LedgerBitmapBucket;
 use sui_types::storage::LedgerBitmapBucketIter;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::OwnedObjectInfo;
+use sui_types::storage::PackageVersionsIterator;
 use sui_types::storage::RpcIndexes;
-
-/// Local alias matching the inaccessible
-/// `sui_types::storage::read_store::PackageVersionsIterator`.
-type PackageVersionsIterator<'a> =
-    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
 use sui_types::storage::error::Result as StorageResult;
 use typed_store_error::TypedStoreError;
 
@@ -361,13 +358,16 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         .map_err(sui_types::storage::error::Error::custom)?;
         let mapped = iter.map(move |row| {
             let (key, value) = row.map_err(to_typed_store_err)?;
+            let info = value.into_inner();
             // Decode storage_id (32 bytes).
-            let storage_id_bytes: [u8; 32] = (&value.into_inner().storage_id[..])
-                .try_into()
-                .map_err(|_| {
-                    TypedStoreError::SerializationError("package_versions storage_id length".into())
-                })?;
-            Ok((key.version, ObjectID::new(storage_id_bytes)))
+            let storage_id_bytes: [u8; 32] = (&info.storage_id[..]).try_into().map_err(|_| {
+                TypedStoreError::SerializationError("package_versions storage_id length".into())
+            })?;
+            Ok(IndexedPackageVersion {
+                version: key.version,
+                storage_id: ObjectID::new(storage_id_bytes),
+                checkpoint: info.checkpoint,
+            })
         });
         Ok(Box::new(mapped))
     }
@@ -603,6 +603,7 @@ mod tests {
     use sui_consistent_store::Db;
     use sui_consistent_store::DbOptions;
     use sui_types::base_types::ObjectID;
+    use sui_types::storage::IndexedPackageVersion;
     use sui_types::storage::RpcIndexes;
 
     use crate::RpcStoreSchema;
@@ -1165,11 +1166,11 @@ mod tests {
                 .unwrap();
             for _ in 0..2 {
                 match iter.next() {
-                    Some(res) => seen.push(res.unwrap().0),
+                    Some(res) => seen.push(res.unwrap().version),
                     None => break,
                 }
             }
-            cursor = iter.next().transpose().unwrap().map(|(v, _)| v);
+            cursor = iter.next().transpose().unwrap().map(|entry| entry.version);
             if cursor.is_none() {
                 break;
             }
@@ -1184,6 +1185,46 @@ mod tests {
         unique.sort();
         unique.dedup();
         assert_eq!(unique, versions, "every version, no gaps or duplicates");
+    }
+
+    #[test]
+    fn package_versions_iter_reports_publish_checkpoint_unset_for_restored_rows() {
+        let (_dir, db, reader) = setup();
+        let original = ObjectID::from_single_byte(0xBD);
+        let s1 = ObjectID::from_single_byte(0x01);
+        let s2 = ObjectID::from_single_byte(0x02);
+
+        let mut batch = db.batch();
+        let (k, v) = crate::schema::package_versions::store_restored(original, 1, s1);
+        batch
+            .put(&reader.schema().package_versions, &k, &v)
+            .unwrap();
+        let (k, v) = crate::schema::package_versions::store(original, 2, s2, 42);
+        batch
+            .put(&reader.schema().package_versions, &k, &v)
+            .unwrap();
+        batch.commit().unwrap();
+
+        let entries: Vec<IndexedPackageVersion> = reader
+            .package_versions_iter(original, None)
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            entries,
+            vec![
+                IndexedPackageVersion {
+                    version: 1,
+                    storage_id: s1,
+                    checkpoint: None,
+                },
+                IndexedPackageVersion {
+                    version: 2,
+                    storage_id: s2,
+                    checkpoint: Some(42),
+                },
+            ]
+        );
     }
 
     #[test]

@@ -29,6 +29,23 @@ impl PageToken {
     }
 }
 
+/// The error for a `ListPackageVersions` `at_checkpoint` above the highest indexed checkpoint.
+/// Shared with other implementors of `MovePackageService` so the backends fail identically.
+pub fn at_checkpoint_not_indexed_error(at_checkpoint: u64, highest_indexed: u64) -> RpcError {
+    RpcError::new(
+        tonic::Code::NotFound,
+        format!(
+            "requested checkpoint {at_checkpoint} is not yet indexed; highest indexed checkpoint \
+             is {highest_indexed}",
+        ),
+    )
+}
+
+/// List the versions of a package's upgrade lineage, optionally only those published at or
+/// before `at_checkpoint`.
+///
+/// Restore-floor rows (versions with no recorded publish checkpoint) are listed with
+/// `checkpoint` unset; see the `at_checkpoint` floor check below for why a bound may include them.
 #[tracing::instrument(skip(service))]
 pub fn list_package_versions(
     service: &RpcService,
@@ -68,16 +85,65 @@ pub fn list_package_versions(
         .indexes()
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
 
+    if let Some(at_checkpoint) = request.at_checkpoint {
+        // The floor makes unset publish checkpoints safe to include under a bound; it is not
+        // guarding against pruned reads. A store restored from a live-object snapshot records no
+        // publish checkpoint for the versions it restored: they were all published before the
+        // lowest checkpoint available at restore time, `L`. The restore stamps the rpc-store
+        // pruning floor at `L`, and the objects floor read here includes that floor, so it never
+        // drops below `L`. A bound at or above it is therefore at or above `L`, and every unset
+        // version was published before the bound. Below the floor, an unset version may have been
+        // published after the bound, so the request is rejected rather than answered wrongly.
+        //
+        // Unlike `GetObject`'s `at_checkpoint`, this check can run before the read: pruning never
+        // deletes `package_versions` rows, and the floor only rises, so a bound that passes stays
+        // correct for rows read afterwards.
+        let lowest_available = service
+            .reader
+            .inner()
+            .get_lowest_available_checkpoint_objects()?;
+        if at_checkpoint < lowest_available {
+            return Err(RpcError::new(
+                tonic::Code::OutOfRange,
+                format!(
+                    "requested checkpoint {at_checkpoint} has been pruned; lowest available \
+                     checkpoint is {lowest_available}",
+                ),
+            ));
+        }
+
+        let highest_indexed = indexes
+            .get_highest_indexed_checkpoint_seq_number()
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+            .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
+        if at_checkpoint > highest_indexed {
+            return Err(at_checkpoint_not_indexed_error(
+                at_checkpoint,
+                highest_indexed,
+            ));
+        }
+    }
+
     let mut versions = vec![];
     let iter = indexes
         .package_versions_iter(original_package_id, page_token.map(|t| t.version))
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
     for result in iter.take(page_size + 1) {
-        let (version, storage_id) =
-            result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+        let entry = result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-        versions.push(PackageVersion::new(&storage_id.into(), version));
+        // Publish checkpoints are non-decreasing in version, so the first version published
+        // after the bound ends the scan. A version with no recorded publish checkpoint predates
+        // the lowest available checkpoint, which the bound was checked against above.
+        if let (Some(at_checkpoint), Some(published)) = (request.at_checkpoint, entry.checkpoint)
+            && published > at_checkpoint
+        {
+            break;
+        }
+
+        let mut version = PackageVersion::new(&entry.storage_id.into(), entry.version);
+        version.checkpoint = entry.checkpoint;
+        versions.push(version);
     }
 
     let next_page_token = if versions.len() > page_size {

@@ -989,7 +989,7 @@ impl RpcIndexes for RpcStoreReadStore {
         &self,
         original_id: ObjectID,
         cursor: Option<u64>,
-    ) -> Result<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>> {
+    ) -> Result<sui_types::storage::PackageVersionsIterator<'_>> {
         self.reader.package_versions_iter(original_id, cursor)
     }
 
