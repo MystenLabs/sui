@@ -2186,7 +2186,9 @@ mod test {
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.2,
             conflicting_transaction_probability,
-            alias_tx_probability: if address_aliases_enabled { 0.3 } else { 0.0 },
+            // A payload removes its alias after 3 successful alias txs. Batches of 6 txs leave
+            // each payload only about 8 batches, so alias txs must be frequent.
+            alias_tx_probability: if address_aliases_enabled { 0.5 } else { 0.0 },
             // The party lifecycle has the longest path to its version collisions, so it starts
             // more often than the others.
             party_object_probability: 0.8,
