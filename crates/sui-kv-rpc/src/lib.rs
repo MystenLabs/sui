@@ -19,6 +19,7 @@ pub use sui_kvstore::ChannelHealthConfig;
 use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
 use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::OBJECTS_PIPELINE;
 use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
@@ -297,10 +298,10 @@ pub struct KvRpcServer {
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) monotonic_read_wait_timeout: Duration,
     pub(crate) stages: StagesConfig,
-    // `at_checkpoint` object reads need the alpha
-    // [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`], backfilled from genesis (see
-    // [`KvRpcConfig::enable_object_at_checkpoint`]). Instances without it
-    // reject those reads with `Unimplemented`.
+    // `at_checkpoint` and `max_version` object reads need the alpha
+    // [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECT_TOMBSTONES_PIPELINE`],
+    // backfilled from genesis (see [`KvRpcConfig::enable_object_at_checkpoint`]).
+    // Instances without them reject those reads with `Unimplemented`.
     object_at_checkpoint_enabled: bool,
 }
 
@@ -687,7 +688,8 @@ impl KvRpcServer {
 
 /// Pipelines whose watermarks bound the checkpoint height reported by `GetServiceInfo`, so an
 /// instance does not advertise a height it cannot serve. [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`]
-/// is among them when `at_checkpoint` object reads are enabled.
+/// and [`OBJECT_TOMBSTONES_PIPELINE`] are among them when `at_checkpoint` and `max_version`
+/// object reads are enabled.
 pub fn service_info_watermark_pipelines(
     bitmap_schema: BitmapSchema,
     enable_object_at_checkpoint: bool,
@@ -710,6 +712,7 @@ pub fn service_info_watermark_pipelines(
     ];
     if enable_object_at_checkpoint {
         pipelines.push(OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE);
+        pipelines.push(OBJECT_TOMBSTONES_PIPELINE);
     }
     pipelines
 }
@@ -775,13 +778,14 @@ mod tests {
         .expect("start kv-rpc server")
     }
 
-    /// Write a watermark row for every pipeline a v2 replica serves, at the checkpoint
-    /// `checkpoint_of` names for it.
+    /// Write a watermark row for each of `pipelines`, at the checkpoint `checkpoint_of` names for
+    /// it.
     pub(crate) async fn seed_watermarks(
         client: &mut BigTableClient,
+        pipelines: &[&str],
         checkpoint_of: impl Fn(&str) -> u64,
     ) {
-        for pipeline in service_info_watermark_pipelines(BitmapSchema::V2, false) {
+        for &pipeline in pipelines {
             let checkpoint = checkpoint_of(pipeline);
             client
                 .create_pipeline_watermark_if_absent(
@@ -828,7 +832,8 @@ mod tests {
         let error = get_service_info(&server).await.unwrap_err();
         assert_eq!(error.code(), tonic::Code::Unavailable);
 
-        seed_watermarks(&mut client, |_| 20).await;
+        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, false);
+        seed_watermarks(&mut client, &pipelines, |_| 20).await;
         timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
             .await
             .expect("service info never refreshed")
@@ -848,7 +853,8 @@ mod tests {
 
         // The objects pipeline lags, so it bounds the served checkpoint, and the timestamp must
         // come from its watermark rather than from a pipeline that is further ahead.
-        seed_watermarks(&mut client, |pipeline| {
+        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, false);
+        seed_watermarks(&mut client, &pipelines, |pipeline| {
             if pipeline == OBJECTS_PIPELINE { 20 } else { 25 }
         })
         .await;

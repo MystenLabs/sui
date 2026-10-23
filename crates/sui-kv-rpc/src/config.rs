@@ -632,25 +632,28 @@ pub struct KvRpcConfig {
     pub bigtable_http2_connection_window_bytes: Option<u32>,
 
     /// Deprecated and ignored: the `GetServiceInfo` watermark set always
-    /// includes the List API pipelines, adds the object versions index when
-    /// `enable-object-at-checkpoint` is on, and cannot be chosen per pipeline.
+    /// includes the List API pipelines, adds the object versions index and the
+    /// object tombstones when `enable-object-at-checkpoint` is on, and cannot be
+    /// chosen per pipeline.
     /// Still parsed so existing config files keep loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
 
-    /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint`, and fold the
-    /// alpha `kvstore_object_versions_by_checkpoint` pipeline into the `GetServiceInfo`
-    /// checkpoint height. Defaults to `false`, which rejects those requests with
-    /// `Unimplemented`.
+    /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint` or
+    /// `max_version`, and fold the alpha `kvstore_object_versions_by_checkpoint` and
+    /// `kvstore_object_tombstones` pipelines into the `GetServiceInfo` checkpoint height.
+    /// Defaults to `false`, which rejects those requests with `Unimplemented`.
     ///
-    /// Enable this only after `kvstore_object_versions_by_checkpoint` has been backfilled from
-    /// genesis. Its table has no restore floor, so an object unchanged since before the
-    /// pipeline's first checkpoint would wrongly read as `NotFound`. The server cannot check
-    /// this: a backfill run as a separate task writes its own watermark row, so the main
+    /// Enable this only after both pipelines have been backfilled from genesis. The versions
+    /// index has no restore floor, so an object unchanged since before the pipeline's first
+    /// checkpoint would wrongly read as `NotFound`. A `max_version` read stops at the tombstone
+    /// written where the object was deleted or wrapped; without it, the read resolves to the
+    /// object's last live version before the removal instead of `NotFound`. The server cannot
+    /// check this: a backfill run as a separate task writes its own watermark row, so a main
     /// pipeline's `reader_lo` does not say whether history is complete. Setting this flag is the
     /// operator's statement that it is.
     ///
-    /// If this is on but the pipeline is not running, the pipeline has no watermark and the
+    /// If this is on but either pipeline is not running, that pipeline has no watermark and the
     /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and
     /// every request bounded by the served height fails with `Unavailable`. Requests that do not
     /// use the served height, such as latest and exact-version `GetObject` reads, are still
@@ -1212,27 +1215,33 @@ render-ahead = 3
 
     #[test]
     fn object_at_checkpoint_off_by_default_and_bounds_the_watermark_set() {
+        let object_pipelines = [
+            sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
+            sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
+        ];
         let cfg = KvRpcConfig::default();
         assert!(!cfg.enable_object_at_checkpoint());
-        assert!(
-            !service_info_watermark_pipelines(
-                cfg.ledger_history().bitmap_schema(),
-                cfg.enable_object_at_checkpoint()
-            )
-            .contains(&sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE)
+        let pipelines = service_info_watermark_pipelines(
+            cfg.ledger_history().bitmap_schema(),
+            cfg.enable_object_at_checkpoint(),
         );
+        for pipeline in object_pipelines {
+            assert!(!pipelines.contains(&pipeline), "{pipeline}");
+        }
 
         let yaml = "enable-object-at-checkpoint: true\n";
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
         assert!(cfg.enable_object_at_checkpoint());
-        assert!(
-            service_info_watermark_pipelines(
-                cfg.ledger_history().bitmap_schema(),
-                cfg.enable_object_at_checkpoint()
-            )
-            .contains(&sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE),
-            "the object versions index must bound the height",
+        let pipelines = service_info_watermark_pipelines(
+            cfg.ledger_history().bitmap_schema(),
+            cfg.enable_object_at_checkpoint(),
         );
+        for pipeline in object_pipelines {
+            assert!(
+                pipelines.contains(&pipeline),
+                "{pipeline} must bound the height"
+            );
+        }
     }
 
     #[test]
