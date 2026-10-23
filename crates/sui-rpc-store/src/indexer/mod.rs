@@ -388,6 +388,12 @@ impl Indexer {
                             // multiple checkpoints into one batch
                             // trips its out-of-order check.
                             max_batch_checkpoints: Some(1),
+                            // With one checkpoint per batch there
+                            // is nothing to accumulate, so write
+                            // each checkpoint as soon as it is
+                            // next in order instead of waiting for
+                            // the collect interval.
+                            min_eager_rows: Some(0),
                             ..Default::default()
                         },
                     )
@@ -456,7 +462,8 @@ impl Indexer {
     ///
     /// As with every synchronizer-coordinated pipeline, registers with
     /// `max_batch_checkpoints = 1` so each `commit` (and thus each
-    /// broadcast) is exactly one checkpoint.
+    /// broadcast) is exactly one checkpoint, and `min_eager_rows = 0`
+    /// so each checkpoint is written as soon as it is next in order.
     pub async fn add_checkpoint_broadcast(
         &mut self,
         sender: tokio::sync::broadcast::Sender<Arc<Checkpoint>>,
@@ -467,6 +474,7 @@ impl Indexer {
             SequentialConfig {
                 committer,
                 max_batch_checkpoints: Some(1),
+                min_eager_rows: Some(0),
                 ..Default::default()
             },
         )
