@@ -26,7 +26,7 @@ fun capy_init() {
     let pub = package::test_claim(CAPY {}, test.ctx());
 
     // create a new display object
-    let mut display = display::new<Capy>(&pub, test.ctx());
+    let mut display = display::new_for_testing<Capy>(&pub, test.ctx());
 
     display.add(b"name".to_string(), b"Capy {name}".to_string());
     display.add(b"link".to_string(), b"https://capy.art/capy/{id}".to_string());
