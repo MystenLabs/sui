@@ -16603,6 +16603,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tideconsole",
+ "tikv-jemallocator",
  "tokio",
  "tracing",
  "typed-store",
