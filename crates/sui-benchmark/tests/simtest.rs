@@ -2195,6 +2195,7 @@ mod test {
             gasless_probability: 0.2,
             sponsored_probability: 0.1,
             deny_probability: 0.2,
+            multisig_probability: 0.2,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -2332,6 +2333,7 @@ mod test {
             OWNED_CREATE,
             GASLESS_TRANSFER,
             SPONSORED_TX,
+            MULTISIG_TX,
         ] {
             let success_count: u64 = metrics
                 .iter_stats()

@@ -99,6 +99,8 @@ pub const SPONSOR_WITHDRAWAL: &str = "sponsor_withdrawal";
 pub const TEST_COIN_DENY: &str = "test_coin_deny";
 pub const TEST_COIN_UNDENY: &str = "test_coin_undeny";
 
+pub const MULTISIG_TX: &str = "multisig_tx";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,

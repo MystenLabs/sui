@@ -17,8 +17,8 @@ pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
     AllowanceWithdraw, AuthenticatedEventEmit, COIN_MERGE, CoinReservationWithdraw,
-    GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, OWNED_CREATE, OWNED_DELETE,
-    OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
+    GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, MULTISIG_TX, OWNED_CREATE,
+    OWNED_DELETE, OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
     OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF,
     PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
     PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
@@ -64,9 +64,10 @@ use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
-use sui_types::crypto::{AccountKeyPair, get_key_pair};
+use sui_types::crypto::{AccountKeyPair, Signature, Signer, SuiKeyPair, get_key_pair};
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GAS;
+use sui_types::multisig::MultiSigPublicKey;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -367,6 +368,9 @@ pub struct CompositeWorkloadConfig {
     /// Per-batch probability that the payload holding TEST_COIN's deny cap toggles whether
     /// its partner is denied. Zero disables it.
     pub deny_probability: f32,
+    /// Per-batch probability of adding a tx from the payload's multisig account. Zero
+    /// disables multisig accounts.
+    pub multisig_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -402,6 +406,7 @@ impl CompositeWorkloadConfig {
             owned_object_probability: 0.1,
             sponsored_probability: 0.05,
             deny_probability: 0.05,
+            multisig_probability: 0.1,
             ..Default::default()
         }
     }
@@ -479,6 +484,7 @@ impl Default for CompositeWorkloadConfig {
             gasless_probability: 0.0,
             sponsored_probability: 0.0,
             deny_probability: 0.0,
+            multisig_probability: 0.0,
             metrics: None,
         }
     }
@@ -542,6 +548,7 @@ pub struct CompositePayload {
     allowances: Option<PayloadAllowances>,
     lifecycles: Vec<Box<dyn Lifecycle>>,
     sponsor: Option<Sponsor>,
+    multisig: Option<MultisigAccount>,
 }
 
 /// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
@@ -599,6 +606,8 @@ enum BatchTxKind {
     InvalidPostRevocation,
     /// A gasless SUI transfer.
     Gasless,
+    /// A tx from the payload's multisig account.
+    Multisig,
     /// A call from the lifecycle at `index` in `CompositePayload::lifecycles`.
     Lifecycle { index: usize, step: LifecycleStep },
 }
@@ -626,6 +635,36 @@ struct BatchTxInfo {
     sponsor_coin: Option<(usize, ObjectID)>,
     op_set: OperationSet,
     kind: BatchTxKind,
+}
+
+/// A 2-of-3 multisig account with one key of each scheme. Its gas is paid from its address
+/// balance, which is funded at init.
+#[derive(Debug, Clone)]
+struct MultisigAccount {
+    address: SuiAddress,
+    public_key: MultiSigPublicKey,
+    keys: Vec<Arc<SuiKeyPair>>,
+}
+
+impl MultisigAccount {
+    fn new() -> Self {
+        let keys: Vec<Arc<SuiKeyPair>> = vec![
+            Arc::new(SuiKeyPair::Ed25519(get_key_pair().1)),
+            Arc::new(SuiKeyPair::Secp256k1(get_key_pair().1)),
+            Arc::new(SuiKeyPair::Secp256r1(get_key_pair().1)),
+        ];
+        let public_key = MultiSigPublicKey::new(
+            keys.iter().map(|key| key.public()).collect(),
+            vec![1; keys.len()],
+            2,
+        )
+        .expect("the multisig public key is valid");
+        Self {
+            address: SuiAddress::from(&public_key),
+            public_key,
+            keys,
+        }
+    }
 }
 
 /// The partner payload, which sponsors some of this payload's txs.
@@ -966,6 +1005,85 @@ impl CompositePayload {
                 kind,
             },
         )
+    }
+
+    /// Builds a tx from the multisig account, signed by a random two of its three keys. It
+    /// increments a shared counter and sends one MIST to the partner.
+    fn generate_multisig_transaction(&mut self, rgp: u64, current_epoch: u64) -> Transaction {
+        let account = self.multisig.clone().unwrap();
+        let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
+        let mut tx_builder = TestTransactionBuilder::new_with_address_balance_gas(
+            account.address,
+            rgp,
+            self.pool.chain_identifier,
+            current_epoch,
+            nonce,
+        );
+        {
+            let package_version = self.pool.select_package_version();
+            let (counter_id, counter_version) = self.pool.select_counter();
+            let builder = tx_builder.ptb_builder_mut();
+            builder
+                .move_call(
+                    package_version,
+                    Identifier::new("counter").unwrap(),
+                    Identifier::new("increment").unwrap(),
+                    vec![],
+                    vec![CallArg::Object(ObjectArg::SharedObject {
+                        id: counter_id,
+                        initial_shared_version: counter_version,
+                        mutability: SharedObjectMutability::Mutable,
+                    })],
+                )
+                .unwrap();
+            let withdrawal = builder
+                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(1, GAS::type_tag()))
+                .unwrap();
+            let balance = builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("balance").unwrap(),
+                Identifier::new("redeem_funds").unwrap(),
+                vec![GAS::type_tag()],
+                vec![withdrawal],
+            );
+            let recipient = builder.pure(self.partner_address).unwrap();
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("balance").unwrap(),
+                Identifier::new("send_funds").unwrap(),
+                vec![GAS::type_tag()],
+                vec![balance, recipient],
+            );
+        }
+        // The signatures must be in the order of the keys in the multisig public key.
+        let skipped = get_rng().gen_range(0..account.keys.len());
+        let mut signers: Vec<&dyn Signer<Signature>> = vec![];
+        let mut bitmap = 0;
+        for (i, key) in account.keys.iter().enumerate() {
+            if i != skipped {
+                signers.push(key.as_ref());
+                bitmap |= 1 << i;
+            }
+        }
+        let tx = tx_builder.ensure_unique().build_and_sign_multisig(
+            account.public_key.clone(),
+            &signers,
+            bitmap,
+        );
+        let op_set = OperationSet::new().with(MULTISIG_TX);
+        self.metrics
+            .lock()
+            .unwrap()
+            .record_signed_and_sent(op_set.clone());
+        self.current_batch_txs.push(BatchTxInfo {
+            // The tx uses no gas coin, so the result leaves this coin unchanged.
+            gas_idx: 0,
+            extra_gas_idx: None,
+            sponsor_coin: None,
+            op_set,
+            kind: BatchTxKind::Multisig,
+        });
+        tx
     }
 
     /// Builds a gasless tx that sends SUI from the sender's address balance to the partner.
@@ -1394,6 +1512,13 @@ impl Payload for CompositePayload {
         }
 
         if !address_balance_gas_disabled
+            && self.multisig.is_some()
+            && rng.gen_bool(self.config.multisig_probability as f64)
+        {
+            transactions.push(self.generate_multisig_transaction(rgp, current_epoch));
+        }
+
+        if !address_balance_gas_disabled
             && !gasless_disabled(system_state.protocol_config.as_ref())
             && rng.gen_bool(self.config.gasless_probability as f64)
         {
@@ -1443,6 +1568,12 @@ impl Payload for CompositePayload {
                 && effects.is_ok()
             {
                 assert_reachable!("gasless composite transfer executed");
+            }
+            if let (BatchTxKind::Multisig, BatchedTransactionStatus::Success { effects }) =
+                (tx_info.kind, &result.status)
+                && effects.is_ok()
+            {
+                assert_reachable!("multisig composite tx executed");
             }
 
             if tx_info.kind.is_alias()
@@ -1751,6 +1882,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             upgrade_cap: None,
             deny_cap: None,
             deny_list_initial_shared_version: None,
+            multisig_accounts: vec![],
         }))
     }
 }
@@ -1779,6 +1911,8 @@ pub struct CompositeWorkload {
     /// TEST_COIN's deny cap, owned by payload 0.
     deny_cap: Option<ObjectRef>,
     deny_list_initial_shared_version: Option<SequenceNumber>,
+    /// Indexed by payload.
+    multisig_accounts: Vec<MultisigAccount>,
 }
 
 impl CompositeWorkload {
@@ -2407,6 +2541,58 @@ impl Workload<dyn Payload> for CompositeWorkload {
             );
         }
 
+        if self.config.multisig_probability > 0.0
+            && !address_balance_disabled(protocol_config.as_ref())
+        {
+            let amount = self.config.address_balance_amount * 100;
+            self.multisig_accounts = (0..self.payload_gas.len())
+                .map(|_| MultisigAccount::new())
+                .collect();
+            let mut futures = vec![];
+            for (idx, ((gas_coins, sender, keypair), account)) in
+                itertools::zip_eq(&self.payload_gas, &self.multisig_accounts).enumerate()
+            {
+                let mut tx_builder = TestTransactionBuilder::new(*sender, gas_coins[0], gas_price);
+                {
+                    let builder = tx_builder.ptb_builder_mut();
+                    let amount_arg = builder.pure(amount).unwrap();
+                    let coin =
+                        builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+                    let Argument::Result(coin_idx) = coin else {
+                        panic!("SplitCoins should return Result");
+                    };
+                    let balance = builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("coin").unwrap(),
+                        Identifier::new("into_balance").unwrap(),
+                        vec![GAS::type_tag()],
+                        vec![Argument::NestedResult(coin_idx, 0)],
+                    );
+                    let recipient = builder.pure(account.address).unwrap();
+                    builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("balance").unwrap(),
+                        Identifier::new("send_funds").unwrap(),
+                        vec![GAS::type_tag()],
+                        vec![balance, recipient],
+                    );
+                }
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
+                let proxy_ref = execution_proxy.clone();
+                futures.push(async move {
+                    let effects = proxy_ref
+                        .execute_transaction_block(tx)
+                        .await
+                        .expect("Multisig account funding should succeed");
+                    (idx, effects)
+                });
+            }
+            for (idx, effects) in join_all(futures).await {
+                update_gas!(&mut self.payload_gas[idx].0[0], effects);
+            }
+            info!("Funded {} multisig accounts", self.multisig_accounts.len());
+        }
+
         // split remaining gas coins into 4 equal parts
         {
             let mut futures = vec![];
@@ -2611,6 +2797,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     deny,
                 ),
                 sponsor,
+                multisig: self.multisig_accounts.get(i as usize).cloned(),
             }));
         }
 
