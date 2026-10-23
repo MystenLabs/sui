@@ -8,6 +8,7 @@ mod flow_control;
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::ops::Bound;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -32,6 +33,7 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 use tonic::Code;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
@@ -400,8 +402,8 @@ impl BigTableClient {
         match self
             .range_scan(
                 tables::epochs::NAME,
-                None,
-                Some(upper_limit),
+                Bound::Unbounded,
+                Bound::Included(upper_limit),
                 1,
                 true,
                 filter,
@@ -463,8 +465,8 @@ impl BigTableClient {
         let rows = self
             .range_scan_stream(
                 tables::checkpoints::NAME,
-                Some(Bytes::from(start_key)),
-                Some(Bytes::from(end_key)),
+                Bound::Included(Bytes::from(start_key)),
+                Bound::Included(Bytes::from(end_key)),
                 rows_limit,
                 !direction.is_ascending(),
                 filter,
@@ -1204,14 +1206,14 @@ impl BigTableClient {
         Ok(stream.boxed())
     }
 
-    /// Scan a range of rows with optional start/end keys, limit, and direction.
-    /// Applies `CellsPerColumnLimitFilter(1)` like `multi_get_internal`.
+    /// Scan a range of rows between start/end keys, each included, excluded, or open, with a
+    /// limit and direction. Applies `CellsPerColumnLimitFilter(1)` like `multi_get_internal`.
     /// An optional column filter can be provided to restrict which columns are fetched.
     pub(crate) async fn range_scan(
         &mut self,
         table_name: &str,
-        start_key: Option<Bytes>,
-        end_key: Option<Bytes>,
+        start_key: Bound<Bytes>,
+        end_key: Bound<Bytes>,
         limit: i64,
         reversed: bool,
         filter: Option<RowFilter>,
@@ -1247,16 +1249,13 @@ impl BigTableClient {
     async fn range_scan_internal(
         &mut self,
         table_name: &str,
-        start_key: Option<Bytes>,
-        end_key: Option<Bytes>,
+        start_key: Bound<Bytes>,
+        end_key: Bound<Bytes>,
         limit: i64,
         reversed: bool,
         filter: Option<RowFilter>,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
-        let range = RowRange {
-            start_key: start_key.map(StartKey::StartKeyClosed),
-            end_key: end_key.map(EndKey::EndKeyClosed),
-        };
+        let range = row_range(start_key, end_key);
         let version_filter = RowFilter {
             filter: Some(Filter::CellsPerColumnLimitFilter(1)),
         };
@@ -1288,16 +1287,13 @@ impl BigTableClient {
     async fn range_scan_stream(
         &mut self,
         table_name: &str,
-        start_key: Option<Bytes>,
-        end_key: Option<Bytes>,
+        start_key: Bound<Bytes>,
+        end_key: Bound<Bytes>,
         limit: i64,
         reversed: bool,
         filter: Option<RowFilter>,
     ) -> Result<impl futures::Stream<Item = Result<(Bytes, Vec<(Bytes, Bytes)>)>> + use<>> {
-        let range = RowRange {
-            start_key: start_key.map(StartKey::StartKeyClosed),
-            end_key: end_key.map(EndKey::EndKeyClosed),
-        };
+        let range = row_range(start_key, end_key);
         let version_filter = RowFilter {
             filter: Some(Filter::CellsPerColumnLimitFilter(1)),
         };
@@ -1651,6 +1647,22 @@ impl BigTableClient {
 type TxSeqDigestScanStream = futures::stream::BoxStream<'static, Result<TxSeqDigestData>>;
 type TxSeqDigestScanTask = TaskGuard<Result<TxSeqDigestScanStream>>;
 
+/// The Bigtable row range between `start` and `end`, each included, excluded, or open.
+fn row_range(start: Bound<Bytes>, end: Bound<Bytes>) -> RowRange {
+    RowRange {
+        start_key: match start {
+            Bound::Included(key) => Some(StartKey::StartKeyClosed(key)),
+            Bound::Excluded(key) => Some(StartKey::StartKeyOpen(key)),
+            Bound::Unbounded => None,
+        },
+        end_key: match end {
+            Bound::Included(key) => Some(EndKey::EndKeyClosed(key)),
+            Bound::Excluded(key) => Some(EndKey::EndKeyOpen(key)),
+            Bound::Unbounded => None,
+        },
+    }
+}
+
 fn spawn_tx_seq_digest_bucket_scan(
     mut client: BigTableClient,
     bucket_range: Range<u64>,
@@ -1675,8 +1687,8 @@ async fn open_tx_seq_digest_bucket_scan(
     let rows = client
         .range_scan_stream(
             tx_seq_digest::NAME,
-            Some(Bytes::from(start_key)),
-            Some(Bytes::from(end_key)),
+            Bound::Included(Bytes::from(start_key)),
+            Bound::Included(Bytes::from(end_key)),
             rows_limit,
             descending,
             None,
@@ -1940,8 +1952,8 @@ impl KeyValueStoreReader for BigTableClient {
         if let Some((row_key, row)) = self
             .range_scan(
                 tables::objects::NAME,
-                Some(lower_limit),
-                Some(upper_limit),
+                Bound::Included(lower_limit),
+                Bound::Included(upper_limit),
                 1,
                 true,
                 None,
@@ -1977,8 +1989,8 @@ impl KeyValueStoreReader for BigTableClient {
         let Some((row_key, _)) = self
             .range_scan(
                 tables::objects::NAME,
-                Some(lower_limit),
-                Some(upper_limit),
+                Bound::Included(lower_limit),
+                Bound::Included(upper_limit),
                 1,
                 true,
                 Some(Self::keys_only_filter()),
@@ -2006,8 +2018,8 @@ impl KeyValueStoreReader for BigTableClient {
         let Some((_, row)) = self
             .range_scan(
                 tables::object_versions_by_checkpoint::NAME,
-                Some(start_key),
-                Some(end_key),
+                Bound::Included(start_key),
+                Bound::Included(end_key),
                 1,
                 true,
                 None,
@@ -2198,8 +2210,8 @@ impl KeyValueStoreReader for BigTableClient {
         match self
             .range_scan(
                 tables::packages::NAME,
-                Some(start_key),
-                Some(end_key),
+                Bound::Included(start_key),
+                Bound::Included(end_key),
                 1,
                 true,
                 Some(filter),
@@ -2257,8 +2269,8 @@ impl KeyValueStoreReader for BigTableClient {
         let rows = self
             .range_scan_stream(
                 tables::packages::NAME,
-                Some(start_key),
-                Some(end_key),
+                Bound::Included(start_key),
+                Bound::Included(end_key),
                 rows_limit,
                 descending,
                 None,
@@ -2284,39 +2296,37 @@ impl KeyValueStoreReader for BigTableClient {
 
     async fn get_packages_by_checkpoint_range(
         &mut self,
-        cp_after: Option<u64>,
-        cp_before: Option<u64>,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>> {
-        let start_cp = match cp_after {
-            Some(u64::MAX) => return Ok(vec![]),
-            Some(c) => c + 1,
-            None => 0,
+        // Bigtable rejects a row range that starts past its end, so an empty range is answered
+        // here.
+        let empty = match (&lower, &upper) {
+            (Bound::Included(lower), Bound::Included(upper)) => lower > upper,
+            (
+                Bound::Included(lower) | Bound::Excluded(lower),
+                Bound::Included(upper) | Bound::Excluded(upper),
+            ) => lower >= upper,
+            _ => false,
         };
-        let end_cp = match cp_before {
-            Some(0) => return Ok(vec![]),
-            Some(c) => c - 1,
-            None => u64::MAX,
-        };
-        if start_cp > end_cp || limit == 0 {
+        if empty || limit == 0 {
             return Ok(vec![]);
         }
 
-        let start_key = Bytes::from(tables::packages_by_checkpoint::encode_key(
-            start_cp, &[0u8; 32], 0,
-        ));
-        let end_key = Bytes::from(tables::packages_by_checkpoint::encode_key(
-            end_cp,
-            &[0xff; 32],
-            u64::MAX,
-        ));
-
+        let encode = |key: PackagePublishKey| {
+            Bytes::from(tables::packages_by_checkpoint::encode_key(
+                key.checkpoint,
+                key.original_id.as_ref(),
+                key.version,
+            ))
+        };
         let rows = self
             .range_scan(
                 tables::packages_by_checkpoint::NAME,
-                Some(start_key),
-                Some(end_key),
+                lower.map(encode),
+                upper.map(encode),
                 limit as i64,
                 descending,
                 None,
@@ -2336,17 +2346,29 @@ impl KeyValueStoreReader for BigTableClient {
         let packages = self.get_packages_by_version(&lookup_keys).await?;
         let mut package_map: HashMap<(ObjectID, u64), PackageData> = packages
             .into_iter()
-            .filter_map(|p| {
-                let orig_id = ObjectID::from_bytes(&p.original_id).ok()?;
-                Some(((orig_id, p.package_version), p))
+            .map(|p| {
+                Ok((
+                    (ObjectID::from_bytes(&p.original_id)?, p.package_version),
+                    p,
+                ))
             })
-            .collect();
+            .collect::<Result<_>>()?;
 
-        let results = lookup_keys
+        // A listing that skipped a version would end its page early, which a caller reads as the
+        // end of the listing, so a version indexed without its `packages` row is an error.
+        lookup_keys
             .into_iter()
-            .filter_map(|key| package_map.remove(&key))
-            .collect();
-        Ok(results)
+            .map(|(original_id, version)| {
+                package_map
+                    .remove(&(original_id, version))
+                    .with_context(|| {
+                        format!(
+                            "package {original_id} version {version} is in packages_by_checkpoint \
+                             but has no packages row"
+                        )
+                    })
+            })
+            .collect()
     }
 
     async fn get_system_packages(
@@ -2359,18 +2381,18 @@ impl KeyValueStoreReader for BigTableClient {
             return Ok(vec![]);
         }
 
-        let start_key = after_original_id.map(|id| {
-            // Start just after the given original_id by appending a byte.
-            let mut key = tables::system_packages::encode_key(id.as_ref());
-            key.push(0);
-            Bytes::from(key)
-        });
+        let start_key = match after_original_id {
+            Some(id) => Bound::Excluded(Bytes::from(tables::system_packages::encode_key(
+                id.as_ref(),
+            ))),
+            None => Bound::Unbounded,
+        };
 
         let rows = self
             .range_scan_stream(
                 tables::system_packages::NAME,
                 start_key,
-                None,
+                Bound::Unbounded,
                 0,
                 false,
                 None,
@@ -3244,11 +3266,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_packages_by_checkpoint_range_preserves_order() {
+    async fn get_packages_by_checkpoint_range_lists_key_range_in_order() {
+        use std::ops::Bound::{Excluded, Included, Unbounded};
+
+        async fn list(
+            client: &mut BigTableClient,
+            lower: Bound<PackagePublishKey>,
+            upper: Bound<PackagePublishKey>,
+            limit: usize,
+            descending: bool,
+        ) -> Result<Vec<ObjectID>> {
+            client
+                .get_packages_by_checkpoint_range(lower, upper, limit, descending)
+                .await?
+                .into_iter()
+                .map(|package| Ok(ObjectID::from_bytes(&package.original_id)?))
+                .collect()
+        }
+
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
         // The mock emits row_keys lookups in reverse request order, so this test fails unless
-        // get_packages_by_checkpoint_range restores checkpoint order itself.
+        // get_packages_by_checkpoint_range restores key order itself.
         mock.set_read_rows_response_order(
             crate::bigtable::mock_server::ReadRowsResponseOrder::ReverseRequestOrder,
         )
@@ -3260,9 +3299,9 @@ mod tests {
 
         // Create 3 packages whose lexicographical original_id order is different
         // from their checkpoint publication order.
-        let id_a = sui_types::base_types::ObjectID::from_bytes([0x10; 32]).unwrap();
-        let id_b = sui_types::base_types::ObjectID::from_bytes([0x20; 32]).unwrap();
-        let id_c = sui_types::base_types::ObjectID::from_bytes([0x30; 32]).unwrap();
+        let id_a = ObjectID::from_bytes([0x10; 32]).unwrap();
+        let id_b = ObjectID::from_bytes([0x20; 32]).unwrap();
+        let id_c = ObjectID::from_bytes([0x30; 32]).unwrap();
 
         // Publish order: cp 5 -> id_b, cp 6 -> id_a, cp 7 -> id_c
         let pubs = [(5u64, id_b, 1u64), (6u64, id_a, 1u64), (7u64, id_c, 1u64)];
@@ -3277,48 +3316,78 @@ mod tests {
             mock.insert_row(tables::packages::NAME, pkg_key, pkg_cells)
                 .await;
         }
+        let key = |checkpoint, original_id, version| PackagePublishKey {
+            checkpoint,
+            original_id,
+            version,
+        };
 
-        // Ascending scan across cp 5..=7: should be id_b, id_a, id_c (checkpoint order)
-        let asc = client
-            .get_packages_by_checkpoint_range(Some(4), Some(8), 10, false)
-            .await
-            .unwrap();
-        assert_eq!(asc.len(), 3);
-        assert_eq!(asc[0].original_id, id_b.to_vec());
-        assert_eq!(asc[1].original_id, id_a.to_vec());
-        assert_eq!(asc[2].original_id, id_c.to_vec());
-
-        // Descending scan across cp 5..=7: should be id_c, id_a, id_b
-        let desc = client
-            .get_packages_by_checkpoint_range(Some(4), Some(8), 10, true)
-            .await
-            .unwrap();
-        assert_eq!(desc.len(), 3);
-        assert_eq!(desc[0].original_id, id_c.to_vec());
-        assert_eq!(desc[1].original_id, id_a.to_vec());
-        assert_eq!(desc[2].original_id, id_b.to_vec());
-
-        // Boundary tests: cp_before = Some(0), cp_after = Some(u64::MAX), start > end
-        assert!(
-            client
-                .get_packages_by_checkpoint_range(None, Some(0), 10, false)
+        // Checkpoints 5 through 7, from their lowest possible key to their highest, in either
+        // direction.
+        let (first, last) = (key(5, ObjectID::ZERO, 0), key(7, ObjectID::MAX, u64::MAX));
+        assert_eq!(
+            list(&mut client, Included(first), Included(last), 10, false)
                 .await
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+            vec![id_b, id_a, id_c],
         );
-        assert!(
-            client
-                .get_packages_by_checkpoint_range(Some(u64::MAX), None, 10, false)
+        assert_eq!(
+            list(&mut client, Included(first), Included(last), 10, true)
                 .await
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+            vec![id_c, id_a, id_b],
         );
-        assert!(
-            client
-                .get_packages_by_checkpoint_range(Some(10), Some(5), 10, false)
+
+        // Bounds excluding listed keys, as cursors set them, leave those keys out in either
+        // direction, and a limit keeps the first versions in the scan direction.
+        let (after, before) = (key(5, id_b, 1), key(7, id_c, 1));
+        for descending in [false, true] {
+            assert_eq!(
+                list(
+                    &mut client,
+                    Excluded(after),
+                    Excluded(before),
+                    10,
+                    descending
+                )
                 .await
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+                vec![id_a],
+            );
+        }
+        assert_eq!(
+            list(&mut client, Unbounded, Unbounded, 2, true)
+                .await
+                .unwrap(),
+            vec![id_c, id_a],
+        );
+
+        // Empty and inverted ranges list nothing.
+        for (lower, upper) in [
+            (Excluded(after), Included(after)),
+            (Included(after), Excluded(after)),
+            (Included(before), Included(after)),
+        ] {
+            assert!(
+                list(&mut client, lower, upper, 10, false)
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+
+        // A version indexed without its `packages` row fails the read rather than ending the
+        // listing early.
+        mock.insert_row(
+            tables::packages_by_checkpoint::NAME,
+            tables::packages_by_checkpoint::encode_key(8, id_a.as_ref(), 2),
+            tables::packages_by_checkpoint::encode(),
+        )
+        .await;
+        assert!(
+            list(&mut client, Excluded(before), Unbounded, 10, false)
+                .await
+                .is_err()
         );
     }
 

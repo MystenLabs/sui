@@ -776,7 +776,12 @@ async fn test_indexer_e2e() -> Result<()> {
     // get_packages_by_checkpoint_range: should include the published package
     let by_cp = harness
         .bigtable_client()
-        .get_packages_by_checkpoint_range(None, None, 100, false)
+        .get_packages_by_checkpoint_range(
+            std::ops::Bound::Unbounded,
+            std::ops::Bound::Unbounded,
+            100,
+            false,
+        )
         .await?;
     assert!(
         by_cp.iter().any(|p| p.package_id == package_id.to_vec()),

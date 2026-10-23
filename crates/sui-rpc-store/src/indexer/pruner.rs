@@ -56,8 +56,8 @@
 //!   forced catch-up pass and periodic compaction provide those sweeps.
 //!
 //! The live-set-bounded indexes (`object_by_owner`, `object_by_type`,
-//! `balance`, `package_versions`) and the tiny `epochs` CF are never
-//! pruned.
+//! `balance`, `package_versions` and its checkpoint-ordered projection
+//! `packages_by_checkpoint`) and the tiny `epochs` CF are never pruned.
 //!
 //! # Floor, retention, and safety
 //!
@@ -665,8 +665,8 @@ fn retract_object_version_by_checkpoint(
 ///   database-local `tx_seq` floor so their compaction filters drop
 ///   fully-pruned buckets during periodic compaction.
 ///
-/// The live cohort, `package_versions`, and the tiny `epochs` CF are
-/// never pruned.
+/// The live cohort, `package_versions`, `packages_by_checkpoint`, and
+/// the tiny `epochs` CF are never pruned.
 ///
 /// `pruned_checkpoint_watermark` is the highest checkpoint the
 /// perpetual store has pruned (inclusive); `pruned_tx_seq_exclusive` is
