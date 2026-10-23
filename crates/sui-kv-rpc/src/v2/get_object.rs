@@ -6,7 +6,7 @@ use futures::stream;
 use futures::stream::BoxStream;
 use std::collections::HashMap;
 use sui_kvstore::KeyValueStoreReader;
-use sui_kvstore::tables::object_versions_by_checkpoint::ObjectStatus;
+use sui_kvstore::ObjectStatus;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
