@@ -6,7 +6,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_common::debug_fatal;
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::{SequenceNumber, SuiAddress};
+use crate::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use crate::collection_types::VecSet;
 use crate::error::{SuiErrorKind, SuiResult};
 use crate::object::Owner;
@@ -34,10 +34,7 @@ pub fn get_address_alias_state_obj_initial_shared_version(
         }))
 }
 
-pub fn get_address_aliases_from_store(
-    object_store: &dyn ObjectStore,
-    address: SuiAddress,
-) -> SuiResult<Option<(AddressAliases, SequenceNumber)>> {
+pub fn address_aliases_object_id(address: SuiAddress) -> SuiResult<ObjectID> {
     let alias_key_type = TypeTag::Struct(Box::new(StructTag {
         address: SUI_FRAMEWORK_ADDRESS,
         module: Identifier::new("address_alias").unwrap(),
@@ -46,17 +43,23 @@ pub fn get_address_aliases_from_store(
     }));
 
     let key_bytes = bcs::to_bytes(&address).unwrap();
-    let Ok(address_aliases_id) = derived_object::derive_object_id(
+    derived_object::derive_object_id(
         SuiAddress::from(SUI_ADDRESS_ALIAS_STATE_OBJECT_ID),
         &alias_key_type,
         &key_bytes,
-    ) else {
+    )
+    .map_err(|_| {
         debug_fatal!("failed to compute derived object id for alias state");
-        return Err(SuiErrorKind::Unknown(
-            "failed to compute derived object id for alias state".to_string(),
-        )
-        .into());
-    };
+        SuiErrorKind::Unknown("failed to compute derived object id for alias state".to_string())
+            .into()
+    })
+}
+
+pub fn get_address_aliases_from_store(
+    object_store: &dyn ObjectStore,
+    address: SuiAddress,
+) -> SuiResult<Option<(AddressAliases, SequenceNumber)>> {
+    let address_aliases_id = address_aliases_object_id(address)?;
     let address_aliases = object_store.get_object(&address_aliases_id);
 
     Ok(address_aliases.map(|obj| {

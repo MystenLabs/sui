@@ -4052,8 +4052,10 @@ type Query {
 	- `intentScope` indicates whether `message` is to be parsed as a personal message or
 	`TransactionData`.
 	- `author` is the signer's address.
+	- `checkAddressAliases`, if true, requires the signer to be one of `author`'s current address
+	aliases, rather than `author` itself.
 	"""
-	verifySignature(message: Base64!, signature: Base64!, intentScope: IntentScope!, author: SuiAddress!): SignatureVerifyResult
+	verifySignature(message: Base64!, signature: Base64!, intentScope: IntentScope!, author: SuiAddress!, checkAddressAliases: Boolean): SignatureVerifyResult
 	"""
 	Verify a zkLogin signature is from the given `author`.
 	
