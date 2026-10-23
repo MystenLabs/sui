@@ -21,3 +21,6 @@ sui-types.workspace = true
 sui-json.workspace = true
 
 move-core-types.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

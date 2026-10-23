@@ -2926,6 +2926,13 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> anyhow::Result<Self> {
+        let upgrade_cap_policy = crate::move_package::UpgradeCapPolicy::try_from(upgrade_policy)?;
+        if upgrade_cap_policy.minversion_state() == crate::move_package::MinVersionState::Enabled {
+            anyhow::bail!(
+                "TransactionData::new_upgrade cannot build an enrolled package upgrade without PackageConfig"
+            );
+        }
+
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             let capability_arg = match capability_owner {
@@ -2957,7 +2964,9 @@ impl TransactionData {
                 }
             };
             builder.obj(capability_arg).unwrap();
-            let upgrade_arg = builder.pure(upgrade_policy).unwrap();
+            let upgrade_arg = builder
+                .pure(upgrade_cap_policy.base_policy() as u8)
+                .unwrap();
             let digest_arg = builder.pure(digest).unwrap();
             let upgrade_ticket = builder.programmable_move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,

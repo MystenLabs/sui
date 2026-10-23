@@ -16623,6 +16623,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-types",
+ "tokio",
 ]
 
 [[package]]
