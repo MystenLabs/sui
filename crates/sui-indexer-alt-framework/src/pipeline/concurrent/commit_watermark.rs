@@ -30,10 +30,15 @@ use crate::store::pipeline_task;
 /// since the last watermark update.
 ///
 /// It receives watermark "parts" that detail the proportion of each checkpoint's data that has been
-/// written out by the committer and periodically (on a configurable interval) checks if the
-/// watermark for the pipeline can be pushed forward. The watermark can be pushed forward if there
-/// is one or more complete (all data for that checkpoint written out) watermarks spanning
-/// contiguously from the current high watermark into the future.
+/// written out by the committer and, after every message, checks if the watermark for the pipeline
+/// can be pushed forward. The watermark can be pushed forward if there is one or more complete (all
+/// data for that checkpoint written out) watermarks spanning contiguously from the current high
+/// watermark into the future.
+///
+/// Writes of the watermark to the DB are spaced at least `watermark_interval_ms` (plus jitter)
+/// apart: when the watermark advances and that much time has passed since the previous write, it
+/// is written immediately; otherwise the task waits out the remainder of the gap, then writes the
+/// latest watermark it has gathered.
 ///
 /// If it detects that more than [WARN_PENDING_WATERMARKS] watermarks have built up, it will issue a
 /// warning, as this could be the indication of a memory leak, and the caller probably intended to
@@ -76,37 +81,38 @@ pub(super) fn commit_watermark<H: Handler>(
             next_checkpoint, "Starting commit watermark task"
         );
 
-        let mut next_wake = tokio::time::Instant::now();
+        // The earliest time at which the next DB write may start. Starts at "now" so the first
+        // advance is written immediately.
+        let mut next_write_at = tokio::time::Instant::now();
         let mut pending_watermark = None;
 
         loop {
-            let mut should_write_db = false;
+            // The timer is only armed when there is a gathered watermark waiting to be written.
+            let write_pending = pending_watermark.is_some();
 
             tokio::select! {
-                () = tokio::time::sleep_until(next_wake) => {
-                    // Schedule next wake immediately, so the timer effectively runs in parallel
-                    // with the commit logic below.
-                    next_wake = config.watermark_interval_with_jitter();
-                    should_write_db = true;
-                }
-                Some(parts) = rx.recv() => {
-                    for part in parts {
-                        match precommitted.entry(part.checkpoint()) {
-                            Entry::Vacant(entry) => {
-                                entry.insert(part);
-                            }
+                biased;
 
-                            Entry::Occupied(mut entry) => {
-                                entry.get_mut().add(part);
-                            }
-                        }
+                parts = rx.recv() => {
+                    let Some(parts) = parts else {
+                        info!(pipeline = H::NAME, "Committer closed channel");
+                        break;
+                    };
+
+                    // Take every message that is already queued, so that a single gather (and at
+                    // most one write) covers all of them.
+                    add_parts(&mut precommitted, parts);
+                    while let Ok(parts) = rx.try_recv() {
+                        add_parts(&mut precommitted, parts);
                     }
                 }
+
+                () = tokio::time::sleep_until(next_write_at), if write_pending => {}
             }
 
             // Advance the watermark through contiguous precommitted entries on every
-            // iteration, not just when the DB write timer fires. This ensures commit_hi
-            // feedback reaches the broadcaster immediately.
+            // iteration, whether or not a DB write follows, so that the next write carries the
+            // latest watermark and the `watermark_*` gauges stay current.
             let guard = metrics
                 .watermark_gather_latency
                 .with_label_values(&[H::NAME])
@@ -187,10 +193,11 @@ pub(super) fn commit_watermark<H: Handler>(
                 );
             }
 
-            // DB writes are deferred to the timer interval to avoid excessive DB load.
-            if should_write_db
+            if tokio::time::Instant::now() >= next_write_at
                 && let Some(watermark) = pending_watermark.take()
-                && write_watermark::<H>(
+            {
+                next_write_at = config.watermark_interval_with_jitter();
+                if write_watermark::<H>(
                     &store,
                     &pipeline_task,
                     &watermark,
@@ -200,13 +207,9 @@ pub(super) fn commit_watermark<H: Handler>(
                 )
                 .await
                 .is_err()
-            {
-                pending_watermark = Some(watermark);
-            }
-
-            if rx.is_closed() && rx.is_empty() {
-                info!(pipeline = H::NAME, "Committer closed channel");
-                break;
+                {
+                    pending_watermark = Some(watermark);
+                }
             }
         }
 
@@ -234,8 +237,23 @@ pub(super) fn commit_watermark<H: Handler>(
     })
 }
 
+/// Merge `parts` into `precommitted`, combining parts that belong to the same checkpoint.
+fn add_parts(precommitted: &mut BTreeMap<u64, WatermarkPart>, parts: Vec<WatermarkPart>) {
+    for part in parts {
+        match precommitted.entry(part.checkpoint()) {
+            Entry::Vacant(entry) => {
+                entry.insert(part);
+            }
+
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().add(part);
+            }
+        }
+    }
+}
+
 /// Write the watermark to DB and update metrics. Returns `Err` on failure so the caller can
-/// preserve the watermark for retry on the next tick.
+/// preserve the watermark and retry it once the write interval has passed.
 async fn write_watermark<H: Handler>(
     store: &H::Store,
     pipeline_task: &str,
@@ -406,6 +424,12 @@ mod tests {
             batch_rows: 1,
             total_rows: 1,
         }
+    }
+
+    fn written_checkpoint_hi(store: &FallibleMockStore) -> Option<u64> {
+        store
+            .watermark(DataPipeline::NAME)
+            .and_then(|watermark| watermark.checkpoint_hi_inclusive)
     }
 
     #[tokio::test]
@@ -637,5 +661,75 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, Some(1));
+    }
+
+    /// Watermark writes are spaced at least `watermark_interval_ms` apart, measured from the
+    /// previous write, but an advance that lands after the gap has passed is written straight
+    /// away, not on the next fixed tick.
+    #[tokio::test(start_paused = true)]
+    async fn test_watermark_writes_respect_minimum_gap() {
+        let config = CommitterConfig {
+            watermark_interval_ms: 1_000,
+            ..Default::default()
+        };
+        let setup = setup_test::<DataPipeline>(config, 1, FallibleMockStore::default());
+
+        // The first advance is written immediately.
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(1)])
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(written_checkpoint_hi(&setup.store), Some(1));
+
+        // An advance inside the gap is written when the gap since the previous write (at t=0)
+        // ends, at t=1000, not a full interval after the advance itself (t=1500).
+        tokio::time::sleep(Duration::from_millis(490)).await;
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(2)])
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(written_checkpoint_hi(&setup.store), Some(1));
+
+        tokio::time::sleep(Duration::from_millis(480)).await;
+        assert_eq!(written_checkpoint_hi(&setup.store), Some(1));
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(written_checkpoint_hi(&setup.store), Some(2));
+
+        // Once the gap since the last write has passed, the next advance is written immediately.
+        tokio::time::sleep(Duration::from_millis(1_500)).await;
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(3)])
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(written_checkpoint_hi(&setup.store), Some(3));
+    }
+
+    /// Parts that queue up while the task is busy are all gathered before the next write, so a
+    /// backlog of committer messages is covered by one write instead of one write per interval.
+    #[tokio::test(start_paused = true)]
+    async fn test_queued_parts_are_written_together() {
+        let config = CommitterConfig {
+            watermark_interval_ms: 1_000,
+            ..Default::default()
+        };
+        let setup = setup_test::<DataPipeline>(config, 1, FallibleMockStore::default());
+
+        for cp in 1..=5 {
+            setup
+                .watermark_tx
+                .send(vec![create_watermark_part_for_checkpoint(cp)])
+                .await
+                .unwrap();
+        }
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(written_checkpoint_hi(&setup.store), Some(5));
     }
 }

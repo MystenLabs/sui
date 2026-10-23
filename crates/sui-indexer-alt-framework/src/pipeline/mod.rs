@@ -29,7 +29,9 @@ pub struct CommitterConfig {
     /// The collector will check for pending data at least this often, in milliseconds.
     pub collect_interval_ms: u64,
 
-    /// Watermark task will check for pending watermarks this often, in milliseconds.
+    /// Minimum time between two watermark writes of a concurrent pipeline, in milliseconds. A
+    /// watermark that advances once this much time has passed since the previous write is written
+    /// immediately; one that advances sooner is written when the gap has passed.
     pub watermark_interval_ms: u64,
 
     /// Maximum random jitter to add to the watermark interval, in milliseconds.
@@ -87,8 +89,8 @@ impl CommitterConfig {
         Duration::from_millis(self.watermark_interval_ms)
     }
 
-    /// Returns the next watermark update instant with a random jitter added. The jitter is a
-    /// random value between 0 and `watermark_interval_jitter_ms`.
+    /// Returns the earliest instant at which the next watermark write may start: now plus the
+    /// watermark interval plus a random jitter between 0 and `watermark_interval_jitter_ms`.
     pub fn watermark_interval_with_jitter(&self) -> tokio::time::Instant {
         let jitter = if self.watermark_interval_jitter_ms == 0 {
             0
