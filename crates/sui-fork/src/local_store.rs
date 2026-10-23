@@ -169,6 +169,26 @@ impl LocalStore {
         self.highest_status_at_or_before(id, upper_bound)
     }
 
+    /// Return the checkpoint and version of the object's earliest checkpoint-pinned row.
+    ///
+    /// The object rows are complete from that version upward. The row is either the object's
+    /// version at the fork checkpoint, resolved by a remote query pinned there, or the object's
+    /// first locally executed change, and every later version was executed locally. Below it, the
+    /// rows are a sparse cache of historical reads.
+    pub(crate) fn earliest_checkpoint_pinned_version(
+        &self,
+        id: ObjectID,
+    ) -> anyhow::Result<Option<(CheckpointSequenceNumber, SequenceNumber)>> {
+        let Some(row) = self.schema.iter_object_versions_by_checkpoint(id)?.next() else {
+            return Ok(None);
+        };
+        let (key, value) = row?;
+        Ok(Some((
+            key.checkpoint,
+            SequenceNumber::from_u64(value.into_inner().version),
+        )))
+    }
+
     /// Save an object version without changing current live state or indexes.
     ///
     /// Use this for exact-version and bounded historical reads, and choose a live-object write
