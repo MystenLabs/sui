@@ -157,6 +157,7 @@ impl CommitterLayer {
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
+            flush_policy: base.flush_policy,
         }
     }
 }

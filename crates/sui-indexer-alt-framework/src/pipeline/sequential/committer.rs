@@ -48,6 +48,7 @@ pub(super) fn committer<H: Handler>(
                 batch,
                 watermark,
                 batch_rows,
+                in_flight,
             } = batched;
 
             let backoff = ExponentialBackoff {
@@ -100,6 +101,10 @@ pub(super) fn committer<H: Handler>(
             };
 
             let (affected, elapsed) = backoff::future::retry(backoff, commit).await?;
+
+            // The batch is written, so it no longer counts against the collector's writes in
+            // flight.
+            drop(in_flight);
 
             debug!(
                 pipeline = H::NAME,

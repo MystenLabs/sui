@@ -157,7 +157,8 @@ pub(crate) fn pipeline<H: Handler>(
     let max_pending_rows = config.max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_batch_checkpoints = config
         .max_batch_checkpoints
-        .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
+        .unwrap_or(H::MAX_BATCH_CHECKPOINTS)
+        .max(1);
 
     let processor_channel_size = config
         .processor_channel_size
@@ -208,6 +209,7 @@ mod tests {
 
     use crate::mocks::store::FallibleMockConnection;
     use crate::mocks::store::FallibleMockStore;
+    use crate::pipeline::FlushPolicy;
     use crate::pipeline::IndexedCheckpoint;
 
     use super::*;
@@ -322,6 +324,59 @@ mod tests {
             checkpoint * 1000, // timestamp
             vec![checkpoint],  // values
         )
+    }
+
+    fn when_idle_config() -> SequentialConfig {
+        SequentialConfig {
+            committer: CommitterConfig {
+                collect_interval_ms: 60_000,
+                flush_policy: FlushPolicy::WhenIdle,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    /// Starts only the collector, flushing under `FlushPolicy::WhenIdle` with a collect interval
+    /// long enough that it can never be what triggers a batch. The test plays the committer: a
+    /// batch counts as in flight until the test drops it.
+    fn when_idle_collector(
+        next_checkpoint: u64,
+        metrics: Arc<IndexerMetrics>,
+    ) -> (
+        mpsc::Sender<IndexedCheckpoint<TestHandler>>,
+        mpsc::Receiver<BatchedRows<TestHandler>>,
+        Service,
+    ) {
+        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
+        let (collector_tx, collector_rx) = mpsc::channel(10);
+        let service = collector(
+            Arc::new(TestHandler),
+            when_idle_config(),
+            next_checkpoint,
+            checkpoint_rx,
+            metrics,
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_BATCH_CHECKPOINTS,
+            collector_tx,
+        );
+
+        (checkpoint_tx, collector_rx, service)
+    }
+
+    async fn recv_batch(
+        rx: &mut mpsc::Receiver<BatchedRows<TestHandler>>,
+    ) -> BatchedRows<TestHandler> {
+        tokio::time::timeout(Duration::from_millis(100), rx.recv())
+            .await
+            .expect("timed out waiting for a batch")
+            .expect("collector channel closed")
+    }
+
+    async fn expect_no_batch(rx: &mut mpsc::Receiver<BatchedRows<TestHandler>>) {
+        let received = tokio::time::timeout(Duration::from_secs(1), rx.recv()).await;
+        assert!(received.is_err(), "expected no batch");
     }
 
     #[tokio::test]
@@ -534,5 +589,130 @@ mod tests {
         let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, Some(5));
         assert_eq!(watermark.tx_hi, 5);
+    }
+
+    /// Under `FlushPolicy::WhenIdle`, the next checkpoint is written as soon as no write is in
+    /// flight. While one is, later checkpoints are held, and they are written as soon as it
+    /// finishes, without waiting for more input or the collect interval.
+    #[tokio::test(start_paused = true)]
+    async fn when_idle_holds_checkpoints_until_the_write_in_flight_finishes() {
+        let metrics = IndexerMetrics::new(None, &Registry::default());
+        let (checkpoint_tx, mut collector_rx, _collector) = when_idle_collector(0, metrics);
+
+        checkpoint_tx.send(create_checkpoint(0)).await.unwrap();
+        let first = recv_batch(&mut collector_rx).await;
+        assert_eq!(first.batch, vec![0]);
+
+        checkpoint_tx.send(create_checkpoint(1)).await.unwrap();
+        expect_no_batch(&mut collector_rx).await;
+
+        drop(first);
+        let second = recv_batch(&mut collector_rx).await;
+        assert_eq!(second.batch, vec![1]);
+        assert_eq!(second.watermark.checkpoint_hi_inclusive, 1);
+    }
+
+    /// While a write is in flight, checkpoints are still written as soon as `min_eager_rows` rows
+    /// are pending, rather than waiting for the write to finish.
+    #[tokio::test(start_paused = true)]
+    async fn when_idle_writes_at_threshold_while_a_write_is_in_flight() {
+        let metrics = IndexerMetrics::new(None, &Registry::default());
+        let (checkpoint_tx, mut collector_rx, _collector) = when_idle_collector(0, metrics);
+
+        checkpoint_tx.send(create_checkpoint(0)).await.unwrap();
+        let _first = recv_batch(&mut collector_rx).await;
+
+        // One row per checkpoint, so three are still below `MIN_EAGER_ROWS`.
+        for i in 1..4 {
+            checkpoint_tx.send(create_checkpoint(i)).await.unwrap();
+        }
+        expect_no_batch(&mut collector_rx).await;
+
+        checkpoint_tx.send(create_checkpoint(4)).await.unwrap();
+        let second = recv_batch(&mut collector_rx).await;
+        assert_eq!(second.batch, vec![1, 2, 3]);
+        let third = recv_batch(&mut collector_rx).await;
+        assert_eq!(third.batch, vec![4]);
+    }
+
+    /// Checkpoints without rows still reach the committer, so the watermark keeps moving for
+    /// pipelines that write nothing.
+    #[tokio::test(start_paused = true)]
+    async fn when_idle_writes_checkpoints_without_rows() {
+        let metrics = IndexerMetrics::new(None, &Registry::default());
+        let (checkpoint_tx, mut collector_rx, _collector) = when_idle_collector(0, metrics);
+
+        checkpoint_tx
+            .send(IndexedCheckpoint::new(0, 0, 0, 0, vec![]))
+            .await
+            .unwrap();
+
+        let batch = recv_batch(&mut collector_rx).await;
+        assert!(batch.batch.is_empty());
+        assert_eq!(batch.watermark.checkpoint_hi_inclusive, 0);
+    }
+
+    /// When the processor stops, checkpoints held back by a write in flight are written out at
+    /// once, and the collector then stops.
+    #[tokio::test(start_paused = true)]
+    async fn when_idle_writes_held_checkpoints_on_shutdown() {
+        let metrics = IndexerMetrics::new(None, &Registry::default());
+        let (checkpoint_tx, mut collector_rx, mut collector) = when_idle_collector(0, metrics);
+
+        checkpoint_tx.send(create_checkpoint(0)).await.unwrap();
+        let _first = recv_batch(&mut collector_rx).await;
+
+        checkpoint_tx.send(create_checkpoint(1)).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        drop(checkpoint_tx);
+
+        let last = recv_batch(&mut collector_rx).await;
+        assert_eq!(last.batch, vec![1]);
+
+        tokio::time::timeout(Duration::from_millis(100), collector.join())
+            .await
+            .expect("collector shutdown timeout")
+            .expect("collector shutdown failed");
+    }
+
+    /// A checkpoint that arrives before its predecessor cannot be written, so it must not trigger
+    /// a flush (which would gather nothing, over and over). Once the predecessor arrives, both are
+    /// written in order.
+    #[tokio::test(start_paused = true)]
+    async fn when_idle_waits_for_missing_predecessor_without_flushing() {
+        let metrics = IndexerMetrics::new(None, &Registry::default());
+        let (checkpoint_tx, mut collector_rx, _collector) = when_idle_collector(0, metrics.clone());
+
+        checkpoint_tx.send(create_checkpoint(1)).await.unwrap();
+        expect_no_batch(&mut collector_rx).await;
+        assert_eq!(
+            metrics
+                .collector_gather_latency
+                .with_label_values(&[TestHandler::NAME])
+                .get_sample_count(),
+            0
+        );
+
+        checkpoint_tx.send(create_checkpoint(0)).await.unwrap();
+        let batch = recv_batch(&mut collector_rx).await;
+        assert_eq!(batch.batch, vec![0, 1]);
+        assert_eq!(batch.watermark.checkpoint_hi_inclusive, 1);
+    }
+
+    /// End to end under `FlushPolicy::WhenIdle`: the committer marks each batch as written, so
+    /// checkpoints keep flowing one at a time without relying on the collect interval.
+    #[tokio::test]
+    async fn when_idle_pipeline_writes_each_checkpoint_without_waiting() {
+        let mut setup = setup_test(0, when_idle_config(), FallibleMockStore::default());
+
+        for i in 0..3 {
+            send_checkpoint(&mut setup, i).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2]);
+        let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(2));
     }
 }

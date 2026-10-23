@@ -26,6 +26,7 @@ use crate::pipeline::concurrent::committer::committer;
 use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
+use crate::pipeline::flush::InFlightWrite;
 use crate::pipeline::processor::processor;
 use crate::store::ConcurrentStore;
 use crate::store::Store;
@@ -179,6 +180,8 @@ struct BatchedRows<H: Handler> {
     batch_len: usize,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
+    /// Counts this batch as in flight for the collector until the committer has written it.
+    in_flight: InFlightWrite,
 }
 
 impl<H, V> BatchedRows<H>
@@ -192,6 +195,7 @@ where
             batch,
             batch_len,
             watermark,
+            in_flight: Arc::new(crate::pipeline::flush::InFlightWrites::default()).start(),
         }
     }
 }
@@ -364,6 +368,7 @@ mod tests {
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::FallibleMockConnection;
     use crate::mocks::store::FallibleMockStore;
+    use crate::pipeline::FlushPolicy;
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::Checkpoint;
     use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -703,6 +708,35 @@ mod tests {
         let watermark = setup
             .store
             .wait_for_watermark(DataPipeline::NAME, 4, TEST_TIMEOUT)
+            .await;
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(4));
+    }
+
+    /// End to end under `FlushPolicy::WhenIdle`: with eager batching disabled and a collect
+    /// interval that never fires, each checkpoint is still written as soon as the previous write
+    /// finishes, because the committer marks every batch as written.
+    #[tokio::test]
+    async fn test_e2e_pipeline_when_idle() {
+        let config = ConcurrentConfig {
+            committer: CommitterConfig {
+                collect_interval_ms: 60_000,
+                flush_policy: FlushPolicy::WhenIdle,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let setup = TestSetup::new(config, FallibleMockStore::default(), 0).await;
+
+        for i in 0..5 {
+            setup
+                .send_checkpoint_with_timeout(i, Duration::from_millis(200))
+                .await
+                .unwrap();
+        }
+
+        let watermark = setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 4, Duration::from_secs(5))
             .await;
         assert_eq!(watermark.checkpoint_hi_inclusive, Some(4));
     }

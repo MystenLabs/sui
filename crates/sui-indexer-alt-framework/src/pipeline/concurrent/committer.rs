@@ -61,6 +61,7 @@ pub(super) fn committer<H: Handler>(
                      batch,
                      batch_len,
                      watermark,
+                     in_flight,
                  }| {
                     let batch = Arc::new(batch);
                     let handler = handler.clone();
@@ -186,6 +187,11 @@ pub(super) fn committer<H: Handler>(
                         // not produce any permanent errors, but if it does, we need to shutdown
                         // the pipeline).
                         backoff::future::retry(backoff, commit).await?;
+
+                        // The batch is written, so it no longer counts against the collector's
+                        // writes in flight.
+                        drop(in_flight);
+
                         if tx.send(watermark).await.is_err() {
                             info!(pipeline = H::NAME, "Watermark closed channel");
                             return Err(Break::<anyhow::Error>::Break);
