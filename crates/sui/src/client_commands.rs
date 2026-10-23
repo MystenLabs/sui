@@ -2051,15 +2051,6 @@ pub(crate) async fn upgrade_package(
     with_unpublished_dependencies: bool,
     _skip_dependency_verification: bool,
 ) -> Result<(UpgradeCapPolicy, CompiledPackage), anyhow::Error> {
-    let compiled_package = compile_package(
-        client.clone(),
-        root_pkg,
-        build_config.clone(),
-        package_path,
-        with_unpublished_dependencies,
-    )
-    .await?;
-
     let object = client.get_object(upgrade_capability).await?;
 
     let upgrade_cap: UpgradeCap = bcs::from_bytes(
@@ -2074,6 +2065,15 @@ pub(crate) async fn upgrade_package(
     // authorization policy and must not be submitted to `authorize_upgrade`.
     let upgrade_policy = UpgradeCapPolicy::try_from(upgrade_cap.policy)
         .map_err(|_| anyhow!("Invalid upgrade cap policy"))?;
+
+    let compiled_package = compile_package(
+        client.clone(),
+        root_pkg,
+        build_config.clone(),
+        package_path,
+        with_unpublished_dependencies,
+    )
+    .await?;
 
     Ok((upgrade_policy, compiled_package))
 }
