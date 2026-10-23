@@ -509,6 +509,54 @@ pub fn history_seed_pending(db: &Db) -> anyhow::Result<bool> {
     Ok(true)
 }
 
+/// Whether a restore's history-floor pipelines (`object_version_by_checkpoint`
+/// and `package_versions`) are still backfilling below their restore anchor `T`.
+///
+/// When a prefix of the chain has been pruned, the restore loads their floor
+/// rows at `T` and the history backfill then fills in `(L, T]`. Until a floor
+/// pipeline has committed `T`, a checkpoint-pinned read at a checkpoint the
+/// backfill has already passed can still be wrong: an object or package version
+/// whose first change in the window comes later than the backfill has reached
+/// resolves to its floor row at `T`, as if nothing had changed since. Lowering
+/// the read's upper bound does not help, because any checkpoint in `[L, T]` can
+/// be affected, so checkpoint-pinned reads must wait for this to be `false`.
+///
+/// A pipeline that was never restored has no floor rows and does not count. A
+/// restore that has not completed counts as pending.
+///
+/// Between the restore's finalize, which stamps the floors' watermarks at `T`,
+/// and [`seed_history_cohort`], which rewinds them to `L - 1`, this returns
+/// `false` although nothing in `(L, T]` has been backfilled. That state is
+/// never served: the embedded bootstrap runs both before it starts serving, and
+/// repairs a crash between them with the seed ([`history_seed_pending`]). In
+/// it, the other history pipelines have no watermark, so the indexed tip is
+/// unset and checkpoint-pinned reads are refused regardless.
+pub fn history_backfill_pending(db: &Db) -> anyhow::Result<bool> {
+    let framework = db.framework();
+    for name in HISTORY_FLOORS {
+        let key = PipelineTaskKey::new(*name);
+        let Some(state) = framework
+            .restore
+            .get(&key)
+            .with_context(|| format!("reading restore state for {name}"))?
+        else {
+            continue;
+        };
+        let Some(restore_state::State::Complete(complete)) = state.state else {
+            return Ok(true);
+        };
+        let committed = framework
+            .watermarks
+            .get(&key)
+            .with_context(|| format!("reading watermark for {name}"))?
+            .map(|watermark| watermark.checkpoint_hi_inclusive);
+        if committed.is_none_or(|checkpoint| checkpoint < complete.restored_at) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -1118,6 +1166,66 @@ mod tests {
         stamp(ObjectVersionByCheckpoint::NAME);
         stamp(PackageVersions::NAME);
         assert!(!history_seed_pending(&db).unwrap());
+    }
+
+    /// The history floors are pending from their restore until each has
+    /// committed the restore anchor; pipelines that were never restored
+    /// do not count.
+    #[test]
+    fn history_backfill_pending_until_floors_reach_restore_anchor() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, _schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let framework = FrameworkSchema::new(db.clone());
+
+        let put_restore_state = |name: &'static str, state: restore_state::State| {
+            let mut batch = db.batch();
+            batch
+                .put(
+                    &framework.restore,
+                    &PipelineTaskKey::new(name),
+                    &sui_consistent_store::RestoreState { state: Some(state) },
+                )
+                .unwrap();
+            batch.commit().unwrap();
+        };
+        let put_watermark = |name: &'static str, checkpoint: u64| {
+            let mut batch = db.batch();
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(name),
+                    &Watermark::for_checkpoint(checkpoint),
+                )
+                .unwrap();
+            batch.commit().unwrap();
+        };
+        let complete_at =
+            |restored_at| restore_state::State::Complete(restore_state::Complete { restored_at });
+
+        // Never restored: nothing to backfill.
+        assert!(!history_backfill_pending(&db).unwrap());
+
+        // A restore still running is pending.
+        put_restore_state(
+            ObjectVersionByCheckpoint::NAME,
+            restore_state::State::InProgress(restore_state::InProgress::default()),
+        );
+        assert!(history_backfill_pending(&db).unwrap());
+
+        // Restored at 100 and rewound to L - 1 = 9 by the history seed.
+        put_restore_state(ObjectVersionByCheckpoint::NAME, complete_at(100));
+        put_restore_state(PackageVersions::NAME, complete_at(100));
+        put_watermark(ObjectVersionByCheckpoint::NAME, 9);
+        put_watermark(PackageVersions::NAME, 9);
+        assert!(history_backfill_pending(&db).unwrap());
+
+        // One floor reaching the anchor is not enough.
+        put_watermark(ObjectVersionByCheckpoint::NAME, 100);
+        assert!(history_backfill_pending(&db).unwrap());
+
+        // Both floors at or past the anchor: complete.
+        put_watermark(PackageVersions::NAME, 150);
+        assert!(!history_backfill_pending(&db).unwrap());
     }
 
     /// The live and history cohorts are disjoint and each has the

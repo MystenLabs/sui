@@ -1049,6 +1049,15 @@ impl BigTableClient {
             filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
         }
     }
+
+    /// A `RowFilter` that keeps every cell but empties its value, for reads that need only row
+    /// keys. A filter that dropped the cells instead would drop the rows with them: Bigtable
+    /// leaves a row with no cells out of the response.
+    fn keys_only_filter() -> RowFilter {
+        RowFilter {
+            filter: Some(Filter::StripValueTransformer(true)),
+        }
+    }
 }
 
 struct ActivePollWait {
@@ -1848,6 +1857,18 @@ impl KeyValueStoreReader for BigTableClient {
         Ok(objects)
     }
 
+    async fn get_existing_object_keys(
+        &mut self,
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<ObjectKey>> {
+        let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
+        self.multi_get(tables::objects::NAME, keys, Some(Self::keys_only_filter()))
+            .await?
+            .into_iter()
+            .map(|(row_key, _)| tables::objects::decode_key(&row_key))
+            .collect()
+    }
+
     async fn get_transactions(
         &mut self,
         transactions: &[TransactionDigest],
@@ -1945,6 +1966,29 @@ impl KeyValueStoreReader for BigTableClient {
 
         tracing::debug!(?object_id, "get_latest_object: object not found in range");
         Ok(None)
+    }
+
+    async fn get_latest_object_version(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> Result<Option<SequenceNumber>> {
+        let lower_limit = Bytes::from(Self::raw_object_key(&ObjectKey::min_for_id(object_id)));
+        let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
+        let Some((row_key, _)) = self
+            .range_scan(
+                tables::objects::NAME,
+                Some(lower_limit),
+                Some(upper_limit),
+                1,
+                true,
+                Some(Self::keys_only_filter()),
+            )
+            .await?
+            .pop()
+        else {
+            return Ok(None);
+        };
+        Ok(Some(tables::objects::decode_key(&row_key)?.1))
     }
 
     async fn get_object_version_at_checkpoint(

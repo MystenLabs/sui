@@ -1011,10 +1011,23 @@ impl RpcIndexes for RpcStoreReadStore {
             .get_package_at_checkpoint(original_id, checkpoint)
     }
 
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<SequenceNumber>> {
+        self.reader
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>> {
         self.reader.get_highest_indexed_checkpoint_seq_number()
+    }
+
+    fn is_history_backfill_pending(&self) -> Result<bool> {
+        self.reader.is_history_backfill_pending()
     }
 
     fn get_highest_live_indexed_checkpoint_seq_number(

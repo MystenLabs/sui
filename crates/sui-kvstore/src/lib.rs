@@ -313,6 +313,9 @@ pub struct WatermarkV1 {
 #[async_trait]
 pub trait KeyValueStoreReader {
     async fn get_objects(&mut self, objects: &[ObjectKey]) -> Result<Vec<Object>>;
+    /// The keys in `objects` that have a row in the objects table, read without the objects'
+    /// contents.
+    async fn get_existing_object_keys(&mut self, objects: &[ObjectKey]) -> Result<Vec<ObjectKey>>;
     async fn get_transactions(
         &mut self,
         transactions: &[TransactionDigest],
@@ -333,6 +336,11 @@ pub trait KeyValueStoreReader {
         pipelines: &[&str],
     ) -> Result<Option<WatermarkV1>>;
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
+    /// The version [`Self::get_latest_object`] would return, read without the object's contents.
+    async fn get_latest_object_version(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> Result<Option<SequenceNumber>>;
     /// The version and status `object_id` had at the end of `checkpoint`, written by the latest
     /// checkpoint at or before `checkpoint` that changed the object. `None` if no such checkpoint
     /// exists. Served by the alpha [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`].
