@@ -9,7 +9,7 @@ use std::{
 
 use consensus_config::ProtocolKeyPair;
 #[cfg(test)]
-use consensus_config::{AuthorityIndex, Stake, local_committee_and_keys};
+use consensus_config::{AuthorityIndex, Committee, Stake, local_committee_and_keys};
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 #[cfg(test)]
@@ -358,6 +358,10 @@ impl Core {
             );
             self.signals.new_accepted_block(block.clone());
         }
+        if self.context.protocol_config.enable_v3() && !accepted_blocks.is_empty() {
+            // Notify commit finalizer v3 about the new blocks to retry direct finalization.
+            self.commit_observer.notify_new_blocks();
+        }
         (accepted_blocks, missing_block_refs)
     }
 
@@ -601,6 +605,7 @@ impl Core {
             self.signals.new_block(extended_block.clone())?;
             self.signals
                 .new_accepted_block(extended_block.block.clone());
+            self.commit_observer.notify_new_blocks();
 
             fail_point!("consensus-after-propose");
 
@@ -925,19 +930,15 @@ impl Core {
         Ok(committed_sub_dags)
     }
 
-    // Post-processing for a single committed subdag on the v3 path: persists the
-    // commit, forwards to the finalizer, updates bookkeeping, unsuspends blocks,
-    // notifies the proposer about own blocks, and feeds v3 leader
-    // scoring.
+    // Post-processing for a single committed subdag on the v3 path: buffers the commit,
+    // updates bookkeeping and unsuspends blocks, forwards to the finalizer, notifies
+    // the proposer about own blocks, and feeds v3 leader scoring.
     fn post_commit(
         &mut self,
         commit: TrustedCommit,
         subdag: CommittedSubDag,
     ) -> ConsensusResult<()> {
         self.dag_state.write().add_commit(commit);
-
-        self.commit_observer.report_commit_metrics(&subdag);
-        self.commit_observer.send_to_finalizer(subdag.clone())?;
 
         self.last_decided_leader = subdag.leader.into();
         self.context
@@ -948,6 +949,12 @@ impl Core {
 
         self.block_manager
             .try_unsuspend_blocks_for_latest_gc_round();
+
+        self.commit_observer.report_commit_metrics(&subdag);
+
+        // Send after GC unsuspension so finalization sees newly accepted voting blocks.
+        // The finalizer persists finalized commits before forwarding them to execution.
+        self.commit_observer.send_to_finalizer(subdag.clone())?;
 
         let committed_block_refs = subdag
             .blocks
@@ -1296,6 +1303,19 @@ impl CoreTestFixture {
         store: Arc<MemStore>,
     ) -> Self {
         let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
+        // Production uses v3 committee thresholds when v3 is enabled. A crash-only
+        // fault budget gives these tests the v2 quorum threshold and no equivocation
+        // tolerance.
+        let committee = if context.protocol_config.enable_v3() {
+            Committee::new_v3(
+                committee.epoch(),
+                committee.authorities_slice().to_vec(),
+                /* malicious_stake */ 0,
+                /* crash_stake */ 1,
+            )
+        } else {
+            committee
+        };
         let mut context = context.clone();
         context = context
             .with_committee(committee)
@@ -1789,8 +1809,8 @@ mod test {
         assert_eq!(proposed.transaction_votes_cutoff_round(), gc_round);
     }
 
-    // Adds 3 rounds of peer blocks. The local authority rejects transaction 0 in each block.
-    // Then proposes a block.
+    // Adds two rounds of peer blocks, including eight extra forks from one peer in round 1.
+    // The local authority rejects transaction 0 in each block, then proposes a block.
     // Returns the fixture, the proposed block and the peer blocks.
     async fn propose_after_peer_blocks_with_reject_votes(
         context: Context,
@@ -1804,7 +1824,18 @@ mod test {
         .await;
         let mut builder = DagBuilder::new(fixture.core.context.clone());
         builder
-            .layers(1..=3)
+            .layer(1)
+            .authorities(vec![AuthorityIndex::new_for_test(1)])
+            .equivocate(8)
+            .build();
+        builder
+            .blocks
+            .retain(|block_ref, _| block_ref.author != fixture.core.context.own_index);
+        builder
+            .last_ancestors
+            .retain(|block_ref| block_ref.author != fixture.core.context.own_index);
+        builder
+            .layer(2)
             .authorities(vec![fixture.core.context.own_index])
             .skip_block()
             .build();
@@ -1830,6 +1861,7 @@ mod test {
             propose_after_peer_blocks_with_reject_votes(context).await;
 
         // V2 blocks have no signed cutoff round, so the V3 limit must not remove their targets.
+        assert_eq!(blocks.len(), 14);
         assert!(blocks.len() > vote_target_limit);
         assert_eq!(proposed.transaction_votes().len(), blocks.len());
     }
@@ -1839,7 +1871,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (mut context, _) = Context::new_for_test(4);
         context.protocol_config.set_enable_v3_for_testing(true);
-        context.protocol_config.set_gc_depth_for_testing(1);
+        context.protocol_config.set_gc_depth_for_testing(3);
         let vote_target_limit = max_transaction_vote_targets(&context);
 
         let (fixture, proposed, blocks) =
@@ -3590,6 +3622,128 @@ mod test {
             }
             recovered.core.stop().await;
         }
+    }
+
+    #[tokio::test]
+    async fn accepted_blocks_notify_v3_finalizer_without_new_commit() {
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let mut fixture =
+            CoreTestFixture::new(context, vec![1; 4], AuthorityIndex::new_for_test(0), true).await;
+        fixture.core.proposer = None;
+        assert_eq!(fixture.core.context.committee.quorum_threshold(), 3);
+        assert_eq!(fixture.core.context.committee.certification_threshold(), 2);
+
+        let genesis_refs: Vec<_> = genesis_blocks(&fixture.core.context)
+            .iter()
+            .map(|block| block.reference())
+            .collect();
+        let blocks: Vec<_> = (0..4)
+            .map(|author| {
+                let transactions = if author == 0 {
+                    vec![crate::Transaction::new(vec![1])]
+                } else {
+                    vec![]
+                };
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(1, author)
+                        .set_ancestors(genesis_refs.clone())
+                        .set_transactions(transactions)
+                        .build_v3(0),
+                )
+            })
+            .collect();
+        fixture.add_blocks(blocks[..3].to_vec()).unwrap();
+        let target = &blocks[0];
+        let voters: Vec<_> = (0..3)
+            .map(|author| {
+                let ancestors = if author == 2 {
+                    &blocks[..]
+                } else {
+                    &blocks[..3]
+                };
+                let mut ancestors: Vec<_> =
+                    ancestors.iter().map(|block| block.reference()).collect();
+                ancestors.sort_by_key(|block_ref| block_ref.author.value() != author as usize);
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(2, author)
+                        .set_ancestors(ancestors)
+                        .set_transaction_votes(vec![crate::block::BlockTransactionVotes {
+                            block_ref: target.reference(),
+                            rejects: vec![0],
+                        }])
+                        .build_v3(0),
+                )
+            })
+            .collect();
+        fixture.add_blocks(voters[..2].to_vec()).unwrap();
+
+        let commit = TrustedCommit::new_for_test(
+            1,
+            fixture.dag_state.read().last_commit_digest(),
+            0,
+            target.reference(),
+            vec![target.reference()],
+        );
+        fixture
+            .core
+            .add_certified_commits(CertifiedCommits::new(
+                vec![CertifiedCommit::new_certified(
+                    commit.clone(),
+                    vec![target.clone()],
+                )],
+                vec![],
+            ))
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while fixture
+                .core
+                .context
+                .metrics
+                .node_metrics
+                .finalizer_buffered_commits
+                .get()
+                != 1
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("The synced commit must wait for another vote");
+
+        assert!(!fixture.add_blocks(voters[2..].to_vec()).unwrap().is_empty());
+        // Neither suspended blocks nor duplicates should trigger finalization.
+        assert!(fixture.add_blocks(vec![target.clone()]).unwrap().is_empty());
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(100),
+                fixture._commit_output_receiver.recv(),
+            )
+            .await
+            .is_err()
+        );
+        // Accepting the missing ancestor also unsuspends the final voter.
+        assert!(fixture.add_blocks(blocks[3..].to_vec()).unwrap().is_empty());
+        assert_eq!(fixture.dag_state.read().last_commit_index(), 1);
+        let finalized = tokio::time::timeout(
+            Duration::from_secs(1),
+            fixture._commit_output_receiver.recv(),
+        )
+        .await
+        .expect("Accepted blocks must notify the finalizer even without a new commit")
+        .unwrap();
+        assert_eq!(finalized.commit_ref, commit.reference());
+        assert_eq!(
+            finalized
+                .rejected_transactions_by_block
+                .get(&target.reference()),
+            Some(&vec![0])
+        );
+        assert_eq!(
+            fixture.store.read_last_finalized_commit().unwrap(),
+            Some(commit.reference())
+        );
+        fixture.core.stop().await;
     }
 
     #[tokio::test]
