@@ -974,6 +974,7 @@ async fn start_archival(
         kv_rpc_config.stages(),
         kv_rpc_config.enable_list_apis(),
         kv_rpc_config.enable_object_at_checkpoint(),
+        kv_rpc_config.enable_object_max_version(),
     )
     .await
     .context("Failed to create KvRpcServer")?;

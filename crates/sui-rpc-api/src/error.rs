@@ -354,6 +354,7 @@ impl ErrorDetails {
 pub struct ObjectNotFoundError {
     object_id: sui_sdk_types::Address,
     version: Option<sui_sdk_types::Version>,
+    max_version: Option<sui_sdk_types::Version>,
     checkpoint: Option<sui_sdk_types::CheckpointSequenceNumber>,
 }
 
@@ -362,6 +363,7 @@ impl ObjectNotFoundError {
         Self {
             object_id,
             version: None,
+            max_version: None,
             checkpoint: None,
         }
     }
@@ -371,9 +373,20 @@ impl ObjectNotFoundError {
         version: sui_sdk_types::Version,
     ) -> Self {
         Self {
-            object_id,
             version: Some(version),
-            checkpoint: None,
+            ..Self::new(object_id)
+        }
+    }
+
+    /// The object had no version at or below `max_version`, or was deleted or wrapped at the
+    /// newest one.
+    pub fn new_with_max_version(
+        object_id: sui_sdk_types::Address,
+        max_version: sui_sdk_types::Version,
+    ) -> Self {
+        Self {
+            max_version: Some(max_version),
+            ..Self::new(object_id)
         }
     }
 
@@ -384,9 +397,20 @@ impl ObjectNotFoundError {
         checkpoint: sui_sdk_types::CheckpointSequenceNumber,
     ) -> Self {
         Self {
-            object_id,
-            version: None,
             checkpoint: Some(checkpoint),
+            ..Self::new(object_id)
+        }
+    }
+
+    /// Bound a `version` or `max_version` read by `checkpoint`: the version it selected was not
+    /// found, or was written after `checkpoint`.
+    pub fn visible_at_checkpoint(
+        self,
+        checkpoint: sui_sdk_types::CheckpointSequenceNumber,
+    ) -> Self {
+        Self {
+            checkpoint: Some(checkpoint),
+            ..self
         }
     }
 }
@@ -397,6 +421,10 @@ impl std::fmt::Display for ObjectNotFoundError {
 
         if let Some(version) = self.version {
             write!(f, " with version {version}")?;
+        }
+
+        if let Some(max_version) = self.max_version {
+            write!(f, " with version at most {max_version}")?;
         }
 
         if let Some(checkpoint) = self.checkpoint {
