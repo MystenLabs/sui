@@ -221,6 +221,29 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         let (_key, value) = row?;
         Ok(decode(value.into_inner())?.into_live())
     }
+
+    /// Look up the newest version of an object at or below `version`.
+    ///
+    /// A single bounded reverse scan takes the greatest `(id, v)` row with
+    /// `v <= version`, returning the live object or `None` if that row is
+    /// a tombstone, like the validator perpetual store's
+    /// `find_object_lt_or_eq_version`. Returns `Ok(None)` when the object
+    /// has no recorded version at or below `version`.
+    pub fn get_object_lt_or_eq_version(
+        &self,
+        id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>, Error> {
+        let lowest = Key {
+            id,
+            version: SequenceNumber::MIN,
+        };
+        let Some(row) = self.objects.iter_rev(lowest..=Key { id, version })?.next() else {
+            return Ok(None);
+        };
+        let (_key, value) = row?;
+        Ok(decode(value.into_inner())?.into_live())
+    }
 }
 
 #[cfg(test)]
@@ -228,6 +251,7 @@ mod tests {
     use sui_consistent_store::Db;
     use sui_consistent_store::DbOptions;
     use sui_types::base_types::SuiAddress;
+    use sui_types::object::Owner;
 
     use super::*;
     use crate::RpcStoreSchema;
@@ -456,5 +480,61 @@ mod tests {
         // The reverse prefix scan must not spill across the id bound.
         assert_eq!(schema.get_object(a).unwrap(), Some(oa));
         assert_eq!(schema.get_object(b).unwrap(), Some(ob));
+    }
+
+    #[test]
+    fn get_object_lt_or_eq_version_stops_at_tombstones() {
+        let (_dir, db, schema) = fresh_db();
+        let below = ObjectID::from_single_byte(1);
+        let id = ObjectID::from_single_byte(2);
+        let above = ObjectID::from_single_byte(3);
+        let v = SequenceNumber::from_u64;
+        let live = |id, version| {
+            store(&Object::with_id_owner_version_for_testing(
+                id,
+                v(version),
+                Owner::AddressOwner(SuiAddress::ZERO),
+            ))
+        };
+
+        // `id` is live at 1, wrapped at 3, unwrapped at 4 and deleted at 6. The neighboring
+        // objects' rows sit right next to `id`'s in key order, on either side.
+        let mut batch = db.batch();
+        for (row_id, version, value) in [
+            (below, u64::MAX, live(below, u64::MAX)),
+            (id, 1, live(id, 1)),
+            (id, 3, tombstone(TombstoneKind::Wrapped)),
+            (id, 4, live(id, 4)),
+            (id, 6, tombstone(TombstoneKind::Deleted)),
+            (above, 0, live(above, 0)),
+        ] {
+            let key = Key {
+                id: row_id,
+                version: v(version),
+            };
+            batch.put(&schema.objects, &key, &value).unwrap();
+        }
+        batch.commit().unwrap();
+
+        for (version, expected) in [
+            (0, None),
+            (1, Some(1)),
+            (2, Some(1)),
+            (3, None),
+            (4, Some(4)),
+            (5, Some(4)),
+            (6, None),
+            (u64::MAX, None),
+        ] {
+            let found = schema
+                .get_object_lt_or_eq_version(id, v(version))
+                .unwrap()
+                .map(|object| (object.id(), object.version().value()));
+            assert_eq!(
+                found,
+                expected.map(|version| (id, version)),
+                "at or below version {version}"
+            );
+        }
     }
 }
