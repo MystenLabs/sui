@@ -66,6 +66,7 @@ use crate::bigtable::proto::bigtable::v2::ReadModifyWriteRowRequest;
 use crate::bigtable::proto::bigtable::v2::ReadModifyWriteRowResponse;
 use crate::bigtable::proto::bigtable::v2::ReadRowsRequest;
 use crate::bigtable::proto::bigtable::v2::ReadRowsResponse;
+use crate::bigtable::proto::bigtable::v2::RowFilter;
 use crate::bigtable::proto::bigtable::v2::SampleRowKeysRequest;
 use crate::bigtable::proto::bigtable::v2::SampleRowKeysResponse;
 use crate::bigtable::proto::bigtable::v2::bigtable_server::Bigtable;
@@ -455,7 +456,8 @@ struct ReadFilter {
 /// `ColumnQualifierRegexFilter`, `StripValueTransformer(true)`, and a `Chain`
 /// of those plus an optional `FamilyNameRegexFilter` matching
 /// [`crate::tables::FAMILY`] and at most one `Condition` (see
-/// [`parse_read_condition`]).
+/// [`parse_read_condition`]). A `Chain` nested in a `Chain` is read as its
+/// filters in place, since chaining is associative.
 ///
 /// The mock evaluates a `Condition` predicate against the full stored row.
 /// BigTable feeds each `Chain` element the output of the previous one, so a
@@ -483,7 +485,7 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         }
         Some(Filter::StripValueTransformer(true)) => parsed.strip_values = true,
         Some(Filter::Chain(chain)) => {
-            for f in chain.filters {
+            for f in flatten_chain(chain.filters) {
                 match f.filter {
                     Some(Filter::CellsPerColumnLimitFilter(1)) | None => {}
                     Some(Filter::StripValueTransformer(true)) => parsed.strip_values = true,
@@ -527,6 +529,18 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         }
     }
     Ok(parsed)
+}
+
+/// The filters of a `Chain`, with the filters of every nested `Chain` spliced in
+/// where it stood.
+fn flatten_chain(filters: Vec<RowFilter>) -> Vec<RowFilter> {
+    filters
+        .into_iter()
+        .flat_map(|f| match f.filter {
+            Some(Filter::Chain(chain)) => flatten_chain(chain.filters),
+            filter => vec![RowFilter { filter }],
+        })
+        .collect()
 }
 
 /// Parse a `ReadRows` `Condition` filter whose predicate is the CAS helper

@@ -263,7 +263,7 @@ impl BigTableClient {
             .await
     }
 
-    /// The keys in `object_keys` that have an `objects` row, read without the
+    /// The keys in `object_keys` at which the object is live, read without the
     /// objects' contents. One multi-get, under one permit.
     pub(crate) async fn get_existing_object_keys(
         &self,
