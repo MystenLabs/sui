@@ -1337,9 +1337,7 @@ for the upgrade to succeed.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>, policy: u8, digest: vector&lt;u8&gt;): <a href="../sui/package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
-    <b>if</b> (!cap.<a href="../sui/package.md#sui_package_minversion_permanently_enabled">minversion_permanently_enabled</a>()) {
-        <b>return</b> cap.<a href="../sui/package.md#sui_package_authorize_upgrade_impl">authorize_upgrade_impl</a>(policy, digest)
-    };
+    <b>if</b> (!cap.<a href="../sui/package.md#sui_package_minversion_permanently_enabled">minversion_permanently_enabled</a>()) <b>return</b> cap.<a href="../sui/package.md#sui_package_authorize_upgrade_impl">authorize_upgrade_impl</a>(policy, digest);
     // Capture this before authorization clears the cap's current <a href="../sui/package.md#sui_package">package</a> ID.
     <b>let</b> original_id = cap.<a href="../sui/package.md#sui_package_original_package_id">original_package_id</a>();
     <b>let</b> ticket = cap.<a href="../sui/package.md#sui_package_authorize_upgrade_impl">authorize_upgrade_impl</a>(policy, digest);

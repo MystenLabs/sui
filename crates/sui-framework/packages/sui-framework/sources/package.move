@@ -387,9 +387,7 @@ public entry fun make_immutable(cap: UpgradeCap) {
 /// the parent package must be compatible with the policy in the ticket
 /// for the upgrade to succeed.
 public fun authorize_upgrade(cap: &mut UpgradeCap, policy: u8, digest: vector<u8>): UpgradeTicket {
-    if (!cap.minversion_permanently_enabled()) {
-        return cap.authorize_upgrade_impl(policy, digest)
-    };
+    if (!cap.minversion_permanently_enabled()) return cap.authorize_upgrade_impl(policy, digest);
 
     // Capture this before authorization clears the cap's current package ID.
     let original_id = cap.original_package_id();
