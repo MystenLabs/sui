@@ -9,6 +9,13 @@ use sui_types::exit_main;
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();
 
+// Same allocator as sui-node. Formal snapshot restore runs many writer threads that
+// allocate short-lived batch buffers next to values the tidehunter value cache keeps
+// for millions of inserts; glibc malloc fragments badly on that pattern.
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
+#[global_allocator]
+static JEMALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 #[derive(Parser)]
 #[command(
     name = "sui-tool",
