@@ -2195,7 +2195,7 @@ mod test {
             upgrade_probability: 0.3,
             owned_object_probability: 0.3,
             gasless_probability: 0.2,
-            sponsored_probability: 0.1,
+            sponsored_probability: 0.15,
             deny_probability: 0.2,
             multisig_probability: 0.2,
             metrics: Some(metrics.clone()),

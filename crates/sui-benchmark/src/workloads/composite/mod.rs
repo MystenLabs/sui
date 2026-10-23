@@ -1380,6 +1380,7 @@ impl Payload for CompositePayload {
         // slot. The mixed-payment branch can claim these to build 2-real-coin payments.
         let alias_offset = if alias_tx_needed { 1 } else { 0 };
         let mut next_spare_gas_idx = batch_size + alias_offset;
+        let mut sponsor_coin_claimed = false;
 
         for (i, gas) in current_batch_gas.iter().take(batch_size).enumerate() {
             let mut extra_gas_idx_opt: Option<usize> = None;
@@ -1409,33 +1410,24 @@ impl Payload for CompositePayload {
                     nonce,
                 )
             } else if lifecycle_call.is_none()
+                && !sponsor_coin_claimed
                 && let Some(s) = &self.sponsor
                 && rng.gen_bool(self.config.sponsored_probability as f64)
             {
                 // Validators do not yet accept `WithdrawFrom::Sponsor` withdrawals, so a
-                // sponsored tx withdraws only through its gas.
+                // sponsored tx withdraws only through its gas. The sponsor's address balance
+                // holds only the small seed, so the sponsor pays with a coin, and one tx per
+                // batch claims it.
                 sponsor = Some(TxSponsor {
                     address: s.address,
                     keypair: s.keypair.clone(),
                     op: Some(SPONSORED_TX),
                 });
-                if !address_balance_gas_disabled && rng.gen_bool(0.5) {
-                    // Paid from the sponsor's address balance, because the sponsor is the
-                    // gas owner.
-                    let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
-                    TestTransactionBuilder::new_with_address_balance_gas(
-                        sender,
-                        rgp,
-                        self.pool.chain_identifier,
-                        current_epoch,
-                        nonce,
-                    )
-                } else {
-                    let idx = SPONSOR_GAS_IDX;
-                    let coin = s.gas.lock().unwrap().0[idx];
-                    sponsor_coin = Some((idx, coin.0));
-                    TestTransactionBuilder::new(sender, coin, rgp)
-                }
+                sponsor_coin_claimed = true;
+                let idx = SPONSOR_GAS_IDX;
+                let coin = s.gas.lock().unwrap().0[idx];
+                sponsor_coin = Some((idx, coin.0));
+                TestTransactionBuilder::new(sender, coin, rgp)
             } else if !address_balance_gas_disabled
                 && rng.gen_bool(self.config.address_balance_gas_probability as f64)
             {
@@ -1659,14 +1651,8 @@ impl Payload for CompositePayload {
                     {
                         sponsor_gas_updates.push((idx, new_ref));
                     }
-                    if tx_info.op_set.contains(SPONSORED_TX) && effects.is_ok() {
-                        if tx_info.sponsor_coin.is_some() {
-                            assert_reachable!("composite tx sponsored with a coin executed");
-                        } else {
-                            assert_reachable!(
-                                "composite tx sponsored from an address balance executed"
-                            );
-                        }
+                    if tx_info.sponsor_coin.is_some() && effects.is_ok() {
+                        assert_reachable!("composite tx sponsored with a coin executed");
                     }
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
