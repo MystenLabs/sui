@@ -93,6 +93,10 @@ impl Lifecycle for SharedDeletionLifecycle {
         !matches!(self.phase, SharedDeletionPhase::NeedCreate)
     }
 
+    fn urgent(&self) -> bool {
+        matches!(self.phase, SharedDeletionPhase::Deleted { .. })
+    }
+
     fn start_probability(&self) -> f64 {
         self.start_probability
     }

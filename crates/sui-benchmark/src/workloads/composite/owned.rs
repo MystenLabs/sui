@@ -94,6 +94,13 @@ impl Lifecycle for OwnedLifecycle {
         !matches!(self.phase, OwnedPhase::NeedCreate)
     }
 
+    fn urgent(&self) -> bool {
+        matches!(
+            self.phase,
+            OwnedPhase::Frozen { .. } | OwnedPhase::Deleted { .. }
+        )
+    }
+
     fn start_probability(&self) -> f64 {
         self.start_probability
     }
@@ -319,6 +326,10 @@ impl Lifecycle for CoinMergeLifecycle {
 
     fn in_progress(&self) -> bool {
         !matches!(self.phase, CoinPhase::NeedCoins)
+    }
+
+    fn urgent(&self) -> bool {
+        matches!(self.phase, CoinPhase::Merged { .. })
     }
 
     fn start_probability(&self) -> f64 {

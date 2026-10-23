@@ -158,6 +158,10 @@ impl Lifecycle for PartyLifecycle {
         !matches!(self.phase, PartyPhase::NeedCreate)
     }
 
+    fn urgent(&self) -> bool {
+        !matches!(self.phase, PartyPhase::NeedCreate | PartyPhase::Live { .. })
+    }
+
     fn start_probability(&self) -> f64 {
         self.start_probability
     }
@@ -188,7 +192,9 @@ impl Lifecycle for PartyLifecycle {
                 if mutations >= Self::MAX_MUTATIONS || rng.gen_bool(0.5) {
                     // A single payload is its own partner, and a transfer to itself would
                     // not end the stream.
-                    let end = match rng.gen_range(0..3) {
+                    // Half of the ends go to an address, because only that end is followed by
+                    // an owned mutation of the same id.
+                    let end = match rng.gen_range(0..4) {
                         0 if ctx.partner != ctx.sender => self.call(
                             "to_party",
                             vec![obj.clone(), partner_arg],

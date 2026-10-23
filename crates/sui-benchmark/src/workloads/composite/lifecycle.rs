@@ -176,6 +176,13 @@ pub(super) trait Lifecycle: Send + Sync + std::fmt::Debug {
     /// True once the lifecycle has started and until it returns to its initial state.
     fn in_progress(&self) -> bool;
 
+    /// True if the next step references an object state that the last step ended, such as an
+    /// ended stream or a deleted object. Such a step should run in the next batch, while the
+    /// transition is recent.
+    fn urgent(&self) -> bool {
+        false
+    }
+
     /// Per-batch probability that an idle lifecycle starts.
     fn start_probability(&self) -> f64;
 
@@ -192,20 +199,27 @@ pub(super) trait Lifecycle: Send + Sync + std::fmt::Debug {
     fn handle_result(&mut self, step: LifecycleStep, status: &BatchedTransactionStatus);
 }
 
-/// Picks the lifecycles to step this batch while their calls fit in `budget` txs. Lifecycles in
-/// progress come first, in random order, so that a started lifecycle reaches its later steps.
-/// Idle lifecycles that decide to start come next.
+/// Picks the lifecycles to step this batch while their calls fit in `budget` txs. Urgent
+/// lifecycles come first, then the other lifecycles in progress, so that a started lifecycle
+/// reaches its later steps. Idle lifecycles that decide to start come last. Each group is in
+/// random order.
 pub(super) fn choose_lifecycles(lifecycles: &[Box<dyn Lifecycle>], budget: usize) -> Vec<usize> {
     let mut rng = get_rng();
-    let (mut candidates, mut starting): (Vec<usize>, Vec<usize>) = lifecycles
-        .iter()
-        .enumerate()
-        .filter(|(_, l)| l.in_progress() || rng.gen_bool(l.start_probability()))
-        .map(|(i, _)| i)
-        .partition(|&i| lifecycles[i].in_progress());
-    candidates.shuffle(&mut rng);
-    starting.shuffle(&mut rng);
-    candidates.extend(starting);
+    let mut groups: [Vec<usize>; 3] = Default::default();
+    for (i, lifecycle) in lifecycles.iter().enumerate() {
+        if lifecycle.urgent() {
+            groups[0].push(i);
+        } else if lifecycle.in_progress() {
+            groups[1].push(i);
+        } else if rng.gen_bool(lifecycle.start_probability()) {
+            groups[2].push(i);
+        }
+    }
+    let mut candidates = vec![];
+    for mut group in groups {
+        group.shuffle(&mut rng);
+        candidates.extend(group);
+    }
     let mut remaining = budget;
     candidates.retain(|&i| {
         let calls = lifecycles[i].max_step_calls();
