@@ -2323,25 +2323,34 @@ mod test {
             );
         }
 
-        for name in [
-            PARTY_CREATE,
-            PARTY_END_STREAM,
-            SHARED_DELETE_CREATE,
-            SHARED_DELETE,
-            RECEIVE_CREATE_PARENT,
-            RECEIVE_CHILD,
-            OWNED_CREATE,
-            GASLESS_TRANSFER,
-            SPONSORED_TX,
-            MULTISIG_TX,
-        ] {
-            let success_count: u64 = metrics
-                .iter_stats()
-                .filter(|(op_set, _)| op_set.contains(name))
-                .map(|(_, stats)| stats.success_count)
-                .sum();
-            info!("{name} success count: {success_count}");
-            assert!(success_count > 0, "expected at least one {name} success");
+        // Each group needs at least one success among its ops. A party stream ends by a
+        // transfer to an address, a hand-off to the partner, or a wrap.
+        let groups: &[&[&str]] = &[
+            &[PARTY_CREATE],
+            &[PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_WRAP],
+            &[SHARED_DELETE_CREATE],
+            &[SHARED_DELETE],
+            &[RECEIVE_CREATE_PARENT],
+            &[RECEIVE_CHILD],
+            &[OWNED_CREATE],
+            &[GASLESS_TRANSFER],
+            &[SPONSORED_TX],
+            &[MULTISIG_TX],
+        ];
+        let success_counts: Vec<u64> = groups
+            .iter()
+            .map(|names| {
+                let success_count = metrics
+                    .iter_stats()
+                    .filter(|(op_set, _)| names.iter().any(|name| op_set.contains(name)))
+                    .map(|(_, stats)| stats.success_count)
+                    .sum();
+                info!("{names:?} success count: {success_count}");
+                success_count
+            })
+            .collect();
+        for (names, success_count) in groups.iter().zip(success_counts) {
+            assert!(success_count > 0, "expected at least one {names:?} success");
         }
 
         if allowances_enabled {
