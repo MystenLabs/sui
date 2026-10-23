@@ -285,6 +285,22 @@ pub struct StateSyncConfig {
     /// download started are tried one at a time.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_hedge_delay_ms: Option<NonZeroU64>,
+
+    /// When true, requests to a peer that is slow from this node are hedged sooner than
+    /// `checkpoint_content_hedge_delay_ms`: after the peer's slow-response threshold, which is
+    /// its fastest recent response time plus 25% or plus 20 ms, whichever is more. A peer is slow
+    /// when at least a quarter of its recent responses took longer than that threshold. Requests
+    /// cancelled because a hedge won count as slow responses, so a peer stays slow while hedges
+    /// keep beating it, and stops being slow once it answers within the threshold again.
+    ///
+    /// Also, when a hedge is due before any other peer has announced the checkpoint, or every
+    /// request has failed, the download checks for newly announced peers every 10 ms instead of
+    /// every hedge delay, so the next request goes out within 10 ms of an announcement.
+    ///
+    /// Has no effect unless `checkpoint_content_hedge_delay_ms` is set. If unspecified, this
+    /// defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_adaptive_hedge_delay: Option<bool>,
 }
 
 impl StateSyncConfig {
@@ -435,6 +451,11 @@ impl StateSyncConfig {
     pub fn checkpoint_content_hedge_delay(&self) -> Option<Duration> {
         self.checkpoint_content_hedge_delay_ms
             .map(|delay_ms| Duration::from_millis(delay_ms.get()))
+    }
+
+    pub fn checkpoint_content_adaptive_hedge_delay(&self) -> bool {
+        self.checkpoint_content_adaptive_hedge_delay
+            .unwrap_or(false)
     }
 
     pub fn randomized_for_testing() -> Self {
