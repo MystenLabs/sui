@@ -20,6 +20,8 @@ use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListObjectVersionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListObjectVersionsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
@@ -36,6 +38,7 @@ pub(crate) mod get_transaction;
 mod ledger_read;
 mod list_checkpoints;
 mod list_events;
+mod list_object_versions;
 mod list_transactions;
 mod object_set;
 mod query_end;
@@ -43,6 +46,8 @@ mod stream;
 pub use get_epoch::protocol_config_to_proto;
 pub use get_object::ObjectSelector;
 pub use get_object::validate_get_object_requests;
+pub use list_object_versions::ObjectVersionCursor;
+pub use list_object_versions::ObjectVersionsQuery;
 
 use stream::serve_list_stream;
 
@@ -78,6 +83,15 @@ impl LedgerService for RpcService {
         .map_err(|e| tonic::Status::internal(format!("batch_get_objects task failed: {e}")))?
         .map(tonic::Response::new)
         .map_err(Into::into)
+    }
+
+    async fn list_object_versions(
+        &self,
+        request: tonic::Request<ListObjectVersionsRequest>,
+    ) -> Result<tonic::Response<ListObjectVersionsResponse>, tonic::Status> {
+        list_object_versions::list_object_versions(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn get_transaction(

@@ -36,6 +36,7 @@ use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListObjectVersionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
@@ -2044,6 +2045,312 @@ async fn test_get_object_max_version_and_checkpoint_bounds() {
         .unwrap_err();
     assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
     assert_eq!(bad_request_fields(&err), ["requests[2].max_version"]);
+}
+
+/// A `ListObjectVersionsRequest` for `id` that reads only `object_id` and `version`.
+fn list_versions_request(
+    id: ObjectID,
+    ordering: Ordering,
+    limit: Option<u32>,
+    after: Option<&prost::bytes::Bytes>,
+    before: Option<&prost::bytes::Bytes>,
+) -> ListObjectVersionsRequest {
+    let mut options = QueryOptions::default();
+    options.limit = limit;
+    options.ordering = Some(ordering as i32);
+    options.after = after.cloned();
+    options.before = before.cloned();
+    let mut req = ListObjectVersionsRequest::default();
+    req.object_id = Some(id.to_canonical_string(true));
+    req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+    req.options = Some(options);
+    req
+}
+
+/// One `ListObjectVersions` response: each listed version with its cursor, in order, or the
+/// error's code and message.
+type VersionsRead = Result<Vec<(u64, prost::bytes::Bytes)>, (tonic::Code, String)>;
+
+async fn list_versions(
+    client: &mut LedgerServiceClient<Channel>,
+    req: ListObjectVersionsRequest,
+) -> VersionsRead {
+    let id = req.object_id.clone().expect("requests name an object");
+    match client.list_object_versions(req).await {
+        Ok(response) => Ok(response
+            .into_inner()
+            .versions
+            .into_iter()
+            .map(|listed| {
+                let object = listed.object.expect("object should be present");
+                assert_eq!(object.object_id.as_deref(), Some(id.as_str()));
+                (
+                    object.version.expect("version should be present"),
+                    listed.cursor.expect("cursor should be present"),
+                )
+            })
+            .collect()),
+        Err(status) => Err((status.code(), status.message().to_owned())),
+    }
+}
+
+/// The versions a successful `ListObjectVersions` call listed, in order.
+fn listed_versions(read: &VersionsRead, context: &str) -> Vec<u64> {
+    match read {
+        Ok(listed) => listed.iter().map(|(version, _)| *version).collect(),
+        Err(err) => panic!("{context}: expected versions, got error {err:?}"),
+    }
+}
+
+/// The cursor of the version a successful `ListObjectVersions` call listed at `index`.
+fn listed_cursor(read: &VersionsRead, index: usize) -> prost::bytes::Bytes {
+    read.as_ref().expect("listing should succeed")[index]
+        .1
+        .clone()
+}
+
+/// `ListObjectVersions` lists the live versions of objects driven through creation, mutation,
+/// wrapping, unwrapping, and deletion, in either order, inside every bound the request sets:
+/// the version range, cursors from earlier responses, and `at_checkpoint`, which keeps the
+/// versions written by the end of the checkpoint and none before creation.
+#[tokio::test]
+async fn test_list_object_versions_lifecycle() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
+    let ObjectLifecycle {
+        object, wrapper, ..
+    } = lifecycle;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let served_height = client
+        .get_service_info(GetServiceInfoRequest::default())
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint_height
+        .expect("served height should be set");
+    assert!(served_height >= lifecycle.delete_checkpoint);
+
+    // The object is live after creation, the mutation, and the unwrap; the wrapper is live after
+    // the wrap only.
+    let live = |id: ObjectID| -> Vec<(u64, u64)> {
+        lifecycle
+            .changes
+            .iter()
+            .filter(|&&(_, changed, _, live)| changed == id && live)
+            .map(|&(checkpoint, _, version, _)| (checkpoint, version))
+            .collect()
+    };
+    assert_eq!(live(object).len(), 3);
+    assert_eq!(live(wrapper).len(), 1);
+    let set_value_version = lifecycle
+        .live_version_at(object, lifecycle.set_value_checkpoint)
+        .unwrap();
+    let unwrap_version = live(object)[2].1;
+
+    // Every combination of version range, cursors of each live version, and checkpoint from
+    // just before creation through deletion, for both objects, in both orders.
+    let checkpoints: Vec<Option<u64>> = std::iter::once(None)
+        .chain((lifecycle.publish_checkpoint..=lifecycle.delete_checkpoint).map(Some))
+        .collect();
+    for id in [object, wrapper] {
+        let full = list_versions(
+            &mut client,
+            list_versions_request(id, Ordering::Ascending, None, None, None),
+        )
+        .await;
+        let live_versions: Vec<u64> = live(id).iter().map(|&(_, version)| version).collect();
+        assert_eq!(listed_versions(&full, "full listing"), live_versions);
+        let cursors: Vec<Option<(u64, prost::bytes::Bytes)>> = std::iter::once(None)
+            .chain(full.unwrap().into_iter().map(Some))
+            .collect();
+
+        for (start, end) in [
+            (None, None),
+            (Some(set_value_version), None),
+            (None, Some(unwrap_version)),
+            (Some(set_value_version), Some(unwrap_version)),
+        ] {
+            for after in &cursors {
+                for before in &cursors {
+                    for &at_checkpoint in &checkpoints {
+                        let mut ascending: Vec<u64> = live(id)
+                            .into_iter()
+                            .filter(|&(checkpoint, version)| {
+                                start.is_none_or(|start| version >= start)
+                                    && end.is_none_or(|end| version < end)
+                                    && after.as_ref().is_none_or(|(after, _)| version > *after)
+                                    && before.as_ref().is_none_or(|(before, _)| version < *before)
+                                    && at_checkpoint.is_none_or(|bound| checkpoint <= bound)
+                            })
+                            .map(|(_, version)| version)
+                            .collect();
+                        for ordering in [Ordering::Ascending, Ordering::Descending] {
+                            let mut req = list_versions_request(
+                                id,
+                                ordering,
+                                None,
+                                after.as_ref().map(|(_, cursor)| cursor),
+                                before.as_ref().map(|(_, cursor)| cursor),
+                            );
+                            req.start_version = start;
+                            req.end_version = end;
+                            req.at_checkpoint = at_checkpoint;
+                            let context = format!(
+                                "{id} versions [{start:?}, {end:?}) after {:?} before {:?} \
+                                 at_checkpoint {at_checkpoint:?} {ordering:?}",
+                                after.as_ref().map(|(version, _)| version),
+                                before.as_ref().map(|(version, _)| version),
+                            );
+                            let read = list_versions(&mut client, req).await;
+                            assert_eq!(listed_versions(&read, &context), ascending, "{context}");
+                            ascending.reverse();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // A client holding the page after the created version pages backward from its first
+    // version, then forward from that page's cursors, until short pages reach both ends, with no
+    // gaps or repeats.
+    let live_versions: Vec<u64> = live(object).iter().map(|&(_, version)| version).collect();
+    let first = list_versions(
+        &mut client,
+        list_versions_request(object, Ordering::Ascending, Some(1), None, None),
+    )
+    .await;
+    let held = list_versions(
+        &mut client,
+        list_versions_request(
+            object,
+            Ordering::Ascending,
+            Some(1),
+            Some(&listed_cursor(&first, 0)),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(listed_versions(&held, "held page"), live_versions[1..2]);
+    let back = list_versions(
+        &mut client,
+        list_versions_request(
+            object,
+            Ordering::Descending,
+            Some(2),
+            None,
+            Some(&listed_cursor(&held, 0)),
+        ),
+    )
+    .await;
+    assert_eq!(
+        listed_versions(&back, "backward page"),
+        live_versions[..1],
+        "a short page at the start",
+    );
+    let mut forward: Vec<u64> = Vec::new();
+    let mut after = listed_cursor(&back, 0);
+    loop {
+        let page = list_versions(
+            &mut client,
+            list_versions_request(object, Ordering::Ascending, Some(1), Some(&after), None),
+        )
+        .await;
+        let versions = listed_versions(&page, "forward page");
+        forward.extend(&versions);
+        if versions.is_empty() {
+            break;
+        }
+        after = listed_cursor(&page, 0);
+    }
+    assert_eq!(forward, live_versions[1..], "forward pages");
+
+    // A page of two in a range with one version left is short.
+    let mut req = list_versions_request(
+        object,
+        Ordering::Ascending,
+        Some(2),
+        Some(&listed_cursor(&first, 0)),
+        None,
+    );
+    req.end_version = Some(unwrap_version);
+    let read = list_versions(&mut client, req).await;
+    assert_eq!(listed_versions(&read, "short page"), [set_value_version]);
+
+    // Malformed requests are `InvalidArgument` naming the field.
+    let wrapper_cursor = listed_cursor(
+        &list_versions(
+            &mut client,
+            list_versions_request(wrapper, Ordering::Ascending, None, None, None),
+        )
+        .await,
+        0,
+    );
+    let malformed = prost::bytes::Bytes::from_static(&[0xFF]);
+    let mut missing_object_id =
+        list_versions_request(object, Ordering::Ascending, None, None, None);
+    missing_object_id.object_id = None;
+    for (req, field) in [
+        (missing_object_id, "object_id"),
+        (
+            list_versions_request(object, Ordering::Ascending, None, Some(&malformed), None),
+            "options.after",
+        ),
+        (
+            list_versions_request(
+                object,
+                Ordering::Descending,
+                None,
+                None,
+                Some(&wrapper_cursor),
+            ),
+            "options.before",
+        ),
+    ] {
+        let err = client.list_object_versions(req).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument, "{field}: {err:?}");
+        assert_eq!(bad_request_fields(&err), [field]);
+    }
+
+    // A checkpoint above the served height is `NotFound`.
+    for checkpoint in [served_height + 1, u64::MAX] {
+        let mut req = list_versions_request(object, Ordering::Ascending, None, None, None);
+        req.at_checkpoint = Some(checkpoint);
+        match list_versions(&mut client, req).await {
+            Err((code, message)) => {
+                assert_eq!(code, tonic::Code::NotFound, "{message}");
+                assert!(message.contains("is not yet indexed"), "{message}");
+            }
+            Ok(listed) => panic!("at_checkpoint {checkpoint}: expected NotFound, got {listed:?}"),
+        }
+    }
+}
+
+/// `at_checkpoint` reads are off by default. Every `ListObjectVersions` request reads the version
+/// index to bound itself by `at_checkpoint`, or by the served height when it is unset, so kv-rpc
+/// rejects them all with `Unimplemented`.
+#[tokio::test]
+async fn test_list_object_versions_disabled_by_default() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (_, _, gas) = cluster.funded_account(DEFAULT_GAS_BUDGET).unwrap();
+    let checkpoint = cluster.create_checkpoint().await.sequence_number;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    for at_checkpoint in [Some(checkpoint), None] {
+        let mut req = list_versions_request(gas.0, Ordering::Ascending, None, None, None);
+        req.at_checkpoint = at_checkpoint;
+        match list_versions(&mut client, req).await {
+            Err((code, message)) => assert_eq!(code, tonic::Code::Unimplemented, "{message}"),
+            Ok(listed) => panic!("{at_checkpoint:?}: expected Unimplemented, got {listed:?}"),
+        }
+    }
 }
 
 #[tokio::test]

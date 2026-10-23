@@ -25,6 +25,7 @@
 //! acquisition count are recorded once on `BigTableClientContext` drop.
 
 use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -288,6 +289,25 @@ impl BigTableClient {
         self.call_gated(
             stage::OBJECTS,
             inner.get_object_lt_or_eq_version(object_id, version),
+        )
+        .await
+    }
+
+    /// Up to `limit` live versions of `object_id` in `versions`, in ascending
+    /// version order or descending if `descending`; versions at which the
+    /// object was deleted or wrapped are skipped and do not count toward
+    /// `limit`. One range scan of the `objects` table, under one permit.
+    pub(crate) async fn get_live_object_versions(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECTS,
+            inner.get_live_object_versions(object_id, versions, limit, descending),
         )
         .await
     }
