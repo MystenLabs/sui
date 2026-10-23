@@ -72,12 +72,14 @@ enum PartyPhase {
         ended_start_version: SequenceNumber,
         addr_ref: ObjectRef,
     },
-    /// The address-owned mutation executed. The next step either restarts a stream on the
-    /// same id or abandons the object and creates a new one.
+    /// `rounds` address-owned mutations executed after the stream ended. The next step
+    /// mutates the object again together with txs on the ended stream, restarts a stream on
+    /// the same id, or abandons the object.
     Owned {
         id: ObjectID,
         ended_start_version: SequenceNumber,
         addr_ref: ObjectRef,
+        rounds: u32,
     },
     /// The object moved to the partner on a new stream. The next step references the ended
     /// stream and then abandons the object.
@@ -103,6 +105,8 @@ pub(super) struct PartyLifecycle {
 impl PartyLifecycle {
     /// The stream ends after at most this many mutations so the lifecycle keeps progressing.
     const MAX_MUTATIONS: u32 = 3;
+    /// The object leaves the `Owned` phase after at most this many owned mutations.
+    const MAX_OWNED_ROUNDS: u32 = 3;
 
     pub fn new(start_probability: f64) -> Self {
         Self {
@@ -155,9 +159,10 @@ impl Lifecycle for PartyLifecycle {
     fn max_step_calls(&self) -> usize {
         match self.phase {
             PartyPhase::NeedCreate => 1,
-            PartyPhase::Owned { .. } | PartyPhase::HandedOff { .. } => 2,
+            PartyPhase::HandedOff { .. } => 2,
             PartyPhase::Live { .. }
             | PartyPhase::StreamEnded { .. }
+            | PartyPhase::Owned { .. }
             | PartyPhase::Wrapped { .. } => 3,
         }
     }
@@ -176,7 +181,10 @@ impl Lifecycle for PartyLifecycle {
 
     fn next_step(&mut self, ctx: &StepContext) -> Vec<LifecycleCall> {
         let mut rng = get_rng();
-        if matches!(self.phase, PartyPhase::Owned { .. }) && rng.gen_bool(0.5) {
+        if let PartyPhase::Owned { rounds, .. } = self.phase
+            && (rounds >= Self::MAX_OWNED_ROUNDS || rng.gen_bool(0.3))
+            && rng.gen_bool(0.5)
+        {
             // Abandon the address-owned object and start over with a new one.
             self.phase = PartyPhase::NeedCreate;
         }
@@ -334,23 +342,41 @@ impl Lifecycle for PartyLifecycle {
                 id,
                 ended_start_version,
                 addr_ref,
-            } => vec![
-                self.call(
-                    "to_party",
-                    vec![
-                        CallArg::Object(ObjectArg::ImmOrOwnedObject(addr_ref)),
-                        sender_arg,
-                    ],
-                    PARTY_RESTART_STREAM,
-                    PartyStep::RestartStream,
-                ),
-                self.set_value(
-                    shared_mut(id, ended_start_version),
-                    4,
-                    PARTY_OLD_STREAM,
-                    PartyStep::OldStream,
-                ),
-            ],
+                rounds,
+            } => {
+                let old_stream = shared_mut(id, ended_start_version);
+                if rounds < Self::MAX_OWNED_ROUNDS && rng.gen_bool(0.7) {
+                    // Txs on the ended stream keep arriving while the owned object's versions
+                    // advance, so their assigned versions can match a later owned version.
+                    return vec![
+                        self.set_value(
+                            CallArg::Object(ObjectArg::ImmOrOwnedObject(addr_ref)),
+                            10 + rounds as u64,
+                            PARTY_OWNED_MUTATE,
+                            PartyStep::OwnedMutate,
+                        ),
+                        self.set_value(
+                            old_stream.clone(),
+                            1,
+                            PARTY_OLD_STREAM,
+                            PartyStep::OldStream,
+                        ),
+                        self.set_value(old_stream, 2, PARTY_OLD_STREAM, PartyStep::OldStream),
+                    ];
+                }
+                vec![
+                    self.call(
+                        "to_party",
+                        vec![
+                            CallArg::Object(ObjectArg::ImmOrOwnedObject(addr_ref)),
+                            sender_arg,
+                        ],
+                        PARTY_RESTART_STREAM,
+                        PartyStep::RestartStream,
+                    ),
+                    self.set_value(old_stream, 4, PARTY_OLD_STREAM, PartyStep::OldStream),
+                ]
+            }
         }
     }
 
@@ -548,21 +574,22 @@ impl Lifecycle for PartyLifecycle {
                 }
             }
             (
-                PartyStep::OwnedMutate,
+                PartyStep::OwnedMutate | PartyStep::RestartStream,
                 PartyPhase::StreamEnded {
                     id,
                     ended_start_version,
                     ..
-                },
-            )
-            | (
-                PartyStep::RestartStream,
-                PartyPhase::Owned {
+                }
+                | PartyPhase::Owned {
                     id,
                     ended_start_version,
                     ..
                 },
             ) => {
+                let rounds = match self.phase {
+                    PartyPhase::Owned { rounds, .. } => rounds + 1,
+                    _ => 1,
+                };
                 if effects.is_ok() {
                     if matches!(step, PartyStep::OwnedMutate) {
                         assert_reachable!("party object mutated as owned after its stream ended");
@@ -575,6 +602,7 @@ impl Lifecycle for PartyLifecycle {
                         id: *id,
                         ended_start_version: *ended_start_version,
                         addr_ref,
+                        rounds,
                     }),
                     Some((_, owner)) => {
                         owner.start_version().map(|start_version| PartyPhase::Live {
