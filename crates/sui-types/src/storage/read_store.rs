@@ -842,14 +842,17 @@ pub trait RpcIndexes: Send + Sync {
     ) -> Result<BalanceIterator<'_>>;
 
     /// Iterate the versions of the package originally published at
-    /// `original_id` in ascending version order, starting at version `cursor`
-    /// (inclusive) when set. Versions with no recorded publish checkpoint come
-    /// first, and recorded publish checkpoints are non-decreasing in version,
-    /// once [`Self::is_history_backfill_pending`] is `false`.
+    /// `original_id` in `[start_version, end_version_exclusive)`, in ascending
+    /// version order, or descending when `descending` is set. Versions with no
+    /// recorded publish checkpoint are the lowest, and recorded publish
+    /// checkpoints are non-decreasing in version, once
+    /// [`Self::is_history_backfill_pending`] is `false`.
     fn package_versions_iter(
         &self,
         original_id: ObjectID,
-        cursor: Option<u64>,
+        start_version: u64,
+        end_version_exclusive: u64,
+        descending: bool,
     ) -> Result<PackageVersionsIterator<'_>>;
 
     /// Resolve the storage id holding the exact `version` of the package
