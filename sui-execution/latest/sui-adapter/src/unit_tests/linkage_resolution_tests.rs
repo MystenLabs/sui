@@ -164,7 +164,7 @@ fn minversion_resolution_records_referenced_and_selected_packages() {
 
 #[test]
 fn selected_package_collection_uses_selected_package_dependencies() {
-    let original_id = ObjectID::from_single_byte(1);
+    let original_id = ObjectID::from_single_byte(50);
     let historical_id = ObjectID::from_single_byte(10);
     let selected_id = ObjectID::from_single_byte(12);
     let selected_dependency = ObjectID::from_single_byte(100);
@@ -195,24 +195,103 @@ fn selected_package_collection_uses_selected_package_dependencies() {
         ),
     ]));
     let config = ResolutionConfig::new(LinkageConfig::new(None, false), BinaryConfig::standard());
-    let resolution_table = ResolutionTable::empty(config);
-    let minversion_resolver = |id| -> Result<Option<MinVersion>, ExecutionError> {
-        Ok((id == original_id).then_some(MinVersion {
-            version: 12,
-            package_id: ID::new(selected_id),
-        }))
-    };
-    let mut builder =
-        LinkageStoreResolver::<_, ExecutionError>::new(&store, Some(&minversion_resolver));
+    let mut resolution_table = ResolutionTable::empty(config);
+    resolution_table
+        .resolution_table
+        .insert(original_id, VersionConstraint::AtLeast(12, selected_id));
+    resolution_table.resolution_table.insert(
+        selected_dependency,
+        VersionConstraint::Exact(100, selected_dependency),
+    );
+    let resolver = LinkageStoreResolver::<_, ExecutionError>::new(&store, None);
     let mut original_ids = BTreeSet::new();
 
-    builder
+    resolver
         .collect_original_ids(&resolution_table, historical_id, &mut original_ids)
         .unwrap();
 
     assert_eq!(
         original_ids,
         BTreeSet::from([original_id, selected_dependency])
+    );
+}
+
+#[test]
+fn executable_package_collection_follows_final_dependency_selection() {
+    let root_original_id = ObjectID::from_single_byte(50);
+    let root_id = package_id(10, 1);
+    let dependency_original_id = ObjectID::from_single_byte(60);
+    let dependency_historical_id = package_id(20, 1);
+    let dependency_selected_id = package_id(21, 2);
+    let new_dependency_original_id = ObjectID::from_single_byte(70);
+    let new_dependency_id = package_id(30, 1);
+    let store = TestStore(BTreeMap::from([
+        (
+            root_id,
+            TestPackage {
+                id: root_id,
+                original_id: root_original_id,
+                linkage: BTreeMap::from([(
+                    dependency_original_id.into(),
+                    dependency_historical_id.into(),
+                )]),
+            },
+        ),
+        (
+            dependency_historical_id,
+            TestPackage {
+                id: dependency_historical_id,
+                original_id: dependency_original_id,
+                linkage: BTreeMap::new(),
+            },
+        ),
+        (
+            dependency_selected_id,
+            TestPackage {
+                id: dependency_selected_id,
+                original_id: dependency_original_id,
+                linkage: BTreeMap::from([(
+                    new_dependency_original_id.into(),
+                    new_dependency_id.into(),
+                )]),
+            },
+        ),
+        (
+            new_dependency_id,
+            TestPackage {
+                id: new_dependency_id,
+                original_id: new_dependency_original_id,
+                linkage: BTreeMap::new(),
+            },
+        ),
+    ]));
+    let config = ResolutionConfig::new(LinkageConfig::new(None, false), BinaryConfig::standard());
+    let mut resolution_table = ResolutionTable::empty(config);
+    resolution_table
+        .resolution_table
+        .insert(root_original_id, VersionConstraint::Exact(1, root_id));
+    resolution_table.resolution_table.insert(
+        dependency_original_id,
+        VersionConstraint::AtLeast(2, dependency_selected_id),
+    );
+    resolution_table.resolution_table.insert(
+        new_dependency_original_id,
+        VersionConstraint::AtLeast(1, new_dependency_id),
+    );
+    let resolver = LinkageStoreResolver::<_, ExecutionError>::new(&store, None);
+    let mut original_ids = BTreeSet::new();
+
+    resolver
+        .collect_original_ids(&resolution_table, root_id, &mut original_ids)
+        .unwrap();
+
+    assert_eq!(
+        original_ids,
+        BTreeSet::from([
+            root_original_id,
+            dependency_original_id,
+            new_dependency_original_id,
+        ])
     );
 }
 
@@ -224,7 +303,7 @@ fn system_packages_do_not_read_package_config() {
     let minversion_resolver = |_| -> Result<Option<MinVersion>, ExecutionError> {
         panic!("system packages must not read PackageConfig")
     };
-    let mut resolver =
+    let resolver =
         LinkageStoreResolver::<_, ExecutionError>::new(&store, Some(&minversion_resolver));
     let mut original_ids = BTreeSet::new();
 

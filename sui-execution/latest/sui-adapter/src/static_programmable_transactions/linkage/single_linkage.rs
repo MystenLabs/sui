@@ -69,15 +69,6 @@ pub(crate) fn refine_to_single_linkage<E: ExecutionErrorTrait>(
     let mut version_targets = PackageVersionTargets::default();
 
     for (i, command) in txn.commands.iter().enumerate() {
-        if protocol_config.package_version_rules_enabled() {
-            collect_package_version_targets::<E>(
-                command,
-                &base_linkage,
-                &mut version_targets,
-                &mut resolver,
-            )
-            .map_err(|e| e.with_command_index(i))?;
-        }
         analyze_command::<E>(command, &mut base_linkage, protocol_config, &mut resolver)
             .map_err(|e| e.with_command_index(i))?;
         add_used_input_linkage::<E>(
@@ -131,6 +122,21 @@ pub(crate) fn refine_to_single_linkage<E: ExecutionErrorTrait>(
                 &base_linkage,
                 package_store,
                 protocol_config.enable_package_minversion(),
+            )
+            .map_err(|e| e.with_command_index(i))?;
+        }
+    }
+
+    // Collect policy targets only after every command and input has contributed its constraints.
+    // This ensures executable reachability follows the package versions selected by the final
+    // resolution table, including dependencies introduced only by a later selected version.
+    if protocol_config.package_version_rules_enabled() {
+        for (i, command) in txn.commands.iter().enumerate() {
+            collect_package_version_targets::<E>(
+                command,
+                &base_linkage,
+                &mut version_targets,
+                &resolver,
             )
             .map_err(|e| e.with_command_index(i))?;
         }
@@ -278,7 +284,7 @@ fn collect_package_version_targets<E: ExecutionErrorTrait>(
     command: &Command,
     resolution_table: &ResolutionTable,
     version_targets: &mut PackageVersionTargets,
-    resolver: &mut LinkageStoreResolver<'_, VerifiedPackageStore<'_>, E>,
+    resolver: &LinkageStoreResolver<'_, VerifiedPackageStore<'_>, E>,
 ) -> Result<(), E> {
     match command {
         Command::MoveCall(move_call) => resolver.collect_original_ids(

@@ -389,33 +389,45 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
         Ok(())
     }
 
-    /// Collect original IDs from the selected graph without applying linkage constraints.
+    /// Collect original IDs reachable from an executable root through the package versions chosen
+    /// by the final resolution table.
     pub(crate) fn collect_original_ids(
-        &mut self,
+        &self,
         resolution_table: &ResolutionTable,
         package_id: ObjectID,
         original_ids: &mut BTreeSet<ObjectID>,
     ) -> Result<(), E> {
-        let mut pending = vec![package_id];
-        let mut visited = BTreeSet::new();
-        while let Some(package_id) = pending.pop() {
-            // Package-version rules apply only to user-package families. Skip system packages so
-            // they are neither recorded as runtime targets nor traversed. `load_package` has a
-            // separate guard because other callers still need to load system packages without
-            // resolving minversion through PackageConfig.
-            if sui_types::is_system_package(package_id) {
+        if sui_types::is_system_package(package_id) {
+            return Ok(());
+        }
+
+        let root = get_package(&package_id, self.store)?;
+        let mut pending = vec![root.original_id()];
+        while let Some(original_id) = pending.pop() {
+            // Package-version rules apply only to user-package families. Linkage-table keys are
+            // original IDs, so dependencies do not need to be loaded merely to identify them.
+            if sui_types::is_system_package(original_id) || !original_ids.insert(original_id) {
                 continue;
             }
-            let package = self.load_package(&package_id)?;
-            if !visited.insert(package.version_id()) {
-                continue;
+            let Some(constraint) = resolution_table.resolution_table.get(&original_id) else {
+                invariant_violation!(
+                    "executable package linkage contains original ID {original_id} that is missing \
+                     from the resolution table"
+                )
+            };
+            let package = get_package(&constraint.object_id(), self.store)?;
+            if package.original_id() != original_id {
+                invariant_violation!(
+                    "resolved package {} belongs to {}, not expected original ID {original_id}",
+                    package.version_id(),
+                    package.original_id(),
+                )
             }
-            original_ids.insert(package.original_id());
             pending.extend(
                 resolution_table
                     .config
                     .linkage_table(&package)
-                    .into_values()
+                    .into_keys()
                     .map(ObjectID::from),
             );
         }
