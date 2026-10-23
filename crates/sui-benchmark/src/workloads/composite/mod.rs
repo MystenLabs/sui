@@ -23,9 +23,9 @@ pub use operations::{
     PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
     PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
     RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
-    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSOR_WITHDRAWAL, SPONSORED_TX,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSORED_TX, SharedCounterIncrement,
+    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
+    TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -86,6 +86,12 @@ use super::MultiGas;
 
 /// Lifecycle steps take up to three txs each, so a batch has room for a few of them.
 const MAX_BATCH_SIZE: usize = 6;
+
+/// The gas budget of a multisig tx, in gas units.
+const MULTISIG_GAS_UNITS: u64 = 100_000;
+/// The SUI that each multisig account's address balance receives at init, which pays for
+/// many multisig txs.
+const MULTISIG_FUNDING: u64 = 10_000_000_000;
 
 /// The sponsor's gas coin that pays for coin-sponsored txs.
 const SPONSOR_GAS_IDX: usize = MAX_BATCH_SIZE - 1;
@@ -550,6 +556,9 @@ pub struct CompositePayload {
     lifecycles: Vec<Box<dyn Lifecycle>>,
     sponsor: Option<Sponsor>,
     multisig: Option<MultisigAccount>,
+    /// True if the current batch has a gasless tx. Every tx in a soft bundle must have the
+    /// same gas price, so such a batch is submitted tx by tx.
+    direct_submission: bool,
 }
 
 /// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
@@ -810,7 +819,7 @@ impl CompositePayload {
         keypair: &AccountKeyPair,
         current_epoch: u64,
         lifecycle_call: Option<&LifecycleCall>,
-        sponsor: Option<(Sponsor, bool)>,
+        sponsor: Option<Sponsor>,
     ) -> (Transaction, OperationSet) {
         let ops = match lifecycle_call {
             Some(call) if call.bare => vec![],
@@ -824,11 +833,8 @@ impl CompositePayload {
         if let Some(call) = lifecycle_call {
             op_set = op_set.with(call.op);
         }
-        if let Some((_, sponsor_withdrawal)) = &sponsor {
+        if sponsor.is_some() {
             op_set = op_set.with(SPONSORED_TX);
-            if *sponsor_withdrawal {
-                op_set = op_set.with(SPONSOR_WITHDRAWAL);
-            }
         }
         self.metrics
             .lock()
@@ -849,27 +855,6 @@ impl CompositePayload {
             if let Some(call) = lifecycle_call {
                 call.apply(builder, package_version);
             }
-            if let Some((_, true)) = &sponsor {
-                // Move one MIST from the sponsor's address balance to the sender's.
-                let withdrawal = builder
-                    .funds_withdrawal(FundsWithdrawalArg::balance_from_sponsor(1, GAS::type_tag()))
-                    .unwrap();
-                let balance = builder.programmable_move_call(
-                    SUI_FRAMEWORK_PACKAGE_ID,
-                    Identifier::new("balance").unwrap(),
-                    Identifier::new("redeem_funds").unwrap(),
-                    vec![GAS::type_tag()],
-                    vec![withdrawal],
-                );
-                let recipient = builder.pure(account_state.sender).unwrap();
-                builder.programmable_move_call(
-                    SUI_FRAMEWORK_PACKAGE_ID,
-                    Identifier::new("balance").unwrap(),
-                    Identifier::new("send_funds").unwrap(),
-                    vec![GAS::type_tag()],
-                    vec![balance, recipient],
-                );
-            }
             for op in &ops {
                 let resources = Self::resolve_resources_for_op(
                     op.as_ref(),
@@ -886,7 +871,7 @@ impl CompositePayload {
         let tx_builder = tx_builder.ensure_unique();
         let tx = match sponsor {
             None => tx_builder.build_and_sign(keypair),
-            Some((sponsor, _)) => {
+            Some(sponsor) => {
                 let mut data = tx_builder.build();
                 data.gas_data_mut().owner = sponsor.address;
                 Transaction::from_data_and_signer(data, vec![keypair, sponsor.keypair.as_ref()])
@@ -1019,7 +1004,8 @@ impl CompositePayload {
             self.pool.chain_identifier,
             current_epoch,
             nonce,
-        );
+        )
+        .with_gas_budget(rgp * MULTISIG_GAS_UNITS);
         {
             let package_version = self.pool.select_package_version();
             let (counter_id, counter_version) = self.pool.select_counter();
@@ -1297,6 +1283,10 @@ impl Payload for CompositePayload {
         true
     }
 
+    fn use_direct_batch_submission(&self) -> bool {
+        self.direct_submission
+    }
+
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let alias_tx_needed = self.advance_alias_state().await;
         let system_state = self.system_state_observer.state.borrow().clone();
@@ -1304,6 +1294,7 @@ impl Payload for CompositePayload {
 
         self.current_batch_txs.clear();
         self.current_batch_num_conflicting_transactions = 0;
+        self.direct_submission = false;
 
         let max_normal_batch = if alias_tx_needed {
             MAX_BATCH_SIZE - 1
@@ -1372,10 +1363,9 @@ impl Payload for CompositePayload {
                 && let Some(s) = &self.sponsor
                 && rng.gen_bool(self.config.sponsored_probability as f64)
             {
-                sponsor = Some((
-                    s.clone(),
-                    !address_balance_gas_disabled && rng.gen_bool(0.5),
-                ));
+                // Validators do not yet accept `WithdrawFrom::Sponsor` withdrawals, so a
+                // sponsored tx withdraws only through its gas.
+                sponsor = Some(s.clone());
                 if !address_balance_gas_disabled && rng.gen_bool(0.5) {
                     // Paid from the sponsor's address balance, because the sponsor is the
                     // gas owner.
@@ -1523,6 +1513,7 @@ impl Payload for CompositePayload {
             && !gasless_disabled(system_state.protocol_config.as_ref())
             && rng.gen_bool(self.config.gasless_probability as f64)
         {
+            self.direct_submission = true;
             transactions.push(self.generate_gasless_transaction(
                 sender,
                 keypair.as_ref(),
@@ -1622,9 +1613,6 @@ impl Payload for CompositePayload {
                             assert_reachable!(
                                 "composite tx sponsored from an address balance executed"
                             );
-                        }
-                        if tx_info.op_set.contains(SPONSOR_WITHDRAWAL) {
-                            assert_reachable!("composite tx withdrew from its sponsor");
                         }
                     }
                 }
@@ -2551,7 +2539,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         if self.config.multisig_probability > 0.0
             && !address_balance_disabled(protocol_config.as_ref())
         {
-            let amount = self.config.address_balance_amount * 100;
+            let amount = MULTISIG_FUNDING;
             self.multisig_accounts = (0..self.payload_gas.len())
                 .map(|_| MultisigAccount::new())
                 .collect();
@@ -2805,6 +2793,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 ),
                 sponsor,
                 multisig: self.multisig_accounts.get(i as usize).cloned(),
+                direct_submission: false,
             }));
         }
 

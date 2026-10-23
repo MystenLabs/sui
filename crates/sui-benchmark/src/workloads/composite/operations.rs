@@ -94,7 +94,6 @@ pub const COIN_STALE_MERGE: &str = "coin_stale_merge";
 pub const GASLESS_TRANSFER: &str = "gasless_transfer";
 
 pub const SPONSORED_TX: &str = "sponsored_tx";
-pub const SPONSOR_WITHDRAWAL: &str = "sponsor_withdrawal";
 
 pub const TEST_COIN_DENY: &str = "test_coin_deny";
 pub const TEST_COIN_UNDENY: &str = "test_coin_undeny";
