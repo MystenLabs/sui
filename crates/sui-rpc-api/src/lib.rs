@@ -38,6 +38,7 @@ pub use metrics::{
     grpc_method_paths_from_file_descriptor_sets,
 };
 pub use reader::TransactionNotFoundError;
+pub use reader::checkpoint_not_yet_indexed_error;
 pub use sui_rpc::proto;
 
 #[derive(Clone)]

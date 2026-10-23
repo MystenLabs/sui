@@ -394,7 +394,9 @@ pub trait KeyValueStoreReader {
         cp_bound: u64,
     ) -> Result<Option<PackageData>>;
 
-    /// Paginate package versions for an original_id, filtered by cp_bound.
+    /// Paginate package versions for an original_id, keeping those published at or before
+    /// `cp_bound`. Versions along one lineage are published in non-decreasing checkpoint order,
+    /// so an ascending scan ends at the first version published after `cp_bound`.
     async fn get_package_versions(
         &mut self,
         original_id: ObjectID,

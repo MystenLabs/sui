@@ -31,7 +31,28 @@ use typed_store_error::TypedStoreError;
 
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
-    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+    Box<dyn Iterator<Item = Result<IndexedPackageVersion, TypedStoreError>> + 'a>;
+
+/// One published version of a package, as listed by
+/// [`RpcIndexes::package_versions_iter`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct IndexedPackageVersion {
+    pub version: u64,
+    /// The storage id under which this version lives.
+    pub storage_id: ObjectID,
+    /// The checkpoint this version was published in, or `None` when the
+    /// index holds no history that far back: a store restored from a
+    /// live-object snapshot (or seeded at a fork checkpoint) records no
+    /// publish checkpoint for the versions it loaded, nor for a version it
+    /// first saw as an input to an in-place upgrade inside its history. Such a
+    /// version was published before that history begins, which a
+    /// checkpoint-pinned read must check (see
+    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`]). Until a
+    /// post-restore backfill finishes
+    /// ([`RpcIndexes::is_history_backfill_pending`]), versions published in
+    /// the part of its window it has not reached are also `None`.
+    pub checkpoint: Option<CheckpointSequenceNumber>,
+}
 
 pub trait ReadStore: ObjectStore {
     //
@@ -692,6 +713,22 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     /// available.
     fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber>;
 
+    /// The lowest checkpoint at which checkpoint-pinned reads of the rpc
+    /// indexes are exact.
+    ///
+    /// Rows a store loads from a live-object snapshot (an object's restore
+    /// floor, or a package version with no publish checkpoint) stand for
+    /// state that began at an unknown point before the history the indexes
+    /// hold, so a pinned read below where that history begins can resolve to
+    /// them and be wrong. A node that backfills history down to its lowest
+    /// available checkpoint needs no extra bound, since that floor already
+    /// rejects such reads; this defaults to `0` for it and for indexes built
+    /// from genesis. A store that never backfills, such as a fork seeded at a
+    /// checkpoint, reports where its history begins.
+    fn get_lowest_checkpoint_for_pinned_reads(&self) -> Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
     fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
 
     // Get a handle to an instance of the RpcIndexes
@@ -804,6 +841,11 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> Result<BalanceIterator<'_>>;
 
+    /// Iterate the versions of the package originally published at
+    /// `original_id` in ascending version order, starting at version `cursor`
+    /// (inclusive) when set. Versions with no recorded publish checkpoint come
+    /// first, and recorded publish checkpoints are non-decreasing in version,
+    /// once [`Self::is_history_backfill_pending`] is `false`.
     fn package_versions_iter(
         &self,
         original_id: ObjectID,

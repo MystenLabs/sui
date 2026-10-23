@@ -17,6 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::checkpoint_not_yet_indexed_error;
 use sui_rpc_api::grpc::v2::move_package_service::PageToken;
 use sui_rpc_api::grpc::v2::move_package_service::get_datatype_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_function_response;
@@ -117,13 +118,9 @@ async fn get_package(
             // The response does not echo the checkpoint it resolved at, so a bound above the
             // served height would let a caller persist a wrong answer; fail closed instead.
             if at_checkpoint > served_height.checkpoint {
-                return Err(RpcError::new(
-                    tonic::Code::NotFound,
-                    format!(
-                        "requested checkpoint {at_checkpoint} is not yet indexed; highest \
-                         indexed checkpoint is {}",
-                        served_height.checkpoint,
-                    ),
+                return Err(checkpoint_not_yet_indexed_error(
+                    at_checkpoint,
+                    served_height.checkpoint,
                 ));
             }
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
@@ -211,7 +208,8 @@ async fn get_function(
     get_function_response(&package, module_name, function_name)
 }
 
-/// List the versions of a package published at or below `served_height`.
+/// List the versions of a package published at or below `served_height`, or at or below the
+/// request's `at_checkpoint` when set.
 async fn list_package_versions(
     mut client: BigTableClient,
     served_height: ServedHeight,
@@ -244,19 +242,27 @@ async fn list_package_versions(
             .into());
     }
 
+    // BigTable holds full history, so there is no lower bound to check.
+    if let Some(at_checkpoint) = request.at_checkpoint
+        && at_checkpoint > served_height.checkpoint
+    {
+        return Err(checkpoint_not_yet_indexed_error(
+            at_checkpoint,
+            served_height.checkpoint,
+        ));
+    }
+    let cp_bound = request.at_checkpoint.unwrap_or(served_height.checkpoint);
+
     // The token's version is the first version of the next page (inclusive); the reader's
     // `after_version` bound is exclusive.
     let first_page = page_token.is_none();
     let after_version = page_token.map(|token| token.version.saturating_sub(1));
 
-    // Versions are published in checkpoint order, so those above the served height can only
-    // come at the end of this ascending scan. Cutting them here rather than passing the height
-    // as `cp_bound` keeps the scan unbounded by checkpoint, which lets BigTable stop at the row
-    // limit.
+    // The ascending scan ends at the first version published after `cp_bound`.
     let mut versions: Vec<_> = client
         .get_package_versions(
             original_package_id,
-            u64::MAX,
+            cp_bound,
             after_version,
             None,
             page_size + 1,
@@ -265,18 +271,34 @@ async fn list_package_versions(
         .await
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
         .into_iter()
-        .take_while(|pkg| pkg.cp_sequence_number <= served_height.checkpoint)
         .map(|pkg| {
             let storage_id = ObjectID::from_bytes(&pkg.package_id)
                 .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-            Ok(PackageVersion::new(&storage_id.into(), pkg.package_version))
+            Ok(PackageVersion::new(&storage_id.into(), pkg.package_version)
+                .with_checkpoint(pkg.cp_sequence_number))
         })
         .collect::<Result<_, RpcError>>()?;
 
     // Every package has a first version, so a first page with nothing at or below the served
-    // height means the package is not published yet as of that height.
+    // height means the package is not published yet as of that height. A package published at
+    // or below the served height but after `at_checkpoint` lists no versions instead.
     if first_page && versions.is_empty() {
-        return Err(RpcError::not_found());
+        let published = cp_bound < served_height.checkpoint
+            && !client
+                .get_package_versions(
+                    original_package_id,
+                    served_height.checkpoint,
+                    None,
+                    None,
+                    1,
+                    false,
+                )
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .is_empty();
+        if !published {
+            return Err(RpcError::not_found());
+        }
     }
 
     let next_page_token = if versions.len() > page_size {
@@ -790,5 +812,137 @@ mod tests {
                 .expect_err("package published above the served height")
                 .into();
         assert_eq!(status.code(), tonic::Code::NotFound);
+    }
+
+    fn list_req(package_id: ObjectID, at_checkpoint: Option<u64>) -> ListPackageVersionsRequest {
+        let mut req = ListPackageVersionsRequest::default();
+        req.package_id = Some(package_id.to_string());
+        req.at_checkpoint = at_checkpoint;
+        req
+    }
+
+    /// `(version, checkpoint)` of each listed version.
+    fn listed(response: &ListPackageVersionsResponse) -> Vec<(u64, Option<u64>)> {
+        response
+            .versions
+            .iter()
+            .map(|v| (v.version.expect("version is set"), v.checkpoint))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_at_checkpoint_bounds_the_lineage() {
+        let fixture = setup_lineage_fixture().await;
+
+        // v1 is published at checkpoint 5 and v2 at 20; the served height is 25.
+        for (at_checkpoint, expected) in [
+            (None, vec![(1, Some(5)), (2, Some(20))]),
+            (Some(4), vec![]),
+            (Some(5), vec![(1, Some(5))]),
+            (Some(19), vec![(1, Some(5))]),
+            (Some(20), vec![(1, Some(5)), (2, Some(20))]),
+            (Some(25), vec![(1, Some(5)), (2, Some(20))]),
+        ] {
+            let response = list_package_versions(
+                fixture.client.clone(),
+                FIXTURE_SERVED_HEIGHT,
+                list_req(fixture.upgraded_id, at_checkpoint),
+            )
+            .await
+            .expect("list_package_versions succeeds");
+            assert_eq!(
+                listed(&response),
+                expected,
+                "at_checkpoint {at_checkpoint:?}"
+            );
+            assert!(response.next_page_token.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_at_checkpoint_above_served_height_is_rejected() {
+        let fixture = setup_lineage_fixture().await;
+
+        for at_checkpoint in [26u64, u64::MAX] {
+            let status: tonic::Status = list_package_versions(
+                fixture.client.clone(),
+                FIXTURE_SERVED_HEIGHT,
+                list_req(fixture.original_id, Some(at_checkpoint)),
+            )
+            .await
+            .expect_err("bound above the served height")
+            .into();
+            assert_eq!(status.code(), tonic::Code::NotFound, "{at_checkpoint}");
+            assert_eq!(
+                status.message(),
+                format!(
+                    "requested checkpoint {at_checkpoint} is not yet indexed; highest indexed \
+                     checkpoint is 25"
+                ),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_at_checkpoint_before_first_publish() {
+        let fixture = setup_lineage_fixture().await;
+
+        // Published at or below the served height: an empty list.
+        let response = list_package_versions(
+            fixture.client.clone(),
+            FIXTURE_SERVED_HEIGHT,
+            list_req(fixture.original_id, Some(4)),
+        )
+        .await
+        .expect("package is published as of the served height");
+        assert!(response.versions.is_empty());
+        assert!(response.next_page_token.is_none());
+
+        // Not yet published as of the served height: not found, as without a bound.
+        let served_height = ServedHeight {
+            checkpoint: 4,
+            epoch: 0,
+        };
+        let status: tonic::Status = list_package_versions(
+            fixture.client.clone(),
+            served_height,
+            list_req(fixture.original_id, Some(3)),
+        )
+        .await
+        .expect_err("package published above the served height")
+        .into();
+        assert_eq!(status.code(), tonic::Code::NotFound);
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_paginates_within_the_bound() {
+        let fixture = setup_lineage_fixture().await;
+
+        // Under a bound both versions satisfy, a one-version page points at v2.
+        let mut req = list_req(fixture.original_id, Some(20));
+        req.page_size = Some(1);
+        let first = list_package_versions(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, req)
+            .await
+            .expect("first page");
+        assert_eq!(listed(&first), vec![(1, Some(5))]);
+        let token = first.next_page_token.expect("v2 is within the bound");
+
+        let mut req = list_req(fixture.original_id, Some(20));
+        req.page_size = Some(1);
+        req.page_token = Some(token);
+        let second = list_package_versions(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, req)
+            .await
+            .expect("second page");
+        assert_eq!(listed(&second), vec![(2, Some(20))]);
+        assert!(second.next_page_token.is_none());
+
+        // A bound that cuts v2 ends the listing after v1, with no page token.
+        let mut req = list_req(fixture.original_id, Some(19));
+        req.page_size = Some(1);
+        let only = list_package_versions(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, req)
+            .await
+            .expect("bounded page");
+        assert_eq!(listed(&only), vec![(1, Some(5))]);
+        assert!(only.next_page_token.is_none());
     }
 }

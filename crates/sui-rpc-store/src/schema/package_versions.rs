@@ -10,10 +10,15 @@
 //! as of a given checkpoint — see
 //! [`get_package_at_checkpoint`](super::RpcStoreSchema::get_package_at_checkpoint).
 //!
-//! Rows written by the live-set restore at the anchor checkpoint
-//! leave the publish checkpoint unset (a restore floor): those
-//! versions predate the available window, so a checkpoint-bounded
-//! read treats them as having always existed.
+//! Rows written by the live-set restore at the anchor checkpoint, and
+//! by the backfill for a version it first sees as an in-place upgrade's
+//! input, leave the publish checkpoint unset (a restore floor). Once the
+//! backfill has reached the anchor, every such version was published
+//! before the history this store holds, so a checkpoint-bounded read at
+//! or above where that history begins treats it as having always
+//! existed. Until then, versions published in the part of the window the
+//! backfill has not reached are unset too, and checkpoint-bounded reads
+//! must not be served.
 
 use bytes::Buf;
 use bytes::BufMut;
@@ -92,11 +97,12 @@ pub fn store(
     )
 }
 
-/// Like [`store`], but for rows written by the live-set restore at
-/// the anchor checkpoint: the publish checkpoint is left unset (a
-/// restore floor), marking a version that was published before the
-/// available window. A checkpoint-bounded read treats such a version
-/// as having always existed.
+/// Like [`store`], but for a version whose publish checkpoint this
+/// store does not know: one loaded by the live-set restore at the
+/// anchor checkpoint, or one the backfill first saw as an in-place
+/// upgrade's input. The publish checkpoint is left unset (a restore
+/// floor); see the module docs for when a checkpoint-bounded read may
+/// treat such a version as having always existed.
 pub fn store_restored(original_id: ObjectID, version: u64, storage_id: ObjectID) -> (Key, Value) {
     (
         Key {
@@ -175,7 +181,10 @@ impl<R: Reader> super::RpcStoreSchema<R> {
     /// the scan's cost is bounded by the number of versions published
     /// after `checkpoint`, not by the package's lineage length.
     /// Restore-floor rows (no recorded publish checkpoint) count as
-    /// having always existed, since they predate the available window.
+    /// having always existed, which is exact only for a `checkpoint` at
+    /// or above where this store's history begins, once any
+    /// post-restore backfill has reached its anchor (see the module
+    /// docs). The caller must check both.
     ///
     /// Returns `Ok(None)` when no version of the package existed as
     /// of `checkpoint` (it was first published later, or the package
