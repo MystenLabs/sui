@@ -2329,7 +2329,6 @@ mod test {
             SHARED_DELETE,
             RECEIVE_CREATE_PARENT,
             RECEIVE_CHILD,
-            PACKAGE_UPGRADE,
             OWNED_CREATE,
             GASLESS_TRANSFER,
             SPONSORED_TX,

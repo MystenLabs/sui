@@ -42,7 +42,7 @@ use async_trait::async_trait;
 use deny::DenyLifecycle;
 use futures::future::join_all;
 use lifecycle::{
-    Lifecycle, LifecycleCall, LifecycleStep, StepContext, UpgradeData, choose_lifecycle,
+    Lifecycle, LifecycleCall, LifecycleStep, StepContext, UpgradeData, choose_lifecycles,
 };
 use operations::{
     AllowanceInfo, InitRequirement, Operation, OperationResources, PayloadAllowances,
@@ -1186,23 +1186,23 @@ impl Payload for CompositePayload {
         self.current_batch_txs.clear();
         self.current_batch_num_conflicting_transactions = 0;
 
-        let (lifecycle_index, lifecycle_calls) = match choose_lifecycle(&self.lifecycles) {
-            Some(index) => {
-                let ctx = StepContext {
-                    sender,
-                    partner: self.partner_address,
-                };
-                (index, self.lifecycles[index].next_step(&ctx))
-            }
-            None => (0, vec![]),
+        let max_normal_batch = if alias_tx_needed {
+            MAX_BATCH_SIZE - 1
+        } else {
+            MAX_BATCH_SIZE
         };
+        let ctx = StepContext {
+            sender,
+            partner: self.partner_address,
+        };
+        let mut lifecycle_calls = vec![];
+        for index in choose_lifecycles(&self.lifecycles, max_normal_batch) {
+            let calls = self.lifecycles[index].next_step(&ctx);
+            assert!(calls.len() <= self.lifecycles[index].max_step_calls());
+            lifecycle_calls.extend(calls.into_iter().map(|call| (index, call)));
+        }
         let batch_size = {
             let mut rng = get_rng();
-            let max_normal_batch = if alias_tx_needed {
-                MAX_BATCH_SIZE - 1
-            } else {
-                MAX_BATCH_SIZE
-            };
             assert!(lifecycle_calls.len() <= max_normal_batch);
             rng.gen_range(lifecycle_calls.len().max(1)..=max_normal_batch)
         };
@@ -1242,7 +1242,10 @@ impl Payload for CompositePayload {
 
         for (i, gas) in current_batch_gas.iter().take(batch_size).enumerate() {
             let mut extra_gas_idx_opt: Option<usize> = None;
-            let lifecycle_call = lifecycle_calls.get(i);
+            let (lifecycle_index, lifecycle_call) = match lifecycle_calls.get(i) {
+                Some((index, call)) => (*index, Some(call)),
+                None => (0, None),
+            };
             let mut sponsor = None;
             let mut sponsor_coin = None;
             // Lifecycle txs are never sponsored, because a bare tx's versions depend on its gas.

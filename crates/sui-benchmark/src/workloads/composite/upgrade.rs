@@ -49,6 +49,10 @@ impl UpgradeLifecycle {
 }
 
 impl Lifecycle for UpgradeLifecycle {
+    fn max_step_calls(&self) -> usize {
+        1
+    }
+
     fn in_progress(&self) -> bool {
         false
     }

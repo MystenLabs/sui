@@ -179,6 +179,9 @@ pub(super) trait Lifecycle: Send + Sync + std::fmt::Debug {
     /// Per-batch probability that an idle lifecycle starts.
     fn start_probability(&self) -> f64;
 
+    /// An upper bound on the number of calls that `next_step` returns.
+    fn max_step_calls(&self) -> usize;
+
     /// Advances the lifecycle one step and returns that step's calls. The caller submits all
     /// of them concurrently in one batch.
     fn next_step(&mut self, ctx: &StepContext) -> Vec<LifecycleCall>;
@@ -189,18 +192,28 @@ pub(super) trait Lifecycle: Send + Sync + std::fmt::Debug {
     fn handle_result(&mut self, step: LifecycleStep, status: &BatchedTransactionStatus);
 }
 
-/// Picks at most one lifecycle to step this batch, uniformly among the lifecycles in progress
-/// and the idle lifecycles that decide to start. One step per batch keeps lifecycle txs from
-/// displacing the shared-counter load of the sampled ops.
-pub(super) fn choose_lifecycle(lifecycles: &[Box<dyn Lifecycle>]) -> Option<usize> {
+/// Picks the lifecycles to step this batch among the lifecycles in progress and the idle
+/// lifecycles that decide to start. Candidates are taken in random order while their calls fit
+/// in `budget` txs.
+pub(super) fn choose_lifecycles(lifecycles: &[Box<dyn Lifecycle>], budget: usize) -> Vec<usize> {
     let mut rng = get_rng();
-    let candidates: Vec<usize> = lifecycles
+    let mut candidates: Vec<usize> = lifecycles
         .iter()
         .enumerate()
         .filter(|(_, l)| l.in_progress() || rng.gen_bool(l.start_probability()))
         .map(|(i, _)| i)
         .collect();
-    candidates.choose(&mut rng).copied()
+    candidates.shuffle(&mut rng);
+    let mut remaining = budget;
+    candidates.retain(|&i| {
+        let calls = lifecycles[i].max_step_calls();
+        let fits = calls <= remaining;
+        if fits {
+            remaining -= calls;
+        }
+        fits
+    });
+    candidates
 }
 
 pub(super) fn find_object(effects: &ExecutionEffects, id: ObjectID) -> Option<(ObjectRef, Owner)> {

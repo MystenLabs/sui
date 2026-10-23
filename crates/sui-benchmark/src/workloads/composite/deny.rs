@@ -50,6 +50,10 @@ impl DenyLifecycle {
 }
 
 impl Lifecycle for DenyLifecycle {
+    fn max_step_calls(&self) -> usize {
+        1
+    }
+
     /// Each step is one tx, and the address stays denied between steps.
     fn in_progress(&self) -> bool {
         false

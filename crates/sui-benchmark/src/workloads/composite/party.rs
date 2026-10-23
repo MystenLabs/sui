@@ -150,6 +150,10 @@ impl PartyLifecycle {
 }
 
 impl Lifecycle for PartyLifecycle {
+    fn max_step_calls(&self) -> usize {
+        3
+    }
+
     fn in_progress(&self) -> bool {
         !matches!(self.phase, PartyPhase::NeedCreate)
     }
