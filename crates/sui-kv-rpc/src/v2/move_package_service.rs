@@ -17,6 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServic
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::checkpoint_not_yet_indexed_error;
+use sui_rpc_api::grpc::v2::move_package_service::AllPackageVersionsQuery;
 use sui_rpc_api::grpc::v2::move_package_service::PackageVersionsQuery;
 use sui_rpc_api::grpc::v2::move_package_service::get_datatype_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_function_response;
@@ -25,6 +26,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::move_package::MovePackage;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 
 use crate::KvRpcServer;
 use crate::served_height::ServedHeight;
@@ -208,17 +210,15 @@ async fn get_function(
 }
 
 /// List the versions of a package published at or below `served_height`, or at or below the
-/// request's `at_checkpoint` when set.
+/// request's `at_checkpoint` when set, or with `package_id` unset, the versions of every package.
 async fn list_package_versions(
     mut client: BigTableClient,
     served_height: ServedHeight,
     request: ListPackageVersionsRequest,
 ) -> Result<ListPackageVersionsResponse, RpcError> {
-    let package_id_str = request.package_id.as_ref().ok_or_else(|| {
-        FieldViolation::new("package_id")
-            .with_description("missing package_id")
-            .with_reason(ErrorReason::FieldMissing)
-    })?;
+    let Some(package_id_str) = request.package_id.as_deref() else {
+        return list_all_package_versions(client, served_height, &request).await;
+    };
     let original_package_id =
         resolve_original_package_id(client.clone(), parse_package_id(package_id_str)?).await?;
 
@@ -289,6 +289,50 @@ async fn list_package_versions(
     }
 
     Ok(query.response(versions))
+}
+
+/// List the versions of every package published from the request's `start_checkpoint` through
+/// its `at_checkpoint`, or through `served_height` when that is unset, in publish order.
+async fn list_all_package_versions(
+    mut client: BigTableClient,
+    served_height: ServedHeight,
+    request: &ListPackageVersionsRequest,
+) -> Result<ListPackageVersionsResponse, RpcError> {
+    // BigTable holds full history, so a listing can start anywhere from genesis.
+    let query = AllPackageVersionsQuery::new(
+        request,
+        0,
+        request.at_checkpoint.unwrap_or(served_height.checkpoint),
+    )?;
+    if let Some(at_checkpoint) = request.at_checkpoint
+        && at_checkpoint > served_height.checkpoint
+    {
+        return Err(checkpoint_not_yet_indexed_error(
+            at_checkpoint,
+            served_height.checkpoint,
+        ));
+    }
+
+    let versions = client
+        .get_packages_by_checkpoint_range(query.lower, query.upper, query.limit(), query.descending)
+        .await
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .into_iter()
+        .map(|package| {
+            let storage_id = ObjectID::from_bytes(&package.package_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let original_id = ObjectID::from_bytes(&package.original_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let key = PackagePublishKey {
+                checkpoint: package.cp_sequence_number,
+                original_id,
+                version: package.package_version,
+            };
+            Ok(query.listed_version(key, storage_id))
+        })
+        .collect::<Result<_, RpcError>>()?;
+
+    Ok(ListPackageVersionsResponse::new(versions, None))
 }
 
 /// Load a package by its storage ID: a storage ID identifies exactly one immutable package
@@ -1244,6 +1288,12 @@ mod tests {
             version: 1,
         }
         .encode();
+        let every_package = PackageVersionCursor::AllPackages {
+            checkpoint: 10,
+            original_package_id: fixture.original_id,
+            version: 1,
+        }
+        .encode();
         let malformed = Bytes::from_static(&[0xFF, 0xFF]);
         let ascending = || query_options(None, Ordering::Ascending, None, None);
 
@@ -1253,7 +1303,8 @@ mod tests {
         with_page_token.page_token = Some(page_token);
         let mut invalid_ordering = ascending();
         invalid_ordering.ordering = Some(7);
-
+        let mut with_start_checkpoint = list_req(fixture.original_id, None);
+        with_start_checkpoint.start_checkpoint = Some(10);
         for (req, expected) in [
             (
                 with_page_size,
@@ -1278,8 +1329,19 @@ mod tests {
                 "cursor package ID does not match request package ID",
             ),
             (
+                cursor_req(
+                    fixture.original_id,
+                    query_options(None, Ordering::Ascending, Some(&every_package), None),
+                ),
+                "cursor is from the listing of every package",
+            ),
+            (
                 cursor_req(fixture.original_id, invalid_ordering),
                 "invalid ordering",
+            ),
+            (
+                with_start_checkpoint,
+                "start_checkpoint requires package_id to be unset",
             ),
         ] {
             let status = list_versions_fixture(&fixture, req).await.unwrap_err();
@@ -1310,6 +1372,13 @@ mod tests {
                 req.end_version = end_version;
                 let page = list_versions_fixture(&fixture, req).await.unwrap();
                 assert_eq!(&listed_versions(&page), expected, "page {index}");
+                // Every version names its lineage.
+                for version in &page.versions {
+                    assert_eq!(
+                        version.original_id,
+                        Some(fixture.original_id.to_canonical_string(true))
+                    );
+                }
                 // Page-token items carry the same cursors as cursor mode.
                 for version in &page.versions {
                     assert_eq!(
@@ -1324,6 +1393,318 @@ mod tests {
                     "page {index}"
                 );
             }
+        }
+    }
+
+    /// A mock seeded with the versions of three packages, published (as `(checkpoint, package,
+    /// version)`) at (10, A, 1), (10, B, 1), (20, A, 2), (30, C, 1), (30, C, 2), and (70, B, 2),
+    /// above the served height.
+    struct AllPackagesFixture {
+        client: BigTableClient,
+        _server: tokio::task::JoinHandle<()>,
+    }
+
+    const PACKAGE_A: ObjectID = ObjectID::from_single_byte(0x0A);
+    const PACKAGE_B: ObjectID = ObjectID::from_single_byte(0x0B);
+    const PACKAGE_C: ObjectID = ObjectID::from_single_byte(0x0C);
+
+    /// The versions [`AllPackagesFixture`] lists at its served height, in publish order.
+    const ALL_PACKAGES: [(u64, ObjectID, u64); 5] = [
+        (10, PACKAGE_A, 1),
+        (10, PACKAGE_B, 1),
+        (20, PACKAGE_A, 2),
+        (30, PACKAGE_C, 1),
+        (30, PACKAGE_C, 2),
+    ];
+
+    async fn setup_all_packages_fixture() -> AllPackagesFixture {
+        let mock = MockBigtableServer::new();
+        let (addr, server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        for (checkpoint, original_id, version) in
+            ALL_PACKAGES.into_iter().chain([(70, PACKAGE_B, 2)])
+        {
+            let storage_id = storage_id_of(original_id, version);
+            mock.insert_row(
+                tables::packages::NAME,
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(checkpoint, storage_id.as_ref(), false),
+            )
+            .await;
+            mock.insert_row(
+                tables::packages_by_checkpoint::NAME,
+                tables::packages_by_checkpoint::encode_key(
+                    checkpoint,
+                    original_id.as_ref(),
+                    version,
+                ),
+                tables::packages_by_checkpoint::encode(),
+            )
+            .await;
+        }
+
+        AllPackagesFixture {
+            client,
+            _server: server,
+        }
+    }
+
+    /// The storage id the fixture gives `version` of the package originally published at
+    /// `original_id`.
+    fn storage_id_of(original_id: ObjectID, version: u64) -> ObjectID {
+        let mut bytes = original_id.into_bytes();
+        bytes[0] = version as u8;
+        ObjectID::new(bytes)
+    }
+
+    fn all_packages_req(options: Option<QueryOptions>) -> ListPackageVersionsRequest {
+        let mut req = ListPackageVersionsRequest::default();
+        req.options = options;
+        req
+    }
+
+    async fn list_all_packages_fixture(
+        fixture: &AllPackagesFixture,
+        req: ListPackageVersionsRequest,
+    ) -> Result<ListPackageVersionsResponse, tonic::Status> {
+        list_package_versions(fixture.client.clone(), VERSIONS_FIXTURE_SERVED_HEIGHT, req)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// The `(checkpoint, package, version)` of each version a response lists, in order,
+    /// checking that each version carries its storage id, original id and cursor.
+    fn listed_publishes(response: &ListPackageVersionsResponse) -> Vec<(u64, ObjectID, u64)> {
+        assert!(response.next_page_token.is_none());
+        response
+            .versions
+            .iter()
+            .map(|listed| {
+                let checkpoint = listed.checkpoint.expect("checkpoint is set");
+                let original_id: ObjectID = listed
+                    .original_id
+                    .as_deref()
+                    .expect("original_id is set")
+                    .parse()
+                    .unwrap();
+                let version = listed.version.expect("version is set");
+                let storage_id: ObjectID = listed
+                    .package_id
+                    .as_deref()
+                    .expect("package_id is set")
+                    .parse()
+                    .unwrap();
+                assert_eq!(storage_id, storage_id_of(original_id, version));
+                assert_eq!(
+                    listed.cursor,
+                    Some(
+                        PackageVersionCursor::AllPackages {
+                            checkpoint,
+                            original_package_id: original_id,
+                            version,
+                        }
+                        .encode()
+                    )
+                );
+                (checkpoint, original_id, version)
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_pages_in_publish_order_in_either_direction() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |options| list_all_packages_fixture(&fixture, all_packages_req(Some(options)));
+        let last_cursor = |response: &ListPackageVersionsResponse| {
+            response.versions.last().and_then(|v| v.cursor.clone())
+        };
+
+        // Without options, every version at or below the served height, in publish order.
+        let everything = list_all_packages_fixture(&fixture, all_packages_req(None))
+            .await
+            .unwrap();
+        assert_eq!(listed_publishes(&everything), ALL_PACKAGES.to_vec());
+
+        // Forward in pages of two, each after the last version received, until a short page.
+        let mut after = None;
+        let mut forward = vec![];
+        for expected in [&ALL_PACKAGES[0..2], &ALL_PACKAGES[2..4], &ALL_PACKAGES[4..]] {
+            let page = list(query_options(
+                Some(2),
+                Ordering::Ascending,
+                after.as_ref(),
+                None,
+            ))
+            .await
+            .unwrap();
+            assert_eq!(listed_publishes(&page), expected.to_vec());
+            after = last_cursor(&page);
+            forward.push(page);
+        }
+
+        // Backward from the end in pages of two, each before the lowest version received.
+        let mut before = None;
+        for expected in [vec![4, 3], vec![2, 1], vec![0]] {
+            let page = list(query_options(
+                Some(2),
+                Ordering::Descending,
+                None,
+                before.as_ref(),
+            ))
+            .await
+            .unwrap();
+            let expected: Vec<_> = expected.iter().map(|&i| ALL_PACKAGES[i]).collect();
+            assert_eq!(listed_publishes(&page), expected);
+            before = last_cursor(&page);
+        }
+
+        // A cursor from an ascending page bounds a descending one, inside checkpoint 10 and 30.
+        let between = list(query_options(
+            None,
+            Ordering::Descending,
+            forward[0].versions.first().and_then(|v| v.cursor.as_ref()),
+            forward[2].versions.first().and_then(|v| v.cursor.as_ref()),
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            listed_publishes(&between),
+            vec![ALL_PACKAGES[3], ALL_PACKAGES[2], ALL_PACKAGES[1]],
+        );
+    }
+
+    /// The cursor of `ALL_PACKAGES[index]`.
+    fn all_packages_cursor(index: usize) -> Bytes {
+        let (checkpoint, original_package_id, version) = ALL_PACKAGES[index];
+        PackageVersionCursor::AllPackages {
+            checkpoint,
+            original_package_id,
+            version,
+        }
+        .encode()
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_bounds_by_start_and_at_checkpoint() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |start_checkpoint,
+                    at_checkpoint,
+                    after: Option<usize>,
+                    before: Option<usize>,
+                    ordering| {
+            let (after, before) = (
+                after.map(all_packages_cursor),
+                before.map(all_packages_cursor),
+            );
+            let mut req = all_packages_req(Some(query_options(
+                None,
+                ordering,
+                after.as_ref(),
+                before.as_ref(),
+            )));
+            req.start_checkpoint = start_checkpoint;
+            req.at_checkpoint = at_checkpoint;
+            list_all_packages_fixture(&fixture, req)
+        };
+
+        // Each case's cursors are indexes into `ALL_PACKAGES`.
+        for (start_checkpoint, at_checkpoint, after, before, expected) in [
+            (Some(20), None, None, None, &ALL_PACKAGES[2..]),
+            (None, Some(20), None, None, &ALL_PACKAGES[..3]),
+            (Some(20), Some(20), None, None, &ALL_PACKAGES[2..3]),
+            (Some(11), Some(29), None, None, &ALL_PACKAGES[2..3]),
+            (Some(25), Some(20), None, None, &ALL_PACKAGES[..0]),
+            (Some(30), Some(60), None, None, &ALL_PACKAGES[3..]),
+            // Cursors inside the checkpoint bounds narrow them.
+            (Some(10), None, Some(0), None, &ALL_PACKAGES[1..]),
+            (None, Some(30), None, Some(4), &ALL_PACKAGES[..4]),
+            // Cursors outside them leave them as they are.
+            (Some(20), None, Some(0), None, &ALL_PACKAGES[2..]),
+            (None, Some(20), None, Some(4), &ALL_PACKAGES[..3]),
+            (Some(11), Some(29), Some(1), Some(3), &ALL_PACKAGES[2..3]),
+        ] {
+            let ascending = list(
+                start_checkpoint,
+                at_checkpoint,
+                after,
+                before,
+                Ordering::Ascending,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                listed_publishes(&ascending),
+                expected.to_vec(),
+                "[{start_checkpoint:?}, {at_checkpoint:?}] after {after:?} before {before:?}"
+            );
+            let descending = list(
+                start_checkpoint,
+                at_checkpoint,
+                after,
+                before,
+                Ordering::Descending,
+            )
+            .await
+            .unwrap();
+            let mut reversed = expected.to_vec();
+            reversed.reverse();
+            assert_eq!(
+                listed_publishes(&descending),
+                reversed,
+                "[{start_checkpoint:?}, {at_checkpoint:?}] after {after:?} before {before:?} \
+                 descending"
+            );
+        }
+
+        let status = list(None, Some(61), None, None, Ordering::Ascending)
+            .await
+            .unwrap_err();
+        assert_eq!(status.code(), tonic::Code::NotFound);
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_rejects_lineage_paging_and_cursors() {
+        let fixture = setup_all_packages_fixture().await;
+        let lineage_cursor = PackageVersionCursor::Lineage {
+            original_package_id: PACKAGE_A,
+            version: 1,
+        }
+        .encode();
+
+        let mut with_page_size = all_packages_req(None);
+        with_page_size.page_size = Some(1);
+        let mut with_page_token = all_packages_req(None);
+        with_page_token.page_token = Some(Bytes::from_static(&[0]));
+        let mut with_start_version = all_packages_req(None);
+        with_start_version.start_version = Some(1);
+        let mut with_end_version = all_packages_req(None);
+        with_end_version.end_version = Some(2);
+
+        for (req, expected) in [
+            (with_page_size, "page_size requires package_id"),
+            (with_page_token, "page_token requires package_id"),
+            (with_start_version, "start_version requires package_id"),
+            (with_end_version, "end_version requires package_id"),
+            (
+                all_packages_req(Some(query_options(
+                    None,
+                    Ordering::Ascending,
+                    None,
+                    Some(&lineage_cursor),
+                ))),
+                "cursor is from the listing of one package",
+            ),
+        ] {
+            let status = list_all_packages_fixture(&fixture, req).await.unwrap_err();
+            assert_eq!(status.code(), tonic::Code::InvalidArgument, "{expected}");
+            assert!(
+                status.message().contains(expected),
+                "expected {expected:?}, got {:?}",
+                status.message()
+            );
         }
     }
 }

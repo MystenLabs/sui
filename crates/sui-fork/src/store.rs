@@ -1072,6 +1072,16 @@ impl RpcStateReader for ForkStore {
         Ok(self.forked_at_checkpoint())
     }
 
+    /// The checkpoint after the fork checkpoint. Every pre-fork package version in the local
+    /// indexes was loaded as of the fork checkpoint with no publish checkpoint, including those
+    /// published in the fork checkpoint itself, so only the fork's own checkpoints record every
+    /// publish.
+    fn get_lowest_checkpoint_for_publish_listings(
+        &self,
+    ) -> StorageResult<CheckpointSequenceNumber> {
+        Ok(self.forked_at_checkpoint().saturating_add(1))
+    }
+
     /// A genuinely hybrid read. The stock side serves the framework `chain_ids` table seeded at
     /// open, while the fallback derives the identifier from the fork checkpoint for custom
     /// networks.

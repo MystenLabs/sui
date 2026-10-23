@@ -595,7 +595,8 @@ async fn test_availability_floor_below_the_fork_passes_through() {
 
 /// The fork's indexes load pre-fork objects and packages as of the fork checkpoint, without the
 /// history before it, so checkpoint-pinned reads below the fork checkpoint are rejected even when
-/// the remote's retention reaches further back; at the fork checkpoint they are served.
+/// the remote's retention reaches further back; at the fork checkpoint they are served. The
+/// listing of every package, which needs each version's publish checkpoint, starts after it.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
@@ -663,6 +664,25 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     assert_eq!(versions.len(), 1);
     assert_eq!(versions[0].version, Some(1));
     assert_eq!(versions[0].checkpoint, None);
+
+    // The seeded package has no publish checkpoint, so the listing of every package cannot start
+    // at or before the fork checkpoint.
+    for (start_checkpoint, at_checkpoint) in
+        [(Some(fork_checkpoint), None), (None, Some(fork_checkpoint))]
+    {
+        let mut request = ListPackageVersionsRequest::default();
+        request.start_checkpoint = start_checkpoint;
+        request.at_checkpoint = at_checkpoint;
+        let error = service
+            .list_package_versions(tonic::Request::new(request))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::OutOfRange);
+        assert_eq!(
+            error.message(),
+            "requested checkpoint 100 has been pruned; lowest available checkpoint is 101",
+        );
+    }
 
     let mut request = GetPackageRequest::default();
     request.package_id = Some(package_id.to_string());

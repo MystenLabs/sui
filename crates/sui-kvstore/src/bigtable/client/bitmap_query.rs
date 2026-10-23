@@ -135,8 +135,8 @@ fn scan_bucket_stream(
         let stream = client
             .range_scan_stream(
                 spec.table_name,
-                Some(bytes::Bytes::from(start_row)),
-                Some(bytes::Bytes::from(end_row)),
+                std::ops::Bound::Included(bytes::Bytes::from(start_row)),
+                std::ops::Bound::Included(bytes::Bytes::from(end_row)),
                 0,
                 !direction.is_ascending(),
                 None,

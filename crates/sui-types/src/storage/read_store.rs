@@ -746,6 +746,22 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
         Ok(0)
     }
 
+    /// The lowest checkpoint from which the rpc indexes record the publish
+    /// checkpoint of every package version, so a listing of the versions
+    /// published at or after a checkpoint is exact from there up.
+    ///
+    /// A package version a store loads from a live-object snapshot has no
+    /// recorded publish checkpoint (see [`IndexedPackageVersion::checkpoint`])
+    /// and is missing from such a listing, wherever it was published. A node
+    /// that backfills history down to its lowest available checkpoint records
+    /// every publish from there, and that floor already rejects listings below
+    /// it; this defaults to `0` for it and for indexes built from genesis. A
+    /// store that never backfills, such as a fork seeded at a checkpoint,
+    /// reports the first checkpoint after the one it was seeded at.
+    fn get_lowest_checkpoint_for_publish_listings(&self) -> Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
     fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
 
     // Get a handle to an instance of the RpcIndexes

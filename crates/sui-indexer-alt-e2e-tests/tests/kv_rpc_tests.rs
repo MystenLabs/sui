@@ -5855,3 +5855,191 @@ async fn test_list_package_versions_cursor_paging() {
     assert_eq!(second.versions[0].cursor, Some(c3));
     assert!(second.next_page_token.is_none());
 }
+
+/// A `ListPackageVersions` request listing the versions of every package.
+fn all_packages_request(
+    limit: Option<u32>,
+    ordering: Ordering,
+    after: Option<&prost::bytes::Bytes>,
+    before: Option<&prost::bytes::Bytes>,
+) -> ListPackageVersionsRequest {
+    let mut options = QueryOptions::default();
+    options.limit = limit;
+    options.ordering = Some(ordering as i32);
+    options.after = after.cloned();
+    options.before = before.cloned();
+    let mut request = ListPackageVersionsRequest::default();
+    request.options = Some(options);
+    request
+}
+
+/// `(publish checkpoint, original id, version, storage id)` of each version a listing of every
+/// package returns, in order, checking that each carries a cursor.
+fn listed_publishes(response: &ListPackageVersionsResponse) -> Vec<(u64, ObjectID, u64, ObjectID)> {
+    assert!(response.next_page_token.is_none());
+    response
+        .versions
+        .iter()
+        .map(|v| {
+            assert!(v.cursor.is_some(), "version {v:?} has no cursor");
+            (
+                v.checkpoint.expect("checkpoint"),
+                v.original_id
+                    .as_deref()
+                    .expect("original_id")
+                    .parse()
+                    .unwrap(),
+                v.version.expect("version"),
+                v.package_id
+                    .as_deref()
+                    .expect("package_id")
+                    .parse()
+                    .unwrap(),
+            )
+        })
+        .collect()
+}
+
+/// `ListPackageVersions` without `package_id` lists every package's versions in publish order,
+/// pages by cursor in either ordering through the genesis checkpoint, and intersects
+/// `start_checkpoint` and `at_checkpoint` with cursors.
+#[tokio::test]
+async fn test_list_all_package_versions() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let path = emit_test_event_pkg_path();
+    let package = sui_move_build::BuildConfig::new_for_testing()
+        .build(&path)
+        .expect("build package");
+    let publish = || {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let cap = builder.publish_upgradeable(
+            package.get_package_bytes(false),
+            package.get_dependency_storage_package_ids(),
+        );
+        builder.transfer_arg(sender, cap);
+        builder
+    };
+
+    let (v1, cap, gas, cp1) =
+        execute_package_write(&mut cluster, sender, &kp, gas, publish()).await;
+    let (v2, _, gas, cp2) =
+        execute_package_write(&mut cluster, sender, &kp, gas, upgrade_ptb(&path, v1, cap)).await;
+    let (other, _, _, cp3) = execute_package_write(&mut cluster, sender, &kp, gas, publish()).await;
+    assert!(cp1 < cp2 && cp2 < cp3, "{cp1} {cp2} {cp3}");
+    wait_for_kv_checkpoint(&cluster, cp3).await;
+
+    let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // Every version in publish order: the system packages from genesis, then the publishes above.
+    let everything =
+        list_package_versions_request(&mut client, ListPackageVersionsRequest::default()).await;
+    let all = listed_publishes(&everything);
+    let (genesis, published) = all.split_at(all.len() - 3);
+    assert_eq!(
+        published,
+        [(cp1, v1, 1, v1), (cp2, v1, 2, v2), (cp3, other, 1, other)]
+    );
+    assert!(
+        genesis.iter().all(|&(checkpoint, ..)| checkpoint == 0),
+        "{genesis:?}"
+    );
+    assert!(genesis.contains(&(0, SUI_FRAMEWORK_PACKAGE_ID, 1, SUI_FRAMEWORK_PACKAGE_ID)));
+    assert!(all.windows(2).all(|pair| pair[0] < pair[1]), "{all:?}");
+    // More versions share the genesis checkpoint than fit in the pages below.
+    assert!(genesis.len() > 2, "{genesis:?}");
+
+    // Pages of two cover the listing exactly in either direction, splitting checkpoints.
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        let mut listed = vec![];
+        let mut cursor = None;
+        for _ in 0..=all.len() {
+            let (after, before) = match ordering {
+                Ordering::Descending => (None, cursor.as_ref()),
+                _ => (cursor.as_ref(), None),
+            };
+            let page = list_package_versions_request(
+                &mut client,
+                all_packages_request(Some(2), ordering, after, before),
+            )
+            .await;
+            let publishes = listed_publishes(&page);
+            listed.extend(publishes.iter().copied());
+            if publishes.len() < 2 {
+                break;
+            }
+            cursor = Some(last_package_version_cursor(&page));
+        }
+        let mut expected = all.clone();
+        if ordering == Ordering::Descending {
+            expected.reverse();
+        }
+        assert_eq!(listed, expected, "{ordering:?}");
+    }
+
+    // `start_checkpoint`, `at_checkpoint` and cursors intersect. Each case lists the matching
+    // versions in ascending order; descending lists them in reverse.
+    let c1 = everything.versions[genesis.len()].cursor.clone().unwrap();
+    for (start_checkpoint, at_checkpoint, after, ascending) in [
+        (Some(cp1), None, None, published.to_vec()),
+        (Some(cp1), Some(cp2), None, published[..2].to_vec()),
+        (None, Some(cp2), None, all[..all.len() - 1].to_vec()),
+        (Some(1), Some(cp3), Some(&c1), published[1..].to_vec()),
+        (Some(cp3), Some(cp2), None, vec![]),
+    ] {
+        for (ordering, expected) in [
+            (Ordering::Ascending, ascending.clone()),
+            (
+                Ordering::Descending,
+                ascending.iter().rev().copied().collect(),
+            ),
+        ] {
+            let mut request = all_packages_request(None, ordering, after, None);
+            request.start_checkpoint = start_checkpoint;
+            request.at_checkpoint = at_checkpoint;
+            let response = list_package_versions_request(&mut client, request).await;
+            assert_eq!(
+                listed_publishes(&response),
+                expected,
+                "[{start_checkpoint:?}, {at_checkpoint:?}] after {after:?} {ordering:?}"
+            );
+        }
+    }
+
+    // A bound above the served height is rejected.
+    let mut request = ListPackageVersionsRequest::default();
+    request.at_checkpoint = Some(u64::MAX);
+    let error = client.list_package_versions(request).await.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::NotFound);
+
+    // Cursors from one package's listing and from the listing of every package do not mix.
+    let lineage = list_package_versions_request(
+        &mut client,
+        package_versions_cursor_request(v2, None, Ordering::Ascending, None, None),
+    )
+    .await;
+    for version in &lineage.versions {
+        assert_eq!(version.original_id, Some(v1.to_string()));
+    }
+    let lineage_cursor = lineage.versions[0].cursor.clone().unwrap();
+    for (request, expected) in [
+        (
+            all_packages_request(None, Ordering::Ascending, Some(&lineage_cursor), None),
+            "cursor is from the listing of one package",
+        ),
+        (
+            package_versions_cursor_request(v1, None, Ordering::Ascending, Some(&c1), None),
+            "cursor is from the listing of every package",
+        ),
+    ] {
+        let error = client.list_package_versions(request).await.unwrap_err();
+        assert_eq!(error.code(), tonic::Code::InvalidArgument, "{expected}");
+        assert!(
+            error.message().contains(expected),
+            "expected {expected:?}, got {:?}",
+            error.message()
+        );
+    }
+}
