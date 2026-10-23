@@ -93,8 +93,13 @@ const MULTISIG_GAS_UNITS: u64 = 100_000;
 /// many multisig txs.
 const MULTISIG_FUNDING: u64 = 10_000_000_000;
 
-/// The sponsor's gas coin that pays for coin-sponsored txs.
-const SPONSOR_GAS_IDX: usize = MAX_BATCH_SIZE - 1;
+/// Each payload's gas coins: one per batch tx, and one that its partner sponsors with.
+const NUM_GAS_COINS: usize = MAX_BATCH_SIZE + 1;
+
+/// The sponsor's gas coin that pays for coin-sponsored txs. The sponsor's own batches use it
+/// only when the mixed-payment branch claims it as a spare, so sponsorship rarely displaces
+/// the sponsor's own txs.
+const SPONSOR_GAS_IDX: usize = MAX_BATCH_SIZE;
 
 fn address_balance_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
@@ -2600,7 +2605,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     .expect("Gas object should exist");
                 // take original gas coin, split the remaining balance into 4 equal parts
                 let gas_balance = gas_obj.as_coin_maybe().unwrap().balance.value();
-                let split_amount = gas_balance / MAX_BATCH_SIZE as u64;
+                let split_amount = gas_balance / NUM_GAS_COINS as u64;
 
                 let mut tx_builder = TestTransactionBuilder::new(*sender, gas, gas_price);
                 {
@@ -2608,12 +2613,12 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     let split_amount_arg = builder.pure(split_amount).unwrap();
                     let coin = builder.command(Command::SplitCoins(
                         Argument::GasCoin,
-                        vec![split_amount_arg; MAX_BATCH_SIZE - 1],
+                        vec![split_amount_arg; NUM_GAS_COINS - 1],
                     ));
                     let Argument::Result(coin_idx) = coin else {
                         panic!("SplitCoins should return Result");
                     };
-                    let new_coin_args = (0..MAX_BATCH_SIZE - 1)
+                    let new_coin_args = (0..NUM_GAS_COINS - 1)
                         .map(|i| Argument::NestedResult(coin_idx, i as u16))
                         .collect();
                     builder.transfer_args(*sender, new_coin_args);
@@ -2643,11 +2648,11 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 }
             }
             for multi_gas in self.payload_gas.iter_mut() {
-                assert_eq!(multi_gas.0.len(), MAX_BATCH_SIZE);
+                assert_eq!(multi_gas.0.len(), NUM_GAS_COINS);
             }
             info!(
                 "Split remaining gas coins into {} equal parts",
-                MAX_BATCH_SIZE
+                NUM_GAS_COINS
             );
         }
     }
