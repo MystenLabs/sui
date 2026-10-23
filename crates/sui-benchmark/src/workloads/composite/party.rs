@@ -72,9 +72,9 @@ enum PartyPhase {
         ended_start_version: SequenceNumber,
         addr_ref: ObjectRef,
     },
-    /// `rounds` address-owned mutations executed after the stream ended. The next step
-    /// mutates the object again together with txs on the ended stream, restarts a stream on
-    /// the same id, or abandons the object.
+    /// The object is address-owned after its stream ended, and `rounds` steps have run in
+    /// this phase. The next step sends txs on the ended stream, sometimes with another owned
+    /// mutation, or it restarts a stream on the same id, or it abandons the object.
     Owned {
         id: ObjectID,
         ended_start_version: SequenceNumber,
@@ -105,8 +105,8 @@ pub(super) struct PartyLifecycle {
 impl PartyLifecycle {
     /// The stream ends after at most this many mutations so the lifecycle keeps progressing.
     const MAX_MUTATIONS: u32 = 3;
-    /// The object leaves the `Owned` phase after at most this many owned mutations.
-    const MAX_OWNED_ROUNDS: u32 = 3;
+    /// The object leaves the `Owned` phase after at most this many rounds.
+    const MAX_OWNED_ROUNDS: u32 = 6;
 
     pub fn new(start_probability: f64) -> Self {
         Self {
@@ -345,16 +345,11 @@ impl Lifecycle for PartyLifecycle {
                 rounds,
             } => {
                 let old_stream = shared_mut(id, ended_start_version);
-                if rounds < Self::MAX_OWNED_ROUNDS && rng.gen_bool(0.7) {
-                    // Txs on the ended stream keep arriving while the owned object's versions
-                    // advance, so their assigned versions can match a later owned version.
-                    return vec![
-                        self.set_value(
-                            CallArg::Object(ObjectArg::ImmOrOwnedObject(addr_ref)),
-                            10 + rounds as u64,
-                            PARTY_OWNED_MUTATE,
-                            PartyStep::OwnedMutate,
-                        ),
+                if rounds < Self::MAX_OWNED_ROUNDS && rng.gen_bool(0.8) {
+                    // Txs on the ended stream keep arriving in later batches, after owned
+                    // mutations of the same id, so their assigned versions can match an owned
+                    // version.
+                    let mut calls = vec![
                         self.set_value(
                             old_stream.clone(),
                             1,
@@ -363,6 +358,23 @@ impl Lifecycle for PartyLifecycle {
                         ),
                         self.set_value(old_stream, 2, PARTY_OLD_STREAM, PartyStep::OldStream),
                     ];
+                    if rng.gen_bool(0.5) {
+                        // The owned mutation's result advances `rounds`.
+                        calls.push(self.set_value(
+                            CallArg::Object(ObjectArg::ImmOrOwnedObject(addr_ref)),
+                            10 + rounds as u64,
+                            PARTY_OWNED_MUTATE,
+                            PartyStep::OwnedMutate,
+                        ));
+                    } else {
+                        self.phase = PartyPhase::Owned {
+                            id,
+                            ended_start_version,
+                            addr_ref,
+                            rounds: rounds + 1,
+                        };
+                    }
+                    return calls;
                 }
                 vec![
                     self.call(
