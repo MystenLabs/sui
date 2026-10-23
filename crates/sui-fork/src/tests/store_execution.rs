@@ -224,6 +224,41 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+/// System package objects at `(id, version)`, each with the modules genesis publishes at `id`: a
+/// package past its first version names its original id through its modules' address.
+fn system_package_objects(versions: &[(ObjectID, u64)]) -> Vec<Object> {
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut OsRng)
+        .deterministic_committee_size(NonZeroUsize::MIN)
+        .build();
+    versions
+        .iter()
+        .map(|&(id, version)| {
+            let genesis_package = config
+                .genesis
+                .objects()
+                .iter()
+                .find(|object| object.id() == id)
+                .and_then(|object| object.data.try_as_package())
+                .expect("genesis publishes every system package");
+            Object::new_package_from_data(
+                sui_types::object::Data::Package(
+                    sui_types::move_package::MovePackage::new(
+                        id,
+                        SequenceNumber::from_u64(version),
+                        genesis_package.serialized_module_map().clone(),
+                        u64::MAX,
+                        vec![],
+                        BTreeMap::new(),
+                    )
+                    .unwrap(),
+                ),
+                TransactionDigest::genesis_marker(),
+            )
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn test_current_object_read_saves_into_rpc_store_when_attached() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -734,6 +769,98 @@ async fn test_system_package_versions_replaced_before_the_fork_are_pruned() {
     for version in [0, 4] {
         let error = get_version(version).await.unwrap_err();
         assert_eq!(error.code(), tonic::Code::NotFound, "v{version}: {error:?}");
+    }
+}
+
+/// The fork loads a system package at its version at the fork checkpoint, without the versions
+/// below it. A cursor naming one of those continues a listing from a view holding them, such as
+/// kv-rpc's: it is rejected in either order, with or without `at_checkpoint`, as below where the
+/// fork's history begins, rather than listing from the loaded version and skipping the versions
+/// in between. A cursor above every version the fork has lies past its tip.
+#[tokio::test]
+async fn test_list_package_versions_rejects_cursors_this_fork_does_not_serve() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    let framework = ObjectID::from_single_byte(2);
+    store
+        .local_store()
+        .restore_seed_objects(&system_package_objects(&[(framework, 3)]))
+        .unwrap();
+    let highest_indexed = sui_types::storage::RpcStateReader::indexes(&store)
+        .unwrap()
+        .get_highest_indexed_checkpoint_seq_number()
+        .unwrap()
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |ordering: Ordering, after: Option<u64>, before: Option<u64>, at_checkpoint| {
+        let cursor = |version| {
+            PackageVersionCursor::Lineage {
+                original_package_id: framework,
+                version,
+            }
+            .encode()
+        };
+        let mut options = QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(cursor);
+        options.before = before.map(cursor);
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(framework.to_string());
+        request.options = Some(options);
+        request.at_checkpoint = at_checkpoint;
+        service.list_package_versions(tonic::Request::new(request))
+    };
+
+    let past_tip = format!(
+        "requested data above latest available; cursor is at checkpoint {0}, and only \
+         checkpoints below {0} are available",
+        highest_indexed + 1
+    );
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        for at_checkpoint in [None, Some(fork_checkpoint)] {
+            for (version, message) in [
+                (
+                    1,
+                    "requested data below earliest available; lowest available checkpoint is 100",
+                ),
+                (4, past_tip.as_str()),
+            ] {
+                for (after, before) in [(Some(version), None), (None, Some(version))] {
+                    let error = list(ordering, after, before, at_checkpoint)
+                        .await
+                        .unwrap_err();
+                    assert_eq!(
+                        (error.code(), error.message()),
+                        (tonic::Code::OutOfRange, message),
+                        "{ordering:?} after {after:?} before {before:?} at {at_checkpoint:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    // A cursor at the loaded version is served.
+    for (ordering, after, before) in [
+        (Ordering::Ascending, Some(3), None),
+        (Ordering::Descending, None, Some(3)),
+    ] {
+        let versions = list(ordering, after, before, None)
+            .await
+            .unwrap()
+            .into_inner()
+            .versions;
+        assert!(versions.is_empty(), "{ordering:?} {versions:?}");
     }
 }
 
