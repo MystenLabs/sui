@@ -51,10 +51,10 @@ use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::ObjectStatus;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
-use sui_kvstore::tables::object_versions_by_checkpoint::ObjectStatus;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_types::base_types::ObjectID;
@@ -263,7 +263,7 @@ impl BigTableClient {
             .await
     }
 
-    /// The keys in `object_keys` that have an `objects` row, read without the
+    /// The keys in `object_keys` at which the object is live, read without the
     /// objects' contents. One multi-get, under one permit.
     pub(crate) async fn get_existing_object_keys(
         &self,
@@ -273,6 +273,22 @@ impl BigTableClient {
         self.call_gated(stage::OBJECTS, async move {
             inner.get_existing_object_keys(&object_keys).await
         })
+        .await
+    }
+
+    /// The newest version of `object_id` at or below `version`, unless the
+    /// object was deleted or wrapped at that version. One reverse range scan of
+    /// the `objects` table, under one permit.
+    pub(crate) async fn get_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECTS,
+            inner.get_object_lt_or_eq_version(object_id, version),
+        )
         .await
     }
 

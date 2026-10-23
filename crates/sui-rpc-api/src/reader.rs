@@ -7,6 +7,7 @@ use std::sync::Arc;
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_sdk_types::{EpochId, ValidatorCommittee};
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Object;
@@ -260,8 +261,9 @@ impl StateReader {
         Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
     }
 
-    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_at_checkpoint`], and
-    /// `GetPackage`'s `at_checkpoint`): the highest checkpoint every rpc index has committed.
+    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_at_checkpoint`],
+    /// [`Self::is_object_version_visible_at_checkpoint`], and `GetPackage`'s `at_checkpoint`): the
+    /// highest checkpoint every rpc index has committed.
     ///
     /// Read it before the reads. It only grows, and the indexes only add data above it, so it
     /// stays valid for reads made after it was read. The lower bound is the opposite; see
@@ -318,6 +320,28 @@ impl StateReader {
         };
         // A deletion or wrapping tombstone has no object at its version.
         Ok(self.inner().get_object_by_key(&object_id, version))
+    }
+
+    /// Whether `version` of `object_id` was written at or before `checkpoint`: whether it is at or
+    /// below the version the object had at the end of `checkpoint`, deletions and wraps included.
+    /// An object's versions increase in checkpoint order, so a version above that one was written
+    /// after `checkpoint`. `false` if the object did not exist yet. `NotFound` if `checkpoint` is
+    /// above `upper_bound`; check the lower bound after the read with
+    /// [`Self::at_checkpoint_lower_bound`].
+    pub fn is_object_version_visible_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        checkpoint: u64,
+        upper_bound: &AtCheckpointUpperBound,
+    ) -> Result<bool, crate::RpcError> {
+        upper_bound.check(checkpoint)?;
+
+        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
+        Ok(indexes
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+            .map_err(index_error)?
+            .is_some_and(|version_at_checkpoint| version <= version_at_checkpoint))
     }
 }
 

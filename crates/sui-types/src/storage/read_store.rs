@@ -697,6 +697,15 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
+    /// The object's newest version at or below `version`, like the execution cache's
+    /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below
+    /// `version`, or if it was deleted or wrapped at that newest version.
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>>;
+
     /// The sequence number of the highest executed checkpoint, independent of
     /// how far any embedded index has caught up.
     ///

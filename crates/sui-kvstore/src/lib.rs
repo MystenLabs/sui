@@ -4,11 +4,13 @@
 mod bigtable;
 pub mod config;
 mod handlers;
+mod object_status;
 mod rate_limiter;
 mod store;
 pub mod tables;
 pub mod testing;
 
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -30,9 +32,9 @@ use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 
 pub use crate::bigtable::client::CheckpointSpan;
+pub use crate::object_status::ObjectStatus;
 use crate::rate_limiter::CompositeRateLimiter;
 use crate::rate_limiter::RateLimiter;
-use crate::tables::object_versions_by_checkpoint::ObjectStatus;
 use sui_protocol_config::Chain;
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
@@ -66,6 +68,7 @@ pub use crate::handlers::CheckpointsPipeline;
 pub use crate::handlers::EpochEndPipeline;
 pub use crate::handlers::EpochStartPipeline;
 pub use crate::handlers::EventBitmapProcessor;
+pub use crate::handlers::ObjectTombstonesPipeline;
 pub use crate::handlers::ObjectVersionsByCheckpointPipeline;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PackagesByCheckpointPipeline;
@@ -122,6 +125,8 @@ pub const EVENT_BITMAP_INDEX_PIPELINE: &str =
 pub const OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE: &str = <BigTableHandler<
     ObjectVersionsByCheckpointPipeline,
 > as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const OBJECT_TOMBSTONES_PIPELINE: &str =
+    <BigTableHandler<ObjectTombstonesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
 /// Pipelines the indexer always registers. Excludes [`ALPHA_PIPELINE_NAMES`].
 pub const ALL_PIPELINE_NAMES: [&str; 14] = [
@@ -143,7 +148,10 @@ pub const ALL_PIPELINE_NAMES: [&str; 14] = [
 
 /// Pipelines the indexer registers only when they are named in the `alpha_pipelines` argument of
 /// [`BigTableIndexer::new`], so deployments do not start writing their tables by default.
-pub const ALPHA_PIPELINE_NAMES: [&str; 1] = [OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE];
+pub const ALPHA_PIPELINE_NAMES: [&str; 2] = [
+    OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
+    OBJECT_TOMBSTONES_PIPELINE,
+];
 
 /// Accepts the name of any pipeline the indexer knows, including alpha pipelines.
 pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
@@ -312,9 +320,11 @@ pub struct WatermarkV1 {
 
 #[async_trait]
 pub trait KeyValueStoreReader {
+    /// The live objects among `objects`. Keys with no object at that version, including keys at
+    /// which the object was deleted or wrapped, are left out.
     async fn get_objects(&mut self, objects: &[ObjectKey]) -> Result<Vec<Object>>;
-    /// The keys in `objects` that have a row in the objects table, read without the objects'
-    /// contents.
+    /// The keys in `objects` at which the object is live, read without the objects' contents.
+    /// Like [`Self::get_objects`], keys at which the object was deleted or wrapped are left out.
     async fn get_existing_object_keys(&mut self, objects: &[ObjectKey]) -> Result<Vec<ObjectKey>>;
     async fn get_transactions(
         &mut self,
@@ -335,12 +345,36 @@ pub trait KeyValueStoreReader {
         &mut self,
         pipelines: &[&str],
     ) -> Result<Option<WatermarkV1>>;
+    /// The object's newest version. `None` if the object has no versions, or if it was deleted or
+    /// wrapped at its newest version. Deletions and wraps are only recorded where the alpha
+    /// [`OBJECT_TOMBSTONES_PIPELINE`] has run; elsewhere a removed object resolves to its last
+    /// live version.
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     /// The version [`Self::get_latest_object`] would return, read without the object's contents.
     async fn get_latest_object_version(
         &mut self,
         object_id: &ObjectID,
     ) -> Result<Option<SequenceNumber>>;
+    /// The object's newest version at or below `version`, like the fullnode's
+    /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below `version`,
+    /// or if it was deleted or wrapped at the newest one. Deletions and wraps are only recorded
+    /// where the alpha [`OBJECT_TOMBSTONES_PIPELINE`] has run.
+    async fn get_object_lt_or_eq_version(
+        &mut self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>>;
+    /// Up to `limit` live versions of `object_id` whose version is in `versions`, in ascending
+    /// version order, or descending if `descending`. Versions at which the object was deleted or
+    /// wrapped are skipped by the server and do not count toward `limit`, so a short page means
+    /// the range is exhausted.
+    async fn get_live_object_versions(
+        &mut self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<Object>>;
     /// The version and status `object_id` had at the end of `checkpoint`, written by the latest
     /// checkpoint at or before `checkpoint` that changed the object. `None` if no such checkpoint
     /// exists. Served by the alpha [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`].
@@ -712,6 +746,22 @@ impl BigTableIndexer {
                         ),
                     ),
                     pipeline.object_versions_by_checkpoint.finish(base.clone()),
+                )
+                .await?;
+        }
+        if alpha_pipelines.contains(&OBJECT_TOMBSTONES_PIPELINE) {
+            indexer
+                .concurrent_pipeline(
+                    BigTableHandler::new(
+                        ObjectTombstonesPipeline,
+                        &pipeline.object_tombstones,
+                        build_rate_limiter(
+                            pipeline.object_tombstones.max_rows_per_second,
+                            base_rps,
+                            &global,
+                        ),
+                    ),
+                    pipeline.object_tombstones.finish(base.clone()),
                 )
                 .await?;
         }

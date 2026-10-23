@@ -19,6 +19,7 @@ use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::EVENT_BITMAP_INDEX_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
 use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::OBJECTS_PIPELINE;
 use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
@@ -321,6 +322,10 @@ pub struct KvRpcServer {
     // [`KvRpcConfig::enable_object_at_checkpoint`]). Instances without it
     // reject those reads with `Unimplemented`.
     object_at_checkpoint_enabled: bool,
+    // `max_version` object reads need the alpha [`OBJECT_TOMBSTONES_PIPELINE`],
+    // backfilled from genesis (see [`KvRpcConfig::enable_object_max_version`]).
+    // Instances without it reject those reads with `Unimplemented`.
+    object_max_version_enabled: bool,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection, and
@@ -451,6 +456,7 @@ impl KvRpcServer {
         stages: StagesConfig,
         enable_list_apis: bool,
         enable_object_at_checkpoint: bool,
+        enable_object_max_version: bool,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -481,6 +487,7 @@ impl KvRpcServer {
             server_version,
             enable_list_apis,
             enable_object_at_checkpoint,
+            enable_object_max_version,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -505,6 +512,7 @@ impl KvRpcServer {
             StagesConfig::default(),
             false,
             false,
+            false,
         )
         .await
     }
@@ -523,6 +531,7 @@ impl KvRpcServer {
         stages: StagesConfig,
         enable_list_apis: bool,
         enable_object_at_checkpoint: bool,
+        enable_object_max_version: bool,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
@@ -534,6 +543,7 @@ impl KvRpcServer {
             server_version,
             enable_list_apis,
             enable_object_at_checkpoint,
+            enable_object_max_version,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -548,6 +558,7 @@ impl KvRpcServer {
         server_version: Option<ServerVersion>,
         enable_list_apis: bool,
         enable_object_at_checkpoint: bool,
+        enable_object_max_version: bool,
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
@@ -570,6 +581,7 @@ impl KvRpcServer {
             service_info_watermark_pipelines: service_info_watermark_pipelines(
                 enable_list_apis,
                 enable_object_at_checkpoint,
+                enable_object_max_version,
             ),
             cache,
             package_resolver,
@@ -580,6 +592,7 @@ impl KvRpcServer {
             stages,
             list_apis_enabled: enable_list_apis,
             object_at_checkpoint_enabled: enable_object_at_checkpoint,
+            object_max_version_enabled: enable_object_max_version,
         };
 
         let server_clone = server.clone();
@@ -696,10 +709,12 @@ impl KvRpcServer {
 /// Pipelines whose watermarks bound the checkpoint height reported by
 /// `GetServiceInfo`: the always-served set, plus the List API pipelines when
 /// those APIs are enabled, plus [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] when
-/// `at_checkpoint` object reads are enabled.
+/// `at_checkpoint` object reads are enabled, plus [`OBJECT_TOMBSTONES_PIPELINE`]
+/// when `max_version` object reads are enabled.
 pub fn service_info_watermark_pipelines(
     enable_list_apis: bool,
     enable_object_at_checkpoint: bool,
+    enable_object_max_version: bool,
 ) -> Vec<&'static str> {
     let mut pipelines = DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec();
     if enable_list_apis {
@@ -707,6 +722,9 @@ pub fn service_info_watermark_pipelines(
     }
     if enable_object_at_checkpoint {
         pipelines.push(OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE);
+    }
+    if enable_object_max_version {
+        pipelines.push(OBJECT_TOMBSTONES_PIPELINE);
     }
     pipelines
 }

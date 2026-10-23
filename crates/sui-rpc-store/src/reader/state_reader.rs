@@ -6,7 +6,7 @@
 //! impl'd in sibling modules) into the top-level trait
 //! `sui-rpc-api` consumes.
 //!
-//! Adds three rpc-api-specific entry points:
+//! Adds these rpc-api-specific entry points:
 //!
 //! - [`get_lowest_available_checkpoint_objects`]: returns the
 //!   pruning watermark's `tx_seq_lo`-derived checkpoint floor. We
@@ -18,15 +18,20 @@
 //!   records the same chain id on first contact).
 //! - [`indexes`]: returns `Some(self)` so callers reach the
 //!   [`RpcIndexes`] impl through the same handle.
+//! - [`get_object_lt_or_eq_version`]: delegates to the schema's
+//!   bounded reverse scan of the `objects` CF.
 //! - [`get_struct_layout_with_overlay`]: delegates to the
 //!   [`resolve_struct_layout`] shim in `layout.rs`.
 
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::reader::Reader;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::object::Object;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::Error as StorageError;
@@ -68,6 +73,16 @@ impl<R: Reader + Send + Sync> RpcStateReader for RpcStoreReader<R> {
 
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
         Some(self)
+    }
+
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> StorageResult<Option<Object>> {
+        self.schema()
+            .get_object_lt_or_eq_version(*object_id, version)
+            .map_err(StorageError::custom)
     }
 
     fn get_struct_layout_with_overlay(

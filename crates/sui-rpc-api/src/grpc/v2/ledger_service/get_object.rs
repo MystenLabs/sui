@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::GetObjectResponse;
 use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
 use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_sdk_types::Address;
+use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::ObjectSet;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
@@ -26,20 +27,78 @@ pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::OBJECT;
 /// Which state of an object a `GetObjectRequest` reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ObjectSelector {
-    /// The latest live version (neither `version` nor `at_checkpoint` set).
+    /// The latest live version (none of `version`, `max_version` and `at_checkpoint` set).
     Latest,
-    /// Exactly this version.
-    Version(u64),
-    /// The object's state at the end of this checkpoint.
+    /// Exactly `version`. With `at_checkpoint`, only if that version was written at or before
+    /// the checkpoint.
+    Version {
+        version: u64,
+        at_checkpoint: Option<u64>,
+    },
+    /// The newest version at or below `max_version`, unless the object was deleted or wrapped at
+    /// that version. With `at_checkpoint`, only if that version was written at or before the
+    /// checkpoint; an older version that was is not returned instead.
+    MaxVersion {
+        max_version: u64,
+        at_checkpoint: Option<u64>,
+    },
+    /// The object's state at the end of this checkpoint (`at_checkpoint` alone).
     AtCheckpoint(u64),
+}
+
+impl ObjectSelector {
+    /// The request's `at_checkpoint`: the checkpoint an [`Self::AtCheckpoint`] read is pinned
+    /// to, or the [`Self::visibility_bound`] of a version read. Either way, the read fails if
+    /// the checkpoint is outside the range the server can answer for.
+    pub fn at_checkpoint(&self) -> Option<u64> {
+        match *self {
+            Self::Latest => None,
+            Self::Version { at_checkpoint, .. } | Self::MaxVersion { at_checkpoint, .. } => {
+                at_checkpoint
+            }
+            Self::AtCheckpoint(checkpoint) => Some(checkpoint),
+        }
+    }
+
+    /// The checkpoint a [`Self::Version`] or [`Self::MaxVersion`] read is bounded by: the
+    /// version it selects is found only if it was written at or before this checkpoint.
+    pub fn visibility_bound(&self) -> Option<u64> {
+        match *self {
+            Self::Version { at_checkpoint, .. } | Self::MaxVersion { at_checkpoint, .. } => {
+                at_checkpoint
+            }
+            Self::Latest | Self::AtCheckpoint(_) => None,
+        }
+    }
+
+    /// The `NotFound` error for `object_id` when this selector finds no object.
+    pub fn not_found(&self, object_id: Address) -> ObjectNotFoundError {
+        let error = match *self {
+            Self::Latest => ObjectNotFoundError::new(object_id),
+            Self::Version { version, .. } => {
+                ObjectNotFoundError::new_with_version(object_id, version)
+            }
+            Self::MaxVersion { max_version, .. } => {
+                ObjectNotFoundError::new_with_max_version(object_id, max_version)
+            }
+            Self::AtCheckpoint(checkpoint) => {
+                ObjectNotFoundError::new_at_checkpoint(object_id, checkpoint)
+            }
+        };
+        match self.visibility_bound() {
+            Some(checkpoint) => error.visible_at_checkpoint(checkpoint),
+            None => error,
+        }
+    }
 }
 
 type ValidationResult = Result<(Vec<(Address, ObjectSelector)>, FieldMaskTree), RpcError>;
 
-/// Validate `(object_id, version, at_checkpoint)` for each request, and the read mask shared by
-/// all of them. A request that sets both `version` and `at_checkpoint` is rejected.
+/// Validate each request's `object_id` and selector fields, and the read mask shared by all of
+/// them; each request's own `read_mask` is ignored. A request that sets both `version` and
+/// `max_version` is rejected. `at_checkpoint` combines with either.
 pub fn validate_get_object_requests(
-    requests: Vec<(Option<String>, Option<u64>, Option<u64>)>,
+    requests: &[GetObjectRequest],
     read_mask: Option<FieldMask>,
 ) -> ValidationResult {
     let read_mask = {
@@ -52,10 +111,11 @@ pub fn validate_get_object_requests(
         FieldMaskTree::from(read_mask)
     };
     let requests = requests
-        .into_iter()
+        .iter()
         .enumerate()
-        .map(|(idx, (object_id, version, at_checkpoint))| {
-            let object_id = object_id
+        .map(|(idx, request)| {
+            let object_id = request
+                .object_id
                 .as_ref()
                 .ok_or_else(|| {
                     FieldViolation::new("object_id")
@@ -69,17 +129,24 @@ pub fn validate_get_object_requests(
                         .with_reason(ErrorReason::FieldInvalid)
                         .nested_at("requests", idx)
                 })?;
-            let selector = match (version, at_checkpoint) {
-                (None, None) => ObjectSelector::Latest,
-                (Some(version), None) => ObjectSelector::Version(version),
-                (None, Some(checkpoint)) => ObjectSelector::AtCheckpoint(checkpoint),
-                (Some(_), Some(_)) => {
-                    return Err(FieldViolation::new("at_checkpoint")
-                        .with_description("version and at_checkpoint are mutually exclusive")
+            let selector = match (request.version, request.max_version, request.at_checkpoint) {
+                (Some(_), Some(_), _) => {
+                    return Err(FieldViolation::new("max_version")
+                        .with_description("version and max_version are mutually exclusive")
                         .with_reason(ErrorReason::FieldInvalid)
                         .nested_at("requests", idx)
                         .into());
                 }
+                (None, None, None) => ObjectSelector::Latest,
+                (None, None, Some(checkpoint)) => ObjectSelector::AtCheckpoint(checkpoint),
+                (Some(version), None, at_checkpoint) => ObjectSelector::Version {
+                    version,
+                    at_checkpoint,
+                },
+                (None, Some(max_version), at_checkpoint) => ObjectSelector::MaxVersion {
+                    max_version,
+                    at_checkpoint,
+                },
             };
             Ok((object_id, selector))
         })
@@ -90,16 +157,11 @@ pub fn validate_get_object_requests(
 #[tracing::instrument(skip(service))]
 pub fn get_object(
     service: &RpcService,
-    GetObjectRequest {
-        object_id,
-        version,
-        read_mask,
-        at_checkpoint,
-        ..
-    }: GetObjectRequest,
+    mut request: GetObjectRequest,
 ) -> Result<GetObjectResponse, RpcError> {
+    let read_mask = request.read_mask.take();
     let (requests, read_mask) =
-        validate_get_object_requests(vec![(object_id, version, at_checkpoint)], read_mask)?;
+        validate_get_object_requests(std::slice::from_ref(&request), read_mask)?;
     let upper_bound = load_at_checkpoint_upper_bound(service, &requests)?;
     let (object_id, selector) = requests[0];
     let mut results = [get_object_impl(
@@ -130,11 +192,7 @@ pub fn batch_get_objects(
         ));
     }
 
-    let requests = requests
-        .into_iter()
-        .map(|req| (req.object_id, req.version, req.at_checkpoint))
-        .collect();
-    let (requests, read_mask) = validate_get_object_requests(requests, read_mask)?;
+    let (requests, read_mask) = validate_get_object_requests(&requests, read_mask)?;
 
     let upper_bound = load_at_checkpoint_upper_bound(service, &requests)?;
     let mut results: Vec<_> = requests
@@ -163,12 +221,11 @@ pub fn batch_get_objects(
 fn has_at_checkpoint(requests: &[(Address, ObjectSelector)]) -> bool {
     requests
         .iter()
-        .any(|(_, selector)| matches!(selector, ObjectSelector::AtCheckpoint(_)))
+        .any(|(_, selector)| selector.at_checkpoint().is_some())
 }
 
 /// Before the reads: the `at_checkpoint` upper bound, read once per request and only when some
-/// item reads at a checkpoint, so that latest and exact-version reads still work on nodes
-/// without rpc indexes.
+/// item sets `at_checkpoint`, so that other reads still work on nodes without rpc indexes.
 fn load_at_checkpoint_upper_bound(
     service: &RpcService,
     requests: &[(Address, ObjectSelector)],
@@ -178,9 +235,9 @@ fn load_at_checkpoint_upper_bound(
         .transpose()
 }
 
-/// After the reads: answer as pruned every `at_checkpoint` item below the lowest available
-/// checkpoint, replacing whatever its read returned, since that read may have seen pruned data.
-/// See `StateReader::at_checkpoint_lower_bound`.
+/// After the reads: answer as pruned every item whose `at_checkpoint` is below the lowest
+/// available checkpoint, replacing whatever its read returned, since that read may have seen
+/// pruned data. See `StateReader::at_checkpoint_lower_bound`.
 fn apply_at_checkpoint_lower_bound(
     service: &RpcService,
     requests: &[(Address, ObjectSelector)],
@@ -191,7 +248,7 @@ fn apply_at_checkpoint_lower_bound(
     }
     let lower_bound = service.reader.at_checkpoint_lower_bound()?;
     for (&(_, selector), result) in requests.iter().zip_debug_eq(results.iter_mut()) {
-        if let ObjectSelector::AtCheckpoint(checkpoint) = selector
+        if let Some(checkpoint) = selector.at_checkpoint()
             && let Err(error) = lower_bound.check(checkpoint)
         {
             *result = Err(error);
@@ -200,8 +257,8 @@ fn apply_at_checkpoint_lower_bound(
     Ok(())
 }
 
-/// Read one object. `upper_bound` is set whenever `selector` is
-/// [`ObjectSelector::AtCheckpoint`] (see [`load_at_checkpoint_upper_bound`]).
+/// Read one object. `upper_bound` is set whenever `selector` has an `at_checkpoint` (see
+/// [`load_at_checkpoint_upper_bound`]).
 #[tracing::instrument(skip(service))]
 fn get_object_impl(
     service: &RpcService,
@@ -210,30 +267,45 @@ fn get_object_impl(
     upper_bound: Option<&AtCheckpointUpperBound>,
     read_mask: &FieldMaskTree,
 ) -> Result<Object, RpcError> {
-    let object = match selector {
-        ObjectSelector::Latest => service
-            .reader
-            .inner()
-            .get_object(&object_id.into())
-            .ok_or_else(|| ObjectNotFoundError::new(object_id))?,
-        ObjectSelector::Version(version) => service
-            .reader
-            .inner()
-            .get_object_by_key(&object_id.into(), version.into())
-            .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?,
-        ObjectSelector::AtCheckpoint(checkpoint) => {
-            let upper_bound = upper_bound.ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    "at_checkpoint upper bound was not loaded",
-                )
-            })?;
-            service
-                .reader
-                .get_object_at_checkpoint(object_id.into(), checkpoint, upper_bound)?
-                .ok_or_else(|| ObjectNotFoundError::new_at_checkpoint(object_id, checkpoint))?
-        }
+    let reader = &service.reader;
+    let id = ObjectID::from(object_id);
+    let not_found = || RpcError::from(selector.not_found(object_id));
+    let upper_bound = || {
+        upper_bound.ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                "at_checkpoint upper bound was not loaded",
+            )
+        })
     };
+
+    // A checkpoint above the upper bound fails the read whatever the object's state.
+    if let Some(checkpoint) = selector.at_checkpoint() {
+        upper_bound()?.check(checkpoint)?;
+    }
+    let object = match selector {
+        ObjectSelector::Latest => reader.inner().get_object(&id),
+        ObjectSelector::Version { version, .. } => {
+            reader.inner().get_object_by_key(&id, version.into())
+        }
+        ObjectSelector::MaxVersion { max_version, .. } => reader
+            .inner()
+            .get_object_lt_or_eq_version(&id, max_version.into())?,
+        ObjectSelector::AtCheckpoint(checkpoint) => {
+            reader.get_object_at_checkpoint(id, checkpoint, upper_bound()?)?
+        }
+    }
+    .ok_or_else(not_found)?;
+    if let Some(checkpoint) = selector.visibility_bound()
+        && !reader.is_object_version_visible_at_checkpoint(
+            id,
+            object.version(),
+            checkpoint,
+            upper_bound()?,
+        )?
+    {
+        return Err(not_found());
+    }
 
     Ok(service.render_object_to_proto(&object, read_mask, &ObjectSet::default()))
 }

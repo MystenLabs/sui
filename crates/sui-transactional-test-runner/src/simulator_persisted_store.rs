@@ -747,6 +747,23 @@ impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
         None
     }
 
+    /// The store records no versions at which objects were deleted or wrapped, so only a live
+    /// object at or below `version` can be answered exactly. Any other read fails rather than
+    /// return a version the object may already have left.
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        match ObjectStore::get_object(self, object_id) {
+            Some(object) if object.version() <= version => Ok(Some(object)),
+            _ => Err(sui_types::storage::error::Error::custom(
+                "PersistedStoreInnerReadOnlyWrapper only serves version-bounded reads of live \
+                 objects at or below the bound",
+            )),
+        }
+    }
+
     fn get_struct_layout_with_overlay(
         &self,
         _: &move_core_types::language_storage::StructTag,

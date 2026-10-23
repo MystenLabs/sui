@@ -15,8 +15,9 @@
 //!   helper shape (`Chain` of family regex, column qualifier regex, optional
 //!   cells-per-column limit, and optional value range) with a
 //!   `PassAllFilter(true)` true branch and no false branch. Rows failing a
-//!   `Condition` predicate are dropped before `rows_limit` is applied, mirroring
-//!   BigTable where the limit counts emitted rows. Records each call for
+//!   `Condition` predicate, and rows the column qualifier filter leaves with no
+//!   cells, are dropped before `rows_limit` is applied, mirroring BigTable where
+//!   the limit counts emitted rows. Records each call for
 //!   assertions, can emit rows in reverse request order, can stream a response
 //!   one row per message with a fixed delay before each row, and serves
 //!   row-range scans in either direction (reversed scans are range-only).
@@ -65,6 +66,7 @@ use crate::bigtable::proto::bigtable::v2::ReadModifyWriteRowRequest;
 use crate::bigtable::proto::bigtable::v2::ReadModifyWriteRowResponse;
 use crate::bigtable::proto::bigtable::v2::ReadRowsRequest;
 use crate::bigtable::proto::bigtable::v2::ReadRowsResponse;
+use crate::bigtable::proto::bigtable::v2::RowFilter;
 use crate::bigtable::proto::bigtable::v2::SampleRowKeysRequest;
 use crate::bigtable::proto::bigtable::v2::SampleRowKeysResponse;
 use crate::bigtable::proto::bigtable::v2::bigtable_server::Bigtable;
@@ -454,7 +456,8 @@ struct ReadFilter {
 /// `ColumnQualifierRegexFilter`, `StripValueTransformer(true)`, and a `Chain`
 /// of those plus an optional `FamilyNameRegexFilter` matching
 /// [`crate::tables::FAMILY`] and at most one `Condition` (see
-/// [`parse_read_condition`]).
+/// [`parse_read_condition`]). A `Chain` nested in a `Chain` is read as its
+/// filters in place, since chaining is associative.
 ///
 /// The mock evaluates a `Condition` predicate against the full stored row.
 /// BigTable feeds each `Chain` element the output of the previous one, so a
@@ -482,7 +485,7 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         }
         Some(Filter::StripValueTransformer(true)) => parsed.strip_values = true,
         Some(Filter::Chain(chain)) => {
-            for f in chain.filters {
+            for f in flatten_chain(chain.filters) {
                 match f.filter {
                     Some(Filter::CellsPerColumnLimitFilter(1)) | None => {}
                     Some(Filter::StripValueTransformer(true)) => parsed.strip_values = true,
@@ -526,6 +529,18 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         }
     }
     Ok(parsed)
+}
+
+/// The filters of a `Chain`, with the filters of every nested `Chain` spliced in
+/// where it stood.
+fn flatten_chain(filters: Vec<RowFilter>) -> Vec<RowFilter> {
+    filters
+        .into_iter()
+        .flat_map(|f| match f.filter {
+            Some(Filter::Chain(chain)) => flatten_chain(chain.filters),
+            filter => vec![RowFilter { filter }],
+        })
+        .collect()
 }
 
 /// Parse a `ReadRows` `Condition` filter whose predicate is the CAS helper
@@ -853,17 +868,22 @@ impl Bigtable for MockBigtableServer {
             }
         }
 
-        // A `Condition` filter selects rows server-side: rows whose predicate
-        // does not match are dropped before `rows_limit` is applied, mirroring
-        // BigTable where the limit counts rows actually emitted after filtering.
-        if let Some(predicate) = &condition {
-            requested_keys.retain(|key| {
-                state
-                    .rows
-                    .get(&(table.clone(), key.clone()))
-                    .is_some_and(|row| row_satisfies(row, predicate))
-            });
-        }
+        // Rows are selected server-side before `rows_limit` is applied, mirroring BigTable where
+        // the limit counts rows actually emitted after filtering: a row is dropped if it fails
+        // the `Condition` predicate or if the column qualifier filter leaves it with no cells.
+        // Missing rows stay in the recorded request unless a `Condition` is present.
+        requested_keys.retain(|key| {
+            let Some(row) = state.rows.get(&(table.clone(), key.clone())) else {
+                return condition.is_none();
+            };
+            condition
+                .as_ref()
+                .is_none_or(|predicate| row_satisfies(row, predicate))
+                && allowed_qualifiers.as_ref().is_none_or(|allowed| {
+                    row.keys()
+                        .any(|(_, qualifier)| allowed.contains(qualifier.as_ref()))
+                })
+        });
         if req.rows_limit != 0 {
             requested_keys.truncate(req.rows_limit as usize);
         }
