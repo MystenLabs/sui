@@ -22,7 +22,6 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_inverted_index::WatermarkPacing;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
@@ -37,6 +36,7 @@ use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
+use sui_kvstore::default_committer_config;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -168,6 +168,7 @@ fn bitmap_query_stream(
         })
 }
 
+
 impl TestHarness {
     async fn new() -> Result<Self> {
         require_bigtable_emulator();
@@ -212,7 +213,7 @@ impl TestHarness {
             indexer_args,
             client_args,
             ingestion_config.into(),
-            CommitterConfig::default(),
+            default_committer_config(),
             IndexerConfig::default(),
             PipelineLayer::default(),
             Chain::Unknown,

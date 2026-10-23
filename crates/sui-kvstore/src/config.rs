@@ -9,6 +9,7 @@ use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::FlushPolicy;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::{self as framework};
@@ -22,10 +23,20 @@ pub(crate) const DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH: usize = 100;
 
 const DEFAULT_WRITE_CONCURRENCY: usize = 256;
 
+/// Minimum gap between two watermark writes of the same concurrent pipeline (sequential pipelines
+/// write their watermark with every commit). Shorter than the time between checkpoints, so at the
+/// tip every checkpoint's watermark is written as soon as it is complete.
+const DEFAULT_WATERMARK_INTERVAL_MS: u64 = 100;
+
 /// Returns the committer defaults used by sui-kvstore before applying config overrides.
+///
+/// Batches are cut as soon as no earlier write of the pipeline is in flight
+/// ([`FlushPolicy::WhenIdle`]), so the collect interval plays no part.
 pub fn default_committer_config() -> CommitterConfig {
     CommitterConfig {
         write_concurrency: DEFAULT_WRITE_CONCURRENCY,
+        watermark_interval_ms: DEFAULT_WATERMARK_INTERVAL_MS,
+        flush_policy: FlushPolicy::WhenIdle,
         ..CommitterConfig::default()
     }
 }
@@ -144,6 +155,7 @@ pub struct CommitterLayer {
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
+    pub flush_policy: Option<FlushPolicy>,
 }
 
 impl CommitterLayer {
@@ -157,7 +169,7 @@ impl CommitterLayer {
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
-            flush_policy: base.flush_policy,
+            flush_policy: self.flush_policy.unwrap_or(base.flush_policy),
         }
     }
 }
@@ -364,5 +376,31 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
             min_cohort_boundary: config.min_cohort_boundary,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Committer settings resolved from a config file the way `sui-kvstore-alt` resolves them.
+    fn resolved_committer(config: &str) -> CommitterConfig {
+        let config: IndexerConfig = toml::from_str(config).unwrap();
+        config.committer.finish(default_committer_config())
+    }
+
+    #[test]
+    fn flush_policy_defaults_to_when_idle_and_can_be_overridden() {
+        // The production config sets no flush policy, so it gets the kvstore default.
+        let committer = resolved_committer("[committer]\nwrite-concurrency = 10\n");
+        assert_eq!(committer.flush_policy, FlushPolicy::WhenIdle);
+        assert_eq!(committer.write_concurrency, 10);
+
+        let committer = resolved_committer("[committer]\nflush-policy = \"interval\"\n");
+        assert_eq!(committer.flush_policy, FlushPolicy::Interval);
+
+        let config: IndexerConfig =
+            toml::from_str("[committer]\nflush-policy = \"when-idle\"\n").unwrap();
+        assert_eq!(config.committer.flush_policy, Some(FlushPolicy::WhenIdle));
     }
 }
