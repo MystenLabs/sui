@@ -1130,6 +1130,23 @@ async fn test_pagination() {
     }
 
     let stream_id = SuiAddress::from(package_id);
+
+    let start = tokio::time::Instant::now();
+    loop {
+        let visible = query_authenticated_events(test_cluster.rpc_url(), stream_id, 0, None)
+            .await
+            .unwrap();
+        if visible.len() == 25 {
+            break;
+        }
+        assert!(
+            start.elapsed() <= Duration::from_secs(30),
+            "timed out waiting for all 25 authenticated events to become queryable; found {}",
+            visible.len()
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
     let all_events = list_authenticated_events(test_cluster.rpc_url(), stream_id, 0, Some(7)).await;
 
     assert_eq!(
