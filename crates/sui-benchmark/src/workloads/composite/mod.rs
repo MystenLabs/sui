@@ -16,10 +16,10 @@ pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
     AllowanceWithdraw, AuthenticatedEventEmit, COIN_MERGE, CoinReservationWithdraw,
-    INVALID_ALIAS_TX, ImmutableObjectRead, OWNED_CREATE, OWNED_DELETE, OWNED_FREEZE,
-    ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor,
-    PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE,
-    PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
+    GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, OWNED_CREATE, OWNED_DELETE,
+    OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
+    OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF,
+    PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
     PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
     RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
     SHARED_DELETE_RACING, SHARED_DELETE_STALE, SharedCounterIncrement, SharedCounterRead,
@@ -65,8 +65,10 @@ use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    Argument, CallArg, Command, ObjectArg, SharedObjectMutability, Transaction,
+    Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability, Transaction,
+    TransactionData,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use sui_types::{
@@ -95,6 +97,12 @@ fn address_alias_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
 fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
         .map(|cfg| !cfg.enable_authenticated_event_streams())
+        .unwrap_or(false)
+}
+
+fn gasless_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.enable_gasless())
         .unwrap_or(false)
 }
 
@@ -344,6 +352,9 @@ pub struct CompositeWorkloadConfig {
     /// one. The coin-merge lifecycle uses the same probability and also needs the TestCoinCap.
     /// Zero disables both.
     pub owned_object_probability: f32,
+    /// Per-batch probability of adding a gasless SUI transfer to the partner. The protocol
+    /// config must allow SUI in gasless txs, or validators reject these txs.
+    pub gasless_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -451,6 +462,7 @@ impl Default for CompositeWorkloadConfig {
             receive_probability: 0.0,
             upgrade_probability: 0.0,
             owned_object_probability: 0.0,
+            gasless_probability: 0.0,
             metrics: None,
         }
     }
@@ -568,6 +580,8 @@ enum BatchTxKind {
     AliasAdd,
     /// Alias-signed transfer after revocation (expected to fail).
     InvalidPostRevocation,
+    /// A gasless SUI transfer.
+    Gasless,
     /// A call from the lifecycle at `index` in `CompositePayload::lifecycles`.
     Lifecycle { index: usize, step: LifecycleStep },
 }
@@ -885,6 +899,58 @@ impl CompositePayload {
                 kind,
             },
         )
+    }
+
+    /// Builds a gasless tx that sends SUI from the sender's address balance to the partner.
+    /// Gasless txs may call only framework fund functions, so it carries no sampled ops.
+    fn generate_gasless_transaction(
+        &mut self,
+        sender: SuiAddress,
+        keypair: &AccountKeyPair,
+        current_epoch: u64,
+    ) -> Transaction {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let withdrawal = builder
+            .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(1, GAS::type_tag()))
+            .unwrap();
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal],
+        );
+        let recipient = builder.pure(self.partner_address).unwrap();
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![balance, recipient],
+        );
+        let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
+        let data = TransactionData::new_programmable_with_address_balance_gas(
+            sender,
+            builder.finish(),
+            0,
+            0,
+            self.pool.chain_identifier,
+            current_epoch,
+            nonce,
+        );
+        let op_set = OperationSet::new().with(GASLESS_TRANSFER);
+        self.metrics
+            .lock()
+            .unwrap()
+            .record_signed_and_sent(op_set.clone());
+        self.current_batch_txs.push(BatchTxInfo {
+            // The tx uses no gas coin, so the result leaves this coin unchanged.
+            gas_idx: 0,
+            extra_gas_idx: None,
+            op_set,
+            kind: BatchTxKind::Gasless,
+        });
+        Transaction::from_data_and_signer(data, vec![keypair])
     }
 
     /// Polls for pending alias checkpoint confirmations and returns true if
@@ -1224,6 +1290,17 @@ impl Payload for CompositePayload {
             }
         }
 
+        if !address_balance_gas_disabled
+            && !gasless_disabled(system_state.protocol_config.as_ref())
+            && rng.gen_bool(self.config.gasless_probability as f64)
+        {
+            transactions.push(self.generate_gasless_transaction(
+                sender,
+                keypair.as_ref(),
+                current_epoch,
+            ));
+        }
+
         debug!(
             num_conflicting_transactions = self.current_batch_num_conflicting_transactions,
             "built batch: {:?}",
@@ -1256,6 +1333,12 @@ impl Payload for CompositePayload {
 
             if let BatchTxKind::Lifecycle { index, step } = tx_info.kind {
                 self.lifecycles[index].handle_result(step, &result.status);
+            }
+            if let (BatchTxKind::Gasless, BatchedTransactionStatus::Success { effects }) =
+                (tx_info.kind, &result.status)
+                && effects.is_ok()
+            {
+                assert_reachable!("gasless composite transfer executed");
             }
 
             if tx_info.kind.is_alias()

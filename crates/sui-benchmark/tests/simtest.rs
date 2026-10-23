@@ -2152,6 +2152,14 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        // Gasless txs in the workload send SUI, which no chain allows by default.
+        let _gasless_guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_gasless_allowed_token_types_for_testing(vec![(
+                "0x2::sui::SUI".to_string(),
+                0,
+            )]);
+            config
+        });
 
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
@@ -2184,6 +2192,7 @@ mod test {
             receive_probability: 0.3,
             upgrade_probability: 0.3,
             owned_object_probability: 0.3,
+            gasless_probability: 0.2,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -2320,6 +2329,7 @@ mod test {
             RECEIVE_CHILD,
             PACKAGE_UPGRADE,
             OWNED_CREATE,
+            GASLESS_TRANSFER,
         ] {
             let success_count: u64 = metrics
                 .iter_stats()
