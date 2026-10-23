@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod deny;
 mod lifecycle;
 mod operations;
 mod owned;
@@ -38,6 +39,7 @@ use crate::workloads::workload::{
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams, gas_to_multi_gas};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
+use deny::DenyLifecycle;
 use futures::future::join_all;
 use lifecycle::{
     Lifecycle, LifecycleCall, LifecycleStep, StepContext, UpgradeData, choose_lifecycle,
@@ -73,7 +75,7 @@ use sui_types::transaction::{
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 use tracing::{debug, info, trace};
@@ -362,6 +364,9 @@ pub struct CompositeWorkloadConfig {
     /// Per-tx probability that the partner payload sponsors a composite tx. Zero disables
     /// sponsorship.
     pub sponsored_probability: f32,
+    /// Per-batch probability that the payload holding TEST_COIN's deny cap toggles whether
+    /// its partner is denied. Zero disables it.
+    pub deny_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -396,6 +401,7 @@ impl CompositeWorkloadConfig {
             upgrade_probability: 0.05,
             owned_object_probability: 0.1,
             sponsored_probability: 0.05,
+            deny_probability: 0.05,
             ..Default::default()
         }
     }
@@ -472,6 +478,7 @@ impl Default for CompositeWorkloadConfig {
             owned_object_probability: 0.0,
             gasless_probability: 0.0,
             sponsored_probability: 0.0,
+            deny_probability: 0.0,
             metrics: None,
         }
     }
@@ -1450,6 +1457,9 @@ impl Payload for CompositePayload {
 
             match &result.status {
                 BatchedTransactionStatus::Success { effects } => {
+                    if effects.is_address_denied() {
+                        assert_reachable!("composite tx failed for a denied address");
+                    }
                     if effects.is_cancelled() {
                         metrics.record_cancellation(tx_info.op_set.clone());
                     } else if effects.is_insufficient_funds() {
@@ -1484,6 +1494,9 @@ impl Payload for CompositePayload {
                     }
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
+                    if error.contains("denied") {
+                        assert_reachable!("composite tx rejected for a denied address");
+                    }
                     permanent_failure_count += 1;
                     metrics.record_permanent_failure(tx_info.op_set.clone());
                     tracing::debug!(
@@ -1733,6 +1746,8 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             allowances: vec![],
             upgrade_data: None,
             upgrade_cap: None,
+            deny_cap: None,
+            deny_list_initial_shared_version: None,
         }))
     }
 }
@@ -1758,6 +1773,9 @@ pub struct CompositeWorkload {
     upgrade_data: Option<Arc<UpgradeData>>,
     /// The composite package's upgrade cap, owned by payload 0.
     upgrade_cap: Option<ObjectRef>,
+    /// TEST_COIN's deny cap, owned by payload 0.
+    deny_cap: Option<ObjectRef>,
+    deny_list_initial_shared_version: Option<SequenceNumber>,
 }
 
 impl CompositeWorkload {
@@ -1770,6 +1788,7 @@ impl CompositeWorkload {
         sender: SuiAddress,
         test_coin_cap: Option<(ObjectID, SequenceNumber)>,
         upgrade: Option<UpgradeLifecycle>,
+        deny: Option<DenyLifecycle>,
     ) -> Vec<Box<dyn Lifecycle>> {
         let mut lifecycles: Vec<Box<dyn Lifecycle>> = vec![];
         if config.party_object_probability > 0.0 {
@@ -1797,6 +1816,9 @@ impl CompositeWorkload {
         }
         if let Some(upgrade) = upgrade {
             lifecycles.push(Box::new(upgrade));
+        }
+        if let Some(deny) = deny {
+            lifecycles.push(Box::new(deny));
         }
         lifecycles
     }
@@ -1891,6 +1913,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
         let mut treasury_cap_ref = None;
         let mut upgrade_cap_ref = None;
+        let mut deny_cap_ref = None;
         let mut owned_refs = vec![];
         for (obj_ref, owner) in effects.created() {
             match owner {
@@ -1912,6 +1935,8 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     info!("Found TreasuryCap {:?}", treasury_cap_ref);
                 } else if obj_type.contains("UpgradeCap") {
                     upgrade_cap_ref = Some(obj.compute_object_reference());
+                } else if obj_type.contains("DenyCapV2") {
+                    deny_cap_ref = Some(obj.compute_object_reference());
                 }
             }
         }
@@ -2262,28 +2287,53 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }
         }
 
+        // Payload 0 runs the lifecycles that need the publisher's caps.
+        let mut caps = vec![];
         if self.config.upgrade_probability > 0.0 {
-            let cap = upgrade_cap_ref.expect("the publish tx creates an upgrade cap");
+            caps.push(upgrade_cap_ref.expect("the publish tx creates an upgrade cap"));
+        }
+        if self.config.deny_probability > 0.0 {
+            caps.push(deny_cap_ref.expect("the publish tx creates a deny cap"));
+            let deny_list = execution_proxy
+                .get_object(SUI_DENY_LIST_OBJECT_ID)
+                .await
+                .expect("Failed to get the deny list object");
+            let Owner::Shared {
+                initial_shared_version,
+            } = deny_list.owner()
+            else {
+                panic!("The deny list must be shared");
+            };
+            self.deny_list_initial_shared_version = Some(*initial_shared_version);
+        }
+        if !caps.is_empty() {
             let (gas, sender, keypair) = &mut self.init_gas[0];
             let recipient = self.payload_gas[0].1;
-            let tx = TestTransactionBuilder::new(*sender, *gas, gas_price)
-                .transfer(FullObjectRef::from_fastpath_ref(cap), recipient)
-                .ensure_unique()
-                .build_and_sign(keypair.as_ref());
+            let mut tx_builder = TestTransactionBuilder::new(*sender, *gas, gas_price);
+            for cap in &caps {
+                tx_builder = tx_builder.transfer(FullObjectRef::from_fastpath_ref(*cap), recipient);
+            }
+            let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
             let effects = execution_proxy
                 .execute_transaction_block(tx)
                 .await
-                .expect("Upgrade cap transfer should succeed");
+                .expect("Cap transfer should succeed");
             update_gas!(gas, effects);
-            self.upgrade_cap = Some(
+            let transferred = |cap: Option<ObjectRef>| {
+                let id = cap?.0;
                 effects
                     .mutated()
                     .into_iter()
-                    .find(|(obj_ref, _)| obj_ref.0 == cap.0)
-                    .expect("the transfer mutates the upgrade cap")
-                    .0,
-            );
-            info!("Transferred the composite upgrade cap to {recipient}");
+                    .find(|(obj_ref, _)| obj_ref.0 == id)
+                    .map(|(obj_ref, _)| obj_ref)
+            };
+            if self.config.upgrade_probability > 0.0 {
+                self.upgrade_cap = transferred(upgrade_cap_ref);
+            }
+            if self.config.deny_probability > 0.0 {
+                self.deny_cap = transferred(deny_cap_ref);
+            }
+            info!("Transferred {} publisher caps to {recipient}", caps.len());
         }
 
         if init_requirements.contains(&InitRequirement::EnableAddressAlias) {
@@ -2522,7 +2572,20 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         cycle_state: AliasRevokeCycleState::NeedAdd,
                     },
                 );
-            let partner_address = payload_addresses[get_partner_index(i as usize)];
+            let partner_address = payload_addresses[partner_idx];
+            let deny = if i == 0
+                && partner_idx != 0
+                && let Some(cap) = self.deny_cap
+            {
+                Some(DenyLifecycle::new(
+                    config.deny_probability as f64,
+                    cap,
+                    self.deny_list_initial_shared_version.unwrap(),
+                    partner_address,
+                ))
+            } else {
+                None
+            };
             let allowances = self.allowances.get(i as usize).copied();
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
@@ -2537,7 +2600,13 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 alias_state,
                 partner_address,
                 allowances,
-                lifecycles: Self::make_lifecycles(&config, sender, self.test_coin_cap, upgrade),
+                lifecycles: Self::make_lifecycles(
+                    &config,
+                    sender,
+                    self.test_coin_cap,
+                    upgrade,
+                    deny,
+                ),
                 sponsor,
             }));
         }

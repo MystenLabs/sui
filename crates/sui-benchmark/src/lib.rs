@@ -257,6 +257,20 @@ impl ExecutionEffects {
         )
     }
 
+    pub fn is_address_denied(&self) -> bool {
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::AddressDeniedForCoin { .. },
+                ..
+            })
+        )
+    }
+
     pub fn is_insufficient_funds(&self) -> bool {
         let status = match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),

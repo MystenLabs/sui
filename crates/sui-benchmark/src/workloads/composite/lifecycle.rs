@@ -18,6 +18,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{Identifier, base_types::SequenceNumber};
 
+use super::deny::DenyStep;
 use super::owned::{CoinStep, OwnedStep};
 use super::party::PartyStep;
 use super::receive::ReceiveStep;
@@ -35,6 +36,7 @@ pub(super) enum LifecycleStep {
     Upgrade(UpgradeStep),
     Owned(OwnedStep),
     CoinMerge(CoinStep),
+    Deny(DenyStep),
 }
 
 #[derive(Clone, Debug)]

@@ -96,6 +96,9 @@ pub const GASLESS_TRANSFER: &str = "gasless_transfer";
 pub const SPONSORED_TX: &str = "sponsored_tx";
 pub const SPONSOR_WITHDRAWAL: &str = "sponsor_withdrawal";
 
+pub const TEST_COIN_DENY: &str = "test_coin_deny";
+pub const TEST_COIN_UNDENY: &str = "test_coin_undeny";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,

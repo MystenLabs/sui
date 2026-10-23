@@ -2194,6 +2194,7 @@ mod test {
             owned_object_probability: 0.3,
             gasless_probability: 0.2,
             sponsored_probability: 0.1,
+            deny_probability: 0.2,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
