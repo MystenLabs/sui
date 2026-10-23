@@ -1009,26 +1009,15 @@ mod tests {
     /// consumes it and is `OutOfRange` in both directions.
     #[test]
     fn filtered_window_serving_floor_matrix() {
-        // (ascending, floor_tx, floor_cp, expected: claim, tx_range, entry, end_cp, end_pos, exhaustion)
+        // (ascending, floor_tx, floor_cp, expected: tx_range, entry, end_cp, end_pos, exhaustion)
         // Window: txs 0..40 spanning checkpoints 0..=8. A floor tx inside
         // the window maps to a checkpoint inside the interval (tx 20 -> cp 4).
-        for (
-            ascending,
-            floor_tx,
-            floor_cp,
-            claim,
-            expected_range,
-            entry,
-            end_cp,
-            end_pos,
-            exhaustion,
-        ) in [
+        for (ascending, floor_tx, floor_cp, expected_range, entry, end_cp, end_pos, exhaustion) in [
             // Floor inside: ascending raises the entry claim only.
             (
                 true,
                 20,
                 4,
-                Some(7),
                 20..40,
                 4,
                 8,
@@ -1040,7 +1029,6 @@ mod tests {
                 false,
                 20,
                 4,
-                Some(4),
                 20..40,
                 8,
                 4,
@@ -1062,7 +1050,6 @@ mod tests {
             )
             .unwrap();
             let context = format!("floor_tx {floor_tx} asc {ascending}");
-            assert_eq!(cp_range.natural_end_claim(&options), claim, "{context}");
             assert_eq!(tx_range, expected_range, "{context}");
             assert_eq!(cp_range.entry_checkpoint, entry, "{context}");
             assert_eq!(cp_range.end_checkpoint, end_cp, "{context}");
@@ -1109,7 +1096,7 @@ mod tests {
             end_checkpoint,
             end_position,
             exhaustion: RangeExhaustion::CheckpointBound,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(end_checkpoint),
         }
     }
 

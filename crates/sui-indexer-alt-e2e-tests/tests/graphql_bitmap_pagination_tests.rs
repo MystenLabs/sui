@@ -290,6 +290,82 @@ async fn transactions_page(
         .collect()
 }
 
+/// One page of the transactions connection under `filter`, returning the edge count and
+/// `pageInfo`.
+async fn transactions_page_info(
+    cluster: &OffchainCluster,
+    filter: &Value,
+    from_back: bool,
+    after: Option<String>,
+    before: Option<String>,
+) -> (usize, Value) {
+    let query = r#"query($filter: TransactionFilter, $first: Int, $last: Int, $after: String, $before: String) {
+        transactions(first: $first, last: $last, filter: $filter, after: $after, before: $before) {
+            edges { cursor }
+            pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
+        }
+    }"#;
+
+    let (first, last) = if from_back {
+        (None, Some(10))
+    } else {
+        (Some(10), None)
+    };
+    let resp = graphql(
+        cluster,
+        query,
+        json!({ "filter": filter, "first": first, "last": last, "after": after, "before": before }),
+    )
+    .await;
+
+    let edges = resp
+        .pointer("/transactions/edges")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("expected edges array in {resp}"))
+        .len();
+    let page_info = resp
+        .pointer("/transactions/pageInfo")
+        .cloned()
+        .unwrap_or_else(|| panic!("expected pageInfo in {resp}"));
+
+    (edges, page_info)
+}
+
+/// A forward page of the transactions connection under `filter`, returning the edge cursors and
+/// `pageInfo`.
+async fn transactions_forward(
+    cluster: &OffchainCluster,
+    filter: &Value,
+    first: usize,
+    after: Option<String>,
+) -> (Vec<String>, Value) {
+    let query = r#"query($filter: TransactionFilter, $first: Int, $after: String) {
+        transactions(first: $first, filter: $filter, after: $after) {
+            edges { cursor }
+            pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
+        }
+    }"#;
+    let resp = graphql(
+        cluster,
+        query,
+        json!({ "filter": filter, "first": first, "after": after }),
+    )
+    .await;
+
+    let cursors = resp
+        .pointer("/transactions/edges")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("expected edges array in {resp}"))
+        .iter()
+        .map(|e| e["cursor"].as_str().expect("edge cursor").to_string())
+        .collect();
+    let page_info = resp
+        .pointer("/transactions/pageInfo")
+        .cloned()
+        .unwrap_or_else(|| panic!("expected pageInfo in {resp}"));
+    (cursors, page_info)
+}
+
 /// One page of `checkpoint(sequenceNumber: 1) { transactions }`: the edges' digests in emission
 /// order, and the page info.
 async fn checkpoint_transactions_page(
@@ -663,6 +739,256 @@ async fn cursor_checkpoint_hint_is_redundant() {
     )
     .await;
     assert_eq!(digests(&wrong), expected);
+}
+
+/// A cursor that already sits at or past the checkpoint filter's end leaves nothing to scan. The
+/// page must report no further pages in that direction; otherwise a client following
+/// `hasNextPage`/`hasPreviousPage` re-requests the same empty page forever.
+#[tokio::test]
+async fn transactions_empty_window_past_cursor_has_no_more_pages() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1).to_string();
+
+    // Three Alice transactions in each of cp 1 and cp 2.
+    let mut total_txs = 1u64;
+    for cp in [1u64, 2] {
+        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
+        for i in 0..3u64 {
+            builder = builder
+                .start_transaction(1)
+                .create_owned_object(cp * 10 + i)
+                .finish_transaction();
+        }
+        total_txs += 3;
+        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
+            .await
+            .unwrap();
+    }
+    cluster
+        .wait_for_graphql(2, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 2");
+
+    let all = transactions_page(&cluster, &alice, false, None, None).await;
+    assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
+    let cursor = |i: usize| all[i].0.clone();
+
+    let before_cp2 = json!({ "sentAddress": alice, "beforeCheckpoint": 2 });
+    let after_cp1 = json!({ "sentAddress": alice, "afterCheckpoint": 1 });
+
+    // (filter, paginate from the back, after, before)
+    let cases = [
+        // Forward, cursor in a checkpoint at or past `beforeCheckpoint`.
+        (&before_cp2, false, Some(cursor(3)), None),
+        (&before_cp2, false, Some(cursor(5)), None),
+        // Forward, a cursor with a placeholder checkpoint hint (as pg-minted cursors carry) that
+        // still lies past the window.
+        (
+            &before_cp2,
+            false,
+            Some(restamp_cursor_checkpoint(&cursor(4), 0)),
+            None,
+        ),
+    ];
+
+    for (filter, from_back, after, before) in cases {
+        let (edges, page_info) =
+            transactions_page_info(&cluster, filter, from_back, after.clone(), before.clone())
+                .await;
+        let context = format!("filter={filter} after={after:?} before={before:?}: {page_info}");
+        assert_eq!(edges, 0, "{context}");
+        let more = if from_back {
+            &page_info["hasPreviousPage"]
+        } else {
+            &page_info["hasNextPage"]
+        };
+        assert_eq!(more, &json!(false), "{context}");
+    }
+
+    // Forward, resuming from the window's last transaction (at its edge) or from one past the
+    // window. The page is empty, and its cursors resume, without the filter, right after the
+    // starting cursor: neither re-serving that transaction nor falling back to the window's end.
+    let alice_only = json!({ "sentAddress": alice });
+    for i in [2, 3, 4] {
+        let (page, page_info) =
+            transactions_forward(&cluster, &before_cp2, 3, Some(cursor(i))).await;
+        assert!(page.is_empty(), "after transaction {i}: {page_info}");
+        assert_eq!(
+            page_info["hasNextPage"],
+            json!(false),
+            "after transaction {i}: {page_info}"
+        );
+        for key in ["startCursor", "endCursor"] {
+            let resume = page_info[key]
+                .as_str()
+                .unwrap_or_else(|| panic!("after transaction {i}: no {key}: {page_info}"));
+            let (rest, _) =
+                transactions_forward(&cluster, &alice_only, 10, Some(resume.to_string())).await;
+            assert_eq!(
+                rest,
+                all[i + 1..].iter().map(|t| t.0.clone()).collect::<Vec<_>>(),
+                "after transaction {i}: resuming from {key}: {page_info}"
+            );
+        }
+    }
+
+    // Backward, from a cursor below the window's start, or on its first transaction. The page is
+    // empty, and its cursors resume, without the filter, right before the starting cursor going
+    // backward, and at it going forward.
+    let digests = |page: &[(String, String)]| page.iter().map(|t| t.1.clone()).collect::<Vec<_>>();
+    for i in [0, 2, 3] {
+        let (edges, page_info) =
+            transactions_page_info(&cluster, &after_cp1, true, None, Some(cursor(i))).await;
+        assert_eq!(edges, 0, "before transaction {i}: {page_info}");
+        assert_eq!(
+            page_info["hasPreviousPage"],
+            json!(false),
+            "before transaction {i}: {page_info}"
+        );
+        for key in ["startCursor", "endCursor"] {
+            let resume = page_info[key]
+                .as_str()
+                .unwrap_or_else(|| panic!("before transaction {i}: no {key}: {page_info}"))
+                .to_string();
+            let backward =
+                transactions_page(&cluster, &alice, true, None, Some(resume.clone())).await;
+            assert_eq!(
+                digests(&backward),
+                digests(&all[..i]),
+                "before transaction {i}: resuming backward from {key}: {page_info}"
+            );
+            let forward = transactions_page(&cluster, &alice, false, Some(resume), None).await;
+            assert_eq!(
+                digests(&forward),
+                digests(&all[i..]),
+                "before transaction {i}: turning forward from {key}: {page_info}"
+            );
+        }
+    }
+}
+
+/// Events counterpart of [`transactions_empty_window_past_cursor_has_no_more_pages`].
+#[tokio::test]
+async fn events_empty_window_past_cursor_has_no_more_pages() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let pkg = ObjectID::from_single_byte(0x42);
+
+    // Two Alice transactions in each of cp 1 and cp 2, each emitting two events.
+    let mut total_txs = 1u64;
+    for cp in [1u64, 2] {
+        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
+        for i in 0..2u64 {
+            let ev = || test_event(pkg, "m", alice, "0x42::m::T");
+            builder = builder
+                .start_transaction(1)
+                .with_events(vec![ev(), ev()])
+                .create_owned_object(cp * 10 + i)
+                .finish_transaction();
+        }
+        total_txs += 2;
+        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
+            .await
+            .unwrap();
+    }
+    cluster
+        .wait_for_graphql(2, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 2");
+
+    let sender = json!({ "sender": alice.to_string() });
+    let (all, _) = events_page(&cluster, &sender, Some(50), None, None, None).await;
+    assert_eq!(all.len(), 8, "expected all Alice events, got {all:?}");
+    let cursor = |i: usize| all[i].0.clone();
+
+    let before_cp2 = json!({ "sender": alice.to_string(), "beforeCheckpoint": 2 });
+    let after_cp1 = json!({ "sender": alice.to_string(), "afterCheckpoint": 1 });
+
+    // Forward, cursor in a checkpoint at or past `beforeCheckpoint`.
+    for i in [4, 7] {
+        let (page, page_info) =
+            events_page(&cluster, &before_cp2, Some(10), Some(cursor(i)), None, None).await;
+        assert!(page.is_empty(), "after event {i}: {page_info}");
+        assert_eq!(
+            page_info["hasNextPage"],
+            json!(false),
+            "after event {i}: {page_info}"
+        );
+    }
+
+    // Forward, resuming from the window's last event (at its edge) or from one past the window.
+    // The page is empty, and its cursors resume, without the filter, right after the starting
+    // cursor: neither re-serving that event nor falling back to the window's end.
+    for i in [3, 4, 5] {
+        let (page, page_info) =
+            events_page(&cluster, &before_cp2, Some(4), Some(cursor(i)), None, None).await;
+        assert!(page.is_empty(), "after event {i}: {page_info}");
+        assert_eq!(
+            page_info["hasNextPage"],
+            json!(false),
+            "after event {i}: {page_info}"
+        );
+        for key in ["startCursor", "endCursor"] {
+            let resume = page_info[key]
+                .as_str()
+                .unwrap_or_else(|| panic!("after event {i}: no {key}: {page_info}"));
+            let (rest, _) = events_page(
+                &cluster,
+                &sender,
+                Some(10),
+                Some(resume.to_string()),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(
+                rest.iter().map(|e| e.0.clone()).collect::<Vec<_>>(),
+                (i + 1..8).map(cursor).collect::<Vec<_>>(),
+                "after event {i}: resuming from {key}: {page_info}"
+            );
+        }
+    }
+
+    // Backward, from a cursor below the window's start, or on its first event. The page is empty,
+    // and its cursors resume, without the filter, right before the starting cursor going
+    // backward, and at it going forward.
+    for i in [0, 3, 4] {
+        let (page, page_info) =
+            events_page(&cluster, &after_cp1, None, None, Some(10), Some(cursor(i))).await;
+        assert!(page.is_empty(), "before event {i}: {page_info}");
+        assert_eq!(
+            page_info["hasPreviousPage"],
+            json!(false),
+            "before event {i}: {page_info}"
+        );
+        for key in ["startCursor", "endCursor"] {
+            let resume = page_info[key]
+                .as_str()
+                .unwrap_or_else(|| panic!("before event {i}: no {key}: {page_info}"))
+                .to_string();
+            let (backward, _) = events_page(
+                &cluster,
+                &sender,
+                None,
+                None,
+                Some(10),
+                Some(resume.clone()),
+            )
+            .await;
+            assert_eq!(
+                backward.iter().map(|e| e.0.clone()).collect::<Vec<_>>(),
+                (0..i).map(cursor).collect::<Vec<_>>(),
+                "before event {i}: resuming backward from {key}: {page_info}"
+            );
+            let (forward, _) =
+                events_page(&cluster, &sender, Some(10), Some(resume), None, None).await;
+            assert_eq!(
+                forward.iter().map(|e| e.0.clone()).collect::<Vec<_>>(),
+                (i..8).map(cursor).collect::<Vec<_>>(),
+                "before event {i}: turning forward from {key}: {page_info}"
+            );
+        }
+    }
 }
 
 #[tokio::test]
