@@ -131,7 +131,7 @@ jobs:
             --base "$REF_NAME" \
             --head "$BRANCH" \
             --title "$BODY" \
-            --reviewer "ebmifa,pei-mysten,tharbert" \
+            --reviewer "ebmifa,tharbert" \
             --body "$BODY"
 
           if [[ "$AUTO_MERGE" == "true" ]]; then
