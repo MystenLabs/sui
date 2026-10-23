@@ -2187,7 +2187,9 @@ mod test {
             address_balance_gas_probability: 0.2,
             conflicting_transaction_probability,
             alias_tx_probability: if address_aliases_enabled { 0.3 } else { 0.0 },
-            party_object_probability: 0.3,
+            // The party lifecycle has the longest path to its version collisions, so it starts
+            // more often than the others.
+            party_object_probability: 0.8,
             shared_deletion_probability: 0.3,
             receive_probability: 0.3,
             upgrade_probability: 0.3,
