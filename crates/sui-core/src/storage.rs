@@ -988,9 +988,16 @@ impl RpcIndexes for RpcStoreReadStore {
     fn package_versions_iter(
         &self,
         original_id: ObjectID,
-        cursor: Option<u64>,
+        start_version: u64,
+        end_version_exclusive: u64,
+        descending: bool,
     ) -> Result<sui_types::storage::PackageVersionsIterator<'_>> {
-        self.reader.package_versions_iter(original_id, cursor)
+        self.reader.package_versions_iter(
+            original_id,
+            start_version,
+            end_version_exclusive,
+            descending,
+        )
     }
 
     fn get_package_version_storage_id(
