@@ -1006,7 +1006,7 @@ Marks each bit in <code>mask</code> as forbidden in <code>chunk</code>, creating
     );
     <b>if</b> (forbidden_through == old_forbidden_through) <b>return</b>;
     <b>let</b> key = <a href="../sui/package_config.md#sui_package_config_VersionsForbiddenThroughKey">VersionsForbiddenThroughKey</a> { original_id };
-    <b>let</b> _ = field::replace&lt;<a href="../sui/package_config.md#sui_package_config_VersionsForbiddenThroughKey">VersionsForbiddenThroughKey</a>, u64, u64&gt;(
+    field::replace&lt;<a href="../sui/package_config.md#sui_package_config_VersionsForbiddenThroughKey">VersionsForbiddenThroughKey</a>, u64, u64&gt;(
         &<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id,
         key,
         forbidden_through,

@@ -324,7 +324,7 @@ fun advance_versions_forbidden_through(
     if (forbidden_through == old_forbidden_through) return;
 
     let key = VersionsForbiddenThroughKey { original_id };
-    let _ = field::replace<VersionsForbiddenThroughKey, u64, u64>(
+    field::replace<VersionsForbiddenThroughKey, u64, u64>(
         &mut package_config.id,
         key,
         forbidden_through,
@@ -448,7 +448,7 @@ public(package) fun allow_version_for_testing(
     };
     if (package_config.versions_forbidden_through(original_id) >= version) {
         let key = VersionsForbiddenThroughKey { original_id };
-        let _ = field::replace<VersionsForbiddenThroughKey, u64, u64>(
+        field::replace<VersionsForbiddenThroughKey, u64, u64>(
             &mut package_config.id,
             key,
             version - 1,
