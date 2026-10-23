@@ -3,20 +3,25 @@
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::pin::pin;
 use std::sync::Arc;
 
 use sui_futures::service::Service;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use tokio::sync::mpsc;
-use tokio::time::MissedTickBehavior;
-use tokio::time::interval;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
 use crate::metrics::IndexerMetrics;
+use crate::pipeline::FlushPolicy;
 use crate::pipeline::IndexedCheckpoint;
 use crate::pipeline::WARN_PENDING_WATERMARKS;
+use crate::pipeline::flush::FlushReason;
+use crate::pipeline::flush::InFlightWrite;
+use crate::pipeline::flush::InFlightWrites;
+use crate::pipeline::flush::collect_timer;
+use crate::pipeline::flush::next_tick;
 use crate::pipeline::sequential::Handler;
 use crate::pipeline::sequential::SequentialConfig;
 
@@ -28,15 +33,18 @@ pub(super) struct BatchedRows<H: Handler> {
     pub batch: H::Batch,
     pub watermark: CommitterWatermark,
     pub batch_rows: usize,
+    /// Counts this batch as in flight for the collector until the committer has written it.
+    pub in_flight: InFlightWrite,
 }
 
 /// Collector task — drains `rx` into a reorder buffer, assembles batches in checkpoint order,
 /// and hands each ready batch off to the committer via `committer_tx`.
 ///
 /// Data arrives out of order, grouped by checkpoint, on `rx`. The collector orders them and
-/// waits to dispatch them until either a configurable polling interval has passed (controlled
-/// by `config.collect_interval()`), or `H::BATCH_SIZE` rows have been accumulated and the next
-/// expected checkpoint has arrived.
+/// dispatches them once the next expected checkpoint has arrived and either `min_eager_rows` rows
+/// have accumulated, or the [`FlushPolicy`] allows a smaller batch: under
+/// [`FlushPolicy::Interval`] when the collect interval (`config.collect_interval()`) elapses, and
+/// under [`FlushPolicy::WhenIdle`] as soon as no batch sent earlier is still being written.
 ///
 /// Backpressure: when `committer_tx` is full (bounded by `pipeline_depth`), the collector
 /// blocks on send and stops reading `rx`, so the processor→collector channel fills and the
@@ -58,10 +66,13 @@ pub(super) fn collector<H: Handler>(
     committer_tx: mpsc::Sender<BatchedRows<H>>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
-        // The `poll` interval controls the maximum time to wait between commits, regardless of the
-        // amount of data available.
-        let mut poll = interval(config.committer.collect_interval());
-        poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        // Under `FlushPolicy::Interval`, the `poll` timer controls the maximum time to wait
+        // between commits, regardless of the amount of data available.
+        let mut poll = collect_timer(&config.committer);
+        let flush_when_idle = config.committer.flush_policy == FlushPolicy::WhenIdle;
+
+        // Batches sent to the committer that have not finished being written.
+        let writes_in_flight = Arc::new(InFlightWrites::default());
 
         // The task keeps track of the highest (inclusive) checkpoint it has added to a batch
         // through `next_checkpoint`. By extension it also knows the next checkpoint to expect.
@@ -72,51 +83,83 @@ pub(super) fn collector<H: Handler>(
 
         info!(pipeline = H::NAME, "Starting collector");
 
-        loop {
-            // IDLE: block until timer fires or enough data accumulates
-            tokio::select! {
-                biased;
+        'collect: loop {
+            // Created before checking for writes in flight, so that a write that finishes after
+            // the check still wakes the collector.
+            let mut writes_drained = pin!(writes_in_flight.drained());
 
-                Some(mut indexed) = rx.recv() => {
-                    // Eagerly drain the channel to avoid scheduler ping-pong. `rx.recv`
-                    // itself is never gated — the reorder buffer must stay unbounded,
-                    // because a missing predecessor may still be sitting in `rx` and
-                    // capping receive could deadlock. The `max_pending_rows` check inside
-                    // the drain loop is only a yield to the flush phase, not a hard-cap on
-                    // the amount of rows buffered.
-                    let mut recv_rows = 0usize;
-                    loop {
-                        recv_rows += indexed.len();
-                        pending_rows += indexed.len();
-                        pending.insert(indexed.checkpoint(), indexed);
-
-                        if pending_rows >= max_pending_rows {
-                            break;
-                        }
-
-                        match rx.try_recv() {
-                            Ok(next) => indexed = next,
-                            Err(_) => break,
-                        }
-                    }
-
-                    // Although there isn't an explicit collector in the sequential pipeline,
-                    // keeping this metric consistent with the concurrent pipeline is useful
-                    // to monitor the backpressure from committer to processor.
-                    metrics
-                        .total_collector_rows_received
-                        .with_label_values(&[H::NAME])
-                        .inc_by(recv_rows as u64);
-
-                    if pending_rows < min_eager_rows {
-                        continue;
-                    }
+            // IDLE: block until there is a reason to flush
+            let reason = 'idle: {
+                // Only an in-order checkpoint can be written: flushing while the next one is
+                // still missing would gather nothing and come straight back here.
+                if flush_when_idle
+                    && writes_in_flight.is_empty()
+                    && has_ready_checkpoint(next_checkpoint, &pending)
+                {
+                    break 'idle FlushReason::Idle;
                 }
 
-                // Timer: always fall through to flush (an empty tick still advances
-                // watermarks for any future-checkpoint progress that may have become
-                // possible).
-                _ = poll.tick() => {}
+                tokio::select! {
+                    biased;
+
+                    received = rx.recv() => {
+                        // The processor has stopped, so write out everything that can be.
+                        let Some(mut indexed) = received else {
+                            break 'idle FlushReason::Shutdown;
+                        };
+
+                        // Eagerly drain the channel to avoid scheduler ping-pong. `rx.recv`
+                        // itself is never gated — the reorder buffer must stay unbounded,
+                        // because a missing predecessor may still be sitting in `rx` and
+                        // capping receive could deadlock. The `max_pending_rows` check inside
+                        // the drain loop is only a yield to the flush phase, not a hard-cap on
+                        // the amount of rows buffered.
+                        let mut recv_rows = 0usize;
+                        loop {
+                            recv_rows += indexed.len();
+                            pending_rows += indexed.len();
+                            pending.insert(indexed.checkpoint(), indexed);
+
+                            if pending_rows >= max_pending_rows {
+                                break;
+                            }
+
+                            match rx.try_recv() {
+                                Ok(next) => indexed = next,
+                                Err(_) => break,
+                            }
+                        }
+
+                        // Although there isn't an explicit collector in the sequential pipeline,
+                        // keeping this metric consistent with the concurrent pipeline is useful
+                        // to monitor the backpressure from committer to processor.
+                        metrics
+                            .total_collector_rows_received
+                            .with_label_values(&[H::NAME])
+                            .inc_by(recv_rows as u64);
+
+                        if pending_rows < min_eager_rows {
+                            continue 'collect;
+                        }
+
+                        FlushReason::Threshold
+                    }
+
+                    // A batch finished writing, so the collector may now be idle.
+                    () = writes_drained.as_mut(), if flush_when_idle => continue 'collect,
+
+                    // Timer: always fall through to flush (an empty tick still advances
+                    // watermarks for any future-checkpoint progress that may have become
+                    // possible).
+                    () = next_tick(&mut poll) => FlushReason::Interval,
+                }
+            };
+
+            if has_ready_checkpoint(next_checkpoint, &pending) {
+                metrics
+                    .total_collector_flushes
+                    .with_label_values(&[H::NAME, reason.as_str()])
+                    .inc();
             }
 
             if pending.len() > WARN_PENDING_WATERMARKS {
@@ -234,6 +277,7 @@ pub(super) fn collector<H: Handler>(
                     batch,
                     watermark,
                     batch_rows,
+                    in_flight: writes_in_flight.start(),
                 };
                 if committer_tx.send(batched).await.is_err() {
                     info!(

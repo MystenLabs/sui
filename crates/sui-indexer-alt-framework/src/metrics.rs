@@ -146,6 +146,7 @@ pub struct IndexerMetrics {
     pub total_collector_checkpoints_received: IntCounterVec,
     pub total_collector_rows_received: IntCounterVec,
     pub total_collector_batches_created: IntCounterVec,
+    pub total_collector_flushes: IntCounterVec,
     pub total_committer_batches_attempted: IntCounterVec,
     pub total_committer_batches_succeeded: IntCounterVec,
     pub total_committer_batches_failed: IntCounterVec,
@@ -559,6 +560,16 @@ impl IndexerMetrics {
                 name("total_collector_batches_created"),
                 "Total number of batches created by this collector",
                 &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            total_collector_flushes: register_int_counter_vec_with_registry!(
+                name("total_collector_flushes"),
+                "Number of times this collector handed pending rows to its committer, by what \
+                 triggered it: threshold (min_eager_rows reached), idle (no write in flight), \
+                 interval (collect interval elapsed) or shutdown (input closed). Triggers that \
+                 find nothing to write are not counted",
+                &["pipeline", "reason"],
                 registry,
             )
             .unwrap(),

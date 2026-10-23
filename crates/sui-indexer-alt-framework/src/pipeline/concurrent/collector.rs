@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::pin::pin;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -9,19 +10,22 @@ use std::sync::atomic::Ordering;
 use sui_futures::service::Service;
 use tokio::sync::SetOnce;
 use tokio::sync::mpsc;
-use tokio::time::MissedTickBehavior;
-use tokio::time::interval;
 use tracing::debug;
 use tracing::info;
 
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
+use crate::pipeline::FlushPolicy;
 use crate::pipeline::IndexedCheckpoint;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::BatchStatus;
 use crate::pipeline::concurrent::BatchedRows;
 use crate::pipeline::concurrent::Handler;
+use crate::pipeline::flush::FlushReason;
+use crate::pipeline::flush::InFlightWrites;
+use crate::pipeline::flush::collect_timer;
+use crate::pipeline::flush::next_tick;
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
@@ -59,13 +63,17 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 /// committer task to write to the database. The task publishes batches in the following
 /// circumstances:
 ///
-/// - If `H::BATCH_SIZE` rows are pending, it will immediately schedule a batch to be gathered.
+/// - If `min_eager_rows` rows are pending, it will immediately schedule a batch to be gathered.
 ///
 /// - If after sending one batch there is more data to be sent, it will immediately schedule the
-///   next batch to be gathered (Each batch will contain at most `H::CHUNK_SIZE` rows).
+///   next batch to be gathered (each batch is cut when the handler reports it as ready).
 ///
-/// - Otherwise, it will check for any data to write out at a regular interval (controlled by
-///   `config.collect_interval()`).
+/// - Otherwise, under [`FlushPolicy::Interval`] it will check for any data to write out at a
+///   regular interval (controlled by `config.collect_interval()`), and under
+///   [`FlushPolicy::WhenIdle`] it writes out pending data as soon as no batch it sent earlier is
+///   still being written.
+///
+/// - When the processor closes its channel, everything still pending is written out.
 ///
 /// The `main_reader_lo` tracks the lowest checkpoint that can be committed by this pipeline.
 ///
@@ -82,10 +90,13 @@ pub(super) fn collector<H: Handler>(
     max_watermark_updates: usize,
 ) -> Service {
     Service::new().spawn_aborting(async move {
-        // The `poll` interval controls the maximum time to wait between collecting batches,
-        // regardless of number of rows pending.
-        let mut poll = interval(config.collect_interval());
-        poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        // Under `FlushPolicy::Interval`, the `poll` timer controls the maximum time to wait
+        // between collecting batches, regardless of number of rows pending.
+        let mut poll = collect_timer(&config);
+        let flush_when_idle = config.flush_policy == FlushPolicy::WhenIdle;
+
+        // Batches sent to the committer that have not finished being written.
+        let writes_in_flight = Arc::new(InFlightWrites::default());
 
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
             &metrics.collected_checkpoint_timestamp_lag,
@@ -102,63 +113,90 @@ pub(super) fn collector<H: Handler>(
         // Wait for main_reader_lo to be initialized before processing any checkpoints.
         let reader_lo_atomic = main_reader_lo.wait().await;
 
-        loop {
-            // === IDLE: block until timer fires or enough data accumulates ===
-            tokio::select! {
-                biased;
+        'collect: loop {
+            // Created before checking for writes in flight, so that a write that finishes after
+            // the check still wakes the collector.
+            let mut writes_drained = pin!(writes_in_flight.drained());
 
-                // docs::#collector (see https://docs.sui.io/develop/accessing-data/custom-indexer/custom-indexers)
-                Some(mut indexed) = rx.recv(), if pending_rows < max_pending_rows => {
-                    let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
-
-                    metrics
-                        .collector_reader_lo
-                        .with_label_values(&[H::NAME])
-                        .set(reader_lo as i64);
-
-                    let mut recv_cps = 0usize;
-                    let mut recv_rows = 0usize;
-                    loop {
-                        if indexed.checkpoint() < reader_lo {
-                            indexed.values.clear();
-                            metrics
-                                .total_collector_skipped_checkpoints
-                                .with_label_values(&[H::NAME])
-                                .inc();
-                        }
-
-                        recv_cps += 1;
-                        recv_rows += indexed.len();
-                        pending_rows += indexed.len();
-                        pending.insert(indexed.checkpoint(), indexed.into());
-
-                        if pending_rows >= max_pending_rows {
-                            break;
-                        }
-
-                        match rx.try_recv() {
-                            Ok(next) => indexed = next,
-                            Err(_) => break,
-                        }
-                    }
-
-                    metrics
-                        .total_collector_rows_received
-                        .with_label_values(&[H::NAME])
-                        .inc_by(recv_rows as u64);
-                    metrics
-                        .total_collector_checkpoints_received
-                        .with_label_values(&[H::NAME])
-                        .inc_by(recv_cps as u64);
-
-                    if pending_rows < min_eager_rows {
-                        continue;
-                    }
+            // === IDLE: block until there is a reason to flush ===
+            let reason = 'idle: {
+                if flush_when_idle && !pending.is_empty() && writes_in_flight.is_empty() {
+                    break 'idle FlushReason::Idle;
                 }
-                // docs::/#collector
 
-                // Timer: always flush (even if empty, for watermark progress)
-                _ = poll.tick() => {}
+                tokio::select! {
+                    biased;
+
+                    // docs::#collector (see https://docs.sui.io/develop/accessing-data/custom-indexer/custom-indexers)
+                    received = rx.recv(), if pending_rows < max_pending_rows => {
+                        // The processor has stopped, so write out everything that is left.
+                        let Some(mut indexed) = received else {
+                            break 'idle FlushReason::Shutdown;
+                        };
+
+                        let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
+
+                        metrics
+                            .collector_reader_lo
+                            .with_label_values(&[H::NAME])
+                            .set(reader_lo as i64);
+
+                        let mut recv_cps = 0usize;
+                        let mut recv_rows = 0usize;
+                        loop {
+                            if indexed.checkpoint() < reader_lo {
+                                indexed.values.clear();
+                                metrics
+                                    .total_collector_skipped_checkpoints
+                                    .with_label_values(&[H::NAME])
+                                    .inc();
+                            }
+
+                            recv_cps += 1;
+                            recv_rows += indexed.len();
+                            pending_rows += indexed.len();
+                            pending.insert(indexed.checkpoint(), indexed.into());
+
+                            if pending_rows >= max_pending_rows {
+                                break;
+                            }
+
+                            match rx.try_recv() {
+                                Ok(next) => indexed = next,
+                                Err(_) => break,
+                            }
+                        }
+
+                        metrics
+                            .total_collector_rows_received
+                            .with_label_values(&[H::NAME])
+                            .inc_by(recv_rows as u64);
+                        metrics
+                            .total_collector_checkpoints_received
+                            .with_label_values(&[H::NAME])
+                            .inc_by(recv_cps as u64);
+
+                        if pending_rows < min_eager_rows {
+                            continue 'collect;
+                        }
+
+                        FlushReason::Threshold
+                    }
+                    // docs::/#collector
+
+                    // A batch finished writing, so the collector may now be idle.
+                    () = writes_drained.as_mut(), if flush_when_idle => continue 'collect,
+
+                    // Timer: always flush (even if empty, for watermark progress)
+                    () = next_tick(&mut poll) => FlushReason::Interval,
+                }
+            };
+
+            if !pending.is_empty() {
+                metrics
+                    .total_collector_flushes
+                    .with_label_values(&[H::NAME, reason.as_str()])
+                    .inc();
             }
 
             // === FLUSHING: send batches until pending is drained ===
@@ -224,6 +262,7 @@ pub(super) fn collector<H: Handler>(
                     batch,
                     batch_len,
                     watermark,
+                    in_flight: writes_in_flight.start(),
                 };
                 if tx.send(batched_rows).await.is_err() {
                     info!(
@@ -342,6 +381,143 @@ mod tests {
             Ok(None) => panic!("Collector channel was closed unexpectedly"),
             Err(_) => panic!("Test timed out waiting for batch from collector"),
         }
+    }
+
+    /// A collector that flushes under `FlushPolicy::WhenIdle`, with a collect interval long enough
+    /// that it can never be what triggers a batch. The test plays the committer: a batch counts as
+    /// in flight until the test drops it.
+    fn when_idle_collector() -> (
+        mpsc::Sender<IndexedCheckpoint<TestHandler>>,
+        mpsc::Receiver<BatchedRows<TestHandler>>,
+        Service,
+    ) {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, collector_rx) = mpsc::channel(10);
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
+
+        let collector = collector::<TestHandler>(
+            Arc::new(TestHandler),
+            CommitterConfig {
+                collect_interval_ms: 60_000,
+                flush_policy: FlushPolicy::WhenIdle,
+                ..CommitterConfig::default()
+            },
+            processor_rx,
+            collector_tx,
+            main_reader_lo,
+            test_metrics(),
+            TestHandler::MIN_EAGER_ROWS,
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
+        );
+
+        (processor_tx, collector_rx, collector)
+    }
+
+    /// Under `FlushPolicy::WhenIdle`, rows are written as soon as no write is in flight. While one
+    /// is, rows below `min_eager_rows` are held, and they are written as soon as it finishes,
+    /// without waiting for more input or the collect interval.
+    #[tokio::test(start_paused = true)]
+    async fn test_when_idle_holds_rows_until_the_write_in_flight_finishes() {
+        let (processor_tx, mut collector_rx, _collector) = when_idle_collector();
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry]))
+            .await
+            .unwrap();
+        let first = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+        assert_eq!(first.batch_len, 1);
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 2, 20, 2000, vec![Entry; 2]))
+            .await
+            .unwrap();
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 3, 30, 3000, vec![Entry; 3]))
+            .await
+            .unwrap();
+        expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+
+        drop(first);
+        let second = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+        assert_eq!(second.batch_len, 5);
+    }
+
+    /// While a write is in flight, rows are still written as soon as `min_eager_rows` of them are
+    /// pending, so a slow store receives full-sized batches rather than waiting on each write.
+    #[tokio::test(start_paused = true)]
+    async fn test_when_idle_writes_at_threshold_while_a_write_is_in_flight() {
+        let (processor_tx, mut collector_rx, _collector) = when_idle_collector();
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry]))
+            .await
+            .unwrap();
+        let _first = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+
+        processor_tx
+            .send(IndexedCheckpoint::new(
+                0,
+                2,
+                20,
+                2000,
+                vec![Entry; TestHandler::MIN_EAGER_ROWS - 1],
+            ))
+            .await
+            .unwrap();
+        expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 3, 30, 3000, vec![Entry]))
+            .await
+            .unwrap();
+        let second = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+        assert_eq!(second.batch_len, TestHandler::MIN_EAGER_ROWS);
+    }
+
+    /// Checkpoints without rows still reach the committer under `FlushPolicy::WhenIdle`, so the
+    /// watermark keeps moving for pipelines that write nothing.
+    #[tokio::test(start_paused = true)]
+    async fn test_when_idle_writes_checkpoints_without_rows() {
+        let (processor_tx, mut collector_rx, _collector) = when_idle_collector();
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![]))
+            .await
+            .unwrap();
+
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+        assert_eq!(batch.batch_len, 0);
+        assert_eq!(batch.watermark.len(), 1);
+        assert_eq!(batch.watermark[0].checkpoint(), 1);
+    }
+
+    /// When the processor stops, rows held back by a write in flight are written out at once, and
+    /// the collector then stops.
+    #[tokio::test(start_paused = true)]
+    async fn test_when_idle_writes_everything_pending_on_shutdown() {
+        let (processor_tx, mut collector_rx, mut collector) = when_idle_collector();
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry]))
+            .await
+            .unwrap();
+        let _first = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 2, 20, 2000, vec![Entry; 2]))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        drop(processor_tx);
+
+        let last = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+        assert_eq!(last.batch_len, 2);
+
+        tokio::time::timeout(Duration::from_millis(100), collector.join())
+            .await
+            .expect("collector shutdown timeout")
+            .expect("collector shutdown failed");
     }
 
     #[tokio::test]

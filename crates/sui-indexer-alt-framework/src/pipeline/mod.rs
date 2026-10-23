@@ -11,6 +11,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 pub mod concurrent;
+mod flush;
 mod logging;
 mod processor;
 pub mod sequential;
@@ -26,7 +27,8 @@ pub struct CommitterConfig {
     /// Number of concurrent writers per pipeline.
     pub write_concurrency: usize,
 
-    /// The collector will check for pending data at least this often, in milliseconds.
+    /// Under [`FlushPolicy::Interval`], the collector will check for pending data at least this
+    /// often, in milliseconds. Not used under [`FlushPolicy::WhenIdle`].
     pub collect_interval_ms: u64,
 
     /// Minimum time between two watermark writes of a concurrent pipeline, in milliseconds. A
@@ -36,6 +38,31 @@ pub struct CommitterConfig {
 
     /// Maximum random jitter to add to the watermark interval, in milliseconds.
     pub watermark_interval_jitter_ms: u64,
+
+    /// When the collector cuts a batch from pending rows that are fewer than the pipeline's
+    /// `min_eager_rows`.
+    #[serde(default)]
+    pub flush_policy: FlushPolicy,
+}
+
+/// When a pipeline's collector cuts a batch out of its pending rows and hands it to the committer.
+///
+/// Under every policy, a batch is cut as soon as at least `min_eager_rows` rows are pending. For
+/// sequential pipelines that count includes rows buffered for checkpoints that arrived ahead of
+/// their predecessors, but a batch only ever holds the in-order run starting at the next checkpoint
+/// to commit. The policies differ in when fewer rows than `min_eager_rows` are written.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlushPolicy {
+    /// Write whatever is pending every `collect_interval_ms`.
+    #[default]
+    Interval,
+
+    /// Write whatever is pending as soon as no batch the collector handed over earlier is still
+    /// being written. When the pipeline keeps up with its input, each checkpoint is written as soon
+    /// as it has been processed. When writes are the bottleneck, one is always in flight, so rows
+    /// accumulate until `min_eager_rows` are pending. `collect_interval_ms` is not used.
+    WhenIdle,
 }
 
 /// Per-pipeline ingestion settings.
@@ -180,6 +207,7 @@ impl Default for CommitterConfig {
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
             watermark_interval_jitter_ms: 0,
+            flush_policy: FlushPolicy::Interval,
         }
     }
 }
