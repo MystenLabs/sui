@@ -1,6 +1,5 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/api/types/available_range.rs
-assertion_line: 632
 expression: output
 ---
 AccumulatorRootCreateTransaction._
@@ -1387,6 +1386,9 @@ OtherCommand._
   => {}
 
 OwnedOrImmutable.object
+  => {}
+
+PackageConfigCreateTransaction._
   => {}
 
 PageInfo.hasPreviousPage
