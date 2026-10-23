@@ -8,6 +8,7 @@ use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
@@ -15,16 +16,20 @@ use sui_rpc::proto::sui::rpc::v2::VerifySignatureRequest;
 use sui_rpc::proto::sui::rpc::v2::signature_verification_service_client::SignatureVerificationServiceClient;
 use sui_rpc::proto::sui::rpc::v2::{ActiveJwk, Jwk, JwkId};
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{ObjectDigest, ObjectID, SuiAddress};
+use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
+use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::{PublicKey, Signature, SuiKeyPair, get_key_pair};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData};
 use sui_types::utils::{
     PINNED_PROOF_ADDRESS_SEED, PINNED_V1_PROOF_JSON, PINNED_V2_PROOF_JSON, pinned_jwks,
 };
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
-use test_cluster::TestClusterBuilder;
+use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[sim_test]
 async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
@@ -305,6 +310,251 @@ async fn test_verify_signature_mldsa65() {
     );
     let response = client
         .verify_signature(verify(message, &multisig, Some(multisig_address)))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+}
+
+fn verify_request(
+    message: &[u8],
+    signature: &GenericSignature,
+    address: Option<SuiAddress>,
+    check_address_aliases: Option<bool>,
+) -> VerifySignatureRequest {
+    let mut request = VerifySignatureRequest::default();
+    request.message = Some(Bcs::from(message.to_vec()));
+    request.signature = Some({
+        let mut proto = UserSignature::default();
+        proto.bcs = Some(Bcs::from(signature.as_ref().to_owned()));
+        proto
+    });
+    request.address = address.map(|a| a.to_string());
+    request.check_address_aliases = check_address_aliases;
+    request
+}
+
+async fn call_address_alias(
+    test_cluster: &TestCluster,
+    sender: SuiAddress,
+    function: &'static str,
+    object: (ObjectID, SequenceNumber),
+    args: Vec<CallArg>,
+) -> TransactionEffects {
+    let mut call_args = vec![CallArg::Object(ObjectArg::SharedObject {
+        id: object.0,
+        initial_shared_version: object.1,
+        mutability: SharedObjectMutability::Mutable,
+    })];
+    call_args.extend(args);
+
+    let tx_data = test_cluster
+        .test_transaction_builder_with_sender(sender)
+        .await
+        .move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            "address_alias",
+            function,
+            call_args,
+        )
+        .build();
+    let effects = test_cluster
+        .sign_and_execute_transaction(&tx_data)
+        .await
+        .effects;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    effects
+}
+
+#[sim_test]
+async fn test_verify_signature_address_aliases() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut client = SignatureVerificationServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let addresses = test_cluster.get_addresses();
+    let (owner, delegate) = (addresses[0], addresses[1]);
+    let keystore = &test_cluster.wallet.config.keystore;
+    let owner_kp = keystore.export(&owner).unwrap();
+    let delegate_kp = keystore.export(&delegate).unwrap();
+
+    let personal_message = PersonalMessage {
+        message: b"hello".to_vec(),
+    };
+    let personal_bytes = bcs::to_bytes(&personal_message).unwrap();
+    let personal_intent = IntentMessage::new(Intent::personal_message(), personal_message);
+    let owner_sig: GenericSignature = Signature::new_secure(&personal_intent, owner_kp).into();
+    let delegate_sig: GenericSignature =
+        Signature::new_secure(&personal_intent, delegate_kp).into();
+
+    let tx_data = test_cluster
+        .test_transaction_builder_with_sender(owner)
+        .await
+        .transfer_sui(None, owner)
+        .build();
+    let tx_bytes = bcs::to_bytes(&tx_data).unwrap();
+    let delegate_tx_sig: GenericSignature = Signature::new_secure(
+        &IntentMessage::new(Intent::sui_transaction(), tx_data),
+        delegate_kp,
+    )
+    .into();
+
+    let status = client
+        .verify_signature(verify_request(
+            &personal_bytes,
+            &owner_sig,
+            None,
+            Some(true),
+        ))
+        .await
+        .unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument, "{status:?}");
+
+    let response = client
+        .verify_signature(verify_request(
+            &personal_bytes,
+            &owner_sig,
+            Some(owner),
+            Some(true),
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+    assert_eq!(response.address_aliases_checked, Some(true));
+
+    let response = client
+        .verify_signature(verify_request(
+            &personal_bytes,
+            &delegate_sig,
+            Some(owner),
+            Some(true),
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert_eq!(response.address_aliases_checked, Some(true));
+
+    let alias_state_version = test_cluster.fullnode_handle.sui_node.with(|node| {
+        get_address_alias_state_obj_initial_shared_version(node.state().get_object_store().as_ref())
+            .unwrap()
+            .expect("address alias state object should exist")
+    });
+    let effects = call_address_alias(
+        &test_cluster,
+        owner,
+        "enable",
+        (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, alias_state_version),
+        vec![],
+    )
+    .await;
+    let aliases = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| matches!(owner, Owner::ConsensusAddressOwner { .. }))
+        .expect("AddressAliases object should be created")
+        .0;
+    let aliases = (aliases.0, aliases.1);
+    call_address_alias(
+        &test_cluster,
+        owner,
+        "add",
+        aliases,
+        vec![CallArg::Pure(bcs::to_bytes(&delegate).unwrap())],
+    )
+    .await;
+
+    for (message, signature) in [
+        (&personal_bytes, &delegate_sig),
+        (&tx_bytes, &delegate_tx_sig),
+    ] {
+        let response = client
+            .verify_signature(verify_request(message, signature, Some(owner), Some(true)))
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+        assert_eq!(response.address_aliases_checked, Some(true));
+
+        for check_address_aliases in [None, Some(false)] {
+            let response = client
+                .verify_signature(verify_request(
+                    message,
+                    signature,
+                    Some(owner),
+                    check_address_aliases,
+                ))
+                .await
+                .unwrap()
+                .into_inner();
+            assert_eq!(response.is_valid, Some(false));
+            assert_eq!(response.address_aliases_checked, None);
+        }
+    }
+
+    let other_message = bcs::to_bytes(&PersonalMessage {
+        message: b"other".to_vec(),
+    })
+    .unwrap();
+    let response = client
+        .verify_signature(verify_request(
+            &other_message,
+            &delegate_sig,
+            Some(owner),
+            Some(true),
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert_eq!(response.address_aliases_checked, Some(true));
+
+    call_address_alias(
+        &test_cluster,
+        owner,
+        "remove",
+        aliases,
+        vec![CallArg::Pure(bcs::to_bytes(&owner).unwrap())],
+    )
+    .await;
+
+    let response = client
+        .verify_signature(verify_request(
+            &personal_bytes,
+            &owner_sig,
+            Some(owner),
+            Some(true),
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert_eq!(response.address_aliases_checked, Some(true));
+
+    let response = client
+        .verify_signature(verify_request(
+            &personal_bytes,
+            &owner_sig,
+            Some(owner),
+            None,
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+
+    let response = client
+        .verify_signature(verify_request(
+            &personal_bytes,
+            &delegate_sig,
+            Some(owner),
+            Some(true),
+        ))
         .await
         .unwrap()
         .into_inner();

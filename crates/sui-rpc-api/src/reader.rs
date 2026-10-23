@@ -75,6 +75,15 @@ impl StateReader {
             .map_err(StorageError::custom)
     }
 
+    pub fn get_address_aliases(
+        &self,
+        address: sui_types::base_types::SuiAddress,
+    ) -> Result<Option<sui_types::address_alias::AddressAliases>> {
+        sui_types::address_alias::get_address_aliases_from_store(self.inner(), address)
+            .map(|aliases| aliases.map(|(aliases, _version)| aliases))
+            .map_err(StorageError::custom)
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn get_transaction(
         &self,

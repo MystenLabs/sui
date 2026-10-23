@@ -943,6 +943,8 @@ impl Query {
     /// - `intentScope` indicates whether `message` is to be parsed as a personal message or
     ///   `TransactionData`.
     /// - `author` is the signer's address.
+    /// - `checkAddressAliases`, if true, requires the signer to be one of `author`'s current address
+    ///   aliases, rather than `author` itself.
     async fn verify_signature(
         &self,
         ctx: &Context<'_>,
@@ -950,6 +952,7 @@ impl Query {
         signature: Base64,
         intent_scope: IntentScope,
         author: SuiAddress,
+        check_address_aliases: Option<bool>,
     ) -> Option<Result<SignatureVerifyResult, RpcError<signature_verify::Error>>> {
         Some(
             async {
@@ -960,6 +963,7 @@ impl Query {
                     signature,
                     intent_scope,
                     author,
+                    check_address_aliases.unwrap_or(false),
                 )
                 .await
             }
