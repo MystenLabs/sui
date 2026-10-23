@@ -142,6 +142,8 @@ pub struct ObjectRuntime<'a> {
     /// The Clock pinned for this transaction, loaded on first borrow. References handed out by
     /// `borrow_clock` point into it, so it lives as long as the runtime; it is kept outside
     /// `ObjectRuntimeState`, which test scenarios reset at the end of every transaction.
+    // TODO: if another implicitly read system object becomes borrowable, group these loaded
+    // values in a struct instead of adding more fields here.
     clock: Option<GlobalValue>,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
