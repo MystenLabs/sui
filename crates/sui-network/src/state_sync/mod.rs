@@ -91,7 +91,7 @@ mod tests;
 mod worker;
 
 use self::{
-    metrics::{ContentRequestOutcome, HedgeEvent, Metrics},
+    metrics::{ContentRequestOutcome, HedgeEvent, Metrics, OtherPeerWaitOutcome},
     server::CheckpointContentsDownloadLimitLayer,
 };
 use crate::state_sync::worker::process_archive_checkpoint;
@@ -162,6 +162,16 @@ pub(super) fn compute_adaptive_timeout(
     Duration::from_secs_f64((base.as_secs_f64() + jitter).max(min_timeout.as_secs_f64()))
 }
 
+/// How long one checkpoint contents request to a peer took, as far as is known.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ContentResponseTime {
+    /// The peer answered after this long.
+    Answered(Duration),
+    /// The request was cancelled after running this long because another peer answered first,
+    /// so the peer would have taken longer.
+    LongerThan(Duration),
+}
+
 #[cfg_attr(test, derive(Debug))]
 pub(super) struct PeerScore {
     successes: VecDeque<(Instant, u64 /* response_size_bytes */, Duration)>,
@@ -170,6 +180,10 @@ pub(super) struct PeerScore {
     /// if it lowers the throughput estimate (see `record_cancelled`). These samples count as
     /// neither successes nor failures.
     cancelled: VecDeque<(Instant, u64 /* response_size_bytes */, Duration)>,
+    /// How long recent checkpoint contents requests that were not hedges took, oldest first.
+    /// Used to decide whether requests to this peer should be hedged sooner (see
+    /// `slow_peer_hedge_delay`).
+    content_response_times: VecDeque<(Instant, ContentResponseTime)>,
     failures: VecDeque<Instant>,
     window: Duration,
     failure_rate: f64,
@@ -179,11 +193,19 @@ pub(super) struct PeerScore {
 impl PeerScore {
     const MAX_SAMPLES: usize = 20;
     const MIN_SAMPLES_FOR_FAILURE: usize = 10;
+    /// A contents response is slow when it takes longer than the peer's fastest recent response
+    /// times this factor, or plus [`Self::SLOW_RESPONSE_MIN_MARGIN`], whichever is more.
+    const SLOW_RESPONSE_FACTOR: f64 = 1.25;
+    const SLOW_RESPONSE_MIN_MARGIN: Duration = Duration::from_millis(20);
+    /// A peer is slow when at least this share of its recent contents responses were slow.
+    const SLOW_PEER_SHARE: f64 = 0.25;
+    const MIN_SAMPLES_FOR_SLOW: usize = 10;
 
     pub(super) fn new(window: Duration, failure_rate: f64) -> Self {
         Self {
             successes: VecDeque::new(),
             cancelled: VecDeque::new(),
+            content_response_times: VecDeque::new(),
             failures: VecDeque::new(),
             window,
             failure_rate,
@@ -219,6 +241,66 @@ impl PeerScore {
         while self.cancelled.len() > Self::MAX_SAMPLES {
             self.cancelled.pop_front();
         }
+    }
+
+    /// Records how long a checkpoint contents request that was not a hedge took. Hedge requests
+    /// are left out: a hedge is cancelled whenever the request it hedged answers first, however
+    /// short a time it has run, so how often hedges are cut short says nothing about the peer.
+    /// A request that was not a hedge is hedged no earlier than its peer's slow-response
+    /// threshold, so when it is cancelled, it was slow.
+    pub(super) fn record_content_response_time(&mut self, response_time: ContentResponseTime) {
+        self.content_response_times
+            .push_back((Instant::now(), response_time));
+        while self.content_response_times.len() > Self::MAX_SAMPLES {
+            self.content_response_times.pop_front();
+        }
+    }
+
+    /// If this peer is slow, its slow-response threshold, after which requests to it should be
+    /// hedged. The threshold is the peer's fastest recent contents response times
+    /// [`Self::SLOW_RESPONSE_FACTOR`], or plus [`Self::SLOW_RESPONSE_MIN_MARGIN`], whichever is
+    /// more. The peer is slow when at least [`Self::SLOW_PEER_SHARE`] of its recent responses
+    /// took longer than the threshold. Returns `None` if the peer isn't slow, or if it has too
+    /// few recent samples to tell.
+    pub(super) fn slow_peer_hedge_delay(&self) -> Option<Duration> {
+        let now = Instant::now();
+        let recent = || {
+            self.content_response_times
+                .iter()
+                .filter(move |(ts, _)| now.duration_since(*ts) < self.window)
+                .map(|(_, response_time)| *response_time)
+        };
+        let fastest = recent()
+            .filter_map(|response_time| match response_time {
+                ContentResponseTime::Answered(elapsed) => Some(elapsed),
+                ContentResponseTime::LongerThan(_) => None,
+            })
+            .min()?;
+        let threshold = fastest
+            .mul_f64(Self::SLOW_RESPONSE_FACTOR)
+            .max(fastest + Self::SLOW_RESPONSE_MIN_MARGIN);
+
+        let mut slow = 0;
+        let mut known = 0;
+        for response_time in recent() {
+            match response_time {
+                ContentResponseTime::Answered(elapsed) => {
+                    known += 1;
+                    if elapsed > threshold {
+                        slow += 1;
+                    }
+                }
+                ContentResponseTime::LongerThan(elapsed) if elapsed >= threshold => {
+                    known += 1;
+                    slow += 1;
+                }
+                // Cancelled before the threshold: whether the response would have been slow is
+                // unknown.
+                ContentResponseTime::LongerThan(_) => {}
+            }
+        }
+        (known >= Self::MIN_SAMPLES_FOR_SLOW && slow as f64 >= Self::SLOW_PEER_SHARE * known as f64)
+            .then_some(threshold)
     }
 
     pub(super) fn record_failure(&mut self) {
@@ -325,6 +407,13 @@ struct PeerStateSyncInfo {
     /// lowest available checkpoint watermark for this Peer.
     /// This defaults to 0 for now.
     lowest: CheckpointSequenceNumber,
+}
+
+impl PeerStateSyncInfo {
+    /// Whether the peer has announced `sequence_number` and still has its contents.
+    fn has_contents(&self, sequence_number: CheckpointSequenceNumber) -> bool {
+        self.height >= sequence_number && self.lowest <= sequence_number
+    }
 }
 
 impl PeerHeights {
@@ -501,6 +590,30 @@ impl PeerHeights {
         }
     }
 
+    /// Records how long a checkpoint contents request to `peer_id` that was not a hedge took
+    /// (see `PeerScore::record_content_response_time`).
+    pub fn record_content_response_time(
+        &mut self,
+        peer_id: PeerId,
+        response_time: ContentResponseTime,
+    ) {
+        if !self.peers.contains_key(&peer_id) {
+            return;
+        }
+        self.scores
+            .entry(peer_id)
+            .or_insert_with(|| PeerScore::new(self.peer_scoring_window, self.peer_failure_rate))
+            .record_content_response_time(response_time);
+    }
+
+    /// If `peer_id` is slow from this node, the delay after which a contents request to it
+    /// should be hedged (see `PeerScore::slow_peer_hedge_delay`).
+    pub fn slow_peer_hedge_delay(&self, peer_id: &PeerId) -> Option<Duration> {
+        self.scores
+            .get(peer_id)
+            .and_then(|score| score.slow_peer_hedge_delay())
+    }
+
     pub fn record_failure(&mut self, peer_id: PeerId) {
         if !self.peers.contains_key(&peer_id) {
             return;
@@ -635,9 +748,7 @@ impl PeerBalancer {
         let requested = self.requested_checkpoint.unwrap_or(0);
         match &self.request_type {
             PeerCheckpointRequestType::Summary => info.height >= requested,
-            PeerCheckpointRequestType::Content => {
-                info.height >= requested && info.lowest <= requested
-            }
+            PeerCheckpointRequestType::Content => info.has_contents(requested),
         }
     }
 
@@ -800,6 +911,7 @@ where
             self.config.checkpoint_content_download_tx_concurrency(),
             self.config.use_get_checkpoint_contents_v2(),
             self.config.checkpoint_content_hedge_delay(),
+            self.config.checkpoint_content_adaptive_hedge_delay(),
             self.metrics.clone(),
             target_checkpoint_contents_sequence_receiver,
         );
@@ -1710,6 +1822,7 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_content_download_tx_concurrency: u64,
     use_get_checkpoint_contents_v2: bool,
     checkpoint_content_hedge_delay: Option<Duration>,
+    checkpoint_content_adaptive_hedge_delay: bool,
     metrics: Metrics,
     mut target_sequence_channel: watch::Receiver<CheckpointSequenceNumber>,
 ) where
@@ -1728,6 +1841,7 @@ async fn sync_checkpoint_contents<S>(
 
     let hedge = checkpoint_content_hedge_delay.map(|delay| ContentHedge {
         delay,
+        adaptive_delay: checkpoint_content_adaptive_hedge_delay,
         highest_synced: Arc::new(AtomicU64::new(*highest_synced.sequence_number())),
     });
 
@@ -1926,11 +2040,19 @@ const MAX_CONCURRENT_CONTENT_REQUESTS: usize = 2;
 /// of downloads in flight) without reducing how long it takes to release.
 const CONTENT_HEDGE_WINDOW: CheckpointSequenceNumber = 8;
 
+/// How often a download near the release frontier checks whether a peer that hasn't been asked
+/// yet has announced the checkpoint, while it has a reason to: a hedge is due, every request
+/// failed, or the wait for another peer is being measured.
+const CONTENT_CANDIDATE_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
 /// Settings for hedged checkpoint contents downloads.
 #[derive(Clone)]
 struct ContentHedge {
     /// How long a request may run before another peer is also asked.
     delay: Duration,
+    /// Whether requests to peers that are slow from this node are hedged after the peer's
+    /// slow-response threshold when that is shorter than `delay`.
+    adaptive_delay: bool,
     /// Sequence number of the highest checkpoint whose contents are synced and released.
     highest_synced: Arc<AtomicU64>,
 }
@@ -1983,6 +2105,54 @@ impl ContentFetch<'_> {
             PeerCheckpointRequestType::Content,
         )
         .with_checkpoint(*self.checkpoint.sequence_number())
+    }
+
+    /// Whether a connected peer not in `asked` has announced the checkpoint and still has its
+    /// contents. Cheaper than [`Self::candidates`], for frequent checks.
+    fn has_unasked_candidate(&self, asked: &HashSet<PeerId>) -> bool {
+        let sequence_number = *self.checkpoint.sequence_number();
+        self.peer_heights
+            .read()
+            .unwrap()
+            .peers_on_same_chain()
+            .any(|(peer_id, info)| {
+                info.has_contents(sequence_number)
+                    && !asked.contains(peer_id)
+                    && self.network.peer(*peer_id).is_some()
+            })
+    }
+
+    /// The next peer to ask among the peers not in `asked` that have the checkpoint now.
+    fn next_candidate(&self, asked: &HashSet<PeerId>) -> Option<StateSyncClient<anemo::Peer>> {
+        if !self.has_unasked_candidate(asked) {
+            return None;
+        }
+        self.candidates().excluding(asked).next()
+    }
+
+    /// How long a request to `peer_id` may run before it is hedged: `hedge.delay`, or with
+    /// adaptive delays, the peer's slow-response threshold if the peer is slow from this node and
+    /// the threshold is shorter.
+    fn hedge_delay_for(&self, hedge: &ContentHedge, peer_id: PeerId) -> Duration {
+        if !hedge.adaptive_delay {
+            return hedge.delay;
+        }
+        let slow_peer_delay = self
+            .peer_heights
+            .read()
+            .unwrap()
+            .slow_peer_hedge_delay(&peer_id);
+        match slow_peer_delay {
+            Some(delay) if delay < hedge.delay => {
+                self.metrics
+                    .record_checkpoint_content_slow_peer_hedge_delay(
+                        &content_metrics_peer_label(self.network, peer_id),
+                        delay,
+                    );
+                delay
+            }
+            _ => hedge.delay,
+        }
     }
 
     fn request(
@@ -2095,12 +2265,14 @@ impl ContentFetch<'_> {
         None
     }
 
-    /// Sends a hedge request to another peer when `hedge.delay` passes after the latest request
-    /// without a valid response, with at most [`MAX_CONCURRENT_CONTENT_REQUESTS`] requests in
-    /// flight. When every request has failed, asks another peer right away. Peers are picked
-    /// from the peers that have announced the checkpoint at the time each request is sent, not
-    /// when the download started. The first valid response wins, and the other request is
-    /// cancelled.
+    /// Sends a hedge request to another peer when the latest request has run for its peer's
+    /// hedge delay (see [`Self::hedge_delay_for`]) without a valid response, with at most
+    /// [`MAX_CONCURRENT_CONTENT_REQUESTS`] requests in flight. If no other peer has the
+    /// checkpoint at that point, the next check comes after another hedge delay, or with adaptive
+    /// delays, every [`CONTENT_CANDIDATE_POLL_INTERVAL`]. When every request has failed, asks
+    /// another peer right away. Peers are picked from the peers that have announced the
+    /// checkpoint at the time each request is sent, not when the download started. The first
+    /// valid response wins, and the other request is cancelled.
     async fn hedged(&self, hedge: &ContentHedge) -> Option<VersionedFullCheckpointContents> {
         let sequence_number = *self.checkpoint.sequence_number();
         let wait_interval = self
@@ -2108,19 +2280,30 @@ impl ContentFetch<'_> {
             .read()
             .unwrap()
             .wait_interval_when_no_peer_to_sync_content();
+        // When a hedge is due but no other peer has the checkpoint yet, how long until the next
+        // check: another hedge delay, or with adaptive delays, a short poll interval.
+        let recheck_interval = if hedge.adaptive_delay {
+            CONTENT_CANDIDATE_POLL_INTERVAL
+        } else {
+            hedge.delay
+        };
         let download_start = tokio::time::Instant::now();
         let mut asked = HashSet::new();
         let mut in_flight = FuturesUnordered::new();
-        let mut in_flight_start_times = HashMap::new();
+        // Start time and kind of each request still in flight, by peer.
+        let mut in_flight_requests = HashMap::new();
         let mut no_hedge_candidate_reported = false;
+        let mut other_peer_wait = OtherPeerWait::new(hedge.covers(sequence_number));
         let next_hedge = tokio::time::sleep(hedge.delay);
         tokio::pin!(next_hedge);
+        let next_other_peer_check = tokio::time::sleep(CONTENT_CANDIDATE_POLL_INTERVAL);
+        tokio::pin!(next_other_peer_check);
 
         loop {
             if in_flight.is_empty() {
                 // Either nothing was sent yet or every request failed. Ask the next peer that has
                 // the checkpoint now instead of waiting for the retry interval.
-                if let Some(peer) = self.candidates().excluding(&asked).next() {
+                if let Some(peer) = self.next_candidate(&asked) {
                     let kind = if asked.is_empty() {
                         ContentRequestKind::First
                     } else {
@@ -2129,25 +2312,41 @@ impl ContentFetch<'_> {
                     };
                     let peer_id = peer.inner().peer_id();
                     asked.insert(peer_id);
-                    in_flight_start_times.insert(peer_id, Instant::now());
+                    in_flight_requests.insert(peer_id, (Instant::now(), kind));
                     in_flight.push(self.request(peer, kind));
                     next_hedge
                         .as_mut()
-                        .reset(tokio::time::Instant::now() + hedge.delay);
+                        .reset(tokio::time::Instant::now() + self.hedge_delay_for(hedge, peer_id));
+                    if kind == ContentRequestKind::First {
+                        other_peer_wait.first_request_sent();
+                        next_other_peer_check
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
+                        if self.has_unasked_candidate(&asked) {
+                            other_peer_wait.other_peer_found(self.metrics);
+                        }
+                    } else {
+                        other_peer_wait.other_peer_found(self.metrics);
+                    }
                 } else if hedge.covers(sequence_number) && download_start.elapsed() < wait_interval
                 {
                     // No peer that hasn't been asked has the checkpoint yet. Near the release
-                    // frontier, check again after the hedge delay, or when the retry interval
-                    // ends if that is sooner.
-                    tokio::time::sleep_until(
-                        next_hedge.deadline().min(download_start + wait_interval),
-                    )
-                    .await;
-                    next_hedge
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + hedge.delay);
+                    // frontier, check again at the hedge deadline, or with adaptive delays after
+                    // a short poll interval; or when the retry interval ends if that is sooner.
+                    let next_check = if hedge.adaptive_delay {
+                        tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL
+                    } else {
+                        next_hedge.deadline()
+                    };
+                    tokio::time::sleep_until(next_check.min(download_start + wait_interval)).await;
+                    if !hedge.adaptive_delay {
+                        next_hedge
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + hedge.delay);
+                    }
                     continue;
                 } else {
+                    other_peer_wait.download_ended(self.metrics);
                     return None;
                 }
             }
@@ -2155,53 +2354,129 @@ impl ContentFetch<'_> {
             tokio::select! {
                 biased;
                 Some(response) = in_flight.next() => {
-                    in_flight_start_times.remove(&response.peer_id);
-                    let kind = response.kind;
+                    in_flight_requests.remove(&response.peer_id);
+                    let (peer_id, kind, elapsed) = (response.peer_id, response.kind, response.elapsed);
                     let Some((contents, size)) = self.record_response(response) else {
                         continue;
                     };
                     if kind == ContentRequestKind::Hedge {
                         self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Won);
+                    } else {
+                        self.peer_heights.write().unwrap().record_content_response_time(
+                            peer_id,
+                            ContentResponseTime::Answered(elapsed),
+                        );
                     }
                     // Dropping `in_flight` on return cancels the requests that lost.
-                    for (peer_id, start) in in_flight_start_times {
+                    for (peer_id, (start, kind)) in in_flight_requests {
                         let cancelled_after = start.elapsed();
                         self.metrics.record_checkpoint_content_peer_request(
                             &content_metrics_peer_label(self.network, peer_id),
                             ContentRequestOutcome::Cancelled,
                             cancelled_after,
                         );
-                        self.peer_heights.write().unwrap().record_cancelled_request(
-                            peer_id,
-                            size,
-                            cancelled_after,
-                        );
+                        let mut peer_heights = self.peer_heights.write().unwrap();
+                        peer_heights.record_cancelled_request(peer_id, size, cancelled_after);
+                        if kind != ContentRequestKind::Hedge {
+                            peer_heights.record_content_response_time(
+                                peer_id,
+                                ContentResponseTime::LongerThan(cancelled_after),
+                            );
+                        }
                     }
+                    other_peer_wait.download_ended(self.metrics);
                     return Some(contents);
                 }
                 () = next_hedge.as_mut(), if in_flight.len() < MAX_CONCURRENT_CONTENT_REQUESTS => {
-                    next_hedge
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + hedge.delay);
                     if !hedge.covers(sequence_number) {
+                        next_hedge
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + hedge.delay);
                         continue;
                     }
-                    match self.candidates().excluding(&asked).next() {
+                    match self.next_candidate(&asked) {
                         Some(peer) => {
                             self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Sent);
+                            other_peer_wait.other_peer_found(self.metrics);
                             let peer_id = peer.inner().peer_id();
                             asked.insert(peer_id);
-                            in_flight_start_times.insert(peer_id, Instant::now());
+                            in_flight_requests
+                                .insert(peer_id, (Instant::now(), ContentRequestKind::Hedge));
                             in_flight.push(self.request(peer, ContentRequestKind::Hedge));
+                            next_hedge.as_mut().reset(
+                                tokio::time::Instant::now() + self.hedge_delay_for(hedge, peer_id),
+                            );
                         }
-                        None if !no_hedge_candidate_reported => {
-                            no_hedge_candidate_reported = true;
-                            self.metrics.inc_checkpoint_content_hedge(HedgeEvent::NoCandidate);
+                        None => {
+                            if !no_hedge_candidate_reported {
+                                no_hedge_candidate_reported = true;
+                                self.metrics
+                                    .inc_checkpoint_content_hedge(HedgeEvent::NoCandidate);
+                            }
+                            next_hedge
+                                .as_mut()
+                                .reset(tokio::time::Instant::now() + recheck_interval);
                         }
-                        None => {}
+                    }
+                }
+                () = next_other_peer_check.as_mut(), if other_peer_wait.is_waiting() => {
+                    if self.has_unasked_candidate(&asked) {
+                        other_peer_wait.other_peer_found(self.metrics);
+                    } else {
+                        next_other_peer_check
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
                     }
                 }
             }
+        }
+    }
+}
+
+/// For a download near the release frontier, measures how long after its first request a peer
+/// that hasn't been asked yet first has the checkpoint, which bounds how soon a hedge can go out.
+enum OtherPeerWait {
+    /// The download is not measured.
+    NotMeasured,
+    BeforeFirstRequest,
+    /// Waiting since the first request went out at this time.
+    Waiting(Instant),
+    Recorded,
+}
+
+impl OtherPeerWait {
+    fn new(measured: bool) -> Self {
+        if measured {
+            Self::BeforeFirstRequest
+        } else {
+            Self::NotMeasured
+        }
+    }
+
+    fn first_request_sent(&mut self) {
+        if let Self::BeforeFirstRequest = self {
+            *self = Self::Waiting(Instant::now());
+        }
+    }
+
+    fn is_waiting(&self) -> bool {
+        matches!(self, Self::Waiting(_))
+    }
+
+    /// Records the wait if a peer that hasn't been asked yet now has the checkpoint.
+    fn other_peer_found(&mut self, metrics: &Metrics) {
+        self.record(metrics, OtherPeerWaitOutcome::Announced);
+    }
+
+    /// Records the wait if the download ends before another peer had the checkpoint.
+    fn download_ended(&mut self, metrics: &Metrics) {
+        self.record(metrics, OtherPeerWaitOutcome::NotAnnounced);
+    }
+
+    fn record(&mut self, metrics: &Metrics, outcome: OtherPeerWaitOutcome) {
+        if let Self::Waiting(since) = self {
+            metrics.record_checkpoint_content_other_peer_wait(outcome, since.elapsed());
+            *self = Self::Recorded;
         }
     }
 }
