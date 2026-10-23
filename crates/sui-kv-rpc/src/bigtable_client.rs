@@ -280,6 +280,22 @@ impl BigTableClient {
         .await
     }
 
+    /// The newest version of `object_id` at or below `version`, unless the
+    /// object was deleted or wrapped at that version. One single-row read of
+    /// the objects table, forward under `objects_v2`, under one permit.
+    pub(crate) async fn get_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECTS,
+            inner.get_object_lt_or_eq_version(object_id, version),
+        )
+        .await
+    }
+
     pub(crate) async fn resolve_tx_digests_stream(
         &self,
         tx_sequence_numbers: Vec<u64>,
