@@ -93,6 +93,9 @@ pub const COIN_STALE_MERGE: &str = "coin_stale_merge";
 
 pub const GASLESS_TRANSFER: &str = "gasless_transfer";
 
+pub const SPONSORED_TX: &str = "sponsored_tx";
+pub const SPONSOR_WITHDRAWAL: &str = "sponsor_withdrawal";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,

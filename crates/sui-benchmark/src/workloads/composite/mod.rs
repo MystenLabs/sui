@@ -22,8 +22,9 @@ pub use operations::{
     PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
     PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
     RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
-    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SharedCounterIncrement, SharedCounterRead,
-    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
+    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSOR_WITHDRAWAL, SPONSORED_TX,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -68,7 +69,7 @@ use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability, Transaction,
-    TransactionData,
+    TransactionData, TransactionDataAPI,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use sui_types::{
@@ -81,6 +82,9 @@ use upgrade::UpgradeLifecycle;
 use super::MultiGas;
 
 const MAX_BATCH_SIZE: usize = 4;
+
+/// The sponsor's gas coin that pays for coin-sponsored txs.
+const SPONSOR_GAS_IDX: usize = MAX_BATCH_SIZE - 1;
 
 fn address_balance_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
@@ -355,6 +359,9 @@ pub struct CompositeWorkloadConfig {
     /// Per-batch probability of adding a gasless SUI transfer to the partner. The protocol
     /// config must allow SUI in gasless txs, or validators reject these txs.
     pub gasless_probability: f32,
+    /// Per-tx probability that the partner payload sponsors a composite tx. Zero disables
+    /// sponsorship.
+    pub sponsored_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -388,6 +395,7 @@ impl CompositeWorkloadConfig {
             receive_probability: 0.1,
             upgrade_probability: 0.05,
             owned_object_probability: 0.1,
+            sponsored_probability: 0.05,
             ..Default::default()
         }
     }
@@ -463,6 +471,7 @@ impl Default for CompositeWorkloadConfig {
             upgrade_probability: 0.0,
             owned_object_probability: 0.0,
             gasless_probability: 0.0,
+            sponsored_probability: 0.0,
             metrics: None,
         }
     }
@@ -515,7 +524,7 @@ pub struct CompositePayload {
     config: Arc<CompositeWorkloadConfig>,
     fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
     pool: Arc<OperationPool>,
-    gas: Mutex<MultiGas>,
+    gas: Arc<Mutex<MultiGas>>,
     current_batch_num_conflicting_transactions: usize,
     current_batch_txs: Vec<BatchTxInfo>,
     system_state_observer: Arc<SystemStateObserver>,
@@ -525,6 +534,7 @@ pub struct CompositePayload {
     partner_address: SuiAddress,
     allowances: Option<PayloadAllowances>,
     lifecycles: Vec<Box<dyn Lifecycle>>,
+    sponsor: Option<Sponsor>,
 }
 
 /// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
@@ -605,8 +615,20 @@ struct BatchTxInfo {
     /// mixed-payment branch when it claims a spare from `current_batch_gas`). Its
     /// tracked version must also be refreshed from effects.
     extra_gas_idx: Option<usize>,
+    /// The index and id of the sponsor's gas coin that pays for this tx.
+    sponsor_coin: Option<(usize, ObjectID)>,
     op_set: OperationSet,
     kind: BatchTxKind,
+}
+
+/// The partner payload, which sponsors some of this payload's txs.
+#[derive(Clone)]
+struct Sponsor {
+    address: SuiAddress,
+    keypair: Arc<AccountKeyPair>,
+    /// The sponsor's own gas. A sponsored tx paid with one of these coins updates the coin's
+    /// version here, and it can conflict with the sponsor's own txs on that coin.
+    gas: Arc<Mutex<MultiGas>>,
 }
 
 impl std::fmt::Debug for CompositePayload {
@@ -741,6 +763,7 @@ impl CompositePayload {
         keypair: &AccountKeyPair,
         current_epoch: u64,
         lifecycle_call: Option<&LifecycleCall>,
+        sponsor: Option<(Sponsor, bool)>,
     ) -> (Transaction, OperationSet) {
         let ops = match lifecycle_call {
             Some(call) if call.bare => vec![],
@@ -753,6 +776,12 @@ impl CompositePayload {
         }
         if let Some(call) = lifecycle_call {
             op_set = op_set.with(call.op);
+        }
+        if let Some((_, sponsor_withdrawal)) = &sponsor {
+            op_set = op_set.with(SPONSORED_TX);
+            if *sponsor_withdrawal {
+                op_set = op_set.with(SPONSOR_WITHDRAWAL);
+            }
         }
         self.metrics
             .lock()
@@ -773,6 +802,27 @@ impl CompositePayload {
             if let Some(call) = lifecycle_call {
                 call.apply(builder, package_version);
             }
+            if let Some((_, true)) = &sponsor {
+                // Move one MIST from the sponsor's address balance to the sender's.
+                let withdrawal = builder
+                    .funds_withdrawal(FundsWithdrawalArg::balance_from_sponsor(1, GAS::type_tag()))
+                    .unwrap();
+                let balance = builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("balance").unwrap(),
+                    Identifier::new("redeem_funds").unwrap(),
+                    vec![GAS::type_tag()],
+                    vec![withdrawal],
+                );
+                let recipient = builder.pure(account_state.sender).unwrap();
+                builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("balance").unwrap(),
+                    Identifier::new("send_funds").unwrap(),
+                    vec![GAS::type_tag()],
+                    vec![balance, recipient],
+                );
+            }
             for op in &ops {
                 let resources = Self::resolve_resources_for_op(
                     op.as_ref(),
@@ -786,7 +836,16 @@ impl CompositePayload {
             }
         }
 
-        (tx_builder.ensure_unique().build_and_sign(keypair), op_set)
+        let tx_builder = tx_builder.ensure_unique();
+        let tx = match sponsor {
+            None => tx_builder.build_and_sign(keypair),
+            Some((sponsor, _)) => {
+                let mut data = tx_builder.build();
+                data.gas_data_mut().owner = sponsor.address;
+                Transaction::from_data_and_signer(data, vec![keypair, sponsor.keypair.as_ref()])
+            }
+        };
+        (tx, op_set)
     }
 
     fn generate_alias_transaction(
@@ -895,6 +954,7 @@ impl CompositePayload {
             BatchTxInfo {
                 gas_idx,
                 extra_gas_idx: None,
+                sponsor_coin: None,
                 op_set,
                 kind,
             },
@@ -947,6 +1007,7 @@ impl CompositePayload {
             // The tx uses no gas coin, so the result leaves this coin unchanged.
             gas_idx: 0,
             extra_gas_idx: None,
+            sponsor_coin: None,
             op_set,
             kind: BatchTxKind::Gasless,
         });
@@ -1174,7 +1235,36 @@ impl Payload for CompositePayload {
 
         for (i, gas) in current_batch_gas.iter().take(batch_size).enumerate() {
             let mut extra_gas_idx_opt: Option<usize> = None;
-            let builder = if !address_balance_gas_disabled
+            let lifecycle_call = lifecycle_calls.get(i);
+            let mut sponsor = None;
+            let mut sponsor_coin = None;
+            // Lifecycle txs are never sponsored, because a bare tx's versions depend on its gas.
+            let builder = if lifecycle_call.is_none()
+                && let Some(s) = &self.sponsor
+                && rng.gen_bool(self.config.sponsored_probability as f64)
+            {
+                sponsor = Some((
+                    s.clone(),
+                    !address_balance_gas_disabled && rng.gen_bool(0.5),
+                ));
+                if !address_balance_gas_disabled && rng.gen_bool(0.5) {
+                    // Paid from the sponsor's address balance, because the sponsor is the
+                    // gas owner.
+                    let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
+                    TestTransactionBuilder::new_with_address_balance_gas(
+                        sender,
+                        rgp,
+                        self.pool.chain_identifier,
+                        current_epoch,
+                        nonce,
+                    )
+                } else {
+                    let idx = SPONSOR_GAS_IDX;
+                    let coin = s.gas.lock().unwrap().0[idx];
+                    sponsor_coin = Some((idx, coin.0));
+                    TestTransactionBuilder::new(sender, coin, rgp)
+                }
+            } else if !address_balance_gas_disabled
                 && rng.gen_bool(self.config.address_balance_gas_probability as f64)
             {
                 let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
@@ -1224,17 +1314,18 @@ impl Payload for CompositePayload {
                 TestTransactionBuilder::new(sender, *gas, rgp)
             };
 
-            let lifecycle_call = lifecycle_calls.get(i);
             let (tx, op_set) = self.generate_transaction(
                 builder,
                 &account_state,
                 &keypair,
                 current_epoch,
                 lifecycle_call,
+                sponsor,
             );
             self.current_batch_txs.push(BatchTxInfo {
                 gas_idx: i,
                 extra_gas_idx: extra_gas_idx_opt,
+                sponsor_coin,
                 op_set,
                 kind: lifecycle_call.map_or(BatchTxKind::Normal, |call| BatchTxKind::Lifecycle {
                     index: lifecycle_index,
@@ -1260,10 +1351,12 @@ impl Payload for CompositePayload {
                     &keypair,
                     current_epoch,
                     None,
+                    None,
                 );
                 self.current_batch_txs.push(BatchTxInfo {
                     gas_idx: *gas_idx,
                     extra_gas_idx: None,
+                    sponsor_coin: None,
                     op_set,
                     kind: BatchTxKind::Normal,
                 });
@@ -1323,6 +1416,7 @@ impl Payload for CompositePayload {
         let mut expected_alias_failure_count = 0;
 
         let mut gas = self.gas.lock().unwrap();
+        let mut sponsor_gas_updates = vec![];
         for (i, result) in results.results.iter().enumerate() {
             let tx_info = &self.current_batch_txs[i];
             trace!("result: {}", result.description());
@@ -1371,6 +1465,23 @@ impl Payload for CompositePayload {
                     if let Some(extra_idx) = tx_info.extra_gas_idx {
                         update_gas!(&mut gas.0[extra_idx], effects);
                     }
+                    if let Some((idx, coin_id)) = tx_info.sponsor_coin
+                        && let Some(new_ref) = effects.updated_gas(coin_id)
+                    {
+                        sponsor_gas_updates.push((idx, new_ref));
+                    }
+                    if tx_info.op_set.contains(SPONSORED_TX) && effects.is_ok() {
+                        if tx_info.sponsor_coin.is_some() {
+                            assert_reachable!("composite tx sponsored with a coin executed");
+                        } else {
+                            assert_reachable!(
+                                "composite tx sponsored from an address balance executed"
+                            );
+                        }
+                        if tx_info.op_set.contains(SPONSOR_WITHDRAWAL) {
+                            assert_reachable!("composite tx withdrew from its sponsor");
+                        }
+                    }
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
                     permanent_failure_count += 1;
@@ -1398,6 +1509,18 @@ impl Payload for CompositePayload {
                         i,
                         result.digest,
                     );
+                }
+            }
+        }
+        // Partners sponsor each other, so a payload never holds its own gas lock while it
+        // takes its sponsor's.
+        drop(gas);
+        if let Some(sponsor) = &self.sponsor {
+            let mut sponsor_gas = sponsor.gas.lock().unwrap();
+            for (idx, new_ref) in sponsor_gas_updates {
+                // The sponsor's own txs may have moved the coin to a later version.
+                if sponsor_gas.0[idx].0 == new_ref.0 && sponsor_gas.0[idx].1 < new_ref.1 {
+                    sponsor_gas.0[idx] = new_ref;
                 }
             }
         }
@@ -2343,8 +2466,8 @@ impl Workload<dyn Payload> for CompositeWorkload {
             .collect();
 
         // Pair payloads: 0↔1, 2↔3, etc. If odd number, last one pairs with first.
-        let get_partner_address = |i: usize| -> SuiAddress {
-            let partner_idx = if i.is_multiple_of(2) {
+        let get_partner_index = |i: usize| -> usize {
+            if i.is_multiple_of(2) {
                 if i + 1 < payload_addresses.len() {
                     i + 1
                 } else {
@@ -2352,14 +2475,28 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 }
             } else {
                 i - 1
-            };
-            payload_addresses[partner_idx]
+            }
         };
+        let payload_gas: Vec<Arc<Mutex<MultiGas>>> = self
+            .payload_gas
+            .iter()
+            .map(|gas| Arc::new(Mutex::new(gas.clone())))
+            .collect();
 
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
         for i in 0..self.num_payloads {
-            let gas = self.payload_gas[i as usize].clone();
-            let sender = gas.1;
+            let gas = payload_gas[i as usize].clone();
+            let sender = self.payload_gas[i as usize].1;
+            let partner_idx = get_partner_index(i as usize);
+            let sponsor =
+                (config.sponsored_probability > 0.0 && partner_idx != i as usize).then(|| {
+                    let (_, address, keypair) = &self.payload_gas[partner_idx];
+                    Sponsor {
+                        address: *address,
+                        keypair: keypair.clone(),
+                        gas: payload_gas[partner_idx].clone(),
+                    }
+                });
             let upgrade = if i == 0
                 && let Some(cap) = self.upgrade_cap
             {
@@ -2385,13 +2522,13 @@ impl Workload<dyn Payload> for CompositeWorkload {
                         cycle_state: AliasRevokeCycleState::NeedAdd,
                     },
                 );
-            let partner_address = get_partner_address(i as usize);
+            let partner_address = payload_addresses[get_partner_index(i as usize)];
             let allowances = self.allowances.get(i as usize).copied();
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
                 fullnode_proxies: fullnode_proxies.clone(),
                 pool: operation_pool.clone(),
-                gas: Mutex::new(gas),
+                gas,
                 current_batch_num_conflicting_transactions: 0,
                 current_batch_txs: vec![],
                 system_state_observer: system_state_observer.clone(),
@@ -2401,6 +2538,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 partner_address,
                 allowances,
                 lifecycles: Self::make_lifecycles(&config, sender, self.test_coin_cap, upgrade),
+                sponsor,
             }));
         }
 

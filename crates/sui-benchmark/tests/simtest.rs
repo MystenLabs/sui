@@ -2193,6 +2193,7 @@ mod test {
             upgrade_probability: 0.3,
             owned_object_probability: 0.3,
             gasless_probability: 0.2,
+            sponsored_probability: 0.1,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -2330,6 +2331,7 @@ mod test {
             PACKAGE_UPGRADE,
             OWNED_CREATE,
             GASLESS_TRANSFER,
+            SPONSORED_TX,
         ] {
             let success_count: u64 = metrics
                 .iter_stats()
