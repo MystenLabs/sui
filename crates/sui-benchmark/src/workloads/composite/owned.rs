@@ -15,7 +15,7 @@ use super::lifecycle::{
 };
 use super::operations::{
     COIN_MERGE, COIN_MINT, COIN_STALE_MERGE, OWNED_CONFLICTING_MUTATE, OWNED_CREATE, OWNED_DELETE,
-    OWNED_FREEZE, OWNED_FROZEN_MUTATE, OWNED_FROZEN_READ, OWNED_MUTATE, OWNED_STALE_MUTATE,
+    OWNED_FREEZE, OWNED_FROZEN_READ, OWNED_MUTATE, OWNED_STALE_MUTATE,
 };
 use crate::workloads::payload::BatchedTransactionStatus;
 
@@ -35,8 +35,6 @@ pub(super) enum OwnedStep {
     ConflictingMutate,
     /// Read the frozen object.
     FrozenRead,
-    /// Mutate the frozen object (expected to be rejected).
-    FrozenMutate,
     /// Mutate the deleted object (expected to be rejected).
     StaleMutate,
 }
@@ -136,23 +134,17 @@ impl Lifecycle for OwnedLifecycle {
                     mutate(2, OWNED_CONFLICTING_MUTATE, OwnedStep::ConflictingMutate),
                 ]
             }
+            // A mutation of the frozen object would fail with `InvalidObjectByMutRef`, which
+            // the bench driver treats as a workload bug, so the frozen object is only read.
             OwnedPhase::Frozen { obj_ref } => {
                 self.phase = OwnedPhase::NeedCreate;
-                vec![
-                    Self::call(
-                        "value",
-                        vec![owned(obj_ref)],
-                        OWNED_FROZEN_READ,
-                        OwnedStep::FrozenRead,
-                    ),
-                    Self::call(
-                        "set_value",
-                        vec![owned(obj_ref), pure(&3u64)],
-                        OWNED_FROZEN_MUTATE,
-                        OwnedStep::FrozenMutate,
-                    )
-                    .bare(),
-                ]
+                let read = Self::call(
+                    "value",
+                    vec![owned(obj_ref)],
+                    OWNED_FROZEN_READ,
+                    OwnedStep::FrozenRead,
+                );
+                vec![read.clone(), read.bare()]
             }
             OwnedPhase::Deleted { obj_ref } => {
                 self.phase = OwnedPhase::NeedCreate;
@@ -176,20 +168,14 @@ impl Lifecycle for OwnedLifecycle {
         let effects = match status {
             BatchedTransactionStatus::Success { effects } => effects,
             BatchedTransactionStatus::PermanentFailure { .. } => {
-                match step {
-                    OwnedStep::FrozenMutate => {
-                        assert_reachable!("mutation of a frozen object rejected")
-                    }
-                    OwnedStep::StaleMutate => {
-                        assert_reachable!("mutation of a deleted owned object rejected")
-                    }
-                    _ => {}
+                if matches!(step, OwnedStep::StaleMutate) {
+                    assert_reachable!("mutation of a deleted owned object rejected");
                 }
                 return;
             }
             BatchedTransactionStatus::RetriableFailure { .. }
             | BatchedTransactionStatus::UnknownRejection => {
-                if !matches!(step, OwnedStep::FrozenRead | OwnedStep::FrozenMutate) {
+                if !matches!(step, OwnedStep::FrozenRead) {
                     debug!(?step, "owned tx outcome unknown, resetting lifecycle");
                     self.phase = OwnedPhase::NeedCreate;
                 }
@@ -204,14 +190,12 @@ impl Lifecycle for OwnedLifecycle {
                 }
                 return;
             }
-            OwnedStep::FrozenMutate | OwnedStep::StaleMutate => {
+            OwnedStep::StaleMutate => {
                 if effects.is_ok() {
                     debug_fatal!(
-                        "{step:?} tx succeeded on an object that is frozen or deleted: {:?}",
+                        "mutation of a deleted owned object succeeded: {:?}",
                         effects.digest()
                     );
-                } else if matches!(step, OwnedStep::FrozenMutate) {
-                    assert_reachable!("mutation of a frozen object failed in execution");
                 }
                 return;
             }

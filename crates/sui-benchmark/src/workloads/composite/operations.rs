@@ -85,12 +85,13 @@ pub const OWNED_FREEZE: &str = "owned_freeze";
 pub const OWNED_DELETE: &str = "owned_delete";
 pub const OWNED_CONFLICTING_MUTATE: &str = "owned_conflicting_mutate";
 pub const OWNED_FROZEN_READ: &str = "owned_frozen_read";
-pub const OWNED_FROZEN_MUTATE: &str = "owned_frozen_mutate";
 pub const OWNED_STALE_MUTATE: &str = "owned_stale_mutate";
 
 pub const COIN_MINT: &str = "coin_mint";
 pub const COIN_MERGE: &str = "coin_merge";
 pub const COIN_STALE_MERGE: &str = "coin_stale_merge";
+
+pub const GASLESS_TRANSFER: &str = "gasless_transfer";
 
 pub struct OperationDescriptor {
     pub name: &'static str,
