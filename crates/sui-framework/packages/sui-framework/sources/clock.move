@@ -67,6 +67,8 @@ fun consensus_commit_prologue(clock: &mut Clock, timestamp_ms: u64, ctx: &TxCont
     clock.timestamp_ms = timestamp_ms
 }
 
+// TODO: forbid creating more than one Clock in a test, so that the
+// Clock returned by `borrow` cannot disagree with a Clock a test holds.
 #[test_only]
 /// Expose the functionality of `create()` (usually only done during
 /// genesis) for tests that want to create a Clock.
