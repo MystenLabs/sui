@@ -1293,19 +1293,30 @@ async fn test_object_tombstones() -> Result<()> {
                 "{id} at version {version}",
             );
 
+            // The exact-version read and its contents-free form agree.
+            let expected_exact = live_versions.contains(&version).then_some(version);
             let exact = harness
                 .bigtable_client()
                 .get_objects(&[ObjectKey(id, version)])
                 .await?;
-            let expected_exact = live_versions.contains(&version).then_some(version);
             assert_eq!(
                 exact.first().map(|o| o.version()),
                 expected_exact,
                 "{id} exactly at version {version}",
             );
+            let existing = harness
+                .bigtable_client()
+                .get_existing_object_keys(&[ObjectKey(id, version)])
+                .await?;
+            assert_eq!(
+                existing.first().map(|key| key.1),
+                expected_exact,
+                "{id} key exactly at version {version}",
+            );
         }
 
-        // Both objects end deleted, so neither has a latest version.
+        // Both objects end deleted, so neither has a latest version, with or without contents,
+        // even though their older live versions remain.
         assert!(
             harness
                 .bigtable_client()
@@ -1313,6 +1324,14 @@ async fn test_object_tombstones() -> Result<()> {
                 .await?
                 .is_none(),
             "{id} has a latest version after deletion",
+        );
+        assert_eq!(
+            harness
+                .bigtable_client()
+                .get_latest_object_version(&id)
+                .await?,
+            None,
+            "{id} has a latest version number after deletion",
         );
 
         // Pages of live versions skip the tombstones, which never take a slot in a page.

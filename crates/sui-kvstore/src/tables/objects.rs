@@ -119,6 +119,18 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<ObjectRow> {
     }
 }
 
+/// Whether a row is live rather than a tombstone, told apart by column alone, so it also works on
+/// rows read with their values stripped.
+pub fn is_live(row: &[(Bytes, Bytes)]) -> Result<bool> {
+    let has_column = |column: &str| row.iter().any(|(name, _)| name == column.as_bytes());
+    match (has_column(col::OBJECT), has_column(col::STATUS)) {
+        (true, false) => Ok(true),
+        (false, true) => Ok(false),
+        (true, true) => bail!("row has both an object and a tombstone status"),
+        (false, false) => bail!("row has neither an object nor a tombstone status"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use sui_types::base_types::ObjectID;
