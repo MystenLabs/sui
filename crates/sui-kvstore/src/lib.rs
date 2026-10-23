@@ -336,8 +336,8 @@ pub trait KeyValueStoreReader {
     /// The live objects among `objects`. Keys with no object at that version, including keys at
     /// which the object was deleted or wrapped, are left out.
     async fn get_objects(&mut self, objects: &[ObjectKey]) -> Result<Vec<Object>>;
-    /// The keys in `objects` that have a row in the objects table, read without the objects'
-    /// contents.
+    /// The keys in `objects` at which the object is live, read without the objects' contents.
+    /// Like [`Self::get_objects`], keys at which the object was deleted or wrapped are left out.
     async fn get_existing_object_keys(&mut self, objects: &[ObjectKey]) -> Result<Vec<ObjectKey>>;
     async fn get_transactions(
         &mut self,

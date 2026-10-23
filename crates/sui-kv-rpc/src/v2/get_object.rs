@@ -326,7 +326,7 @@ async fn read_latest(
 }
 
 /// Read one exact version from the `objects` table: the whole object, or with `version_only`
-/// just whether its row exists.
+/// just whether the object is live at it.
 async fn read_exact_version(
     client: &mut sui_kvstore::BigTableClient,
     key: ObjectKey,
@@ -351,7 +351,7 @@ async fn read_exact_version(
 
 /// Read exact versions from the `objects` table through the request's gated `client`, in
 /// multi-gets planned by `objects_stage`, each under one permit: the whole objects, or with
-/// `version_only` just which of `keys` exist. Keys that are not found are absent from the map.
+/// `version_only` just which of `keys` are live. Keys that are not found are absent from the map.
 async fn read_exact_versions(
     client: &BigTableClient,
     objects_stage: ResolvedStageConfig,
@@ -630,6 +630,74 @@ mod tests {
             [true; 4],
             "version-only reads fetch only row keys",
         );
+
+        mock_server.abort();
+    }
+
+    /// A read mask that needs no object contents answers a deleted object as `NOT_FOUND`, like a
+    /// read of its contents does, both latest and at the version that deleted it.
+    #[tokio::test]
+    async fn test_version_only_reads_of_deleted_object_are_not_found() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), false).await;
+
+        // Live at version 1, deleted at version 2.
+        let id = ObjectID::random();
+        let live = SequenceNumber::from_u64(1);
+        let object = Object::with_id_owner_version_for_testing(
+            id,
+            live,
+            Owner::AddressOwner(SuiAddress::ZERO),
+        );
+        mock.insert_row(
+            objects::NAME,
+            objects::encode_key(&ObjectKey(id, live)),
+            objects::encode(&object).unwrap(),
+        )
+        .await;
+        mock.insert_row(
+            objects::NAME,
+            objects::encode_key(&ObjectKey(id, SequenceNumber::from_u64(2))),
+            objects::encode_tombstone(ObjectStatus::Deleted).unwrap(),
+        )
+        .await;
+
+        let request = |version: Option<u64>| {
+            let mut req = GetObjectRequest::default();
+            req.object_id = Some(id.to_canonical_string(true));
+            req.version = version;
+            req
+        };
+        let version_only = ["object_id", "version"];
+        for paths in [&version_only[..], &["object_id", "version", "digest"]] {
+            for version in [None, Some(2)] {
+                let mut req = request(version);
+                req.read_mask = Some(mask(paths));
+                let status: tonic::Status = get_object(&kv_rpc, req).await.unwrap_err().into();
+                assert_eq!(
+                    status.code(),
+                    tonic::Code::NotFound,
+                    "{version:?} {paths:?}"
+                );
+            }
+            let mut req = request(Some(1));
+            req.read_mask = Some(mask(paths));
+            let found = get_object(&kv_rpc, req).await.unwrap().object.unwrap();
+            assert_eq!(found.version, Some(1), "{paths:?}");
+        }
+
+        let mut batch = BatchGetObjectsRequest::default();
+        batch.requests = vec![request(None), request(Some(2)), request(Some(1))];
+        batch.read_mask = Some(mask(&version_only));
+        let items = batch_get_objects(&kv_rpc, batch).await.unwrap().objects;
+        assert_eq!(
+            items[0].error().code,
+            tonic::Code::NotFound as i32,
+            "latest"
+        );
+        assert_eq!(items[1].error().code, tonic::Code::NotFound as i32, "at 2");
+        assert_eq!(items[2].object().version, Some(1), "at 1");
 
         mock_server.abort();
     }
