@@ -1,9 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 4 tasks
+processed 14 tasks
 
-// init with entry used to be allowed
+// init with entry used to be allowed, but direct calls are rejected once the ban is enabled
 
 init:
 A: object(0,0)
@@ -19,17 +19,47 @@ task 3, line 24:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-// TODO advance protocol version
-// //# run test::m::init --protocol-version 7
+task 4, line 26:
+//# advance-epoch --protocol-version 103
+Epoch advanced: 1
 
-// // m still loads
-// //# run test::m::foo --protocol-version 7
+task 5, line 28:
+//# run test::m::init --sender A
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }
 
-// //# upgrade --package test  --sender A --upgrade-capability 1,1
-// module v2::m {
-//     use sui::tx_context::TxContext;
-//     fun init(_: &mut TxContext) {
-//     }
+task 6, line 30:
+//# advance-epoch --protocol-version 104
+Epoch advanced: 2
 
-//     public fun foo() {}
-// }
+task 7, line 32:
+//# run test::m::init --sender A
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }
+
+task 8, line 34:
+//# advance-epoch --protocol-version 118
+Epoch advanced: 3
+
+task 9, line 36:
+//# run test::m::init --sender A
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }
+
+task 10, line 38:
+//# advance-epoch --protocol-version 119
+Epoch advanced: 4
+
+task 11, line 40:
+//# run test::m::init --sender A
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }
+
+task 12, line 42:
+//# advance-epoch --protocol-version 137
+Epoch advanced: 5
+
+task 13, line 44:
+//# run test::m::init --sender A
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }
