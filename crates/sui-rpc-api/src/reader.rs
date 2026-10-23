@@ -417,6 +417,16 @@ impl AtCheckpointUpperBound {
         }
         Ok(())
     }
+
+    /// The error for a cursor naming a position the indexes have not reached whose checkpoint is
+    /// not known, such as a package version this backend has no row for: `OutOfRange` with an
+    /// `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo) for the bound
+    /// "cursor", placing the cursor at the lowest checkpoint it can be at, the first one above
+    /// the bound.
+    pub fn unindexed_cursor_error(&self) -> crate::RpcError {
+        let first_unindexed = self.highest_indexed.saturating_add(1);
+        above_latest_available("cursor", first_unindexed, first_unindexed)
+    }
 }
 
 /// The error for an `at_checkpoint` read above the highest indexed checkpoint: `OutOfRange` with

@@ -297,7 +297,8 @@ pub struct KvRpcServer {
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) monotonic_read_wait_timeout: Duration,
     pub(crate) stages: StagesConfig,
-    // Object history reads (`at_checkpoint` and `max_version`) need the alpha
+    // Object history reads (`at_checkpoint` and `max_version`, and every `ListObjectVersions`
+    // request, bounded by `at_checkpoint` or the served height) need the alpha
     // [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`], backfilled from genesis, and the `objects_v2`
     // table: they are served only with [`KvRpcConfig::enable_object_at_checkpoint`] on and
     // [`ObjectSchema::V2`] (see [`KvRpcConfig::serves_object_history`]). Otherwise they are
