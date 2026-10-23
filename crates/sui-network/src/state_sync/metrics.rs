@@ -20,6 +20,15 @@ const CHECKPOINT_CONTENT_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 30.0,
 ];
 
+/// Buckets for hedge timing: how long until another peer has a checkpoint, and shortened hedge
+/// delays. The 25 ms steps between 50 and 300 ms resolve the range in which distant peers answer
+/// and hedges are sent. The first bucket holds downloads for which another peer already had the
+/// checkpoint when the first request went out.
+const HEDGE_TIMING_SEC_BUCKETS: &[f64] = &[
+    0.005, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3, 0.35, 0.4,
+    0.5, 0.75, 1.0, 2.0, 5.0,
+];
+
 /// How a single checkpoint contents request to one peer ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ContentRequestOutcome {
@@ -60,6 +69,24 @@ impl HedgeEvent {
             Self::Sent => "sent",
             Self::Won => "won",
             Self::NoCandidate => "no_candidate",
+        }
+    }
+}
+
+/// How the wait for a second peer ended in a download near the release frontier.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum OtherPeerWaitOutcome {
+    /// A peer that hadn't been asked yet announced the checkpoint while the download was running.
+    Announced,
+    /// The download ended before any peer that hadn't been asked announced the checkpoint.
+    NotAnnounced,
+}
+
+impl OtherPeerWaitOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Announced => "announced",
+            Self::NotAnnounced => "not_announced",
         }
     }
 }
@@ -171,6 +198,58 @@ impl Metrics {
         }
     }
 
+    /// Records how long after a download's first request a peer that hadn't been asked yet had
+    /// the checkpoint (`Announced`), or how long the download ran without one (`NotAnnounced`).
+    pub fn record_checkpoint_content_other_peer_wait(
+        &self,
+        outcome: OtherPeerWaitOutcome,
+        elapsed: Duration,
+    ) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_content_other_peer_wait
+                .with_label_values(&[outcome.as_str()])
+                .observe(elapsed.as_secs_f64());
+        }
+    }
+
+    /// Records a request to `peer` that is hedged after the peer's slow-response threshold,
+    /// `delay`, instead of after the configured hedge delay.
+    pub fn record_checkpoint_content_slow_peer_hedge_delay(&self, peer: &str, delay: Duration) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_content_slow_peer_hedge_delay
+                .with_label_values(&[peer])
+                .observe(delay.as_secs_f64());
+        }
+    }
+
+    #[cfg(test)]
+    pub fn checkpoint_content_other_peer_waits(&self, outcome: OtherPeerWaitOutcome) -> u64 {
+        self.0
+            .as_ref()
+            .map(|inner| {
+                inner
+                    .checkpoint_content_other_peer_wait
+                    .with_label_values(&[outcome.as_str()])
+                    .get_sample_count()
+            })
+            .unwrap_or(0)
+    }
+
+    #[cfg(test)]
+    pub fn checkpoint_content_slow_peer_hedge_delays(&self, peer: &str) -> u64 {
+        self.0
+            .as_ref()
+            .map(|inner| {
+                inner
+                    .checkpoint_content_slow_peer_hedge_delay
+                    .with_label_values(&[peer])
+                    .get_sample_count()
+            })
+            .unwrap_or(0)
+    }
+
     #[cfg(test)]
     pub fn checkpoint_content_hedges(&self, event: HedgeEvent) -> u64 {
         self.0
@@ -231,6 +310,8 @@ struct Inner {
     checkpoint_content_download_latency: Histogram,
     checkpoint_content_hedges: IntCounterVec,
     checkpoint_content_fallback_requests: IntCounter,
+    checkpoint_content_other_peer_wait: HistogramVec,
+    checkpoint_content_slow_peer_hedge_delay: HistogramVec,
 }
 
 impl Inner {
@@ -322,6 +403,27 @@ impl Inner {
                 "state_sync_checkpoint_content_fallback_requests",
                 "Checkpoint contents requests sent in a download attempt after every earlier \
                  request in that attempt failed.",
+                registry,
+            )
+            .unwrap(),
+            checkpoint_content_other_peer_wait: register_histogram_vec_with_registry!(
+                "state_sync_checkpoint_content_other_peer_wait",
+                "For hedged downloads near the release frontier: with outcome `announced`, the \
+                 time from the first request until a peer that hadn't been asked yet had the \
+                 checkpoint (near zero if one already had it); with outcome `not_announced`, the \
+                 time from the first request until the download ended without such a peer.",
+                &["outcome"],
+                HEDGE_TIMING_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_content_slow_peer_hedge_delay: register_histogram_vec_with_registry!(
+                "state_sync_checkpoint_content_slow_peer_hedge_delay",
+                "With adaptive hedge delays, the shortened hedge delay of each checkpoint \
+                 contents request to a peer that is slow from this node, by peer. Same peer \
+                 labels as state_sync_checkpoint_content_peer_requests.",
+                &["peer_id"],
+                HEDGE_TIMING_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
