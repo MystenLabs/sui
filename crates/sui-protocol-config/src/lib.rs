@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 140;
+const MAX_PROTOCOL_VERSION: u64 = 141;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -426,6 +426,7 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
 //              Disable effects transaction dependencies on mainnet.
 //              Add the staggered-submission duplication signal thresholds.
+// Version 141: Allow allowance spends in gasless transactions on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1352,6 +1353,12 @@ struct FeatureFlags {
     // id.
     #[serde(skip_serializing_if = "is_false")]
     disable_id_leak_verifier: bool,
+
+    // Allow `sui::allowance::balance_spend` in gasless transactions. The spent allowance is
+    // written without storage charges or rebates. Requires `enable_gasless` and `enable_allowances`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    gasless_allowance_spend: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2465,6 +2472,12 @@ impl ProtocolConfig {
 
     pub fn enable_allowances(&self) -> bool {
         self.feature_flags.enable_allowances && self.enable_accumulators()
+    }
+
+    pub fn gasless_allowance_spend(&self) -> bool {
+        self.feature_flags.gasless_allowance_spend
+            && self.enable_gasless()
+            && self.enable_allowances()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -4939,6 +4952,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.disable_id_leak_verifier = true;
                     cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     cfg.feature_flags.disable_effects_tx_dependencies = true;
+                }
+                141 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.gasless_allowance_spend = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
