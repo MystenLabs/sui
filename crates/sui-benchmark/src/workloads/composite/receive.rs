@@ -182,7 +182,13 @@ impl ReceiveLifecycle {
 
 impl Lifecycle for ReceiveLifecycle {
     fn max_step_calls(&self) -> usize {
-        2
+        match self.phase {
+            ReceivePhase::Active {
+                child: Child::AtParent(_),
+                ..
+            } => 2,
+            _ => 1,
+        }
     }
 
     fn in_progress(&self) -> bool {

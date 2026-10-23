@@ -87,7 +87,10 @@ impl OwnedLifecycle {
 
 impl Lifecycle for OwnedLifecycle {
     fn max_step_calls(&self) -> usize {
-        2
+        match self.phase {
+            OwnedPhase::NeedCreate | OwnedPhase::Deleted { .. } => 1,
+            OwnedPhase::Owned { .. } | OwnedPhase::Frozen { .. } => 2,
+        }
     }
 
     fn in_progress(&self) -> bool {
@@ -321,7 +324,10 @@ impl CoinMergeLifecycle {
 
 impl Lifecycle for CoinMergeLifecycle {
     fn max_step_calls(&self) -> usize {
-        2
+        match self.phase {
+            CoinPhase::Coins { .. } => 2,
+            CoinPhase::NeedCoins | CoinPhase::Merged { .. } => 1,
+        }
     }
 
     fn in_progress(&self) -> bool {

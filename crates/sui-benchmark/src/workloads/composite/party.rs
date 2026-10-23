@@ -123,9 +123,11 @@ impl PartyLifecycle {
         // Txs after a stream ends carry no sampled ops. Sampled ops would raise the owned
         // object's versions past the ended stream's assigned versions, and they would never
         // collide. The wrap tx carries none so that the holder is the only object it creates.
+        // Sampled ops reject or abort most creates, which would delay the lifecycle.
         if matches!(
             step,
-            PartyStep::OldStream
+            PartyStep::Create
+                | PartyStep::OldStream
                 | PartyStep::OwnedMutate
                 | PartyStep::RestartStream
                 | PartyStep::Wrap
@@ -151,7 +153,13 @@ impl PartyLifecycle {
 
 impl Lifecycle for PartyLifecycle {
     fn max_step_calls(&self) -> usize {
-        3
+        match self.phase {
+            PartyPhase::NeedCreate => 1,
+            PartyPhase::Owned { .. } | PartyPhase::HandedOff { .. } => 2,
+            PartyPhase::Live { .. }
+            | PartyPhase::StreamEnded { .. }
+            | PartyPhase::Wrapped { .. } => 3,
+        }
     }
 
     fn in_progress(&self) -> bool {

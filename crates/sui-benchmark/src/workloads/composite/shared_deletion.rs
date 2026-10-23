@@ -86,7 +86,11 @@ impl SharedDeletionLifecycle {
 
 impl Lifecycle for SharedDeletionLifecycle {
     fn max_step_calls(&self) -> usize {
-        3
+        match self.phase {
+            SharedDeletionPhase::NeedCreate => 1,
+            SharedDeletionPhase::Live { .. } => 3,
+            SharedDeletionPhase::Deleted { .. } => 2,
+        }
     }
 
     fn in_progress(&self) -> bool {
@@ -104,12 +108,16 @@ impl Lifecycle for SharedDeletionLifecycle {
     fn next_step(&mut self, _ctx: &StepContext) -> Vec<LifecycleCall> {
         let mut rng = get_rng();
         match self.phase.clone() {
-            SharedDeletionPhase::NeedCreate => vec![self.call(
-                "create",
-                vec![],
-                SHARED_DELETE_CREATE,
-                SharedDeletionStep::Create,
-            )],
+            // Sampled ops reject or abort most creates, which would delay the lifecycle.
+            SharedDeletionPhase::NeedCreate => vec![
+                self.call(
+                    "create",
+                    vec![],
+                    SHARED_DELETE_CREATE,
+                    SharedDeletionStep::Create,
+                )
+                .bare(),
+            ],
             SharedDeletionPhase::Live {
                 id,
                 initial_shared_version,
