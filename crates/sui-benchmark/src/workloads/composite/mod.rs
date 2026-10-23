@@ -84,7 +84,8 @@ use upgrade::UpgradeLifecycle;
 
 use super::MultiGas;
 
-const MAX_BATCH_SIZE: usize = 4;
+/// Lifecycle steps take up to three txs each, so a batch has room for a few of them.
+const MAX_BATCH_SIZE: usize = 6;
 
 /// The sponsor's gas coin that pays for coin-sponsored txs.
 const SPONSOR_GAS_IDX: usize = MAX_BATCH_SIZE - 1;
@@ -2054,7 +2055,13 @@ impl Workload<dyn Payload> for CompositeWorkload {
         let mut owned_refs = vec![];
         for (obj_ref, owner) in effects.created() {
             match owner {
-                Owner::Immutable => {
+                // The regulated TEST_COIN also freezes its RegulatedCoinMetadata.
+                Owner::Immutable
+                    if execution_proxy
+                        .get_object(obj_ref.0)
+                        .await
+                        .is_ok_and(|obj| obj.is_package()) =>
+                {
                     self.package_id = Some(obj_ref.0);
                     info!("Composite package id {:?}", self.package_id);
                 }
@@ -2613,7 +2620,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     let split_amount_arg = builder.pure(split_amount).unwrap();
                     let coin = builder.command(Command::SplitCoins(
                         Argument::GasCoin,
-                        vec![split_amount_arg, split_amount_arg, split_amount_arg],
+                        vec![split_amount_arg; MAX_BATCH_SIZE - 1],
                     ));
                     let Argument::Result(coin_idx) = coin else {
                         panic!("SplitCoins should return Result");

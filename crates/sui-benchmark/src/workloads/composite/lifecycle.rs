@@ -192,18 +192,20 @@ pub(super) trait Lifecycle: Send + Sync + std::fmt::Debug {
     fn handle_result(&mut self, step: LifecycleStep, status: &BatchedTransactionStatus);
 }
 
-/// Picks the lifecycles to step this batch among the lifecycles in progress and the idle
-/// lifecycles that decide to start. Candidates are taken in random order while their calls fit
-/// in `budget` txs.
+/// Picks the lifecycles to step this batch while their calls fit in `budget` txs. Lifecycles in
+/// progress come first, in random order, so that a started lifecycle reaches its later steps.
+/// Idle lifecycles that decide to start come next.
 pub(super) fn choose_lifecycles(lifecycles: &[Box<dyn Lifecycle>], budget: usize) -> Vec<usize> {
     let mut rng = get_rng();
-    let mut candidates: Vec<usize> = lifecycles
+    let (mut candidates, mut starting): (Vec<usize>, Vec<usize>) = lifecycles
         .iter()
         .enumerate()
         .filter(|(_, l)| l.in_progress() || rng.gen_bool(l.start_probability()))
         .map(|(i, _)| i)
-        .collect();
+        .partition(|&i| lifecycles[i].in_progress());
     candidates.shuffle(&mut rng);
+    starting.shuffle(&mut rng);
+    candidates.extend(starting);
     let mut remaining = budget;
     candidates.retain(|&i| {
         let calls = lifecycles[i].max_step_calls();
