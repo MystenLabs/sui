@@ -301,6 +301,23 @@ pub struct StateSyncConfig {
     /// defaults to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_adaptive_hedge_delay: Option<bool>,
+
+    /// When true, downloads of checkpoints close to the next one to be released send their
+    /// requests to the peers expected to answer soonest. A peer's expected response time is the
+    /// longer of its connection round-trip time and its fastest recent response time (just the
+    /// round-trip time if it has no recent responses). The first request goes to the connected
+    /// peer with the lowest expected response time among the peers that have announced the
+    /// checkpoint, skipping peers with recent failures. While only one request is in flight, the
+    /// download checks every 10 ms for a peer that has announced the checkpoint since and is
+    /// expected to finish at least 50 ms before the request in flight, and if there is one,
+    /// hedges to it right away instead of waiting for the hedge delay. A request that has
+    /// already run past its expected finish gets no early hedge; it is hedged after the usual
+    /// hedge delay.
+    ///
+    /// Has no effect unless `checkpoint_content_hedge_delay_ms` is set, and only applies near
+    /// the release frontier, where hedging applies. If unspecified, this defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_hedge_to_closer_peer: Option<bool>,
 }
 
 impl StateSyncConfig {
@@ -455,6 +472,11 @@ impl StateSyncConfig {
 
     pub fn checkpoint_content_adaptive_hedge_delay(&self) -> bool {
         self.checkpoint_content_adaptive_hedge_delay
+            .unwrap_or(false)
+    }
+
+    pub fn checkpoint_content_hedge_to_closer_peer(&self) -> bool {
+        self.checkpoint_content_hedge_to_closer_peer
             .unwrap_or(false)
     }
 
