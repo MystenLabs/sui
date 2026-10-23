@@ -149,9 +149,6 @@ pub struct TemporaryStore<'backing> {
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
-    /// The PackageConfig root version used by every package-version rule lookup in this transaction.
-    package_config_root_version: RefCell<Option<SequenceNumber>>,
-
     unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
 }
 
@@ -261,7 +258,6 @@ impl<'backing> TemporaryStore<'backing> {
             invariants: InvariantChecker::default(),
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
-            package_config_root_version: RefCell::new(None),
             unsettled_object_funds,
         }
     }
@@ -296,27 +292,58 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     fn package_config_root_version(&self) -> SuiResult<Option<SequenceNumber>> {
-        // Callers apply their feature gates; keeping this helper ungated makes one selected root
+        // Callers apply their feature gates; keeping this helper ungated makes one assigned root
         // version shared by minversion and forbid-list lookups.
-        if let Some(object) = self.input_objects.get(&SUI_PACKAGE_CONFIG_OBJECT_ID) {
-            return Ok(Some(object.version()));
-        }
-        if let Some(version) = *self.package_config_root_version.borrow() {
-            return Ok(Some(version));
-        }
-        if self
+        let Some(assigned) = self
             .system_object_versions
             .get(&SUI_PACKAGE_CONFIG_OBJECT_ID)
-            .is_none()
-        {
+        else {
             return Ok(None);
+        };
+
+        // An explicit input is already authenticated and will be included in effects through the
+        // ordinary input path. Do not also record it as an implicit read.
+        if let Some(object) = self.input_objects.get(&SUI_PACKAGE_CONFIG_OBJECT_ID) {
+            if object.version() != assigned.version {
+                debug_fatal!(
+                    "explicit PackageConfig input version {:?} does not match assigned version {:?}",
+                    object.version(),
+                    assigned.version
+                );
+                return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+            }
+            return Ok(Some(assigned.version));
         }
+
+        // Reuse the implicit root recorded by an earlier package-policy lookup.
+        if let Some((version, _)) = self
+            .loaded_system_objects
+            .borrow()
+            .get(&SUI_PACKAGE_CONFIG_OBJECT_ID)
+        {
+            if *version != assigned.version {
+                debug_fatal!(
+                    "loaded PackageConfig version {:?} does not match assigned version {:?}",
+                    version,
+                    assigned.version
+                );
+                return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+            }
+            return Ok(Some(assigned.version));
+        }
+
         let object = self
             .load_implicitly_read_system_object(&SUI_PACKAGE_CONFIG_OBJECT_ID)
             .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
-        let version = object.version();
-        *self.package_config_root_version.borrow_mut() = Some(version);
-        Ok(Some(version))
+        if object.version() != assigned.version {
+            debug_fatal!(
+                "implicitly loaded PackageConfig version {:?} does not match assigned version {:?}",
+                object.version(),
+                assigned.version
+            );
+            return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+        }
+        Ok(Some(assigned.version))
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
@@ -767,7 +794,6 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
             loaded_system_objects,
-            package_config_root_version,
             unsettled_object_funds,
             // Execution outcomes can be discarded.
             execution_results: _,
@@ -790,7 +816,6 @@ impl<'backing> TemporaryStore<'backing> {
             post_execution_check_inputs,
             system_object_versions,
             loaded_system_objects,
-            package_config_root_version,
             unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
@@ -1529,5 +1554,43 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
+    }
+}
+
+#[cfg(test)]
+impl<'backing> TemporaryStore<'backing> {
+    pub(crate) fn new_for_testing(
+        store: &'backing dyn BackingStore,
+        input_objects: InputObjects,
+        protocol_config: &'backing ProtocolConfig,
+        system_object_versions: SystemObjectVersions,
+    ) -> Self {
+        Self::new_with_input_objects(
+            store,
+            input_objects,
+            vec![],
+            TransactionDigest::random(),
+            protocol_config,
+            0,
+            system_object_versions,
+            PostExecutionCheckInputs::default(),
+            &EmptyUnsettledObjectFunds,
+        )
+    }
+
+    pub(crate) fn package_config_root_version_for_testing(
+        &self,
+    ) -> SuiResult<Option<SequenceNumber>> {
+        self.package_config_root_version()
+    }
+
+    pub(crate) fn loaded_system_object_version_for_testing(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<SequenceNumber> {
+        self.loaded_system_objects
+            .borrow()
+            .get(&object_id)
+            .map(|(version, _)| *version)
     }
 }

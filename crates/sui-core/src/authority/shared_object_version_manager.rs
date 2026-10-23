@@ -707,7 +707,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use std::collections::{BTreeMap, HashMap};
     use std::sync::Arc;
-    use sui_protocol_config::ProtocolConfig;
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, SystemObjectVersions};
     use sui_types::crypto::{RandomnessRound, get_account_key_pair};
@@ -1105,6 +1105,54 @@ mod tests {
             &InMemoryStorage::default(),
         );
         assert!(versions.get(&SUI_PACKAGE_CONFIG_OBJECT_ID).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_package_config_activation_requires_the_object() {
+        let v140_network =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_protocol_version(ProtocolVersion::new(140))
+                .build();
+        let v141_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(141), Chain::Unknown);
+        let before_creation = TestAuthorityBuilder::new()
+            .with_shared_network_config(&v140_network)
+            .with_protocol_config(v141_config.clone())
+            .build()
+            .await;
+        let before_epoch_store = before_creation.epoch_store_for_testing();
+
+        assert!(!before_epoch_store.package_config_exists());
+        assert!(!before_epoch_store.package_version_rules_active());
+        assert!(
+            before_creation
+                .create_package_config_tx(&before_epoch_store)
+                .is_some()
+        );
+        assert!(
+            implicitly_read_system_objects(&before_epoch_store)
+                .iter()
+                .all(|(id, _)| *id != SUI_PACKAGE_CONFIG_OBJECT_ID)
+        );
+
+        let after_creation = TestAuthorityBuilder::new()
+            .with_protocol_config(v141_config)
+            .build()
+            .await;
+        let after_epoch_store = after_creation.epoch_store_for_testing();
+
+        assert!(after_epoch_store.package_config_exists());
+        assert!(after_epoch_store.package_version_rules_active());
+        assert!(
+            after_creation
+                .create_package_config_tx(&after_epoch_store)
+                .is_none()
+        );
+        assert!(
+            implicitly_read_system_objects(&after_epoch_store)
+                .iter()
+                .any(|(id, _)| *id == SUI_PACKAGE_CONFIG_OBJECT_ID)
+        );
     }
 
     #[tokio::test]
