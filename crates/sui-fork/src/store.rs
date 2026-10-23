@@ -1079,6 +1079,16 @@ impl RpcStateReader for ForkStore {
         Some(self.stock_reader())
     }
 
+    /// Resolve through the overlay, the local store, then the remote, as the inherent
+    /// `ForkStore::get_object_lt_or_eq_version` does for child-object reads.
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> StorageResult<Option<Object>> {
+        ForkStore::get_object_lt_or_eq_version(self, object_id, version).map_err(to_storage_error)
+    }
+
     /// Read a struct layout from `sui-rpc-store`.
     fn get_struct_layout_with_overlay(
         &self,

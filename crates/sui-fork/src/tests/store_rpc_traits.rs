@@ -137,3 +137,62 @@ fn ledger_indexes_delegate_to_rpc_store() {
         .expect("event bitmap iterator should decode rows");
     assert!(event_bitmap_rows.is_empty());
 }
+
+/// The RPC trait's `get_object_lt_or_eq_version`, which serves `GetObject`'s `max_version`,
+/// returns the newest version at or below each bound from the fork's own writes, and `None` where
+/// the newest one is a removal. A bound below every local version would fall back to the remote.
+#[test]
+fn object_lt_or_eq_version_stops_at_removals() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let services = ServiceManager::open(
+        temp.path(),
+        "custom".to_owned(),
+        0,
+        CheckpointDigest::new([9; 32]).into(),
+    )
+    .expect("service manager should open");
+    let mut store = ForkStore::new_for_testing(temp.path().to_path_buf(), services.local_store());
+
+    // Live at 1, wrapped at 3, and unwrapped at 4.
+    let id = ObjectID::random();
+    let live = |version: u64| {
+        Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(version),
+            sui_types::object::Owner::AddressOwner(SuiAddress::ZERO),
+        )
+    };
+    store
+        .apply_object_updates(BTreeMap::from([(id, live(1))]), vec![])
+        .expect("creation should stage");
+    store
+        .apply_object_updates(
+            BTreeMap::new(),
+            vec![ObjectRemoval {
+                object_id: id,
+                version: SequenceNumber::from_u64(3),
+                kind: TombstoneKind::Wrapped,
+            }],
+        )
+        .expect("wrap should stage");
+    store
+        .apply_object_updates(BTreeMap::from([(id, live(4))]), vec![])
+        .expect("unwrap should stage");
+
+    for (bound, expected) in [
+        (1, Some(1)),
+        (2, Some(1)),
+        (3, None),
+        (4, Some(4)),
+        (u64::MAX, Some(4)),
+    ] {
+        let found = RpcStateReader::get_object_lt_or_eq_version(
+            &store,
+            &id,
+            SequenceNumber::from_u64(bound),
+        )
+        .expect("local versions should answer without the remote")
+        .map(|object| object.version().value());
+        assert_eq!(found, expected, "at or below version {bound}");
+    }
+}

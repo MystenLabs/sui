@@ -81,6 +81,17 @@ impl RocksDbStore {
             .multi_get_objects_by_key(object_keys)
     }
 
+    /// See [`crate::execution_cache::ObjectCacheRead::find_object_lt_or_eq_version`].
+    pub fn find_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        self.cache_traits
+            .object_cache_reader
+            .find_object_lt_or_eq_version(object_id, version)
+    }
+
     pub fn get_last_executed_checkpoint(&self) -> Option<VerifiedCheckpoint> {
         self.checkpoint_store
             .get_highest_executed_checkpoint()
@@ -635,6 +646,14 @@ impl RpcStateReader for RestReadStore {
         None
     }
 
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>> {
+        Ok(self.rocks.find_object_lt_or_eq_version(*object_id, version))
+    }
+
     fn get_struct_layout_with_overlay(
         &self,
         struct_tag: &move_core_types::language_storage::StructTag,
@@ -911,6 +930,14 @@ impl RpcStateReader for RpcStoreReadStore {
 
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
         Some(self)
+    }
+
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>> {
+        Ok(self.rocks.find_object_lt_or_eq_version(*object_id, version))
     }
 
     fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
