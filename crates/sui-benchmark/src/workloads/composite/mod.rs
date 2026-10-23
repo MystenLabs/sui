@@ -87,6 +87,9 @@ use super::MultiGas;
 /// Lifecycle steps take up to three txs each, so a batch has room for a few of them.
 const MAX_BATCH_SIZE: usize = 6;
 
+/// The SUI that each lifecycle gas account's address balance receives at init.
+const LIFECYCLE_GAS_FUNDING: u64 = 50_000_000_000;
+
 /// The gas budget of a multisig tx, in gas units.
 const MULTISIG_GAS_UNITS: u64 = 100_000;
 /// The SUI that each multisig account's address balance receives at init, which pays for
@@ -423,6 +426,19 @@ impl CompositeWorkloadConfig {
         }
     }
 
+    fn has_lifecycles(&self) -> bool {
+        [
+            self.party_object_probability,
+            self.shared_deletion_probability,
+            self.receive_probability,
+            self.upgrade_probability,
+            self.owned_object_probability,
+            self.deny_probability,
+        ]
+        .iter()
+        .any(|p| *p > 0.0)
+    }
+
     pub fn with_probability(mut self, name: &'static str, prob: f32) -> Self {
         self.probabilities.insert(name, prob);
         self
@@ -561,6 +577,8 @@ pub struct CompositePayload {
     lifecycles: Vec<Box<dyn Lifecycle>>,
     sponsor: Option<Sponsor>,
     multisig: Option<MultisigAccount>,
+    /// The account whose address balance pays for this payload's bare lifecycle txs.
+    lifecycle_gas: Option<(SuiAddress, Arc<AccountKeyPair>)>,
     /// True if the current batch has a gasless tx. Every tx in a soft bundle must have the
     /// same gas price, so such a batch is submitted tx by tx.
     direct_submission: bool,
@@ -680,6 +698,13 @@ impl MultisigAccount {
             keys,
         }
     }
+}
+
+/// The gas owner of a sponsored tx. `op` is recorded in the tx's `OperationSet`.
+struct TxSponsor {
+    address: SuiAddress,
+    keypair: Arc<AccountKeyPair>,
+    op: Option<&'static str>,
 }
 
 /// The partner payload, which sponsors some of this payload's txs.
@@ -824,7 +849,7 @@ impl CompositePayload {
         keypair: &AccountKeyPair,
         current_epoch: u64,
         lifecycle_call: Option<&LifecycleCall>,
-        sponsor: Option<Sponsor>,
+        sponsor: Option<TxSponsor>,
     ) -> (Transaction, OperationSet) {
         let ops = match lifecycle_call {
             Some(call) if call.bare => vec![],
@@ -838,8 +863,8 @@ impl CompositePayload {
         if let Some(call) = lifecycle_call {
             op_set = op_set.with(call.op);
         }
-        if sponsor.is_some() {
-            op_set = op_set.with(SPONSORED_TX);
+        if let Some(op) = sponsor.as_ref().and_then(|sponsor| sponsor.op) {
+            op_set = op_set.with(op);
         }
         self.metrics
             .lock()
@@ -1364,14 +1389,36 @@ impl Payload for CompositePayload {
             };
             let mut sponsor = None;
             let mut sponsor_coin = None;
-            // Lifecycle txs are never sponsored, because a bare tx's versions depend on its gas.
-            let builder = if lifecycle_call.is_none()
+            let builder = if lifecycle_call.is_some_and(|call| call.bare)
+                && !address_balance_gas_disabled
+                && let Some((address, keypair)) = &self.lifecycle_gas
+            {
+                // A bare tx pays from the lifecycle gas account's address balance, so that no
+                // gas coin version raises the versions it assigns or writes.
+                sponsor = Some(TxSponsor {
+                    address: *address,
+                    keypair: keypair.clone(),
+                    op: None,
+                });
+                let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
+                TestTransactionBuilder::new_with_address_balance_gas(
+                    sender,
+                    rgp,
+                    self.pool.chain_identifier,
+                    current_epoch,
+                    nonce,
+                )
+            } else if lifecycle_call.is_none()
                 && let Some(s) = &self.sponsor
                 && rng.gen_bool(self.config.sponsored_probability as f64)
             {
                 // Validators do not yet accept `WithdrawFrom::Sponsor` withdrawals, so a
                 // sponsored tx withdraws only through its gas.
-                sponsor = Some(s.clone());
+                sponsor = Some(TxSponsor {
+                    address: s.address,
+                    keypair: s.keypair.clone(),
+                    op: Some(SPONSORED_TX),
+                });
                 if !address_balance_gas_disabled && rng.gen_bool(0.5) {
                     // Paid from the sponsor's address balance, because the sponsor is the
                     // gas owner.
@@ -1390,11 +1437,8 @@ impl Payload for CompositePayload {
                     TestTransactionBuilder::new(sender, coin, rgp)
                 }
             } else if !address_balance_gas_disabled
-                && (lifecycle_call.is_some_and(|call| call.bare)
-                    || rng.gen_bool(self.config.address_balance_gas_probability as f64))
+                && rng.gen_bool(self.config.address_balance_gas_probability as f64)
             {
-                // A bare tx pays from the address balance, so that no gas coin version raises
-                // the versions it assigns or writes.
                 let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
                 TestTransactionBuilder::new_with_address_balance_gas(
                     sender,
@@ -1881,6 +1925,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             deny_cap: None,
             deny_list_initial_shared_version: None,
             multisig_accounts: vec![],
+            lifecycle_gas_accounts: vec![],
         }))
     }
 }
@@ -1911,6 +1956,8 @@ pub struct CompositeWorkload {
     deny_list_initial_shared_version: Option<SequenceNumber>,
     /// Indexed by payload.
     multisig_accounts: Vec<MultisigAccount>,
+    /// Indexed by payload.
+    lifecycle_gas_accounts: Vec<(SuiAddress, Arc<AccountKeyPair>)>,
 }
 
 impl CompositeWorkload {
@@ -2545,41 +2592,61 @@ impl Workload<dyn Payload> for CompositeWorkload {
             );
         }
 
-        if self.config.multisig_probability > 0.0
-            && !address_balance_disabled(protocol_config.as_ref())
-        {
-            let amount = MULTISIG_FUNDING;
-            self.multisig_accounts = (0..self.payload_gas.len())
-                .map(|_| MultisigAccount::new())
-                .collect();
+        if !address_balance_disabled(protocol_config.as_ref()) {
+            if self.config.multisig_probability > 0.0 {
+                self.multisig_accounts = (0..self.payload_gas.len())
+                    .map(|_| MultisigAccount::new())
+                    .collect();
+            }
+            if self.config.has_lifecycles() {
+                self.lifecycle_gas_accounts = (0..self.payload_gas.len())
+                    .map(|_| {
+                        let (address, keypair) = get_key_pair::<AccountKeyPair>();
+                        (address, Arc::new(keypair))
+                    })
+                    .collect();
+            }
+        }
+        if !self.multisig_accounts.is_empty() || !self.lifecycle_gas_accounts.is_empty() {
             let mut futures = vec![];
-            for (idx, ((gas_coins, sender, keypair), account)) in
-                itertools::zip_eq(&self.payload_gas, &self.multisig_accounts).enumerate()
-            {
+            for (idx, (gas_coins, sender, keypair)) in self.payload_gas.iter().enumerate() {
+                let recipients: Vec<(SuiAddress, u64)> = self
+                    .multisig_accounts
+                    .get(idx)
+                    .map(|account| (account.address, MULTISIG_FUNDING))
+                    .into_iter()
+                    .chain(
+                        self.lifecycle_gas_accounts
+                            .get(idx)
+                            .map(|(address, _)| (*address, LIFECYCLE_GAS_FUNDING)),
+                    )
+                    .collect();
                 let mut tx_builder = TestTransactionBuilder::new(*sender, gas_coins[0], gas_price);
                 {
                     let builder = tx_builder.ptb_builder_mut();
-                    let amount_arg = builder.pure(amount).unwrap();
-                    let coin =
-                        builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
-                    let Argument::Result(coin_idx) = coin else {
-                        panic!("SplitCoins should return Result");
-                    };
-                    let balance = builder.programmable_move_call(
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        Identifier::new("coin").unwrap(),
-                        Identifier::new("into_balance").unwrap(),
-                        vec![GAS::type_tag()],
-                        vec![Argument::NestedResult(coin_idx, 0)],
-                    );
-                    let recipient = builder.pure(account.address).unwrap();
-                    builder.programmable_move_call(
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        Identifier::new("balance").unwrap(),
-                        Identifier::new("send_funds").unwrap(),
-                        vec![GAS::type_tag()],
-                        vec![balance, recipient],
-                    );
+                    for (recipient, amount) in recipients {
+                        let amount_arg = builder.pure(amount).unwrap();
+                        let coin = builder
+                            .command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+                        let Argument::Result(coin_idx) = coin else {
+                            panic!("SplitCoins should return Result");
+                        };
+                        let balance = builder.programmable_move_call(
+                            SUI_FRAMEWORK_PACKAGE_ID,
+                            Identifier::new("coin").unwrap(),
+                            Identifier::new("into_balance").unwrap(),
+                            vec![GAS::type_tag()],
+                            vec![Argument::NestedResult(coin_idx, 0)],
+                        );
+                        let recipient = builder.pure(recipient).unwrap();
+                        builder.programmable_move_call(
+                            SUI_FRAMEWORK_PACKAGE_ID,
+                            Identifier::new("balance").unwrap(),
+                            Identifier::new("send_funds").unwrap(),
+                            vec![GAS::type_tag()],
+                            vec![balance, recipient],
+                        );
+                    }
                 }
                 let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
                 let proxy_ref = execution_proxy.clone();
@@ -2587,14 +2654,18 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     let effects = proxy_ref
                         .execute_transaction_block(tx)
                         .await
-                        .expect("Multisig account funding should succeed");
+                        .expect("Multisig and lifecycle gas account funding should succeed");
                     (idx, effects)
                 });
             }
             for (idx, effects) in join_all(futures).await {
                 update_gas!(&mut self.payload_gas[idx].0[0], effects);
             }
-            info!("Funded {} multisig accounts", self.multisig_accounts.len());
+            info!(
+                "Funded {} multisig and {} lifecycle gas accounts",
+                self.multisig_accounts.len(),
+                self.lifecycle_gas_accounts.len()
+            );
         }
 
         // split remaining gas coins into 4 equal parts
@@ -2802,6 +2873,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 ),
                 sponsor,
                 multisig: self.multisig_accounts.get(i as usize).cloned(),
+                lifecycle_gas: self.lifecycle_gas_accounts.get(i as usize).cloned(),
                 direct_submission: false,
             }));
         }
