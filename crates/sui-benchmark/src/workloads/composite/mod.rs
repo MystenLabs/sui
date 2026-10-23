@@ -108,18 +108,20 @@ macro_rules! update_gas {
     ($gas:expr, $effects:expr) => {{
         // Look up the tracked gas coin by ObjectID rather than reading whatever
         // `gas_object()` reports — IFFW short-circuits leave `gas_object() == None`
-        // but the input coin is still version-bumped in `mutated()`.
-        let Some(new_gas_ref) = $effects.updated_gas($gas.0) else {
+        // but the input coin is still version-bumped in `mutated()`. A tx paid with
+        // address-balance gas does not use the coin, so the coin is absent. This must not
+        // return early, because the caller may still have results to process.
+        if let Some(new_gas_ref) = $effects.updated_gas($gas.0) {
+            info!(
+                "Updating gas object from {:?} to {:?} for tx {:?}",
+                $gas,
+                new_gas_ref,
+                $effects.digest()
+            );
+            *$gas = new_gas_ref;
+        } else {
             info!("No gas object in effects, skipping update");
-            return;
-        };
-        info!(
-            "Updating gas object from {:?} to {:?} for tx {:?}",
-            $gas,
-            new_gas_ref,
-            $effects.digest()
-        );
-        *$gas = new_gas_ref;
+        }
     }};
 }
 
