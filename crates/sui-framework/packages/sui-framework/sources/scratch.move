@@ -48,6 +48,22 @@ public fun permit<K: copy + drop>(_: internal::Permit<K>): Permit<K> {
     Permit()
 }
 
+/// Adds an entry without requiring a `TxContext`. Restricted to framework-internal callers, and
+/// the permit can only be created by the module that defines `K`.
+public(package) fun add_internal<K: copy + drop, V: drop>(
+    _: internal::Permit<K>,
+    key: K,
+    value: V,
+) {
+    add_impl(hash_type_and_key(key), value)
+}
+
+/// Removes an entry without requiring a `TxContext`. Restricted to framework-internal callers,
+/// and the permit can only be created by the module that defines `K`.
+public(package) fun remove_internal<K: copy + drop, V: drop>(_: internal::Permit<K>, key: K): V {
+    remove_impl(hash_type_and_key(key))
+}
+
 /// Adds the `key`-`value` pair to the scratch store. Requires a `Permit<K>` for the key type.
 /// Aborts with `EEntryAlreadyExists` if there is already an entry for `key`, regardless of its
 /// value type.
