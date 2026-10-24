@@ -51,7 +51,10 @@ sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true, features = ["transport"] }
+tonic-health.workspace = true
 tonic-prost.workspace = true
+tonic-reflection.workspace = true
+tokio-util.workspace = true
 tokio-stream = { workspace = true, optional = true }
 tracing.workspace = true
 

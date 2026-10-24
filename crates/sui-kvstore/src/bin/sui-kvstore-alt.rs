@@ -1,19 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::service::Error;
+use sui_indexer_alt_framework::service::Service;
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::default_committer_config;
+use sui_kvstore::peer_watermarks;
+use sui_kvstore::readiness::ReadinessArgs;
+use sui_kvstore::readiness::wait_until_caught_up;
+use sui_kvstore::rpc::RpcArgs;
+use sui_kvstore::rpc::RpcService;
+use sui_kvstore::rpc::proto::FILE_DESCRIPTOR_SET;
+use sui_kvstore::rpc::proto::v1alpha::watermark_service_server::WatermarkServiceServer;
+use sui_kvstore::rpc::watermark_service::WatermarkService;
 use sui_kvstore::set_write_legacy_data;
 use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
@@ -58,6 +69,12 @@ struct Args {
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
+
+    #[command(flatten)]
+    rpc_args: RpcArgs,
+
+    #[command(flatten)]
+    readiness_args: ReadinessArgs,
 
     #[command(flatten)]
     client_args: ClientArgs,
@@ -126,6 +143,11 @@ async fn main() -> Result<()> {
     )
     .await?;
 
+    // The gRPC server reads the stored watermarks at startup with its own client handle.
+    let rpc_setup = args
+        .rpc_args
+        .rpc_listen_address
+        .map(|rpc_listen_address| (rpc_listen_address, client.clone()));
     let indexer_config = config.clone();
     let committer = config.committer.finish(default_committer_config());
     let bigtable_indexer = BigTableIndexer::new(
@@ -141,10 +163,26 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    let metrics_handle = metrics_service.run().await?;
-    let service = bigtable_indexer.run().await?;
+    let rpc_handle = match rpc_setup {
+        Some((rpc_listen_address, stored_watermark_client)) => Some(
+            start_rpc(
+                rpc_listen_address,
+                args.readiness_args,
+                &bigtable_indexer,
+                stored_watermark_client,
+            )
+            .await?,
+        ),
+        None => None,
+    };
 
-    match service.attach(metrics_handle).main().await {
+    let metrics_handle = metrics_service.run().await?;
+    let mut service = bigtable_indexer.run().await?.attach(metrics_handle);
+    if let Some(rpc_handle) = rpc_handle {
+        service = service.attach(rpc_handle);
+    }
+
+    match service.main().await {
         Ok(()) => {}
         Err(Error::Terminated) => {
             if is_bounded {
@@ -160,4 +198,81 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Starts the kvstore gRPC server on `rpc_listen_address`. Its health checks report ready once
+/// every pipeline has caught up to the stored watermarks read here, at startup, and to the peers
+/// in `readiness_args`.
+async fn start_rpc(
+    rpc_listen_address: SocketAddr,
+    readiness_args: ReadinessArgs,
+    bigtable_indexer: &BigTableIndexer,
+    mut stored_watermark_client: BigTableClient,
+) -> Result<Service> {
+    let pipeline_tasks = bigtable_indexer.pipeline_tasks().to_vec();
+    let watermark_keys: Vec<&str> = pipeline_tasks.iter().map(String::as_str).collect();
+    let startup_watermarks = stored_watermark_client
+        .get_pipeline_watermarks(&watermark_keys)
+        .await
+        .context("Failed to read stored pipeline watermarks")?;
+    let (peer_watermarks, peer_watermarks_handle) =
+        peer_watermarks::follow(&readiness_args.peer_urls)?;
+
+    let durable_progress = bigtable_indexer.durable_progress();
+    let caught_up = wait_until_caught_up(
+        pipeline_tasks,
+        durable_progress.subscribe(),
+        startup_watermarks,
+        peer_watermarks,
+        readiness_args.readiness_max_lag_ms,
+    );
+
+    let rpc_service = RpcService::new(rpc_listen_address);
+    let watermark_service =
+        WatermarkService::new(durable_progress.subscribe(), rpc_service.shutdown_token());
+    let rpc_handle = rpc_service
+        .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+        .add_service(WatermarkServiceServer::new(watermark_service))
+        .run(caught_up)
+        .await?;
+
+    Ok(rpc_handle.attach(peer_watermarks_handle))
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::error::ErrorKind;
+
+    use super::*;
+
+    fn parse(extra: &[&str]) -> Result<Args, clap::Error> {
+        let required = [
+            "sui-kvstore-alt",
+            "instance",
+            "--chain",
+            "mainnet",
+            "--local-ingestion-path",
+            "/tmp",
+        ];
+        Args::try_parse_from(required.iter().chain(extra))
+    }
+
+    #[test]
+    fn grpc_server_is_off_by_default() {
+        let args = parse(&[]).unwrap();
+        assert_eq!(args.rpc_args.rpc_listen_address, None);
+    }
+
+    #[test]
+    fn readiness_flags_require_grpc_server() {
+        let server = ["--rpc-listen-address", "0.0.0.0:7001"];
+        for flag in [
+            ["--peer-url", "http://peer:7001"],
+            ["--readiness-max-lag-ms", "1000"],
+        ] {
+            let error = parse(&flag).err().expect("accepted without the server");
+            assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument, "{flag:?}");
+            parse(&[flag, server].concat()).unwrap();
+        }
+    }
 }
