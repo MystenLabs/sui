@@ -1,0 +1,145 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+// Release and re-claim a party-owned derived object.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-37:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7736800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 39:
+//# run ex::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 41-43:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> ex::m::to_party(Result(0), Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 4, line 45:
+//# view-object 3,0
+Owner: ConsensusAddressOwner( 3, A )
+Version: 3
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 5, lines 47-49:
+// Release a party object: X is deleted.
+//# programmable --sender A --inputs object(2,0) object(3,0)
+//> ex::m::release(Input(0), Input(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 6010999, non_refundable_storage_fee: 601
+
+task 6, lines 51-54:
+// Re-claim as party in a later transaction: X starts a new consensus stream.
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> ex::m::to_party(Result(0), Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 7, line 56:
+//# view-object 3,0
+Owner: ConsensusAddressOwner( 5, A )
+Version: 5
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 8, line 58:
+//# run ex::m::set --sender A --args object(3,0) 1
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2272173, non_refundable_storage_fee: 227
+
+task 9, lines 60-64:
+// Release, claim, party transfer to the same owner in one transaction: the start version is kept.
+//# programmable --sender A --inputs object(2,0) object(3,0) @A
+//> ex::m::release(Input(0), Input(1));
+//> 1: ex::m::claim(Input(0));
+//> ex::m::to_party(Result(1), Input(2))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3518800,  storage_rebate: 3518448, non_refundable_storage_fee: 352
+
+task 10, line 66:
+//# view-object 3,0
+Owner: ConsensusAddressOwner( 5, A )
+Version: 7
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 11, line 68:
+//# run ex::m::set --sender A --args object(3,0) 2
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2272173, non_refundable_storage_fee: 227
+
+task 12, lines 70-75:
+// Release, claim, party transfer to a different owner in one transaction: the start version
+// changes.
+//# programmable --sender A --inputs object(2,0) object(3,0) @B
+//> ex::m::release(Input(0), Input(1));
+//> 1: ex::m::claim(Input(0));
+//> ex::m::to_party(Result(1), Input(2))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3518800,  storage_rebate: 3518448, non_refundable_storage_fee: 352
+
+task 13, line 77:
+//# view-object 3,0
+Owner: ConsensusAddressOwner( 9, B )
+Version: 9
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 14, line 79:
+//# run ex::m::set --sender B --args object(3,0) 3
+mutated: object(0,1), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 1284272, non_refundable_storage_fee: 128
+
+task 15, line 81:
+//# view-object 3,0
+Owner: ConsensusAddressOwner( 9, B )
+Version: 10
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 3u64,
+}

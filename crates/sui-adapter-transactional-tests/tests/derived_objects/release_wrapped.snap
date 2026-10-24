@@ -1,0 +1,156 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+// Release and re-claim a derived object that is wrapped, either as an object or as a bare UID.
+
+init:
+A: object(0,0)
+
+task 1, lines 8-53:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9226400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 55:
+//# run ex::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 57-59:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 4, lines 61-62:
+// X is wrapped.
+//# run ex::m::wrap --sender A --args object(3,0)
+created: object(4,0)
+mutated: object(0,0)
+wrapped: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2211379, non_refundable_storage_fee: 221
+
+task 5, lines 64-67:
+// Unwrap and release: X is unwrapped_then_deleted.
+//# programmable --sender A --inputs object(2,0) object(4,0)
+//> 0: ex::m::unwrap(Input(1));
+//> ex::m::release(Input(0), Result(0))
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(4,0)
+unwrapped_then_deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 6223778, non_refundable_storage_fee: 622
+
+task 6, lines 69-72:
+// Claim X again in a later transaction: X is created.
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 7, line 74:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 6
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 8, line 76:
+//# run ex::m::wrap --sender A --args object(3,0)
+created: object(8,0)
+mutated: object(0,0)
+wrapped: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2211379, non_refundable_storage_fee: 221
+
+task 9, lines 78-83:
+// Unwrap, release, claim, transfer in one transaction: X is unwrapped.
+//# programmable --sender A --inputs object(2,0) object(8,0) @A
+//> 0: ex::m::unwrap(Input(1));
+//> ex::m::release(Input(0), Result(0));
+//> 2: ex::m::claim(Input(0));
+//> TransferObjects([Result(2)], Input(2))
+mutated: object(0,0), object(2,0)
+unwrapped: object(3,0)
+deleted: object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 3731227, non_refundable_storage_fee: 373
+
+task 10, line 85:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 8
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 11, line 87:
+//# run ex::m::wrap --sender A --args object(3,0)
+created: object(11,0)
+mutated: object(0,0)
+wrapped: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2211379, non_refundable_storage_fee: 221
+
+task 12, lines 89-94:
+// Unwrap, release, claim, re-wrap in one transaction: X stays wrapped and is not in the effects.
+//# programmable --sender A --inputs object(2,0) object(11,0)
+//> 0: ex::m::unwrap(Input(1));
+//> ex::m::release(Input(0), Result(0));
+//> 2: ex::m::claim(Input(0));
+//> ex::m::wrap(Result(2))
+created: object(12,0)
+mutated: object(0,0), object(2,0)
+deleted: object(11,0)
+gas summary: computation_cost: 1000000, storage_cost: 3731600,  storage_rebate: 3731227, non_refundable_storage_fee: 373
+
+task 13, lines 96-98:
+//# programmable --sender A --inputs object(2,0) object(12,0)
+//> 0: ex::m::unwrap(Input(1));
+//> ex::m::release(Input(0), Result(0))
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(12,0)
+unwrapped_then_deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 6223778, non_refundable_storage_fee: 622
+
+task 14, lines 100-102:
+// X is claimed as a bare UID inside a holder and never becomes an object, so X is not in the
+// effects.
+//# run ex::m::claim_into_holder --sender A --args object(2,0)
+created: object(3,1), object(14,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6239600,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 15, lines 104-105:
+// Releasing the bare UID: X is unwrapped_then_deleted.
+//# run ex::m::release_from_holder --sender A --args object(2,0) object(14,0)
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(14,0)
+unwrapped_then_deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 6238976, non_refundable_storage_fee: 624
+
+task 16, line 107:
+//# run ex::m::claim_into_holder --sender A --args object(2,0)
+created: object(3,1), object(16,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6239600,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 17, line 109:
+//# run ex::m::release_from_holder --sender A --args object(2,0) object(16,0)
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(16,0)
+unwrapped_then_deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 6238976, non_refundable_storage_fee: 624

@@ -1,0 +1,149 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+// The parent of a derived object is itself derived. Releasing and re-claiming the parent while its
+// child is live keeps the child's claim, so the child cannot be claimed a second time.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-48:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9006000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 50:
+//# run ex::m::create_root --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 52-55:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim_parent(Input(0));
+//> 1: ex::m::claim_child(Result(0));
+//> TransferObjects([Result(0), Result(1)], Input(1))
+created: object(3,0), object(3,1), object(3,2), object(3,3)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 9750800,  storage_rebate: 2218978, non_refundable_storage_fee: 222
+
+task 4, line 57:
+//# view-object 3,1
+Owner: Account Address ( A )
+Version: 3
+Contents: ex::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,1),
+        },
+    },
+}
+
+task 5, line 59:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 3
+Contents: ex::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 6, lines 61-67:
+// Release the child, release the parent, re-claim the parent, re-claim the child.
+//# programmable --sender A --inputs object(2,0) object(3,1) object(3,0) @A
+//> ex::m::release_child(Input(1), Input(2));
+//> ex::m::release_parent(Input(0), Input(1));
+//> 2: ex::m::claim_parent(Input(0));
+//> 3: ex::m::claim_child(Result(2));
+//> TransferObjects([Result(2), Result(3)], Input(3))
+mutated: object(0,0), object(2,0), object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 4765200,  storage_rebate: 4764723, non_refundable_storage_fee: 477
+
+task 7, lines 69-71:
+// Release the parent while the child is live.
+//# programmable --sender A --inputs object(2,0) object(3,1)
+//> ex::m::release_parent(Input(0), Input(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 5957804, non_refundable_storage_fee: 596
+
+task 8, lines 73-77:
+// The re-claimed parent still has the child's claim.
+//# programmable --sender A --inputs object(2,0) true @A
+//> 0: ex::m::claim_parent(Input(0));
+//> ex::m::assert_child_claimed(Result(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 2218978, non_refundable_storage_fee: 222
+
+task 9, lines 79-80:
+//# programmable --sender A --inputs object(2,0) object(3,1)
+//> ex::m::release_parent(Input(0), Input(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 5957804, non_refundable_storage_fee: 596
+
+task 10, lines 82-86:
+// Claiming the live child again aborts with EObjectAlreadyExists.
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim_parent(Input(0));
+//> 1: ex::m::claim_child(Result(0));
+//> TransferObjects([Result(0), Result(1)], Input(1))
+Error: Transaction Effects Status: Move Abort in sui::derived_object::claim (function index 0) at offset 20 at line 50 with clever code 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 0, instruction: 20, function_name: Some("claim") }, 13835058270030528513), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835058270030528513), message: Some("sui::derived_object::claim at offset 20"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("derived_object") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 20)] }), command: Some(1) } }
+
+task 11, lines 88-90:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim_parent(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 2218978, non_refundable_storage_fee: 222
+
+task 12, lines 92-97:
+// The same within one transaction: release and re-claim the parent, then try to claim the child.
+//# programmable --sender A --inputs object(2,0) object(3,1) true @A
+//> ex::m::release_parent(Input(0), Input(1));
+//> 1: ex::m::claim_parent(Input(0));
+//> ex::m::assert_child_claimed(Result(1), Input(2));
+//> TransferObjects([Result(1)], Input(3))
+mutated: object(0,0), object(2,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 3465253, non_refundable_storage_fee: 347
+
+task 13, lines 99-105:
+// Release and re-claim the parent, then claim the live child, in one transaction: aborts with
+// EObjectAlreadyExists.
+//# programmable --sender A --inputs object(2,0) object(3,1) @A
+//> ex::m::release_parent(Input(0), Input(1));
+//> 1: ex::m::claim_parent(Input(0));
+//> 2: ex::m::claim_child(Result(1));
+//> TransferObjects([Result(1), Result(2)], Input(2))
+Error: Transaction Effects Status: Move Abort in sui::derived_object::claim (function index 0) at offset 20 at line 50 with clever code 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 0, instruction: 20, function_name: Some("claim") }, 13835058270030528513), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835058270030528513), message: Some("sui::derived_object::claim at offset 20"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("derived_object") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 20)] }), command: Some(2) } }
+
+task 14, lines 107-108:
+// The original child is still usable.
+//# run ex::m::set --sender A --args object(3,0) 7
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2287371, non_refundable_storage_fee: 229
+
+task 15, line 110:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 12
+Contents: ex::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 7u64,
+}
