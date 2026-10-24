@@ -1707,7 +1707,6 @@ mod tests {
                 controllable_handler,
                 ConcurrentConfig {
                     committer: CommitterConfig {
-                        collect_interval_ms: 10,
                         watermark_interval_ms: 10,
                         ..Default::default()
                     },
@@ -2004,14 +2003,13 @@ mod tests {
         .await
         .unwrap();
 
-        // Near-tip pipeline: commit promptly so its watermark advances without waiting on the
-        // default collector/watermark intervals.
+        // Near-tip pipeline: write watermarks promptly so it advances without waiting on the
+        // default watermark interval.
         indexer
             .concurrent_pipeline(
                 A,
                 ConcurrentConfig {
                     committer: CommitterConfig {
-                        collect_interval_ms: 10,
                         watermark_interval_ms: 10,
                         ..Default::default()
                     },

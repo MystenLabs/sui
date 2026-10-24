@@ -10,8 +10,8 @@ use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
 
+mod batch_floor;
 pub mod concurrent;
-mod flush;
 mod logging;
 mod processor;
 pub mod sequential;
@@ -27,10 +27,6 @@ pub struct CommitterConfig {
     /// Number of concurrent writers per pipeline.
     pub write_concurrency: usize,
 
-    /// Under [`FlushPolicy::Interval`], the collector will check for pending data at least this
-    /// often, in milliseconds. Not used under [`FlushPolicy::WhenIdle`].
-    pub collect_interval_ms: u64,
-
     /// Minimum time between two watermark writes of a concurrent pipeline, in milliseconds. A
     /// watermark that advances once this much time has passed since the previous write is written
     /// immediately; one that advances sooner is written when the gap has passed.
@@ -39,30 +35,18 @@ pub struct CommitterConfig {
     /// Maximum random jitter to add to the watermark interval, in milliseconds.
     pub watermark_interval_jitter_ms: u64,
 
-    /// When the collector cuts a batch from pending rows that are fewer than the pipeline's
-    /// `min_eager_rows`.
+    /// How many rows the collector waits for before it cuts them into a batch. With the default
+    /// of 0, pending rows are cut into a batch as soon as the committer has room for one, so
+    /// batches only grow while the committer is busy. Stores that prefer fewer, larger writes can
+    /// raise this; rows then wait until this many are pending, or until the oldest has waited
+    /// `max_batch_delay_ms`.
     #[serde(default)]
-    pub flush_policy: FlushPolicy,
-}
+    pub min_batch_rows: usize,
 
-/// When a pipeline's collector cuts a batch out of its pending rows and hands it to the committer.
-///
-/// Under every policy, a batch is cut as soon as at least `min_eager_rows` rows are pending. For
-/// sequential pipelines that count includes rows buffered for checkpoints that arrived ahead of
-/// their predecessors, but a batch only ever holds the in-order run starting at the next checkpoint
-/// to commit. The policies differ in when fewer rows than `min_eager_rows` are written.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum FlushPolicy {
-    /// Write whatever is pending every `collect_interval_ms`.
-    #[default]
-    Interval,
-
-    /// Write whatever is pending as soon as no batch the collector handed over earlier is still
-    /// being written. When the pipeline keeps up with its input, each checkpoint is written as soon
-    /// as it has been processed. When writes are the bottleneck, one is always in flight, so rows
-    /// accumulate until `min_eager_rows` are pending. `collect_interval_ms` is not used.
-    WhenIdle,
+    /// Longest time, in milliseconds, that pending rows wait for `min_batch_rows` to be reached
+    /// before they are written anyway. Not used while `min_batch_rows` is 0.
+    #[serde(default = "default_max_batch_delay_ms")]
+    pub max_batch_delay_ms: u64,
 }
 
 /// Per-pipeline ingestion settings.
@@ -108,8 +92,8 @@ struct WatermarkPart {
 }
 
 impl CommitterConfig {
-    pub fn collect_interval(&self) -> Duration {
-        Duration::from_millis(self.collect_interval_ms)
+    pub fn max_batch_delay(&self) -> Duration {
+        Duration::from_millis(self.max_batch_delay_ms)
     }
 
     pub fn watermark_interval(&self) -> Duration {
@@ -204,12 +188,16 @@ impl Default for CommitterConfig {
     fn default() -> Self {
         Self {
             write_concurrency: 5,
-            collect_interval_ms: 500,
             watermark_interval_ms: 500,
             watermark_interval_jitter_ms: 0,
-            flush_policy: FlushPolicy::Interval,
+            min_batch_rows: 0,
+            max_batch_delay_ms: default_max_batch_delay_ms(),
         }
     }
+}
+
+fn default_max_batch_delay_ms() -> u64 {
+    500
 }
 
 #[cfg(test)]

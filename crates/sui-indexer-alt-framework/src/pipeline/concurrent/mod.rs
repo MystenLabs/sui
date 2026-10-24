@@ -26,7 +26,6 @@ use crate::pipeline::concurrent::committer::committer;
 use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
-use crate::pipeline::flush::InFlightWrite;
 use crate::pipeline::processor::processor;
 use crate::store::ConcurrentStore;
 use crate::store::Store;
@@ -70,9 +69,6 @@ pub enum BatchStatus {
 pub trait Handler: Processor {
     type Store: ConcurrentStore;
     type Batch: Default + Send + Sync + 'static;
-
-    /// If at least this many rows are pending, the committer will commit them eagerly.
-    const MIN_EAGER_ROWS: usize = 50;
 
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;
@@ -130,9 +126,6 @@ pub struct ConcurrentConfig {
     /// Processor concurrency. Defaults to adaptive scaling up to the number of CPUs.
     pub fanout: Option<ConcurrencyConfig>,
 
-    /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
-    pub min_eager_rows: Option<usize>,
-
     /// Override for `Handler::MAX_PENDING_ROWS` (backpressure threshold).
     pub max_pending_rows: Option<usize>,
 
@@ -180,8 +173,6 @@ struct BatchedRows<H: Handler> {
     batch_len: usize,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
-    /// Counts this batch as in flight for the collector until the committer has written it.
-    in_flight: InFlightWrite,
 }
 
 impl<H, V> BatchedRows<H>
@@ -195,7 +186,6 @@ where
             batch,
             batch_len,
             watermark,
-            in_flight: Arc::new(crate::pipeline::flush::InFlightWrites::default()).start(),
         }
     }
 }
@@ -260,7 +250,6 @@ pub(crate) fn pipeline<H: Handler>(
         ingestion: _,
         pruner: pruner_config,
         fanout,
-        min_eager_rows,
         max_pending_rows,
         max_watermark_updates,
         processor_channel_size,
@@ -274,7 +263,6 @@ pub(crate) fn pipeline<H: Handler>(
         max: num_cpus::get().max(1),
         dead_band: None,
     });
-    let min_eager_rows = min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
     let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
 
@@ -311,7 +299,6 @@ pub(crate) fn pipeline<H: Handler>(
         collector_tx,
         main_reader_lo.clone(),
         metrics.clone(),
-        min_eager_rows,
         max_pending_rows,
         max_watermark_updates,
     );
@@ -368,7 +355,6 @@ mod tests {
     use crate::metrics::IndexerMetrics;
     use crate::mocks::store::FallibleMockConnection;
     use crate::mocks::store::FallibleMockStore;
-    use crate::pipeline::FlushPolicy;
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::Checkpoint;
     use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -413,7 +399,6 @@ mod tests {
         type Store = FallibleMockStore;
         type Batch = Vec<TestValue>;
 
-        const MIN_EAGER_ROWS: usize = 1000; // High value to disable eager batching
         const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
@@ -712,35 +697,6 @@ mod tests {
         assert_eq!(watermark.checkpoint_hi_inclusive, Some(4));
     }
 
-    /// End to end under `FlushPolicy::WhenIdle`: with eager batching disabled and a collect
-    /// interval that never fires, each checkpoint is still written as soon as the previous write
-    /// finishes, because the committer marks every batch as written.
-    #[tokio::test]
-    async fn test_e2e_pipeline_when_idle() {
-        let config = ConcurrentConfig {
-            committer: CommitterConfig {
-                collect_interval_ms: 60_000,
-                flush_policy: FlushPolicy::WhenIdle,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let setup = TestSetup::new(config, FallibleMockStore::default(), 0).await;
-
-        for i in 0..5 {
-            setup
-                .send_checkpoint_with_timeout(i, Duration::from_millis(200))
-                .await
-                .unwrap();
-        }
-
-        let watermark = setup
-            .store
-            .wait_for_watermark(DataPipeline::NAME, 4, Duration::from_secs(5))
-            .await;
-        assert_eq!(watermark.checkpoint_hi_inclusive, Some(4));
-    }
-
     // ==================== BACK-PRESSURE TESTING ====================
 
     #[tokio::test]
@@ -759,7 +715,10 @@ mod tests {
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
-                collect_interval_ms: 5_000, // Long interval to prevent timer-driven collection
+                // Hold rows in the collector for longer than the test runs, so it fills up to
+                // `MAX_PENDING_ROWS` instead of handing batches to the committer.
+                min_batch_rows: 1000,
+                max_batch_delay_ms: 5_000,
                 write_concurrency: 1,
                 ..Default::default()
             },
@@ -829,10 +788,6 @@ mod tests {
         let config = ConcurrentConfig {
             committer: CommitterConfig {
                 write_concurrency: 1, // Single committer for deterministic blocking
-                // MIN_EAGER_ROWS is 1000 and MAX_PENDING_ROWS is 4, so
-                // this test relies on the collect interval tip to force
-                // batch flushing.
-                collect_interval_ms: 10,
                 ..Default::default()
             },
             fanout: Some(ConcurrencyConfig::Fixed { value: 2 }),
