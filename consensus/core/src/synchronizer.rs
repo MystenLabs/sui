@@ -23,7 +23,7 @@ use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::{
     sync::{mpsc::error::TrySendError, oneshot},
-    task::JoinSet,
+    task::{JoinError, JoinSet},
     time::{Instant, sleep, sleep_until, timeout},
 };
 use tracing::{debug, info, trace, warn};
@@ -35,14 +35,15 @@ use crate::{
     commit::CommitIndex,
     commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
+    core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{ObserverNetworkClient, PeerId, SynchronizerClient, ValidatorNetworkClient},
     peers_pool::PeersPool,
     round_tracker::RoundTracker,
     task::{shutdown_join_set, spawn_blocking},
+    transaction_vote_tracker::TransactionVoteTracker,
 };
-use crate::{core_thread::CoreThreadDispatcher, transaction_vote_tracker::TransactionVoteTracker};
 
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
@@ -103,7 +104,7 @@ impl InflightBlocksMap {
             // check that the number of peers that are already instructed to fetch the block is not
             // higher than the allowed and the `peer` has not already been instructed to do that.
             let peers = inner.entry(block_ref).or_default();
-            if peers.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK && peers.get(&peer).is_none() {
+            if peers.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK && !peers.contains(&peer) {
                 assert!(peers.insert(peer.clone()));
                 blocks.insert(block_ref);
             }
@@ -219,7 +220,6 @@ impl SynchronizerHandle {
     #[cfg(test)]
     /// Creates a mock synchronizer handle for testing
     pub(crate) fn new_for_test() -> Arc<Self> {
-        use tokio::task::JoinSet;
         let (tx, _rx) = channel("test_synchronizer", 1);
         Arc::new(Self {
             commands_sender: tx,
@@ -321,7 +321,6 @@ where
                 receiver,
                 commands_sender.clone(),
                 round_tracker.clone(),
-                peers_pool.clone(),
             );
             tasks.spawn(monitored_future!(fetch_blocks_from_peer_async));
             fetch_block_senders.insert(peer, sender);
@@ -438,7 +437,7 @@ where
                             let timeout = if self.fetch_blocks_scheduler_task.is_empty() {
                                 Instant::now()
                             } else {
-                                Instant::now() + PERIODIC_FETCH_INTERVAL.checked_div(2).unwrap()
+                                Instant::now() + PERIODIC_FETCH_INTERVAL / 2
                             };
 
                             // only reset if it is earlier than the next deadline
@@ -455,30 +454,10 @@ where
                     }
                 },
                 Some(result) = self.fetch_own_last_block_task.join_next(), if !self.fetch_own_last_block_task.is_empty() => {
-                    match result {
-                        Ok(()) => {},
-                        Err(e) => {
-                            if e.is_cancelled() {
-                            } else if e.is_panic() {
-                                std::panic::resume_unwind(e.into_panic());
-                            } else {
-                                panic!("fetch our last block task failed: {e}");
-                            }
-                        },
-                    };
+                    Self::handle_task_result(result, "fetch our last block");
                 },
                 Some(result) = self.fetch_blocks_scheduler_task.join_next(), if !self.fetch_blocks_scheduler_task.is_empty() => {
-                    match result {
-                        Ok(()) => {},
-                        Err(e) => {
-                            if e.is_cancelled() {
-                            } else if e.is_panic() {
-                                std::panic::resume_unwind(e.into_panic());
-                            } else {
-                                panic!("fetch blocks scheduler task failed: {e}");
-                            }
-                        },
-                    };
+                    Self::handle_task_result(result, "fetch blocks scheduler");
                 },
                 () = &mut scheduler_timeout => {
                     // we want to start a new task only if the previous one has already finished.
@@ -495,6 +474,19 @@ where
                         .reset(Instant::now() + PERIODIC_FETCH_INTERVAL);
                 }
             }
+        }
+    }
+
+    // Propagates panics of a finished task. Cancellations are expected during shutdown.
+    fn handle_task_result(result: Result<(), JoinError>, task_name: &str) {
+        let Err(e) = result else {
+            return;
+        };
+        if e.is_cancelled() {
+        } else if e.is_panic() {
+            std::panic::resume_unwind(e.into_panic());
+        } else {
+            panic!("{task_name} task failed: {e}");
         }
     }
 
@@ -517,19 +509,18 @@ where
         mut receiver: Receiver<BlocksGuard>,
         commands_sender: Sender<Command>,
         round_tracker: Arc<RwLock<RoundTracker>>,
-        _peers_pool: Arc<PeersPool>,
     ) {
-        const MAX_RETRIES: u32 = 3;
+        const MAX_ATTEMPTS: u32 = 3;
         let mut requests = FuturesUnordered::new();
 
         loop {
             tokio::select! {
                 Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
-                    let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+                    let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
 
-                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
+                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 0))
                 },
-                Some((response, blocks_guard, retries, _peer, fetch_after_rounds)) = requests.next() => {
+                Some((response, blocks_guard, failed_attempts, _peer, fetch_after_rounds)) = requests.next() => {
                     match response {
                         Ok(blocks) => {
                             if let Err(err) = Self::process_fetched_blocks(blocks,
@@ -550,10 +541,10 @@ where
                         },
                         Err(_) => {
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
-                            if retries <= MAX_RETRIES {
-                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
+                            if failed_attempts < MAX_ATTEMPTS {
+                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, failed_attempts))
                             } else {
-                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {}.", peer.hostname(&context));
+                                warn!("Max attempts {MAX_ATTEMPTS} reached while trying to fetch blocks from peer {}.", peer.hostname(&context));
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
                                 drop(blocks_guard);
                             }
@@ -669,10 +660,7 @@ where
         Ok(())
     }
 
-    fn get_fetch_after_rounds(
-        context: &Arc<Context>,
-        dag_state: Arc<RwLock<DagState>>,
-    ) -> Vec<Round> {
+    fn get_fetch_after_rounds(context: &Context, dag_state: &RwLock<DagState>) -> Vec<Round> {
         let (blocks, gc_round) = {
             let dag_state = dag_state.read();
             (
@@ -712,7 +700,7 @@ where
                         .metrics
                         .node_metrics
                         .invalid_blocks
-                        .with_label_values(&[peer_label.as_str(), "synchronizer", e.clone().name()])
+                        .with_label_values(&[peer_label.as_str(), "synchronizer", e.name()])
                         .inc();
                     info!("Invalid block received from {}: {}", peer, e);
                 })?;
@@ -721,7 +709,7 @@ where
             let now = context.clock.timestamp_utc_ms();
             let drift = verified_block.timestamp_ms().saturating_sub(now);
             if drift > 0 {
-                let peer_hostname = &context
+                let author_hostname = &context
                     .committee
                     .authority(verified_block.author())
                     .hostname;
@@ -729,7 +717,7 @@ where
                     .metrics
                     .node_metrics
                     .block_timestamp_drift_ms
-                    .with_label_values(&[peer_hostname.as_str(), "synchronizer"])
+                    .with_label_values(&[author_hostname.as_str(), "synchronizer"])
                     .inc_by(drift);
 
                 trace!(
@@ -754,7 +742,7 @@ where
         fetch_after_rounds: Vec<Round>,
         fetch_missing_ancestors: bool,
         request_timeout: Duration,
-        mut retries: u32,
+        mut failed_attempts: u32,
     ) -> (
         ConsensusResult<Vec<Bytes>>,
         BlocksGuard,
@@ -767,12 +755,8 @@ where
             request_timeout,
             network_client.fetch_blocks(
                 peer.clone(),
-                blocks_guard
-                    .block_refs
-                    .clone()
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                fetch_after_rounds.clone().into_iter().collect::<Vec<_>>(),
+                blocks_guard.block_refs.iter().copied().collect(),
+                fetch_after_rounds.clone(),
                 fetch_missing_ancestors,
                 request_timeout,
             ),
@@ -786,18 +770,24 @@ where
                 // Add a delay before retrying - if that is needed. If request has timed out then eventually
                 // this will be a no-op.
                 sleep_until(start + request_timeout).await;
-                retries += 1;
+                failed_attempts += 1;
                 Err(err)
             } // network error
             Err(err) => {
                 // timeout
                 sleep_until(start + request_timeout).await;
-                retries += 1;
+                failed_attempts += 1;
                 Err(ConsensusError::NetworkRequestTimeout(err.to_string()))
             }
             Ok(result) => result,
         };
-        (resp, blocks_guard, retries, peer, fetch_after_rounds)
+        (
+            resp,
+            blocks_guard,
+            failed_attempts,
+            peer,
+            fetch_after_rounds,
+        )
     }
 
     fn start_fetch_own_last_block_task(&mut self) {
@@ -835,7 +825,7 @@ where
                                 .metrics
                                 .node_metrics
                                 .invalid_blocks
-                                .with_label_values(&[hostname.as_str(), "synchronizer_own_block", err.clone().name()])
+                                .with_label_values(&[hostname.as_str(), "synchronizer_own_block", err.name()])
                                 .inc();
                             warn!("Invalid block received from {}: {}", authority_index, err);
                         })?;
@@ -968,7 +958,7 @@ where
         if self.commit_sync_failover {
             // Keep missing blocks to those that must be included in fetch request.
             // Filtered out missing blocks that will eventually be fetched with fetch_after_rounds.
-            let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+            let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
         } else if missing_blocks.is_empty() {
             return Ok(());
@@ -1148,21 +1138,23 @@ where
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
-        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
 
         // Pick a random peer (excluding self).
         // Get available peers from the PeersPool
-        let mut peers = peers_pool.get_known_peers();
+        let peers = peers_pool.get_known_peers();
 
         // TODO: in the future it would be possible, temporarily, for an Observer node to not have peers to fetch from.
         // We should change this assertion to allow for this case.
         assert!(!peers.is_empty(), "No known peers to fetch blocks from");
 
-        if cfg!(not(test)) {
-            peers.shuffle(&mut ThreadRng::default());
+        let peer = if cfg!(test) {
+            peers.first()
+        } else {
+            peers.choose(&mut ThreadRng::default())
         }
-
-        let peer = peers.first().unwrap().clone();
+        .unwrap()
+        .clone();
 
         let response = timeout(
             FETCH_REQUEST_TIMEOUT,
@@ -1279,7 +1271,7 @@ where
             authorities.shuffle(&mut ThreadRng::default());
         }
 
-        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
 
         // Send the fetch requests
         for batch in authorities.chunks(num_authorities_per_peer) {
@@ -1300,15 +1292,14 @@ where
                 .collect::<BTreeSet<_>>();
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
-            if let Some(blocks_guard) =
-                inflight_blocks.lock_blocks(block_refs.clone(), peer.clone())
-            {
+            if let Some(blocks_guard) = inflight_blocks.lock_blocks(block_refs, peer.clone()) {
                 info!(
                     "Periodic sync of {} missing blocks from peer {} {:?}: {}",
+                    blocks_guard.block_refs.len(),
                     peer_name.as_str(),
-                    block_refs.len(),
                     peer,
-                    block_refs
+                    blocks_guard
+                        .block_refs
                         .iter()
                         .map(|b| b.to_string())
                         .collect::<Vec<_>>()
@@ -1321,7 +1312,7 @@ where
                     fetch_after_rounds.clone(),
                     false,
                     FETCH_REQUEST_TIMEOUT,
-                    1,
+                    0,
                 ));
             }
         }
@@ -1331,17 +1322,13 @@ where
 
         tokio::pin!(fetcher_timeout);
 
-        loop {
+        // Stop as soon as no pending requests are left, instead of waiting for the timeout.
+        while !request_futures.is_empty() {
             tokio::select! {
-                Some((response, blocks_guard, _retries, peer, fetch_after_rounds)) = request_futures.next() => {
+                Some((response, blocks_guard, _failed_attempts, peer, fetch_after_rounds)) = request_futures.next() => {
                     match response {
                         Ok(fetched_blocks) => {
                             results.push((blocks_guard, fetched_blocks, peer));
-
-                            // no more pending requests are left, just break the loop
-                            if request_futures.is_empty() {
-                                break;
-                            }
                         },
                         Err(_) => {
                             let peer_name = peer.labelname(&context);
@@ -1367,7 +1354,7 @@ where
                                         fetch_after_rounds,
                                         false,
                                         FETCH_REQUEST_TIMEOUT,
-                                        1,
+                                        0,
                                     ));
                                 } else {
                                     debug!("Couldn't acquire locks to fetch blocks from peer {:?}.", next_peer)
@@ -1420,8 +1407,8 @@ mod tests {
         },
         storage::mem_store::MemStore,
         synchronizer::{
-            COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
-            InflightBlocksMap, Synchronizer,
+            COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_FROM_PEERS_TIMEOUT,
+            FETCH_REQUEST_TIMEOUT, InflightBlocksMap, Synchronizer,
         },
     };
     use crate::{
@@ -1916,6 +1903,96 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn fetch_blocks_from_peers_returns_when_no_requests_are_pending() {
+        type TestSynchronizer = Synchronizer<
+            NoopBlockVerifier,
+            MockCoreThreadDispatcher,
+            MockNetworkClient,
+            MockNetworkClient,
+        >;
+
+        // GIVEN
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let inflight_blocks = InflightBlocksMap::new();
+
+        // One missing block per authority 1, 2 & 3, so each peer gets assigned one of them.
+        let blocks = (1..=3)
+            .map(|author| VerifiedBlock::new_for_test(TestBlock::new(1, author).build()))
+            .collect::<Vec<_>>();
+        let missing_blocks = blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<BTreeSet<_>>();
+
+        // Peers 1 & 2 respond immediately, peer 3 times out and there is no peer left to retry.
+        for (i, block) in blocks.iter().enumerate() {
+            let latency = (i == 2).then_some(2 * FETCH_REQUEST_TIMEOUT);
+            mock_client
+                .stub_fetch_blocks(
+                    vec![block.clone()],
+                    AuthorityIndex::new_for_test(i as u32 + 1),
+                    latency,
+                )
+                .await;
+        }
+
+        // WHEN
+        let start = tokio::time::Instant::now();
+        let results = TestSynchronizer::fetch_blocks_from_peers(
+            context.clone(),
+            inflight_blocks.clone(),
+            network_client.clone(),
+            missing_blocks.clone(),
+            dag_state.clone(),
+            peers_pool.clone(),
+        )
+        .await;
+
+        // THEN the successful results are returned once the failed request completes, without
+        // waiting for the overall timeout.
+        assert_eq!(results.len(), 2);
+        assert_eq!(start.elapsed(), FETCH_REQUEST_TIMEOUT);
+        assert!(start.elapsed() < FETCH_FROM_PEERS_TIMEOUT);
+        drop(results);
+        assert_eq!(inflight_blocks.num_of_locked_blocks(), 0);
+
+        // AND WHEN all the missing blocks are already locked by the max allowed number of peers
+        let _guards = (1..=2)
+            .map(|i| {
+                let peer = PeerId::Validator(AuthorityIndex::new_for_test(i));
+                inflight_blocks
+                    .lock_blocks(missing_blocks.clone(), peer)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        let start = tokio::time::Instant::now();
+        let results = TestSynchronizer::fetch_blocks_from_peers(
+            context,
+            inflight_blocks.clone(),
+            network_client,
+            missing_blocks,
+            dag_state,
+            peers_pool,
+        )
+        .await;
+
+        // THEN no request is made and the method returns immediately.
+        assert!(results.is_empty());
+        assert_eq!(start.elapsed(), Duration::ZERO);
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
