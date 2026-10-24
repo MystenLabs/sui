@@ -34,7 +34,7 @@ use crate::handlers::cp_blooms::insert_tx_addresses;
 ///
 /// Checkpoints are processed concurrently and are batched by cp_block_index for commit.
 /// A batch typically contains only a subset of the checkpoints that belong to a block
-/// (batches are flushed on timer or when batch.len() >= MIN_EAGER_ROWS).
+/// (a batch is cut as soon as the committer has room for it).
 /// On conflict, we OR the incoming bits into the existing bloom filter so that partial
 /// writes accumulate correctly across multiple commits.
 pub(crate) struct CpBloomBlocks;

@@ -7,9 +7,9 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
+use sui_indexer_alt_framework::config::warn_ignored_config_key;
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
-use sui_indexer_alt_framework::pipeline::FlushPolicy;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::{self as framework};
@@ -29,14 +29,10 @@ const DEFAULT_WRITE_CONCURRENCY: usize = 256;
 const DEFAULT_WATERMARK_INTERVAL_MS: u64 = 100;
 
 /// Returns the committer defaults used by sui-kvstore before applying config overrides.
-///
-/// Batches are cut as soon as no earlier write of the pipeline is in flight
-/// ([`FlushPolicy::WhenIdle`]), so the collect interval plays no part.
 pub fn default_committer_config() -> CommitterConfig {
     CommitterConfig {
         write_concurrency: DEFAULT_WRITE_CONCURRENCY,
         watermark_interval_ms: DEFAULT_WATERMARK_INTERVAL_MS,
-        flush_policy: FlushPolicy::WhenIdle,
         ..CommitterConfig::default()
     }
 }
@@ -152,24 +148,38 @@ impl BigtablePoolLayer {
 #[serde(default, rename_all = "kebab-case")]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
-    pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
-    pub flush_policy: Option<FlushPolicy>,
+
+    /// Minimum number of pending rows the collector waits for before cutting a batch. `0` cuts a
+    /// batch as soon as the committer has room for it.
+    pub min_batch_rows: Option<usize>,
+
+    /// Longest time, in milliseconds, the oldest pending row waits for `min-batch-rows` to
+    /// accumulate before a batch is cut anyway.
+    pub max_batch_delay_ms: Option<u64>,
+
+    /// Deprecated and ignored: batches are cut as soon as the committer has room; see
+    /// `min-batch-rows` and `max-batch-delay-ms`.
+    pub collect_interval_ms: Option<u64>,
 }
 
 impl CommitterLayer {
     pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
+        if self.collect_interval_ms.is_some() {
+            warn_ignored_config_key("collect-interval-ms");
+        }
+
         CommitterConfig {
             write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
-            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
-            flush_policy: self.flush_policy.unwrap_or(base.flush_policy),
+            min_batch_rows: self.min_batch_rows.unwrap_or(base.min_batch_rows),
+            max_batch_delay_ms: self.max_batch_delay_ms.unwrap_or(base.max_batch_delay_ms),
         }
     }
 }
@@ -185,6 +195,8 @@ pub struct ConcurrentLayer {
     /// `IndexerConfig::max_rows_per_second` when set.
     pub max_rows_per_second: Option<u64>,
     pub fanout: Option<ConcurrencyConfig>,
+    /// Deprecated and ignored: batch size is controlled by the committer's `min-batch-rows` and
+    /// `max-batch-delay-ms`.
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
@@ -205,6 +217,10 @@ impl ConcurrentLayer {
     }
 
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
+        if self.min_eager_rows.is_some() {
+            warn_ignored_config_key("min-eager-rows");
+        }
+
         ConcurrentConfig {
             committer: if let Some(c) = self.committer {
                 c.finish(base.committer)
@@ -218,7 +234,6 @@ impl ConcurrentLayer {
             },
             pruner: None,
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
@@ -246,6 +261,8 @@ pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
     pub fanout: Option<ConcurrencyConfig>,
+    /// Deprecated and ignored: batch size is controlled by the committer's `min-batch-rows` and
+    /// `max-batch-delay-ms`.
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
@@ -277,6 +294,10 @@ impl SequentialLayer {
     }
 
     pub fn finish(self, base: ConcurrentConfig) -> SequentialConfig {
+        if self.min_eager_rows.is_some() {
+            warn_ignored_config_key("min-eager-rows");
+        }
+
         let committer = if let Some(c) = self.committer {
             c.finish(base.committer)
         } else {
@@ -290,7 +311,6 @@ impl SequentialLayer {
                 base.ingestion
             },
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_batch_checkpoints: self.max_batch_checkpoints,
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
@@ -376,31 +396,5 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
             min_cohort_boundary: config.min_cohort_boundary,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Committer settings resolved from a config file the way `sui-kvstore-alt` resolves them.
-    fn resolved_committer(config: &str) -> CommitterConfig {
-        let config: IndexerConfig = toml::from_str(config).unwrap();
-        config.committer.finish(default_committer_config())
-    }
-
-    #[test]
-    fn flush_policy_defaults_to_when_idle_and_can_be_overridden() {
-        // The production config sets no flush policy, so it gets the kvstore default.
-        let committer = resolved_committer("[committer]\nwrite-concurrency = 10\n");
-        assert_eq!(committer.flush_policy, FlushPolicy::WhenIdle);
-        assert_eq!(committer.write_concurrency, 10);
-
-        let committer = resolved_committer("[committer]\nflush-policy = \"interval\"\n");
-        assert_eq!(committer.flush_policy, FlushPolicy::Interval);
-
-        let config: IndexerConfig =
-            toml::from_str("[committer]\nflush-policy = \"when-idle\"\n").unwrap();
-        assert_eq!(config.committer.flush_policy, Some(FlushPolicy::WhenIdle));
     }
 }

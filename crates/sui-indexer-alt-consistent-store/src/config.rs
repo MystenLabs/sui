@@ -6,6 +6,7 @@ use std::num::NonZeroUsize;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework as framework;
+use sui_indexer_alt_framework::config::warn_ignored_config_key;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use tracing::warn;
 
@@ -79,8 +80,19 @@ pub struct PipelineLayer {
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
-    pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
+
+    /// Minimum number of pending rows the collector waits for before cutting a batch. `0` cuts a
+    /// batch as soon as the committer has room for it.
+    pub min_batch_rows: Option<usize>,
+
+    /// Longest time, in milliseconds, the oldest pending row waits for `min-batch-rows` to
+    /// accumulate before a batch is cut anyway.
+    pub max_batch_delay_ms: Option<u64>,
+
+    /// Deprecated and ignored: batches are cut as soon as the committer has room; see
+    /// `min-batch-rows` and `max-batch-delay-ms`.
+    pub collect_interval_ms: Option<u64>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -112,7 +124,6 @@ impl ServiceConfig {
         for_test.ingestion.ingest_concurrency =
             framework::config::ConcurrencyConfig::Fixed { value: 1 };
 
-        for_test.committer.collect_interval_ms = Some(50);
         for_test.committer.watermark_interval_ms = Some(50);
         for_test.committer.write_concurrency = Some(1);
 
@@ -135,12 +146,17 @@ impl PipelineLayer {
 
 impl CommitterLayer {
     pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
+        if self.collect_interval_ms.is_some() {
+            warn_ignored_config_key("collect-interval-ms");
+        }
+
         CommitterConfig {
             write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
-            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
+            min_batch_rows: self.min_batch_rows.unwrap_or(base.min_batch_rows),
+            max_batch_delay_ms: self.max_batch_delay_ms.unwrap_or(base.max_batch_delay_ms),
             ..base
         }
     }
@@ -187,8 +203,10 @@ impl From<CommitterConfig> for CommitterLayer {
     fn from(config: CommitterConfig) -> Self {
         Self {
             write_concurrency: Some(config.write_concurrency),
-            collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
+            min_batch_rows: Some(config.min_batch_rows),
+            max_batch_delay_ms: Some(config.max_batch_delay_ms),
+            collect_interval_ms: None,
         }
     }
 }

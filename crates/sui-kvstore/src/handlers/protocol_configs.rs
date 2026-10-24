@@ -73,5 +73,4 @@ impl Processor for ProtocolConfigsPipeline {
 
 impl BigTableProcessor for ProtocolConfigsPipeline {
     const TABLE: &'static str = tables::protocol_configs::NAME;
-    const MIN_EAGER_ROWS: usize = 1;
 }

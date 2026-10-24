@@ -58,8 +58,10 @@ impl Default for CommitterConfig {
     fn default() -> Self {
         Self {
             write_concurrency: 5,
-            collect_interval_ms: 500,
             watermark_interval_ms: 500,
+            watermark_interval_jitter_ms: 0,
+            min_batch_rows: 0,
+            max_batch_delay_ms: 500,
         }
     }
 }
@@ -78,7 +80,7 @@ impl Default for IngestionConfig {
 }
 ```
 
-This means that by default, the blog post pipeline will have a write concurrency of 5, and the adaptive ingestion controller throttles fetch concurrency as the pipeline's subscriber channel fills.
+This means that by default, the blog post pipeline will have a write concurrency of 5, it writes a batch as soon as the committer has room for one (set `min_batch_rows` to wait for larger batches, for at most `max_batch_delay_ms`), and the adaptive ingestion controller throttles fetch concurrency as the pipeline's subscriber channel fills.
 
 ## Follow-Along
 The following uploads the `blog_post.rs` file to Walrus, and runs the indexer locally with `--last-checkpoint` to verify that the indexer is working correctly.

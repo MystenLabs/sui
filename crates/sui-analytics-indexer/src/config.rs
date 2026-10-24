@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
+use sui_indexer_alt_framework::config::warn_ignored_config_key;
 use sui_indexer_alt_framework::ingestion::{IngestConcurrencyConfig, IngestionConfig};
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
@@ -91,20 +92,35 @@ pub enum OutputStoreConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
-    pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
+
+    /// Minimum number of pending rows the collector waits for before cutting a batch. `0` cuts a
+    /// batch as soon as the committer has room for it.
+    pub min_batch_rows: Option<usize>,
+
+    /// Longest time, in milliseconds, the oldest pending row waits for `min_batch_rows` to
+    /// accumulate before a batch is cut anyway.
+    pub max_batch_delay_ms: Option<u64>,
+
+    /// Deprecated and ignored: batches are cut as soon as the committer has room; see
+    /// `min_batch_rows` and `max_batch_delay_ms`.
+    pub collect_interval_ms: Option<u64>,
 }
 
 impl CommitterLayer {
     pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
+        if self.collect_interval_ms.is_some() {
+            warn_ignored_config_key("collect_interval_ms");
+        }
+
         CommitterConfig {
             write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
-            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: 0,
-            flush_policy: base.flush_policy,
+            min_batch_rows: self.min_batch_rows.unwrap_or(base.min_batch_rows),
+            max_batch_delay_ms: self.max_batch_delay_ms.unwrap_or(base.max_batch_delay_ms),
         }
     }
 }
@@ -114,6 +130,8 @@ pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
     pub fanout: Option<ConcurrencyConfig>,
+    /// Deprecated and ignored: batch size is controlled by the committer's `min_batch_rows` and
+    /// `max_batch_delay_ms`.
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
@@ -174,6 +192,10 @@ impl IngestionLayer {
 
 impl SequentialLayer {
     pub fn finish(self, base: SequentialConfig) -> SequentialConfig {
+        if self.min_eager_rows.is_some() {
+            warn_ignored_config_key("min_eager_rows");
+        }
+
         SequentialConfig {
             committer: if let Some(c) = self.committer {
                 c.finish(base.committer)
@@ -186,7 +208,6 @@ impl SequentialLayer {
                 base.ingestion
             },
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
