@@ -59,6 +59,10 @@ pub(super) enum HedgeEvent {
     /// A hedge request was sent early because a peer that hadn't been asked yet is expected to
     /// answer sooner than the request in flight. Also counted in `Sent`.
     SentToCloserPeer,
+    /// A hedge request was sent early because the request in flight is to a peer that is slow
+    /// from this node and a peer that isn't slow and hadn't been asked yet has the checkpoint.
+    /// Also counted in `Sent`.
+    SentAroundSlowPeer,
     /// The checkpoint's contents came from a hedge request.
     Won,
     /// The hedge delay passed, but no peer that hadn't been asked yet had announced the
@@ -71,6 +75,7 @@ impl HedgeEvent {
         match self {
             Self::Sent => "sent",
             Self::SentToCloserPeer => "sent_to_closer_peer",
+            Self::SentAroundSlowPeer => "sent_around_slow_peer",
             Self::Won => "won",
             Self::NoCandidate => "no_candidate",
         }
@@ -228,6 +233,17 @@ impl Metrics {
         }
     }
 
+    /// Counts a checkpoint contents request to `peer`, which is slow from this node, that is a
+    /// slow-peer probe.
+    pub fn inc_checkpoint_content_slow_peer_probe(&self, peer: &str) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_content_slow_peer_probes
+                .with_label_values(&[peer])
+                .inc();
+        }
+    }
+
     /// Records how long after a download's first request a poll first saw `peer` having the
     /// checkpoint.
     pub fn record_checkpoint_content_peer_announce_delay(&self, peer: &str, delay: Duration) {
@@ -261,6 +277,19 @@ impl Metrics {
                     .checkpoint_content_slow_peer_hedge_delay
                     .with_label_values(&[peer])
                     .get_sample_count()
+            })
+            .unwrap_or(0)
+    }
+
+    #[cfg(test)]
+    pub fn checkpoint_content_slow_peer_probes(&self, peer: &str) -> u64 {
+        self.0
+            .as_ref()
+            .map(|inner| {
+                inner
+                    .checkpoint_content_slow_peer_probes
+                    .with_label_values(&[peer])
+                    .get()
             })
             .unwrap_or(0)
     }
@@ -366,6 +395,7 @@ struct Inner {
     checkpoint_content_fallback_requests: IntCounter,
     checkpoint_content_other_peer_wait: HistogramVec,
     checkpoint_content_slow_peer_hedge_delay: HistogramVec,
+    checkpoint_content_slow_peer_probes: IntCounterVec,
     checkpoint_content_peer_announce_delay: HistogramVec,
 }
 
@@ -449,9 +479,11 @@ impl Inner {
                 "state_sync_checkpoint_content_hedges",
                 "Hedged checkpoint contents download events: sent, sent_to_closer_peer (sent \
                  early because a peer that hadn't been asked yet is expected to answer sooner \
-                 than the request in flight; also counted in sent), won, and no_candidate (the \
-                 hedge delay passed with no other peer having the checkpoint; at most once per \
-                 download attempt).",
+                 than the request in flight; also counted in sent), sent_around_slow_peer (sent \
+                 early because the request in flight is to a peer that is slow from this node \
+                 and a peer that isn't slow and hadn't been asked yet has the checkpoint; also \
+                 counted in sent), won, and no_candidate (the hedge delay passed with no other \
+                 peer having the checkpoint; at most once per download attempt).",
                 &["event"],
                 registry,
             )
@@ -481,6 +513,17 @@ impl Inner {
                  labels as state_sync_checkpoint_content_peer_requests.",
                 &["peer_id"],
                 HEDGE_TIMING_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_content_slow_peer_probes: register_int_counter_vec_with_registry!(
+                "state_sync_checkpoint_content_slow_peer_probes",
+                "With hedging to a closer peer, checkpoint contents requests to a peer that is \
+                 slow from this node that are slow-peer probes, by peer: one in four requests \
+                 that are not hedges, which are not hedged right away just because the peer is \
+                 slow, so that they measure whether it still is. Same peer labels as \
+                 state_sync_checkpoint_content_peer_requests.",
+                &["peer_id"],
                 registry,
             )
             .unwrap(),
