@@ -70,9 +70,6 @@ pub trait Handler: Processor {
     type Store: ConcurrentStore;
     type Batch: Default + Send + Sync + 'static;
 
-    /// If at least this many rows are pending, the committer will commit them eagerly.
-    const MIN_EAGER_ROWS: usize = 50;
-
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;
 
@@ -128,9 +125,6 @@ pub struct ConcurrentConfig {
 
     /// Processor concurrency. Defaults to adaptive scaling up to the number of CPUs.
     pub fanout: Option<ConcurrencyConfig>,
-
-    /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
-    pub min_eager_rows: Option<usize>,
 
     /// Override for `Handler::MAX_PENDING_ROWS` (backpressure threshold).
     pub max_pending_rows: Option<usize>,
@@ -256,7 +250,6 @@ pub(crate) fn pipeline<H: Handler>(
         ingestion: _,
         pruner: pruner_config,
         fanout,
-        min_eager_rows,
         max_pending_rows,
         max_watermark_updates,
         processor_channel_size,
@@ -270,9 +263,10 @@ pub(crate) fn pipeline<H: Handler>(
         max: num_cpus::get().max(1),
         dead_band: None,
     });
-    let min_eager_rows = min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
     let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
-    let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
+    let max_watermark_updates = max_watermark_updates
+        .unwrap_or(H::MAX_WATERMARK_UPDATES)
+        .max(1);
 
     let processor_channel_size = processor_channel_size
         .unwrap_or_else(|| num_cpus::get() / 2)
@@ -307,7 +301,6 @@ pub(crate) fn pipeline<H: Handler>(
         collector_tx,
         main_reader_lo.clone(),
         metrics.clone(),
-        min_eager_rows,
         max_pending_rows,
         max_watermark_updates,
     );
@@ -408,7 +401,6 @@ mod tests {
         type Store = FallibleMockStore;
         type Batch = Vec<TestValue>;
 
-        const MIN_EAGER_ROWS: usize = 1000; // High value to disable eager batching
         const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
@@ -725,7 +717,10 @@ mod tests {
 
         let config = ConcurrentConfig {
             committer: CommitterConfig {
-                collect_interval_ms: 5_000, // Long interval to prevent timer-driven collection
+                // Hold rows in the collector for longer than the test runs, so it fills up to
+                // `MAX_PENDING_ROWS` instead of handing batches to the committer.
+                min_batch_rows: 1000,
+                max_batch_delay_ms: 5_000,
                 write_concurrency: 1,
                 ..Default::default()
             },
@@ -795,10 +790,6 @@ mod tests {
         let config = ConcurrentConfig {
             committer: CommitterConfig {
                 write_concurrency: 1, // Single committer for deterministic blocking
-                // MIN_EAGER_ROWS is 1000 and MAX_PENDING_ROWS is 4, so
-                // this test relies on the collect interval tip to force
-                // batch flushing.
-                collect_interval_ms: 10,
                 ..Default::default()
             },
             fanout: Some(ConcurrencyConfig::Fixed { value: 2 }),

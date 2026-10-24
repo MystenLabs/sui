@@ -22,7 +22,6 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_inverted_index::WatermarkPacing;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
@@ -41,6 +40,7 @@ use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::ObjectStatus;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
+use sui_kvstore::default_committer_config;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -207,7 +207,7 @@ async fn build_indexer(
         IndexerArgs::default(),
         client_args,
         IngestionConfig::default().into(),
-        CommitterConfig::default(),
+        default_committer_config(),
         IndexerConfig::default(),
         PipelineLayer::default(),
         alpha_pipelines,
