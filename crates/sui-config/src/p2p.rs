@@ -319,11 +319,17 @@ pub struct StateSyncConfig {
     /// has the checkpoint, the hedge goes to the one of those peers with the lowest expected
     /// response time. Otherwise, if a peer is expected to finish at least 50 ms before the
     /// request in flight, the hedge goes to it; a request that has already run past its expected
-    /// finish gets no such hedge. One in four requests that are not hedges sent to a slow peer is
-    /// a probe that is not hedged right away just because the peer is slow, so that whether the
-    /// peer is still slow keeps being measured. A request cancelled before its peer's
-    /// slow-response threshold, which counts neither way, is not kept as a sample once the peer
-    /// has a threshold, so it doesn't push out samples that count.
+    /// finish gets no such hedge.
+    ///
+    /// One in four requests that are not hedges sent to a slow peer is a probe that is not hedged
+    /// right away just because the peer is slow. While a peer is slow, only probes add response
+    /// time samples, so once the samples from before it became slow have been replaced or have
+    /// aged out, probes alone decide whether it is still slow and what its fastest recent
+    /// response time is. Other requests to it are hedged right away, which cuts their slow
+    /// responses short while their fast ones still arrive, so recording them would make the peer
+    /// look less slow than it is. A request cancelled before its peer's slow-response threshold,
+    /// which counts neither way, is not recorded once the peer has a threshold, so it doesn't
+    /// push out samples that count.
     ///
     /// Has no effect unless `checkpoint_content_hedge_delay_ms` is set, and only applies near
     /// the release frontier, where hedging applies. If unspecified, this defaults to `false`.
