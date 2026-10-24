@@ -6,6 +6,7 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 pub(crate) mod checked {
 
+    use crate::accumulator_settlement::{ExecutionBatch, execution_batches};
     use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
     use crate::gas_charger::{PaymentKind, PaymentMethod};
@@ -1691,19 +1692,33 @@ pub(crate) mod checked {
                 trace_builder_opt,
             ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
-                SPT::execute::<execution_mode::System<Mode::Error>>(
-                    protocol_config,
-                    metrics,
-                    move_vm,
-                    temporary_store,
-                    store,
-                    tx_ctx,
-                    gas_charger,
-                    None,
-                    pt,
-                    trace_builder_opt,
-                )
-                .map_err(|(e, _)| (e, vec![]))?;
+                for ExecutionBatch {
+                    transaction: pt,
+                    command_indices,
+                } in execution_batches(pt)
+                {
+                    // Each batch updates disjoint accumulator fields. The shared store merges
+                    // their results before effects are finalized for the original transaction.
+                    SPT::execute::<execution_mode::System<Mode::Error>>(
+                        protocol_config,
+                        metrics.clone(),
+                        move_vm,
+                        temporary_store,
+                        store,
+                        tx_ctx.clone(),
+                        gas_charger,
+                        None,
+                        pt,
+                        trace_builder_opt,
+                    )
+                    .map_err(|(e, _)| {
+                        let e = match e.command().and_then(|i| command_indices.get(i)) {
+                            Some(index) => e.with_command_index(*index),
+                            None => e,
+                        };
+                        (e, vec![])
+                    })?;
+                }
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
