@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use std::sync::Mutex;
+
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::warn;
 
 use sui_futures::stream::ConcurrencyConfig as RuntimeConcurrencyConfig;
 
@@ -75,5 +79,18 @@ impl From<ConcurrencyConfig> for RuntimeConcurrencyConfig {
                 c
             }
         }
+    }
+}
+
+/// Log a warning that the config key `key` is set but no longer has any effect. Each key is
+/// reported at most once per process, however many pipelines set it.
+pub fn warn_ignored_config_key(key: &'static str) {
+    static WARNED: Mutex<BTreeSet<&'static str>> = Mutex::new(BTreeSet::new());
+    let first_time = WARNED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(key);
+    if first_time {
+        warn!(key, "Config key is no longer used and is ignored");
     }
 }
