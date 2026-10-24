@@ -735,6 +735,10 @@ impl<'a> ObjectRuntime<'a> {
         self.state.deleted_ids.contains(id)
     }
 
+    pub fn input_owner(&self, id: &ObjectID) -> Option<&Owner> {
+        self.state.input_objects.get(id)
+    }
+
     pub fn is_transferred(&self, id: &ObjectID) -> Option<Owner> {
         self.state
             .transfers
