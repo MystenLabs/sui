@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_ingestion","read_ingestion_data"],"struct":["Config"]};

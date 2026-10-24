@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DENY_LIST_COIN_TYPE_INDEX","DENY_LIST_CREATE_FUNC","DENY_LIST_MODULE"],"fn":["check_coin_deny_list_v1","get_coin_deny_list","get_deny_list_obj_initial_shared_version","get_deny_list_root_object"],"struct":["CoinDenyCap","DenyList","PerTypeDenyList","RegulatedCoinMetadata"]};

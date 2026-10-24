@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StoreData","StoreObjectV1","StoreObjectWrapper"],"fn":["get_store_object"],"struct":["StoreObjectValue"],"type":["StoreObject"]};
