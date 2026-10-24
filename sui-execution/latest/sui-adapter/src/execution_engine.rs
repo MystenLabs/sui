@@ -1375,12 +1375,13 @@ pub(crate) mod checked {
                 };
                 let owner = match fw.withdraw_from {
                     WithdrawFrom::Sender => sender,
-                    WithdrawFrom::Sponsor => {
+                    WithdrawFrom::Sponsor => tx_ctx.sponsor().unwrap_or_else(|| {
                         debug_fatal!(
-                            "WithdrawFrom::Sponsor is not expected in gasless transactions"
+                            "A sponsor withdrawal requires a sponsor and should have been \
+                            checked at signing"
                         );
-                        tx_ctx.sponsor().unwrap_or(sender)
-                    }
+                        sender
+                    }),
                     WithdrawFrom::SenderAllowance { funder, .. } => funder,
                 };
                 let Reservation::MaxAmountU64(amount) = fw.reservation;

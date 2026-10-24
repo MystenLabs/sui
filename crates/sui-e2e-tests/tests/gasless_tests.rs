@@ -8,7 +8,9 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
+use shared_crypto::intent::Intent;
 use sui_core::transaction_driver::SubmitTransactionOptions;
+use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
@@ -20,8 +22,8 @@ use sui_types::{
     messages_grpc::SubmitTxRequest,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        self, Command, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
-        TransactionExpiration, TransactionKind,
+        self, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction, TransactionData,
+        TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
@@ -48,8 +50,16 @@ async fn setup_custom_coin(test_env: &mut TestEnv, funding: &[(u64, SuiAddress)]
 }
 
 fn build_send_funds_ptb(amount: u64, coin_type: TypeTag, recipient: SuiAddress) -> TransactionKind {
-    let mut builder = ProgrammableTransactionBuilder::new();
     let withdraw_arg = FundsWithdrawalArg::balance_from_sender(amount, coin_type.clone());
+    build_withdraw_and_send_ptb(withdraw_arg, coin_type, recipient)
+}
+
+fn build_withdraw_and_send_ptb(
+    withdraw_arg: FundsWithdrawalArg,
+    coin_type: TypeTag,
+    recipient: SuiAddress,
+) -> TransactionKind {
+    let mut builder = ProgrammableTransactionBuilder::new();
     let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
     let balance = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
@@ -978,6 +988,64 @@ async fn test_gasless_rate_limit_rejects() {
         err_str.contains("ValidatorOverloaded") || err_str.contains("retry"),
         "Expected validator overloaded error, got: {err_str}"
     );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_sponsor_withdrawal() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let sponsor = test_env.get_sender(2);
+    let recipient = test_env.get_sender(3);
+
+    let initial_funding = 10_000u64;
+    let transfer_amount = 1000u64;
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(initial_funding, sponsor)]).await;
+
+    // The funds come from the sponsor, who also co-signs as gas owner of a zero-budget tx.
+    let tx_kind = build_withdraw_and_send_ptb(
+        FundsWithdrawalArg::balance_from_sponsor(transfer_amount, coin_type.clone()),
+        coin_type.clone(),
+        recipient,
+    );
+    let mut tx = test_env.gasless_transaction_data(tx_kind, sender, 0, 0);
+    tx.gas_data_mut().owner = sponsor;
+
+    let keystore = &test_env.cluster.wallet.config.keystore;
+    let sender_sig = keystore
+        .sign_secure(&sender, &tx, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let sponsor_sig = keystore
+        .sign_secure(&sponsor, &tx, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let signed_tx = Transaction::from_data(tx, vec![sender_sig, sponsor_sig]);
+
+    let (_, effects) = test_env
+        .cluster
+        .execute_transaction_directly(&signed_tx)
+        .await
+        .unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "Gasless sponsor withdrawal should succeed: {:?}",
+        effects.status()
+    );
+    assert_zero_gas(effects.gas_cost_summary());
+
+    assert_eq!(
+        test_env.get_balance_ab(sponsor, coin_type.clone()),
+        initial_funding - transfer_amount
+    );
+    assert_eq!(
+        test_env.get_balance_ab(recipient, coin_type.clone()),
+        transfer_amount
+    );
+    assert_eq!(test_env.get_balance_ab(sender, coin_type), 0);
 
     test_env.trigger_reconfiguration().await;
 }

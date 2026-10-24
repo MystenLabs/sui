@@ -547,3 +547,156 @@ fn test_allowance_requires_feature_flag() {
         "{err}"
     );
 }
+
+/// A tx from `sender`, with gas owned by `gas_owner`, withdrawing 100 GAS from the sponsor.
+fn sponsor_withdrawal_tx(sender: SuiAddress, gas_owner: SuiAddress) -> TransactionData {
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sponsor(
+        100,
+        GAS::type_tag(),
+    ))
+    .unwrap();
+    TransactionData::new_programmable_allow_sponsor(
+        sender,
+        vec![random_object_ref()],
+        ptb.finish(),
+        1_000_000,
+        1000,
+        gas_owner,
+    )
+}
+
+#[test]
+fn test_sponsor_withdrawal_requires_feature_flag() {
+    // Accumulators on, sponsor withdrawals off.
+    let mut cfg = protocol_config();
+    cfg.set_enable_sponsor_withdrawals_for_testing(false);
+    let tx = sponsor_withdrawal_tx(
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    );
+
+    let err = tx
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(&cfg))
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Explicit sponsor withdrawals are not yet supported"),
+        "{err}"
+    );
+}
+
+#[test]
+fn test_sponsor_withdrawal_allowed_when_enabled() {
+    let mut cfg = protocol_config();
+    cfg.set_enable_sponsor_withdrawals_for_testing(true);
+    let tx = sponsor_withdrawal_tx(
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    );
+
+    tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&cfg))
+        .unwrap();
+}
+
+#[test]
+fn test_sponsor_withdrawal_requires_sponsor() {
+    let mut cfg = protocol_config();
+    cfg.set_enable_sponsor_withdrawals_for_testing(true);
+    let sender = SuiAddress::random_for_testing_only();
+    let tx = sponsor_withdrawal_tx(sender, sender);
+
+    let err = tx
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(&cfg))
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Sponsor withdrawals require a gas owner different from the sender"),
+        "{err}"
+    );
+}
+
+#[test]
+fn test_sponsor_withdrawals_count_towards_max_withdraws() {
+    let mut cfg = protocol_config();
+    cfg.set_enable_sponsor_withdrawals_for_testing(true);
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    for _ in 0..11 {
+        ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sponsor(
+            100,
+            GAS::type_tag(),
+        ))
+        .unwrap();
+    }
+    let tx = TransactionData::new_programmable_allow_sponsor(
+        SuiAddress::random_for_testing_only(),
+        vec![random_object_ref()],
+        ptb.finish(),
+        1_000_000,
+        1000,
+        SuiAddress::random_for_testing_only(),
+    );
+
+    let err = tx
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(&cfg))
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Maximum number of balance withdraw reservations"),
+        "{err}"
+    );
+}
+
+#[test]
+fn test_sponsor_withdraw_reserves_against_sponsor() {
+    let sender = SuiAddress::random_for_testing_only();
+    let sponsor = SuiAddress::random_for_testing_only();
+    let tx = sponsor_withdrawal_tx(sender, sponsor);
+
+    // The reservation is keyed by the gas owner's account, not the sender's.
+    let withdraws = tx
+        .process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl)
+        .unwrap();
+    let sponsor_account = AccumulatorValue::get_field_id(sponsor, &balance_gas_type_tag()).unwrap();
+    assert_eq!(withdraws.len(), 1);
+    assert_eq!(withdraws.get(&sponsor_account).unwrap().0, 100);
+}
+
+#[test]
+fn test_sponsor_withdrawal_aggregates_with_sponsor_address_balance_gas() {
+    let sender = SuiAddress::random_for_testing_only();
+    let sponsor = SuiAddress::random_for_testing_only();
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sponsor(
+        100,
+        GAS::type_tag(),
+    ))
+    .unwrap();
+    // Gas is paid from the sponsor's address balance (empty payment).
+    let tx = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(ptb.finish()),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sponsor,
+            price: 1000,
+            budget: 10_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: ChainIdentifier::from(CheckpointDigest::default()),
+            nonce: 42,
+        },
+    });
+
+    // Both the explicit withdrawal and the gas budget are reserved from the same sponsor account.
+    let withdraws = tx
+        .process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl)
+        .unwrap();
+    let sponsor_account = AccumulatorValue::get_field_id(sponsor, &balance_gas_type_tag()).unwrap();
+    assert_eq!(withdraws.len(), 1);
+    assert_eq!(withdraws.get(&sponsor_account).unwrap().0, 10_000_100);
+}

@@ -3601,10 +3601,25 @@ impl TransactionDataAPI for TransactionDataV1 {
                 match withdraw.withdraw_from {
                     WithdrawFrom::Sender => (),
                     WithdrawFrom::Sponsor => {
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: "Explicit sponsor withdrawals are not yet supported".to_string(),
-                        }
-                        .into());
+                        fp_ensure!(
+                            config.enable_sponsor_withdrawals(),
+                            UserInputError::InvalidWithdrawReservation {
+                                error: "Explicit sponsor withdrawals are not yet supported"
+                                    .to_string(),
+                            }
+                            .into()
+                        );
+                        // Execution only sets a sponsor in the TxContext when the gas owner
+                        // differs from the sender, and fails with an invariant violation otherwise.
+                        fp_ensure!(
+                            self.gas_owner() != self.sender(),
+                            UserInputError::InvalidWithdrawReservation {
+                                error: "Sponsor withdrawals require a gas owner different from \
+                                        the sender"
+                                    .to_string(),
+                            }
+                            .into()
+                        );
                     }
                     // The allowance itself is checked after input loading, in
                     // `check_allowance_inputs`.
