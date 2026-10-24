@@ -1,0 +1,414 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 20 tasks
+
+// A derived object is released and re-created, across checkpoints and within one checkpoint (with
+// a different type). Its history spans every incarnation, and reads at a checkpoint where it is
+// released return nothing.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-43:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7189600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 45-47:
+//# programmable --sender A --inputs @A
+//> 0: test::derived::new();
+//> 1: TransferObjects([Result(0)], Input(0));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 49-51:
+//# programmable --sender A --inputs object(2,0) 1u64 @A
+//> 0: test::derived::claim(Input(0), Input(1));
+//> 1: TransferObjects([Result(0)], Input(2));
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 2279772, non_refundable_storage_fee: 228
+
+task 4, line 53:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 55-62:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "address": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "version": 4
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 6, lines 64-65:
+//# programmable --sender A --inputs object(2,0) object(3,1)
+//> 0: test::derived::release(Input(0), Input(1));
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 6117388, non_refundable_storage_fee: 612
+
+task 7, line 67:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 69-76:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 9, lines 78-80:
+//# programmable --sender A --inputs object(2,0) 2u64 @A
+//> 0: test::derived::claim(Input(0), Input(1));
+//> 1: TransferObjects([Result(0)], Input(2));
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 2279772, non_refundable_storage_fee: 228
+
+task 10, line 82:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 11, lines 84-91:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "address": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "version": 6
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12, lines 93-95:
+// Released and re-created as a different type in separate transactions of one checkpoint.
+//# programmable --sender A --inputs object(2,0) object(3,1)
+//> 0: test::derived::release(Input(0), Input(1));
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 6117388, non_refundable_storage_fee: 612
+
+task 13, lines 97-99:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: test::derived::claim_other(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6057200,  storage_rebate: 2279772, non_refundable_storage_fee: 228
+
+task 14, line 101:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 15, lines 103-113:
+//# run-graphql
+Response: {
+  "data": {
+    "objectVersions": {
+      "nodes": [
+        {
+          "version": 4,
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+              },
+              "json": {
+                "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+                "value": "1"
+              }
+            }
+          }
+        },
+        {
+          "version": 6,
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+              },
+              "json": {
+                "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+                "value": "2"
+              }
+            }
+          }
+        },
+        {
+          "version": 8,
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Other"
+              },
+              "json": {
+                "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 115-131:
+//# run-graphql
+Response: {
+  "data": {
+    "cp1": {
+      "version": 4,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "value": "1"
+          }
+        }
+      }
+    },
+    "cp2": null,
+    "cp3": {
+      "version": 6,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "value": "2"
+          }
+        }
+      }
+    },
+    "cp4": {
+      "version": 8,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Other"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0"
+          }
+        }
+      }
+    },
+    "latest": {
+      "version": 8,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Other"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0"
+          }
+        }
+      }
+    },
+    "root6": {
+      "version": 6,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "value": "2"
+          }
+        }
+      }
+    },
+    "root7": null,
+    "root8": {
+      "version": 8,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Other"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 17, lines 133-149:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "cp1": {
+        "version": 4,
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "value": "1"
+          }
+        }
+      },
+      "cp2": null,
+      "cp3": {
+        "version": 6,
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "value": "2"
+          }
+        }
+      },
+      "cp4": {
+        "version": 8,
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Other"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0"
+          }
+        }
+      },
+      "root6": {
+        "version": 6,
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Child"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "value": "2"
+          }
+        }
+      },
+      "root7": null,
+      "root8": {
+        "version": 8,
+        "contents": {
+          "type": {
+            "repr": "0x499d1f21f859f1b52923a47091183d81c4f0114e76010c39b5c1c472015b4656::derived::Other"
+          },
+          "json": {
+            "id": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 18, lines 151-175:
+//# run-graphql
+Response: {
+  "data": {
+    "claimed": {
+      "asTransactionObject": {
+        "idCreated": true,
+        "idDeleted": false,
+        "inputState": null,
+        "outputState": {
+          "version": 4
+        }
+      }
+    },
+    "released": {
+      "asTransactionObject": {
+        "idCreated": false,
+        "idDeleted": true,
+        "inputState": {
+          "version": 4
+        },
+        "outputState": null
+      }
+    },
+    "reclaimed": {
+      "asTransactionObject": {
+        "idCreated": true,
+        "idDeleted": false,
+        "inputState": null,
+        "outputState": {
+          "version": 6
+        }
+      }
+    },
+    "releasedAgain": {
+      "asTransactionObject": {
+        "idCreated": false,
+        "idDeleted": true,
+        "inputState": {
+          "version": 6
+        },
+        "outputState": null
+      }
+    },
+    "reclaimedAsOther": {
+      "asTransactionObject": {
+        "idCreated": true,
+        "idDeleted": false,
+        "inputState": null,
+        "outputState": {
+          "version": 8
+        }
+      }
+    }
+  }
+}
+
+task 19, lines 177-187:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "children": {
+        "nodes": []
+      },
+      "others": {
+        "nodes": [
+          {
+            "address": "0x1b5f45d073d42d05e803e80cdfe0849abf7ec46f9ed57266df4a0ca941db32c0",
+            "version": 8
+          }
+        ]
+      }
+    }
+  }
+}
