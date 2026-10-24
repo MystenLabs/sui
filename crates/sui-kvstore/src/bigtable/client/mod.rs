@@ -705,6 +705,39 @@ impl BigTableClient {
         Ok(None)
     }
 
+    /// Read the v1 watermark row of every pipeline in `pipelines` with one batched read,
+    /// keyed by pipeline name. Pipelines whose row is missing or lacks the v1 schema are
+    /// absent from the map. Hidden rows (`checkpoint_hi_inclusive == None` or below
+    /// `reader_lo`) are returned as-is so callers decide how to treat them.
+    pub async fn get_pipeline_watermarks(
+        &mut self,
+        pipelines: &[&str],
+    ) -> Result<HashMap<String, WatermarkV1>> {
+        if pipelines.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let pipeline_by_key: HashMap<Vec<u8>, &str> = pipelines
+            .iter()
+            .map(|name| (tables::watermarks::encode_key(name), *name))
+            .collect();
+        let keys: Vec<Vec<u8>> = pipeline_by_key.keys().cloned().collect();
+
+        let rows = self.multi_get(tables::watermarks::NAME, keys, None).await?;
+
+        let mut watermarks = HashMap::with_capacity(rows.len());
+        for (key, row) in rows {
+            let Some(pipeline) = pipeline_by_key.get(&key[..]) else {
+                continue;
+            };
+            if let Some(watermark) = tables::watermarks::decode_v1(&row)? {
+                watermarks.insert(pipeline.to_string(), watermark);
+            }
+        }
+
+        Ok(watermarks)
+    }
+
     /// Write pre-built entries to BigTable.
     ///
     /// On partial failure (some entries succeed, some fail), returns a `PartialWriteError`
@@ -1882,25 +1915,19 @@ impl KeyValueStoreReader for BigTableClient {
             bail!("at least one watermark pipeline must be provided");
         }
 
-        let keys: Vec<Vec<u8>> = pipelines
-            .iter()
-            .map(|name| tables::watermarks::encode_key(name))
-            .collect();
+        let watermarks = self.get_pipeline_watermarks(pipelines).await?;
 
-        let rows = self.multi_get(tables::watermarks::NAME, keys, None).await?;
-
-        if rows.len() != pipelines.len() {
+        // A pipeline whose row is missing or lacks the v1 schema is absent from `watermarks`. A
+        // row is hidden if `checkpoint_hi_inclusive == None` or
+        // `checkpoint_hi_inclusive < reader_lo`. If any pipeline is absent or hidden, every
+        // consumer of this method (RPC/graphql) treats the whole result as missing, resulting
+        // in `Ok(None)`.
+        if watermarks.len() != pipelines.len() {
             return Ok(None);
         }
 
-        // A row is hidden if `checkpoint_hi_inclusive == None` or
-        // `checkpoint_hi_inclusive < reader_lo`. If any pipeline is hidden, every consumer
-        // of this method (RPC/graphql) treats the whole result as missing, resulting in `Ok(None)`.
         let mut min_wm: Option<(u64, WatermarkV1)> = None;
-        for (_, row) in &rows {
-            let Some(wm) = tables::watermarks::decode_v1(row)? else {
-                return Ok(None);
-            };
+        for wm in watermarks.into_values() {
             let Some(cp) = wm.checkpoint_hi_inclusive.filter(|cp| *cp >= wm.reader_lo) else {
                 return Ok(None);
             };

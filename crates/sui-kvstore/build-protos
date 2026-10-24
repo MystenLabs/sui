@@ -4,33 +4,58 @@
 edition = "2024"
 
 [dependencies]
+prost = "0.14"
 tonic-prost-build = "0.14.2"
 protox = "0.9"
 ---
 
+use std::path::Path;
 use std::path::PathBuf;
+
+use prost::Message;
 
 fn main() {
     let crate_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
     let proto_dir = crate_dir.join("proto");
-    let out_dir = crate_dir.join("src/bigtable/proto");
 
-    let fds = protox::Compiler::new(&proto_dir)
+    compile(
+        &proto_dir,
+        &[
+            "google/bigtable/v2/bigtable.proto",
+            "google/bigtable/v2/feature_flags.proto",
+        ],
+        &crate_dir.join("src/bigtable/proto"),
+        None,
+    );
+
+    compile(
+        &proto_dir,
+        &["sui/kvstore/v1alpha/watermark_service.proto"],
+        &crate_dir.join("src/rpc/proto"),
+        Some("sui.kvstore.v1alpha.fds.bin"),
+    );
+}
+
+/// Generates client and server code for `files` into `out_dir`. With `descriptor_file`, also
+/// writes the encoded file descriptor set there, for the gRPC reflection service.
+fn compile(proto_dir: &Path, files: &[&str], out_dir: &Path, descriptor_file: Option<&str>) {
+    let fds = protox::Compiler::new([proto_dir])
         .unwrap()
         .include_source_info(false)
         .include_imports(true)
-        .open_files(&[
-            proto_dir.join("google/bigtable/v2/bigtable.proto"),
-            proto_dir.join("google/bigtable/v2/feature_flags.proto"),
-        ])
+        .open_files(files.iter().map(|file| proto_dir.join(file)))
         .unwrap()
         .file_descriptor_set();
+
+    if let Some(descriptor_file) = descriptor_file {
+        std::fs::write(out_dir.join(descriptor_file), fds.encode_to_vec()).unwrap();
+    }
 
     tonic_prost_build::configure()
         .build_client(true)
         .build_server(true)
         .bytes(".")
-        .out_dir(&out_dir)
+        .out_dir(out_dir)
         .compile_fds(fds)
         .unwrap();
 }

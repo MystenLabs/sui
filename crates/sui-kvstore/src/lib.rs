@@ -3,9 +3,13 @@
 
 mod bigtable;
 pub mod config;
+mod durable_progress;
 mod handlers;
 mod object_status;
+pub mod peer_watermarks;
 mod rate_limiter;
+pub mod readiness;
+pub mod rpc;
 mod store;
 pub mod tables;
 pub mod testing;
@@ -60,6 +64,7 @@ pub use crate::bigtable::client::PoolConfig;
 pub use crate::bigtable::client::bitmap_query::BigTableBitmapSource;
 pub use crate::bigtable::client::bitmap_query::BitmapIndexSpec;
 pub use crate::bigtable::proto::bigtable::v2::RowFilter;
+pub use crate::durable_progress::DurableProgress;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::BitmapIndexHandler;
 pub use crate::handlers::BitmapIndexProcessor;
@@ -191,6 +196,12 @@ pub struct BigTableIndexer {
     /// indexer's Service by [`Self::run`] so bitmap committer tasks are
     /// supervised for panic propagation and coordinated shutdown.
     store_service: Service,
+    /// Per pipeline, the highest committer watermark through which this process's data rows are
+    /// durable.
+    durable_progress: DurableProgress,
+    /// Watermark row key of every enabled pipeline, as recorded by `init_watermark` during
+    /// pipeline registration.
+    pipeline_tasks: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -760,11 +771,27 @@ impl BigTableIndexer {
         Ok(Self {
             indexer,
             store_service: store_runtime_builder.into_service(),
+            durable_progress: store.durable_progress(),
+            pipeline_tasks: store.pipeline_tasks(),
         })
     }
 
     pub fn pipeline_names(&self) -> Vec<&'static str> {
         self.indexer.pipelines().collect()
+    }
+
+    /// The watermark row key of every enabled pipeline, as recorded by `init_watermark` during
+    /// pipeline registration. These are the keys of [`Self::durable_progress`] and of the stored
+    /// watermark rows.
+    pub fn pipeline_tasks(&self) -> &[String] {
+        &self.pipeline_tasks
+    }
+
+    /// Per pipeline, the highest committer watermark through which this process's data rows are
+    /// durable, recorded before the watermark row itself is written. Subscribers observe each
+    /// pipeline's entry as it advances.
+    pub fn durable_progress(&self) -> DurableProgress {
+        self.durable_progress.clone()
     }
 
     /// Run the indexer and return a composed [`Service`] that supervises
