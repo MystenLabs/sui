@@ -39,4 +39,33 @@ module basics::party_obj {
     public fun value(o: &PartyObj): u64 {
         o.value
     }
+
+    /// An address-owned object that wraps a party object, which ends the party object's
+    /// consensus stream.
+    public struct Holder has key {
+        id: UID,
+        inner: PartyObj,
+    }
+
+    public fun wrap(o: PartyObj, recipient: address, ctx: &mut TxContext) {
+        transfer::transfer(Holder { id: object::new(ctx), inner: o }, recipient);
+    }
+
+    /// Unwrap the object onto a new consensus stream.
+    public fun unwrap_to_party(h: Holder, recipient: address) {
+        let Holder { id, inner } = h;
+        id.delete();
+        transfer::public_party_transfer(inner, party::single_owner(recipient));
+    }
+
+    /// Unwrap the object to a plain address.
+    public fun unwrap_to_address(h: Holder, recipient: address) {
+        let Holder { id, inner } = h;
+        id.delete();
+        transfer::public_transfer(inner, recipient);
+    }
+
+    public fun holder_value(h: &Holder): u64 {
+        h.inner.value
+    }
 }
