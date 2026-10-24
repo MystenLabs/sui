@@ -5,6 +5,9 @@ mod auth_channel;
 pub mod bitmap_query;
 mod channel_pool;
 mod flow_control;
+#[cfg(test)]
+mod raw_h2_server;
+mod read_rows_retry;
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -40,11 +43,16 @@ use tonic::transport::ClientTlsConfig;
 
 use auth_channel::AuthChannel;
 use auth_channel::bigtable_features_header;
+pub use channel_pool::ChannelHealthConfig;
 use channel_pool::ChannelPool;
 use channel_pool::ChannelPrimer;
 pub use channel_pool::PoolConfig;
+use channel_pool::is_quarantine_cancellation;
 use flow_control::BatchWriteFlowController;
+use flow_control::WriteAdmission;
 use flow_control::is_overload_error;
+pub use read_rows_retry::ReadRowsRetryConfig;
+use read_rows_retry::ResumableReadRows;
 
 use crate::CheckpointData;
 use crate::EpochData;
@@ -177,6 +185,15 @@ impl ChannelPrimer for BigtablePrimer {
             Ok(())
         })
     }
+
+    fn fetch_credentials<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            if let Some(token_provider) = &self.token_provider {
+                token_provider.token(&[self.policy.as_str()]).await?;
+            }
+            Ok(())
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -188,6 +205,7 @@ pub struct BigTableClient {
     metrics: Option<Arc<KvMetrics>>,
     flow_controller: Option<Arc<BatchWriteFlowController>>,
     app_profile_id: Option<String>,
+    read_rows_retry: ReadRowsRetryConfig,
 }
 
 impl BigTableClient {
@@ -206,6 +224,21 @@ impl BigTableClient {
         let endpoint = Channel::from_shared(format!("http://{host}"))?;
         let pool =
             ChannelPool::new_connected(endpoint, PoolConfig::singleton(), None, None).await?;
+        Ok(Self::for_local_pool(
+            pool,
+            &instance_id,
+            client_name,
+            batch_write_flow_control,
+        ))
+    }
+
+    /// Client over a connected pool, addressing tables of an emulator-style instance.
+    fn for_local_pool(
+        pool: ChannelPool,
+        instance_id: &str,
+        client_name: &str,
+        batch_write_flow_control: bool,
+    ) -> Self {
         let auth_channel = AuthChannel::new(
             pool,
             "https://www.googleapis.com/auth/bigtable.data".to_string(),
@@ -215,7 +248,7 @@ impl BigTableClient {
         let client_name = client_name.to_string();
         let flow_controller = batch_write_flow_control
             .then(|| BatchWriteFlowController::new(client_name.clone(), None));
-        Ok(Self {
+        Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
             batch_write_flow_control: BatchWriteFlowControl::Disabled,
@@ -223,7 +256,8 @@ impl BigTableClient {
             metrics: None,
             flow_controller,
             app_profile_id: None,
-        })
+            read_rows_retry: ReadRowsRetryConfig::default(),
+        }
     }
 
     pub async fn new_remote(
@@ -320,7 +354,14 @@ impl BigTableClient {
             metrics,
             flow_controller,
             app_profile_id,
+            read_rows_retry: ReadRowsRetryConfig::default(),
         })
+    }
+
+    /// Override the gap timeout and attempt budget of ReadRows calls.
+    pub fn with_read_rows_retry(mut self, config: ReadRowsRetryConfig) -> Self {
+        self.read_rows_retry = config;
+        self
     }
 
     pub(crate) fn with_backfill_through(mut self, checkpoint: u64) -> Self {
@@ -746,9 +787,7 @@ impl BigTableClient {
         let mut response = match self.client.clone().mutate_rows(request).await {
             Ok(response) => response.into_inner(),
             Err(status) => {
-                if let Some(write_admission) = write_admission {
-                    write_admission.fail(status.code());
-                }
+                report_write_failure(write_admission, &status);
                 return Err(status.into());
             }
         };
@@ -784,9 +823,7 @@ impl BigTableClient {
                 }
                 Ok(None) => break,
                 Err(status) => {
-                    if let Some(write_admission) = write_admission {
-                        write_admission.fail(status.code());
-                    }
+                    report_write_failure(write_admission, &status);
                     return Err(status.into());
                 }
             }
@@ -827,6 +864,12 @@ impl BigTableClient {
 
     /// Streaming variant of `read_rows`. Returns rows as they arrive from the
     /// underlying gRPC stream rather than collecting into a Vec.
+    ///
+    /// Each attempt is bounded by the client's [`ReadRowsRetryConfig`] gap timeout
+    /// (except the final attempt). An attempt that times out, is cancelled by a channel
+    /// quarantine, fails with `Unavailable`, is refused by a GOAWAY from BigTable, is cut off by
+    /// its connection failing, or is never sent because its connection closed is retried on
+    /// another channel, resuming after the last row this stream yielded.
     pub async fn read_rows_stream(
         &mut self,
         mut request: ReadRowsRequest,
@@ -842,10 +885,15 @@ impl BigTableClient {
                 .with_label_values(&labels)
                 .inc();
         }
-        let response = self.client.clone().read_rows(request).await?.into_inner();
-        let metrics = self.metrics.clone();
-        let client_name = self.client_name.clone();
-        let table_name = table_name.to_owned();
+        let mut read = ResumableReadRows::new(
+            self.client.clone(),
+            request,
+            self.read_rows_retry,
+            self.metrics.clone(),
+            self.client_name.clone(),
+            table_name.to_owned(),
+        );
+        let response = read.open().await?;
 
         Ok(async_stream::try_stream! {
             // Zero-copy accumulator for cell values. BigTable streams cell data
@@ -891,53 +939,66 @@ impl BigTableClient {
             }
 
             let mut response = response;
-            let mut row_key: Option<Bytes> = None;
-            let mut row = vec![];
-            let mut cell_value = CellValue::Empty;
-            let mut cell_name: Option<Bytes> = None;
-            let mut timestamp = 0i64;
+            // Each pass reads one attempt. A failed attempt is replaced by one that resumes
+            // after the last yielded row, discarding any partially assembled row.
+            while let Some(mut attempt) = response.take() {
+                let mut row_key: Option<Bytes> = None;
+                let mut row = vec![];
+                let mut cell_value = CellValue::Empty;
+                let mut cell_name: Option<Bytes> = None;
+                let mut timestamp = 0i64;
 
-            while let Some(message) = response.message().await? {
-                if let Some(ref metrics) = metrics {
-                    report_bt_stats_inner(metrics, &client_name, &table_name, &message.request_stats);
-                }
-                for chunk in message.chunks.into_iter() {
-                    if !chunk.row_key.is_empty() {
-                        row_key = Some(chunk.row_key);
-                    }
-                    match chunk.qualifier {
-                        Some(qualifier) => {
-                            if let Some(name) = cell_name.take() {
-                                row.push((name, cell_value.into_bytes()));
-                                cell_value = CellValue::Empty;
-                            }
-                            cell_name = Some(Bytes::from(qualifier));
-                            timestamp = chunk.timestamp_micros;
-                            cell_value.extend(chunk.value);
+                let failure = loop {
+                    let message = match read.next_message(&mut attempt).await {
+                        Ok(Some(message)) => message,
+                        Ok(None) => break None,
+                        Err(failure) => break Some(failure),
+                    };
+                    read.report_stats(&message.request_stats);
+                    for chunk in message.chunks.into_iter() {
+                        if !chunk.row_key.is_empty() {
+                            row_key = Some(chunk.row_key);
                         }
-                        None => {
-                            if chunk.timestamp_micros == 0 {
-                                cell_value.extend(chunk.value);
-                            } else if chunk.timestamp_micros >= timestamp {
+                        match chunk.qualifier {
+                            Some(qualifier) => {
+                                if let Some(name) = cell_name.take() {
+                                    row.push((name, cell_value.into_bytes()));
+                                    cell_value = CellValue::Empty;
+                                }
+                                cell_name = Some(Bytes::from(qualifier));
                                 timestamp = chunk.timestamp_micros;
-                                cell_value.replace(chunk.value);
+                                cell_value.extend(chunk.value);
+                            }
+                            None => {
+                                if chunk.timestamp_micros == 0 {
+                                    cell_value.extend(chunk.value);
+                                } else if chunk.timestamp_micros >= timestamp {
+                                    timestamp = chunk.timestamp_micros;
+                                    cell_value.replace(chunk.value);
+                                }
                             }
                         }
-                    }
-                    if chunk.row_status.is_some() {
-                        if let Some(RowStatus::CommitRow(_)) = chunk.row_status {
-                            if let Some(name) = cell_name.take() {
-                                row.push((name, cell_value.into_bytes()));
+                        if chunk.row_status.is_some() {
+                            if let Some(RowStatus::CommitRow(_)) = chunk.row_status {
+                                if let Some(name) = cell_name.take() {
+                                    row.push((name, cell_value.into_bytes()));
+                                }
+                                if let Some(key) = row_key.take() {
+                                    read.record_delivered(&key);
+                                    yield (key, std::mem::take(&mut row));
+                                }
                             }
-                            if let Some(key) = row_key.take() {
-                                yield (key, std::mem::take(&mut row));
-                            }
+                            row_key = None;
+                            row = vec![];
+                            cell_value = CellValue::Empty;
+                            cell_name = None;
                         }
-                        row_key = None;
-                        row = vec![];
-                        cell_value = CellValue::Empty;
-                        cell_name = None;
                     }
+                };
+                // Drop the failed attempt's stream before starting the next attempt.
+                drop(attempt);
+                if let Some(failure) = failure {
+                    response = read.resume(failure).await?;
                 }
             }
         })
@@ -1161,9 +1222,9 @@ impl futures::Stream for MultiGetStreamPollWait {
 impl BigTableClient {
     /// Streaming variant of `multi_get`. Rows arrive on the stream as soon as
     /// BigTable writes them on the wire, so downstream stages in a pipeline
-    /// can start work before the full batch completes. Emits rows in arrival
-    /// order, which is not necessarily key order — callers that need stable
-    /// ordering should sort at the end.
+    /// can start work before the full batch completes. Emits rows in the order
+    /// BigTable returns them, which is row-key order rather than the order of
+    /// `keys` — callers that need request order should reorder at the end.
     pub async fn multi_get_stream(
         &mut self,
         table_name: &str,
@@ -1475,8 +1536,9 @@ impl BigTableClient {
     }
 
     /// Streaming variant of `resolve_tx_checkpoints`. Yields
-    /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (arrival
-    /// order, not key order — callers needing a stable order must reorder).
+    /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (row-key
+    /// order, not the order of `tx_sequence_numbers` — callers needing that
+    /// order must reorder).
     pub async fn resolve_tx_checkpoints_stream(
         &mut self,
         tx_sequence_numbers: Vec<u64>,
@@ -1787,6 +1849,16 @@ fn decode_tx_seq_digest_scan_row(
             checkpoint_number,
         },
     ))
+}
+
+/// Report a failed MutateRows to batch-write flow control. A quarantine cancellation is decided
+/// locally and says nothing about BigTable's load, so it is not reported.
+fn report_write_failure(write_admission: Option<WriteAdmission<'_>>, status: &tonic::Status) {
+    if let Some(write_admission) = write_admission
+        && !is_quarantine_cancellation(status)
+    {
+        write_admission.fail(status.code());
+    }
 }
 
 fn report_bt_stats_inner(

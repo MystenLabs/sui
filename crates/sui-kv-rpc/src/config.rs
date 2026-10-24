@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::PoolConfig;
+use sui_kvstore::ReadRowsRetryConfig;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_RENDER_AHEAD: usize = 4;
@@ -570,6 +571,26 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_max_pool_size: Option<usize>,
 
+    /// Detect stalled BigTable channels, quarantine them (cancelling their open
+    /// requests so reads retry on other channels), and replace ones that stay
+    /// unhealthy. Defaults to `true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_channel_health_check: Option<bool>,
+
+    /// Longest a BigTable ReadRows attempt may wait for its response headers
+    /// or its next response message before it is retried on another channel,
+    /// in milliseconds. Defaults to `5000`. The final attempt has no gap
+    /// timeout. A stall before the headers is retried only while
+    /// `bigtable-channel-timeout-ms`, which ends that wait on every attempt, is
+    /// longer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_read_rows_gap_timeout_ms: Option<u64>,
+
+    /// Attempts per BigTable ReadRows call, including the first. Defaults to
+    /// `3`; `1` turns off the gap timeout and retries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_read_rows_max_attempts: Option<u32>,
+
     /// Deprecated and ignored: the `GetServiceInfo` watermark set is derived
     /// from `enable-list-apis` and can no longer be chosen per pipeline.
     /// Still parsed so existing config files keep loading.
@@ -691,7 +712,22 @@ impl KvRpcConfig {
                 .unwrap_or(base.initial_pool_size),
             min_pool_size: self.bigtable_min_pool_size.unwrap_or(base.min_pool_size),
             max_pool_size: self.bigtable_max_pool_size.unwrap_or(base.max_pool_size),
+            health_check: base
+                .health_check
+                .filter(|_| self.bigtable_channel_health_check.unwrap_or(true)),
             ..base
+        }
+    }
+
+    pub fn read_rows_retry(&self) -> ReadRowsRetryConfig {
+        let base = ReadRowsRetryConfig::default();
+        ReadRowsRetryConfig {
+            gap_timeout: self
+                .bigtable_read_rows_gap_timeout_ms
+                .map_or(base.gap_timeout, Duration::from_millis),
+            max_attempts: self
+                .bigtable_read_rows_max_attempts
+                .unwrap_or(base.max_attempts),
         }
     }
 
@@ -729,6 +765,7 @@ impl KvRpcConfig {
             self.request_bigtable_concurrency() > 0,
             "request_bigtable_concurrency must be greater than zero",
         );
+        self.read_rows_retry().validate(self.channel_timeout())?;
         let stages = self.stages();
         for stage in [
             PipelineStage::TxSeqDigest,

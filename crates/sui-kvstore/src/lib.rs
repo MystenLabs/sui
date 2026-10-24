@@ -56,7 +56,9 @@ use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::Transaction;
 
 pub use crate::bigtable::client::BigTableClient;
+pub use crate::bigtable::client::ChannelHealthConfig;
 pub use crate::bigtable::client::PoolConfig;
+pub use crate::bigtable::client::ReadRowsRetryConfig;
 pub use crate::bigtable::client::bitmap_query::BigTableBitmapSource;
 pub use crate::bigtable::client::bitmap_query::BitmapIndexSpec;
 pub use crate::bigtable::proto::bigtable::v2::RowFilter;

@@ -15,6 +15,7 @@ use sui_kvstore::BITMAP_INDEX_PIPELINE;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
+pub use sui_kvstore::ChannelHealthConfig;
 use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::EVENT_BITMAP_INDEX_PIPELINE;
@@ -23,6 +24,7 @@ use sui_kvstore::OBJECTS_PIPELINE;
 use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
 use sui_kvstore::PACKAGES_PIPELINE;
 pub use sui_kvstore::PoolConfig;
+pub use sui_kvstore::ReadRowsRetryConfig;
 use sui_kvstore::TRANSACTIONS_PIPELINE;
 use sui_kvstore::TX_SEQ_DIGEST_PIPELINE;
 use sui_package_resolver::PackageStore;
@@ -439,6 +441,7 @@ impl KvRpcServer {
         registry: &Registry,
         credentials_path: Option<String>,
         pool_config: PoolConfig,
+        read_rows_retry: ReadRowsRetryConfig,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
         monotonic_read_wait_timeout: Duration,
@@ -459,7 +462,8 @@ impl KvRpcServer {
             credentials_path,
             false,
         )
-        .await?;
+        .await?
+        .with_read_rows_retry(read_rows_retry);
         let genesis = client
             .get_checkpoints(&[0])
             .await?

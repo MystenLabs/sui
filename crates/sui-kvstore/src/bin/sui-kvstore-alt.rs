@@ -119,6 +119,8 @@ async fn main() -> Result<()> {
         .bigtable_pool
         .clone()
         .finish(config.bigtable_connection_pool_size);
+    let read_rows_retry = config.read_rows_retry();
+    read_rows_retry.validate(channel_timeout)?;
 
     let registry = prometheus::Registry::new();
     let metrics_service =
@@ -136,7 +138,8 @@ async fn main() -> Result<()> {
         pool_config,
         config.batch_write_flow_control,
     )
-    .await?;
+    .await?
+    .with_read_rows_retry(read_rows_retry);
 
     let indexer_config = config.clone();
     let committer = config.committer.finish(default_committer_config());
