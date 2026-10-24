@@ -8,22 +8,23 @@ use sui_package_resolver::Package;
 use sui_package_resolver::PackageStore;
 use sui_package_resolver::Result;
 
-use crate::task::watermark::KV_PACKAGES_PIPELINE;
+use crate::task::watermark::LEDGER_GRPC_PIPELINE;
 
 use super::streamed_cache_eviction::EvictableCache;
 use super::streamed_store::StreamedStore;
 
-/// Package store for streaming subscriptions that holds packages not yet indexed by the DB.
+/// Package store for streaming subscriptions that holds packages the ledger gRPC service has not
+/// indexed yet.
 ///
-/// Packages from streamed checkpoints are indexed here. Once the `kv_packages` pipeline catches up,
-/// the eviction task removes them, at which point the inner store (LRU → PackageCache → DB) serves
-/// them instead. Each entry records the checkpoint that introduced it, so eviction of an older
-/// checkpoint does not remove a system package that was upgraded at a later checkpoint.
+/// Packages from streamed checkpoints are indexed here. Once the `ledger_grpc` pipeline catches up,
+/// the eviction task removes them, at which point the inner store (LRU → PackageCache → ledger
+/// gRPC) serves them instead. Each entry records the checkpoint that introduced it, so eviction of
+/// an older checkpoint does not remove a system package that was upgraded at a later checkpoint.
 pub(crate) struct StreamedPackageStore<S> {
-    /// Packages from streamed checkpoints not yet in the DB.
+    /// Packages from streamed checkpoints the ledger gRPC service has not indexed yet.
     cache: StreamedStore<AccountAddress, Arc<Package>>,
 
-    /// Fallback store (typically the shared PackageCache → DB).
+    /// Fallback store (typically the shared PackageCache → ledger gRPC).
     inner: S,
 }
 
@@ -58,7 +59,7 @@ impl<S: PackageStore> PackageStore for StreamedPackageStore<S> {
 
 impl<S: Send + Sync> EvictableCache for StreamedPackageStore<S> {
     fn watermark_pipeline(&self) -> &'static str {
-        KV_PACKAGES_PIPELINE
+        LEDGER_GRPC_PIPELINE
     }
 
     fn evict_up_to(&self, indexed_checkpoint: u64) {
