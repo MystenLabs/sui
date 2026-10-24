@@ -264,7 +264,9 @@ pub(crate) fn pipeline<H: Handler>(
         dead_band: None,
     });
     let max_pending_rows = max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
-    let max_watermark_updates = max_watermark_updates.unwrap_or(H::MAX_WATERMARK_UPDATES);
+    let max_watermark_updates = max_watermark_updates
+        .unwrap_or(H::MAX_WATERMARK_UPDATES)
+        .max(1);
 
     let processor_channel_size = processor_channel_size
         .unwrap_or_else(|| num_cpus::get() / 2)
