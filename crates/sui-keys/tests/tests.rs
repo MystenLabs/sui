@@ -372,3 +372,74 @@ async fn keystore_file_permissions_test() {
         "Keystore file permissions should remain 0o600 after operations"
     );
 }
+
+/// ML-DSA-65 derivation at the default path m/94'/784'/0'/0'/0'. The vectors
+/// are shared with the TypeScript SDK's mldsa65-keypair tests.
+#[tokio::test]
+async fn mldsa65_mnemonic_derivation() -> Result<(), anyhow::Error> {
+    const TEST_CASES: [[&str; 3]; 3] = [
+        [
+            "act wing dilemma glory episode region allow mad tourist humble muffin oblige",
+            "suiprivkey1qamkapjn935cx32r206gvzh9u0cscydaf09we9z4uxc9crs5j3c82q5m0tk",
+            "0xd0f33625a23608ac4f3fd938a461ab15ed688af783eb4c54c19ab68e37a420dd",
+        ],
+        [
+            "flag rebel cabbage captain minimum purpose long already valley horn enrich salt",
+            "suiprivkey1ql7gkea080ddh5f3gae0lnfw6t7vhcylupgucp7rcpwnnyhdegax6hx9cww",
+            "0xd6de2b6e6d68114bbb6c4bbe3af4f174dcf51b27e5393b7606203cda8c933a93",
+        ],
+        [
+            "area renew bar language pudding trial small host remind supreme cabbage era",
+            "suiprivkey1q7xkhwyu7a60pjrevj9gatlk3ju3x8svkx5gcgy6zdznafwvxp54swwyjt4",
+            "0x48e9fcc44df5766d6be8e824c2781c40dd196f6a6b2e7244b78b02ab05249d66",
+        ],
+    ];
+
+    for [mnemonic, suiprivkey, address] in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let derived = keystore
+            .import_from_mnemonic(mnemonic, SignatureScheme::MLDSA65, None, None)
+            .await?;
+        assert_eq!(derived, SuiAddress::from_str(address)?);
+        assert_eq!(keystore.export(&derived)?.encode().unwrap(), suiprivkey);
+
+        // Explicit default path gives the same key; a sibling account does not.
+        let mut explicit = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let same = explicit
+            .import_from_mnemonic(
+                mnemonic,
+                SignatureScheme::MLDSA65,
+                Some("m/94'/784'/0'/0'/0'".parse().unwrap()),
+                None,
+            )
+            .await?;
+        assert_eq!(same, derived);
+        let sibling = explicit
+            .import_from_mnemonic(
+                mnemonic,
+                SignatureScheme::MLDSA65,
+                Some("m/94'/784'/1'/0'/0'".parse().unwrap()),
+                None,
+            )
+            .await?;
+        assert_ne!(sibling, derived);
+    }
+
+    // Wrong purpose, and an unhardened level, are both rejected.
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+    for path in ["m/44'/784'/0'/0'/0'", "m/94'/784'/0'/0/0"] {
+        assert!(
+            keystore
+                .import_from_mnemonic(
+                    TEST_CASES[0][0],
+                    SignatureScheme::MLDSA65,
+                    Some(path.parse().unwrap()),
+                    None,
+                )
+                .await
+                .is_err()
+        );
+    }
+
+    Ok(())
+}
