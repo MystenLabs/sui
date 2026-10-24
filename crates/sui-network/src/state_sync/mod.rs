@@ -172,6 +172,30 @@ pub(super) enum ContentResponseTime {
     LongerThan(Duration),
 }
 
+/// With hedging to a closer peer, how a contents request that is not a hedge relates to its
+/// peer's slow flag when it is sent (see [`SLOW_PEER_PROBE_INTERVAL`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SlowPeerRequest {
+    /// The peer was not slow from this node.
+    PeerNotSlow,
+    /// The peer was slow, and the request is a slow-peer probe.
+    Probe,
+    /// The peer was slow, and the request is not a probe.
+    NotProbe,
+}
+
+impl SlowPeerRequest {
+    /// Whether the request's outcome is recorded as a response-time sample (see
+    /// `PeerScore::record_content_response_time`). While a peer is slow, only probes are.
+    /// Other requests to it are hedged right away once a peer that isn't slow has the
+    /// checkpoint, so their slow outcomes are cut short before the peer's slow-response
+    /// threshold while their fast answers still arrive. Recording them would make the peer look
+    /// less slow than it is.
+    pub(super) fn records_response_time(self) -> bool {
+        self != Self::NotProbe
+    }
+}
+
 #[cfg_attr(test, derive(Debug))]
 pub(super) struct PeerScore {
     successes: VecDeque<(Instant, u64 /* response_size_bytes */, Duration)>,
@@ -250,6 +274,8 @@ impl PeerScore {
     /// Records how long a checkpoint contents request that was not a hedge took. Hedge requests
     /// are left out: a hedge is cancelled whenever the request it hedged answers first, however
     /// short a time it has run, so how often hedges are cut short says nothing about the peer.
+    /// With hedging to a closer peer, requests sent while the peer was slow that were not
+    /// slow-peer probes are left out too (see [`SlowPeerRequest::records_response_time`]).
     /// A request that was not a hedge and is cancelled after its peer's slow-response threshold
     /// was slow. One cancelled sooner, for example by a hedge to a closer peer, might still have
     /// answered in time, so `slow_peer_hedge_delay` counts it neither way. With
@@ -337,20 +363,20 @@ impl PeerScore {
             .then_some(threshold)
     }
 
-    /// Called when a contents request that is not a hedge is about to be sent to this peer.
-    /// Returns whether it is a slow-peer probe: every [`SLOW_PEER_PROBE_INTERVAL`]th such request
-    /// sent while the peer is slow is one. Requests sent while the peer isn't slow are not
+    /// Called when a contents request that is not a hedge is about to be sent to this peer, with
+    /// hedging to a closer peer. Every [`SLOW_PEER_PROBE_INTERVAL`]th such request sent while
+    /// the peer is slow is a slow-peer probe. Requests sent while the peer isn't slow are not
     /// counted.
-    pub(super) fn slow_peer_probe_for_new_request(&mut self) -> bool {
+    pub(super) fn classify_new_request(&mut self) -> SlowPeerRequest {
         if self.slow_peer_hedge_delay().is_none() {
-            return false;
+            return SlowPeerRequest::PeerNotSlow;
         }
         self.requests_since_probe += 1;
         if self.requests_since_probe < SLOW_PEER_PROBE_INTERVAL {
-            return false;
+            return SlowPeerRequest::NotProbe;
         }
         self.requests_since_probe = 0;
-        true
+        SlowPeerRequest::Probe
     }
 
     pub(super) fn record_failure(&mut self) {
@@ -665,12 +691,14 @@ impl PeerHeights {
             .and_then(|score| score.slow_peer_hedge_delay())
     }
 
-    /// Called when a contents request that is not a hedge is about to be sent to `peer_id`.
-    /// Returns whether it is a slow-peer probe (see `PeerScore::slow_peer_probe_for_new_request`).
-    pub fn slow_peer_probe_for_new_request(&mut self, peer_id: &PeerId) -> bool {
+    /// Called when a contents request that is not a hedge is about to be sent to `peer_id`, with
+    /// hedging to a closer peer (see `PeerScore::classify_new_request`).
+    pub fn classify_new_request(&mut self, peer_id: &PeerId) -> SlowPeerRequest {
         self.scores
             .get_mut(peer_id)
-            .is_some_and(|score| score.slow_peer_probe_for_new_request())
+            .map_or(SlowPeerRequest::PeerNotSlow, |score| {
+                score.classify_new_request()
+            })
     }
 
     /// The fastest answer among `peer_id`'s recent contents requests that were not hedges (see
@@ -2123,14 +2151,17 @@ const CLOSER_PEER_MIN_GAIN: Duration = Duration::from_millis(50);
 
 /// When hedging to a closer peer, one in this many requests that are not hedges sent to a peer
 /// while it is slow from this node is a slow-peer probe. Requests to a slow peer are otherwise
-/// hedged right away once a peer that isn't slow has the checkpoint, so most of them are
-/// cancelled before the slow peer's slow-response threshold, and such samples don't count (see
-/// `PeerScore::slow_peer_hedge_delay`). A probe is only hedged after its hedge delay (see
-/// `ContentFetch::hedge_delay_for`) or to a peer expected to finish at least
-/// [`CLOSER_PEER_MIN_GAIN`] sooner, so it usually ends in a sample that counts: an answer, or,
-/// with adaptive hedge delays, a cancellation at or after the threshold. Probes keep the slow
-/// flag measurable and re-check the peer every so often, so that it stops being treated as slow
-/// once it answers in time again.
+/// hedged right away once a peer that isn't slow has the checkpoint, so their slow outcomes are
+/// cut short before the slow peer's slow-response threshold, where they don't count (see
+/// `PeerScore::slow_peer_hedge_delay`), while their fast answers still arrive. Recording those
+/// would make the peer look less slow than it is, so while a peer is slow, only probes add
+/// response-time samples (see `SlowPeerRequest::records_response_time`). Samples from before it
+/// became slow still count until newer ones replace them or they age out.
+/// A probe is only hedged after its hedge delay (see `ContentFetch::hedge_delay_for`) or to a
+/// peer expected to finish at least [`CLOSER_PEER_MIN_GAIN`] sooner, so it usually ends in a
+/// sample that counts: an answer, or, with adaptive hedge delays, a cancellation at or after
+/// the threshold. Probes keep the slow flag measurable and re-check the peer every so often, so
+/// that it stops being treated as slow once it answers in time again.
 const SLOW_PEER_PROBE_INTERVAL: u32 = 4;
 
 /// Settings for hedged checkpoint contents downloads.
@@ -2149,8 +2180,9 @@ struct ContentHedge {
     /// yet in two cases. First, if the request in flight is to a slow peer, is not a slow-peer
     /// probe (see [`SLOW_PEER_PROBE_INTERVAL`]), and a peer that isn't slow has the checkpoint.
     /// Otherwise, if a peer is expected to finish at least [`CLOSER_PEER_MIN_GAIN`] before the
-    /// request in flight. Requests that were not hedges and were cancelled before their peer's
-    /// slow-response threshold are not kept as response-time samples (see
+    /// request in flight. While a peer is slow, only the outcomes of slow-peer probes to it are
+    /// kept as response-time samples, and requests that were not hedges and were cancelled
+    /// before their peer's slow-response threshold are not kept (see
     /// `PeerScore::record_content_response_time`).
     closer_peer: bool,
     /// Sequence number of the highest checkpoint whose contents are synced and released.
@@ -2182,9 +2214,12 @@ enum ContentRequestKind {
 struct InFlightContentRequest {
     start: Instant,
     kind: ContentRequestKind,
-    /// Whether the request is a slow-peer probe, which is not hedged right away just because
-    /// its peer is slow from this node (see [`SLOW_PEER_PROBE_INTERVAL`]).
-    slow_peer_probe: bool,
+    /// For a request that is not a hedge, with hedging to a closer peer, whether its peer was
+    /// slow from this node when it was sent and whether it is a slow-peer probe. A probe is not
+    /// hedged right away just because its peer is slow, and while a peer is slow, only probes
+    /// record response-time samples (see [`SLOW_PEER_PROBE_INTERVAL`]). `PeerNotSlow` for hedges
+    /// and without hedging to a closer peer.
+    slow_peer: SlowPeerRequest,
 }
 
 /// Peers that could be asked for a checkpoint's contents, each with its
@@ -2352,7 +2387,7 @@ impl ContentFetch<'_> {
         };
         let unasked = self.unasked_peers_with_expected_response_times(peers, asked);
         if in_flight_peer_slow
-            && !in_flight.slow_peer_probe
+            && in_flight.slow_peer != SlowPeerRequest::Probe
             && let Some((peer, _)) = unasked
                 .not_slow
                 .iter()
@@ -2397,23 +2432,24 @@ impl ContentFetch<'_> {
         }
     }
 
-    /// Called when a request that is not a hedge is about to be sent to `peer_id`: whether it is
-    /// a slow-peer probe (see [`SLOW_PEER_PROBE_INTERVAL`]). Counts probes in
+    /// Called when a request that is not a hedge is about to be sent to `peer_id`, with hedging
+    /// to a closer peer: whether the peer is slow and the request is a slow-peer probe (see
+    /// [`SLOW_PEER_PROBE_INTERVAL`]). Counts probes in
     /// `state_sync_checkpoint_content_slow_peer_probes`.
-    fn slow_peer_probe_for_new_request(&self, peer_id: PeerId) -> bool {
-        let probe = self
+    fn classify_new_request(&self, peer_id: PeerId) -> SlowPeerRequest {
+        let slow_peer = self
             .peer_heights
             .write()
             .unwrap()
-            .slow_peer_probe_for_new_request(&peer_id);
-        if probe {
+            .classify_new_request(&peer_id);
+        if slow_peer == SlowPeerRequest::Probe {
             self.metrics
                 .inc_checkpoint_content_slow_peer_probe(&content_metrics_peer_label(
                     self.network,
                     peer_id,
                 ));
         }
-        probe
+        slow_peer
     }
 
     fn request(
@@ -2588,14 +2624,17 @@ impl ContentFetch<'_> {
                     };
                     let peer_id = peer.inner().peer_id();
                     asked.insert(peer_id);
-                    let slow_peer_probe =
-                        pick_closest && self.slow_peer_probe_for_new_request(peer_id);
+                    let slow_peer = if pick_closest {
+                        self.classify_new_request(peer_id)
+                    } else {
+                        SlowPeerRequest::PeerNotSlow
+                    };
                     in_flight_requests.insert(
                         peer_id,
                         InFlightContentRequest {
                             start: Instant::now(),
                             kind,
-                            slow_peer_probe,
+                            slow_peer,
                         },
                     );
                     in_flight.push(self.request(peer, kind));
@@ -2664,14 +2703,16 @@ impl ContentFetch<'_> {
             tokio::select! {
                 biased;
                 Some(response) = in_flight.next() => {
-                    in_flight_requests.remove(&response.peer_id);
+                    let finished_request = in_flight_requests.remove(&response.peer_id);
                     let (peer_id, kind, elapsed) = (response.peer_id, response.kind, response.elapsed);
                     let Some((contents, size)) = self.record_response(response) else {
                         continue;
                     };
                     if kind == ContentRequestKind::Hedge {
                         self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Won);
-                    } else {
+                    } else if finished_request
+                        .is_none_or(|request| request.slow_peer.records_response_time())
+                    {
                         self.peer_heights.write().unwrap().record_content_response_time(
                             peer_id,
                             ContentResponseTime::Answered(elapsed),
@@ -2688,7 +2729,9 @@ impl ContentFetch<'_> {
                         );
                         let mut peer_heights = self.peer_heights.write().unwrap();
                         peer_heights.record_cancelled_request(peer_id, size, cancelled_after);
-                        if request.kind != ContentRequestKind::Hedge {
+                        if request.kind != ContentRequestKind::Hedge
+                            && request.slow_peer.records_response_time()
+                        {
                             peer_heights.record_content_response_time(
                                 peer_id,
                                 ContentResponseTime::LongerThan(cancelled_after),
@@ -2717,7 +2760,7 @@ impl ContentFetch<'_> {
                                 InFlightContentRequest {
                                     start: Instant::now(),
                                     kind: ContentRequestKind::Hedge,
-                                    slow_peer_probe: false,
+                                    slow_peer: SlowPeerRequest::PeerNotSlow,
                                 },
                             );
                             in_flight.push(self.request(peer, ContentRequestKind::Hedge));
@@ -2768,7 +2811,7 @@ impl ContentFetch<'_> {
                             InFlightContentRequest {
                                 start: Instant::now(),
                                 kind: ContentRequestKind::Hedge,
-                                slow_peer_probe: false,
+                                slow_peer: SlowPeerRequest::PeerNotSlow,
                             },
                         );
                         in_flight.push(self.request(peer, ContentRequestKind::Hedge));
