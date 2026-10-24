@@ -290,8 +290,9 @@ pub struct StateSyncConfig {
     /// `checkpoint_content_hedge_delay_ms`: after the peer's slow-response threshold, which is
     /// its fastest recent response time plus 25% or plus 20 ms, whichever is more. A peer is slow
     /// when at least a quarter of its recent responses took longer than that threshold. Requests
-    /// cancelled because a hedge won count as slow responses, so a peer stays slow while hedges
-    /// keep beating it, and stops being slow once it answers within the threshold again.
+    /// cancelled after the threshold because a hedge won count as slow responses, so a peer stays
+    /// slow while hedges keep beating it, and stops being slow once it answers within the
+    /// threshold again. Requests cancelled sooner count neither way.
     ///
     /// Also, when a hedge is due before any other peer has announced the checkpoint, or every
     /// request has failed, the download checks for newly announced peers every 10 ms instead of
@@ -301,6 +302,39 @@ pub struct StateSyncConfig {
     /// defaults to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_adaptive_hedge_delay: Option<bool>,
+
+    /// When true, downloads of checkpoints close to the next one to be released send their
+    /// requests to the peers expected to answer soonest. A peer's expected response time is the
+    /// longer of its connection round-trip time and its fastest recent response time (just the
+    /// round-trip time if it has no recent responses). The first request, the hedge after the
+    /// hedge delay, and a request sent after every request failed go to the connected peer with
+    /// the lowest expected response time among the peers that have announced the checkpoint,
+    /// skipping peers with recent failures. Peers that are slow from this node (see
+    /// `checkpoint_content_adaptive_hedge_delay`; this applies whether or not that option is on)
+    /// come after all peers that are not.
+    ///
+    /// While only one request is in flight, the download checks every 10 ms which peers have
+    /// announced the checkpoint since, and hedges right away instead of waiting for the hedge
+    /// delay in two cases. If the request in flight is to a slow peer and a peer that isn't slow
+    /// has the checkpoint, the hedge goes to the one of those peers with the lowest expected
+    /// response time. Otherwise, if a peer is expected to finish at least 50 ms before the
+    /// request in flight, the hedge goes to it; a request that has already run past its expected
+    /// finish gets no such hedge.
+    ///
+    /// One in four requests that are not hedges sent to a slow peer is a probe that is not hedged
+    /// right away just because the peer is slow. While a peer is slow, only probes add response
+    /// time samples, so once the samples from before it became slow have been replaced or have
+    /// aged out, probes alone decide whether it is still slow and what its fastest recent
+    /// response time is. Other requests to it are hedged right away, which cuts their slow
+    /// responses short while their fast ones still arrive, so recording them would make the peer
+    /// look less slow than it is. A request cancelled before its peer's slow-response threshold,
+    /// which counts neither way, is not recorded once the peer has a threshold, so it doesn't
+    /// push out samples that count.
+    ///
+    /// Has no effect unless `checkpoint_content_hedge_delay_ms` is set, and only applies near
+    /// the release frontier, where hedging applies. If unspecified, this defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_hedge_to_closer_peer: Option<bool>,
 }
 
 impl StateSyncConfig {
@@ -455,6 +489,11 @@ impl StateSyncConfig {
 
     pub fn checkpoint_content_adaptive_hedge_delay(&self) -> bool {
         self.checkpoint_content_adaptive_hedge_delay
+            .unwrap_or(false)
+    }
+
+    pub fn checkpoint_content_hedge_to_closer_peer(&self) -> bool {
+        self.checkpoint_content_hedge_to_closer_peer
             .unwrap_or(false)
     }
 
