@@ -83,6 +83,17 @@ ignore = [
     # TODO: security sign-off on secp256k1/secp256r1 signing exposure, and link the
     # tracking issue for the elliptic-curve 0.14 upgrade.
     "RUSTSEC-2026-0387",
+    # zstd 0.13 / zstd-safe 7: stream data leaking across a reused context (0391)
+    # and uninitialized memory on failed legacy-frame streaming decompression
+    # (0403). Fixed only in zstd 0.14.3 / zstd-safe 8.2, but zstd 0.13 comes in
+    # transitively through tonic 0.14, parquet 57 and compression-codecs, none of
+    # which have a release on zstd 0.14 yet. external-crates/move is already on
+    # zstd 0.14.3.
+    # Remove once those dependencies move to zstd 0.14.
+    # TODO: security sign-off on decompression of untrusted input (gRPC zstd
+    # request decompression via tonic, remote checkpoint ingestion).
+    "RUSTSEC-2026-0391",
+    "RUSTSEC-2026-0403",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

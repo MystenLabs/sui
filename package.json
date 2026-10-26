@@ -32,7 +32,8 @@
 			"picomatch@<2.3.2": ">=2.3.2",
 			"picomatch@>=4.0.0 <4.0.4": ">=4.0.4",
 			"proxy-addr@<2.0.8": ">=2.0.8",
-			"shell-quote@<1.8.4": ">=1.8.4"
+			"shell-quote@<1.8.4": ">=1.8.4",
+			"body-parser@<1.20.9": "^1.20.9"
 		},
 		"auditConfig": {
 			"ignoreCves": [

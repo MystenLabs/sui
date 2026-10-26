@@ -3636,8 +3636,8 @@ dependencies = [
  "compression-core",
  "flate2",
  "memchr",
- "zstd",
- "zstd-safe",
+ "zstd 0.13.2",
+ "zstd-safe 7.2.1",
 ]
 
 [[package]]
@@ -8878,7 +8878,7 @@ dependencies = [
  "move-core-types",
  "serde",
  "serde_json",
- "zstd",
+ "zstd 0.14.3",
 ]
 
 [[package]]
@@ -10216,7 +10216,7 @@ dependencies = [
  "snap",
  "thrift",
  "twox-hash 2.1.2",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -12950,7 +12950,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-transaction-checks",
  "sui-types",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -13718,7 +13718,7 @@ dependencies = [
  "tokio-util 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -13791,7 +13791,7 @@ dependencies = [
  "tokio-util 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -13975,7 +13975,7 @@ dependencies = [
  "toml 0.7.4",
  "tracing",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -14078,7 +14078,7 @@ dependencies = [
  "toml 0.7.4",
  "tracing",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -14189,7 +14189,7 @@ dependencies = [
  "tracing",
  "twox-hash 1.6.3",
  "typed-store",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -14266,7 +14266,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -14806,7 +14806,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -14877,7 +14877,7 @@ dependencies = [
  "tonic 0.14.6",
  "tracing",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -14927,7 +14927,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "wiremock",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -15634,7 +15634,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -15957,7 +15957,7 @@ dependencies = [
  "tokio",
  "toml 0.7.4",
  "tracing",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -16404,7 +16404,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "url",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -16502,7 +16502,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -17887,7 +17887,7 @@ dependencies = [
  "tower-service",
  "tracing",
  "webpki-roots 1.0.10",
- "zstd",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -19908,7 +19908,16 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcf2b778a664581e31e389454a7072dab1647606d44f7feea22cd5abb9c9f3f9"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 7.2.1",
+]
+
+[[package]]
+name = "zstd"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db3ae9bf90af6e40197bef767eeefc46ad6397420fe873830bd85e5fbbfb3c70"
+dependencies = [
+ "zstd-safe 8.2.0",
 ]
 
 [[package]]
@@ -19921,10 +19930,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "zstd-sys"
-version = "2.0.11+zstd.1.5.6"
+name = "zstd-safe"
+version = "8.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75652c55c0b6f3e6f12eb786fe1bc960396bf05a1eb3bf1f3691c3610ac2e6d4"
+checksum = "ded520f16b29e1a9b771c722221b2b0a0398c2316d9bb3c42b458a5414d7434b"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.2+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "481ada9c543b2323cbb7bbdbb5249177fbf0188ed959ed2c15e4b22421c84ed3"
 dependencies = [
  "cc",
  "pkg-config",
