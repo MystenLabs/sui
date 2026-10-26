@@ -31,13 +31,14 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
+use sui_types::package_config::{self, MinVersion};
 use sui_types::storage::{
     BackingStore, DenyListResult, ImplicitSystemObjectResolver, PackageObject,
 };
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_PACKAGE_CONFIG_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -288,6 +289,61 @@ impl<'backing> TemporaryStore<'backing> {
             .borrow_mut()
             .insert(*object_id, (object.version(), object.digest()));
         Some(object)
+    }
+
+    fn package_config_root_version(&self) -> SuiResult<Option<SequenceNumber>> {
+        // Callers apply their feature gates; keeping this helper ungated makes one assigned root
+        // version shared by minversion and forbid-list lookups.
+        let Some(assigned) = self
+            .system_object_versions
+            .get(&SUI_PACKAGE_CONFIG_OBJECT_ID)
+        else {
+            return Ok(None);
+        };
+
+        // An explicit input is already authenticated and will be included in effects through the
+        // ordinary input path. Do not also record it as an implicit read.
+        if let Some(object) = self.input_objects.get(&SUI_PACKAGE_CONFIG_OBJECT_ID) {
+            if object.version() != assigned.version {
+                debug_fatal!(
+                    "explicit PackageConfig input version {:?} does not match assigned version {:?}",
+                    object.version(),
+                    assigned.version
+                );
+                return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+            }
+            return Ok(Some(assigned.version));
+        }
+
+        // Reuse the implicit root recorded by an earlier package-policy lookup.
+        if let Some((version, _)) = self
+            .loaded_system_objects
+            .borrow()
+            .get(&SUI_PACKAGE_CONFIG_OBJECT_ID)
+        {
+            if *version != assigned.version {
+                debug_fatal!(
+                    "loaded PackageConfig version {:?} does not match assigned version {:?}",
+                    version,
+                    assigned.version
+                );
+                return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+            }
+            return Ok(Some(assigned.version));
+        }
+
+        let object = self
+            .load_implicitly_read_system_object(&SUI_PACKAGE_CONFIG_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
+        if object.version() != assigned.version {
+            debug_fatal!(
+                "implicitly loaded PackageConfig version {:?} does not match assigned version {:?}",
+                object.version(),
+                assigned.version
+            );
+            return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+        }
+        Ok(Some(assigned.version))
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
@@ -1450,6 +1506,20 @@ impl Storage for TemporaryStore<'_> {
         result
     }
 
+    fn read_minversion(&self, original_id: ObjectID) -> SuiResult<Option<MinVersion>> {
+        let Some(root_version) = self.package_config_root_version()? else {
+            return Ok(None);
+        };
+        package_config::read_minversion(original_id, root_version, self)
+    }
+
+    fn is_package_version_forbidden(&self, original_id: ObjectID, version: u64) -> SuiResult<bool> {
+        let Some(root_version) = self.package_config_root_version()? else {
+            return Ok(false);
+        };
+        package_config::is_version_forbidden(original_id, version, root_version, self)
+    }
+
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
         TemporaryStore::save_generated_object_ids(self, generated_ids)
     }
@@ -1484,5 +1554,43 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
+    }
+}
+
+#[cfg(test)]
+impl<'backing> TemporaryStore<'backing> {
+    pub(crate) fn new_for_testing(
+        store: &'backing dyn BackingStore,
+        input_objects: InputObjects,
+        protocol_config: &'backing ProtocolConfig,
+        system_object_versions: SystemObjectVersions,
+    ) -> Self {
+        Self::new_with_input_objects(
+            store,
+            input_objects,
+            vec![],
+            TransactionDigest::random(),
+            protocol_config,
+            0,
+            system_object_versions,
+            PostExecutionCheckInputs::default(),
+            &EmptyUnsettledObjectFunds,
+        )
+    }
+
+    pub(crate) fn package_config_root_version_for_testing(
+        &self,
+    ) -> SuiResult<Option<SequenceNumber>> {
+        self.package_config_root_version()
+    }
+
+    pub(crate) fn loaded_system_object_version_for_testing(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<SequenceNumber> {
+        self.loaded_system_objects
+            .borrow()
+            .get(&object_id)
+            .map(|(version, _)| *version)
     }
 }
