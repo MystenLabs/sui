@@ -358,7 +358,9 @@ jobs:
     name: Finalize
     needs: [seed-search, stress-determinism]
     if: ${{ !cancelled() && needs.seed-search.outputs.workspace_ready == 'true' }}
-    timeout-minutes: 30
+    # Mostly idle, but may have to wait out a stress run the previous job lost
+    # track of.
+    timeout-minutes: 360
     permissions:
       id-token: write
       contents: read
@@ -376,6 +378,16 @@ jobs:
           proxy: mysten.teleport.sh:443
           token: sui-simtest-token
           certificate-ttl: 1h
+
+      # Either phase job may have lost track of its detached run (repeated SSH
+      # failures while polling) while the run is still going on the host. Wait
+      # for it before collecting logs or declaring the host idle.
+      - name: Wait for any remaining simtest run on host
+        run: |
+          while tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "pgrep -f 'scripts/simtest/(simtest-run|seed-search)' > /dev/null"; do
+            echo "$(date): a simtest run is still in progress on simtest-01, waiting..."
+            sleep 120
+          done
 
       - name: Collect failing tests
         id: failures
@@ -401,7 +413,7 @@ jobs:
     name: Notify
     needs: [seed-search, stress-determinism, finalize]
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && github.event_name == 'schedule' && (needs.seed-search.result == 'failure' || needs.stress-determinism.result == 'failure') }}
+    if: ${{ !cancelled() && github.event_name == 'schedule' && (needs.seed-search.result == 'failure' || needs.stress-determinism.result == 'failure' || needs.finalize.result == 'failure') }}
 
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
