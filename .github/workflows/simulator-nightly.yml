@@ -183,16 +183,19 @@ jobs:
       # The test script runs independently on the remote machine; we poll for completion
       # with short-lived SSH calls instead of holding a single long-lived session.
       #
-      # The whole background shell is started in its own session (setsid) with
-      # stdin, stdout and stderr redirected. If only the inner simtest-run.sh is
-      # redirected, the outer `bash -c` inherits the SSH channel and holds it
-      # open, this step blocks for the entire run and the polling step below
-      # never runs. The exit marker is written to a temporary file and moved
-      # into place so the poller never reads a partially written marker.
+      # The background shell is started in its own session (setsid) with
+      # stdin, stdout and stderr redirected, and the setup commands before it
+      # are terminated with `|| exit 1;` rather than `&&`. With `a && b &&
+      # nohup ... &` the trailing `&` applies to the whole AND-list, so bash
+      # forks a subshell that runs nohup in the foreground and waits for it
+      # while still holding the SSH session's stdout and stderr; this step
+      # then blocks for the entire run and the polling step below never runs.
+      # The exit marker is written to a temporary file and moved into place so
+      # the poller never reads a partially written marker.
       - name: Start simtest (detached)
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_${{ env.PHASE }}_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\nlog_dir=%s\nphase=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ env.SIMTEST_MIN_FREE_GB }}' '${{ steps.run.outputs.log_dir }}' '${{ env.PHASE }}' > ~/simtest_active_run"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} SIMTEST_RUN_ID=${{ steps.run.outputs.run_id }} SIMTEST_PHASES=seed-search SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ steps.protocol.outputs.protocol_config_override }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ env.PHASE }}_exit_code.tmp && mv ~/simtest_${{ env.PHASE }}_exit_code.tmp ~/simtest_${{ env.PHASE }}_exit_code' < /dev/null > ~/simtest_${{ env.PHASE }}_stdout.log 2>&1 &"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui || exit 1; nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} SIMTEST_RUN_ID=${{ steps.run.outputs.run_id }} SIMTEST_PHASES=seed-search SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ steps.protocol.outputs.protocol_config_override }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ env.PHASE }}_exit_code.tmp && mv ~/simtest_${{ env.PHASE }}_exit_code.tmp ~/simtest_${{ env.PHASE }}_exit_code' < /dev/null > ~/simtest_${{ env.PHASE }}_stdout.log 2>&1 &"
 
       - name: Wait for simtest completion
         run: |
@@ -324,7 +327,7 @@ jobs:
       - name: Start simtest (detached)
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_${{ env.PHASE }}_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\nlog_dir=%s\nphase=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ env.SIMTEST_MIN_FREE_GB }}' '${{ needs.seed-search.outputs.log_dir }}' '${{ env.PHASE }}' > ~/simtest_active_run"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} SIMTEST_RUN_ID=${{ needs.seed-search.outputs.run_id }} SIMTEST_PHASES=stress,determinism SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ env.SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ env.PHASE }}_exit_code.tmp && mv ~/simtest_${{ env.PHASE }}_exit_code.tmp ~/simtest_${{ env.PHASE }}_exit_code' < /dev/null > ~/simtest_${{ env.PHASE }}_stdout.log 2>&1 &"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui || exit 1; nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} SIMTEST_RUN_ID=${{ needs.seed-search.outputs.run_id }} SIMTEST_PHASES=stress,determinism SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ env.SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ env.PHASE }}_exit_code.tmp && mv ~/simtest_${{ env.PHASE }}_exit_code.tmp ~/simtest_${{ env.PHASE }}_exit_code' < /dev/null > ~/simtest_${{ env.PHASE }}_stdout.log 2>&1 &"
 
       - name: Wait for simtest completion
         run: |
