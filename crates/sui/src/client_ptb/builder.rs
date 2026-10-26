@@ -29,15 +29,18 @@ use move_core_types::{
 };
 use move_package_compilation::build_config::BuildConfig as MoveBuildConfig;
 use mysten_common::ZipDebugEqIteratorExt;
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::Path,
+};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_rpc_api::Client;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
-    Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
+    Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_PACKAGE_CONFIG_OBJECT_ID, TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
     gas_coin::GAS,
-    move_package::MovePackage,
+    move_package::{MinVersionState, MovePackage},
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     resolve_address,
@@ -268,6 +271,9 @@ pub struct PTBBuilder<'a> {
     last_command: Option<Tx::Argument>,
     /// The actual PTB that we are building up.
     ptb: ProgrammableTransactionBuilder,
+    /// Upgrade caps enrolled earlier in this PTB. Their on-chain state remains stale while this
+    /// transaction is being built, so later upgrades must use the minversion completion flow.
+    minversion_enabled_caps: HashSet<Tx::Argument>,
     /// The list of errors that we have built up while processing commands. We do not report errors
     /// eagerly but instead wait until we have processed all commands to report any errors.
     errors: Vec<PTBError>,
@@ -329,6 +335,7 @@ impl<'a> PTBBuilder<'a> {
             reader,
             wallet,
             last_command: None,
+            minversion_enabled_caps: HashSet::new(),
             errors: Vec::new(),
         }
     }
@@ -925,6 +932,9 @@ impl<'a> PTBBuilder<'a> {
                 }
 
                 let package_id = ObjectID::from_address(resolved_address);
+                let enables_minversion = package_id == SUI_FRAMEWORK_PACKAGE_ID
+                    && module_name.value.as_str() == "package"
+                    && function_name.value.as_str() == "enable_minversion_permanently";
                 let package = self.resolve_to_package(package_id, address.span).await?;
                 let args = self
                     .resolve_move_call_args(
@@ -936,6 +946,9 @@ impl<'a> PTBBuilder<'a> {
                         mod_access_loc,
                     )
                     .await?;
+                if enables_minversion && let Some(cap) = args.first() {
+                    self.minversion_enabled_caps.insert(*cap);
+                }
                 let res = self.ptb.command(Tx::Command::move_call(
                     package_id,
                     module_name.value,
@@ -1006,7 +1019,12 @@ impl<'a> PTBBuilder<'a> {
                 };
 
                 let package_path = Path::new(&package_path);
-                let build_config = MoveBuildConfig::default();
+                // Upgraded root modules retain their original package identity on chain but must
+                // compile at address 0x0 so they are emitted as unpublished module bytecode.
+                let build_config = MoveBuildConfig {
+                    root_as_zero: true,
+                    ..Default::default()
+                };
                 let root_pkg =
                     load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
                         .await
@@ -1019,7 +1037,7 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .await?;
 
-                let (upgrade_policy, compiled_package) = upgrade_package(
+                let (upgrade_cap_policy, compiled_package) = upgrade_package(
                     self.reader.clone(),
                     &root_pkg,
                     build_config.clone(),
@@ -1040,9 +1058,12 @@ impl<'a> PTBBuilder<'a> {
                 // let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
                 //     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
+                let minversion_enabled = upgrade_cap_policy.minversion_state()
+                    == MinVersionState::Enabled
+                    || self.minversion_enabled_caps.contains(&upgrade_cap_arg);
                 let upgrade_arg = self
                     .ptb
-                    .pure(upgrade_policy)
+                    .pure(upgrade_cap_policy.base_policy() as u8)
                     .map_err(|e| err!(cmd_span, "{e}"))?;
                 let digest_arg = self
                     .ptb
@@ -1067,6 +1088,24 @@ impl<'a> PTBBuilder<'a> {
                         .collect::<Vec<_>>(),
                     compiled_modules,
                 );
+                if minversion_enabled {
+                    let package_config_arg = self
+                        .resolve(
+                            cmd_span.wrap(PTBArg::Address(NumericalAddress::new(
+                                SUI_PACKAGE_CONFIG_OBJECT_ID.into_bytes(),
+                                NumberFormat::Hex,
+                            ))),
+                            ToObject::default(),
+                        )
+                        .await?;
+                    self.ptb.command(Tx::Command::move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        ident_str!("package_config").to_owned(),
+                        ident_str!("record_minversion_upgrade").to_owned(),
+                        vec![],
+                        vec![package_config_arg, upgrade_cap_arg, upgrade_receipt],
+                    ));
+                }
                 let res = self.ptb.command(Tx::Command::move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     ident_str!("package").to_owned(),
