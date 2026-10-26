@@ -7,6 +7,7 @@ use crate::keytool::CommandOutput;
 use crate::keytool::read_authority_keypair_from_file;
 use crate::keytool::read_keypair_from_file;
 
+use super::Key;
 use super::KeyToolCommand;
 use super::write_keypair_to_file;
 use anyhow::Ok;
@@ -747,4 +748,25 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
     Ok(())
+}
+
+#[tokio::test]
+async fn keytool_list_abbreviates_mldsa65_keys_only() {
+    let mldsa = Key::from(&SuiKeyPair::decode(MLDSA65_TEST_SUIPRIVKEY).unwrap());
+    let ed25519_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let full_mldsa = mldsa.public_base64_key.clone();
+    let full_ed25519 = Key::from(&ed25519_kp).public_base64_key.clone();
+
+    let shown = format!(
+        "{}",
+        CommandOutput::List(vec![mldsa, Key::from(&ed25519_kp)])
+    );
+    assert!(!shown.contains(&full_mldsa));
+    assert!(shown.contains("add --json for the full key"));
+    assert!(shown.contains(&full_ed25519));
+
+    // Without an ML-DSA-65 key the table is untouched.
+    let shown = format!("{}", CommandOutput::List(vec![Key::from(&ed25519_kp)]));
+    assert!(shown.contains(&full_ed25519));
+    assert!(!shown.contains("add --json for the full key"));
 }
