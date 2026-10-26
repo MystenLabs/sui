@@ -33,8 +33,21 @@ env:
   TEST_NUM: "${{ github.event.inputs.test_num || '30' }}"
   SIMTEST_MIN_FREE_GB: "100"
 
+# A GitHub-hosted job is hard-capped at 6 hours and the full nightly (seed
+# search, then stress and determinism) now takes longer than that, so the run
+# is split into two sequential jobs that each SSH into simtest-01 and run a
+# subset of the phases in scripts/simtest/simtest-run.sh (SIMTEST_PHASES).
+# Both jobs pass the same SIMTEST_RUN_ID, so they share one log directory
+# (~/simtest_logs/<run id>/) and one seed base, and the finalize job collects
+# failures from that directory once for the notification.
+#
+# Host files, per phase: ~/simtest_<phase>_stdout.log and
+# ~/simtest_<phase>_exit_code, where <phase> is seed-search or
+# stress-determinism. ~/simtest_active_run marks the host as busy for the
+# whole run.
 jobs:
-  simtest:
+  seed-search:
+    name: Seed search
     # Allow running the job for up to 6 hours, maximum for GitHub Actions.
     timeout-minutes: 360
     permissions:
@@ -43,6 +56,8 @@ jobs:
       id-token: write
       contents: read
     runs-on: ubuntu-latest
+    env:
+      PHASE: seed-search
 
     steps:
       - name: Install Teleport
@@ -76,7 +91,7 @@ jobs:
       # nightly that was cancelled mid-run and nohup'd onto the host —
       # otherwise the survivor's in-flight cargo/test processes race
       # our re-clone, exec test binaries we're about to delete, and
-      # corrupt the shared ~/simtest_stdout.log via a leaked fd.
+      # corrupt the shared stdout logs via a leaked fd.
       - name: Environment clean
         run: |
           # The character classes ([ ], [e]) below are deliberate: pkill -f
@@ -93,7 +108,7 @@ jobs:
             pkill -9 -f 'cargo-simtest[ ]simtest' || true; \
             pkill -9 -f 'target/simulator/d[e]ps/' || true; \
             sleep 3; \
-            rm -f ~/simtest_active_run; \
+            rm -f ~/simtest_active_run ~/simtest_*_exit_code ~/simtest_*_exit_code.tmp; \
             sudo rm -rf /tmp/* 2>/dev/null || true; \
             rm -rf ~/sui; \
             (cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs -r rm -rf) || true"
@@ -132,30 +147,52 @@ jobs:
         # It checks if the trigger was a manual dispatch or a specific schedule.
         run: |
           message=""
+          override=""
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ -n "${{ github.event.inputs.protocol_config_override }}" ]]; then
               echo "Testing with protocol config override: ${{ github.event.inputs.protocol_config_override }}"
-              echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ github.event.inputs.protocol_config_override }}" >> $GITHUB_ENV
+              override="${{ github.event.inputs.protocol_config_override }}"
             else
               echo "Testing latest protocol config for dispatched run"
             fi
           elif [[ "${{ github.event.schedule }}" == "0 21 * * *" ]]; then
             echo "Testing mainnet protocol config"
-            echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=mainnet" >> $GITHUB_ENV
+            override="mainnet"
             message="(mainnet config) "
           else
             echo "Testing latest protocol config"
           fi
-          # Set the output for other jobs to use
+          # Set the outputs for the start step and the other jobs to use. The
+          # override has to be passed explicitly on the remote command line:
+          # tsh does not forward the runner's environment to the host.
           echo "protocol_message=${message}" >> $GITHUB_OUTPUT
+          echo "protocol_config_override=${override}" >> $GITHUB_OUTPUT
+
+      # The run id names the shared log directory and seeds both jobs.
+      - name: Choose run id
+        id: run
+        run: |
+          run_id=$(date +%s)
+          echo "run_id=${run_id}" >> $GITHUB_OUTPUT
+          echo "log_dir=/home/ubuntu/simtest_logs/${run_id}" >> $GITHUB_OUTPUT
+          # The workspace on the host is ready: the stress-determinism and
+          # finalize jobs may run even if seed search itself fails.
+          echo "workspace_ready=true" >> $GITHUB_OUTPUT
 
       # Run simulator tests via detached execution to survive SSH session drops.
       # The test script runs independently on the remote machine; we poll for completion
       # with short-lived SSH calls instead of holding a single long-lived session.
+      #
+      # The whole background shell is started in its own session (setsid) with
+      # stdin, stdout and stderr redirected. If only the inner simtest-run.sh is
+      # redirected, the outer `bash -c` inherits the SSH channel and holds it
+      # open, this step blocks for the entire run and the polling step below
+      # never runs. The exit marker is written to a temporary file and moved
+      # into place so the poller never reads a partially written marker.
       - name: Start simtest (detached)
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ env.SIMTEST_MIN_FREE_GB }}' > ~/simtest_active_run"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && nohup bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} ./scripts/simtest/simtest-run.sh > ~/simtest_stdout.log 2>&1; echo \$? > ~/simtest_exit_code' &"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_${{ env.PHASE }}_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\nlog_dir=%s\nphase=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ env.SIMTEST_MIN_FREE_GB }}' '${{ steps.run.outputs.log_dir }}' '${{ env.PHASE }}' > ~/simtest_active_run"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} SIMTEST_RUN_ID=${{ steps.run.outputs.run_id }} SIMTEST_PHASES=seed-search SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ steps.protocol.outputs.protocol_config_override }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ env.PHASE }}_exit_code.tmp && mv ~/simtest_${{ env.PHASE }}_exit_code.tmp ~/simtest_${{ env.PHASE }}_exit_code' < /dev/null > ~/simtest_${{ env.PHASE }}_stdout.log 2>&1 &"
 
       - name: Wait for simtest completion
         run: |
@@ -166,17 +203,17 @@ jobs:
             # Use echo-based check so we can distinguish "SSH failed" from "file not found".
             # If SSH succeeds, we get DONE or RUNNING. If SSH fails, output is empty.
             result=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
-              "if test -s ~/simtest_exit_code; then if grep -Eq '^[0-9]+$' ~/simtest_exit_code; then echo DONE; else echo BAD_EXIT_MARKER; fi; elif test -e ~/simtest_exit_code; then echo BAD_EXIT_MARKER; else echo RUNNING; fi" 2>/dev/null) || true
+              "if test -s ~/simtest_${{ env.PHASE }}_exit_code; then if grep -Eq '^[0-9]+$' ~/simtest_${{ env.PHASE }}_exit_code; then echo DONE; else echo BAD_EXIT_MARKER; fi; elif test -e ~/simtest_${{ env.PHASE }}_exit_code; then echo BAD_EXIT_MARKER; else echo RUNNING; fi" 2>/dev/null) || true
             if [ "$result" = "DONE" ]; then
               echo "Simtest completed."
               break
             elif [ "$result" = "RUNNING" ]; then
               ssh_failures=0
               echo "$(date): simtest still running..."
-              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -5 ~/simtest_stdout.log" 2>/dev/null || true
+              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -5 ~/simtest_${{ env.PHASE }}_stdout.log" 2>/dev/null || true
             elif [ "$result" = "BAD_EXIT_MARKER" ]; then
               echo "::error::Remote simtest exit marker is missing, empty, or non-integer. Treating this as infrastructure failure."
-              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_exit_code ~/simtest_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_stdout.log 2>/dev/null || true" || true
+              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_${{ env.PHASE }}_exit_code ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true" || true
               exit 1
             else
               # No output — SSH call itself failed
@@ -191,23 +228,160 @@ jobs:
 
       - name: Check simtest results
         run: |
-          exit_code=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cat ~/simtest_exit_code")
+          exit_code=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cat ~/simtest_${{ env.PHASE }}_exit_code")
           if ! [[ "$exit_code" =~ ^[0-9]+$ ]]; then
             echo "::error::Remote simtest exit marker is missing, empty, or non-integer: '$exit_code'"
             echo "--- Remote disk and output state ---"
-            tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_exit_code ~/simtest_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_stdout.log 2>/dev/null || true" || true
+            tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_${{ env.PHASE }}_exit_code ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true" || true
             exit 1
           fi
           echo "Remote simtest exited with code: $exit_code"
           echo "--- Last 200 lines of simtest output ---"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -200 ~/simtest_stdout.log" || true
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -200 ~/simtest_${{ env.PHASE }}_stdout.log" || true
           exit "$exit_code"
+
+      # The finalize job clears the marker once both phases are done. Only
+      # clear it here when the workspace was never set up, i.e. a setup step
+      # failed and the later jobs will not run. Skip on cancellation: the
+      # simtest was launched with `nohup ... &`, so a cancelled Actions run
+      # leaves the remote process alive. Clearing the marker here would falsely
+      # advertise the host as idle while a run is still in flight. The next
+      # nightly's "Environment clean" step pkills the survivor and removes the
+      # marker together, so leaving it on cancel is safe.
+      - name: Clear simtest active marker
+        if: always() && !cancelled() && steps.run.outputs.workspace_ready != 'true'
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_active_run" || true
+
+    outputs:
+      workspace_ready: ${{ steps.run.outputs.workspace_ready }}
+      run_id: ${{ steps.run.outputs.run_id }}
+      log_dir: ${{ steps.run.outputs.log_dir }}
+      protocol_message: ${{ steps.protocol.outputs.protocol_message }}
+      protocol_config_override: ${{ steps.protocol.outputs.protocol_config_override }}
+
+  stress-determinism:
+    name: Stress and determinism
+    needs: [seed-search]
+    # Runs after seed search test failures, but not after cancellation or a
+    # failed clone/install.
+    if: ${{ !cancelled() && needs.seed-search.outputs.workspace_ready == 'true' }}
+    timeout-minutes: 360
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+    env:
+      PHASE: stress-determinism
+      SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: ${{ needs.seed-search.outputs.protocol_config_override }}
+
+    steps:
+      - name: Install Teleport
+        uses: teleport-actions/setup@a820ebbf1bc1a496efca348ad21042d6e8df73a6 # pin@v1.1.0
+        with:
+          version: 18.2.0
+      - name: Authorize against Teleport
+        id: auth
+        uses: teleport-actions/auth@d48447391aa28b202c98ae3f3358097025c32511 # pin@v2.0.4
+        with:
+          proxy: mysten.teleport.sh:443
+          token: sui-simtest-token
+          certificate-ttl: 6h
+
+      # Seed search may still be running on the host if its job lost track of
+      # it (repeated SSH failures while polling). Wait for it instead of racing
+      # it for the build directory, then check that the clone and cargo-simtest
+      # install from the seed-search job are still in place.
+      - name: Wait for seed search to finish on host
+        run: |
+          while tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "pgrep -f 'scripts/simtest/(simtest-run|seed-search)' > /dev/null"; do
+            echo "$(date): seed search still running on simtest-01, waiting..."
+            sleep 120
+          done
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git rev-parse HEAD && command -v cargo-simtest"
+
+      # Reuses ~/sui, the cargo-simtest install and the build left by the
+      # seed-search job; only the stress and determinism phases run, into the
+      # same log directory.
+      - name: Start simtest (detached)
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_${{ env.PHASE }}_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\nlog_dir=%s\nphase=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ env.SIMTEST_MIN_FREE_GB }}' '${{ needs.seed-search.outputs.log_dir }}' '${{ env.PHASE }}' > ~/simtest_active_run"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} SIMTEST_RUN_ID=${{ needs.seed-search.outputs.run_id }} SIMTEST_PHASES=stress,determinism SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ env.SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ env.PHASE }}_exit_code.tmp && mv ~/simtest_${{ env.PHASE }}_exit_code.tmp ~/simtest_${{ env.PHASE }}_exit_code' < /dev/null > ~/simtest_${{ env.PHASE }}_stdout.log 2>&1 &"
+
+      - name: Wait for simtest completion
+        run: |
+          ssh_failures=0
+          max_ssh_failures=3
+          while true; do
+            sleep 120
+            result=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
+              "if test -s ~/simtest_${{ env.PHASE }}_exit_code; then if grep -Eq '^[0-9]+$' ~/simtest_${{ env.PHASE }}_exit_code; then echo DONE; else echo BAD_EXIT_MARKER; fi; elif test -e ~/simtest_${{ env.PHASE }}_exit_code; then echo BAD_EXIT_MARKER; else echo RUNNING; fi" 2>/dev/null) || true
+            if [ "$result" = "DONE" ]; then
+              echo "Simtest completed."
+              break
+            elif [ "$result" = "RUNNING" ]; then
+              ssh_failures=0
+              echo "$(date): simtest still running..."
+              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -5 ~/simtest_${{ env.PHASE }}_stdout.log" 2>/dev/null || true
+            elif [ "$result" = "BAD_EXIT_MARKER" ]; then
+              echo "::error::Remote simtest exit marker is missing, empty, or non-integer. Treating this as infrastructure failure."
+              tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_${{ env.PHASE }}_exit_code ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true" || true
+              exit 1
+            else
+              ssh_failures=$((ssh_failures + 1))
+              echo "$(date): SSH connection failed (attempt $ssh_failures/$max_ssh_failures)"
+              if [ $ssh_failures -ge $max_ssh_failures ]; then
+                echo "Too many consecutive SSH failures. The test may still be running on the remote machine."
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Check simtest results
+        run: |
+          exit_code=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cat ~/simtest_${{ env.PHASE }}_exit_code")
+          if ! [[ "$exit_code" =~ ^[0-9]+$ ]]; then
+            echo "::error::Remote simtest exit marker is missing, empty, or non-integer: '$exit_code'"
+            echo "--- Remote disk and output state ---"
+            tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_${{ env.PHASE }}_exit_code ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_${{ env.PHASE }}_stdout.log 2>/dev/null || true" || true
+            exit 1
+          fi
+          echo "Remote simtest exited with code: $exit_code"
+          echo "--- Last 200 lines of simtest output ---"
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "tail -200 ~/simtest_${{ env.PHASE }}_stdout.log" || true
+          exit "$exit_code"
+
+  # Runs once both phases are done (or the second one was skipped after a
+  # cancellation-free failure): collects failures from the shared log
+  # directory once and clears the active marker.
+  finalize:
+    name: Finalize
+    needs: [seed-search, stress-determinism]
+    if: ${{ !cancelled() && needs.seed-search.outputs.workspace_ready == 'true' }}
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Teleport
+        uses: teleport-actions/setup@a820ebbf1bc1a496efca348ad21042d6e8df73a6 # pin@v1.1.0
+        with:
+          version: 18.2.0
+      - name: Authorize against Teleport
+        id: auth
+        uses: teleport-actions/auth@d48447391aa28b202c98ae3f3358097025c32511 # pin@v2.0.4
+        with:
+          proxy: mysten.teleport.sh:443
+          token: sui-simtest-token
+          certificate-ttl: 1h
 
       - name: Collect failing tests
         id: failures
-        if: failure()
+        if: needs.seed-search.result == 'failure' || needs.stress-determinism.result == 'failure'
         run: |
-          LOG_DIR=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -td ~/simtest_logs/*/ | head -1")
+          LOG_DIR="${{ needs.seed-search.outputs.log_dir }}"
           FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
             "cd ~/sui && ./scripts/simtest/collect-failures.py '$LOG_DIR' | head -20")
           echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
@@ -215,26 +389,19 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           echo "log_dir=$LOG_DIR" >> $GITHUB_OUTPUT
 
-      # Skip on cancellation: the simtest was launched with `nohup ... &`, so a
-      # cancelled Actions run leaves the remote process alive. Clearing the
-      # marker here would falsely advertise the host as idle while a run is
-      # still in flight. The next nightly's "Environment clean" step pkills the
-      # survivor and removes the marker together, so leaving it on cancel is safe.
       - name: Clear simtest active marker
-        if: always() && !cancelled()
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_active_run" || true
 
     outputs:
       failed_tests: ${{ steps.failures.outputs.failed_tests }}
       log_dir: ${{ steps.failures.outputs.log_dir }}
-      protocol_message: ${{ steps.protocol.outputs.protocol_message }}
 
   notify:
     name: Notify
-    needs: [simtest]
+    needs: [seed-search, stress-determinism, finalize]
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' && failure()
+    if: ${{ !cancelled() && github.event_name == 'schedule' && (needs.seed-search.result == 'failure' || needs.stress-determinism.result == 'failure') }}
 
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
@@ -252,7 +419,7 @@ jobs:
             "run_id": "${{ github.run_id }}",
             "workflow_name": "${{ github.workflow }}",
             "workflow_conclusion": "${{ env.WORKFLOW_CONCLUSION }}",
-            "protocol_message": "${{ needs.simtest.outputs.protocol_message }}",
-            "failed_tests": ${{ toJSON(needs.simtest.outputs.failed_tests) }},
-            "log_dir": "${{ needs.simtest.outputs.log_dir }}"
+            "protocol_message": "${{ needs.seed-search.outputs.protocol_message }}",
+            "failed_tests": ${{ toJSON(needs.finalize.outputs.failed_tests) }},
+            "log_dir": "${{ needs.finalize.outputs.log_dir }}"
           }
