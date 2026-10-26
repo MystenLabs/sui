@@ -30,7 +30,10 @@ use sui_types::transaction::{
     Argument, CallArg, Command, InputObjectKind, ObjectArg, SharedObjectMutability,
     TransactionData, TransactionKind,
 };
-use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID, coin, fp_ensure};
+use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_PACKAGE_CONFIG_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID, coin, fp_ensure,
+    move_package::{MinVersionState, UpgradeCap, UpgradeCapPolicy, UpgradePolicy},
+};
 
 #[async_trait]
 pub trait DataReader {
@@ -531,7 +534,7 @@ impl TransactionBuilder {
         modules: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
         upgrade_capability: ObjectID,
-        upgrade_policy: u8,
+        upgrade_cap_policy: UpgradeCapPolicy,
         digest: Vec<u8>,
     ) -> Result<TransactionKind, anyhow::Error> {
         let upgrade_capability = self.0.get_object(upgrade_capability).await?;
@@ -567,24 +570,51 @@ impl TransactionBuilder {
                     return Err(anyhow::anyhow!("Upgrade capability controlled by object"));
                 }
             };
-            builder.obj(capability_arg).unwrap();
-            let upgrade_arg = builder.pure(upgrade_policy).unwrap();
+            let capability_arg = builder.obj(capability_arg).unwrap();
+            // `authorize_upgrade` accepts only the base compatibility policy. The minversion
+            // state remains packed in the cap and selects the completion flow below.
+            let upgrade_arg = builder
+                .pure(upgrade_cap_policy.base_policy() as u8)
+                .unwrap();
             let digest_arg = builder.pure(digest).unwrap();
+            let minversion_enabled =
+                upgrade_cap_policy.minversion_state() == MinVersionState::Enabled;
             let upgrade_ticket = builder.programmable_move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,
                 ident_str!("package").to_owned(),
                 ident_str!("authorize_upgrade").to_owned(),
                 vec![],
-                vec![Argument::Input(0), upgrade_arg, digest_arg],
+                vec![capability_arg, upgrade_arg, digest_arg],
             );
             let upgrade_receipt = builder.upgrade(package_id, upgrade_ticket, dep_ids, modules);
 
+            if minversion_enabled {
+                let package_config = self.0.get_object(SUI_PACKAGE_CONFIG_OBJECT_ID).await?;
+                let package_config_arg = match package_config.owner() {
+                    Owner::Shared {
+                        initial_shared_version,
+                    } => ObjectArg::SharedObject {
+                        id: package_config.id(),
+                        initial_shared_version: *initial_shared_version,
+                        mutability: SharedObjectMutability::Mutable,
+                    },
+                    _ => bail!("Package config object is not shared"),
+                };
+                let package_config_arg = builder.obj(package_config_arg).unwrap();
+                builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    ident_str!("package_config").to_owned(),
+                    ident_str!("record_minversion_upgrade").to_owned(),
+                    vec![],
+                    vec![package_config_arg, capability_arg, upgrade_receipt],
+                );
+            }
             builder.programmable_move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,
                 ident_str!("package").to_owned(),
                 ident_str!("commit_upgrade").to_owned(),
                 vec![],
-                vec![Argument::Input(0), upgrade_receipt],
+                vec![capability_arg, upgrade_receipt],
             );
 
             builder.finish()
@@ -609,20 +639,37 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(sender, gas, gas_budget, vec![], gas_price)
             .await?;
+        let requested_policy = UpgradePolicy::try_from(upgrade_policy)
+            .map_err(|_| anyhow!("invalid upgrade policy: {upgrade_policy:#04x}"))?;
         let upgrade_cap = self.0.get_object(upgrade_capability).await?;
-        let cap_owner = upgrade_cap.owner().clone();
-        TransactionData::new_upgrade(
+        let upgrade_cap: UpgradeCap = bcs::from_bytes(
+            upgrade_cap
+                .data
+                .try_as_move()
+                .ok_or_else(|| anyhow!("Upgrade capability is not a Move object"))?
+                .contents(),
+        )?;
+        let cap_policy = UpgradeCapPolicy::try_from(upgrade_cap.policy)?;
+        let upgrade_cap_policy = UpgradeCapPolicy::try_from(
+            requested_policy as u8 | cap_policy.minversion_state() as u8,
+        )?;
+        let kind = self
+            .upgrade_tx_kind(
+                package_id,
+                compiled_modules,
+                dep_ids,
+                upgrade_capability,
+                upgrade_cap_policy,
+                digest,
+            )
+            .await?;
+        Ok(TransactionData::new_with_gas_coins(
+            kind,
             sender,
-            gas,
-            package_id,
-            compiled_modules,
-            dep_ids,
-            (upgrade_cap.compute_object_reference(), cap_owner),
-            upgrade_policy,
-            digest,
+            vec![gas],
             gas_budget,
             gas_price,
-        )
+        ))
     }
 
     /// Construct a transaction kind for the SplitCoin transaction type
@@ -987,3 +1034,6 @@ impl TransactionBuilder {
         Ok((full_object_ref, object_type))
     }
 }
+
+#[cfg(test)]
+mod tests;
