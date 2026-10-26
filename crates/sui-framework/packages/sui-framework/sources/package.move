@@ -8,6 +8,7 @@ module sui::package;
 
 use std::ascii::String;
 use std::type_name;
+use sui::scratch;
 use sui::types;
 
 /// Allows calling `.burn` to destroy a `Publisher`.
@@ -25,8 +26,8 @@ public use fun published_package as Publisher.package;
 /// authorizes upgrades for.
 public use fun upgrade_package as UpgradeCap.package;
 
-/// Allows calling `.policy` to access the most permissive kind of
-/// upgrade this cap will authorize.
+/// Allows calling `.policy` to access the base compatibility policy
+/// this cap will authorize.
 public use fun upgrade_policy as UpgradeCap.policy;
 
 /// Allows calling `.authorize` to initiate an upgrade.
@@ -72,6 +73,14 @@ const EUpgradeInProgress: u64 = 5;
 /// Invalid package version in the `UpgradeCap`, or there was a mismatch
 /// between the package ID and version supplied (in the native).
 const EInvalidPackageVersion: u64 = 6;
+/// The requested minversion operation is not available for this cap.
+const EMinVersionUnavailable: u64 = 7;
+/// Tried to commit an enrolled upgrade before recording its minversion selection.
+const EMinVersionUpgradeNotRecorded: u64 = 8;
+/// Tried to record an enrolled upgrade more than once.
+const EMinVersionUpgradeAlreadyRecorded: u64 = 9;
+/// Tried to authorize an upgrade with an unknown policy value.
+const EInvalidUpgradePolicy: u64 = 10;
 
 /// Update any part of the package (function implementations, add new
 /// functions or types, change dependencies)
@@ -81,6 +90,17 @@ const COMPATIBLE: u8 = 0;
 const ADDITIVE: u8 = 128;
 /// Only be able to change dependencies.
 const DEP_ONLY: u8 = 192;
+
+/// Mask for the base compatibility policy in an `UpgradeCap` policy.
+const BASE_POLICY_MASK: u8 = 0xc0;
+/// Mask for the minversion state in an `UpgradeCap` policy.
+const MINVERSION_STATE_MASK: u8 = 0x30;
+/// Minversion is not enabled and can still be enabled.
+const MINVERSION_AVAILABLE: u8 = 0x00;
+/// Minversion is not enabled and can never be enabled.
+const MINVERSION_PERMANENTLY_DISABLED: u8 = 0x10;
+/// Minversion is enabled.
+const MINVERSION_ENABLED: u8 = 0x20;
 
 /// This type can only be created in the transaction that
 /// generates a module, by consuming its one-time witness, so it
@@ -134,6 +154,26 @@ public struct UpgradeReceipt {
     cap: ID,
     /// (Immutable) ID of the package after it was upgraded.
     package: ID,
+}
+
+/// Must be consumed to record minversion enrollment in package configuration.
+public struct MinVersionEnrollment {
+    original_id: ID,
+    version: u64,
+    package_id: ID,
+}
+
+/// Identifies transaction-local state for an enrolled upgrade.
+public struct MinVersionUpgradeKey has copy, drop {
+    cap: ID,
+}
+
+/// Carries an enrolled cap's identity across authorization, while its package ID is cleared.
+public struct MinVersionUpgradeState has drop {
+    original_id: ID,
+    previous_version: u64,
+    previous_package_id: ID,
+    recorded_package_id: Option<ID>,
 }
 
 /// Claim a Publisher object.
@@ -204,10 +244,66 @@ public fun version(cap: &UpgradeCap): u64 {
     cap.version
 }
 
-/// The most permissive kind of upgrade currently supported by this
-/// `cap`.
+/// The base compatibility policy currently supported by this `cap`.
 public fun upgrade_policy(cap: &UpgradeCap): u8 {
-    cap.policy
+    cap.policy & BASE_POLICY_MASK
+}
+
+/// Whether this `cap` can enroll in minversion.
+public fun minversion_enrollment_available(cap: &UpgradeCap): bool {
+    (cap.policy & MINVERSION_STATE_MASK) == MINVERSION_AVAILABLE
+}
+
+/// Whether this `cap` is permanently enrolled in minversion.
+public fun minversion_permanently_enabled(cap: &UpgradeCap): bool {
+    (cap.policy & MINVERSION_STATE_MASK) == MINVERSION_ENABLED
+}
+
+/// Whether this `cap` cannot be enrolled in minversion.
+public fun minversion_permanently_disabled(cap: &UpgradeCap): bool {
+    (cap.policy & MINVERSION_STATE_MASK) == MINVERSION_PERMANENTLY_DISABLED
+}
+
+/// Enroll this `cap` in minversion and produce the token required to record the current package
+/// version as the selected minversion.
+public fun enable_minversion_permanently(cap: &mut UpgradeCap): MinVersionEnrollment {
+    let original_id = cap.original_package_id();
+    cap.enable_minversion_impl(original_id)
+}
+
+fun enable_minversion_impl(
+    cap: &mut UpgradeCap,
+    original_id: ID,
+): MinVersionEnrollment {
+    assert!(cap.minversion_enrollment_available(), EMinVersionUnavailable);
+
+    let version = cap.version;
+    let package_id = cap.package;
+    cap.policy = cap.policy | MINVERSION_ENABLED;
+
+    MinVersionEnrollment {
+        original_id,
+        version,
+        package_id,
+    }
+}
+
+/// Permanently prevent this `cap` from enrolling in minversion.
+public fun disable_minversion_permanently(cap: &mut UpgradeCap) {
+    assert!(cap.minversion_enrollment_available(), EMinVersionUnavailable);
+    cap.policy = cap.policy | MINVERSION_PERMANENTLY_DISABLED;
+}
+
+/// Consume a minversion enrollment token and return `(original_id, version, package_id)`.
+public(package) fun minversion_enrollment_info(
+    enrollment: MinVersionEnrollment,
+): (ID, u64, ID) {
+    let MinVersionEnrollment {
+        original_id,
+        version,
+        package_id,
+    } = enrollment;
+    (original_id, version, package_id)
 }
 
 /// The package that this ticket is authorized to upgrade
@@ -271,7 +367,10 @@ public entry fun only_dep_upgrades(cap: &mut UpgradeCap) {
 
 #[allow(lint(public_entry))]
 /// Discard the `UpgradeCap` to make a package immutable.
+/// Aborts if the capability has an outstanding upgrade authorization.
 public entry fun make_immutable(cap: UpgradeCap) {
+    // Authorization clears the package ID until commit; do not destroy a cap in that state.
+    assert!(cap.package.to_address() != @0x0, EUpgradeInProgress);
     let UpgradeCap { id, package: _, version: _, policy: _ } = cap;
     id.delete();
 }
@@ -279,7 +378,8 @@ public entry fun make_immutable(cap: UpgradeCap) {
 /// Issue a ticket authorizing an upgrade to a particular new bytecode
 /// (identified by its digest).  A ticket will only be issued if one has
 /// not already been issued, and if the `policy` requested is at least as
-/// restrictive as the policy set out by the `cap`.
+/// restrictive as the policy set out by the `cap`. The requested policy
+/// must be one of the known base upgrade policies.
 ///
 /// The `digest` supplied and the `policy` will both be checked by
 /// validators when running the upgrade.  I.e. the bytecode supplied in
@@ -287,9 +387,26 @@ public entry fun make_immutable(cap: UpgradeCap) {
 /// the parent package must be compatible with the policy in the ticket
 /// for the upgrade to succeed.
 public fun authorize_upgrade(cap: &mut UpgradeCap, policy: u8, digest: vector<u8>): UpgradeTicket {
+    if (!cap.minversion_permanently_enabled()) return cap.authorize_upgrade_impl(policy, digest);
+
+    // Capture this before authorization clears the cap's current package ID.
+    let original_id = cap.original_package_id();
+    let ticket = cap.authorize_upgrade_impl(policy, digest);
+    cap.begin_minversion_upgrade(original_id, ticket.package);
+    ticket
+}
+
+fun authorize_upgrade_impl(
+    cap: &mut UpgradeCap,
+    policy: u8,
+    digest: vector<u8>,
+): UpgradeTicket {
     let id_zero = @0x0.to_id();
     assert!(cap.package != id_zero, EAlreadyAuthorized);
-    assert!(policy >= cap.policy, ETooPermissive);
+    // Tickets carry only a base policy. Reject packed minversion state and unknown policy bits
+    // here rather than issuing a ticket that execution will reject later.
+    assert!(policy == COMPATIBLE || policy == ADDITIVE || policy == DEP_ONLY, EInvalidUpgradePolicy);
+    assert!(policy >= cap.upgrade_policy(), ETooPermissive);
 
     let package = cap.package;
     cap.package = id_zero;
@@ -302,9 +419,79 @@ public fun authorize_upgrade(cap: &mut UpgradeCap, policy: u8, digest: vector<u8
     }
 }
 
-/// Consume an `UpgradeReceipt` to update its `UpgradeCap`, finalizing
-/// the upgrade.
+fun begin_minversion_upgrade(cap: &UpgradeCap, original_id: ID, previous_package_id: ID) {
+    let key = MinVersionUpgradeKey { cap: object::id(cap) };
+    scratch::add_internal(
+        internal::permit<MinVersionUpgradeKey>(),
+        key,
+        MinVersionUpgradeState {
+            original_id,
+            previous_version: cap.version,
+            previous_package_id,
+            recorded_package_id: option::none(),
+        },
+    );
+}
+
+/// Consume an `UpgradeReceipt` to update its `UpgradeCap`, finalizing the upgrade. An enrolled
+/// upgrade must first record its new selection in `PackageConfig`.
 public fun commit_upgrade(cap: &mut UpgradeCap, receipt: UpgradeReceipt) {
+    if (cap.minversion_permanently_enabled()) {
+        let key = MinVersionUpgradeKey { cap: object::id(cap) };
+        let MinVersionUpgradeState {
+            original_id: _,
+            previous_version,
+            previous_package_id: _,
+            recorded_package_id,
+        } = scratch::remove_internal(
+            internal::permit<MinVersionUpgradeKey>(),
+            key,
+        );
+        assert!(previous_version == cap.version, EMinVersionUpgradeNotRecorded);
+        assert!(recorded_package_id.is_some(), EMinVersionUpgradeNotRecorded);
+        assert!(recorded_package_id.destroy_some() == receipt.package, EWrongUpgradeCap);
+    };
+    cap.commit_upgrade_impl(receipt);
+}
+
+/// Marks an enrolled upgrade as recorded and returns the old and new selections.
+public(package) fun record_minversion_upgrade_info(
+    cap: &UpgradeCap,
+    receipt: &UpgradeReceipt,
+): (ID, u64, ID, ID) {
+    assert!(cap.minversion_permanently_enabled(), EMinVersionUnavailable);
+    assert!(object::id(cap) == receipt.cap, EWrongUpgradeCap);
+    assert!(cap.package.to_address() == @0x0, ENotAuthorized);
+
+    let key = MinVersionUpgradeKey { cap: object::id(cap) };
+    let MinVersionUpgradeState {
+        original_id,
+        previous_version,
+        previous_package_id,
+        recorded_package_id,
+    } = scratch::remove_internal(
+        internal::permit<MinVersionUpgradeKey>(),
+        key,
+    );
+    assert!(previous_version == cap.version, EMinVersionUpgradeNotRecorded);
+    assert!(recorded_package_id.is_none(), EMinVersionUpgradeAlreadyRecorded);
+    recorded_package_id.destroy_none();
+
+    let package_id = receipt.package;
+    scratch::add_internal(
+        internal::permit<MinVersionUpgradeKey>(),
+        key,
+        MinVersionUpgradeState {
+            original_id,
+            previous_version,
+            previous_package_id,
+            recorded_package_id: option::some(package_id),
+        },
+    );
+    (original_id, previous_version, previous_package_id, package_id)
+}
+
+fun commit_upgrade_impl(cap: &mut UpgradeCap, receipt: UpgradeReceipt) {
     let UpgradeReceipt { cap: cap_id, package } = receipt;
 
     assert!(object::id(cap) == cap_id, EWrongUpgradeCap);
@@ -339,6 +526,14 @@ public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
 }
 
 #[test_only]
+public fun enable_minversion_for_testing(
+    cap: &mut UpgradeCap,
+    original_id: ID,
+): MinVersionEnrollment {
+    cap.enable_minversion_impl(original_id)
+}
+
+#[test_only]
 /// Test-only function to simulate publishing a package at address
 /// `ID`, to create an `UpgradeCap`.
 public fun test_publish(package: ID, ctx: &mut TxContext): UpgradeCap {
@@ -348,6 +543,21 @@ public fun test_publish(package: ID, ctx: &mut TxContext): UpgradeCap {
         version: 1,
         policy: COMPATIBLE,
     }
+}
+
+#[test_only]
+/// Authorizes an enrolled upgrade without resolving package metadata unavailable to Move unit
+/// tests.
+public fun authorize_upgrade_for_testing(
+    cap: &mut UpgradeCap,
+    original_id: ID,
+    policy: u8,
+    digest: vector<u8>,
+): UpgradeTicket {
+    assert!(cap.minversion_permanently_enabled(), EMinVersionUnavailable);
+    let ticket = cap.authorize_upgrade_impl(policy, digest);
+    cap.begin_minversion_upgrade(original_id, ticket.package);
+    ticket
 }
 
 #[test_only]
@@ -370,6 +580,6 @@ public fun test_upgrade(ticket: UpgradeTicket): UpgradeReceipt {
 }
 
 fun restrict(cap: &mut UpgradeCap, policy: u8) {
-    assert!(cap.policy <= policy, ETooPermissive);
-    cap.policy = policy;
+    assert!(cap.upgrade_policy() <= policy, ETooPermissive);
+    cap.policy = policy | (cap.policy & MINVERSION_STATE_MASK);
 }
