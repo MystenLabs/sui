@@ -74,6 +74,15 @@ ignore = [
     # deprecated), used only by the sui-metric-checker CLI to parse its own
     # config file. Remove once sui-metric-checker moves off serde_yaml.
     "RUSTSEC-2024-0449",
+    # crypto-bigint < 0.7.6: operations intended to be constant-time may branch on
+    # secret data. Fixed only in crypto-bigint 0.7.6; Sui pulls 0.4.x/0.5.x through
+    # the RustCrypto elliptic-curve 0.12/0.13 stack (k256, p256, p384, ecdsa,
+    # primeorder via fastcrypto and alloy-signer), so clearing it needs the
+    # elliptic-curve 0.14 / crypto-bigint 0.7 upgrade. Validator signing uses
+    # BLS12-381 and Ed25519, which do not use this stack.
+    # TODO: security sign-off on secp256k1/secp256r1 signing exposure, and link the
+    # tracking issue for the elliptic-curve 0.14 upgrade.
+    "RUSTSEC-2026-0387",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
