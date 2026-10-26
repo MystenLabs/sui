@@ -294,8 +294,26 @@ jobs:
       # install from the seed-search job are still in place.
       - name: Wait for seed search to finish on host
         run: |
-          while tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "pgrep -f 'scripts/simtest/(simtest-run|seed-search)' > /dev/null"; do
-            echo "$(date): seed search still running on simtest-01, waiting..."
+          ssh_failures=0
+          max_ssh_failures=3
+          while true; do
+            # RUNNING or IDLE if SSH succeeds, empty if the SSH call itself failed:
+            # an SSH failure must not be mistaken for an idle host.
+            result=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
+              "if pgrep -f 'scripts/simtest/(simtest-run|seed-search)' > /dev/null; then echo RUNNING; else echo IDLE; fi" 2>/dev/null) || true
+            if [ "$result" = "IDLE" ]; then
+              break
+            elif [ "$result" = "RUNNING" ]; then
+              ssh_failures=0
+              echo "$(date): seed search still in progress on simtest-01, waiting..."
+            else
+              ssh_failures=$((ssh_failures + 1))
+              echo "$(date): SSH connection failed (attempt $ssh_failures/$max_ssh_failures)"
+              if [ $ssh_failures -ge $max_ssh_failures ]; then
+                echo "::error::Too many consecutive SSH failures while waiting for the host. A simtest run may still be in progress."
+                exit 1
+              fi
+            fi
             sleep 120
           done
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git rev-parse HEAD && command -v cargo-simtest"
@@ -384,8 +402,26 @@ jobs:
       # for it before collecting logs or declaring the host idle.
       - name: Wait for any remaining simtest run on host
         run: |
-          while tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "pgrep -f 'scripts/simtest/(simtest-run|seed-search)' > /dev/null"; do
-            echo "$(date): a simtest run is still in progress on simtest-01, waiting..."
+          ssh_failures=0
+          max_ssh_failures=3
+          while true; do
+            # RUNNING or IDLE if SSH succeeds, empty if the SSH call itself failed:
+            # an SSH failure must not be mistaken for an idle host.
+            result=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
+              "if pgrep -f 'scripts/simtest/(simtest-run|seed-search)' > /dev/null; then echo RUNNING; else echo IDLE; fi" 2>/dev/null) || true
+            if [ "$result" = "IDLE" ]; then
+              break
+            elif [ "$result" = "RUNNING" ]; then
+              ssh_failures=0
+              echo "$(date): a simtest run is still in progress on simtest-01, waiting..."
+            else
+              ssh_failures=$((ssh_failures + 1))
+              echo "$(date): SSH connection failed (attempt $ssh_failures/$max_ssh_failures)"
+              if [ $ssh_failures -ge $max_ssh_failures ]; then
+                echo "::error::Too many consecutive SSH failures while waiting for the host. A simtest run may still be in progress."
+                exit 1
+              fi
+            fi
             sleep 120
           done
 
