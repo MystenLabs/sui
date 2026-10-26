@@ -1,0 +1,65 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+// A call before an upgrade places Root's family in the transaction-wide linkage table. The same
+// PTB then upgrades Root and introduces a new module with init. The enrolled dependency family must
+// resolve consistently to DepV2 for both the earlier call and the new initializer.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-12:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5145200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-16:
+//# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5145200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 18-22:
+//# publish --upgradeable --dependencies DepV1 --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7052800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 39-41:
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(5,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 43-49:
+// Command 0 inserts RootV1 and selected DepV2 into unified linkage before the upgrade-with-init is
+// analyzed. The call event and shared Config both record dependency version 2.
+//# programmable --sender A --inputs object(3,1) 0u8 digest(RootV2)
+//> 0: RootV1::root::ping();
+//> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 2: Upgrade(RootV2, [DepV2,sui,std], RootV1, Result(1));
+//> sui::package::commit_upgrade(Input(0), Result(2));
+events: Event { package_id: RootV1, transaction_module: Identifier("root"), sender: A, type_: StructTag { address: RootV1, module: Identifier("root"), name: Identifier("Call"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+created: object(6,0), object(6,1)
+mutated: object(0,0), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 11369600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 7, line 51:
+//# view-object 6,1
+Owner: Shared( 6 )
+Version: 6
+Contents: RootV1::init_module::Config {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,1),
+        },
+    },
+    version: 2u64,
+}

@@ -1388,6 +1388,9 @@ OtherCommand._
 OwnedOrImmutable.object
   => {}
 
+PackageConfigCreateTransaction._
+  => {}
+
 PageInfo.hasPreviousPage
   => {}
 

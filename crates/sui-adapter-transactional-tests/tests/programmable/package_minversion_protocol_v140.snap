@@ -1,0 +1,31 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+// Package-version rules activate in protocol version 141. At v140 there is no PackageConfig
+// object, so a historical package reference must execute exactly the version it names without an
+// implicit PackageConfig read.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-13:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-18:
+//# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 20-22:
+// v140 executes the explicitly referenced historical package. The snapshot must contain the v1
+// event and no unchanged 0xcf6 shared input.
+//# run BaseV1::base::ping --sender A
+events: Event { package_id: BaseV1, transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV1, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

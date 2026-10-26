@@ -64,3 +64,27 @@ public fun ping() {}
 // Entry pins transitive `Leaf` exact(1); `ping` pins it exact(2) => exact/exact conflict => InvalidLinkage.
 //> 0: Root::m::ent_go(Input(0));
 //> 1: Leaf_V2::l::ping();
+
+// Enroll the upgraded leaf as the selected minimum version.
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+
+//# programmable --sender A --inputs object(4,0)
+// Public linkage remains at-least: the historical Leaf_V1 dependency is raised to selected v2.
+//> Root::m::pub_go(Input(0));
+
+//# view-object 4,0
+
+//# programmable --sender A --inputs object(4,0)
+// Entry linkage remains exact after selection: it executes the selected v2 dependency.
+//> Root::m::ent_go(Input(0));
+
+//# view-object 4,0
+
+// The same PTB conflicted before enrollment. Both references now select Leaf v2 and succeed.
+//# programmable --sender A --inputs object(4,0)
+//> 0: Root::m::ent_go(Input(0));
+//> 1: Leaf_V2::l::ping();
+
+//# view-object 4,0

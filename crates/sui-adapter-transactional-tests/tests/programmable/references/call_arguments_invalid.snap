@@ -23,6 +23,7 @@ task 2, lines 62-64:
 //> 1: TransferObjects([Result(0)], Input(0));
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 // --- the same reference twice in one call ---

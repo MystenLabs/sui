@@ -1,0 +1,93 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Two selected intermediate packages form a diamond over one leaf family:
+//
+//   Consumer -> selected LeftV2  -> LeafV2
+//            -> selected RightV2 -> LeafV3
+//
+// A public consumer permits upward dependency unification, so both branches execute LeafV3. An
+// entry consumer retains its exact historical LeafV1 constraint and conflicts with the selected
+// branches' newer leaf requirements.
+
+init:
+A: object(0,0)
+
+task 1, lines 15-17:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-21:
+//# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 23-25:
+//# upgrade --package LeafV2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 27-30:
+//# publish --upgradeable --dependencies LeafV1 --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 5988800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 32-35:
+//# upgrade --package LeftV1 --upgrade-capability 4,1 --dependencies LeafV2 --sender A
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 5988800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 37-40:
+//# publish --upgradeable --dependencies LeafV1 --sender A
+created: object(6,0), object(6,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 42-45:
+//# upgrade --package RightV1 --upgrade-capability 6,1 --dependencies LeafV3 --sender A
+created: object(7,0)
+mutated: object(0,0), object(6,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 8, lines 47-57:
+//# publish --dependencies LeftV1 RightV1 LeafV1 --sender A
+created: object(8,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7288400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 59-63:
+//# programmable --sender A --inputs object(4,1) object(6,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(2), Result(0));
+//> 2: sui::package::enable_minversion_permanently(Input(1));
+//> sui::package_config::record_minversion_enrollment(Input(2), Result(2));
+created: object(9,0), object(9,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(4,1), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 11278400,  storage_rebate: 4255574, non_refundable_storage_fee: 426
+
+task 10, lines 65-66:
+// Public linkage raises both diamond branches to LeafV3.
+//# run Consumer::consumer::public_call --sender A
+events: Event { package_id: Consumer, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: Consumer, module: Identifier("consumer"), name: Identifier("Versions"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 11, lines 68-69:
+// Entry linkage pins the historical LeafV1 exactly and cannot satisfy either selected branch.
+//# run Consumer::consumer::entry_call --sender A
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package LeafV1 (version 1) and also at least the following version of the package LeafV3 at version 3. However LeafV1 is at version 1 which is less than 3."), command: Some(0) } }

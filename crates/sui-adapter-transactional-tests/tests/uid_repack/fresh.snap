@@ -19,6 +19,7 @@ task 2, line 44:
 //# run ex::m::transfer_b --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 46:
@@ -37,6 +38,7 @@ task 4, line 48:
 //# run ex::m::share_b --sender A
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, line 50:
@@ -55,6 +57,7 @@ task 6, line 52:
 //# run ex::m::freeze_b --sender A
 created: object(6,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, line 54:
@@ -72,9 +75,11 @@ Contents: ex::m::B {
 task 8, line 56:
 //# run ex::m::use_b --args object(4,0) --sender A
 mutated: object(0,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 9, line 58:
 //# run ex::m::delete_b --sender A
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

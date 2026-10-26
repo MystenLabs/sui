@@ -1,0 +1,132 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+// Unified linkage must be independent of command order. Historical calls into two enrolled package
+// families both select their v2 packages. Two entry consumers are individually valid with exact
+// LeafV2 and LeafV3 closures, but cannot share one PTB because exact constraints at different leaf
+// versions conflict. Both command orders exercise the same outcomes.
+
+init:
+A: object(0,0)
+
+task 1, lines 11-13:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-17:
+//# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 19-21:
+//# upgrade --package LeafV2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 23-27:
+//# publish --upgradeable --dependencies LeafV1 --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7136400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 29-33:
+//# upgrade --package AV1 --upgrade-capability 4,1 --dependencies LeafV2 --sender A
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7136400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 35-39:
+//# publish --upgradeable --dependencies LeafV1 --sender A
+created: object(6,0), object(6,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7136400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 41-45:
+//# upgrade --package BV1 --upgrade-capability 6,1 --dependencies LeafV2 --sender A
+created: object(7,0)
+mutated: object(0,0), object(6,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7136400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 8, lines 47-50:
+//# publish --dependencies AV1 LeafV2 --sender A
+created: object(8,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4917200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 52-55:
+//# publish --dependencies BV1 LeafV3 --sender A
+created: object(9,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 4917200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 10, lines 57-61:
+//# programmable --sender A --inputs object(4,1) object(6,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(2), Result(0));
+//> 2: sui::package::enable_minversion_permanently(Input(1));
+//> sui::package_config::record_minversion_enrollment(Input(2), Result(2));
+created: object(10,0), object(10,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(4,1), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 11278400,  storage_rebate: 4255574, non_refundable_storage_fee: 426
+
+task 11, lines 63-66:
+// Both historical package calls select v2 and execute against LeafV2.
+//# programmable --sender A
+//> 0: AV1::a::call();
+//> BV1::b::call();
+events: Event { package_id: AV2, transaction_module: Identifier("a"), sender: A, type_: StructTag { address: AV1, module: Identifier("a"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: BV2, transaction_module: Identifier("b"), sender: A, type_: StructTag { address: BV1, module: Identifier("b"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 68-70:
+//# programmable --sender A
+//> 0: BV1::b::call();
+//> AV1::a::call();
+events: Event { package_id: BV2, transaction_module: Identifier("b"), sender: A, type_: StructTag { address: BV1, module: Identifier("b"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: AV2, transaction_module: Identifier("a"), sender: A, type_: StructTag { address: AV1, module: Identifier("a"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 13, lines 72-74:
+// Each entry consumer succeeds alone: its exact leaf version satisfies the selected package's
+// minimum LeafV2 dependency.
+//# run ConsumerV2::consumer::call --sender A
+events: Event { package_id: ConsumerV2, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: AV1, module: Identifier("a"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 14, line 76:
+//# run ConsumerV3::consumer::call --sender A
+events: Event { package_id: ConsumerV3, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: BV1, module: Identifier("b"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 15, lines 78-81:
+// Together, exact LeafV2 and exact LeafV3 cannot be unified, in either command order.
+//# programmable --sender A
+//> 0: ConsumerV2::consumer::call();
+//> ConsumerV3::consumer::call();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly LeafV2 (version 2) and LeafV3 (version 3) to be used in the same transaction"), command: Some(1) } }
+
+task 16, lines 83-85:
+//# programmable --sender A
+//> 0: ConsumerV3::consumer::call();
+//> ConsumerV2::consumer::call();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly LeafV3 (version 3) and LeafV2 (version 2) to be used in the same transaction"), command: Some(1) } }

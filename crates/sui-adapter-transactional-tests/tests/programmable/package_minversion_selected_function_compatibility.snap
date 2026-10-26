@@ -1,0 +1,52 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+// Package upgrades may remove a private entry function or change its parameters. After this package
+// family selects v2, a transaction that names the old v1 package ID is redirected to v2 before the
+// function is looked up. The call must therefore fail if v2 removed the function or changed its
+// signature, and succeed only when its arguments match the v2 signature.
+
+init:
+A: object(0,0)
+
+task 1, lines 11-15:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6566400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-20:
+//# upgrade --package FunctionsV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6308000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 22-24:
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(3,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 26-27:
+// Root selection happens before function lookup, so the removed v1 entry is not found.
+//# run FunctionsV1::functions::removed --sender A
+Error: Transaction Effects Status: Function Not Found.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'removed' in module 'FunctionsV2::functions'"), command: Some(0) } }
+
+task 5, lines 29-30:
+// Arguments are checked against the selected v2 signature, not the historical v1 signature.
+//# run FunctionsV1::functions::changed --args 7 --sender A
+Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects bool but provided argument's value does not match"), command: Some(0) } }
+
+task 6, lines 32-33:
+// A historical package reference with the selected signature executes v2.
+//# run FunctionsV1::functions::changed --args true --sender A
+events: Event { package_id: FunctionsV2, transaction_module: Identifier("functions"), sender: A, type_: StructTag { address: FunctionsV1, module: Identifier("functions"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

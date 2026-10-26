@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+set -euo pipefail
+
+chain_id=$(sui client --client.config "$CONFIG" chain-identifier --format=hex)
+
+make_package() {
+  local name=$1
+  mkdir -p "$name/sources"
+  cat > "$name/Move.toml" <<EOF
+[package]
+name = "$name"
+edition = "2024"
+
+[dependencies]
+
+[environments]
+localnet = "$chain_id"
+EOF
+  cat > "$name/sources/main.move" <<EOF
+module $name::main;
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 1 }) }
+EOF
+}
+
+publish() {
+  local name=$1
+  sui client --client.config "$CONFIG" publish "$name" --json > "$name.json"
+  jq -er '.objectChanges[] | select(.type == "created" and (.objectType | endswith("::package::UpgradeCap"))) | .objectId' "$name.json" > "$name.cap"
+  jq -er '.objectChanges[] | select(.type == "published") | .packageId' "$name.json" > "$name.package"
+}
+
+upgrade() {
+  local name=$1
+  cat > "$name/sources/main.move" <<EOF
+module $name::main;
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 2 }) }
+EOF
+  sui client --client.config "$CONFIG" upgrade "$name" --json > "$name.upgrade.json"
+  jq -er '.objectChanges[] | select(.type == "published") | .packageId' "$name.upgrade.json" > "$name.latest-package"
+}
+
+# An enrollment-available cap uses the ordinary upgrade completion flow.
+make_package available
+publish available
+echo "=== upgrade with enrollment available ==="
+upgrade available
+
+# The generic PTB --upgrade command also retains the ordinary flow.
+make_package ptb_available
+publish ptb_available
+cat > ptb_available/sources/main.move <<'EOF'
+module ptb_available::main;
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 2 }) }
+EOF
+echo "=== PTB upgrade with enrollment available ==="
+sui client --client.config "$CONFIG" ptb \
+  --upgrade ptb_available "@$(< ptb_available.cap)" \
+  --json > ptb_available.upgrade.json
+jq -er '.objectChanges[] | select(.type == "published") | .packageId' ptb_available.upgrade.json > ptb_available.latest-package
+
+# A permanently-disabled cap also uses the ordinary completion flow.
+make_package disabled
+publish disabled
+sui client --client.config "$CONFIG" ptb \
+  --move-call sui::package::disable_minversion_permanently "@$(< disabled.cap)" \
+  --summary > /dev/null
+echo "=== upgrade with enrollment disabled ==="
+upgrade disabled
+
+# An enabled cap requires the minversion completion and recording flow.
+make_package enabled
+publish enabled
+sui client --client.config "$CONFIG" ptb \
+  --move-call sui::package::enable_minversion_permanently "@$(< enabled.cap)" \
+  --assign authorization \
+  --move-call sui::package_config::record_minversion_enrollment @0xcf6 authorization \
+  --summary > /dev/null
+cat > enabled/sources/main.move <<'EOF'
+module enabled::main;
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 2 }) }
+EOF
+sui client --client.config "$CONFIG" upgrade enabled --dry-run > /dev/null
+sui client --client.config "$CONFIG" upgrade enabled --serialize-unsigned-transaction > enabled.unsigned
+[ -s enabled.unsigned ]
+echo "=== upgrade with minversion enabled ==="
+upgrade enabled
+sui client --client.config "$CONFIG" ptb \
+  --move-call "$(< enabled.package)"::main::emit_version \
+  --json > enabled.call.json
+jq -e --arg latest "$(< enabled.latest-package)" \
+  '.events | any(.packageId == $latest and .parsedJson.value == "2")' \
+  enabled.call.json > /dev/null
+echo "=== historical call selected latest package ==="
+
+# The generic PTB --upgrade command uses the minversion flow for an already-enrolled cap.
+cat > enabled/sources/main.move <<'EOF'
+module enabled::main;
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 3 }) }
+EOF
+echo "=== PTB upgrade with minversion enabled ==="
+sui client --client.config "$CONFIG" ptb \
+  --upgrade enabled "@$(< enabled.cap)" \
+  --json > enabled.ptb-upgrade.json
+jq -er '.objectChanges[] | select(.type == "published") | .packageId' enabled.ptb-upgrade.json > enabled.ptb-latest-package
+sui client --client.config "$CONFIG" ptb \
+  --move-call "$(< enabled.package)"::main::emit_version \
+  --json > enabled.ptb-call.json
+jq -e --arg latest "$(< enabled.ptb-latest-package)" \
+  '.events | any(.packageId == $latest and .parsedJson.value == "3")' \
+  enabled.ptb-call.json > /dev/null
+
+# Packed state bits must be decoded before authorization. Additive permits adding an API.
+make_package additive
+publish additive
+sui client --client.config "$CONFIG" ptb --move-call sui::package::only_additive_upgrades "@$(< additive.cap)" --summary > /dev/null
+sui client --client.config "$CONFIG" ptb --move-call sui::package::enable_minversion_permanently "@$(< additive.cap)" --assign authorization --move-call sui::package_config::record_minversion_enrollment @0xcf6 authorization --summary > /dev/null
+cat >> additive/sources/main.move <<EOF
+public fun added(): u64 { 2 }
+EOF
+echo "=== upgrade with additive minversion policy ==="
+sui client --client.config "$CONFIG" upgrade additive --json > additive.upgrade.json
+jq -er '.objectChanges[] | select(.type == "published") | .packageId' additive.upgrade.json > additive.latest-package
+sui client --client.config "$CONFIG" ptb \
+  --move-call "$(< additive.latest-package)"::main::added \
+  --json > /dev/null
+
+# Dependency-only permits an unchanged-module upgrade.
+make_package dep_only
+publish dep_only
+sui client --client.config "$CONFIG" ptb --move-call sui::package::only_dep_upgrades "@$(< dep_only.cap)" --summary > /dev/null
+sui client --client.config "$CONFIG" ptb --move-call sui::package::enable_minversion_permanently "@$(< dep_only.cap)" --assign authorization --move-call sui::package_config::record_minversion_enrollment @0xcf6 authorization --summary > /dev/null
+echo "=== upgrade with dependency-only minversion policy ==="
+sui client --client.config "$CONFIG" upgrade dep_only --json > dep_only.upgrade.json
+jq -er '.objectChanges[] | select(.type == "published") | .packageId' dep_only.upgrade.json > dep_only.latest-package
+
+# Enrollment and upgrade can be composed in one generic CLI PTB. The builder must account for
+# the cap state written earlier in the transaction rather than only its pre-transaction state.
+make_package enroll_and_upgrade
+publish enroll_and_upgrade
+cat > enroll_and_upgrade/sources/main.move <<'EOF'
+module enroll_and_upgrade::main;
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 2 }) }
+EOF
+echo "=== enroll and upgrade in one PTB ==="
+sui client --client.config "$CONFIG" ptb \
+  --move-call sui::package::enable_minversion_permanently "@$(< enroll_and_upgrade.cap)" \
+  --assign authorization \
+  --move-call sui::package_config::record_minversion_enrollment @0xcf6 authorization \
+  --upgrade enroll_and_upgrade "@$(< enroll_and_upgrade.cap)" \
+  --json > enroll_and_upgrade.upgrade.json
+jq -er '.objectChanges[] | select(.type == "published") | .packageId' enroll_and_upgrade.upgrade.json > enroll_and_upgrade.latest-package

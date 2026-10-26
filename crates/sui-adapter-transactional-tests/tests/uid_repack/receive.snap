@@ -18,6 +18,7 @@ task 2, line 42:
 //# run ex::m::start --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 44:
@@ -35,6 +36,7 @@ Contents: ex::m::A {
 task 4, line 46:
 //# run ex::m::receive_a_as_b --args object(2,0) receiving(2,1) --sender A
 mutated: object(0,0), object(2,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 3442456, non_refundable_storage_fee: 344
 
 task 5, line 48:
@@ -58,6 +60,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 7, line 53:
 //# run ex::m::receive_b_as_a --args object(2,0) receiving(2,1) --sender A
 mutated: object(0,0), object(2,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 3442456, non_refundable_storage_fee: 344
 
 task 8, line 55:

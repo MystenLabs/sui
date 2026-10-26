@@ -1,0 +1,186 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+// A nested type argument names two enrolled type-package families:
+//
+//   TypesAV1::Wrap<TypesBV1::Item>
+//       | selected TypesAV2 -> LeafAV2
+//       ` selected TypesBV2 -> LeafBV2
+//
+// Combining that type with Root's public call raises both executable leaf dependencies to v2. A
+// type-only use remains allowed after LeafAV2 is forbidden, while Root plus the nested selected type
+// is rejected because it would execute the forbidden LeafAV2 selected only through type linkage.
+
+init:
+A: object(0,0)
+
+task 1, lines 16-19:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-24:
+//# upgrade --package LeafAV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 26-29:
+//# upgrade --package LeafAV2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 31-34:
+//# publish --upgradeable --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 36-39:
+//# upgrade --package LeafBV1 --upgrade-capability 4,1 --sender A
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 41-44:
+//# publish --upgradeable --dependencies LeafAV1 --sender A
+created: object(6,0), object(6,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6467600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 46-49:
+//# upgrade --package TypesAV1 --upgrade-capability 6,1 --dependencies LeafAV2 --sender A
+created: object(7,0)
+mutated: object(0,0), object(6,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6467600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 8, lines 51-54:
+//# publish --upgradeable --dependencies LeafBV1 --sender A
+created: object(8,0), object(8,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6384000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 56-59:
+//# upgrade --package TypesBV1 --upgrade-capability 8,1 --dependencies LeafBV2 --sender A
+created: object(9,0)
+mutated: object(0,0), object(8,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6384000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 10, lines 61-72:
+//# publish --dependencies LeafAV1 LeafBV1 --sender A
+created: object(10,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7645600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 11, line 74:
+//# run Root::root::make --sender A
+created: object(11,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 2378800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 76-78:
+//# publish --sender A
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3518800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 13, lines 80-84:
+//# programmable --sender A --inputs object(6,1) object(8,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(2), Result(0));
+//> 2: sui::package::enable_minversion_permanently(Input(1));
+//> sui::package_config::record_minversion_enrollment(Input(2), Result(2));
+created: object(13,0), object(13,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(6,1), object(8,1)
+gas summary: computation_cost: 1000000, storage_cost: 11278400,  storage_rebate: 4255574, non_refundable_storage_fee: 426
+
+task 14, lines 86-89:
+// Both selected type packages raise Root's executable leaves to v2.
+//# programmable --sender A --inputs object(11,0)
+//> 0: Root::root::call(Input(0));
+//> 1: Generic::generic::use_type<TypesAV1::types_a::Wrap<TypesBV1::types_b::Item>>();
+mutated: object(0,0), object(11,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 2378800,  storage_rebate: 2378562, non_refundable_storage_fee: 238
+
+task 15, line 91:
+//# view-object 11,0
+Owner: Account Address ( A )
+Version: 15
+Contents: Root::root::Result {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(11,0),
+        },
+    },
+    a: 2u64,
+    b: 2u64,
+}
+
+task 16, lines 93-94:
+// LeafAV2 is historical because LeafAV3 exists.
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
+created: object(16,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+
+task 17, lines 96-97:
+// Type-only use does not execute LeafA code and remains allowed.
+//# run Generic::generic::use_type --type-args TypesAV1::types_a::Wrap<TypesBV1::types_b::Item> --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 18, lines 99-101:
+// Root alone still executes its allowed historical v1 leaves.
+//# programmable --sender A --inputs object(11,0)
+//> Root::root::call(Input(0));
+mutated: object(0,0), object(11,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 2378800,  storage_rebate: 2378562, non_refundable_storage_fee: 238
+
+task 19, line 103:
+//# view-object 11,0
+Owner: Account Address ( A )
+Version: 18
+Contents: Root::root::Result {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(11,0),
+        },
+    },
+    a: 1u64,
+    b: 1u64,
+}
+
+task 20, lines 105-108:
+// The selected nested type raises Root's LeafA dependency to forbidden v2, so this is rejected.
+//# programmable --sender A --inputs object(11,0)
+//> 0: Root::root::call(Input(0));
+//> 1: Generic::generic::use_type<TypesAV1::types_a::Wrap<TypesBV1::types_b::Item>>();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
+
+task 21, line 110:
+//# view-object 11,0
+Owner: Account Address ( A )
+Version: 19
+Contents: Root::root::Result {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(11,0),
+        },
+    },
+    a: 1u64,
+    b: 1u64,
+}

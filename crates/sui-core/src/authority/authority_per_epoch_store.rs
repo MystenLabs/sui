@@ -3224,7 +3224,13 @@ impl AuthorityPerEpochStore {
                         key,
                         AssignedVersions::new(
                             versions.shared_object_versions,
-                            sui_types::base_types::SystemObjectVersions::empty(),
+                            sui_types::base_types::SystemObjectVersions::new(
+                                None,
+                                None,
+                                versions
+                                    .system_object_versions
+                                    .get(&sui_types::SUI_PACKAGE_CONFIG_OBJECT_ID),
+                            ),
                         ),
                     )
                 })
