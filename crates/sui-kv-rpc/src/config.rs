@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::PoolConfig;
+use sui_kvstore::ReadRowsRetryConfig;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_RENDER_AHEAD: usize = 4;
@@ -28,6 +29,8 @@ const DEFAULT_REQUEST_BIGTABLE_CONCURRENCY: usize = 50;
 // Largest `tx_seq_digest` read size measured: reads of up to 100 keys within
 // one or two buckets cost about one seek.
 const DEFAULT_MAX_KEYS_PER_READ: usize = 100;
+// Largest flow-control window HTTP/2 allows (RFC 9113 §6.9.1); h2 panics on a larger one.
+const MAX_HTTP2_WINDOW_BYTES: u32 = (1 << 31) - 1;
 
 /// Built-in per-endpoint defaults. These differ per endpoint (e.g. checkpoints
 /// page smaller than transactions).
@@ -570,6 +573,39 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_max_pool_size: Option<usize>,
 
+    /// Detect stalled BigTable channels, quarantine them (cancelling their open
+    /// requests so reads retry on other channels), and replace ones that stay
+    /// unhealthy. Defaults to `true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_channel_health_check: Option<bool>,
+
+    /// Longest a BigTable ReadRows attempt may wait for its response headers
+    /// or its next response message before it is retried on another channel,
+    /// in milliseconds. Defaults to `5000`. The final attempt has no gap
+    /// timeout. A stall before the headers is retried only while
+    /// `bigtable-channel-timeout-ms`, which ends that wait on every attempt, is
+    /// longer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_read_rows_gap_timeout_ms: Option<u64>,
+
+    /// Attempts per BigTable ReadRows call, including the first. Defaults to
+    /// `3`; `1` turns off the gap timeout and retries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_read_rows_max_attempts: Option<u32>,
+
+    /// HTTP/2 receive window of each BigTable response stream, in bytes: the
+    /// most unread data one read can hold. Defaults to hyper's 2 MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_http2_stream_window_bytes: Option<u32>,
+
+    /// HTTP/2 receive window of each BigTable connection, in bytes: the most
+    /// unread data all reads on one channel can hold together. While unread
+    /// data fills it, no read on that channel receives anything, so it should
+    /// be at least `bigtable-http2-stream-window-bytes` times the most reads a
+    /// channel carries at once. Defaults to hyper's 5 MiB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_http2_connection_window_bytes: Option<u32>,
+
     /// Deprecated and ignored: the `GetServiceInfo` watermark set is derived
     /// from `enable-list-apis` and can no longer be chosen per pipeline.
     /// Still parsed so existing config files keep loading.
@@ -691,7 +727,24 @@ impl KvRpcConfig {
                 .unwrap_or(base.initial_pool_size),
             min_pool_size: self.bigtable_min_pool_size.unwrap_or(base.min_pool_size),
             max_pool_size: self.bigtable_max_pool_size.unwrap_or(base.max_pool_size),
+            health_check: base
+                .health_check
+                .filter(|_| self.bigtable_channel_health_check.unwrap_or(true)),
+            http2_stream_window_bytes: self.bigtable_http2_stream_window_bytes,
+            http2_connection_window_bytes: self.bigtable_http2_connection_window_bytes,
             ..base
+        }
+    }
+
+    pub fn read_rows_retry(&self) -> ReadRowsRetryConfig {
+        let base = ReadRowsRetryConfig::default();
+        ReadRowsRetryConfig {
+            gap_timeout: self
+                .bigtable_read_rows_gap_timeout_ms
+                .map_or(base.gap_timeout, Duration::from_millis),
+            max_attempts: self
+                .bigtable_read_rows_max_attempts
+                .unwrap_or(base.max_attempts),
         }
     }
 
@@ -729,6 +782,24 @@ impl KvRpcConfig {
             self.request_bigtable_concurrency() > 0,
             "request_bigtable_concurrency must be greater than zero",
         );
+        self.read_rows_retry().validate(self.channel_timeout())?;
+        for (key, bytes) in [
+            (
+                "bigtable-http2-stream-window-bytes",
+                self.bigtable_http2_stream_window_bytes,
+            ),
+            (
+                "bigtable-http2-connection-window-bytes",
+                self.bigtable_http2_connection_window_bytes,
+            ),
+        ] {
+            if let Some(bytes) = bytes {
+                anyhow::ensure!(
+                    (1..=MAX_HTTP2_WINDOW_BYTES).contains(&bytes),
+                    "{key} must be between 1 and {MAX_HTTP2_WINDOW_BYTES}",
+                );
+            }
+        }
         let stages = self.stages();
         for stage in [
             PipelineStage::TxSeqDigest,

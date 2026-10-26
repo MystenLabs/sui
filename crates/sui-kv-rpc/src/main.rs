@@ -218,6 +218,7 @@ async fn main() -> Result<()> {
         &registry,
         config.credentials.clone(),
         config.pool_config(),
+        config.read_rows_retry(),
         config.ledger_history(),
         config.request_bigtable_concurrency(),
         config.monotonic_read_wait_timeout(),
