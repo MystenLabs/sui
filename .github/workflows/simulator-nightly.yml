@@ -377,7 +377,7 @@ jobs:
         with:
           proxy: mysten.teleport.sh:443
           token: sui-simtest-token
-          certificate-ttl: 1h
+          certificate-ttl: 6h
 
       # Either phase job may have lost track of its detached run (repeated SSH
       # failures while polling) while the run is still going on the host. Wait
