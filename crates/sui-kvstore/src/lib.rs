@@ -6,11 +6,11 @@ pub mod config;
 mod durable_progress;
 mod handlers;
 mod object_status;
-pub mod peer_watermarks;
 mod rate_limiter;
 pub mod readiness;
 pub mod rpc;
 mod store;
+pub mod streamed_watermarks;
 pub mod tables;
 pub mod testing;
 

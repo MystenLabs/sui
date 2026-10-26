@@ -8,7 +8,7 @@
 //! - the pipeline's stored watermark row, read once at startup: how far the instances running at
 //!   that moment had got, and
 //! - the most advanced durable watermark any peer instance has streamed
-//!   ([`crate::peer_watermarks`]).
+//!   ([`crate::streamed_watermarks`]).
 //!
 //! The instance is ready once every pipeline has recorded durable progress since startup and is
 //! at most `max_lag_ms` of chain time behind both references.
@@ -57,7 +57,7 @@ use tracing::info;
 use tracing::warn;
 
 use crate::WatermarkV1;
-use crate::peer_watermarks::PeerWatermarks;
+use crate::streamed_watermarks::StreamedWatermarks;
 
 /// Minimum time peers can hold up readiness after the instance has caught up to the stored
 /// watermark rows read at startup.
@@ -195,7 +195,7 @@ pub async fn wait_until_caught_up(
     pipelines: Vec<String>,
     mut local: watch::Receiver<HashMap<String, CommitterWatermark>>,
     startup: HashMap<String, WatermarkV1>,
-    mut peers: watch::Receiver<PeerWatermarks>,
+    mut peers: watch::Receiver<StreamedWatermarks>,
     max_lag_ms: u64,
 ) {
     let started = Instant::now();
@@ -239,7 +239,7 @@ pub async fn wait_until_caught_up(
                 &peer_snapshot.watermarks,
                 max_lag_ms,
             );
-            (blockers, peer_snapshot.unsettled_peers)
+            (blockers, peer_snapshot.unsettled_instances)
         };
 
         let peer_wait_over = peer_wait_deadline.is_some_and(|deadline| now >= deadline);
@@ -337,9 +337,9 @@ mod tests {
 
     fn settled_peers(
         entries: impl IntoIterator<Item = (&'static str, CommitterWatermark)>,
-    ) -> PeerWatermarks {
-        PeerWatermarks {
-            unsettled_peers: 0,
+    ) -> StreamedWatermarks {
+        StreamedWatermarks {
+            unsettled_instances: 0,
             watermarks: map(entries),
         }
     }
@@ -516,7 +516,7 @@ mod tests {
         let (local_tx, local_rx) = watch::channel(map([(PIPELINE, local_watermark(1, 0))]));
         let startup = map([(PIPELINE, stored_watermark(Some(10), 50_000))]);
         // No peers configured: nothing ever sends on the peer channel.
-        let (_, peers_rx) = watch::channel(PeerWatermarks::default());
+        let (_, peers_rx) = watch::channel(StreamedWatermarks::default());
 
         let wait = wait_until_caught_up(
             vec![PIPELINE.to_string()],
@@ -544,8 +544,8 @@ mod tests {
     #[tokio::test]
     async fn wait_waits_for_unsettled_peers() {
         let (_local_tx, local_rx) = watch::channel(map([(PIPELINE, local_watermark(10, 50_000))]));
-        let (peers_tx, peers_rx) = watch::channel(PeerWatermarks {
-            unsettled_peers: 1,
+        let (peers_tx, peers_rx) = watch::channel(StreamedWatermarks {
+            unsettled_instances: 1,
             watermarks: HashMap::new(),
         });
 
@@ -664,7 +664,7 @@ mod tests {
     #[tokio::test]
     async fn wait_resolves_immediately_without_pipelines() {
         let (_local_tx, local_rx) = watch::channel(HashMap::new());
-        let (_peers_tx, peers_rx) = watch::channel(PeerWatermarks::default());
+        let (_peers_tx, peers_rx) = watch::channel(StreamedWatermarks::default());
 
         tokio::time::timeout(
             Duration::from_secs(5),

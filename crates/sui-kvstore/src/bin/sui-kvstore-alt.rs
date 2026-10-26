@@ -18,7 +18,6 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::default_committer_config;
-use sui_kvstore::peer_watermarks;
 use sui_kvstore::readiness::ReadinessArgs;
 use sui_kvstore::readiness::wait_until_caught_up;
 use sui_kvstore::rpc::RpcArgs;
@@ -27,6 +26,7 @@ use sui_kvstore::rpc::proto::FILE_DESCRIPTOR_SET;
 use sui_kvstore::rpc::proto::v1alpha::watermark_service_server::WatermarkServiceServer;
 use sui_kvstore::rpc::watermark_service::WatermarkService;
 use sui_kvstore::set_write_legacy_data;
+use sui_kvstore::streamed_watermarks;
 use sui_kvstore::validate_pipeline_name;
 use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
@@ -233,7 +233,7 @@ async fn start_rpc(
         .await
         .context("Failed to read stored pipeline watermarks")?;
     let (peer_watermarks, peer_watermarks_handle) =
-        peer_watermarks::follow(&readiness_args.peer_urls)?;
+        streamed_watermarks::follow(&readiness_args.peer_urls)?;
 
     let durable_progress = bigtable_indexer.durable_progress();
     let rpc_service = RpcService::new(rpc_listen_address);

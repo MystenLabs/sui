@@ -15,13 +15,17 @@ use sui_inverted_index::SkipPolicy;
 use sui_kvstore::PoolConfig;
 use sui_kvstore::ReadRowsRetryConfig;
 
+use crate::WatermarkSource;
+
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_RENDER_AHEAD: usize = 4;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 4_000;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 4_000;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
-// Comfortably above the 10ms watermark refresh: a replica slower than this is genuinely behind,
-// and the client is better off retrying elsewhere.
+// Comfortably above how far a replica's served checkpoint trails other replicas': up to one 10ms
+// watermark refresh when polling Bigtable, or the delivery delay of the indexers' watermark streams
+// when following them. A replica slower than this is genuinely behind, and the client is better
+// off retrying elsewhere.
 const DEFAULT_MONOTONIC_READ_WAIT_TIMEOUT_MS: u64 = 100;
 const DEFAULT_BITMAP_DRAIN_PROBE_ROWS: u32 = 50;
 const DEFAULT_WATERMARK_BEACON_BUCKETS: NonZeroU64 = NonZeroU64::new(256).unwrap();
@@ -641,6 +645,36 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub monotonic_read_wait_timeout_ms: Option<u64>,
 
+    /// gRPC URLs of kvstore indexers (for example `http://kvstore-1-grpc:7001`, the address an
+    /// indexer serves with `--rpc-listen-address`) whose watermark streams set the checkpoint this
+    /// instance serves. Each must be a plaintext `http://` URL with a host; startup fails
+    /// otherwise. When the list is not empty, each pipeline counts with the highest watermark
+    /// any indexer has streamed for it, and this instance serves up to the lowest of those across
+    /// the pipelines it serves. Bigtable's watermark rows are then never read: while every stream
+    /// is down, the served checkpoint keeps its last value until a stream delivers again. Unset or
+    /// empty polls Bigtable's watermark rows instead.
+    ///
+    /// This instance must read from the same Bigtable cluster that every listed indexer writes to:
+    /// its app profile must route reads to the cluster the indexers' app profile writes to. A
+    /// streamed watermark means the indexer's rows are durable in the cluster it wrote them to, and
+    /// Bigtable replicates them to other clusters only later, so a read routed to another cluster
+    /// can miss rows below the served checkpoint. Polling has no such requirement, because it reads
+    /// the watermark rows through this instance's own app profile.
+    ///
+    /// Requests that depend on the served checkpoint are answered `Unavailable`, and `/health`
+    /// answers 503, until every served pipeline has a watermark. An indexer's first response holds
+    /// every pipeline it runs that had a readable stored watermark row when it started or has
+    /// advanced since, so the first response from an indexer that runs every served pipeline is
+    /// enough, even during a chain halt. A served pipeline that no listed indexer runs keeps this
+    /// instance unavailable, and is named in a warning. In this mode `/health` reports readiness:
+    /// use it for a readiness probe, not a liveness probe, which would restart an instance that is
+    /// still waiting for watermarks.
+    ///
+    /// Streamed watermarks carry no `reader_lo`, so this mode assumes no pipeline has pruned past
+    /// its watermark; the kvstore does not prune.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexer_urls: Option<Vec<String>>,
+
     /// Per-table-stage read pipeline tunables (read sizes and fan-out
     /// concurrency), shared by the point-get and list APIs. Bounded by
     /// `request_bigtable_concurrency` at runtime, which remains the request-wide
@@ -768,6 +802,15 @@ impl KvRpcConfig {
 
     pub fn stages(&self) -> StagesConfig {
         self.stages.clone().unwrap_or_default()
+    }
+
+    /// Where this instance learns how far the data in Bigtable goes: the watermark streams of the
+    /// indexers in `indexer-urls` when it lists any, else Bigtable's watermark rows.
+    pub fn watermark_source(&self) -> WatermarkSource {
+        match self.indexer_urls.as_deref() {
+            Some(urls) if !urls.is_empty() => WatermarkSource::IndexerStreams(urls.to_vec()),
+            _ => WatermarkSource::Bigtable,
+        }
     }
 
     /// Reject configurations that cannot make forward progress. Validates the
@@ -1160,6 +1203,29 @@ enable-list-apis: true
             service_info_watermark_pipelines(cfg.enable_list_apis()).len(),
             DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.len()
                 + LIST_API_SERVICE_INFO_WATERMARK_PIPELINES.len(),
+        );
+    }
+
+    #[test]
+    fn watermark_source_polls_bigtable_unless_indexer_urls_lists_any() {
+        assert_eq!(
+            KvRpcConfig::default().watermark_source(),
+            WatermarkSource::Bigtable
+        );
+
+        let cfg: KvRpcConfig = toml::from_str("indexer-urls = []\n").unwrap();
+        assert_eq!(cfg.watermark_source(), WatermarkSource::Bigtable);
+
+        let config_toml = r#"
+indexer-urls = ["http://kvstore-0-grpc:7001", "http://kvstore-1-grpc:7001"]
+"#;
+        let cfg: KvRpcConfig = toml::from_str(config_toml).unwrap();
+        assert_eq!(
+            cfg.watermark_source(),
+            WatermarkSource::IndexerStreams(vec![
+                "http://kvstore-0-grpc:7001".to_string(),
+                "http://kvstore-1-grpc:7001".to_string(),
+            ])
         );
     }
 }
