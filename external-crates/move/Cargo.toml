@@ -119,7 +119,7 @@ sysinfo = "0.35.2"
 tempfile = "3.2.0"
 test-log = { version = "0.2.17", features = ["trace"] }
 thiserror = "1.0.24"
-tokio = { version = "1.44.2", features = ["full"] }
+tokio = { version = "1.54.1", features = ["full"] }
 toml = "0.5.8"
 toml_edit = { version = "0.22.24", features = ["serde", "default"] }
 tracing = "0.1.26"
@@ -133,7 +133,7 @@ walkdir = "2.3.1"
 whoami = { version = "1.2.1" }
 inline_colorization = "0.1.6"
 insta = "1.42.0"
-zstd = "0.13.2"
+zstd = "0.14.3"
 lcov = "0.8.1"
 fs4 = { version = "0.13.1" }
 
