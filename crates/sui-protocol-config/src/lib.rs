@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 140;
+const MAX_PROTOCOL_VERSION: u64 = 141;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -426,6 +426,8 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
 //              Disable effects transaction dependencies on mainnet.
 //              Add the staggered-submission duplication signal thresholds.
+// Version 141: Abort with EInvalidVerifyingKey in groth16::verify_groth16_proof when the
+//              prepared verifying key length does not match the number of public inputs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1292,6 +1294,12 @@ struct FeatureFlags {
     // MAX_PUBLIC_INPUTS public inputs.
     #[serde(skip_serializing_if = "is_false")]
     limit_groth16_pvk_inputs: bool,
+
+    // If true, groth16::verify_groth16_proof checks that the prepared verifying key has the
+    // length implied by the number of public inputs, and aborts with EInvalidVerifyingKey if it
+    // does not.
+    #[serde(skip_serializing_if = "is_false")]
+    check_groth16_pvk_length: bool,
 
     // If true, the funds-accumulator address-balance change invariant
     // (`TemporaryStore::check_address_balance_changes`) is enforced as a consensus check —
@@ -4939,6 +4947,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.disable_id_leak_verifier = true;
                     cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     cfg.feature_flags.disable_effects_tx_dependencies = true;
+                }
+                141 => {
+                    cfg.feature_flags.check_groth16_pvk_length = true;
                 }
                 // Use this template when making changes:
                 //

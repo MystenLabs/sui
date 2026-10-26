@@ -466,7 +466,7 @@ Returns a boolean indicating whether the proof is valid.
 
 ## Function `verify_groth16_proof_internal`
 
-Native functions that flattens the inputs into arrays of vectors and passed to the Rust native function. May abort with <code><a href="../sui/groth16.md#sui_groth16_EInvalidCurve">EInvalidCurve</a></code> or <code><a href="../sui/groth16.md#sui_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a></code>.
+Native functions that flattens the inputs into arrays of vectors and passed to the Rust native function. May abort with <code><a href="../sui/groth16.md#sui_groth16_EInvalidCurve">EInvalidCurve</a></code>, <code><a href="../sui/groth16.md#sui_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a></code> or <code><a href="../sui/groth16.md#sui_groth16_EInvalidVerifyingKey">EInvalidVerifyingKey</a></code>.
 
 
 <pre><code><b>fun</b> <a href="../sui/groth16.md#sui_groth16_verify_groth16_proof_internal">verify_groth16_proof_internal</a>(curve: u8, vk_gamma_abc_g1_bytes: &vector&lt;u8&gt;, alpha_g1_beta_g2_bytes: &vector&lt;u8&gt;, gamma_g2_neg_pc_bytes: &vector&lt;u8&gt;, delta_g2_neg_pc_bytes: &vector&lt;u8&gt;, public_proof_inputs: &vector&lt;u8&gt;, proof_points: &vector&lt;u8&gt;): bool
