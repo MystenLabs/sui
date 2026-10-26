@@ -6,8 +6,11 @@ use std::path::PathBuf;
 use anyhow::Context;
 use anyhow::Result;
 use axum::Router;
+use axum::extract::State;
+use axum::http::StatusCode;
 use axum::routing::get;
 use clap::Parser;
+use sui_kv_rpc::Health;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kv_rpc::ServerConfig;
@@ -167,8 +170,15 @@ fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
     }
 }
 
-async fn health_check() -> &'static str {
-    "OK"
+async fn health_check(State(health): State<Health>) -> (StatusCode, &'static str) {
+    if health.is_ready() {
+        (StatusCode::OK, "OK")
+    } else {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "served checkpoint not known yet",
+        )
+    }
 }
 
 #[tokio::main]
@@ -224,6 +234,7 @@ async fn main() -> Result<()> {
         config.monotonic_read_wait_timeout(),
         config.stages(),
         config.enable_list_apis(),
+        config.watermark_source(),
     )
     .await?;
 
@@ -234,8 +245,11 @@ async fn main() -> Result<()> {
         plaintext_address: config.plaintext_address().map(str::parse).transpose()?,
     };
 
-    tokio::spawn(async {
-        let web_server = Router::new().route("/health", get(health_check));
+    let health = server.health();
+    tokio::spawn(async move {
+        let web_server = Router::new()
+            .route("/health", get(health_check))
+            .with_state(health);
         let listener = tokio::net::TcpListener::bind("0.0.0.0:8081")
             .await
             .expect("can't bind to the healthcheck port");

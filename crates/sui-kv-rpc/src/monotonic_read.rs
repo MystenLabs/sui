@@ -38,9 +38,8 @@ pub const X_SUI_MIN_CHECKPOINT: &str = "x-sui-min-checkpoint";
 /// Applies the monotonic-read contract to every request reaching the services below it.
 ///
 /// `service_info` carries this replica's view of the ledger, `None` before it has one, and its
-/// `checkpoint_height` is the highest checkpoint the replica can serve. Its owner must publish on
-/// every refresh, including refreshes that do not advance the height, so a waiter re-evaluates
-/// rather than sleeping until the next advance.
+/// `checkpoint_height` is the highest checkpoint the replica can serve. Its owner must publish
+/// every change to that view; a waiter re-evaluates on each publish.
 #[derive(Clone)]
 pub(crate) struct MonotonicReadLayer {
     service_info: watch::Receiver<Option<GetServiceInfoResponse>>,
