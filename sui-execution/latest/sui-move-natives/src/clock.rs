@@ -16,7 +16,7 @@ use move_vm_runtime::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::clock::Clock;
+use sui_types::{SUI_CLOCK_OBJECT_ID, clock::Clock};
 
 #[derive(Clone)]
 pub struct ClockBorrowCostParams {
@@ -77,10 +77,10 @@ pub fn set_timestamp_ms_for_testing(
 }
 
 /***************************************************************************************************
- * native fun native_exists_for_testing
- * Implementation of the Move native function `fun native_exists_for_testing(): bool`
+ * native fun native_create_for_testing
+ * Implementation of the Move native function `fun native_create_for_testing(): bool`
  **************************************************************************************************/
-pub fn exists_for_testing(
+pub fn create_for_testing(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
@@ -89,11 +89,22 @@ pub fn exists_for_testing(
     safe_assert!(args.is_empty());
 
     let store: &&InMemoryTestStore = get_extension!(context)?;
-    let exists = store.clock_exists();
+    if store.clock_exists() {
+        return Ok(NativeResult::ok(
+            legacy_test_cost(),
+            smallvec![Value::bool(false)],
+        ));
+    }
+    store.set_clock_timestamp_ms(0);
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    // The Clock's id is fixed, so register it the way `object::new` does for fresh ids: deleting
+    // and recreating it within one transaction then leaves it neither created nor deleted.
+    object_runtime.new_id(SUI_CLOCK_OBJECT_ID)?;
+    object_runtime.clear_clock_for_testing();
 
     Ok(NativeResult::ok(
         legacy_test_cost(),
-        smallvec![Value::bool(exists)],
+        smallvec![Value::bool(true)],
     ))
 }
 

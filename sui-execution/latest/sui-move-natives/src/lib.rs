@@ -1088,8 +1088,8 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         (
             "clock",
-            "native_exists_for_testing",
-            make_native!(clock::exists_for_testing),
+            "native_create_for_testing",
+            make_native!(clock::create_for_testing),
         ),
         (
             "clock",

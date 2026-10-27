@@ -50,3 +50,31 @@ fun creating_a_second_clock_fails() {
     second.destroy_for_testing();
     clock.destroy_for_testing();
 }
+
+#[test]
+fun recreated_clock_can_be_shared_in_the_same_transaction() {
+    let mut test = sui::test_scenario::begin(@0x1);
+    clock::create_for_testing(test.ctx()).destroy_for_testing();
+    clock::create_for_testing(test.ctx()).share_for_testing();
+    test.next_tx(@0x1);
+    let clock = test.take_shared<clock::Clock>();
+    sui::test_scenario::return_shared(clock);
+    test.end();
+}
+
+#[test]
+fun shared_clock_can_be_destroyed_and_recreated() {
+    let mut test = sui::test_scenario::begin(@0x1);
+    clock::create_for_testing(test.ctx()).share_for_testing();
+    test.next_tx(@0x1);
+    let mut clock = test.take_shared<clock::Clock>();
+    clock.increment_for_testing(7);
+    clock.destroy_for_testing();
+    clock::create_for_testing(test.ctx()).share_for_testing();
+    test.next_tx(@0x1);
+    let clock = test.take_shared<clock::Clock>();
+    assert!(clock.timestamp_ms() == 0);
+    assert!(clock::borrow().timestamp_ms() == 0);
+    sui::test_scenario::return_shared(clock);
+    test.end();
+}
