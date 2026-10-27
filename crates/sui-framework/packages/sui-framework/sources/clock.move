@@ -78,11 +78,7 @@ fun consensus_commit_prologue(clock: &mut Clock, timestamp_ms: u64, ctx: &TxCont
 /// `borrow` cannot disagree with it; it has the same id as the
 /// genesis `Clock`.
 public fun create_for_testing(_ctx: &mut TxContext): Clock {
-    native_create_for_testing();
-    Clock {
-        id: object::clock(),
-        timestamp_ms: 0,
-    }
+    native_create_for_testing()
 }
 
 #[test_only]
@@ -118,10 +114,10 @@ public fun destroy_for_testing(clock: Clock) {
 native fun native_set_timestamp_ms_for_testing(timestamp_ms: u64);
 
 #[test_only]
-/// Records the test's `Clock` as created in this transaction, at
-/// timestamp 0. Aborts with `EClockAlreadyExists` if the test already
+/// Creates the test's `Clock` at timestamp 0, with the genesis
+/// `Clock` id. Aborts with `EClockAlreadyExists` if the test already
 /// holds one.
-native fun native_create_for_testing();
+native fun native_create_for_testing(): Clock;
 
 #[test_only]
 /// Forgets the test's `Clock`, so that `borrow` returns the genesis

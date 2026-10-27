@@ -7,7 +7,9 @@ use crate::{
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_binary_format::{safe_assert, safe_unwrap};
-use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
+use move_core_types::{
+    gas_algebra::InternalGas, language_storage::TypeTag, runtime_value as R, vm_status::StatusCode,
+};
 use move_vm_runtime::{
     execution::{Type, values::Value},
     native_charge_gas_early_exit,
@@ -16,7 +18,7 @@ use move_vm_runtime::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::{SUI_CLOCK_OBJECT_ID, clock::Clock};
+use sui_types::{SUI_CLOCK_OBJECT_ID, clock::Clock, id::UID};
 
 const E_CLOCK_ALREADY_EXISTS: u64 = 1;
 
@@ -44,16 +46,20 @@ pub fn borrow(
     );
     native_charge_gas_early_exit!(context, clock_borrow_cost_base);
 
-    let layout = context
-        .type_tag_to_type_layout(&TypeTag::Struct(Box::new(Clock::type_())))
-        .ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Failed to load the Clock type layout".to_string())
-        })?;
+    let layout = clock_layout(context)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let clock_ref = object_runtime.borrow_clock(&layout)?;
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![clock_ref]))
+}
+
+fn clock_layout(context: &NativeContext) -> PartialVMResult<R::MoveTypeLayout> {
+    context
+        .type_tag_to_type_layout(&TypeTag::Struct(Box::new(Clock::type_())))
+        .ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Failed to load the Clock type layout".to_string())
+        })
 }
 
 /***************************************************************************************************
@@ -80,7 +86,7 @@ pub fn set_timestamp_ms_for_testing(
 
 /***************************************************************************************************
  * native fun native_create_for_testing
- * Implementation of the Move native function `fun native_create_for_testing()`
+ * Implementation of the Move native function `fun native_create_for_testing(): Clock`
  **************************************************************************************************/
 pub fn create_for_testing(
     context: &mut NativeContext,
@@ -98,13 +104,27 @@ pub fn create_for_testing(
         ));
     }
     store.set_clock_timestamp_ms(0);
+    let layout = clock_layout(context)?;
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     // The Clock's id is fixed, so register it the way `object::new` does for fresh ids: deleting
     // and recreating it within one transaction then leaves it neither created nor deleted.
     object_runtime.new_id(SUI_CLOCK_OBJECT_ID)?;
     object_runtime.clear_clock_for_testing();
 
-    Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
+    let clock = Clock {
+        id: UID::new(SUI_CLOCK_OBJECT_ID),
+        timestamp_ms: 0,
+    };
+    let bytes = bcs::to_bytes(&clock).map_err(|e| {
+        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+            .with_message(format!("Failed to serialize the Clock: {e}"))
+    })?;
+    let value = Value::simple_deserialize(&bytes, &layout).ok_or_else(|| {
+        PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
+            .with_message("Failed to deserialize the Clock".to_string())
+    })?;
+
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![value]))
 }
 
 /***************************************************************************************************
