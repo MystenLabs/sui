@@ -4,7 +4,7 @@ This document covers **how virtual balances are laid out on-chain**: the accumul
 per-account dynamic field, the value representation, and the version invariant. It is purely
 about data structures — the algorithms that read and modify them live in
 [`write_path.md`](./write_path.md), [`address_funds_scheduling.md`](./address_funds_scheduling.md),
-and [`object_funds_checking.md`](./object_funds_checking.md).
+and [`object_funds_in_execution.md`](./object_funds_in_execution.md).
 
 ## 1. The accumulator root
 
@@ -106,7 +106,7 @@ Three things to internalize:
    `0xACC` to one version V, and the barrier that closes the batch bumps the version to V+1.
    This means transactions within that batch see *identical* balances (in storage), which is
    what motivates the unsettled-withdraws tracking in
-   [`object_funds_checking.md`](./object_funds_checking.md) §2.
+   [`object_funds_in_execution.md`](./object_funds_in_execution.md) §3.
 
 3. **The version is *not* an execution dependency for withdraws.** A transaction at version V+1
    does **not** have to wait for the V→V+1 settlement to finish executing before it can execute
@@ -134,7 +134,7 @@ prune-eligible.
 
 That precision is necessary whenever correctness depends on the answer to the historical
 question "what balance did version V observe?" rather than the latest-state question "has the
-system already advanced past V?" The two scheduler/checker subsystems intentionally ask
+system already advanced past V?" The address-funds scheduler and the object funds check intentionally ask
 different questions:
 
 - The **address-funds scheduler** mostly needs the latest-state question. It is deciding whether
@@ -142,11 +142,10 @@ different questions:
   requested version then the request is stale and can be handed off via `SkipSchedule` to the
   rest of execution, which will observe the already-applied settlement effects through normal
   state reads.
-- The **object-funds checker** needs the historical question. It runs *after* execution, once a
-  transaction has already produced accumulator events, and it must decide whether those effects
-  are valid for the transaction's assigned accumulator version. At that point a latest-state read
-  would be unsafe: storage may already include later settlements that this transaction was not
-  allowed to rely on.
+- The **object funds check** needs the historical question. It runs *during* execution, and it
+  must decide whether each withdrawal is covered by the balance at the transaction's assigned
+  accumulator version. A latest-state read would be unsafe: storage may already include later
+  settlements that this transaction was not allowed to rely on.
 
 That is also why the implementation is careful about *when* it attempts such reads. If checkpoint
 progress advances far enough while a historical read is in flight, the old version can become
@@ -166,8 +165,8 @@ too, so the same dynamic-field structure works. The differences are operational,
 - An object-owned balance can only be withdrawn from by a Move program with access to the owning
   object, and the withdrawal *amount* is determined by that program's logic at runtime — not
   declared up front in transaction data.
-- Sufficiency must therefore be checked *after* execution. That is what
-  [`object_funds_checking.md`](./object_funds_checking.md) is about.
+- Sufficiency must therefore be checked *during* execution, at each withdrawal. That is what
+  [`object_funds_in_execution.md`](./object_funds_in_execution.md) is about.
 
 The on-chain layout is unchanged: still a dynamic field under `0xACC`, still a `U128` value,
 still derived deterministically from `(owner, type)`.
