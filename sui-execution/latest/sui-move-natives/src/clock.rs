@@ -75,3 +75,44 @@ pub fn set_timestamp_ms_for_testing(
 
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
 }
+
+/***************************************************************************************************
+ * native fun native_exists_for_testing
+ * Implementation of the Move native function `fun native_exists_for_testing(): bool`
+ **************************************************************************************************/
+pub fn exists_for_testing(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
+
+    let store: &&InMemoryTestStore = get_extension!(context)?;
+    let exists = store.clock_exists();
+
+    Ok(NativeResult::ok(
+        legacy_test_cost(),
+        smallvec![Value::bool(exists)],
+    ))
+}
+
+/***************************************************************************************************
+ * native fun native_clear_for_testing
+ * Implementation of the Move native function `fun native_clear_for_testing()`
+ **************************************************************************************************/
+pub fn clear_for_testing(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
+
+    let store: &&InMemoryTestStore = get_extension!(context)?;
+    store.clear_clock_timestamp_ms();
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    object_runtime.clear_clock_for_testing();
+
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
+}

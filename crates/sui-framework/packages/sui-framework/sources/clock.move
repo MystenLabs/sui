@@ -8,6 +8,10 @@ module sui::clock;
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
+#[test_only]
+/// The test already holds a `Clock`.
+const EClockAlreadyExists: u64 = 1;
+
 /// Singleton shared object that exposes time to Move calls.  This
 /// object is found at address 0x6, and can only be read (accessed
 /// via an immutable reference) by entry functions.
@@ -67,15 +71,17 @@ fun consensus_commit_prologue(clock: &mut Clock, timestamp_ms: u64, ctx: &TxCont
     clock.timestamp_ms = timestamp_ms
 }
 
-// TODO: forbid creating more than one Clock in a test, so that the
-// Clock returned by `borrow` cannot disagree with a Clock a test holds.
 #[test_only]
 /// Expose the functionality of `create()` (usually only done during
-/// genesis) for tests that want to create a Clock.
-public fun create_for_testing(ctx: &mut TxContext): Clock {
+/// genesis) for tests that want to create a Clock. A test holds at
+/// most one `Clock` at a time, so that the `Clock` returned by
+/// `borrow` cannot disagree with it; it has the same id as the
+/// genesis `Clock`.
+public fun create_for_testing(_ctx: &mut TxContext): Clock {
+    assert!(!native_exists_for_testing(), EClockAlreadyExists);
     native_set_timestamp_ms_for_testing(0);
     Clock {
-        id: object::new(ctx),
+        id: object::clock(),
         timestamp_ms: 0,
     }
 }
@@ -103,11 +109,20 @@ public fun set_for_testing(clock: &mut Clock, timestamp_ms: u64) {
 public fun destroy_for_testing(clock: Clock) {
     let Clock { id, timestamp_ms: _ } = clock;
     id.delete();
+    native_clear_for_testing();
 }
 
 #[test_only]
 /// Keeps the `Clock` returned by `borrow` in step with the `Clock` a
 /// test creates or mutates, since tests have no consensus commits to
-/// set it. With several test Clocks, the most recently created or
-/// mutated one wins.
+/// set it.
 native fun native_set_timestamp_ms_for_testing(timestamp_ms: u64);
+
+#[test_only]
+/// Whether the test holds a `Clock`.
+native fun native_exists_for_testing(): bool;
+
+#[test_only]
+/// Forgets the test's `Clock`, so that `borrow` returns the genesis
+/// `Clock` again and the test can create another.
+native fun native_clear_for_testing();

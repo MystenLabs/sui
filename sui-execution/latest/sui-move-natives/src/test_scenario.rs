@@ -83,15 +83,24 @@ pub struct InMemoryTestStore {
     /// for a transaction's funds withdrawal inputs. Object withdrawals are reserved by the object
     /// runtime instead, under different rules.
     address_reservations: RefCell<BTreeMap<(SuiAddress, TypeTag), U256>>,
-    /// Timestamp of the Clock `clock::borrow` returns. Unit tests have no consensus commits,
-    /// so the test-only Clock helpers set it; it starts at the genesis Clock's 0.
-    clock_timestamp_ms: Cell<u64>,
+    /// Timestamp of the Clock the test holds, which `clock::borrow` returns. Unit tests have
+    /// no consensus commits, so the test-only Clock helpers set it. `None` while the test holds
+    /// no Clock, when `clock::borrow` serves the genesis Clock's 0.
+    clock_timestamp_ms: Cell<Option<u64>>,
 }
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl InMemoryTestStore {
     pub(crate) fn set_clock_timestamp_ms(&self, timestamp_ms: u64) {
-        self.clock_timestamp_ms.set(timestamp_ms);
+        self.clock_timestamp_ms.set(Some(timestamp_ms));
+    }
+
+    pub(crate) fn clear_clock_timestamp_ms(&self) {
+        self.clock_timestamp_ms.set(None);
+    }
+
+    pub(crate) fn clock_exists(&self) -> bool {
+        self.clock_timestamp_ms.get().is_some()
     }
 
     fn settled_funds(&self, owner: SuiAddress, type_: &TypeTag) -> u128 {
@@ -179,7 +188,7 @@ impl ImplicitSystemObjectResolver for InMemoryTestStore {
     fn clock(&self) -> sui_types::error::SuiResult<Object> {
         let clock = Clock {
             id: UID::new(SUI_CLOCK_OBJECT_ID),
-            timestamp_ms: self.clock_timestamp_ms.get(),
+            timestamp_ms: self.clock_timestamp_ms.get().unwrap_or(0),
         };
         let move_object = unsafe {
             MoveObject::new_from_execution_with_limit(
