@@ -376,7 +376,6 @@ async fn test_object_funds_unsettled_withdraws_same_commit() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.set_enable_object_funds_withdraw_for_testing(true);
             cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
-            cfg.set_record_net_unsettled_object_withdraws_for_testing(true);
             cfg
         }))
         .build()
