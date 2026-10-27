@@ -25,6 +25,8 @@ public struct Holder has key { id: UID, parent: UID }
 
 public struct Obj has key, store { id: UID }
 
+public struct Mid has key, store { id: UID }
+
 public fun create_parent(ctx: &mut TxContext) {
     transfer::transfer(Parent { id: object::new(ctx) }, ctx.sender())
 }
@@ -63,6 +65,24 @@ public fun claim_from_holder(holder: &mut Holder): Obj {
 public fun release_from_holder(holder: &mut Holder, obj: Obj) {
     let Obj { id } = obj;
     derived_object::release(&mut holder.parent, id)
+}
+
+public fun claim_mid(parent: &mut Parent): Mid {
+    Mid { id: derived_object::claim(&mut parent.id, 0u64) }
+}
+
+public fun release_mid(parent: &mut Parent, mid: Mid) {
+    let Mid { id } = mid;
+    derived_object::release(&mut parent.id, id)
+}
+
+public fun claim_from_mid(mid: &mut Mid): Obj {
+    Obj { id: derived_object::claim(&mut mid.id, 0u64) }
+}
+
+public fun release_from_mid(mid: &mut Mid, obj: Obj) {
+    let Obj { id } = obj;
+    derived_object::release(&mut mid.id, id)
 }
 
 // Splits `coin` between a `Balance` dynamic field and a `Coin` dynamic object field.
@@ -196,3 +216,40 @@ public fun add_balance_field(obj: &mut Obj) {
 //> ex::m::assert_funds(Result(0), Input(1), Input(2));
 //> TransferObjects([Result(0)], Input(3))
 
+// X's parent M is itself derived from P. Both are released, then re-claimed together, so X
+// inherits P's root version through M.
+//# run ex::m::create_parent --sender A
+
+//# programmable --sender A --inputs object(23,0) 1000 @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> 2: SplitCoins(Gas, [Input(1)]);
+//> ex::m::fund(Result(1), Result(2));
+//> TransferObjects([Result(0), Result(1)], Input(2))
+
+//# programmable --sender A --inputs object(24,2) 400 400 @A
+//> 0: ex::m::withdraw(Input(0), Input(1));
+//> 1: ex::m::withdraw_coin(Input(0), Input(2));
+//> TransferObjects([Result(0), Result(1)], Input(3))
+
+//# programmable --sender A --inputs object(23,0) object(24,1) object(24,2)
+//> ex::m::release_from_mid(Input(1), Input(2));
+//> ex::m::release_mid(Input(0), Input(1))
+
+//# programmable --sender A --inputs object(23,0) 101 @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> 2: ex::m::withdraw(Result(1), Input(1));
+//> TransferObjects([Result(0), Result(1), Result(2)], Input(2))
+
+//# programmable --sender A --inputs object(23,0) @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> ex::m::add_balance_field(Result(1));
+//> TransferObjects([Result(0), Result(1)], Input(1))
+
+//# programmable --sender A --inputs object(23,0) 100 100 @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> ex::m::assert_funds(Result(1), Input(1), Input(2));
+//> TransferObjects([Result(0), Result(1)], Input(3))

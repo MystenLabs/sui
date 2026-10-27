@@ -97,8 +97,8 @@ task 10, lines 82-86:
 //> 0: ex::m::claim_parent(Input(0));
 //> 1: ex::m::claim_child(Result(0));
 //> TransferObjects([Result(0), Result(1)], Input(1))
-Error: Transaction Effects Status: Move Abort in sui::derived_object::claim (function index 0) at offset 20 at line 50 with clever code 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 0, instruction: 20, function_name: Some("claim") }, 13835058270030528513), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835058270030528513), message: Some("sui::derived_object::claim at offset 20"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("derived_object") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 20)] }), command: Some(1) } }
+Error: Transaction Effects Status: Move Abort in sui::derived_object::claim (function index 0) at offset 20 at line 51 with clever code 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 0, instruction: 20, function_name: Some("claim") }, 13835058274325495809), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835058274325495809), message: Some("sui::derived_object::claim at offset 20"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("derived_object") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 20)] }), command: Some(1) } }
 
 task 11, lines 88-90:
 //# programmable --sender A --inputs object(2,0) @A
@@ -126,8 +126,8 @@ task 13, lines 99-105:
 //> 1: ex::m::claim_parent(Input(0));
 //> 2: ex::m::claim_child(Result(1));
 //> TransferObjects([Result(1), Result(2)], Input(2))
-Error: Transaction Effects Status: Move Abort in sui::derived_object::claim (function index 0) at offset 20 at line 50 with clever code 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 0, instruction: 20, function_name: Some("claim") }, 13835058270030528513), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835058270030528513), message: Some("sui::derived_object::claim at offset 20"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("derived_object") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 20)] }), command: Some(2) } }
+Error: Transaction Effects Status: Move Abort in sui::derived_object::claim (function index 0) at offset 20 at line 51 with clever code 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 0, instruction: 20, function_name: Some("claim") }, 13835058274325495809), source: Some(VMError { major_status: ABORTED, sub_status: Some(13835058274325495809), message: Some("sui::derived_object::claim at offset 20"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("derived_object") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 20)] }), command: Some(2) } }
 
 task 14, lines 107-108:
 // The original child is still usable.

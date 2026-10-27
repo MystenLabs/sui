@@ -44,8 +44,8 @@ task 5, lines 51-53:
 // Releasing a shared object aborts.
 //# programmable --sender A --inputs object(2,0) object(3,0)
 //> ex::m::release(Input(0), Input(1))
-Error: Transaction Effects Status: Move Abort in sui::derived_object::release (function index 1) at offset 8 at line 59 with clever code 2
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 1, instruction: 8, function_name: Some("release") }, 13835621258638917637) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::derived_object::release (function index 1) at offset 8 at line 60 with clever code 2
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 1, instruction: 8, function_name: Some("release") }, 13835621262933884933) at command Some(0)
 
 task 6, lines 55-59:
 // Releasing, re-claiming, and re-sharing in one transaction also aborts at the release.
@@ -53,8 +53,8 @@ task 6, lines 55-59:
 //> ex::m::release(Input(0), Input(1));
 //> 1: ex::m::claim(Input(0));
 //> ex::m::share(Result(1))
-Error: Transaction Effects Status: Move Abort in sui::derived_object::release (function index 1) at offset 8 at line 59 with clever code 2
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 1, instruction: 8, function_name: Some("release") }, 13835621258638917637) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::derived_object::release (function index 1) at offset 8 at line 60 with clever code 2
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 1, instruction: 8, function_name: Some("release") }, 13835621262933884933) at command Some(0)
 
 task 7, line 61:
 //# view-object 3,0
@@ -137,5 +137,5 @@ task 16, lines 92-94:
 // Now that it is shared, it cannot be released.
 //# programmable --sender A --inputs object(10,0) object(11,0)
 //> ex::m::release(Input(0), Input(1))
-Error: Transaction Effects Status: Move Abort in sui::derived_object::release (function index 1) at offset 8 at line 59 with clever code 2
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 1, instruction: 8, function_name: Some("release") }, 13835621258638917637) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::derived_object::release (function index 1) at offset 8 at line 60 with clever code 2
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("derived_object") }, function: 1, instruction: 8, function_name: Some("release") }, 13835621262933884933) at command Some(0)
