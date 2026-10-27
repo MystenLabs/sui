@@ -180,10 +180,7 @@ async fn test_epoch_transactions_cursor_pagination() {
         .unwrap();
     assert_eq!(window(&page.edges), window(&all.edges[hi - 2..hi]));
 
-    let beyond = CursorToken::item(Position::Transactions {
-        checkpoint: 0,
-        tx_seq: 100,
-    });
+    let beyond = CursorToken::item(Position::Transactions { tx_seq: 100 });
     let beyond_cursor = Base64::encode(beyond.encode());
     let page = epoch_transactions(&cluster, 2, None, Some(2), Some(beyond_cursor), None)
         .await

@@ -42,14 +42,14 @@ Response: {
   "data": {
     "transactionsA": {
       "pageInfo": {
-        "startCursor": "AAABCCgBOgQIARACAQABAAAAAAAAAAEAAAAAAAAA",
-        "endCursor": "AAABCCgCOgQIBBAHAQEEAAAAAAAAAAAAAAAAAAAA",
+        "startCursor": "AAABBigBOgIQAgEAAQAAAAAAAAABAAAAAAAAAA==",
+        "endCursor": "AAABBigCOgIQBwEBBAAAAAAAAAAAAAAAAAAAAA==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "AAABCCgBOgQIARACAQABAAAAAAAAAAEAAAAAAAAA",
+          "cursor": "AAABBigBOgIQAgEAAQAAAAAAAAABAAAAAAAAAA==",
           "node": {
             "digest": "74XecJe2t2baP9fJgfxrBuc7YpX1Nrc7S38wwoYTxdLL",
             "effects": {
@@ -64,14 +64,14 @@ Response: {
     },
     "transactionsB": {
       "pageInfo": {
-        "startCursor": "AAABCCgBOgQIAxAFAQADAAAAAAAAAAAAAAAAAAAA",
-        "endCursor": "AAABCCgCOgQIBBAHAQEEAAAAAAAAAAAAAAAAAAAA",
+        "startCursor": "AAABBigBOgIQBQEAAwAAAAAAAAAAAAAAAAAAAA==",
+        "endCursor": "AAABBigCOgIQBwEBBAAAAAAAAAAAAAAAAAAAAA==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "AAABCCgBOgQIAxAFAQADAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABBigBOgIQBQEAAwAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "5LWtVeBUiTA87ugd6888N2ii7ZQiAprV3EvWmdYN4oRt",
             "effects": {

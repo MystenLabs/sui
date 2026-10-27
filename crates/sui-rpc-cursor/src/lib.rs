@@ -19,28 +19,9 @@ pub struct CursorToken {
 /// Endpoint-specific cursor position.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Position {
-    Checkpoints {
-        checkpoint: u64,
-    },
-    Transactions {
-        checkpoint: u64,
-        tx_seq: u64,
-    },
-    Events {
-        checkpoint: u64,
-        tx_seq: u64,
-        event_index: u32,
-    },
-}
-
-impl Position {
-    pub fn checkpoint(&self) -> u64 {
-        match *self {
-            Position::Checkpoints { checkpoint }
-            | Position::Transactions { checkpoint, .. }
-            | Position::Events { checkpoint, .. } => checkpoint,
-        }
-    }
+    Checkpoints { checkpoint: u64 },
+    Transactions { tx_seq: u64 },
+    Events { tx_seq: u64, event_index: u32 },
 }
 
 /// Whether a cursor position is a matched row that was returned to the client (`Item`) or a scan
@@ -87,7 +68,8 @@ impl CursorToken {
     /// (tags 1-4, now reserved): checkpoint, transaction, and event cursors
     /// minted before the format change keep resuming. The event arm hard-codes
     /// the frozen historical bitpacking rather than importing the storage crate.
-    /// Nothing mints this format.
+    /// The legacy `checkpoint` field (tag 3) is ignored: every position is
+    /// recovered from the legacy `position` field. Nothing mints this format.
     fn decode_legacy(bytes: &[u8]) -> anyhow::Result<Self> {
         let legacy = LegacyCursorToken::decode(bytes)?;
         let kind = match legacy.kind {
@@ -95,9 +77,6 @@ impl CursorToken {
             2 => CursorKind::Boundary,
             k => anyhow::bail!("unknown legacy cursor kind: {k}"),
         };
-        let checkpoint = legacy
-            .checkpoint
-            .context("legacy cursor missing checkpoint")?;
         let position = legacy.position.context("legacy cursor missing position")?;
         let position = match legacy.query_type {
             // Legacy checkpoint cursors minted `checkpoint == position`; use
@@ -105,16 +84,12 @@ impl CursorToken {
             1 => Position::Checkpoints {
                 checkpoint: position,
             },
-            2 => Position::Transactions {
-                checkpoint,
-                tx_seq: position,
-            },
+            2 => Position::Transactions { tx_seq: position },
             // Legacy event cursors packed the coordinate into one u64:
             // `(tx_seq << 16) | event_index`. The constant is the FROZEN
             // historical wire format, deliberately not shared with the live
             // storage encoding, which is free to diverge.
             3 => Position::Events {
-                checkpoint,
                 tx_seq: position >> 16,
                 event_index: (position & 0xFFFF) as u32,
             },
@@ -149,18 +124,15 @@ impl From<Position> for grpc::cursor_token::Position {
                     checkpoint: Some(checkpoint),
                 })
             }
-            Position::Transactions { checkpoint, tx_seq } => {
+            Position::Transactions { tx_seq } => {
                 grpc::cursor_token::Position::Transactions(grpc::TransactionsPosition {
-                    checkpoint: Some(checkpoint),
                     tx_seq: Some(tx_seq),
                 })
             }
             Position::Events {
-                checkpoint,
                 tx_seq,
                 event_index,
             } => grpc::cursor_token::Position::Events(grpc::EventsPosition {
-                checkpoint: Some(checkpoint),
                 tx_seq: Some(tx_seq),
                 event_index: Some(event_index),
             }),
@@ -168,9 +140,6 @@ impl From<Position> for grpc::cursor_token::Position {
     }
 }
 
-/// A transaction or event cursor without a checkpoint decodes with checkpoint 0, the value cursors
-/// minted without a known checkpoint already carry. Their checkpoint only labels the cursor: ledger
-/// servers never let it decide which positions a scan returns.
 impl TryFrom<grpc::cursor_token::Position> for Position {
     type Error = anyhow::Error;
 
@@ -180,11 +149,9 @@ impl TryFrom<grpc::cursor_token::Position> for Position {
                 checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
             }),
             grpc::cursor_token::Position::Transactions(position) => Ok(Position::Transactions {
-                checkpoint: position.checkpoint.unwrap_or(0),
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
             }),
             grpc::cursor_token::Position::Events(position) => Ok(Position::Events {
-                checkpoint: position.checkpoint.unwrap_or(0),
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
                 event_index: position.event_index.context("cursor missing event_index")?,
             }),
@@ -230,6 +197,7 @@ struct LegacyCursorToken {
     /// Legacy CursorKind: 1 = item, 2 = boundary.
     #[prost(int32, tag = "2")]
     kind: i32,
+    /// Ignored on decode: positions come from `position` alone.
     #[prost(uint64, optional, tag = "3")]
     checkpoint: Option<u64>,
     #[prost(uint64, optional, tag = "4")]
@@ -244,18 +212,39 @@ mod tests {
     fn roundtrips_all_position_variants() {
         for token in [
             CursorToken::item(Position::Checkpoints { checkpoint: 7 }),
-            CursorToken::boundary(Position::Transactions {
-                checkpoint: 9,
-                tx_seq: 10,
-            }),
+            CursorToken::boundary(Position::Transactions { tx_seq: 10 }),
             CursorToken::item(Position::Events {
-                checkpoint: 11,
                 tx_seq: 12,
                 event_index: 13,
             }),
         ] {
             assert_eq!(CursorToken::decode(&token.encode()).unwrap(), token);
         }
+    }
+
+    /// Cursors minted while `TransactionsPosition` and `EventsPosition` carried a checkpoint in
+    /// tag 1 decode to the same position: the reserved tag is skipped.
+    #[test]
+    fn decodes_cursors_carrying_reserved_checkpoint_tag() {
+        // kind (tag 5) = ITEM;
+        // transactions (tag 7) = { checkpoint (tag 1) = 9, tx_seq (tag 2) = 10 }.
+        let transactions = [0x28, 0x01, 0x3a, 0x04, 0x08, 0x09, 0x10, 0x0a];
+        assert_eq!(
+            CursorToken::decode(&transactions).unwrap(),
+            CursorToken::item(Position::Transactions { tx_seq: 10 })
+        );
+
+        // kind (tag 5) = BOUNDARY;
+        // events (tag 8) = { checkpoint (tag 1) = 11, tx_seq (tag 2) = 12,
+        //                    event_index (tag 3) = 13 }.
+        let events = [0x28, 0x02, 0x42, 0x06, 0x08, 0x0b, 0x10, 0x0c, 0x18, 0x0d];
+        assert_eq!(
+            CursorToken::decode(&events).unwrap(),
+            CursorToken::boundary(Position::Events {
+                tx_seq: 12,
+                event_index: 13,
+            })
+        );
     }
 
     #[test]
@@ -268,10 +257,7 @@ mod tests {
         let bytes = grpc::CursorToken {
             kind: grpc::CursorKind::Unspecified as i32,
             position: Some(grpc::cursor_token::Position::Transactions(
-                grpc::TransactionsPosition {
-                    checkpoint: Some(1),
-                    tx_seq: Some(2),
-                },
+                grpc::TransactionsPosition { tx_seq: Some(2) },
             )),
         }
         .encode_to_vec();
@@ -295,7 +281,6 @@ mod tests {
         let bytes = grpc::CursorToken {
             kind: grpc::CursorKind::Item as i32,
             position: Some(grpc::cursor_token::Position::Events(grpc::EventsPosition {
-                checkpoint: Some(1),
                 tx_seq: Some(2),
                 event_index: None,
             })),
@@ -305,50 +290,18 @@ mod tests {
         assert!(CursorToken::decode(&bytes).is_err());
     }
 
-    /// Transaction and event cursors minted without a checkpoint decode with checkpoint 0. A
-    /// checkpoint cursor's checkpoint is its position, so it stays required.
+    /// A checkpoint cursor's checkpoint is its position, so it is required.
     #[test]
-    fn decodes_cursors_without_a_checkpoint() {
-        let token = |position| {
-            grpc::CursorToken {
-                kind: grpc::CursorKind::Boundary as i32,
-                position: Some(position),
-            }
-            .encode_to_vec()
-        };
+    fn rejects_checkpoint_cursor_without_checkpoint() {
+        let bytes = grpc::CursorToken {
+            kind: grpc::CursorKind::Boundary as i32,
+            position: Some(grpc::cursor_token::Position::Checkpoints(
+                grpc::CheckpointsPosition { checkpoint: None },
+            )),
+        }
+        .encode_to_vec();
 
-        let transactions = token(grpc::cursor_token::Position::Transactions(
-            grpc::TransactionsPosition {
-                checkpoint: None,
-                tx_seq: Some(10),
-            },
-        ));
-        assert_eq!(
-            CursorToken::decode(&transactions).unwrap(),
-            CursorToken::boundary(Position::Transactions {
-                checkpoint: 0,
-                tx_seq: 10,
-            })
-        );
-
-        let events = token(grpc::cursor_token::Position::Events(grpc::EventsPosition {
-            checkpoint: None,
-            tx_seq: Some(10),
-            event_index: Some(3),
-        }));
-        assert_eq!(
-            CursorToken::decode(&events).unwrap(),
-            CursorToken::boundary(Position::Events {
-                checkpoint: 0,
-                tx_seq: 10,
-                event_index: 3,
-            })
-        );
-
-        let checkpoints = token(grpc::cursor_token::Position::Checkpoints(
-            grpc::CheckpointsPosition { checkpoint: None },
-        ));
-        assert!(CursorToken::decode(&checkpoints).is_err());
+        assert!(CursorToken::decode(&bytes).is_err());
     }
 
     #[test]
@@ -358,10 +311,7 @@ mod tests {
         let bytes = [0x08, 0x02, 0x10, 0x01, 0x18, 0x2a, 0x20, 0x07];
         assert_eq!(
             CursorToken::decode(&bytes).unwrap(),
-            CursorToken::item(Position::Transactions {
-                checkpoint: 42,
-                tx_seq: 7,
-            })
+            CursorToken::item(Position::Transactions { tx_seq: 7 })
         );
     }
 
@@ -388,7 +338,6 @@ mod tests {
         assert_eq!(
             CursorToken::decode(&bytes).unwrap(),
             CursorToken::item(Position::Events {
-                checkpoint: 9,
                 tx_seq: 42,
                 event_index: 7,
             })
@@ -407,7 +356,6 @@ mod tests {
         assert_eq!(
             CursorToken::decode(&bytes).unwrap(),
             CursorToken::boundary(Position::Events {
-                checkpoint: 6,
                 tx_seq: 5,
                 event_index: 65535,
             })

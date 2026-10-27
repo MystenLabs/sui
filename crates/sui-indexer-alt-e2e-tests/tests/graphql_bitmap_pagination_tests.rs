@@ -8,6 +8,7 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use move_core_types::identifier::Identifier;
+use prost::Message;
 use serde_json::Value;
 use serde_json::json;
 use sui_framework::BuiltInFramework;
@@ -20,8 +21,7 @@ use sui_indexer_alt_e2e_tests::local_ingestion_client_args;
 use sui_indexer_alt_e2e_tests::write_checkpoint;
 use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
+
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::event::Event;
@@ -32,6 +32,26 @@ use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV
 use sui_types::test_checkpoint_data_builder::AdvanceEpochConfig;
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 use tempfile::TempDir;
+
+/// A transaction cursor in the protobuf format earlier GraphQL releases and ledger servers minted:
+/// `kind` (1 is `CURSOR_KIND_ITEM`) and a transactions position that still carries the checkpoint
+/// label at tag 1. Ledger servers skip the label; GraphQL accepts these cursors through its
+/// earlier-format decoder.
+#[derive(Clone, PartialEq, prost::Message)]
+struct LabelledTransactionCursor {
+    #[prost(int32, tag = "5")]
+    kind: i32,
+    #[prost(message, optional, tag = "7")]
+    transactions: Option<LabelledTransactionsPosition>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct LabelledTransactionsPosition {
+    #[prost(uint64, optional, tag = "1")]
+    checkpoint: Option<u64>,
+    #[prost(uint64, optional, tag = "2")]
+    tx_seq: Option<u64>,
+}
 
 /// Build an `OffchainCluster` with the List APIs enabled and a `BootstrapGenesis` config so the
 /// indexer doesn't wait for a real genesis checkpoint via ingestion. Writes the genesis
@@ -407,9 +427,16 @@ async fn checkpoint_transactions_page(
 }
 
 /// A legacy transactions cursor at `tx_seq` labelled with `checkpoint`, as Postgres-backed
-/// pagination issued it (with label 0) or a client gets it straight from the ledger service.
+/// pagination issued it (with label 0) or as earlier ledger servers minted it.
 fn legacy_cursor(checkpoint: u64, tx_seq: u64) -> String {
-    Base64::encode(CursorToken::item(Position::Transactions { checkpoint, tx_seq }).encode())
+    let cursor = LabelledTransactionCursor {
+        kind: 1,
+        transactions: Some(LabelledTransactionsPosition {
+            checkpoint: Some(checkpoint),
+            tx_seq: Some(tx_seq),
+        }),
+    };
+    Base64::encode(cursor.encode_to_vec())
 }
 
 /// A GraphQL cursor at the transaction at `(checkpoint, transaction_index)`, with no ledger bytes,
@@ -653,9 +680,9 @@ async fn exact_fit_page_reports_no_further_page() {
     );
 }
 
-/// A transactions cursor's checkpoint is a hint: the grpc scan window is driven by the tx_seq
-/// position clamp, so the placeholder hint `0` that position-only cursor sources (e.g. graphql's pg
-/// path) mint must page identically to the real checkpoints grpc mints.
+/// A legacy transactions cursor's checkpoint label is a hint the ledger does not use: the grpc scan
+/// window is driven by the tx_seq position clamp, so the placeholder label `0` that Postgres-backed
+/// pagination issued, and wrong labels, must page identically to the cursors GraphQL mints.
 #[tokio::test]
 async fn cursor_checkpoint_hint_is_redundant() {
     let (cluster, temp_dir) = alpha_cluster().await;

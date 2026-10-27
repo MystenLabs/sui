@@ -307,8 +307,8 @@ mod tests {
         QueryOptions::transactions_from_proto(Some(&proto), 100, 100).unwrap()
     }
 
-    fn tx_position(checkpoint: u64, tx_seq: u64) -> Position {
-        Position::Transactions { checkpoint, tx_seq }
+    fn tx_position(tx_seq: u64) -> Position {
+        Position::Transactions { tx_seq }
     }
 
     fn resolve_transactions(
@@ -343,15 +343,14 @@ mod tests {
         error.into_status_proto().code == tonic::Code::InvalidArgument as i32
     }
 
-    /// What a resolved scan ends with: `(range, terminal cursor's checkpoint field, terminal
-    /// position, end reason, natural end claim)`.
+    /// What a resolved scan ends with: `(range, terminal position, end reason, natural end
+    /// claim)`.
     fn terminal(
         resolved: &ResolvedScan<u64>,
         options: &QueryOptions,
-    ) -> (Range<u64>, u64, u64, RangeExhaustion, Option<u64>) {
+    ) -> (Range<u64>, u64, RangeExhaustion, Option<u64>) {
         (
             resolved.range(),
-            resolved.end_checkpoint,
             resolved.end_position,
             resolved.exhaustion,
             resolved.natural_end_claim(options),
@@ -370,8 +369,8 @@ mod tests {
             let unset = transactions_request(Some(2), Some(4), None, None);
             let zero = transactions_request(Some(2), Some(4), Some(0), None);
             let expected = match ordering {
-                Ordering::Ascending => (3..9, 4, 9, CHECKPOINT_BOUND, Some(3)),
-                Ordering::Descending => (3..9, 2, 3, CHECKPOINT_BOUND, Some(2)),
+                Ordering::Ascending => (3..9, 9, CHECKPOINT_BOUND, Some(3)),
+                Ordering::Descending => (3..9, 3, CHECKPOINT_BOUND, Some(2)),
             };
             assert_eq!(
                 terminal(&resolve_transactions(&unset, &options), &options),
@@ -393,12 +392,12 @@ mod tests {
         let ascending = options(Ordering::Ascending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (4..9, 4, 9, CHECKPOINT_BOUND, Some(3))
+            (4..9, 9, CHECKPOINT_BOUND, Some(3))
         );
         let descending = options(Ordering::Descending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &descending), &descending),
-            (4..9, 3, 4, CHECKPOINT_BOUND, Some(3))
+            (4..9, 4, CHECKPOINT_BOUND, Some(3))
         );
     }
 
@@ -411,17 +410,17 @@ mod tests {
         let request = transactions_request(Some(2), Some(4), None, Some(1));
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (3..8, 3, 8, CHECKPOINT_BOUND, Some(2))
+            (3..8, 8, CHECKPOINT_BOUND, Some(2))
         );
         assert_eq!(
             terminal(&resolve_transactions(&request, &descending), &descending),
-            (3..8, 2, 3, CHECKPOINT_BOUND, Some(2))
+            (3..8, 3, CHECKPOINT_BOUND, Some(2))
         );
 
         let request = transactions_request(Some(2), Some(4), None, Some(0));
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (3..7, 3, 7, CHECKPOINT_BOUND, Some(2))
+            (3..7, 7, CHECKPOINT_BOUND, Some(2))
         );
     }
 
@@ -435,12 +434,12 @@ mod tests {
             let ascending = options(Ordering::Ascending, None, None);
             assert_eq!(
                 terminal(&resolve_transactions(&request, &ascending), &ascending),
-                (7..9, 4, 9, CHECKPOINT_BOUND, Some(3))
+                (7..9, 9, CHECKPOINT_BOUND, Some(3))
             );
             let descending = options(Ordering::Descending, None, None);
             assert_eq!(
                 terminal(&resolve_transactions(&request, &descending), &descending),
-                (7..9, 3, 7, CHECKPOINT_BOUND, Some(3))
+                (7..9, 7, CHECKPOINT_BOUND, Some(3))
             );
         }
     }
@@ -486,12 +485,12 @@ mod tests {
         let ascending = options(Ordering::Ascending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (7..7, 3, 7, CHECKPOINT_BOUND, None)
+            (7..7, 7, CHECKPOINT_BOUND, None)
         );
         let descending = options(Ordering::Descending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &descending), &descending),
-            (8..8, 4, 8, CHECKPOINT_BOUND, None)
+            (8..8, 8, CHECKPOINT_BOUND, None)
         );
     }
 
@@ -503,7 +502,7 @@ mod tests {
         let ascending = options(Ordering::Ascending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (7..14, 5, 14, RangeExhaustion::LedgerTip, Some(4))
+            (7..14, 14, RangeExhaustion::LedgerTip, Some(4))
         );
     }
 
@@ -515,39 +514,34 @@ mod tests {
         let request = transactions_request(Some(2), Some(4), Some(1), Some(1));
         let cases = [
             (
-                options(Ordering::Ascending, Some(tx_position(2, 6)), None),
-                (6..8, 3, 8, CHECKPOINT_BOUND),
+                options(Ordering::Ascending, Some(tx_position(6)), None),
+                (6..8, 8, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Ascending, Some(tx_position(0, 2)), None),
-                (4..8, 3, 8, CHECKPOINT_BOUND),
+                options(Ordering::Ascending, Some(tx_position(2)), None),
+                (4..8, 8, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Ascending, None, Some(tx_position(2, 5))),
-                (4..5, 2, 5, CURSOR_BOUND),
+                options(Ordering::Ascending, None, Some(tx_position(5))),
+                (4..5, 5, CURSOR_BOUND),
             ),
             (
-                options(Ordering::Ascending, None, Some(tx_position(4, 9))),
-                (4..8, 3, 8, CHECKPOINT_BOUND),
+                options(Ordering::Ascending, None, Some(tx_position(9))),
+                (4..8, 8, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Descending, None, Some(tx_position(3, 6))),
-                (4..6, 3, 4, CHECKPOINT_BOUND),
+                options(Ordering::Descending, None, Some(tx_position(6))),
+                (4..6, 4, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Descending, Some(tx_position(2, 5)), None),
-                (5..8, 2, 5, CURSOR_BOUND),
+                options(Ordering::Descending, Some(tx_position(5)), None),
+                (5..8, 5, CURSOR_BOUND),
             ),
         ];
         for (options, expected) in cases {
             let resolved = resolve_transactions(&request, &options);
             assert_eq!(
-                (
-                    resolved.range(),
-                    resolved.end_checkpoint,
-                    resolved.end_position,
-                    resolved.exhaustion
-                ),
+                (resolved.range(), resolved.end_position, resolved.exhaustion),
                 expected,
                 "{options:?}"
             );

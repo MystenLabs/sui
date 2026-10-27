@@ -43,22 +43,17 @@ message CheckpointsPosition {
 }
 
 message TransactionsPosition {
-    // Checkpoint containing or bounding the transaction sequence position.
-    // Item cursors carry the checkpoint containing the transaction. Boundary
-    // cursors carry that checkpoint or the one before or after it, depending
-    // on the scan that issued them; readers must not let it exclude a
-    // position that `tx_seq` and the cursor kind admit. Readers must accept
-    // a cursor without it.
-    optional uint64 checkpoint = 1;
+    // Tag 1 is reserved. Cursors minted by earlier servers carry a checkpoint
+    // label there, which decoders skip; the position is `tx_seq` alone.
+    reserved 1;
     // Global transaction sequence number. Item cursors resume strictly after it;
     // Boundary cursors resume at it.
     optional uint64 tx_seq = 2;
 }
 
 message EventsPosition {
-    // Checkpoint containing or bounding the event position, with the same
-    // guarantees as `TransactionsPosition.checkpoint`.
-    optional uint64 checkpoint = 1;
+    // Tag 1 is reserved, as in `TransactionsPosition`.
+    reserved 1;
     // Global transaction sequence number.
     optional uint64 tx_seq = 2;
     // Index of the event within its transaction.
