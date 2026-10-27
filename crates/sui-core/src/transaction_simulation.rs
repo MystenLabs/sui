@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
-use nonempty::NonEmpty;
 use sui_config::{
     transaction_deny_config::TransactionDenyConfig, verifier_signing_config::VerifierSigningConfig,
 };
@@ -19,9 +15,7 @@ use sui_types::{
     effects::TransactionEffectsAPI,
     error::{SuiErrorKind, SuiResult},
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
-    execution_status::ExecutionErrorKind,
     full_checkpoint_content::ObjectSet,
-    gas::SuiGasStatus,
     messages_checkpoint::CheckpointTimestamp,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     object::{MoveObject, OBJECT_START_VERSION, Object, Owner},
@@ -130,7 +124,7 @@ pub fn simulate_transaction(
     // Full validity check including gas budget and price.
     transaction.validity_check(&validity_check_context)?;
 
-    let declared_withdrawals = pre_object_load_checks(
+    pre_object_load_checks(
         &transaction,
         &[],
         &input_object_kinds,
@@ -142,7 +136,6 @@ pub fn simulate_transaction(
         coin_reservation_resolver,
         account_funds_read,
     )?;
-    let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
     let transaction_digest = transaction.digest();
     let (mut input_objects, receiving_objects) = input_loader.read_objects_for_simulation(
@@ -202,11 +195,6 @@ pub fn simulate_transaction(
 
     let tracking_store = TrackingBackingStore::new(backing_store);
 
-    // Clone inputs for potential retry if object funds check fails post-execution.
-    let cloned_input_objects = checked_input_objects.clone();
-    let cloned_gas = gas_data.clone();
-    let cloned_kind = kind.clone();
-    let tx_digest = transaction_digest;
     let system_object_versions = SystemObjectVersions::from_inputs_or_latest_in_store(
         checked_input_objects.inner(),
         backing_store,
@@ -220,67 +208,15 @@ pub fn simulate_transaction(
         &execution_epoch_id,
         epoch_timestamp_ms,
         checked_input_objects,
-        system_object_versions.clone(),
+        system_object_versions,
         gas_data,
         gas_status,
         kind,
-        rewritten_inputs.clone(),
+        rewritten_inputs,
         signer,
-        tx_digest,
+        transaction_digest,
         dev_inspect,
     );
-
-    // Post-execution: check object funds (non-address withdrawals discovered during execution).
-    // TODO: Remove this code once check_object_funds_withdraw_in_execution is enabled on all
-    // production networks.
-    let (inner_temp_store, effects, execution_result) = if !protocol_config
-        .check_object_funds_withdraw_in_execution()
-        && execution_result.is_ok()
-    {
-        let has_insufficient_object_funds = inner_temp_store
-            .accumulator_running_max_withdraws
-            .iter()
-            .filter(|(id, _)| !address_funds.contains(id))
-            .any(|(id, max_withdraw)| {
-                let balance = account_funds_read.get_latest_account_amount(id);
-                balance < *max_withdraw
-            });
-
-        if has_insufficient_object_funds {
-            let retry_gas_status = SuiGasStatus::new(
-                cloned_gas.budget,
-                cloned_gas.price,
-                validity_check_context.reference_gas_price,
-                protocol_config,
-            )?;
-            let (store, _, effects, result) = executor.dev_inspect_transaction(
-                &tracking_store,
-                protocol_config,
-                execution_metrics.clone(),
-                false,
-                ExecutionOrEarlyError::failed(
-                    NonEmpty::new(ExecutionErrorKind::InsufficientFundsForWithdraw),
-                    None,
-                ),
-                &execution_epoch_id,
-                epoch_timestamp_ms,
-                cloned_input_objects,
-                system_object_versions,
-                cloned_gas,
-                retry_gas_status,
-                cloned_kind,
-                rewritten_inputs,
-                signer,
-                tx_digest,
-                dev_inspect,
-            );
-            (store, effects, result)
-        } else {
-            (inner_temp_store, effects, execution_result)
-        }
-    } else {
-        (inner_temp_store, effects, execution_result)
-    };
 
     let loaded_runtime_objects = tracking_store.into_read_objects();
     let unchanged_loaded_runtime_objects =
