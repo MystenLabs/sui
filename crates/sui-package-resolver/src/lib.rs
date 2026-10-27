@@ -724,6 +724,14 @@ impl<S: PackageStore> Resolver<S> {
 // change both. The internal helpers `add_type_tag_sync` / `add_signature_sync` on
 // `ResolutionContext` are similarly paired with `add_type_tag` / `add_signature`.
 impl<S: SyncPackageStore> SyncResolver<S> {
+    /// The canonical form of a type refers to each type in terms of its defining package ID. This
+    /// function takes a non-canonical type and updates all its package IDs to the appropriate
+    /// defining ID.
+    ///
+    /// For every `package::module::datatype` in the input `tag`, `package` must be an object
+    /// on-chain, containing a move package that includes `module`, and that module must define the
+    /// `datatype`. In practice this means the input type `tag` can refer to types at or after
+    /// their defining IDs.
     pub fn canonical_type(&self, mut tag: TypeTag) -> Result<TypeTag> {
         let mut context = ResolutionContext::new(self.limits.as_ref());
 
@@ -741,6 +749,9 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         Ok(tag)
     }
 
+    /// Return the type layout corresponding to the given type tag. The layout always refers to
+    /// structs in terms of their defining ID (i.e. their package ID always points to the first
+    /// package that introduced them).
     pub fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
         let mut context = ResolutionContext::new(self.limits.as_ref());
 
@@ -762,6 +773,9 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         Ok(context.resolve_type_layout(&tag, max_depth)?.0)
     }
 
+    /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
+    /// a convenience wrapper around [`Self::type_layout`] that mirrors the signature of the legacy
+    /// `LayoutResolver::get_annotated_layout` method for easier migration.
     pub fn datatype_layout(&self, struct_tag: &StructTag) -> Result<A::MoveDatatypeLayout> {
         let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
         let layout = self.type_layout(type_tag)?;
@@ -782,6 +796,11 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         }
     }
 
+    /// Return the abilities of a concrete type, based on the abilities in its type definition, and
+    /// the abilities of its concrete type parameters: An instance of a generic type has `store`,
+    /// `copy`, or `drop` if its definition has the ability, and all its non-phantom type parameters
+    /// have the ability as well. Similar rules apply for `key` except that it requires its type
+    /// parameters to have `store`.
     pub fn abilities(&self, mut tag: TypeTag) -> Result<AbilitySet> {
         let mut context = ResolutionContext::new(self.limits.as_ref());
 
@@ -798,6 +817,8 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         context.resolve_abilities(&tag)
     }
 
+    /// Returns the signatures of parameters to function `pkg::module::function` in the package
+    /// store, assuming the function exists.
     pub fn function_signature(
         &self,
         pkg: AccountAddress,
@@ -834,6 +855,15 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         Ok(def)
     }
 
+    /// Attempts to infer the type layouts for pure inputs to the programmable transaction.
+    ///
+    /// The returned vector contains an element for each input to `tx`. Elements corresponding to
+    /// pure inputs that are used as arguments to transaction commands will contain `Some(layout)`.
+    /// Elements for other inputs (non-pure inputs, and unused pure inputs) will be `None`.
+    ///
+    /// Layout resolution can fail if a type/module/package doesn't exist, if layout resolution hits
+    /// a limit, or if a pure input is somehow used in multiple conflicting occasions (with
+    /// different types).
     pub fn pure_input_layouts(
         &self,
         tx: &ProgrammableTransaction,
@@ -933,6 +963,12 @@ impl<S: SyncPackageStore> SyncResolver<S> {
             .collect())
     }
 
+    /// Resolves a runtime address in a `ModuleId` to a storage `ModuleId` according to the linkage
+    /// table in the `context` which must refer to a package.
+    /// * Will fail if the wrong context is provided, i.e., is not a package, or
+    ///   does not exist.
+    /// * Will fail if an invalid `context` is provided for the `location`, i.e., the package at
+    ///   `context` does not contain the module that `location` refers to.
     pub fn resolve_module_id(
         &self,
         module_id: ModuleId,
@@ -943,6 +979,19 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         Ok(ModuleId::new(storage_id, module_id.name().to_owned()))
     }
 
+    /// Resolves an abort code following the clever error format to a `CleverError` enum.
+    /// The `module_id` must be the storage ID of the module (which can e.g., be gotten from the
+    /// `resolve_module_id` function) and not the runtime ID.
+    ///
+    /// If the `abort_code` is not a clever error (i.e., does not follow the tagging and layout as
+    /// defined in `ErrorBitset`), this function will return `None`.
+    ///
+    /// In the case where it is a clever error but only a line number is present (i.e., the error
+    /// is the result of an `assert!(<cond>)` source expression) a `CleverError::LineNumberOnly` is
+    /// returned. Otherwise a `CleverError::CompleteError` is returned.
+    ///
+    /// If for any reason we are unable to resolve the abort code to a `CleverError`, this function
+    /// will return `None`.
     pub fn resolve_clever_error(
         &self,
         module_id: ModuleId,
