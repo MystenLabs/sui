@@ -86,6 +86,7 @@ use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use tokio::sync::mpsc;
 use tracing::warn;
 
+use crate::DurableProgress;
 use crate::bigtable::client::BigTableClient;
 use crate::bigtable::client::CheckpointSpan;
 use crate::handlers::BitmapIndexValue;
@@ -230,6 +231,9 @@ pub(crate) struct BitmapCommitter {
     pub write_chunk_size: usize,
     pub write_concurrency: usize,
     pub metrics: Arc<BitmapIndexMetrics>,
+    /// Records each watermark the generation worker promotes, once every row scheduled through
+    /// it is durable and before the watermark row is written.
+    pub durable_progress: DurableProgress,
 }
 
 pub(crate) type BitmapCommitterHandle = Handle;
@@ -254,6 +258,7 @@ impl BitmapCommitter {
             write_chunk_size,
             write_concurrency,
             metrics,
+            durable_progress,
         } = self;
 
         // The generation task reads its initial watermark (`tx_hi` and
@@ -373,6 +378,7 @@ impl BitmapCommitter {
                 watermark_commit_tx,
                 is_sealed,
                 initial_watermarks: initial_watermarks.clone(),
+                durable_progress,
             };
             async move { worker.run().await }
         });
