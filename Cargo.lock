@@ -15291,7 +15291,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-util 0.7.18",
  "toml 0.7.4",
  "tonic 0.14.6",
  "tonic-health",
