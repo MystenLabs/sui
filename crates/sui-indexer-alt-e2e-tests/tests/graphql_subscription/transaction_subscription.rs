@@ -15,6 +15,7 @@ use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
 use sui_indexer_alt_graphql::CTransaction;
+use sui_indexer_alt_graphql::Point;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::SuiAddress;
@@ -38,15 +39,16 @@ use super::testing::wait_for_matching_item;
 /// delivered through the backfill scan (never the live path).
 const BACKFILL_SETTLE: Duration = Duration::from_secs(5);
 
-/// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
+/// Decode a transaction edge's `cursor` field into the place GraphQL gives it: the checkpoint and
+/// the transaction's index in it.
 fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
     let cursor = edge["cursor"]
         .as_str()
         .expect("transaction edge missing cursor");
     let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
-    match CursorToken::from(&*ct).position {
-        Position::Transactions { checkpoint, tx_seq } => (checkpoint, tx_seq),
-        position => panic!("expected a transactions cursor, got {position:?}"),
+    match ct.point() {
+        Some(Point::At(key)) => (key.checkpoint, key.transaction_index),
+        point => panic!("expected a transaction item cursor, got {point:?}"),
     }
 }
 
@@ -218,13 +220,13 @@ async fn next_progress_cursor(
     }
 }
 
-/// The checkpoint a transaction cursor string sits at.
+/// The checkpoint GraphQL places a transaction cursor string in.
 fn cursor_checkpoint(cursor: &str) -> u64 {
     let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
-    match CursorToken::from(&*ct).position {
-        Position::Transactions { checkpoint, .. } => checkpoint,
-        position => panic!("expected a transactions cursor, got {position:?}"),
-    }
+    ct.point()
+        .expect("GraphQL placed no cursor it minted")
+        .key()
+        .checkpoint
 }
 
 #[tokio::test]
@@ -702,9 +704,11 @@ async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger(
             !before_cursor.contains(&digest),
             "delivered a transaction before the cursor: {edge}",
         );
-        let (_, tx_seq) = decode_tx_cursor(edge);
+        // The cursor's transaction lies past the validator's network total when the test started,
+        // so in checkpoint `resume_seq` or later.
+        let (checkpoint, _) = decode_tx_cursor(edge);
         assert!(
-            tx_seq > resume_tx,
+            checkpoint >= resume_seq,
             "delivered at or before the cursor: {edge}"
         );
         if !after_cursor.contains(&digest) {
