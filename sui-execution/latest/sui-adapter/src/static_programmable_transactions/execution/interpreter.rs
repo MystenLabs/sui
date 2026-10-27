@@ -3,7 +3,7 @@
 
 use crate::{
     execution_mode::ExecutionMode,
-    gas_charger::GasCharger,
+    gas_charger::GasMeter,
     object_runtime, sp,
     static_programmable_transactions::{
         env::Env,
@@ -34,11 +34,11 @@ use sui_types::{
 };
 use tracing::instrument;
 
-pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
+pub(crate) fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
     metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
-    gas_charger: &mut GasCharger,
+    gas_meter: &mut GasMeter,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error>
@@ -52,7 +52,7 @@ where
         env,
         metrics,
         tx_context,
-        gas_charger,
+        gas_meter,
         ast,
         trace_builder_opt,
     );
@@ -72,14 +72,14 @@ fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMo
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
     metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
-    gas_charger: &mut GasCharger,
+    gas_meter: &mut GasMeter,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<Mode::ExecutionResults, Mode::Error>
 where
     'pc: 'state,
 {
-    debug_assert_eq!(gas_charger.move_gas_status().stack_height_current(), 0);
+    debug_assert_eq!(gas_meter.move_gas_status().stack_height_current(), 0);
     let T::Transaction {
         gas_payment,
         bytes,
@@ -96,7 +96,7 @@ where
         env,
         metrics,
         tx_context,
-        gas_charger,
+        gas_meter,
         gas_payment,
         bytes,
         objects,
@@ -168,7 +168,7 @@ fn execute_command<Mode: ExecutionMode>(
         incurs_post_execution_checks: _,
     } = c;
     assert_invariant!(
-        context.gas_charger.move_gas_status().stack_height_current() == 0,
+        context.gas_meter.move_gas_status().stack_height_current() == 0,
         "stack height did not start at 0"
     );
     let is_move_call = matches!(command, T::Command__::MoveCall(_));
@@ -418,7 +418,7 @@ fn execute_command<Mode: ExecutionMode>(
         .collect::<Vec<_>>();
     context.result(result)?;
     assert_invariant!(
-        context.gas_charger.move_gas_status().stack_height_current() == 0,
+        context.gas_meter.move_gas_status().stack_height_current() == 0,
         "stack height did not end at 0"
     );
     Ok(())

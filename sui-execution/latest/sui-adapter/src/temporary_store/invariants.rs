@@ -35,7 +35,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Object, ObjectPermissions, Owner};
 
 use crate::execution_mode::ExecutionMode;
-use crate::gas_charger::{GasCharger, PaymentLocation};
+use crate::gas_charger::{ChargedGas, PaymentLocation};
 use crate::temporary_store::TemporaryStore;
 use crate::type_layout_resolver::TypeLayoutResolver;
 
@@ -625,13 +625,13 @@ impl InvariantChecker {
         store: &TemporaryStore<'_>,
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
-        gas_charger: &GasCharger,
+        charged_gas: &ChargedGas,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         // The funds-accumulator reservation budget is shared with the conservation checks; see
         // `Self::check_address_balance_changes`.
         let input_reservations = &store.post_execution_check_inputs.input_reservations;
-        let gas_objs: HashSet<&ObjectID> = gas_charger.used_coins().map(|g| &g.0).collect();
+        let gas_objs: HashSet<&ObjectID> = charged_gas.used_coins.iter().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
         let mut authenticated_for_mutation = MutationAuthorization::new(*sender, *sponsor);
@@ -805,8 +805,8 @@ impl InvariantChecker {
         let sui_balance_type =
             sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
         let gas_payment_address_balance =
-            gas_charger
-                .gas_payment_location()
+            charged_gas
+                .charge_location
                 .and_then(|location| match location {
                     PaymentLocation::Coin(_) => None,
                     PaymentLocation::AddressBalance(address) => Some(address),
