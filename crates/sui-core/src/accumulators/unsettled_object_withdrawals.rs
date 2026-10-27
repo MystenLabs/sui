@@ -30,9 +30,8 @@ struct Inner {
     /// Balance are updated only by settlement transactions, not when we withdraw funds.
     /// Hence when we are checking object funds, on top of the settled balance, we also need to account for
     /// the amount of withdraws from the same consensus commit (that all reads from the same accumulator version).
-    /// When `record_net_unsettled_object_withdraws` is enabled, the recorded amounts are the per-account
-    /// net withdraws from effects (what settlement will actually deduct); otherwise they are the
-    /// running max withdraws.
+    /// The recorded amounts are the per-account net withdraws from effects (what settlement will
+    /// actually deduct).
     unsettled_withdraws: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
     /// Tracks the accounts that have pending withdraws at each accumulator version.
     /// This information is not required for functional correctness, but needed to garbage collect

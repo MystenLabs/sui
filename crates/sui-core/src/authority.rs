@@ -283,7 +283,6 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
-    pub(crate) execution_driver_paused_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
     pub(crate) execution_queueing_delay_s: Histogram,
     pub(crate) prepare_cert_gas_latency_ratio: Histogram,
@@ -556,12 +555,6 @@ impl AuthorityMetrics {
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
-                registry,
-            )
-            .unwrap(),
-            execution_driver_paused_transactions: register_int_counter_with_registry!(
-                "execution_driver_paused_transactions",
-                "Cumulative number of transactions paused by execution driver",
                 registry,
             )
             .unwrap(),
