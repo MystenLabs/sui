@@ -1446,7 +1446,8 @@ impl Display for CommandOutput {
                 write!(formatter, "{}", table)
             }
             _ => {
-                let json_obj = json![self];
+                let mut json_obj = json![self];
+                abbreviate_mldsa65_keys(&mut json_obj);
                 let mut table = json_to_table(&json_obj);
                 let style = tabled::settings::Style::rounded().horizontals([]);
                 table.with(style);
@@ -1454,6 +1455,38 @@ impl Display for CommandOutput {
                 write!(formatter, "{}", table)
             }
         }
+    }
+}
+
+// A base64 ML-DSA-65 public key is 2,604 chars vs. 44 for Ed25519. In the table the
+// cell wraps into 17 lines and every other cell in the row is padded to match, so for that
+// scheme only the pretty view shows the ends of the key so we abbreviate mldsa key with a
+// left that --json flag can show the whole key if needed
+const ABBREVIATED_KEY_EDGE: usize = 16;
+
+fn abbreviate_mldsa65_keys(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            let is_mldsa65 = map.get("keyScheme").and_then(|v| v.as_str()) == Some("mldsa65");
+            for (key, inner) in map.iter_mut() {
+                if is_mldsa65 && key == "publicBase64Key" {
+                    if let serde_json::Value::String(encoded) = inner
+                        && encoded.len() > 2 * ABBREVIATED_KEY_EDGE
+                    {
+                        *encoded = format!(
+                            "{}...{} ({} chars, add --json for the full key)",
+                            &encoded[..ABBREVIATED_KEY_EDGE],
+                            &encoded[encoded.len() - ABBREVIATED_KEY_EDGE..],
+                            encoded.len()
+                        );
+                    }
+                } else {
+                    abbreviate_mldsa65_keys(inner);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(abbreviate_mldsa65_keys),
+        _ => {}
     }
 }
 
