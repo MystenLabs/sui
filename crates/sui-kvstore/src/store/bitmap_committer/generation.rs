@@ -12,6 +12,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::DurableProgress;
 use crate::store::BitmapInitialWatermarks;
 
 use super::BucketId;
@@ -59,6 +60,8 @@ pub(super) struct GenerationWorker {
     pub(super) watermark_commit_tx: mpsc::Sender<watermark::Commit>,
     pub(super) is_sealed: fn(u64, CommitterWatermark) -> bool,
     pub(super) initial_watermarks: BitmapInitialWatermarks,
+    /// Records each promoted watermark: every row scheduled through it is durable.
+    pub(super) durable_progress: DurableProgress,
 }
 
 struct GenerationState {
@@ -215,6 +218,9 @@ impl GenerationWorker {
             }
         }
 
+        // Every row scheduled through `watermark` is durable, so it counts as durable progress
+        // before the watermark writer persists the watermark row.
+        self.durable_progress.record(self.pipeline, watermark);
         let req = watermark::Commit {
             watermark,
             bucket_start_cp,
@@ -388,6 +394,7 @@ mod tests {
             initial_watermarks: BitmapInitialWatermarks {
                 init_results: Arc::new(Mutex::new(init_results)),
             },
+            durable_progress: DurableProgress::new(),
         }
     }
 
