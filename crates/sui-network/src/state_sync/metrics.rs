@@ -508,9 +508,9 @@ impl Inner {
             .unwrap(),
             checkpoint_content_slow_peer_hedge_delay: register_histogram_vec_with_registry!(
                 "state_sync_checkpoint_content_slow_peer_hedge_delay",
-                "With adaptive hedge delays, the shortened hedge delay of each checkpoint \
-                 contents request to a peer that is slow from this node, by peer. Same peer \
-                 labels as state_sync_checkpoint_content_peer_requests.",
+                "The shortened hedge delay of each checkpoint contents request to a peer that \
+                 is slow from this node, by peer. Same peer labels as \
+                 state_sync_checkpoint_content_peer_requests.",
                 &["peer_id"],
                 HEDGE_TIMING_SEC_BUCKETS.to_vec(),
                 registry,
@@ -518,10 +518,10 @@ impl Inner {
             .unwrap(),
             checkpoint_content_slow_peer_probes: register_int_counter_vec_with_registry!(
                 "state_sync_checkpoint_content_slow_peer_probes",
-                "With hedging to a closer peer, checkpoint contents requests to a peer that is \
-                 slow from this node that are slow-peer probes, by peer: one in four requests \
-                 that are not hedges, which are not hedged right away just because the peer is \
-                 slow, so that they measure whether it still is. Same peer labels as \
+                "Checkpoint contents requests to a peer that is slow from this node that are \
+                 slow-peer probes, by peer: one in four requests that are not hedges, which are \
+                 not hedged right away just because the peer is slow, so that they measure \
+                 whether it still is. Same peer labels as \
                  state_sync_checkpoint_content_peer_requests.",
                 &["peer_id"],
                 registry,

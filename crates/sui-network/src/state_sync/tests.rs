@@ -1814,32 +1814,50 @@ impl HedgeTestClient {
         })
     }
 
-    /// Makes `peer_id` slow from this node: it answered within 20 ms a few times, but most
-    /// requests to it were still running after 500 ms when a hedge won. Its slow-response
-    /// threshold is 40 ms, and its expected response time is 20 ms.
-    fn record_slow_peer_responses(&self, peer_id: PeerId) {
+    /// Makes `peer_id` slow from this node: it answered within `fastest` a few times, but most
+    /// requests to it were still running after 25 times that when a hedge won. Its expected
+    /// response time is `fastest`, and its slow-response threshold is `fastest` plus 25% or plus
+    /// 20 ms, whichever is more.
+    fn record_slow_peer_responses(&self, peer_id: PeerId, fastest: Duration) {
         use super::ContentResponseTime::{Answered, LongerThan};
 
         let mut peer_heights = self.peer_heights.write().unwrap();
         for _ in 0..3 {
-            peer_heights.record_content_response_time(
-                peer_id,
-                Answered(Duration::from_millis(20)),
-                false,
-            );
+            peer_heights.record_content_response_time(peer_id, Answered(fastest), false);
         }
         for _ in 0..7 {
-            peer_heights.record_content_response_time(
-                peer_id,
-                LongerThan(Duration::from_millis(500)),
-                false,
-            );
+            peer_heights.record_content_response_time(peer_id, LongerThan(fastest * 25), false);
         }
         assert!(peer_heights.slow_peer_hedge_delay(&peer_id).is_some());
     }
 
-    /// Downloads `checkpoint`'s contents in hedged mode with a fixed hedge delay, giving up after
-    /// `limit`.
+    /// Records ten answers from `peer_id` that each took `elapsed`, so its expected response time
+    /// is `elapsed` and it is not slow from this node.
+    fn record_answers(&self, peer_id: PeerId, elapsed: Duration) {
+        use super::ContentResponseTime::Answered;
+
+        let mut peer_heights = self.peer_heights.write().unwrap();
+        for _ in 0..10 {
+            peer_heights.record_content_response_time(peer_id, Answered(elapsed), false);
+        }
+    }
+
+    /// Counts the requests to slow peer `peer_id` that come before a slow-peer probe, so that
+    /// the next request to it is a probe.
+    fn make_next_request_a_probe(&self, peer_id: PeerId) {
+        for _ in 1..super::SLOW_PEER_PROBE_INTERVAL {
+            assert_eq!(
+                self.peer_heights
+                    .write()
+                    .unwrap()
+                    .classify_new_request(&peer_id),
+                super::SlowPeerRequest::NotProbe
+            );
+        }
+    }
+
+    /// Downloads `checkpoint`'s contents in hedged mode with `hedge_delay`, with checkpoint
+    /// `highest_synced` as the highest synced one, giving up after `limit`.
     async fn fetch_hedged(
         &self,
         checkpoint: &sui_types::messages_checkpoint::VerifiedCheckpoint,
@@ -1852,23 +1870,8 @@ impl HedgeTestClient {
     > {
         let hedge = super::ContentHedge {
             delay: hedge_delay,
-            adaptive_delay: false,
-            closer_peer: false,
             highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(highest_synced)),
         };
-        self.fetch_with_hedge(checkpoint, &hedge, limit).await
-    }
-
-    /// Downloads `checkpoint`'s contents with `hedge`, giving up after `limit`.
-    async fn fetch_with_hedge(
-        &self,
-        checkpoint: &sui_types::messages_checkpoint::VerifiedCheckpoint,
-        hedge: &super::ContentHedge,
-        limit: Duration,
-    ) -> Result<
-        Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents>,
-        tokio::time::error::Elapsed,
-    > {
         let fetch = super::ContentFetch {
             network: &self.network,
             peer_heights: &self.peer_heights,
@@ -1879,7 +1882,7 @@ impl HedgeTestClient {
         };
         timeout(
             limit,
-            super::get_full_checkpoint_contents(fetch, &self.store, Some(hedge)),
+            super::get_full_checkpoint_contents(fetch, &self.store, Some(&hedge)),
         )
         .await
     }
@@ -2099,12 +2102,13 @@ async fn hedged_contents_fetch_does_not_hedge_far_from_release_frontier() {
     );
 }
 
-/// With adaptive delays, a request to a peer that has been slow from this node is hedged after
-/// the peer's slow-response threshold instead of the configured delay. No other peer has the
-/// checkpoint at that point, so the hedge goes out as soon as one announces it.
+/// A request to a peer that is slow from this node is hedged after the peer's slow-response
+/// threshold instead of the configured delay. The request is a slow-peer probe, so it is not
+/// hedged right away just because its peer is slow. No other peer has the checkpoint when the
+/// threshold passes, so the hedge goes out as soon as one announces it.
 #[tokio::test]
 async fn adaptive_hedge_delay_hedges_slow_peer_early() {
-    use super::ContentResponseTime::{Answered, LongerThan};
+    use super::ContentResponseTime::LongerThan;
     use super::metrics::{HedgeEvent, OtherPeerWaitOutcome};
 
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
@@ -2122,68 +2126,48 @@ async fn adaptive_hedge_delay_hedges_slow_peer_early() {
         &[(&slow_peer, 1), (&fast_peer, 0)],
     )
     .await;
-    // The slow peer answered within 20 ms a few times, but most requests to it were still
-    // running after 500 ms when a hedge won. Its slow-response threshold is 40 ms.
-    {
-        let mut peer_heights = client.peer_heights.write().unwrap();
-        for _ in 0..3 {
-            peer_heights.record_content_response_time(
-                slow_peer.peer_id(),
-                Answered(Duration::from_millis(20)),
-                false,
-            );
-        }
-        for _ in 0..7 {
-            peer_heights.record_content_response_time(
-                slow_peer.peer_id(),
-                LongerThan(Duration::from_millis(500)),
-                false,
-            );
-        }
-    }
+    // The slow peer's slow-response threshold is 40 ms.
+    client.record_slow_peer_responses(slow_peer.peer_id(), Duration::from_millis(20));
+    client.make_next_request_a_probe(slow_peer.peer_id());
     let announce = client.announce_after(fast_peer.peer_id(), 1, Duration::from_millis(100));
-    let hedge = super::ContentHedge {
-        delay: Duration::from_secs(10),
-        adaptive_delay: true,
-        closer_peer: false,
-        highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-    };
 
     let fetched = client
-        .fetch_with_hedge(&checkpoints[1], &hedge, Duration::from_secs(5))
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(10),
+            0,
+            Duration::from_secs(5),
+        )
         .await
         .expect("the slow peer's request should be hedged long before the 10 s hedge delay");
     announce.await.unwrap();
 
     assert!(fetched.is_some());
+    let metrics = &client.metrics;
+    assert_eq!(metrics.checkpoint_content_slow_peer_probes("other"), 1);
     assert_eq!(
-        client
-            .metrics
-            .checkpoint_content_slow_peer_hedge_delays("other"),
+        metrics.checkpoint_content_slow_peer_hedge_delays("other"),
         1
     );
     // The hedge was due at 40 ms, before the other peer announced the checkpoint at 100 ms.
     assert_eq!(
-        client
-            .metrics
-            .checkpoint_content_hedges(HedgeEvent::NoCandidate),
+        metrics.checkpoint_content_hedges(HedgeEvent::NoCandidate),
         1
     );
+    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Sent), 1);
     assert_eq!(
-        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
-        1
+        metrics.checkpoint_content_hedges(HedgeEvent::SentAroundSlowPeer),
+        0
     );
-    assert_eq!(client.metrics.checkpoint_content_hedges(HedgeEvent::Won), 1);
+    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Won), 1);
     assert_eq!(
-        client
-            .metrics
-            .checkpoint_content_other_peer_waits(OtherPeerWaitOutcome::Announced),
+        metrics.checkpoint_content_other_peer_waits(OtherPeerWaitOutcome::Announced),
         1
     );
 
-    // The slow peer's request was cancelled when the hedge won, after it had run past the 40 ms
-    // threshold, so it adds a slow sample that keeps the peer flagged. The winning hedge adds no
-    // sample for the fast peer.
+    // The probe was cancelled when the hedge won, after it had run past the 40 ms threshold, so
+    // it adds a slow sample that keeps the peer flagged. The winning hedge adds no sample for
+    // the fast peer.
     let peer_heights = client.peer_heights.read().unwrap();
     let slow_samples = &peer_heights.scores[&slow_peer.peer_id()].content_response_times;
     assert_eq!(slow_samples.len(), 11);
@@ -2204,17 +2188,16 @@ async fn adaptive_hedge_delay_hedges_slow_peer_early() {
     );
 }
 
-/// With hedging to a closer peer, a request to a peer that is far away from this node is hedged
-/// as soon as a nearby peer announces the checkpoint, long before the hedge delay. Local round
-/// trips are all about zero, so the slow peer's recent answers make it look far away.
+/// A request to a peer that is far away from this node is hedged as soon as a nearby peer
+/// announces the checkpoint, long before the hedge delay. Local round trips are all about zero,
+/// so the far peer's recent answers make it look far away.
 #[tokio::test]
 async fn closer_peer_hedge_goes_out_when_a_faster_peer_announces() {
-    use super::ContentResponseTime::Answered;
     use super::metrics::HedgeEvent;
 
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
-    let slow_peer = build_contents_peer(
+    let far_peer = build_contents_peer(
         &committee,
         &checkpoints,
         &contents,
@@ -2222,34 +2205,21 @@ async fn closer_peer_hedge_goes_out_when_a_faster_peer_announces() {
         Duration::from_secs(30),
     );
     let fast_peer = build_contents_peer(&committee, &checkpoints, &contents, 2, Duration::ZERO);
-    let client = HedgeTestClient::new(
-        *checkpoints[0].digest(),
-        &[(&slow_peer, 1), (&fast_peer, 0)],
-    )
-    .await;
-    // The slow peer's expected response time is about 500 ms.
-    {
-        let mut peer_heights = client.peer_heights.write().unwrap();
-        for _ in 0..10 {
-            peer_heights.record_content_response_time(
-                slow_peer.peer_id(),
-                Answered(Duration::from_millis(500)),
-                false,
-            );
-        }
-    }
+    let client =
+        HedgeTestClient::new(*checkpoints[0].digest(), &[(&far_peer, 1), (&fast_peer, 0)]).await;
+    // The far peer's expected response time is 500 ms, and it is not slow.
+    client.record_answers(far_peer.peer_id(), Duration::from_millis(500));
     let announce = client.announce_after(fast_peer.peer_id(), 1, Duration::from_millis(50));
-    let hedge = super::ContentHedge {
-        delay: Duration::from_secs(10),
-        adaptive_delay: false,
-        closer_peer: true,
-        highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-    };
 
     let fetched = client
-        .fetch_with_hedge(&checkpoints[1], &hedge, Duration::from_secs(5))
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(10),
+            0,
+            Duration::from_secs(5),
+        )
         .await
-        .expect("the request to the slow peer should be hedged long before the 10 s hedge delay");
+        .expect("the request to the far peer should be hedged long before the 10 s hedge delay");
     announce.await.unwrap();
 
     assert!(fetched.is_some());
@@ -2265,7 +2235,7 @@ async fn closer_peer_hedge_goes_out_when_a_faster_peer_announces() {
     );
     assert_eq!(client.metrics.checkpoint_content_hedges(HedgeEvent::Won), 1);
 
-    // The slow peer had the checkpoint when the first request went out, so its announce delay
+    // The far peer had the checkpoint when the first request went out, so its announce delay
     // is about zero. The fast peer was first seen at about 50 ms, after its announcement.
     // Test peers are not in the client's known-peer set, so they share the `other` label.
     let metrics = &client.metrics;
@@ -2284,11 +2254,10 @@ async fn closer_peer_hedge_goes_out_when_a_faster_peer_announces() {
     );
 }
 
-/// With hedging to a closer peer, the first request goes to a peer that isn't slow from this
-/// node, even though a slow peer has a lower expected response time.
+/// The first request goes to a peer that isn't slow from this node, even though a slow peer has
+/// a lower expected response time.
 #[tokio::test]
 async fn closer_peer_first_request_avoids_slow_peer() {
-    use super::ContentResponseTime::Answered;
     use super::metrics::HedgeEvent;
 
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
@@ -2307,26 +2276,16 @@ async fn closer_peer_first_request_avoids_slow_peer() {
     )
     .await;
     // The slow peer's expected response time is 20 ms, the healthy peer's 100 ms.
-    client.record_slow_peer_responses(slow_peer.peer_id());
-    {
-        let mut peer_heights = client.peer_heights.write().unwrap();
-        for _ in 0..10 {
-            peer_heights.record_content_response_time(
-                healthy_peer.peer_id(),
-                Answered(Duration::from_millis(100)),
-                false,
-            );
-        }
-    }
-    let hedge = super::ContentHedge {
-        delay: Duration::from_secs(10),
-        adaptive_delay: false,
-        closer_peer: true,
-        highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-    };
+    client.record_slow_peer_responses(slow_peer.peer_id(), Duration::from_millis(20));
+    client.record_answers(healthy_peer.peer_id(), Duration::from_millis(100));
 
     let fetched = client
-        .fetch_with_hedge(&checkpoints[1], &hedge, Duration::from_secs(5))
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(10),
+            0,
+            Duration::from_secs(5),
+        )
         .await
         .expect("the first request should go to the healthy peer, which answers right away");
 
@@ -2337,9 +2296,9 @@ async fn closer_peer_first_request_avoids_slow_peer() {
     );
 }
 
-/// With hedging to a closer peer, a request to a slow peer is hedged as soon as a peer that
-/// isn't slow announces the checkpoint, even though that peer is not expected to finish
-/// `CLOSER_PEER_MIN_GAIN` sooner, and long before the hedge delay.
+/// A request to a slow peer is hedged as soon as a peer that isn't slow announces the
+/// checkpoint: before the slow peer's slow-response threshold, and although that peer is not
+/// expected to finish `CLOSER_PEER_MIN_GAIN` sooner.
 #[tokio::test]
 async fn closer_peer_hedges_around_slow_peer_in_flight() {
     use super::metrics::HedgeEvent;
@@ -2359,20 +2318,20 @@ async fn closer_peer_hedges_around_slow_peer_in_flight() {
         &[(&slow_peer, 1), (&healthy_peer, 0)],
     )
     .await;
-    // The slow peer's expected response time is 20 ms, so by the time the healthy peer
-    // announces, the request in flight is past its expected finish and the closer-peer rule
-    // alone would not hedge it.
-    client.record_slow_peer_responses(slow_peer.peer_id());
+    // The slow peer's expected response time is 200 ms and its slow-response threshold 250 ms.
+    // The healthy peer is expected to take 200 ms too, so when it announces at 50 ms, it is not
+    // expected to finish sooner than the request in flight.
+    client.record_slow_peer_responses(slow_peer.peer_id(), Duration::from_millis(200));
+    client.record_answers(healthy_peer.peer_id(), Duration::from_millis(200));
     let announce = client.announce_after(healthy_peer.peer_id(), 1, Duration::from_millis(50));
-    let hedge = super::ContentHedge {
-        delay: Duration::from_secs(10),
-        adaptive_delay: false,
-        closer_peer: true,
-        highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-    };
 
     let fetched = client
-        .fetch_with_hedge(&checkpoints[1], &hedge, Duration::from_secs(5))
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(10),
+            0,
+            Duration::from_secs(5),
+        )
         .await
         .expect("the request to the slow peer should be hedged long before the 10 s hedge delay");
     announce.await.unwrap();
@@ -2392,11 +2351,13 @@ async fn closer_peer_hedges_around_slow_peer_in_flight() {
     assert_eq!(metrics.checkpoint_content_slow_peer_probes("other"), 0);
 }
 
-/// A slow-peer probe is not hedged right away just because its peer is slow: the fourth
-/// request to a slow peer runs until the hedge delay even after a peer that isn't slow
-/// announces the checkpoint.
+/// A slow-peer probe is not hedged right away just because its peer is slow: the fourth request
+/// to a slow peer runs until the peer's slow-response threshold, although a peer that isn't slow
+/// announces the checkpoint long before. The probe's cancellation after the threshold adds a
+/// sample that keeps the peer flagged.
 #[tokio::test]
 async fn closer_peer_does_not_hedge_around_slow_peer_probe() {
+    use super::ContentResponseTime::LongerThan;
     use super::metrics::HedgeEvent;
 
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
@@ -2414,39 +2375,51 @@ async fn closer_peer_does_not_hedge_around_slow_peer_probe() {
         &[(&slow_peer, 1), (&healthy_peer, 0)],
     )
     .await;
-    client.record_slow_peer_responses(slow_peer.peer_id());
-    // Three requests to the slow peer were sent already, so the download's first request is
-    // the fourth.
-    for _ in 0..3 {
-        assert_eq!(
-            client
-                .peer_heights
-                .write()
-                .unwrap()
-                .classify_new_request(&slow_peer.peer_id()),
-            super::SlowPeerRequest::NotProbe
-        );
-    }
+    // As in `closer_peer_hedges_around_slow_peer_in_flight`, the slow peer's slow-response
+    // threshold is 250 ms, and the healthy peer is not expected to finish sooner than the
+    // request in flight.
+    client.record_slow_peer_responses(slow_peer.peer_id(), Duration::from_millis(200));
+    client.record_answers(healthy_peer.peer_id(), Duration::from_millis(200));
+    client.make_next_request_a_probe(slow_peer.peer_id());
     let announce = client.announce_after(healthy_peer.peer_id(), 1, Duration::from_millis(50));
-    let hedge = super::ContentHedge {
-        delay: Duration::from_secs(10),
-        adaptive_delay: false,
-        closer_peer: true,
-        highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-    };
 
-    let result = client
-        .fetch_with_hedge(&checkpoints[1], &hedge, Duration::from_millis(500))
-        .await;
+    let start = std::time::Instant::now();
+    let fetched = client
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(10),
+            0,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("the probe should be hedged at the slow peer's 250 ms threshold");
+    let elapsed = start.elapsed();
     announce.await.unwrap();
 
+    assert!(fetched.is_some());
     assert!(
-        result.is_err(),
-        "the probe to the slow peer should not be hedged before the 10 s hedge delay"
+        elapsed >= Duration::from_millis(250),
+        "the probe was hedged after {elapsed:?}, before the slow peer's threshold"
     );
     let metrics = &client.metrics;
     assert_eq!(metrics.checkpoint_content_slow_peer_probes("other"), 1);
-    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Sent), 0);
+    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Sent), 1);
+    assert_eq!(
+        metrics.checkpoint_content_hedges(HedgeEvent::SentAroundSlowPeer),
+        0
+    );
+    assert_eq!(
+        metrics.checkpoint_content_hedges(HedgeEvent::SentToCloserPeer),
+        0
+    );
+    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Won), 1);
+    let peer_heights = client.peer_heights.read().unwrap();
+    let slow_samples = &peer_heights.scores[&slow_peer.peer_id()].content_response_times;
+    assert_eq!(slow_samples.len(), 11);
+    assert!(matches!(
+        slow_samples.back(),
+        Some((_, LongerThan(ran))) if *ran >= Duration::from_millis(250)
+    ));
 }
 
 #[test]
@@ -2534,8 +2507,6 @@ fn test_content_hedge_window() {
 
     let hedge = ContentHedge {
         delay: Duration::from_millis(100),
-        adaptive_delay: false,
-        closer_peer: false,
         highest_synced: Arc::new(AtomicU64::new(100)),
     };
     assert!(hedge.covers(101));
