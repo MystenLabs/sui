@@ -189,8 +189,9 @@ impl Metrics {
         }
     }
 
-    /// Records a request to `peer` that is hedged after the peer's slow-response threshold,
-    /// `delay`, instead of after the configured hedge delay.
+    /// Records a request to `peer`, for a checkpoint in the hedge window, that is due to be hedged
+    /// after the peer's slow-response threshold, `delay`, instead of after the configured hedge
+    /// delay.
     pub fn record_checkpoint_content_slow_peer_hedge_delay(&self, peer: &str, delay: Duration) {
         if let Some(inner) = &self.0 {
             inner
@@ -451,8 +452,8 @@ impl Inner {
             checkpoint_content_slow_peer_hedge_delay: register_histogram_vec_with_registry!(
                 "state_sync_checkpoint_content_slow_peer_hedge_delay",
                 "The shortened hedge delay of each checkpoint contents request to a peer that \
-                 is slow from this node, by peer. Same peer labels as \
-                 state_sync_checkpoint_content_peer_requests.",
+                 is slow from this node, for checkpoints in the hedge window, by peer. Same peer \
+                 labels as state_sync_checkpoint_content_peer_requests.",
                 &["peer_id"],
                 HEDGE_TIMING_SEC_BUCKETS.to_vec(),
                 registry,

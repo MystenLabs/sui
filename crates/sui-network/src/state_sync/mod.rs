@@ -2389,22 +2389,27 @@ impl ContentFetch<'_> {
     /// How long a request to `peer_id` may run before it is hedged: `hedge.delay`, or the peer's
     /// slow-response threshold if the peer is slow from this node and the threshold is shorter.
     fn hedge_delay_for(&self, hedge: &ContentHedge, peer_id: PeerId) -> Duration {
-        let slow_peer_delay = self
-            .peer_heights
+        self.peer_heights
             .read()
             .unwrap()
-            .slow_peer_hedge_delay(&peer_id);
-        match slow_peer_delay {
-            Some(delay) if delay < hedge.delay => {
-                self.metrics
-                    .record_checkpoint_content_slow_peer_hedge_delay(
-                        &content_metrics_peer_label(self.network, peer_id),
-                        delay,
-                    );
-                delay
-            }
-            _ => hedge.delay,
+            .slow_peer_hedge_delay(&peer_id)
+            .filter(|delay| *delay < hedge.delay)
+            .unwrap_or(hedge.delay)
+    }
+
+    /// [`Self::hedge_delay_for`] a request about to be sent to `peer_id`. If the delay is
+    /// shortened and the checkpoint is in the hedge window, where the delay can trigger a hedge,
+    /// records it in `state_sync_checkpoint_content_slow_peer_hedge_delay`.
+    fn new_request_hedge_delay(&self, hedge: &ContentHedge, peer_id: PeerId) -> Duration {
+        let delay = self.hedge_delay_for(hedge, peer_id);
+        if delay < hedge.delay && hedge.covers(*self.checkpoint.sequence_number()) {
+            self.metrics
+                .record_checkpoint_content_slow_peer_hedge_delay(
+                    &content_metrics_peer_label(self.network, peer_id),
+                    delay,
+                );
         }
+        delay
     }
 
     /// Called when a request that is not a hedge is about to be sent to `peer_id` near the
@@ -2603,9 +2608,9 @@ impl ContentFetch<'_> {
                         },
                     );
                     in_flight.push(self.request(peer, kind));
-                    next_hedge
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + self.hedge_delay_for(hedge, peer_id));
+                    next_hedge.as_mut().reset(
+                        tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id),
+                    );
                     if kind == ContentRequestKind::First {
                         announcements.first_request_sent();
                         next_other_peer_check
@@ -2714,7 +2719,7 @@ impl ContentFetch<'_> {
                             );
                             in_flight.push(self.request(peer, ContentRequestKind::Hedge));
                             next_hedge.as_mut().reset(
-                                tokio::time::Instant::now() + self.hedge_delay_for(hedge, peer_id),
+                                tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id),
                             );
                         }
                         None => {
@@ -2764,7 +2769,7 @@ impl ContentFetch<'_> {
                         );
                         in_flight.push(self.request(peer, ContentRequestKind::Hedge));
                         next_hedge.as_mut().reset(
-                            tokio::time::Instant::now() + self.hedge_delay_for(hedge, peer_id),
+                            tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id),
                         );
                     }
                 }

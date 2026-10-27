@@ -2059,7 +2059,8 @@ async fn hedged_contents_fetch_keeps_at_most_two_requests_in_flight() {
 }
 
 /// Checkpoints more than `CONTENT_HEDGE_WINDOW` past the highest synced checkpoint are not
-/// hedged, even when another peer has them.
+/// hedged, even when another peer has them, and a slow peer's shortened hedge delay, which
+/// can't trigger a hedge there, is not recorded.
 #[tokio::test]
 async fn hedged_contents_fetch_does_not_hedge_far_from_release_frontier() {
     use super::metrics::HedgeEvent;
@@ -2079,6 +2080,8 @@ async fn hedged_contents_fetch_does_not_hedge_far_from_release_frontier() {
         &[(&slow_peer, 10), (&fast_peer, 0)],
     )
     .await;
+    // The slow peer's slow-response threshold, 40 ms, is shorter than the hedge delay.
+    client.record_slow_peer_responses(slow_peer.peer_id(), Duration::from_millis(20));
     let announce = client.announce_after(fast_peer.peer_id(), 10, Duration::from_millis(20));
 
     // Checkpoint 10 is 9 past the highest synced checkpoint 1.
@@ -2096,8 +2099,10 @@ async fn hedged_contents_fetch_does_not_hedge_far_from_release_frontier() {
         result.is_err(),
         "only the slow peer should be asked for a checkpoint outside the hedge window"
     );
+    let metrics = &client.metrics;
+    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Sent), 0);
     assert_eq!(
-        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
+        metrics.checkpoint_content_slow_peer_hedge_delays("other"),
         0
     );
 }
