@@ -139,6 +139,12 @@ pub(crate) struct ObjectRuntimeState {
 pub struct ObjectRuntime<'a> {
     child_object_store: ChildObjectStore<'a>,
     system_object_resolver: &'a dyn ImplicitSystemObjectResolver,
+    /// The Clock pinned for this transaction, loaded on first borrow. References handed out by
+    /// `borrow_clock` point into it, so it lives as long as the runtime; it is kept outside
+    /// `ObjectRuntimeState`, which test scenarios reset at the end of every transaction.
+    // TODO: if another implicitly read system object becomes borrowable, group these loaded
+    // values in a struct instead of adding more fields here.
+    clock: Option<GlobalValue>,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     // the internal state
@@ -224,6 +230,7 @@ impl<'a> ObjectRuntime<'a> {
                 epoch_id,
             ),
             system_object_resolver,
+            clock: None,
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
@@ -246,6 +253,41 @@ impl<'a> ObjectRuntime<'a> {
             protocol_config,
             metrics,
         }
+    }
+
+    pub fn borrow_clock(&mut self, layout: &R::MoveTypeLayout) -> PartialVMResult<Value> {
+        if self.clock.is_none() {
+            let clock = self.system_object_resolver.clock().map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Failed to read the Clock: {e}"))
+            })?;
+            let contents = clock
+                .data
+                .try_as_move()
+                .ok_or_else(|| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("The Clock is not a Move object".to_string())
+                })?
+                .contents();
+            let value = Value::simple_deserialize(contents, layout).ok_or_else(|| {
+                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
+                    .with_message("Failed to deserialize the Clock".to_string())
+            })?;
+            self.clock = Some(GlobalValue::create(value)?);
+        }
+        self.clock
+            .as_ref()
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("The Clock was not loaded".to_string())
+            })
+            .and_then(|clock| clock.borrow_global())
+    }
+
+    /// Drops the loaded Clock so the next borrow reads the test store again. Live references
+    /// keep the old value alive.
+    pub fn clear_clock_for_testing(&mut self) {
+        self.clock = None;
     }
 
     pub fn check_object_funds_sufficiency(

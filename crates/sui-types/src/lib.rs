@@ -166,6 +166,7 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+    SUI_CLOCK_OBJECT_ID,
 ];
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
