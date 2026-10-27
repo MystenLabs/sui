@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_mode::ExecutionMode;
-use crate::gas_charger::GasCharger;
+use crate::gas_charger::ChargedGas;
+use crate::gas_state::{StorageCharge, StorageRates};
 use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
@@ -1061,30 +1062,27 @@ impl<'backing> TemporaryStore<'backing> {
         &self,
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
-        gas_charger: &GasCharger,
+        charged_gas: &ChargedGas,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         self.invariants.check_ownership_invariants(
             self,
             sender,
             sponsor,
-            gas_charger,
+            charged_gas,
             is_epoch_change,
         )
     }
 }
 
 impl TemporaryStore<'_> {
-    /// Track storage gas for each mutable input object (including the gas coin)
-    /// and each created object. Compute storage refunds for each deleted object.
-    /// Will *not* charge anything, gas status keeps track of storage cost and rebate.
-    /// All objects will be updated with their new (current) storage rebate/cost.
-    /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
-    /// overall storage rebate and cost.
+    /// The storage cost of each written object and the rebate of each deleted object. Each
+    /// written object gets its new storage rebate.
     pub(crate) fn collect_storage_and_rebate(
         &mut self,
-        gas_charger: &mut GasCharger,
-    ) -> Result<(), ExecutionError> {
+        rates: &StorageRates,
+    ) -> Result<StorageCharge, ExecutionError> {
+        let mut charge = StorageCharge::default();
         // Use two loops because we cannot mut iterate written while calling get_object_modified_at.
         let old_storage_rebates: Vec<_> = self
             .execution_results
@@ -1105,18 +1103,29 @@ impl TemporaryStore<'_> {
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
-            let new_storage_rebate = gas_charger
-                .track_storage_mutation(object.id(), new_object_size, old_storage_rebate)
+            let new_storage_rebate = charge
+                .track_mutation(rates, object.id(), new_object_size, old_storage_rebate)
                 .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))?;
             object.storage_rebate = new_storage_rebate;
         }
-
-        self.collect_rebate(gas_charger)
+        self.track_deleted(rates, &mut charge)?;
+        Ok(charge)
     }
 
+    /// The rebates of the deleted objects only.
     pub(crate) fn collect_rebate(
         &self,
-        gas_charger: &mut GasCharger,
+        rates: &StorageRates,
+    ) -> Result<StorageCharge, ExecutionError> {
+        let mut charge = StorageCharge::default();
+        self.track_deleted(rates, &mut charge)?;
+        Ok(charge)
+    }
+
+    fn track_deleted(
+        &self,
+        rates: &StorageRates,
+        charge: &mut StorageCharge,
     ) -> Result<(), ExecutionError> {
         for object_id in &self.execution_results.modified_objects {
             if self
@@ -1132,8 +1141,8 @@ impl TemporaryStore<'_> {
                 // Unwrap is safe because this loop iterates through all modified objects.
                 .unwrap()
                 .storage_rebate;
-            gas_charger
-                .track_storage_mutation(*object_id, 0, storage_rebate)
+            charge
+                .track_mutation(rates, *object_id, 0, storage_rebate)
                 .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))?;
         }
         Ok(())

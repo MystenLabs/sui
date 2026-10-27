@@ -12,7 +12,7 @@ use crate::{
     },
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
-    gas_charger::GasCharger,
+    gas_charger::GasMeter,
     static_programmable_transactions::{
         env::Env, linkage::analysis::LinkageAnalyzer, metering::translation_meter,
     },
@@ -35,20 +35,20 @@ pub mod metering;
 pub mod spanned;
 pub mod typing;
 
-pub fn execute<Mode: ExecutionMode>(
+pub(crate) fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     metrics: Arc<ExecutionMetrics>,
     vm: &MoveRuntime,
     state_view: &mut dyn ExecutionState,
     package_store: &dyn BackingPackageStore,
     tx_context: Rc<RefCell<TxContext>>,
-    gas_charger: &mut GasCharger,
+    gas_meter: &mut GasMeter,
     // which inputs are withdrawals that need to be converted to coins
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
-    let gas_payment = gas_charger.gas_payment_amount();
+    let gas_payment = gas_meter.payment();
     let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
@@ -74,7 +74,7 @@ pub fn execute<Mode: ExecutionMode>(
         &resolution_vm,
     );
     let mut translation_meter =
-        translation_meter::TranslationMeter::new(protocol_config, gas_charger);
+        translation_meter::TranslationMeter::new(protocol_config, gas_meter);
 
     let txn = {
         let tx_context_ref = tx_context.borrow();
@@ -94,7 +94,7 @@ pub fn execute<Mode: ExecutionMode>(
         &mut env,
         metrics,
         tx_context,
-        gas_charger,
+        gas_meter,
         txn,
         trace_builder_opt,
     )
