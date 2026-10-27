@@ -91,7 +91,7 @@ mod tests;
 mod worker;
 
 use self::{
-    metrics::{ContentRequestOutcome, HedgeEvent, Metrics, OtherPeerWaitOutcome},
+    metrics::{ContentRequestOutcome, HedgeEvent, Metrics},
     server::CheckpointContentsDownloadLimitLayer,
 };
 use crate::state_sync::worker::process_archive_checkpoint;
@@ -2614,13 +2614,10 @@ impl ContentFetch<'_> {
                         if announcements.is_measuring() {
                             announcements.observe(
                                 &self.peers_with_checkpoint(),
-                                &asked,
                                 self.network,
                                 self.metrics,
                             );
                         }
-                    } else {
-                        announcements.other_peer_found(self.metrics);
                     }
                 } else if hedge.covers(sequence_number) && download_start.elapsed() < wait_interval
                 {
@@ -2642,7 +2639,6 @@ impl ContentFetch<'_> {
                                 );
                                 announcements.observe(
                                     &self.peers_with_checkpoint(),
-                                    &asked,
                                     self.network,
                                     self.metrics,
                                 );
@@ -2651,7 +2647,6 @@ impl ContentFetch<'_> {
                     }
                     continue;
                 } else {
-                    announcements.download_ended(self.metrics);
                     return None;
                 }
             }
@@ -2695,7 +2690,6 @@ impl ContentFetch<'_> {
                             );
                         }
                     }
-                    announcements.download_ended(self.metrics);
                     return Some(contents);
                 }
                 () = next_hedge.as_mut(), if in_flight.len() < MAX_CONCURRENT_CONTENT_REQUESTS => {
@@ -2708,7 +2702,6 @@ impl ContentFetch<'_> {
                     match self.candidate(&asked, near_frontier) {
                         Some(peer) => {
                             self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Sent);
-                            announcements.other_peer_found(self.metrics);
                             let peer_id = peer.inner().peer_id();
                             asked.insert(peer_id);
                             in_flight_requests.insert(
@@ -2741,7 +2734,7 @@ impl ContentFetch<'_> {
                         .as_mut()
                         .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
                     let peers = self.peers_with_checkpoint();
-                    announcements.observe(&peers, &asked, self.network, self.metrics);
+                    announcements.observe(&peers, self.network, self.metrics);
                     if in_flight.len() >= MAX_CONCURRENT_CONTENT_REQUESTS {
                         continue;
                     }
@@ -2759,7 +2752,6 @@ impl ContentFetch<'_> {
                     {
                         self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Sent);
                         self.metrics.inc_checkpoint_content_hedge(event);
-                        announcements.other_peer_found(self.metrics);
                         let peer_id = peer.inner().peer_id();
                         asked.insert(peer_id);
                         in_flight_requests.insert(
@@ -2782,10 +2774,9 @@ impl ContentFetch<'_> {
 }
 
 /// For a download near the release frontier, tracks from its first request which peers have the
-/// checkpoint. Records, for each peer, how long after the first request a check first saw it
-/// having the checkpoint (`state_sync_checkpoint_content_peer_announce_delay`), and how long
-/// until a peer that hadn't been asked yet had it (`state_sync_checkpoint_content_other_peer_wait`),
-/// which bounds how soon a hedge can go out.
+/// checkpoint, and records for each peer how long after the first request a check first saw it
+/// having the checkpoint (`state_sync_checkpoint_content_peer_announce_delay`). Once the first
+/// request is out, [`Self::is_measuring`] also turns on the download's checks for early hedges.
 struct PeerAnnouncements {
     /// Whether the download is measured.
     measured: bool,
@@ -2793,8 +2784,6 @@ struct PeerAnnouncements {
     first_request_at: Option<Instant>,
     /// Peers seen having the checkpoint since the first request.
     seen: HashSet<PeerId>,
-    /// Whether the other-peer wait has been recorded.
-    other_peer_wait_recorded: bool,
 }
 
 impl PeerAnnouncements {
@@ -2803,7 +2792,6 @@ impl PeerAnnouncements {
             measured,
             first_request_at: None,
             seen: HashSet::new(),
-            other_peer_wait_recorded: false,
         }
     }
 
@@ -2819,15 +2807,8 @@ impl PeerAnnouncements {
     }
 
     /// Records the announce delay of each peer in `peers`, the peers that have the checkpoint
-    /// now, that wasn't seen having it before, and the other-peer wait if one of `peers` is not
-    /// in `asked`.
-    fn observe(
-        &mut self,
-        peers: &[anemo::Peer],
-        asked: &HashSet<PeerId>,
-        network: &anemo::Network,
-        metrics: &Metrics,
-    ) {
+    /// now, that wasn't seen having it before.
+    fn observe(&mut self, peers: &[anemo::Peer], network: &anemo::Network, metrics: &Metrics) {
         let Some(first_request_at) = self.first_request_at else {
             return;
         };
@@ -2840,28 +2821,6 @@ impl PeerAnnouncements {
                     delay,
                 );
             }
-        }
-        if peers.iter().any(|peer| !asked.contains(&peer.peer_id())) {
-            self.other_peer_found(metrics);
-        }
-    }
-
-    /// Records the other-peer wait if a peer that hasn't been asked yet now has the checkpoint.
-    fn other_peer_found(&mut self, metrics: &Metrics) {
-        self.record_other_peer_wait(metrics, OtherPeerWaitOutcome::Announced);
-    }
-
-    /// Records the other-peer wait if the download ends before another peer had the checkpoint.
-    fn download_ended(&mut self, metrics: &Metrics) {
-        self.record_other_peer_wait(metrics, OtherPeerWaitOutcome::NotAnnounced);
-    }
-
-    fn record_other_peer_wait(&mut self, metrics: &Metrics, outcome: OtherPeerWaitOutcome) {
-        if let Some(first_request_at) = self.first_request_at
-            && !self.other_peer_wait_recorded
-        {
-            metrics.record_checkpoint_content_other_peer_wait(outcome, first_request_at.elapsed());
-            self.other_peer_wait_recorded = true;
         }
     }
 }

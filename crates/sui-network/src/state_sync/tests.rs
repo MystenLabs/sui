@@ -2109,7 +2109,7 @@ async fn hedged_contents_fetch_does_not_hedge_far_from_release_frontier() {
 #[tokio::test]
 async fn adaptive_hedge_delay_hedges_slow_peer_early() {
     use super::ContentResponseTime::LongerThan;
-    use super::metrics::{HedgeEvent, OtherPeerWaitOutcome};
+    use super::metrics::HedgeEvent;
 
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
@@ -2160,10 +2160,6 @@ async fn adaptive_hedge_delay_hedges_slow_peer_early() {
         0
     );
     assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Won), 1);
-    assert_eq!(
-        metrics.checkpoint_content_other_peer_waits(OtherPeerWaitOutcome::Announced),
-        1
-    );
 
     // The probe was cancelled when the hedge won, after it had run past the 40 ms threshold, so
     // it adds a slow sample that keeps the peer flagged. The winning hedge adds no sample for
