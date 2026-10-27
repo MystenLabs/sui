@@ -117,7 +117,8 @@ We make it an enum to make upgradeability easier in the future.
 Variant <code>Reserved</code>
 </dt>
 <dd>
- The UID has been claimed and cannot be re-claimed or used.
+ The UID has been claimed. It may be in use or deleted with <code><a href="../sui/object.md#sui_object_delete">object::delete</a></code>.
+ <code><a href="../sui/derived_object.md#sui_derived_object_release">release</a></code> removes the marker.
 </dd>
 </dl>
 

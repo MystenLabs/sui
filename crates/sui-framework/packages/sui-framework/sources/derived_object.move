@@ -39,7 +39,8 @@ public struct DerivedObjectKey<K: copy + drop + store>(K) has copy, drop, store;
 /// The possible values of a claimed UID.
 /// We make it an enum to make upgradeability easier in the future.
 public enum ClaimedStatus has store {
-    /// The UID has been claimed and cannot be re-claimed or used.
+    /// The UID has been claimed. It may be in use or deleted with `object::delete`.
+    /// `release` removes the marker.
     Reserved,
 }
 

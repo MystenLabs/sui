@@ -293,8 +293,8 @@ public(package) fun is_shared_input(id: &UID): bool {
 // helper for delete
 native fun delete_impl(id: address);
 
-// marks newly created UIDs from hash, tracking the root version of `parent` so that the new UID
-// `bytes` inherits the parent's root version.
+// marks newly created UIDs from hash. Unless `bytes` already has a tracked root version, it
+// inherits the root version of `parent`.
 native fun record_new_uid_from_hash(parent: address, bytes: address);
 
 // helper for is_shared_input
