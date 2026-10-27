@@ -8,7 +8,7 @@ module sui::clock;
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
-#[test_only]
+#[test_only, allow(unused_const)]
 /// The test already holds a `Clock`.
 const EClockAlreadyExists: u64 = 1;
 
@@ -78,7 +78,7 @@ fun consensus_commit_prologue(clock: &mut Clock, timestamp_ms: u64, ctx: &TxCont
 /// `borrow` cannot disagree with it; it has the same id as the
 /// genesis `Clock`.
 public fun create_for_testing(_ctx: &mut TxContext): Clock {
-    assert!(native_create_for_testing(), EClockAlreadyExists);
+    native_create_for_testing();
     Clock {
         id: object::clock(),
         timestamp_ms: 0,
@@ -119,8 +119,9 @@ native fun native_set_timestamp_ms_for_testing(timestamp_ms: u64);
 
 #[test_only]
 /// Records the test's `Clock` as created in this transaction, at
-/// timestamp 0. Returns false if the test already holds one.
-native fun native_create_for_testing(): bool;
+/// timestamp 0. Aborts with `EClockAlreadyExists` if the test already
+/// holds one.
+native fun native_create_for_testing();
 
 #[test_only]
 /// Forgets the test's `Clock`, so that `borrow` returns the genesis

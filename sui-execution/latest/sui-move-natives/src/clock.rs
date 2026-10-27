@@ -18,6 +18,8 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{SUI_CLOCK_OBJECT_ID, clock::Clock};
 
+const E_CLOCK_ALREADY_EXISTS: u64 = 1;
+
 #[derive(Clone)]
 pub struct ClockBorrowCostParams {
     pub clock_borrow_cost_base: Option<InternalGas>,
@@ -78,7 +80,7 @@ pub fn set_timestamp_ms_for_testing(
 
 /***************************************************************************************************
  * native fun native_create_for_testing
- * Implementation of the Move native function `fun native_create_for_testing(): bool`
+ * Implementation of the Move native function `fun native_create_for_testing()`
  **************************************************************************************************/
 pub fn create_for_testing(
     context: &mut NativeContext,
@@ -90,9 +92,9 @@ pub fn create_for_testing(
 
     let store: &&InMemoryTestStore = get_extension!(context)?;
     if store.clock_exists() {
-        return Ok(NativeResult::ok(
+        return Ok(NativeResult::err(
             legacy_test_cost(),
-            smallvec![Value::bool(false)],
+            E_CLOCK_ALREADY_EXISTS,
         ));
     }
     store.set_clock_timestamp_ms(0);
@@ -102,10 +104,7 @@ pub fn create_for_testing(
     object_runtime.new_id(SUI_CLOCK_OBJECT_ID)?;
     object_runtime.clear_clock_for_testing();
 
-    Ok(NativeResult::ok(
-        legacy_test_cost(),
-        smallvec![Value::bool(true)],
-    ))
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
 }
 
 /***************************************************************************************************
