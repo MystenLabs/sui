@@ -1988,6 +1988,61 @@ async fn hedged_contents_fetch_falls_back_to_peer_that_announced_after_failure()
     );
 }
 
+/// When a hedge fails while the request it hedged is still running, the next hedge is due once
+/// that request has run for its hedge delay, not a full hedge delay after the failed hedge was
+/// sent. The first peer never answers in time. The hedge, after 1 s, goes to a peer without the
+/// contents and fails right away. A third peer announces the checkpoint at 1.2 s and gets the next
+/// hedge then, instead of at about 2 s.
+#[tokio::test]
+async fn hedged_contents_fetch_hedges_again_soon_after_a_hedge_fails() {
+    use super::metrics::HedgeEvent;
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let silent_peer = build_contents_peer(
+        &committee,
+        &checkpoints,
+        &contents,
+        2,
+        Duration::from_secs(30),
+    );
+    let empty_peer = build_contents_peer(&committee, &checkpoints, &contents, 1, Duration::ZERO);
+    let good_peer = build_contents_peer(&committee, &checkpoints, &contents, 2, Duration::ZERO);
+    let client = HedgeTestClient::new(
+        *checkpoints[0].digest(),
+        &[(&silent_peer, 1), (&empty_peer, 1), (&good_peer, 0)],
+    )
+    .await;
+    // The empty peer is expected to take 150 ms and the silent peer, with no recent answers, one
+    // local round trip, so the first request goes to the silent peer and the hedge to the empty
+    // peer.
+    client.record_answers(empty_peer.peer_id(), Duration::from_millis(150));
+    let announce = client.announce_after(good_peer.peer_id(), 1, Duration::from_millis(1200));
+
+    let start = std::time::Instant::now();
+    let fetched = client
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(1),
+            0,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("the good peer should get a hedge and answer");
+    let elapsed = start.elapsed();
+    announce.await.unwrap();
+
+    assert!(fetched.is_some());
+    assert!(
+        elapsed < Duration::from_millis(1600),
+        "the good peer's hedge went out about 1 s after the failed hedge: download took {elapsed:?}"
+    );
+    let metrics = &client.metrics;
+    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Sent), 2);
+    assert_eq!(metrics.checkpoint_content_hedges(HedgeEvent::Won), 1);
+    assert_eq!(metrics.checkpoint_content_fallback_requests(), 0);
+}
+
 /// A response that arrives before the hedge delay ends the download without a hedge.
 #[tokio::test]
 async fn hedged_contents_fetch_does_not_hedge_a_response_within_the_delay() {

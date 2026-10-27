@@ -2662,6 +2662,13 @@ impl ContentFetch<'_> {
                     let finished_request = in_flight_requests.remove(&response.peer_id);
                     let (peer_id, kind, elapsed) = (response.peer_id, response.kind, response.elapsed);
                     let Some((contents, size)) = self.record_response(response) else {
+                        // The request still running, if any, is now the latest one: hedge it once
+                        // it has run for its own hedge delay, which may already have passed.
+                        if let Some((&running_peer_id, running)) = in_flight_requests.iter().next() {
+                            next_hedge.as_mut().reset(tokio::time::Instant::from_std(
+                                running.start + self.hedge_delay_for(hedge, running_peer_id),
+                            ));
+                        }
                         continue;
                     };
                     if kind == ContentRequestKind::Hedge {
