@@ -426,10 +426,10 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
 //              Disable effects transaction dependencies on mainnet.
 //              Add the staggered-submission duplication signal thresholds.
-//              Add the `object::is_shared_input_impl` native and its cost.
 // Version 141: Abort with EInvalidVerifyingKey in groth16::verify_groth16_proof when the
 //              prepared verifying key length does not match the number of public inputs.
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
+//              Add the `object::is_shared_input_impl` native and its cost.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2892,7 +2892,7 @@ impl ProtocolConfig {
             // `record_new_uid_from_hash(parent: address, bytes: address)`. Introduced in v131.
             object_record_new_uid_from_hash_cost_base: None,
             // Cost params for the Move native function `is_shared_input_impl(id: address): bool`.
-            // Introduced in v140.
+            // Introduced in v141.
             object_is_shared_input_cost_base: None,
 
             // `transfer` module
@@ -4961,11 +4961,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.disable_id_leak_verifier = true;
                     cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     cfg.feature_flags.disable_effects_tx_dependencies = true;
-                    cfg.object_is_shared_input_cost_base = Some(52);
                 }
                 141 => {
                     cfg.clock_borrow_cost_base = Some(52);
                     cfg.feature_flags.check_groth16_pvk_length = true;
+                    cfg.object_is_shared_input_cost_base = Some(52);
                 }
                 // Use this template when making changes:
                 //
