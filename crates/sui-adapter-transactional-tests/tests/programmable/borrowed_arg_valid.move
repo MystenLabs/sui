@@ -6,22 +6,25 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct R has drop {}
-    public fun r(): R { R {} }
+module test::m1;
 
-    public fun imm_copy(_: &u64, _: u64,) {}
-    public fun copy_imm(_: u64, _: &u64) {}
+public struct R has drop {}
 
-    public fun copy_mut(_: u64, _: &mut u64) {}
-    public fun mut_copy(_: &mut u64, _: u64) {}
-    public fun copy_mut_copy(_: u64, _: &mut u64, _: u64) {}
+public fun r(): R { R {} }
 
-    public fun multiple_copy(_: &u64, _: u64, _: &u64, _: u64) {}
+public fun imm_copy(_: &u64, _: u64) {}
 
+public fun copy_imm(_: u64, _: &u64) {}
 
-    public fun double_r(_: &R, _: &R) {}
-}
+public fun copy_mut(_: u64, _: &mut u64) {}
+
+public fun mut_copy(_: &mut u64, _: u64) {}
+
+public fun copy_mut_copy(_: u64, _: &mut u64, _: u64) {}
+
+public fun multiple_copy(_: &u64, _: u64, _: &u64, _: u64) {}
+
+public fun double_r(_: &R, _: &R) {}
 
 //# programmable --inputs 0
 // imm borrow and copy

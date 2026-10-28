@@ -6,7 +6,7 @@
 //# init --addresses a=0x0 --accounts A
 
 //# publish
-module a::m {
+module a::m;
 
 use sui::dynamic_field;
 use sui::dynamic_object_field;
@@ -36,21 +36,17 @@ entry fun take_and_take(obj: &mut Obj, ctx: &mut TxContext) {
     sui::transfer::public_transfer(v, ctx.sender())
 }
 
-}
-
 //# run a::m::mint --sender A
 
 //# view-object 2,1
 
 //# run a::m::take_and_wrap --sender A --args object(2,0)
 
-
 //# run a::m::mint --sender A
 
 //# view-object 5,2
 
 //# run a::m::take_and_destroy --sender A --args object(5,0)
-
 
 //# run a::m::mint --sender A
 

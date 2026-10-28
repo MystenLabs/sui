@@ -4,31 +4,31 @@
 //# init --addresses Test=0x0
 
 //# publish
-module Test::f {
-    use sui::event;
+module Test::f;
 
-    public enum F has copy, drop {
-        V1,
-        V2(u64),
-        V3(u64, u64),
-        V4 { x: u64 },
-    }
+use sui::event;
 
-    public fun f1() {
-        event::emit(F::V1);
-    }
+public enum F has copy, drop {
+    V1,
+    V2(u64),
+    V3(u64, u64),
+    V4 { x: u64 },
+}
 
-    public fun f2(x: u64) {
-        event::emit(F::V2(x));
-    }
+public fun f1() {
+    event::emit(F::V1);
+}
 
-    public fun f3(x: u64, y: u64) {
-        event::emit(F::V3(x, y));
-    }
+public fun f2(x: u64) {
+    event::emit(F::V2(x));
+}
 
-    public fun f4(x: u64) {
-        event::emit(F::V4 { x });
-    }
+public fun f3(x: u64, y: u64) {
+    event::emit(F::V3(x, y));
+}
+
+public fun f4(x: u64) {
+    event::emit(F::V4 { x });
 }
 
 //# run Test::f::f1

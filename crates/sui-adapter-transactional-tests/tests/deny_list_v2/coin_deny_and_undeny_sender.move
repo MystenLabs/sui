@@ -11,39 +11,35 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
-module test::regulated_coin {
-    use sui::coin;
-    use sui::deny_list::DenyList;
+module test::regulated_coin;
 
-    public struct REGULATED_COIN has drop {}
+use sui::coin;
+use sui::deny_list::DenyList;
 
-    #[allow(deprecated_usage)]
-    fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
-        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
-            otw,
-            9,
-            b"RC",
-            b"REGULATED_COIN",
-            b"A new regulated coin",
-            option::none(),
-            false,
-            ctx
-        );
-        let coin = coin::mint(&mut treasury_cap, 10000, ctx);
-        transfer::public_transfer(coin, tx_context::sender(ctx));
-        transfer::public_transfer(deny_cap, tx_context::sender(ctx));
-        transfer::public_freeze_object(treasury_cap);
-        transfer::public_freeze_object(metadata);
-    }
+public struct REGULATED_COIN has drop {}
 
-    entry fun assert_address_deny_status(
-        deny_list: &DenyList,
-        addr: address,
-        expected: bool,
-    ) {
-        let status = coin::deny_list_v2_contains_next_epoch<REGULATED_COIN>(deny_list, addr);
-        assert!(status == expected, 0);
-    }
+#[allow(deprecated_usage)]
+fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
+    let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
+        otw,
+        9,
+        b"RC",
+        b"REGULATED_COIN",
+        b"A new regulated coin",
+        option::none(),
+        false,
+        ctx,
+    );
+    let coin = coin::mint(&mut treasury_cap, 10000, ctx);
+    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(deny_cap, tx_context::sender(ctx));
+    transfer::public_freeze_object(treasury_cap);
+    transfer::public_freeze_object(metadata);
+}
+
+entry fun assert_address_deny_status(deny_list: &DenyList, addr: address, expected: bool) {
+    let status = coin::deny_list_v2_contains_next_epoch<REGULATED_COIN>(deny_list, addr);
+    assert!(status == expected, 0);
 }
 
 // This is the deny cap v2 object.

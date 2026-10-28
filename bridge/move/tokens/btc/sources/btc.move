@@ -3,11 +3,9 @@
 
 module bridged_btc::btc {
     use std::option;
-
     use sui::coin;
     use sui::transfer;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     struct BTC has drop {}
 
@@ -21,7 +19,7 @@ module bridged_btc::btc {
             b"Bitcoin",
             b"Bridged Bitcoin token",
             option::none(),
-            ctx
+            ctx,
         );
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury_cap, tx_context::sender(ctx));

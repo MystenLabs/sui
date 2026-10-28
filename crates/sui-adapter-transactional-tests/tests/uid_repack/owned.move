@@ -7,37 +7,37 @@
 //# init --addresses ex=0x0 --accounts A --flavor core
 
 //# publish
-module ex::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+module ex::m;
 
-    public struct A has key { id: UID, value: u64 }
-    public struct B has key, store { id: UID, value: u64 }
+use sui::object::{Self, UID};
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
 
-    public fun mint(ctx: &mut TxContext) {
-        transfer::transfer(A { id: object::new(ctx), value: 0 }, tx_context::sender(ctx))
-    }
+public struct A has key { id: UID, value: u64 }
+public struct B has key, store { id: UID, value: u64 }
 
-    public fun repack_a(a: A, ctx: &TxContext) {
-        let A { id, value } = a;
-        transfer::transfer(A { id, value: value + 1 }, tx_context::sender(ctx))
-    }
-
-    public fun a_to_b(a: A): B {
-        let A { id, value } = a;
-        B { id, value: value + 1 }
-    }
-
-    public fun b_to_a(b: B, ctx: &TxContext) {
-        let B { id, value } = b;
-        transfer::transfer(A { id, value: value + 1 }, tx_context::sender(ctx))
-    }
-
-    public fun use_a(_: &A) {}
-
-    public fun use_b(_: &B) {}
+public fun mint(ctx: &mut TxContext) {
+    transfer::transfer(A { id: object::new(ctx), value: 0 }, tx_context::sender(ctx))
 }
+
+public fun repack_a(a: A, ctx: &TxContext) {
+    let A { id, value } = a;
+    transfer::transfer(A { id, value: value + 1 }, tx_context::sender(ctx))
+}
+
+public fun a_to_b(a: A): B {
+    let A { id, value } = a;
+    B { id, value: value + 1 }
+}
+
+public fun b_to_a(b: B, ctx: &TxContext) {
+    let B { id, value } = b;
+    transfer::transfer(A { id, value: value + 1 }, tx_context::sender(ctx))
+}
+
+public fun use_a(_: &A) {}
+
+public fun use_b(_: &B) {}
 
 //# run ex::m::mint --sender A
 

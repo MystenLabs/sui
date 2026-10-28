@@ -9,7 +9,9 @@
 module test::m;
 
 entry fun no_args() {}
+
 entry fun one_arg(_x: u64) {}
+
 entry fun two_args(_x: u64, _y: bool) {}
 
 // 0 params, 1 arg

@@ -6,53 +6,52 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::m1 {
-    use sui::transfer::Receiving;
+module tto::m1;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::transfer::Receiving;
 
-    public struct B has key, store {
-        id: UID,
-    }
+public struct A has key, store {
+    id: UID,
+}
 
-    public struct C has key, store {
-        id: UID,
-    }
+public struct B has key, store {
+    id: UID,
+}
 
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(B { id: object::new(ctx) }, a_address);
-        transfer::public_transfer(B { id: object::new(ctx) }, a_address);
-    }
+public struct C has key, store {
+    id: UID,
+}
 
-    public fun id<T: key>(x: Receiving<T>): Receiving<T> {
-        x
-    }
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(B { id: object::new(ctx) }, a_address);
+    transfer::public_transfer(B { id: object::new(ctx) }, a_address);
+}
 
-    public fun borrow_mut<T: key>(x: &mut Receiving<T>): &mut Receiving<T> {
-        x
-    }
+public fun id<T: key>(x: Receiving<T>): Receiving<T> {
+    x
+}
 
-    public fun receive(parent: &mut A, x: Receiving<B>) {
-        let b = transfer::receive(&mut parent.id, x);
-        transfer::public_transfer(b, @tto);
-    }
+public fun borrow_mut<T: key>(x: &mut Receiving<T>): &mut Receiving<T> {
+    x
+}
 
-    public fun take_all(parent: &mut A, a: Receiving<A>, b: Receiving<B>, c: Receiving<C>) {
-        assert!(transfer::receiving_object_id(&a) == transfer::receiving_object_id(&b));
-        assert!(transfer::receiving_object_id(&b) == transfer::receiving_object_id(&c));
-        receive(parent, b);
-    }
+public fun receive(parent: &mut A, x: Receiving<B>) {
+    let b = transfer::receive(&mut parent.id, x);
+    transfer::public_transfer(b, @tto);
+}
 
-    public fun take_two_b(parent: &mut A, b1: Receiving<B>, b2: Receiving<B>, ) {
-        receive(parent, b1);
-        receive(parent, b2);
-    }
+public fun take_all(parent: &mut A, a: Receiving<A>, b: Receiving<B>, c: Receiving<C>) {
+    assert!(transfer::receiving_object_id(&a) == transfer::receiving_object_id(&b));
+    assert!(transfer::receiving_object_id(&b) == transfer::receiving_object_id(&c));
+    receive(parent, b);
+}
 
+public fun take_two_b(parent: &mut A, b1: Receiving<B>, b2: Receiving<B>) {
+    receive(parent, b1);
+    receive(parent, b2);
 }
 
 //# run tto::m1::start

@@ -10,17 +10,174 @@
 //# publish
 module test::m;
 
-public fun refs17(v: &vector<u64>): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) { (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11], &v[12], &v[13], &v[14], &v[15], &v[16]) }
-public fun refs16(v: &vector<u64>): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) { (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11], &v[12], &v[13], &v[14], &v[15]) }
-public fun refs12(v: &vector<u64>): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) { (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11]) }
+public fun refs17(
+    v: &vector<u64>,
+): (
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+) {
+    (
+        &v[0],
+        &v[1],
+        &v[2],
+        &v[3],
+        &v[4],
+        &v[5],
+        &v[6],
+        &v[7],
+        &v[8],
+        &v[9],
+        &v[10],
+        &v[11],
+        &v[12],
+        &v[13],
+        &v[14],
+        &v[15],
+        &v[16],
+    )
+}
+
+public fun refs16(
+    v: &vector<u64>,
+): (
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+) {
+    (
+        &v[0],
+        &v[1],
+        &v[2],
+        &v[3],
+        &v[4],
+        &v[5],
+        &v[6],
+        &v[7],
+        &v[8],
+        &v[9],
+        &v[10],
+        &v[11],
+        &v[12],
+        &v[13],
+        &v[14],
+        &v[15],
+    )
+}
+
+public fun refs12(
+    v: &vector<u64>,
+): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) {
+    (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11])
+}
+
 public fun one(v: &vector<u64>): &u64 { &v[0] }
-public fun boom16(): (&mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64) { abort 0 }
+
+public fun boom16(): (
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+) { abort 0 }
+
 public fun three_in_two_out(a: &u64, b: &u64, _c: &u64): (&u64, &u64) { (a, b) }
-public fun use16(_: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64) {}
-public fun use12(_: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64) {}
+
+public fun use16(
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+) {}
+
+public fun use12(
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+) {}
+
 public fun use1(_: &u64) {}
+
 public fun use_mut1(_: &mut u64) {}
-public fun use_mut16(_: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64) {}
+
+public fun use_mut16(
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+) {}
+
 public fun check(x: u64, v: u64) { assert!(x == v, 0) }
 
 // --- live references ---

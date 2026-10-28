@@ -8,50 +8,50 @@ processed 9 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-22:
+task 1, lines 8-21:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4104000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 24-26:
+task 2, lines 23-25:
 // can pass to Move function by ref
 //# programmable --sender A
 //> test::m1::t1<sui::coin::Coin<sui::sui::SUI>>(Gas)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 28-29:
+task 3, lines 27-28:
 //# programmable --sender A
 //> test::m1::t2<sui::coin::Coin<sui::sui::SUI>>(Gas)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 31-32:
+task 4, lines 30-31:
 //# programmable --sender A
 //> test::m1::t2<sui::coin::Coin<sui::sui::SUI>>(Gas)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 34-35:
+task 5, lines 33-34:
 //# programmable --sender A
 //> test::m1::t4<sui::coin::Coin<sui::sui::SUI>>(Gas)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 37-38:
+task 6, lines 36-37:
 //# programmable --sender A
 //> test::m1::t5<sui::coin::Coin<sui::sui::SUI>>(Gas)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 40-41:
+task 7, lines 39-40:
 //# programmable --sender A
 //> test::m1::t6<sui::coin::Coin<sui::sui::SUI>>(Gas)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 43-46:
+task 8, lines 42-45:
 // can pass to merge and split
 //# programmable --sender A --inputs 10  --gas-budget 10000000000
 //> 0: SplitCoins(Gas, [Input(0)]);

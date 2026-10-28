@@ -13,23 +13,23 @@ use sui::derived_object;
 use sui::dynamic_object_field;
 
 public struct Parent has key, store {
-  id: UID,
+    id: UID,
 }
 
 public struct Derived has key, store {
-  id: UID,
+    id: UID,
 }
 
 public struct Obj has key, store {
-  id: UID,
+    id: UID,
 }
 
 entry fun create_and_claim(ctx: &mut TxContext) {
-  let mut parent = Parent { id: object::new(ctx) };
-  let mut derived = Derived { id: derived_object::claim(&mut parent.id, 0u64) };
-  dynamic_object_field::add(&mut derived.id, 0u64, Obj { id: object::new(ctx) });
-  transfer::public_transfer(parent, ctx.sender());
-  transfer::public_transfer(derived, ctx.sender());
+    let mut parent = Parent { id: object::new(ctx) };
+    let mut derived = Derived { id: derived_object::claim(&mut parent.id, 0u64) };
+    dynamic_object_field::add(&mut derived.id, 0u64, Obj { id: object::new(ctx) });
+    transfer::public_transfer(parent, ctx.sender());
+    transfer::public_transfer(derived, ctx.sender());
 }
 
 //# run a::m::create_and_claim --sender A

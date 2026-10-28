@@ -8,8 +8,7 @@
 
 //# publish --upgradeable --sender A
 module v0::a {
-    fun init(_: &mut TxContext) {
-    }
+    fun init(_: &mut TxContext) {}
 }
 
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
@@ -23,6 +22,7 @@ module v1::b {
         id: UID,
         v: u64,
     }
+
     fun init(ctx: &mut TxContext) {
         transfer::transfer(B { id: object::new(ctx), v: 1 }, ctx.sender());
     }
@@ -34,12 +34,14 @@ module v1::b {
 
 //# upgrade --package v1 --upgrade-capability 1,1 --sender A
 module v2::a {
+
 }
 module v2::b {
     public struct B has key {
         id: UID,
         v: u64,
     }
+
     fun init(_: &mut TxContext) {
         abort 1
     }

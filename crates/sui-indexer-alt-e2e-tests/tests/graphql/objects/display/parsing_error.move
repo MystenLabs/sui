@@ -13,36 +13,36 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module test::mod {
-  use std::string::utf8;
-  use sui::display;
-  use sui::package;
+module test::mod;
 
-  public struct MOD() has drop;
+use std::string::utf8;
+use sui::display;
+use sui::package;
 
-  public struct Foo has key, store {
+public struct MOD() has drop;
+
+public struct Foo has key, store {
     id: UID,
     bar: u64,
-  }
+}
 
-  fun init(otw: MOD, ctx: &mut TxContext) {
+fun init(otw: MOD, ctx: &mut TxContext) {
     let publisher = package::claim(otw, ctx);
     let mut d = display::new_with_fields<Foo>(
-      &publisher,
-      // Contains a parsing error, all display requests will fail.
-      vector[utf8(b"bar")],
-      vector[utf8(b"{bar")],
-      ctx,
+        &publisher,
+        // Contains a parsing error, all display requests will fail.
+        vector[utf8(b"bar")],
+        vector[utf8(b"{bar")],
+        ctx,
     );
 
     d.update_version();
     transfer::public_transfer(publisher, ctx.sender());
     transfer::public_transfer(d, ctx.sender());
-  }
+}
 
-  public fun new(bar: u64, ctx: &mut TxContext): Foo {
+public fun new(bar: u64, ctx: &mut TxContext): Foo {
     Foo { id: object::new(ctx), bar }
-  }
 }
 
 //# programmable --sender A --inputs 42 @A

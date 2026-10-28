@@ -8,13 +8,13 @@ processed 12 tasks
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1, lines 9-24:
+task 1, lines 8-23:
 //# publish
 created: object(1,0)
 mutated: object(0,3)
 gas summary: computation_cost: 1000000, storage_cost: 5654400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 26-28:
+task 2, lines 25-27:
 //# programmable --sender A --inputs 100000 @A
 //> SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
@@ -22,14 +22,14 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 30-31:
+task 3, lines 29-30:
 // let's get ourselves a coin worth 1000
 //# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(2,0) 1000 @A --sender A
 created: object(3,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1975802, non_refundable_storage_fee: 198
 
-task 4, line 33:
+task 4, line 32:
 //# view-object 3,0
 Owner: Account Address ( A )
 Version: 3
@@ -44,7 +44,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 5, lines 35-38:
+task 5, lines 34-37:
 // split off more than it's available
 //# programmable --sender A --inputs object(3,0) 10001 @B
 //> 0: SplitCoins(Input(0), [Input(1)]);
@@ -52,7 +52,7 @@ task 5, lines 35-38:
 Error: Transaction Effects Status: Insufficient coin balance for operation.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 1000 required: 10001"), command: Some(0) } }
 
-task 6, lines 40-43:
+task 6, lines 39-42:
 // split off more than it's available using vector of amounts
 //# programmable --sender A --inputs object(3,0) 333 333 335 @A
 //> 0: SplitCoins(Input(0), [Input(1), Input(2), Input(3)]);
@@ -60,21 +60,21 @@ task 6, lines 40-43:
 Error: Transaction Effects Status: Insufficient coin balance for operation.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 1000 required: 1001"), command: Some(0) } }
 
-task 7, lines 45-47:
+task 7, lines 44-46:
 // use incorrect amount type for split
 //# programmable --sender A --inputs object(3,0) @C
 //> 0: SplitCoins(Input(0), [Input(1)]);
 Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: Some("Function expects u64 but provided argument's value does not match"), command: Some(0) } }
 
-task 8, lines 49-51:
+task 8, lines 48-50:
 // use incorrect amount type for split with the first one being correct
 //# programmable --sender A --inputs object(3,0) 100 @C
 //> 0: SplitCoins(Input(0), [Input(1), Input(2)]);
 Error: Transaction Effects Status: Invalid command argument at 2. The argument cannot be deserialized into a value of the specified type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidBCSBytes }, source: Some("Function expects u64 but provided argument's value does not match"), command: Some(0) } }
 
-task 9, lines 53-57:
+task 9, lines 52-56:
 // use incorrect arg type for split coming from a Move function
 //# programmable --sender A --inputs object(3,0) @A
 //> 0: test::m1::ret_one_amount();
@@ -83,7 +83,7 @@ task 9, lines 53-57:
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 10, lines 59-63:
+task 10, lines 58-62:
 // use incorrect arg type for split by creating a vector of u64s
 //# programmable --sender A --inputs object(3,0) 100 @A
 //> 0: MakeMoveVec<u64>([Input(1), Input(1), Input(1)]);
@@ -92,7 +92,7 @@ task 10, lines 59-63:
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 11, lines 65-70:
+task 11, lines 64-69:
 // pass result of SplitCoins directly as another function argument without creating and intermediate
 // vector first
 //# programmable --sender A --inputs object(3,0) 100 100 @B

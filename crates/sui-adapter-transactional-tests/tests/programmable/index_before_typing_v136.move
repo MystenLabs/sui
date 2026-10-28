@@ -12,7 +12,9 @@ public struct A() has copy, drop;
 public struct B() has copy, drop;
 
 public fun a(): A { A() }
+
 public fun a2(): (A, A) { (A(), A()) }
+
 public fun take_b(_: B, _: B) {}
 
 // input out of bounds at len

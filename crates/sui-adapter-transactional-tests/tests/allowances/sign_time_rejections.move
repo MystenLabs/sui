@@ -16,7 +16,13 @@ public struct FOO has drop {}
 
 fun init(otw: FOO, ctx: &mut TxContext) {
     let (treasury_cap, metadata) = coin::create_currency(
-        otw, 6, b"FOO", b"Foo", b"", option::none(), ctx,
+        otw,
+        6,
+        b"FOO",
+        b"Foo",
+        b"",
+        option::none(),
+        ctx,
     );
     transfer::public_freeze_object(metadata);
     transfer::public_transfer(treasury_cap, ctx.sender());

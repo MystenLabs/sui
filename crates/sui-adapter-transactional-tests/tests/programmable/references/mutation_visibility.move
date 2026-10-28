@@ -7,37 +7,58 @@
 //# init --addresses test=0x0 p=0x0 q=0x0 q_2=0x0 --accounts A B
 
 //# publish
-module test::m;
+module test::m {
+    public struct Obj has key, store { id: UID, inner: Inner }
+    public struct Inner has copy, drop, store { f: u64, g: u64 }
 
-public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
+    public fun new(ctx: &mut TxContext): Obj {
+        Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    }
 
-public fun new(ctx: &mut TxContext): Obj {
-    Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    public fun share(ctx: &mut TxContext) {
+        transfer::public_share_object(Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } })
+    }
+
+    public fun uid(o: &Obj): &UID { &o.id }
+
+    public fun uid_mut(o: &mut Obj): &mut UID { &mut o.id }
+
+    public fun inner(o: &Obj): &Inner { &o.inner }
+
+    public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
+    public fun f(i: &Inner): &u64 { &i.f }
+
+    public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
+
+    public fun f_g_mut(i: &mut Inner): (&mut u64, &mut u64) { (&mut i.f, &mut i.g) }
+
+    public fun set_inner(i: &mut Inner, f: u64, g: u64) { i.f = f; i.g = g }
+
+    public fun id_mut<T>(t: &mut T): &mut T { t }
+
+    public fun write(r: &mut u64, v: u64) { *r = v }
+
+    public fun write_u8(r: &mut u8, v: u8) { *r = v }
+
+    public fun check(r: &u64, v: u64) { assert!(*r == v, 0) }
+
+    public fun check_u8(r: &u8, v: u8) { assert!(*r == v, 0) }
+
+    public fun check_bool(r: &bool, v: bool) { assert!(*r == v, 0) }
+
+    public fun check_val(x: u64, v: u64) { assert!(x == v, 0) }
+
+    public fun check_two_vals(x: u64, y: u64, v: u64) { assert!(x == v && y == v, 0) }
+
+    public fun check_inner(i: &Inner, f: u64) { assert!(i.f == f, 0) }
+
+    public fun check_elem(v: &vector<u64>, i: u64, e: u64) { assert!(v[i] == e, 0) }
+
+    public fun check_len(v: &vector<u64>, n: u64) { assert!(v.length() == n, 0) }
+
+    public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 }
-public fun share(ctx: &mut TxContext) {
-    transfer::public_share_object(Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } })
-}
-public fun uid(o: &Obj): &UID { &o.id }
-public fun uid_mut(o: &mut Obj): &mut UID { &mut o.id }
-public fun inner(o: &Obj): &Inner { &o.inner }
-public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
-public fun f(i: &Inner): &u64 { &i.f }
-public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
-public fun f_g_mut(i: &mut Inner): (&mut u64, &mut u64) { (&mut i.f, &mut i.g) }
-public fun set_inner(i: &mut Inner, f: u64, g: u64) { i.f = f; i.g = g }
-public fun id_mut<T>(t: &mut T): &mut T { t }
-public fun write(r: &mut u64, v: u64) { *r = v }
-public fun write_u8(r: &mut u8, v: u8) { *r = v }
-public fun check(r: &u64, v: u64) { assert!(*r == v, 0) }
-public fun check_u8(r: &u8, v: u8) { assert!(*r == v, 0) }
-public fun check_bool(r: &bool, v: bool) { assert!(*r == v, 0) }
-public fun check_val(x: u64, v: u64) { assert!(x == v, 0) }
-public fun check_two_vals(x: u64, y: u64, v: u64) { assert!(x == v && y == v, 0) }
-public fun check_inner(i: &Inner, f: u64) { assert!(i.f == f, 0) }
-public fun check_elem(v: &vector<u64>, i: u64, e: u64) { assert!(v[i] == e, 0) }
-public fun check_len(v: &vector<u64>, n: u64) { assert!(v.length() == n, 0) }
-public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 
 //# publish --upgradeable --sender A
 module q::m {
@@ -47,6 +68,7 @@ module q::m {
 //# stage-package
 module p::m {
     public struct Marker has key { id: UID }
+
     fun init(ctx: &mut TxContext) {
         transfer::transfer(Marker { id: object::new(ctx) }, ctx.sender())
     }

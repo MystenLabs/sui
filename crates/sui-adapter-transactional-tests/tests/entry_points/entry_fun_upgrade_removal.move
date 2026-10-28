@@ -6,14 +6,14 @@
 //# init --addresses test=0x0 test1=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module test::m;
-
-entry fun foo() {}
+module test::m {
+    entry fun foo() {}
+}
 
 //# upgrade --package test --upgrade-capability 1,1 --sender A
-module test1::m;
-
-public fun bar() {}
+module test1::m {
+    public fun bar() {}
+}
 
 //# programmable --sender A
 // Cannot be resolved under unified linkage

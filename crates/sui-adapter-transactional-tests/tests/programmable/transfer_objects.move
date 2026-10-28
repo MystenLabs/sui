@@ -6,27 +6,27 @@
 //# init --addresses test=0x0 --accounts A B
 
 //# publish
-module test::m1 {
-    public struct Pub has key, store {
-        id: UID,
-        value: u64,
-    }
+module test::m1;
 
-    public struct Cup<phantom T> has key, store {
-        id: UID,
-    }
+public struct Pub has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public fun new(ctx: &mut TxContext): Pub {
-        Pub { id: object::new(ctx), value: 112 }
-    }
+public struct Cup<phantom T> has key, store {
+    id: UID,
+}
 
-    public fun cup<T>(ctx: &mut TxContext): Cup<T> {
-        Cup { id: object::new(ctx) }
-    }
+public fun new(ctx: &mut TxContext): Pub {
+    Pub { id: object::new(ctx), value: 112 }
+}
 
-    public fun addr(a1: address, cond: bool): address {
-        if (cond) a1 else @0x0
-    }
+public fun cup<T>(ctx: &mut TxContext): Cup<T> {
+    Cup { id: object::new(ctx) }
+}
+
+public fun addr(a1: address, cond: bool): address {
+    if (cond) a1 else @0x0
 }
 
 // simple

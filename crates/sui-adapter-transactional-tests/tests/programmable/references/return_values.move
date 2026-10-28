@@ -8,45 +8,79 @@
 //# init --addresses test=0x0 q=0x0 --accounts A
 
 //# publish
-module test::m;
+module test::m {
+    public struct Obj has key, store { id: UID, inner: Inner }
+    public struct Inner has copy, drop, store { f: u64, g: u64 }
 
-public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
+    public fun new(ctx: &mut TxContext): Obj {
+        Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    }
 
-public fun new(ctx: &mut TxContext): Obj {
-    Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    public fun inner(o: &Obj): &Inner { &o.inner }
+
+    public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
+    public fun inner_frozen(o: &mut Obj): &Inner { &o.inner }
+
+    public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
+
+    public fun f_g_mut(i: &mut Inner): (&mut u64, &mut u64) { (&mut i.f, &mut i.g) }
+
+    public fun f_mut_g(i: &mut Inner): (&mut u64, &u64) { (&mut i.f, &i.g) }
+
+    public fun f_g(i: &Inner): (&u64, &u64) { (&i.f, &i.g) }
+
+    public fun val_and_ref(i: &mut Inner): (u64, &mut u64) { (i.g, &mut i.f) }
+
+    public fun pick(a: &mut Inner, _b: &mut Inner): &mut u64 { &mut a.f }
+
+    public fun pick_mixed(a: &mut Inner, _b: &Inner): &mut u64 { &mut a.f }
+
+    public fun imm_val_mut(
+        a: &vector<u64>,
+        b: &mut vector<u64>,
+    ): (&vector<u64>, u64, &mut vector<u64>) { (a, 1, b) }
+
+    public fun first(v: &vector<u64>): &u64 { &v[0] }
+
+    public fun replace(v: &mut vector<u64>) { *v = vector[] }
+
+    public fun id<T>(t: &T): &T { t }
+
+    public fun id_mut<T>(t: &mut T): &mut T { t }
+
+    public fun first_mut<T>(v: &mut vector<T>): &mut T { &mut v[0] }
+
+    public fun two_mut(_: &mut u64, _: &mut u64) {}
+
+    public fun mut_imm(_: &mut u64, _: &u64) {}
+
+    public fun two_imm(_: &u64, _: &u64) {}
+
+    public fun use_imm<T>(_: &T) {}
+
+    public fun use_mut<T>(_: &mut T) {}
+
+    public fun use_val(_: u64) {}
+
+    public fun write(r: &mut u64, v: u64) { *r = v }
+
+    public fun check(r: &u64, v: u64) { assert!(*r == v, 0) }
+
+    public fun check_val(x: u64, v: u64) { assert!(x == v, 0) }
+
+    public fun check_elem(v: &vector<u64>, i: u64, e: u64) { assert!(v[i] == e, 0) }
+
+    public fun check_id(id: &ID, o: &Obj) { assert!(*id == object::id(o), 0) }
+
+    public fun digest_via(ctx: &TxContext, _x: &u64): &vector<u8> { ctx.digest() }
+
+    public fun fresh(ctx: &mut TxContext): address { ctx.fresh_object_address() }
+
+    public fun eq_bytes(a: &vector<u8>, b: &vector<u8>) { assert!(a == b, 0) }
+
+    public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 }
-public fun inner(o: &Obj): &Inner { &o.inner }
-public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
-public fun inner_frozen(o: &mut Obj): &Inner { &o.inner }
-public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
-public fun f_g_mut(i: &mut Inner): (&mut u64, &mut u64) { (&mut i.f, &mut i.g) }
-public fun f_mut_g(i: &mut Inner): (&mut u64, &u64) { (&mut i.f, &i.g) }
-public fun f_g(i: &Inner): (&u64, &u64) { (&i.f, &i.g) }
-public fun val_and_ref(i: &mut Inner): (u64, &mut u64) { (i.g, &mut i.f) }
-public fun pick(a: &mut Inner, _b: &mut Inner): &mut u64 { &mut a.f }
-public fun pick_mixed(a: &mut Inner, _b: &Inner): &mut u64 { &mut a.f }
-public fun imm_val_mut(a: &vector<u64>, b: &mut vector<u64>): (&vector<u64>, u64, &mut vector<u64>) { (a, 1, b) }
-public fun first(v: &vector<u64>): &u64 { &v[0] }
-public fun replace(v: &mut vector<u64>) { *v = vector[] }
-public fun id<T>(t: &T): &T { t }
-public fun id_mut<T>(t: &mut T): &mut T { t }
-public fun first_mut<T>(v: &mut vector<T>): &mut T { &mut v[0] }
-public fun two_mut(_: &mut u64, _: &mut u64) {}
-public fun mut_imm(_: &mut u64, _: &u64) {}
-public fun two_imm(_: &u64, _: &u64) {}
-public fun use_imm<T>(_: &T) {}
-public fun use_mut<T>(_: &mut T) {}
-public fun use_val(_: u64) {}
-public fun write(r: &mut u64, v: u64) { *r = v }
-public fun check(r: &u64, v: u64) { assert!(*r == v, 0) }
-public fun check_val(x: u64, v: u64) { assert!(x == v, 0) }
-public fun check_elem(v: &vector<u64>, i: u64, e: u64) { assert!(v[i] == e, 0) }
-public fun check_id(id: &ID, o: &Obj) { assert!(*id == object::id(o), 0) }
-public fun digest_via(ctx: &TxContext, _x: &u64): &vector<u8> { ctx.digest() }
-public fun fresh(ctx: &mut TxContext): address { ctx.fresh_object_address() }
-public fun eq_bytes(a: &vector<u8>, b: &vector<u8>) { assert!(a == b, 0) }
-public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 
 //# stage-package
 module q::m {
@@ -136,7 +170,6 @@ module q::m {
 //> 4: test::m::first_mut<u64>(NestedResult(2,2));
 //> 5: test::m::write(Result(4), Input(2));
 //> 6: test::m::check_elem(Result(1), Input(3), Input(2));
-
 
 //# programmable --inputs 1 2
 // VALID: (mut, mut) written separately and passed together

@@ -8,25 +8,25 @@ processed 10 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 8-25:
+task 1, lines 8-24:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5540400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 27:
+task 2, line 26:
 //# run test::m::mint_s
 created: object(2,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, line 29:
+task 3, line 28:
 //# run test::m::mint_s2
 created: object(3,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, line 31:
+task 4, line 30:
 //# view-object 2,0
 Owner: Shared( 3 )
 Version: 3
@@ -38,7 +38,7 @@ Contents: test::m::S {
     },
 }
 
-task 5, line 33:
+task 5, line 32:
 //# view-object 3,0
 Owner: Shared( 4 )
 Version: 4
@@ -50,17 +50,17 @@ Contents: test::m::S2 {
     },
 }
 
-task 6, line 35:
+task 6, line 34:
 //# transfer-object 2,0 --sender A --recipient B
 Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
 Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject } at command Some(0)
 
-task 7, line 37:
+task 7, line 36:
 //# transfer-object 3,0 --sender A --recipient B
 Error: Transaction Effects Status: The shared object operation is not allowed.
 Debug of error: SharedObjectOperationNotAllowed at command None
 
-task 8, line 39:
+task 8, line 38:
 //# view-object 2,0
 Owner: Shared( 3 )
 Version: 4
@@ -72,7 +72,7 @@ Contents: test::m::S {
     },
 }
 
-task 9, line 41:
+task 9, line 40:
 //# view-object 3,0
 Owner: Shared( 4 )
 Version: 5

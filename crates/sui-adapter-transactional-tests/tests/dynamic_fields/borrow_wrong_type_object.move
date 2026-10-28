@@ -8,7 +8,7 @@
 //# init --addresses a=0x0 --accounts A
 
 //# publish
-module a::m {
+module a::m;
 
 use sui::dynamic_object_field::{add, borrow, borrow_mut};
 
@@ -32,8 +32,6 @@ entry fun t2(obj: &mut Obj) {
 
 entry fun t3(obj: &mut Obj) {
     borrow_mut<u64, Fake>(&mut obj.id, 0u64);
-}
-
 }
 
 //# run a::m::t1 --sender A

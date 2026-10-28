@@ -9,13 +9,13 @@ processed 3 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-17:
+task 1, lines 9-20:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4658800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 19-24:
+task 2, lines 22-27:
 //# programmable --inputs 7
 // INVALID: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, the last by-value use stays a copy while the value is borrowed
 //> 0: test::m::no_drop();

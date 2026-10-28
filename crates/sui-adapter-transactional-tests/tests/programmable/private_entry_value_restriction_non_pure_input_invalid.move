@@ -6,12 +6,15 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public fun v1(): u64 { 0 }
-    entry fun v2(): u64 { 0 }
-    public fun dirty(_: &mut u64) {}
-    entry fun priv(_: u64) { abort 0 }
-}
+module test::m1;
+
+public fun v1(): u64 { 0 }
+
+entry fun v2(): u64 { 0 }
+
+public fun dirty(_: &mut u64) {}
+
+entry fun priv(_: u64) { abort 0 }
 
 // cannot use results from other functions
 //# programmable

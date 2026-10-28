@@ -4,49 +4,49 @@
 //# init --protocol-version 108 --accounts A B --addresses P1=0x0 --simulator
 
 //# publish
-module P1::M1 {
-    use sui::event;
-    use std::ascii;
+module P1::M1;
 
-    public struct EventA has copy, drop {
-        message: ascii::String,
-        value: u64,
-    }
+use std::ascii;
+use sui::event;
 
-    public struct EventB has copy, drop {
-        message: ascii::String,
-        value: u64,
-    }
+public struct EventA has copy, drop {
+    message: ascii::String,
+    value: u64,
+}
 
-    public entry fun emit_event(value: u64) {
+public struct EventB has copy, drop {
+    message: ascii::String,
+    value: u64,
+}
+
+public entry fun emit_event(value: u64) {
+    event::emit(EventA {
+        message: ascii::string(b"Hello from test event"),
+        value,
+    });
+}
+
+public entry fun emit_multiple_events() {
+    event::emit(EventA {
+        message: ascii::string(b"First event"),
+        value: 1,
+    });
+
+    event::emit(EventB {
+        message: ascii::string(b"Second event"),
+        value: 2,
+    });
+}
+
+public entry fun emit_events_by_count(count: u64) {
+    let mut i = 0;
+    while (i < count) {
         event::emit(EventA {
-            message: ascii::string(b"Hello from test event"),
-            value,
+            message: ascii::string(b"Event from loop"),
+            value: i + 1,
         });
-    }
-
-    public entry fun emit_multiple_events() {
-        event::emit(EventA {
-            message: ascii::string(b"First event"),
-            value: 1,
-        });
-
-        event::emit(EventB {
-            message: ascii::string(b"Second event"),
-            value: 2,
-        });
-    }
-
-    public entry fun emit_events_by_count(count: u64) {
-        let mut i = 0;
-        while (i < count) {
-            event::emit(EventA {
-                message: ascii::string(b"Event from loop"),
-                value: i + 1,
-            });
-            i = i + 1;
-        };
-    }
+        i = i + 1;
+    };
 }
 
 // Transaction that emits a single event
@@ -157,7 +157,6 @@ fragment E on Event {
   }
 }
 */
-
 
 //# run-graphql --cursors bcs(0u8,1u8,0u8,0u8,1,1,0u32)
 /*

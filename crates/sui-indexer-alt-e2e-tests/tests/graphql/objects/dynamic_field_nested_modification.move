@@ -8,29 +8,29 @@
 // safe to bound a dynamic field by the version of its immediate parent.
 
 //# publish
-module P::M {
-  use sui::object_bag::ObjectBag;
+module P::M;
 
-  public struct C has key, store {
+use sui::object_bag::ObjectBag;
+
+public struct C has key, store {
     id: UID,
-    c: u64
-  }
+    c: u64,
+}
 
-  public fun nest(outer: &mut ObjectBag, mut inner: ObjectBag, ctx: &mut TxContext) {
+public fun nest(outer: &mut ObjectBag, mut inner: ObjectBag, ctx: &mut TxContext) {
     let counter = C {
-      id: object::new(ctx),
-      c: 0,
+        id: object::new(ctx),
+        c: 0,
     };
 
     inner.add(2u64, counter);
     outer.add(1u64, inner);
-  }
+}
 
-  public fun poke(outer: &mut ObjectBag) {
+public fun poke(outer: &mut ObjectBag) {
     let inner = outer.borrow_mut<_, ObjectBag>(1u64);
     let counter = inner.borrow_mut<_, C>(2u64);
     counter.c = counter.c + 1;
-  }
 }
 
 //# programmable --sender A --inputs @A

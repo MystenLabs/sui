@@ -8,19 +8,19 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-39:
+task 1, lines 8-38:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 41:
+task 2, line 40:
 //# run a::m::mint --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 43:
+task 3, line 42:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 2
@@ -32,14 +32,14 @@ Contents: a::m::S {
     },
 }
 
-task 4, line 45:
+task 4, line 44:
 //# run a::m::wrap --sender A --args object(2,0)
 created: object(4,0)
 mutated: object(0,0)
 wrapped: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
-task 5, line 47:
+task 5, line 46:
 //# view-object 4,0
 Owner: Account Address ( A )
 Version: 3
@@ -58,14 +58,14 @@ Contents: a::m::T {
     },
 }
 
-task 6, line 49:
+task 6, line 48:
 //# run a::m::unwrap --sender A --args object(4,0)
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2439356, non_refundable_storage_fee: 244
 
-task 7, line 51:
+task 7, line 50:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 4

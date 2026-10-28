@@ -8,13 +8,13 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-21:
+task 1, lines 8-17:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 23-26:
+task 2, lines 19-22:
 //# programmable --sender A --inputs 0 @A
 // generate some coins for testing
 //> SplitCoins(Gas, [Input(0), Input(0), Input(0)]);
@@ -23,7 +23,7 @@ created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 28-35:
+task 3, lines 24-31:
 //# programmable --sender A --inputs 0 @A
 // Can write to same coin ref via split coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
@@ -36,7 +36,7 @@ created: object(3,0), object(3,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 37-43:
+task 4, lines 33-39:
 //# programmable --sender A --inputs 0 @A object(2,0)
 // Can write to same coin ref via Merge coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
@@ -49,7 +49,7 @@ mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1975802, non_refundable_storage_fee: 198
 
-task 5, lines 45-52:
+task 5, lines 41-48:
 //# programmable --sender A --inputs 0 @A
 // Can write to same coin via split coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
@@ -62,7 +62,7 @@ created: object(5,0), object(5,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 54-60:
+task 6, lines 50-56:
 //# programmable --sender A --inputs 0 @A object(2,1)
 // Can write to same coin via Merge coins
 //> 0: sui::coin::zero<sui::sui::SUI>();

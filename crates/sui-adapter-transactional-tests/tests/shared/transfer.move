@@ -8,19 +8,19 @@
 
 //# publish
 
-module t2::o2 {
-    public struct Obj2 has key, store {
-        id: UID,
-    }
+module t2::o2;
 
-    public entry fun create(ctx: &mut TxContext) {
-        let o = Obj2 { id: object::new(ctx) };
-        transfer::public_share_object(o)
-    }
+public struct Obj2 has key, store {
+    id: UID,
+}
 
-    public entry fun transfer_to_single_owner(o2: Obj2, ctx: &mut TxContext) {
-        transfer::transfer(o2, tx_context::sender(ctx))
-    }
+public entry fun create(ctx: &mut TxContext) {
+    let o = Obj2 { id: object::new(ctx) };
+    transfer::public_share_object(o)
+}
+
+public entry fun transfer_to_single_owner(o2: Obj2, ctx: &mut TxContext) {
+    transfer::transfer(o2, tx_context::sender(ctx))
 }
 
 //# run t2::o2::create

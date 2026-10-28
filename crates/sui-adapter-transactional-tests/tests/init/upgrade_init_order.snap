@@ -8,13 +8,13 @@ processed 4 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-10:
+task 1, lines 8-11:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 26-30:
+task 3, lines 28-32:
 //# programmable --sender A --inputs 10 @A object(1,1) 0u8 digest(v1)
 // 'a' will abort first since it is earlier in the module list
 //> 0: sui::package::authorize_upgrade(Input(2), Input(3), Input(4));

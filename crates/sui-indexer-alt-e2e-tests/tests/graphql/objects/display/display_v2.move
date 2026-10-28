@@ -4,57 +4,60 @@
 //# init --accounts A --addresses test=0x0 --simulator --protocol-version 118
 
 //# publish --sender A
-module test::mod {
-  use std::string::String;
-  use sui::display_registry::DisplayRegistry;
-  use sui::display_registry::DisplayCap;
-  use sui::dynamic_field as df;
+module test::mod;
 
-  public struct Foo has key, store {
+use std::string::String;
+use sui::display_registry::{DisplayRegistry, DisplayCap};
+use sui::dynamic_field as df;
+
+public struct Foo has key, store {
     id: UID,
     bar: Bar,
-  }
+}
 
-  public struct Bar has store { baz: Baz, val: u64 }
-  public struct Baz has store { qux: Qux, val: bool }
-  public struct Qux has store { quy: Quy, val: String }
-  public struct Quy has store { quz: Quz, val: Option<ID> }
-  public struct Quz has store { val: u8 }
+public struct Bar has store { baz: Baz, val: u64 }
+public struct Baz has store { qux: Qux, val: bool }
+public struct Qux has store { quy: Quy, val: String }
+public struct Quy has store { quz: Quz, val: Option<ID> }
+public struct Quz has store { val: u8 }
 
-  /// Register a Display v2 grammar for `Foo`.
-  public fun display(registry: &mut DisplayRegistry, ctx: &mut TxContext): DisplayCap<Foo> {
+/// Register a Display v2 grammar for `Foo`.
+public fun display(registry: &mut DisplayRegistry, ctx: &mut TxContext): DisplayCap<Foo> {
     let (mut display, cap) = registry.new(internal::permit(), ctx);
 
     display.set(&cap, "bar", "bar is {bar.val}!");
     display.set(&cap, "baz", "baz is {bar.baz.val}?");
     display.set(&cap, "qux", "{bar.baz.qux:json}");
     display.set(&cap, "quy", "quy is {bar.baz.qux.quy.val}.");
-    display.set(&cap, "qu_", "x({bar.baz.qux.val}) y({bar.baz.qux.quy.val}), z({bar.baz.qux.quy.quz.val})?!");
+    display.set(
+        &cap,
+        "qu_",
+        "x({bar.baz.qux.val}) y({bar.baz.qux.quy.val}), z({bar.baz.qux.quy.quz.val})?!",
+    );
     display.set(&cap, "f42", "[42] is {id->[42u64] | 0x00420042u32 :hex}");
     display.share();
 
     cap
-  }
+}
 
-  public fun new(
+public fun new(
     v_bar: u64,
     v_baz: bool,
     v_qux: String,
     v_quy: Option<ID>,
     v_quz: u8,
     ctx: &mut TxContext,
-  ): Foo {
+): Foo {
     let quz = Quz { val: v_quz };
     let quy = Quy { val: v_quy, quz };
     let qux = Qux { val: v_qux, quy };
     let baz = Baz { val: v_baz, qux };
     let bar = Bar { val: v_bar, baz };
     Foo { id: object::new(ctx), bar }
-  }
+}
 
-  public fun add_df(foo: &mut Foo) {
+public fun add_df(foo: &mut Foo) {
     df::add(&mut foo.id, 42u64, 0x42004200u32);
-  }
 }
 
 //# programmable --sender A --inputs object(0xd) @A

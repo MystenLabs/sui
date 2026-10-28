@@ -18,32 +18,32 @@ created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7098400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 25-30:
+task 2, lines 25-31:
 //# publish --upgradeable --dependencies Dep_V1 --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6042000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, line 32:
+task 3, line 33:
 //# run Dep_V1::d::make --sender A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 34-45:
+task 4, lines 35-46:
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 7098400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 5, lines 47-49:
+task 5, lines 48-50:
 //# programmable --sender A --inputs object(3,0)
 // Nothing else pins `Dep`, so `at_least(1)` resolves to v1 => writes 1.
 //> Root::m::go(Input(0));
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
-task 6, line 51:
+task 6, line 52:
 //# view-object 3,0
 Owner: Shared( 4 )
 Version: 6
@@ -56,7 +56,7 @@ Contents: Dep_V1::d::S {
     v: 1u64,
 }
 
-task 7, lines 53-56:
+task 7, lines 54-57:
 //# programmable --sender A --inputs object(3,0)
 // `ping` pins `Dep` exact(2); `go`'s `at_least(1)` unifies up to exact(2) => `go` runs v2 => writes 2.
 //> 0: Root::m::go(Input(0));
@@ -64,7 +64,7 @@ task 7, lines 53-56:
 mutated: object(0,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
-task 8, line 58:
+task 8, line 59:
 //# view-object 3,0
 Owner: Shared( 4 )
 Version: 7

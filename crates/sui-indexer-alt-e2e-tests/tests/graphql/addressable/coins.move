@@ -5,24 +5,31 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module T::test {
-    use sui::coin;
+module T::test;
 
-    public struct TEST has drop {}
+use sui::coin;
 
-    fun init(otw: TEST, ctx: &mut TxContext){
-        let (mut treasury, metadata) =
-            coin::create_currency(otw, 6, b"", b"", b"", option::none(), ctx);
+public struct TEST has drop {}
 
-        // Mint and transfer TEST coins with different amounts
-        transfer::public_transfer(treasury.mint(1_000000, ctx), ctx.sender());
-        transfer::public_transfer(treasury.mint(0_500000, ctx), ctx.sender());
-        transfer::public_transfer(treasury.mint(0_250000, ctx), ctx.sender());
-        transfer::public_transfer(treasury.mint(0_100000, ctx), ctx.sender());
+fun init(otw: TEST, ctx: &mut TxContext) {
+    let (mut treasury, metadata) = coin::create_currency(
+        otw,
+        6,
+        b"",
+        b"",
+        b"",
+        option::none(),
+        ctx,
+    );
 
-        transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, ctx.sender());
-    }
+    // Mint and transfer TEST coins with different amounts
+    transfer::public_transfer(treasury.mint(1_000000, ctx), ctx.sender());
+    transfer::public_transfer(treasury.mint(0_500000, ctx), ctx.sender());
+    transfer::public_transfer(treasury.mint(0_250000, ctx), ctx.sender());
+    transfer::public_transfer(treasury.mint(0_100000, ctx), ctx.sender());
+
+    transfer::public_freeze_object(metadata);
+    transfer::public_transfer(treasury, ctx.sender());
 }
 
 //# create-checkpoint

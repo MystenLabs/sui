@@ -5,42 +5,42 @@ processed 8 tasks
 
 // Tests value argument count mismatches
 
-task 1, lines 8-13:
+task 1, lines 8-15:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3777200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-16:
+task 2, lines 17-18:
 // 0 params, 1 arg
 //# run test::m::no_args --args 42u64
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 0 arguments calling function 'test::m::no_args', but found 1"), command: Some(0) } }
 
-task 3, lines 18-19:
+task 3, lines 20-21:
 // 1 param, 0 args
 //# run test::m::one_arg
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'test::m::one_arg', but found 0"), command: Some(0) } }
 
-task 4, lines 21-22:
+task 4, lines 23-24:
 // 2 params, 3 args
 //# run test::m::two_args --args 42u64 true false
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'test::m::two_args', but found 3"), command: Some(0) } }
 
-task 5, lines 24-25:
+task 5, lines 26-27:
 // happy paths
 //# run test::m::no_args
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, line 27:
+task 6, line 29:
 //# run test::m::one_arg --args 42u64
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, line 29:
+task 7, line 31:
 //# run test::m::two_args --args 42u64 true
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

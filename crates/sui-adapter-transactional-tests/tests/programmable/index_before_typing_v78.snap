@@ -8,27 +8,27 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-16:
+task 1, lines 8-18:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 18-20:
+task 2, lines 20-22:
 // input out of bounds at len
 //# programmable --inputs 0u8
 //> test::m::take_b(Input(0), Input(1))
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be instantiated from raw bytes
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg }, source: Some("Non-primitive argument at index 0. If it is an object, it must be populated by an object"), command: Some(0) } }
 
-task 3, lines 22-24:
+task 3, lines 24-26:
 // input out of bounds
 //# programmable --inputs 0u8
 //> test::m::take_b(Input(0), Input(100))
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be instantiated from raw bytes
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg }, source: Some("Non-primitive argument at index 0. If it is an object, it must be populated by an object"), command: Some(0) } }
 
-task 4, lines 26-29:
+task 4, lines 28-31:
 // result out of bounds at len
 //# programmable
 //> test::m::a();
@@ -36,7 +36,7 @@ task 4, lines 26-29:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 5, lines 31-34:
+task 5, lines 33-36:
 // result out of bounds
 //# programmable
 //> test::m::a();
@@ -44,7 +44,7 @@ task 5, lines 31-34:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 6, lines 36-40:
+task 6, lines 38-42:
 // nested results out of bounds at len
 //# programmable
 //> test::m::a();
@@ -53,7 +53,7 @@ task 6, lines 36-40:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
 
-task 7, lines 42-46:
+task 7, lines 44-48:
 // nested results out of bounds
 //# programmable
 //> test::m::a();
@@ -62,7 +62,7 @@ task 7, lines 42-46:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
 
-task 8, lines 48-52:
+task 8, lines 50-54:
 // nested secondary out of bounds barely
 //# programmable
 //> test::m::a();
@@ -71,7 +71,7 @@ task 8, lines 48-52:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
 
-task 9, lines 54-58:
+task 9, lines 56-60:
 // nested secondary out of bounds
 //# programmable
 //> test::m::a();

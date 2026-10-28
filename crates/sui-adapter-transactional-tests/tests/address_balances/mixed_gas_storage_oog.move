@@ -10,7 +10,9 @@
 
 //# publish
 module test::oog;
+
 public struct W has key, store { id: UID }
+
 public fun make(n: u64, ctx: &mut TxContext) {
     let mut i = 0;
     while (i < n) {

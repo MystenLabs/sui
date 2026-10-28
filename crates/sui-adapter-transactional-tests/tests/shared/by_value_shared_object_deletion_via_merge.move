@@ -12,51 +12,51 @@
 
 //# publish
 
-module t2::o2 {
-    use sui::dynamic_field as df;
-    use sui::dynamic_object_field as dof;
-    use sui::sui::SUI;
-    use sui::coin::{Self, Coin};
+module t2::o2;
 
-    public struct Obj2 has key, store {
-        id: UID,
-    }
+use sui::coin::{Self, Coin};
+use sui::dynamic_field as df;
+use sui::dynamic_object_field as dof;
+use sui::sui::SUI;
 
-    public fun mint_shared_coin(ctx: &mut TxContext) {
-        transfer::public_share_object(coin::zero<SUI>(ctx))
-    }
+public struct Obj2 has key, store {
+    id: UID,
+}
 
-    public fun mint_shared_obj(ctx: &mut TxContext) {
-        transfer::public_share_object(Obj2 { id: object::new(ctx) });
-    }
+public fun mint_shared_coin(ctx: &mut TxContext) {
+    transfer::public_share_object(coin::zero<SUI>(ctx))
+}
 
-    public fun mint_owned_coin(ctx: &mut TxContext) {
-        transfer::public_transfer(coin::zero<SUI>(ctx), @A)
-    }
+public fun mint_shared_obj(ctx: &mut TxContext) {
+    transfer::public_share_object(Obj2 { id: object::new(ctx) });
+}
 
-    public fun deleter(o2: Coin<SUI>) {
-        coin::destroy_zero(o2);
-    }
+public fun mint_owned_coin(ctx: &mut TxContext) {
+    transfer::public_transfer(coin::zero<SUI>(ctx), @A)
+}
 
-    public fun freezer(o2: Coin<SUI>) {
-        transfer::public_freeze_object(o2);
-    }
+public fun deleter(o2: Coin<SUI>) {
+    coin::destroy_zero(o2);
+}
 
-    public fun dofer(parent: &mut Obj2, o2: Coin<SUI>) {
-        dof::add(&mut parent.id, 0u64, o2);
-    }
+public fun freezer(o2: Coin<SUI>) {
+    transfer::public_freeze_object(o2);
+}
 
-    public fun dfer(parent: &mut Obj2, o2: Coin<SUI>) {
-        df::add(&mut parent.id, 0u64, o2);
-    }
+public fun dofer(parent: &mut Obj2, o2: Coin<SUI>) {
+    dof::add(&mut parent.id, 0u64, o2);
+}
 
-    public fun transferer(o2: Coin<SUI>) {
-        transfer::public_transfer(o2, @0x0);
-    }
+public fun dfer(parent: &mut Obj2, o2: Coin<SUI>) {
+    df::add(&mut parent.id, 0u64, o2);
+}
 
-    public fun sharer(o2: Coin<SUI>) {
-        transfer::public_share_object(o2);
-    }
+public fun transferer(o2: Coin<SUI>) {
+    transfer::public_transfer(o2, @0x0);
+}
+
+public fun sharer(o2: Coin<SUI>) {
+    transfer::public_share_object(o2);
 }
 
 //# run t2::o2::mint_shared_coin

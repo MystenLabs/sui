@@ -10,7 +10,7 @@ processed 17 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-50:
+task 1, lines 10-74:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
@@ -18,7 +18,7 @@ gas summary: computation_cost: 1000000, storage_cost: 12821200,  storage_rebate:
 
 // --- copy and freeze of reference results ---
 
-task 2, lines 54-62:
+task 2, lines 78-86:
 //# programmable
 // VALID: a `&mut` result copied, frozen, copied again, and moved on its last use
 //> 0: test::m::new();
@@ -31,7 +31,7 @@ task 2, lines 54-62:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 64-70:
+task 3, lines 88-94:
 //# programmable
 // VALID: an immutable result copied and moved
 //> 0: test::m::new();
@@ -42,7 +42,7 @@ task 3, lines 64-70:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 72-79:
+task 4, lines 96-103:
 //# programmable --inputs 5
 // VALID: a frozen use of the `&mut` result does not end its mutability
 //> 0: test::m::new();
@@ -54,7 +54,7 @@ task 4, lines 72-79:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 81-84:
+task 5, lines 105-108:
 //# programmable --sender A --inputs 1000
 // VALID: `&Coin<SUI>` from a `&mut` gas reference
 //> 0: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Gas);
@@ -62,7 +62,7 @@ task 5, lines 81-84:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 6, lines 86-95:
+task 6, lines 110-119:
 //# programmable --inputs 7 0
 // VALID: freezing the parent permits a read while its mutable child is live; the copy keeps the old value
 //> 0: test::m::new();
@@ -78,21 +78,21 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- copies of a borrowed value ---
 
-task 7, lines 99-101:
+task 7, lines 123-125:
 //# programmable --inputs 0 7
 // VALID: copy first, then `&mut`, in one call
 //> 0: test::m::copy_mut(Input(0), Input(0));
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 103-105:
+task 8, lines 127-129:
 //# programmable --inputs 0 7
 // VALID: `&mut` first, then copy, in one call
 //> 0: test::m::mut_copy(Input(0), Input(0));
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 107-112:
+task 9, lines 131-136:
 //# programmable --inputs 0 7
 // VALID: copy of a pure input while a `&mut` result into it is live, a later use sees the write
 //> 0: test::m::id_mut<u64>(Input(0));
@@ -102,7 +102,7 @@ task 9, lines 107-112:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, lines 114-118:
+task 10, lines 138-142:
 //# programmable --inputs 7
 // VALID: the last copy of a borrowed value stays a copy, the reference is still usable after
 //> 0: test::m::id_mut<u64>(Input(0));
@@ -111,7 +111,7 @@ task 10, lines 114-118:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 11, lines 120-126:
+task 11, lines 144-150:
 //# programmable --inputs 7 0
 // VALID: copy of a struct result while a reference into its field is live; the copy has the old value, the original the write
 //> 0: test::m::inner_val();
@@ -122,7 +122,7 @@ task 11, lines 120-126:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 12, lines 128-134:
+task 12, lines 152-158:
 //# programmable --inputs 7
 // VALID: the last by-value use of a borrowed copy-only value stays a copy, so the original is still there to consume
 //> 0: test::m::no_drop();
@@ -135,7 +135,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- reads ---
 
-task 13, lines 138-143:
+task 13, lines 162-167:
 //# programmable --inputs 42 7
 // VALID: the root is borrowed mutably again after a read that was the reference's last use
 //> 0: test::m::id_mut<u64>(Input(0));
@@ -145,7 +145,7 @@ task 13, lines 138-143:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 14, lines 145-150:
+task 14, lines 169-174:
 //# programmable --inputs 1
 // VALID: the referent is consumed after a read that was the reference's last use
 //> 0: test::m::no_copy(Input(0));
@@ -155,7 +155,7 @@ task 14, lines 145-150:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 15, lines 152-156:
+task 15, lines 176-180:
 //# programmable --inputs 42
 // VALID: a by-reference use before the read leaves the reference in place for the read
 //> 0: test::m::id_mut<u64>(Input(0));
@@ -164,7 +164,7 @@ task 15, lines 152-156:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 16, lines 158-165:
+task 16, lines 182-189:
 //# programmable --inputs 7 0
 // VALID: a by-value read of the parent while its mutable child is live, which the pre-regex bytecode verifier rejects as READREF_EXISTS_MUTABLE_BORROW_ERROR
 //> 0: test::m::inner_val();

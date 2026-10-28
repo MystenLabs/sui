@@ -6,33 +6,33 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-10:
+task 1, lines 6-11:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5388400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 12-30:
+task 2, lines 13-34:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: None, command: Some(1) } }
 
-task 3, lines 32-55:
+task 3, lines 36-62:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: _::a::val_for_b (function index 0) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: _, name: Identifier("a") }, function: 0, instruction: 1, function_name: Some("val_for_b") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("fake(1,0)::a::val_for_b at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("a") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(1) } }
 
-task 4, lines 57-79:
+task 4, lines 64-89:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 created: object(4,0), object(4,1), object(4,2)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 12889600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 5, line 81:
+task 5, line 91:
 //# view-object 4,0
 4,0::{a, b, c}
 
-task 6, line 83:
+task 6, line 93:
 //# view-object 4,1
 Owner: Account Address ( A )
 Version: 5
@@ -45,7 +45,7 @@ Contents: v0::b::B {
     v: 11u64,
 }
 
-task 7, line 85:
+task 7, line 95:
 //# view-object 4,2
 Owner: Account Address ( A )
 Version: 5

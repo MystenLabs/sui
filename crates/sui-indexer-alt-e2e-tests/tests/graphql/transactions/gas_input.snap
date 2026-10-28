@@ -105,7 +105,7 @@ Response: {
   }
 }
 
-task 10, lines 97-116:
+task 10, lines 96-115:
 //# run-graphql
 Response: {
   "data": {
@@ -129,7 +129,7 @@ Response: {
   }
 }
 
-task 11, lines 118-137:
+task 11, lines 117-136:
 //# run-graphql
 Response: {
   "data": {
@@ -153,7 +153,7 @@ Response: {
   }
 }
 
-task 12, lines 139-162:
+task 12, lines 138-161:
 //# run-graphql
 Response: {
   "data": {

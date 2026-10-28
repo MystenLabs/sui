@@ -8,28 +8,28 @@
 
 //# publish
 
-module test::m {
-    public struct S has key, store {
-        id: sui::object::UID,
-    }
+module test::m;
 
-    public struct R has key {
-        id: sui::object::UID,
-        s: S,
-    }
+public struct S has key, store {
+    id: sui::object::UID,
+}
 
-    public entry fun create(ctx: &mut TxContext) {
-        let parent = sui::object::new(ctx);
-        let child = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer(R { id: parent, s: child }, tx_context::sender(ctx))
-    }
+public struct R has key {
+    id: sui::object::UID,
+    s: S,
+}
 
-    public entry fun delete(r: R) {
-        let R { id, s } = r;
-        sui::object::delete(id);
-        let S { id } = s;
-        sui::object::delete(id);
-    }
+public entry fun create(ctx: &mut TxContext) {
+    let parent = sui::object::new(ctx);
+    let child = S { id: sui::object::new(ctx) };
+    sui::transfer::transfer(R { id: parent, s: child }, tx_context::sender(ctx))
+}
+
+public entry fun delete(r: R) {
+    let R { id, s } = r;
+    sui::object::delete(id);
+    let S { id } = s;
+    sui::object::delete(id);
 }
 
 //

@@ -7,14 +7,13 @@
 
 //# publish
 
-module test::m {
+module test::m;
 
-    public struct S has key { id: UID }
+public struct S has key { id: UID }
 
-    public entry fun mint_s(ctx: &mut TxContext) {
-        let id = object::new(ctx);
-        transfer::share_object(S { id })
-    }
+public entry fun mint_s(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    transfer::share_object(S { id })
 }
 
 //# run test::m::mint_s

@@ -22,7 +22,6 @@ module t2::o2 {
         let Obj2 { id } = o2;
         object::delete(id);
     }
-
 }
 
 //# publish --dependencies t2

@@ -8,13 +8,13 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-50:
+task 1, lines 8-47:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6498000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 52-57:
+task 2, lines 49-54:
 //# programmable --dev-inspect
 // transfer parent with child
 //> 0: test::m::pair();
@@ -24,7 +24,7 @@ task 2, lines 52-57:
 Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 2
 Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 2
 
-task 3, lines 59-65:
+task 3, lines 56-62:
 //# programmable --dev-inspect
 // borrow parent, transfer parent with child
 //> 0: test::m::pair();
@@ -35,7 +35,7 @@ task 3, lines 59-65:
 Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 3
 Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 3
 
-task 4, lines 67-73:
+task 4, lines 64-70:
 //# programmable --dev-inspect
 // transfer parent with children
 //> 0: test::m::pair();
@@ -46,7 +46,7 @@ task 4, lines 67-73:
 Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 2
 Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 2
 
-task 5, lines 75-81:
+task 5, lines 72-78:
 //# programmable --dev-inspect
 // transfer parent with child, one was released
 //> 0: test::m::pair();
@@ -57,7 +57,7 @@ task 5, lines 75-81:
 Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 3
 Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument } in command 3
 
-task 6, lines 83-90:
+task 6, lines 80-87:
 //# programmable --dev-inspect
 // write to parent with imm child, mut was released
 //> 0: test::m::pair();

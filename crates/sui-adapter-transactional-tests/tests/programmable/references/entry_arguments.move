@@ -10,26 +10,39 @@
 module test::m;
 
 public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
+public struct Inner has copy, drop, store { f: u64, g: u64 }
 public struct Hot {}
 
 public fun new(ctx: &mut TxContext): Obj {
     Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
 }
+
 public fun share(ctx: &mut TxContext) {
     transfer::public_share_object(Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } })
 }
+
 public fun inner(o: &Obj): &Inner { &o.inner }
+
 public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
 public fun heat(_: &Obj): Hot { Hot {} }
+
 public fun cool(h: Hot) { let Hot {} = h; }
+
 public fun use_mut<T>(_: &mut T) {}
+
 entry fun play(_: &Inner) {}
+
 entry fun play_mut(_: &mut Inner) {}
+
 entry fun play_val(_: Inner) {}
+
 entry fun play_obj(_: &mut Obj) {}
+
 public entry fun public_play(_: &Inner) {}
+
 public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
+
 public fun delete_all(mut v: vector<Obj>) {
     while (!v.is_empty()) { delete(v.pop_back()) };
     v.destroy_empty()

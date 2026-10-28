@@ -6,29 +6,32 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct R has key, store { id: UID }
-    public struct Droppable has drop {}
-    public struct Cup<T> has copy, drop { t: T }
-    public struct Copyable has copy {}
+module test::m1;
 
-    public fun r(ctx: &mut TxContext): R {
-        R { id: object::new(ctx) }
-    }
+public struct R has key, store { id: UID }
+public struct Droppable has drop {}
+public struct Cup<T> has copy, drop { t: T }
+public struct Copyable has copy {}
 
-    public fun droppable(): Droppable { Droppable {} }
-
-    public fun cup<T>(t: T): Cup<T> { Cup { t } }
-
-    public fun copyable(): Copyable { Copyable {} }
-    public fun borrow(_: &Copyable) {}
-    public fun copy_(c: Copyable) { let Copyable {} = c; }
-    public fun borrow_and_copy(_: &Copyable, c: Copyable) {
-        let Copyable {} = c;
-    }
-
-    public fun num_mut(_: &u64) {}
+public fun r(ctx: &mut TxContext): R {
+    R { id: object::new(ctx) }
 }
+
+public fun droppable(): Droppable { Droppable {} }
+
+public fun cup<T>(t: T): Cup<T> { Cup { t } }
+
+public fun copyable(): Copyable { Copyable {} }
+
+public fun borrow(_: &Copyable) {}
+
+public fun copy_(c: Copyable) { let Copyable {} = c; }
+
+public fun borrow_and_copy(_: &Copyable, c: Copyable) {
+    let Copyable {} = c;
+}
+
+public fun num_mut(_: &u64) {}
 
 // unused object
 //# programmable --sender A --inputs @A

@@ -22,7 +22,6 @@
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
 
-
 //# create-checkpoint
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
@@ -33,7 +32,6 @@
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @B
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
-
 
 //# create-checkpoint
 

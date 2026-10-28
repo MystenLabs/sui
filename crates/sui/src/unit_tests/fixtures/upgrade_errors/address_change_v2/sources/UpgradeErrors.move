@@ -1,31 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module upgrades::upgrades {
-    // enum
-    public struct MyStruct has drop {
-        a: u32,
-    }
+module upgrades::upgrades;
 
-    public enum MyEnum {
-        A(MyStruct),
-    }
+// enum
+public struct MyStruct has drop {
+    a: u32,
+}
 
-    // struct
-    public struct MyNestedStruct has drop {
-        a: MyStruct,
-    }
+public enum MyEnum {
+    A(MyStruct),
+}
 
-    public struct MyStructWithGeneric<T> has drop {
-        f: T,
-    }
+// struct
+public struct MyNestedStruct has drop {
+    a: MyStruct,
+}
 
-    public fun func_with_generic_struct_param(a: MyStructWithGeneric<MyStruct>): u64 {
-        0
-    }
-    
-    // add a new struct to simulate upgrade
-    public struct MyNewStruct has drop {
-        b: u64,
-    }
+public struct MyStructWithGeneric<T> has drop {
+    f: T,
+}
+
+public fun func_with_generic_struct_param(a: MyStructWithGeneric<MyStruct>): u64 {
+    0
+}
+
+// add a new struct to simulate upgrade
+public struct MyNewStruct has drop {
+    b: u64,
 }

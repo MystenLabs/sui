@@ -8,13 +8,13 @@ processed 4 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-24:
+task 1, lines 8-25:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5487200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 26-34:
+task 2, lines 27-35:
 // valid
 //# programmable
 //> 0: test::m1::a();
@@ -27,7 +27,7 @@ task 2, lines 26-34:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 36-44:
+task 3, lines 37-45:
 // invalid
 //# programmable
 //> 0: test::m1::a();

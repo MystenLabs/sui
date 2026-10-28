@@ -4,27 +4,27 @@
 //# init --addresses tto=0x0 --accounts A
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
-    use sui::dynamic_object_field as dof;
+module tto::M1;
 
-    const KEY: u64 = 0;
+use sui::dynamic_object_field as dof;
+use sui::transfer::Receiving;
 
-    public struct A has key, store {
-        id: UID,
-        value: u64,
-    }
+const KEY: u64 = 0;
 
-    public fun start(ctx: &mut TxContext) {
-        let mut a = A { id: object::new(ctx), value: 0 };
-        dof::add(&mut a.id, KEY, A { id: object::new(ctx), value: 0 });
-        transfer::public_transfer(a, tx_context::sender(ctx));
-    }
+public struct A has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public entry fun receive(parent: &mut A, x: Receiving<A>) {
-        let b = transfer::receive(&mut parent.id, x);
-        dof::add(&mut parent.id, KEY, b);
-    }
+public fun start(ctx: &mut TxContext) {
+    let mut a = A { id: object::new(ctx), value: 0 };
+    dof::add(&mut a.id, KEY, A { id: object::new(ctx), value: 0 });
+    transfer::public_transfer(a, tx_context::sender(ctx));
+}
+
+public entry fun receive(parent: &mut A, x: Receiving<A>) {
+    let b = transfer::receive(&mut parent.id, x);
+    dof::add(&mut parent.id, KEY, b);
 }
 
 //# run tto::M1::start --sender A

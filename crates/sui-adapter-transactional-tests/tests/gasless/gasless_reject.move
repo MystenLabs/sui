@@ -14,7 +14,13 @@ module test::usdc {
 
     fun init(otw: USDC, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(
-            otw, 6, b"USDC", b"USD Coin", b"", option::none(), ctx,
+            otw,
+            6,
+            b"USDC",
+            b"USD Coin",
+            b"",
+            option::none(),
+            ctx,
         );
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury_cap, ctx.sender());
@@ -29,7 +35,13 @@ module test::not_allowed {
 
     fun init(otw: NOT_ALLOWED, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(
-            otw, 6, b"NA", b"Not Allowed", b"", option::none(), ctx,
+            otw,
+            6,
+            b"NA",
+            b"Not Allowed",
+            b"",
+            option::none(),
+            ctx,
         );
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury_cap, ctx.sender());

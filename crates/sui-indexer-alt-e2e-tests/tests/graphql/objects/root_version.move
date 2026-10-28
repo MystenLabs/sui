@@ -4,56 +4,56 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish
-module P::M {
-  use sui::dynamic_field as df;
-  use sui::dynamic_object_field as dof;
+module P::M;
 
-  public struct O has key, store {
+use sui::dynamic_field as df;
+use sui::dynamic_object_field as dof;
+
+public struct O has key, store {
     id: UID,
     count: u64,
-  }
+}
 
-  public fun new(ctx: &mut TxContext): O {
+public fun new(ctx: &mut TxContext): O {
     O {
-      id: object::new(ctx),
-      count: 0,
+        id: object::new(ctx),
+        count: 0,
     }
-  }
+}
 
-  public fun burn(outer: O) {
+public fun burn(outer: O) {
     let O { id, count: _ } = outer;
     id.delete();
-  }
+}
 
-  public fun inc(outer: &mut O) {
+public fun inc(outer: &mut O) {
     outer.count = outer.count + 1;
-  }
+}
 
-  public fun add_df(parent: &mut O, name: u64, field: O) {
+public fun add_df(parent: &mut O, name: u64, field: O) {
     df::add(&mut parent.id, name, field)
-  }
+}
 
-  public fun remove_df(parent: &mut O, name: u64): O {
+public fun remove_df(parent: &mut O, name: u64): O {
     df::remove(&mut parent.id, name)
-  }
+}
 
-  public fun inc_df(outer: &mut O, name: u64) {
+public fun inc_df(outer: &mut O, name: u64) {
     let field: &mut O = df::borrow_mut(&mut outer.id, name);
     field.inc();
-  }
+}
 
-  public fun add_dof(parent: &mut O, name: u64, field: O) {
+public fun add_dof(parent: &mut O, name: u64, field: O) {
     dof::add(&mut parent.id, name, field)
-  }
+}
 
-  public fun remove_dof(parent: &mut O, name: u64): O {
+public fun remove_dof(parent: &mut O, name: u64): O {
     dof::remove(&mut parent.id, name)
-  }
+}
 
-  public fun inc_dof(outer: &mut O, name: u64) {
+public fun inc_dof(outer: &mut O, name: u64) {
     let field: &mut O = dof::borrow_mut(&mut outer.id, name);
     field.inc();
-  }
 }
 
 //# programmable --sender A --inputs @A

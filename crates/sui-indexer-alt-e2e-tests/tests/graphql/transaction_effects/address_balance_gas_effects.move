@@ -9,14 +9,14 @@
 //> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
 
 //# publish
-module test::mod {
-    public fun fails() {
-        abort 42
-    }
+module test::mod;
 
-    public fun succeeds() {
-        // do nothing
-    }
+public fun fails() {
+    abort 42
+}
+
+public fun succeeds() {
+    // do nothing
 }
 
 //# create-checkpoint

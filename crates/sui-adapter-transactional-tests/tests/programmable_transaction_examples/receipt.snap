@@ -3,13 +3,13 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
-task 1, lines 6-23:
+task 1, lines 6-22:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 25-29:
+task 2, lines 24-28:
 //# programmable
 //> 0: test::m1::prologue();
 //> test::m1::execute(Result(0));
@@ -18,7 +18,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, line 31:
+task 3, line 30:
 //# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3

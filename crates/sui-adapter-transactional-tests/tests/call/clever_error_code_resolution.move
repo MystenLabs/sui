@@ -5,6 +5,7 @@
 
 //# publish
 module Test::M1;
+
 #[error(code = 10)]
 const EError: vector<u8> = b"An error occurred";
 

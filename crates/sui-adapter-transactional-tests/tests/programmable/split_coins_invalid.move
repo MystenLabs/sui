@@ -3,24 +3,23 @@
 
 // tests various invalid operations involving SplitCoins
 
-
 //# init --addresses test=0x0 --accounts A B C
 
 //# publish
-module test::m1 {
-    use sui::coin;
+module test::m1;
 
-    public fun ret_one_amount(): address {
-        @42
-    }
+use sui::coin;
 
-    public fun transfer_(mut v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
-        while (!vector::is_empty(&v)) {
-            let c = vector::pop_back(&mut v);
-            transfer::public_transfer(c, r);
-        };
-        vector::destroy_empty(v);
-    }
+public fun ret_one_amount(): address {
+    @42
+}
+
+public fun transfer_(mut v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
+    while (!vector::is_empty(&v)) {
+        let c = vector::pop_back(&mut v);
+        transfer::public_transfer(c, r);
+    };
+    vector::destroy_empty(v);
 }
 
 //# programmable --sender A --inputs 100000 @A

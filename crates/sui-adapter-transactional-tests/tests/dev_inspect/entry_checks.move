@@ -7,45 +7,42 @@
 
 //# publish
 
-module test::m {
+module test::m;
 
-    public fun public_take_and_return_pure(input: u64): u64 {
-        input
-    }
-
-    public fun public_take_pure(_input: u64) {
-        // Do nothing with input
-    }
-
-    entry fun entry_take_pure(_input: u64) {}
-
-
-    public fun public_take_and_return_object(obj: A): A {
-        obj
-    }
-
-    entry fun entry_take_object(obj: A) {
-        let A { id } = obj;
-        id.delete();
-    }
-
-    public fun public_pure_return_value(): u64 {
-        0
-    }
-
-    entry fun entry_return_u64(): u64 {
-        0
-    }
-
-    public struct A has key, store {
-        id: UID,
-    }
-
-    public fun create_object(ctx: &mut TxContext): A {
-        A { id: object::new(ctx) }
-    }
+public fun public_take_and_return_pure(input: u64): u64 {
+    input
 }
 
+public fun public_take_pure(_input: u64) {
+    // Do nothing with input
+}
+
+entry fun entry_take_pure(_input: u64) {}
+
+public fun public_take_and_return_object(obj: A): A {
+    obj
+}
+
+entry fun entry_take_object(obj: A) {
+    let A { id } = obj;
+    id.delete();
+}
+
+public fun public_pure_return_value(): u64 {
+    0
+}
+
+entry fun entry_return_u64(): u64 {
+    0
+}
+
+public struct A has key, store {
+    id: UID,
+}
+
+public fun create_object(ctx: &mut TxContext): A {
+    A { id: object::new(ctx) }
+}
 
 // Basic pure tainted input
 //# programmable --sender A --inputs 0 --dev-inspect

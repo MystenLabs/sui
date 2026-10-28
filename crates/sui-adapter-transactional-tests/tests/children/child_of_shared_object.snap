@@ -18,25 +18,25 @@ created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7698800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 48-72:
+task 3, lines 47-71:
 //# publish --dependencies t2 t3
 created: object(3,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8238400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, line 74:
+task 4, line 73:
 //# run t3::o3::create --sender A
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 5, line 76:
+task 5, line 75:
 //# run t2::o2::create_shared --args object(4,0) --sender A
 created: object(5,0), object(5,1)
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 5920400,  storage_rebate: 2226577, non_refundable_storage_fee: 223
 
-task 6, line 78:
+task 6, line 77:
 //# view-object 4,0
 Owner: Object ID: ( fake(5,1) )
 Version: 3
@@ -48,7 +48,7 @@ Contents: t3::o3::Obj3 {
     },
 }
 
-task 7, line 80:
+task 7, line 79:
 //# view-object 5,0
 Owner: Shared( 3 )
 Version: 3
@@ -60,7 +60,7 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 8, lines 82-83:
+task 8, lines 81-82:
 // child arguments cannot be taken directly
 //# run t1::o1::use_o2_o3 --args object(5,0) object(4,0) --sender A
 Error: Error checking transaction input objects: Object object(4,0) is owned by object object(5,1). Objects owned by other objects cannot be used as input arguments

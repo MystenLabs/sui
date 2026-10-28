@@ -8,7 +8,7 @@
 //# init --addresses a=0x0 --accounts A
 
 //# publish
-module a::m {
+module a::m;
 
 use sui::dynamic_object_field::{add, exists, borrow, borrow_mut, remove};
 
@@ -55,7 +55,7 @@ entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {
 entry fun t2(obj: &Obj) {
     let id = &obj.id;
     assert!(exists<u64>(id, 0u64), 0);
-    assert!(exists<vector<u8>>(id, b""), 0);
+    assert!(sui::dynamic_object_field::exists<vector<u8>>(id, b""), 0);
     assert!(exists<bool>(id, false), 0);
 }
 
@@ -90,15 +90,13 @@ entry fun t6(obj: &mut Obj) {
 entry fun t7(obj: &Obj) {
     let id = &obj.id;
     assert!(!exists<u64>(id, 0), 0);
-    assert!(!exists<vector<u8>>(id, b""), 0);
+    assert!(!sui::dynamic_object_field::exists<vector<u8>>(id, b""), 0);
     assert!(exists<bool>(id, false), 0);
 }
 
 entry fun t8(obj: Obj) {
     let Obj { id } = obj;
     object::delete(id);
-}
-
 }
 
 //# run a::m::t0 --sender A

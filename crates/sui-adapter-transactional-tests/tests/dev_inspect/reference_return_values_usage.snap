@@ -38,7 +38,7 @@ task 3, lines 55-62:
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 65-73:
+task 4, lines 64-72:
 // Read from the struct again to check that the reference was actually
 // updated, and not just `Result(1)`
 //# programmable --sender A --dev-inspect --inputs 43

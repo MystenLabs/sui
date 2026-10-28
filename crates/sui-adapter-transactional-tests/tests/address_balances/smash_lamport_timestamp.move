@@ -17,7 +17,9 @@
 
 //# publish
 module test::obj;
+
 public struct W has key, store { id: UID }
+
 public fun make(ctx: &mut TxContext) {
     sui::transfer::public_transfer(W { id: object::new(ctx) }, ctx.sender());
 }

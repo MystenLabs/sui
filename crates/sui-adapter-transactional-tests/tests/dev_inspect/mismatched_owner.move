@@ -35,14 +35,11 @@ public fun make_object_owned(parent: &Obj, ctx: &mut TxContext) {
     transfer::public_transfer(Obj { id: object::new(ctx) }, parent.id.to_address());
 }
 
-public fun obj_mut(_: &mut Obj) {
-}
+public fun obj_mut(_: &mut Obj) {}
 
-public fun obj_imm(_: &Obj) {
-}
+public fun obj_imm(_: &Obj) {}
 
-public fun drop_receiving(_: sui::transfer::Receiving<Obj>) {
-}
+public fun drop_receiving(_: sui::transfer::Receiving<Obj>) {}
 
 //# programmable --sender A
 //> test::m::make_owned();

@@ -4,15 +4,44 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
-    public fun p16(
-        x0: &u64, x1: &u64, x2: &u64, x3: &u64,
-        x4: &u64, x5: &u64, x6: &u64, x7: &u64,
-        x8: &u64, x9: &u64, x10: &u64, x11: &u64,
-        x12: &u64, x13: &u64, x14: &u64, x15: &u64,
-    ): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) {
-        (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15)
-    }
+module test::m;
+
+public fun p16(
+    x0: &u64,
+    x1: &u64,
+    x2: &u64,
+    x3: &u64,
+    x4: &u64,
+    x5: &u64,
+    x6: &u64,
+    x7: &u64,
+    x8: &u64,
+    x9: &u64,
+    x10: &u64,
+    x11: &u64,
+    x12: &u64,
+    x13: &u64,
+    x14: &u64,
+    x15: &u64,
+): (
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+) {
+    (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15)
 }
 
 // Every call takes all 16 reference results from the preceding call and returns 16 references.

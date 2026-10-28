@@ -3,9 +3,8 @@
 
 module coin::b_coin;
 
-use sui::coin::{Self, TreasuryCap};
 use sui::balance;
-
+use sui::coin::{Self, TreasuryCap};
 
 public struct B_COIN has drop {}
 

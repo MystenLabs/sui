@@ -22,8 +22,7 @@ public fun new(ctx: &mut TxContext): X {
     X { id: object::new(ctx), y: Y { f: 0 } }
 }
 
-public fun mut_ctx_imm(_a: &mut X, _ctx: &mut TxContext, _b: &X) {
-}
+public fun mut_ctx_imm(_a: &mut X, _ctx: &mut TxContext, _b: &X) {}
 
 public fun delete(x: X) {
     let X { id, y: Y { f: _ } } = x;

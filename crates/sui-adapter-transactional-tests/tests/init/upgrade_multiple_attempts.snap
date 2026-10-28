@@ -9,24 +9,24 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-11:
+task 1, lines 9-12:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 13-31:
+task 2, lines 14-33:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: _::n::init (function index 0) at offset 9, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: _, name: Identifier("n") }, function: 0, instruction: 9, function_name: Some("init") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("fake(1,0)::n::init at offset 9"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("n") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 9)] }), command: Some(1) } }
 
-task 3, lines 33-51:
+task 3, lines 35-54:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 8618400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 4, line 53:
+task 4, line 56:
 //# view-object 3,1
 Owner: Account Address ( A )
 Version: 4

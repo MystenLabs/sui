@@ -5,67 +5,67 @@
 /// transferring it to a plain address and later restarted by transferring it back to
 /// a party owner. Used to stress the interaction between old-stream consensus
 /// transactions and owned-object mutations of the same object id.
-module basics::party_obj {
-    use sui::party;
+module basics::party_obj;
 
-    public struct PartyObj has key, store {
-        id: UID,
-        value: u64,
-    }
+use sui::party;
 
-    /// Create a party object owned by `recipient` as a single owner.
-    public fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        let o = PartyObj {
-            id: object::new(ctx),
-            value,
-        };
-        transfer::public_party_transfer(o, party::single_owner(recipient));
-    }
+public struct PartyObj has key, store {
+    id: UID,
+    value: u64,
+}
 
-    /// End the object's consensus stream by moving it to a plain address.
-    public fun to_address(o: PartyObj, recipient: address) {
-        transfer::public_transfer(o, recipient);
-    }
+/// Create a party object owned by `recipient` as a single owner.
+public fun create(value: u64, recipient: address, ctx: &mut TxContext) {
+    let o = PartyObj {
+        id: object::new(ctx),
+        value,
+    };
+    transfer::public_party_transfer(o, party::single_owner(recipient));
+}
 
-    /// Start a new consensus stream by moving the object back to a party owner.
-    public fun to_party(o: PartyObj, recipient: address) {
-        transfer::public_party_transfer(o, party::single_owner(recipient));
-    }
+/// End the object's consensus stream by moving it to a plain address.
+public fun to_address(o: PartyObj, recipient: address) {
+    transfer::public_transfer(o, recipient);
+}
 
-    public fun set_value(o: &mut PartyObj, value: u64) {
-        o.value = value;
-    }
+/// Start a new consensus stream by moving the object back to a party owner.
+public fun to_party(o: PartyObj, recipient: address) {
+    transfer::public_party_transfer(o, party::single_owner(recipient));
+}
 
-    public fun value(o: &PartyObj): u64 {
-        o.value
-    }
+public fun set_value(o: &mut PartyObj, value: u64) {
+    o.value = value;
+}
 
-    /// An address-owned object that wraps a party object, which ends the party object's
-    /// consensus stream.
-    public struct Holder has key {
-        id: UID,
-        inner: PartyObj,
-    }
+public fun value(o: &PartyObj): u64 {
+    o.value
+}
 
-    public fun wrap(o: PartyObj, recipient: address, ctx: &mut TxContext) {
-        transfer::transfer(Holder { id: object::new(ctx), inner: o }, recipient);
-    }
+/// An address-owned object that wraps a party object, which ends the party object's
+/// consensus stream.
+public struct Holder has key {
+    id: UID,
+    inner: PartyObj,
+}
 
-    /// Unwrap the object onto a new consensus stream.
-    public fun unwrap_to_party(h: Holder, recipient: address) {
-        let Holder { id, inner } = h;
-        id.delete();
-        transfer::public_party_transfer(inner, party::single_owner(recipient));
-    }
+public fun wrap(o: PartyObj, recipient: address, ctx: &mut TxContext) {
+    transfer::transfer(Holder { id: object::new(ctx), inner: o }, recipient);
+}
 
-    /// Unwrap the object to a plain address.
-    public fun unwrap_to_address(h: Holder, recipient: address) {
-        let Holder { id, inner } = h;
-        id.delete();
-        transfer::public_transfer(inner, recipient);
-    }
+/// Unwrap the object onto a new consensus stream.
+public fun unwrap_to_party(h: Holder, recipient: address) {
+    let Holder { id, inner } = h;
+    id.delete();
+    transfer::public_party_transfer(inner, party::single_owner(recipient));
+}
 
-    public fun holder_value(h: &Holder): u64 {
-        h.inner.value
-    }
+/// Unwrap the object to a plain address.
+public fun unwrap_to_address(h: Holder, recipient: address) {
+    let Holder { id, inner } = h;
+    id.delete();
+    transfer::public_transfer(inner, recipient);
+}
+
+public fun holder_value(h: &Holder): u64 {
+    h.inner.value
 }

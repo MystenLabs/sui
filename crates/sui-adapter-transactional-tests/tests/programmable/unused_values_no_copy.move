@@ -6,13 +6,15 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct HotPotato {}
-    public fun hot_potato(): HotPotato {
-        HotPotato {}
-    }
-    public fun borrow_and_drop(_: HotPotato, _: &HotPotato) { abort 0 }
+module test::m1;
+
+public struct HotPotato {}
+
+public fun hot_potato(): HotPotato {
+    HotPotato {}
 }
+
+public fun borrow_and_drop(_: HotPotato, _: &HotPotato) { abort 0 }
 
 //# programmable --sender A
 // unconsumed copyable value

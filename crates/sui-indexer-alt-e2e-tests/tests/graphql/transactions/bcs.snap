@@ -6,13 +6,13 @@ processed 8 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-40:
+task 1, lines 6-41:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 9241600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 42-48:
+task 2, lines 43-49:
 //# programmable --sender A --inputs object(1,1) 42 @A
 //> 0: test::counter::inc(Input(0));
 //> 1: test::counter::inc_by(Input(0), Input(1));
@@ -25,7 +25,7 @@ created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 1346796, non_refundable_storage_fee: 13604
 
-task 3, lines 50-52:
+task 3, lines 51-53:
 //# programmable --sender A --inputs 42 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -33,11 +33,11 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, line 54:
+task 4, line 55:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 56-69:
+task 5, lines 57-70:
 //# run-graphql
 Response: {
   "data": {
@@ -46,7 +46,7 @@ Response: {
   }
 }
 
-task 6, lines 71-94:
+task 6, lines 72-95:
 //# run-graphql
 Response: {
   "data": {
@@ -77,7 +77,7 @@ Response: {
   }
 }
 
-task 7, lines 96-115:
+task 7, lines 97-116:
 //# run-graphql
 Response: {
   "data": {

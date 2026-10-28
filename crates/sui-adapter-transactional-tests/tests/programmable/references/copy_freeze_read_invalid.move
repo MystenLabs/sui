@@ -12,8 +12,11 @@ module test::m;
 public struct NoDrop has copy { f: u64 }
 
 public fun no_drop(): NoDrop { NoDrop { f: 0 } }
+
 public fun f_mut(x: &mut NoDrop): &mut u64 { &mut x.f }
+
 public fun write(r: &mut u64, v: u64) { *r = v }
+
 public fun take(x: NoDrop) { let NoDrop { f: _ } = x; }
 
 //# programmable --inputs 7

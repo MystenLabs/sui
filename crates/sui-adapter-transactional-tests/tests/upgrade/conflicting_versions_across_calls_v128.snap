@@ -19,25 +19,25 @@ created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 18-22:
+task 2, lines 18-23:
 //# publish --upgradeable --dependencies Base_V1 --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6194000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, lines 24-27:
+task 3, lines 25-28:
 //# upgrade --package Base_V1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 4, lines 29-33:
+task 4, lines 30-35:
 //# upgrade --package Dep_V1 --upgrade-capability 2,1 --dependencies Base_V2 --sender A
 created: object(4,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6194000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5, lines 35-37:
+task 5, lines 37-39:
 //# programmable --sender A
 //> Dep_V2::my_module::call_return_0();
 //> Dep_V1::my_module::call_return_0();

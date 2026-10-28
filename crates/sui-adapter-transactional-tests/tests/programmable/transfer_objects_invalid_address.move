@@ -6,23 +6,23 @@
 //# init --addresses test=0x0 --accounts A B
 
 //# publish
-module test::m1 {
-    public struct Pub has key, store {
-        id: UID,
-        value: u64,
-    }
+module test::m1;
 
-    public fun new(ctx: &mut TxContext): Pub {
-        Pub { id: object::new(ctx), value: 112 }
-    }
+public struct Pub has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public fun value(): u128 {
-        0
-    }
+public fun new(ctx: &mut TxContext): Pub {
+    Pub { id: object::new(ctx), value: 112 }
+}
 
-    public fun vec(): vector<u8> {
-        sui::address::to_bytes(@0)
-    }
+public fun value(): u128 {
+    0
+}
+
+public fun vec(): vector<u8> {
+    sui::address::to_bytes(@0)
 }
 
 // not an address

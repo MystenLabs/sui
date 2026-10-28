@@ -30,9 +30,7 @@ public fun c(ctx: &mut TxContext) {
     transfer::share_object(C { id: object::new(ctx) });
 }
 
-public fun t0(_: &mut A, _: &B, _: &C, _: &TxContext)
-{
-}
+public fun t0(_: &mut A, _: &B, _: &C, _: &TxContext) {}
 
 //# programmable
 //> test::m::a()
@@ -42,7 +40,6 @@ public fun t0(_: &mut A, _: &B, _: &C, _: &TxContext)
 
 //# programmable
 //> test::m::c()
-
 
 //# programmable --inputs object(2,0) object(3,0) object(4,0)
 // Should fail with type error in the first argument, even though the third is also incorrect

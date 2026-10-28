@@ -8,36 +8,25 @@
 //# publish
 module test::m;
 
-public fun mut_mut(_: &mut TxContext, _: &mut TxContext) {
-}
+public fun mut_mut(_: &mut TxContext, _: &mut TxContext) {}
 
-public fun mut_imm(_: &mut TxContext, _: &TxContext) {
-}
+public fun mut_imm(_: &mut TxContext, _: &TxContext) {}
 
-public fun imm_mut(_: &TxContext, _: &mut TxContext) {
-}
+public fun imm_mut(_: &TxContext, _: &mut TxContext) {}
 
-public fun imm_u64_mut(_: &TxContext, _: u64, _: &mut TxContext) {
-}
+public fun imm_u64_mut(_: &TxContext, _: u64, _: &mut TxContext) {}
 
-public fun mut_u64_imm(_: &mut TxContext, _: u64, _: &TxContext) {
-}
+public fun mut_u64_imm(_: &mut TxContext, _: u64, _: &TxContext) {}
 
-public fun mut_u64_mut(_: &mut TxContext, _: u64, _: &mut TxContext) {
-}
+public fun mut_u64_mut(_: &mut TxContext, _: u64, _: &mut TxContext) {}
 
-public fun mut_imm_mut(_: &mut TxContext, _: &TxContext, _: &mut TxContext) {
-}
+public fun mut_imm_mut(_: &mut TxContext, _: &TxContext, _: &mut TxContext) {}
 
-public fun gen_mut_mut<T>(_: &mut T, _: &mut TxContext) {
-}
+public fun gen_mut_mut<T>(_: &mut T, _: &mut TxContext) {}
 
-public fun gen_mut_imm<T>(_: &mut T, _: &TxContext) {
-}
+public fun gen_mut_imm<T>(_: &mut T, _: &TxContext) {}
 
-public fun gen_imm_mut<T>(_: &T, _: &mut TxContext) {
-}
-
+public fun gen_imm_mut<T>(_: &T, _: &mut TxContext) {}
 
 //# programmable
 //> test::m::mut_mut();

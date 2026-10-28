@@ -6,41 +6,41 @@
 //# publish --upgradeable --sender A
 module A0::base {
     public struct Foo<T: store + copy + drop + key> {
-        x: T
+        x: T,
     }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
     public struct Foo<T: store + copy + drop> {
-        x: T
+        x: T,
     }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
     public struct Foo<T: copy> {
-        x: T
+        x: T,
     }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
     public struct Foo<T: drop> {
-        x: T
+        x: T,
     }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
     public struct Foo<T: key> {
-        x: T
+        x: T,
     }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
     public struct Foo<T: store> {
-        x: T
+        x: T,
     }
 }

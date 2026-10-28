@@ -6,6 +6,7 @@
 //# publish --upgradeable --sender A
 module Test_DepV1::DepM1 {
     public struct DepObj has key, store { id: sui::object::UID, v: u64 }
+
     public fun mod_obj(o: &mut DepObj) {
         o.v = 0;
     }
@@ -14,6 +15,7 @@ module Test_DepV1::DepM1 {
 //# upgrade --package Test_DepV1 --upgrade-capability 1,1 --sender A
 module Test_DepV2::DepM1 {
     public struct DepObj has key, store { id: sui::object::UID, v: u64 }
+
     public fun mod_obj(o: &mut DepObj) {
         o.v = 0;
     }
@@ -26,6 +28,7 @@ module Test_DepV2::DepM1 {
 //# publish --upgradeable --dependencies Test_DepV1 --sender A
 module Test_V1::M1 {
     use Test_DepV1::DepM1;
+
     public fun mod_dep_obj(o: &mut DepM1::DepObj) {
         DepM1::mod_obj(o);
     }

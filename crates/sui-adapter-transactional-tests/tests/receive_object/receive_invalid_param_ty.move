@@ -4,41 +4,44 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
+module tto::M1;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::transfer::Receiving;
 
-    public struct B has key, store {
-        id: UID,
-    }
-
-    public struct Fake<phantom T> has drop { }
-
-    public struct FakeSameLayout<phantom T> has drop {
-        id: ID,
-        version: u64,
-    }
-
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-    }
-
-    public entry fun receiver(_x: u64) { }
-    public fun receiver2(_x: Fake<B>) { }
-    public fun receiver3(_x: &Fake<B>) { }
-
-    public fun receiver4(_x: FakeSameLayout<B>) { }
-    public fun receiver5(_x: &FakeSameLayout<B>) { }
-
-    public fun receiver6(_x: Receiving<B>) { }
+public struct A has key, store {
+    id: UID,
 }
+
+public struct B has key, store {
+    id: UID,
+}
+
+public struct Fake<phantom T> has drop {}
+
+public struct FakeSameLayout<phantom T> has drop {
+    id: ID,
+    version: u64,
+}
+
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+}
+
+public entry fun receiver(_x: u64) {}
+
+public fun receiver2(_x: Fake<B>) {}
+
+public fun receiver3(_x: &Fake<B>) {}
+
+public fun receiver4(_x: FakeSameLayout<B>) {}
+
+public fun receiver5(_x: &FakeSameLayout<B>) {}
+
+public fun receiver6(_x: Receiving<B>) {}
 
 //# run tto::M1::start
 

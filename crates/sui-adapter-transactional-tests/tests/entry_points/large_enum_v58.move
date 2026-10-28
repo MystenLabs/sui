@@ -7,13 +7,13 @@
 
 //# publish
 
-module test::m {
+module test::m;
 
-public enum X1 has drop  {
+public enum X1 has drop {
     Big1(u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8),
 }
 
-public enum X2 has drop  {
+public enum X2 has drop {
     V1(X1, X1, X1),
     V2(X1, X1, X1),
     V3(X1, X1, X1),
@@ -25,13 +25,11 @@ public enum X3 has drop {
 }
 
 entry fun x1(): X1 {
-    X1::Big1(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    X1::Big1(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
 entry fun x3(): X3 {
     X3::U64(0)
-}
-
 }
 
 //# programmable --sender A

@@ -4,35 +4,35 @@
 //# init --addresses tto=0x0 --accounts A
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
-    use sui::dynamic_object_field as dof;
+module tto::M1;
 
-    const KEY: u64 = 0;
+use sui::dynamic_object_field as dof;
+use sui::transfer::Receiving;
 
-    public struct A has key, store {
-        id: UID,
-        value: u64,
-    }
+const KEY: u64 = 0;
 
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx), value: 0 };
-        let a_address = object::id_address(&a);
-        let b = A { id: object::new(ctx), value: 0 };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-    }
+public struct A has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public entry fun receive(parent: &mut A, x: Receiving<A>, ctx: &mut TxContext) {
-        let mut b = transfer::receive(&mut parent.id, x);
-        let x = A { id: object::new(ctx), value: 0 };
-        dof::add(&mut b.id, KEY, x);
-        dof::add(&mut parent.id, KEY, b);
-        let x: &mut A = dof::borrow_mut(&mut parent.id, KEY);
-        let y: &mut A = dof::borrow_mut(&mut x.id, KEY);
-        x.value = 100;
-        y.value = 100;
-    }
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx), value: 0 };
+    let a_address = object::id_address(&a);
+    let b = A { id: object::new(ctx), value: 0 };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+}
+
+public entry fun receive(parent: &mut A, x: Receiving<A>, ctx: &mut TxContext) {
+    let mut b = transfer::receive(&mut parent.id, x);
+    let x = A { id: object::new(ctx), value: 0 };
+    dof::add(&mut b.id, KEY, x);
+    dof::add(&mut parent.id, KEY, b);
+    let x: &mut A = dof::borrow_mut(&mut parent.id, KEY);
+    let y: &mut A = dof::borrow_mut(&mut x.id, KEY);
+    x.value = 100;
+    y.value = 100;
 }
 
 //# run tto::M1::start

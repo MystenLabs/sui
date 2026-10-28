@@ -10,13 +10,13 @@ processed 24 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-49:
+task 1, lines 10-83:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 13710400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 56-58:
+task 3, lines 90-92:
 //# programmable --sender A --inputs @A
 //> 0: test::m::new();
 //> 1: TransferObjects([Result(0)], Input(0));
@@ -26,7 +26,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 
 
 // --- which arguments a result extends ---
 
-task 4, lines 62-73:
+task 4, lines 96-107:
 //# programmable --inputs 1
 // VALID: both sources of a two-source `&mut` result are usable once the result is dead
 //> 0: test::m::new();
@@ -42,7 +42,7 @@ task 4, lines 62-73:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 75-85:
+task 5, lines 109-119:
 //# programmable --inputs 1
 // VALID: a mutable result of a mixed call does not extend the immutable argument
 //> 0: test::m::new();
@@ -57,7 +57,7 @@ task 5, lines 75-85:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 87-92:
+task 6, lines 121-126:
 //# programmable
 // VALID: `&Inner` from `&mut Obj`
 //> 0: test::m::new();
@@ -67,7 +67,7 @@ task 6, lines 87-92:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 94-99:
+task 7, lines 128-133:
 //# programmable
 // VALID: `&Inner` from `&Obj`
 //> 0: test::m::new();
@@ -77,7 +77,7 @@ task 7, lines 94-99:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 101-114:
+task 8, lines 135-148:
 //# programmable --inputs 1
 // VALID: both sources usable again once a chained descendant of a two-source result is dead
 //> 0: test::m::new();
@@ -97,7 +97,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- multiple results from one call ---
 
-task 9, lines 118-128:
+task 9, lines 152-162:
 //# programmable --inputs 1 2 9 1 0
 // VALID: (&T, value, &mut U) keeps result indexes and mutability
 //> 0: MakeMoveVec<u64>([Input(0)]);
@@ -112,7 +112,7 @@ task 9, lines 118-128:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, lines 130-138:
+task 10, lines 164-172:
 //# programmable --inputs 1 2 9 0
 // VALID: with the `&T` result unused, the `&mut U` result extends only its mutable source, so the other root is free
 //> 0: MakeMoveVec<u64>([Input(0)]);
@@ -125,7 +125,7 @@ task 10, lines 130-138:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 11, lines 141-149:
+task 11, lines 174-182:
 //# programmable --inputs 1 2
 // VALID: (mut, mut) written separately and passed together
 //> 0: test::m::new();
@@ -138,7 +138,7 @@ task 11, lines 141-149:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 12, lines 151-159:
+task 12, lines 184-192:
 //# programmable --inputs 1 0
 // VALID: (mut, imm) written and read while both are live
 //> 0: test::m::new();
@@ -151,7 +151,7 @@ task 12, lines 151-159:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 13, lines 161-169:
+task 13, lines 194-202:
 //# programmable --inputs 0
 // VALID: (imm, imm)
 //> 0: test::m::new();
@@ -164,7 +164,7 @@ task 13, lines 161-169:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 14, lines 171-178:
+task 14, lines 204-211:
 //# programmable --inputs 3
 // VALID: (value, mut ref)
 //> 0: test::m::new();
@@ -178,7 +178,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- generic callees ---
 
-task 15, lines 182-192:
+task 15, lines 215-225:
 //# programmable --inputs 4
 // VALID: generic identity on an object, an inner struct, and a field
 //> 0: test::m::new();
@@ -193,7 +193,7 @@ task 15, lines 182-192:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 16, lines 194-199:
+task 16, lines 227-232:
 //# programmable --inputs 1 0 9
 // VALID: generic element borrow of a vector result
 //> 0: MakeMoveVec<u64>([Input(0)]);
@@ -203,7 +203,7 @@ task 16, lines 194-199:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 17, lines 201-204:
+task 17, lines 234-237:
 //# programmable --inputs 5
 // VALID: generic immutable identity on a pure input
 //> 0: test::m::id<u64>(Input(0));
@@ -213,7 +213,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- roots other than MoveCall results ---
 
-task 18, lines 208-213:
+task 18, lines 241-246:
 //# programmable --sender A --inputs 100 @A
 // VALID: a reference rooted in a SplitCoins result
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -224,7 +224,7 @@ created: object(18,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 19, lines 215-220:
+task 19, lines 248-253:
 //# programmable --inputs 1 2 0 9
 // VALID: a reference rooted in a MakeMoveVec result
 //> 0: MakeMoveVec<u64>([Input(0), Input(1)]);
@@ -234,7 +234,7 @@ task 19, lines 215-220:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 20, lines 222-227:
+task 20, lines 255-260:
 //# programmable --sender A --inputs @A
 // VALID: a reference rooted in a Publish result (the UpgradeCap)
 //> 0: Publish(q, []);
@@ -245,7 +245,7 @@ created: object(20,0), object(20,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3990000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 21, lines 229-233:
+task 21, lines 262-266:
 //# programmable --sender A --inputs object(3,0)
 // VALID: `&ID` from a framework borrow of an object input, then the object read again
 //> 0: sui::object::borrow_id<test::m::Obj>(Input(0));
@@ -256,7 +256,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 
 
 // --- TxContext is never a source ---
 
-task 22, lines 237-243:
+task 22, lines 270-276:
 //# programmable
 // VALID: a reference into TxContext survives later mutable TxContext uses and stays consistent
 //> 0: sui::tx_context::digest();
@@ -267,7 +267,7 @@ task 22, lines 237-243:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 23, lines 245-250:
+task 23, lines 278-283:
 //# programmable --inputs 0
 // VALID: a laundered TxContext reference is attributed to the other argument, immutable uses are fine
 //> 0: test::m::digest_via(Input(0));

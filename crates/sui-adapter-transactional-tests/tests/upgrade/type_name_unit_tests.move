@@ -7,7 +7,9 @@
 module A0::m {
     public struct A {}
 
-    public enum EA { V }
+    public enum EA {
+        V,
+    }
 
     public struct ACup<phantom T> {}
 }
@@ -17,8 +19,12 @@ module A1::m {
     public struct A {}
     public struct B {}
 
-    public enum EA { V }
-    public enum EB { V }
+    public enum EA {
+        V,
+    }
+    public enum EB {
+        V,
+    }
 
     public struct ACup<phantom T> {}
     public struct BCup<phantom T> {}
@@ -33,8 +39,12 @@ module A2::m {
     public struct A {}
     public struct B {}
 
-    public enum EA { V }
-    public enum EB { V }
+    public enum EA {
+        V,
+    }
+    public enum EB {
+        V,
+    }
 
     public struct ACup<phantom T> {}
     public struct BCup<phantom T> {}
@@ -43,9 +53,7 @@ module A2::m {
         // skip: addr + "::" + "m" + "::"
         // take: until "<"
         let lt = std::ascii::string(b"<").pop_char().byte();
-        str
-            .skip(sui::address::length() * 2 + 2 + 1 + 2)
-            .take_while!(|c| c != &lt)
+        str.skip(sui::address::length() * 2 + 2 + 1 + 2).take_while!(|c| c != &lt)
     }
 
     // Checks the following in both `with_original_ids` and `with_defining_ids`
@@ -66,7 +74,7 @@ module A2::m {
         assert!(
             sui::address::from_ascii_bytes(og.address_string().as_bytes()) ==
             type_name::original_id<$T>(),
-            3
+            3,
         );
 
         assert!(def.address_string() == defining_string, 4);
@@ -75,7 +83,7 @@ module A2::m {
         assert!(
             sui::address::from_ascii_bytes(def.address_string().as_bytes()) ==
             type_name::defining_id<$T>(),
-            7
+            7,
         );
     }
 
@@ -125,7 +133,6 @@ module A2::m {
         assert!(&inner_s == inner_og.into_string().into_bytes(), 200);
         assert!(leading_address(inner_s) == inner_og_address, 201);
         assert!(leading_address(inner_s) == type_name::original_id<$Inner>(), 202);
-
 
         let cup_def = type_name::with_defining_ids<$T>();
         let inner_def = type_name::with_defining_ids<$Inner>();

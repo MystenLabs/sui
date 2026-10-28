@@ -7,10 +7,9 @@
 
 //# publish
 
-module Test::M {
-    public entry fun create(_value: u64, _recipient: address) {}
+module Test::M;
 
-}
+public entry fun create(_value: u64, _recipient: address) {}
 
 // Instead of calling on the Test package, we are calling a non-existent package
 //# run 0x242::M::create

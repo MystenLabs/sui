@@ -9,7 +9,7 @@
 module a::m {
     public struct Obj has key, store {
         id: UID,
-        digest: vector<u8>
+        digest: vector<u8>,
     }
 
     public fun new(ctx: &mut TxContext): Obj {

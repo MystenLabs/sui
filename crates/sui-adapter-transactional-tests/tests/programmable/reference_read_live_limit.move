@@ -8,15 +8,15 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
-    public fun id_ref(x: &u64): &u64 {
-        x
-    }
+module test::m;
 
-    public fun check_vec(v: vector<u64>, len: u64, value: u64) {
-        assert!(v.length() == len, 0);
-        v.do!(|x| assert!(x == value, 0));
-    }
+public fun id_ref(x: &u64): &u64 {
+    x
+}
+
+public fun check_vec(v: vector<u64>, len: u64, value: u64) {
+    assert!(v.length() == len, 0);
+    v.do!(|x| assert!(x == value, 0));
 }
 
 //# programmable --sender A --inputs 7u64 65u64

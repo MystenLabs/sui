@@ -7,25 +7,24 @@
 
 //# publish
 
-module t2::o2 {
-    public struct Obj2 has key, store {
-        id: UID,
-    }
+module t2::o2;
 
-    public struct Wrapper has key {
-        id: UID,
-        o2: Obj2
-    }
-
-    public entry fun create(ctx: &mut TxContext) {
-        transfer::public_share_object(Obj2 { id: object::new(ctx) })
-    }
-
-    public entry fun wrap_o2(o2: Obj2, ctx: &mut TxContext) {
-        transfer::transfer(Wrapper { id: object::new(ctx), o2}, tx_context::sender(ctx))
-    }
+public struct Obj2 has key, store {
+    id: UID,
 }
 
+public struct Wrapper has key {
+    id: UID,
+    o2: Obj2,
+}
+
+public entry fun create(ctx: &mut TxContext) {
+    transfer::public_share_object(Obj2 { id: object::new(ctx) })
+}
+
+public entry fun wrap_o2(o2: Obj2, ctx: &mut TxContext) {
+    transfer::transfer(Wrapper { id: object::new(ctx), o2 }, tx_context::sender(ctx))
+}
 
 //# run t2::o2::create
 

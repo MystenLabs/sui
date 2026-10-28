@@ -7,19 +7,19 @@
 
 //# publish
 
-module test::m {
-    public struct S has store, key { id: UID }
-    public struct Cup<phantom T: store> has store, key { id: UID }
+module test::m;
 
-    public entry fun mint_s(ctx: &mut TxContext) {
-        let id = object::new(ctx);
-        transfer::public_transfer(S { id }, tx_context::sender(ctx))
-    }
+public struct S has key, store { id: UID }
+public struct Cup<phantom T: store> has key, store { id: UID }
 
-    public entry fun mint_cup<T: store>(ctx: &mut TxContext) {
-        let id = object::new(ctx);
-        transfer::public_transfer(Cup<T> { id }, tx_context::sender(ctx))
-    }
+public entry fun mint_s(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    transfer::public_transfer(S { id }, tx_context::sender(ctx))
+}
+
+public entry fun mint_cup<T: store>(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    transfer::public_transfer(Cup<T> { id }, tx_context::sender(ctx))
 }
 
 // Mint S to A. Transfer S from A to B
@@ -31,7 +31,6 @@ module test::m {
 //# transfer-object 2,0 --sender A --recipient B
 
 //# view-object 2,0
-
 
 // Mint Cup<S> to A. Transfer Cup<S> from A to B
 

@@ -9,7 +9,7 @@
 
 //# create-checkpoint
 
-// Test 2: Multiple elements MakeMoveVec  
+// Test 2: Multiple elements MakeMoveVec
 //# programmable --sender A --inputs 10u64 11u64
 //> 0: MakeMoveVec<u64>([Input(0), Input(1)]);
 

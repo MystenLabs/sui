@@ -8,13 +8,13 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-21:
+task 1, lines 8-17:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 23-26:
+task 2, lines 19-22:
 //# programmable --inputs 10 @A
 // generate some coins for testing
 //> SplitCoins(Gas, [Input(0), Input(0), Input(0)]);
@@ -23,7 +23,7 @@ created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 28-33:
+task 3, lines 24-29:
 //# programmable --sender A --inputs 10 @A
 // Cannot write to borrowed gas coin via split coins
 //> 0: test::m::borrow_mut(Gas);
@@ -33,7 +33,7 @@ task 3, lines 28-33:
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(1) } }
 
-task 4, lines 35-39:
+task 4, lines 31-35:
 //# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed gas coin via Merge coins
 //> 0: test::m::borrow_mut(Gas);
@@ -42,7 +42,7 @@ task 4, lines 35-39:
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(1) } }
 
-task 5, lines 41-46:
+task 5, lines 37-42:
 //# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed coin via split coins
 //> 0: test::m::borrow_mut(Input(2));
@@ -52,7 +52,7 @@ task 5, lines 41-46:
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(1) } }
 
-task 6, lines 48-52:
+task 6, lines 44-48:
 //# programmable --sender A --inputs 10 @A object(2,0) object(2,1)
 // Cannot write to borrowed coin via Merge coins
 //> 0: test::m::borrow_mut(Input(2));
@@ -61,7 +61,7 @@ task 6, lines 48-52:
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(1) } }
 
-task 7, lines 54-61:
+task 7, lines 50-57:
 //# programmable --sender A --inputs 10 @A
 // Cannot write to borrowed fresh coin via split coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
@@ -73,7 +73,7 @@ task 7, lines 54-61:
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(2) } }
 
-task 8, lines 63-69:
+task 8, lines 59-65:
 //# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed fresh coin via Merge coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
@@ -84,7 +84,7 @@ task 8, lines 63-69:
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(2) } }
 
-task 9, lines 71-77:
+task 9, lines 67-73:
 //# programmable --sender A --inputs 10 @A
 // Cannot write to borrowed coin via split coins
 //> 0: test::m::new_mut();
@@ -95,7 +95,7 @@ task 9, lines 71-77:
 Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(2) } }
 
-task 10, lines 79-84:
+task 10, lines 75-80:
 //# programmable --sender A --inputs 10 @A object(2,0)
 // Cannot write to borrowed coin via Merge coins
 //> 0: test::m::new_mut();

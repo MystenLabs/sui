@@ -7,35 +7,34 @@
 //# init --addresses a=0x0 --accounts A --enable-feature-flags shared_object_deletion
 
 //# publish
-module a::m {
-    use sui::dynamic_object_field::{add, remove};
+module a::m;
 
-    public struct Outer has key, store {
-        id: object::UID,
-    }
+use sui::dynamic_object_field::{add, remove};
 
-    public struct Inner has key, store {
-        id: object::UID,
-    }
+public struct Outer has key, store {
+    id: object::UID,
+}
 
-    public entry fun create_shared(ctx: &mut TxContext) {
-        transfer::public_share_object(Inner { id: object::new(ctx) })
-    }
+public struct Inner has key, store {
+    id: object::UID,
+}
 
-    public entry fun add_dynamic_object_field(inner: Inner, ctx: &mut TxContext) {
-        let mut outer = Outer {id: object::new(ctx)};
-        add(&mut outer.id, 0u64, inner);
-        transfer::transfer(outer, ctx.sender());
-    }
+public entry fun create_shared(ctx: &mut TxContext) {
+    transfer::public_share_object(Inner { id: object::new(ctx) })
+}
 
-    public entry fun add_and_remove_dynamic_object_field(inner: Inner, ctx: &mut TxContext) {
-        let mut outer = Outer {id: object::new(ctx)};
-        add(&mut outer.id, 0u64, inner);
-        let removed: Inner = remove(&mut outer.id, 0u64);
-        transfer::public_share_object(removed);
-        transfer::transfer(outer, ctx.sender());
-    }
+public entry fun add_dynamic_object_field(inner: Inner, ctx: &mut TxContext) {
+    let mut outer = Outer { id: object::new(ctx) };
+    add(&mut outer.id, 0u64, inner);
+    transfer::transfer(outer, ctx.sender());
+}
 
+public entry fun add_and_remove_dynamic_object_field(inner: Inner, ctx: &mut TxContext) {
+    let mut outer = Outer { id: object::new(ctx) };
+    add(&mut outer.id, 0u64, inner);
+    let removed: Inner = remove(&mut outer.id, 0u64);
+    transfer::public_share_object(removed);
+    transfer::transfer(outer, ctx.sender());
 }
 
 //# run a::m::create_shared --sender A

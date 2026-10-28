@@ -6,13 +6,13 @@ processed 3 tasks
 // A purely TxContext-derived reference (digest) and an object-rooted `&mut Y` coexist
 // across mutable TxContext uses.
 
-task 1, lines 9-47:
+task 1, lines 9-46:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6931200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 49-58:
+task 2, lines 48-57:
 //# programmable --inputs 1
 //> 0: sui::tx_context::digest();
 //> 1: test::m::new();

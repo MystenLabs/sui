@@ -1,22 +1,21 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 4 tasks
 
-task 1, lines 6-11:
+task 1, lines 6-10:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3427600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 13-14:
+task 2, lines 12-13:
 // wrong number of args
 //# run Test::M::create --args 10
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'Test::M::create', but found 1"), command: Some(0) } }
 
-task 3, lines 16-17:
+task 3, lines 15-16:
 // wrong arg types
 //# run Test::M::create --args 10 10
 Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be deserialized into a value of the specified type

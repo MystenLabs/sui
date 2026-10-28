@@ -12,7 +12,9 @@ module A0::m {
 
     public struct A {}
 
-    public enum EA { V }
+    public enum EA {
+        V,
+    }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
@@ -25,8 +27,12 @@ module A1::m {
     public struct A {}
     public struct B {}
 
-    public enum EA { V }
-    public enum EB { V }
+    public enum EA {
+        V,
+    }
+    public enum EB {
+        V,
+    }
 }
 
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
@@ -42,8 +48,12 @@ module A2::m {
     public struct A {}
     public struct B {}
 
-    public enum EA { V }
-    public enum EB { V }
+    public enum EA {
+        V,
+    }
+    public enum EB {
+        V,
+    }
 
     entry fun canary<T>(use_original: bool, ctx: &mut TxContext) {
         let type_ = if (use_original) {

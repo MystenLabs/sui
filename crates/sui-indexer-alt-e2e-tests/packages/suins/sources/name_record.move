@@ -10,7 +10,6 @@ module suins::name_record;
 use std::string::String;
 use sui::table::{Self, Table};
 use sui::vec_map::{Self, VecMap};
-
 use suins::domain::{Self, Domain};
 
 public struct NameRecord has copy, drop, store {
@@ -21,13 +20,13 @@ public struct NameRecord has copy, drop, store {
 }
 
 public fun share_forward_registry(ctx: &mut TxContext) {
-  let registry: Table<Domain, NameRecord> = table::new(ctx);
-  transfer::public_share_object(registry)
+    let registry: Table<Domain, NameRecord> = table::new(ctx);
+    transfer::public_share_object(registry)
 }
 
 public fun share_reverse_registry(ctx: &mut TxContext) {
-  let registry: Table<address, Domain> = table::new(ctx);
-  transfer::public_share_object(registry)
+    let registry: Table<address, Domain> = table::new(ctx);
+    transfer::public_share_object(registry)
 }
 
 public fun add_domain(

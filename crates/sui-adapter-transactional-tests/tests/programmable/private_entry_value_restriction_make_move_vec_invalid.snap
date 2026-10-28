@@ -9,13 +9,13 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-18:
+task 1, lines 9-22:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5441600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 20-24:
+task 2, lines 24-28:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();
 //> 1: test::m1::r();
@@ -25,7 +25,7 @@ created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 26-29:
+task 3, lines 30-33:
 //# programmable --sender A --inputs object(2,0) object(2,1) object(2,2)
 //> 0: test::m1::dirty(Input(2));
 //> 1: MakeMoveVec([Input(0), Input(1), Input(2)]);
@@ -33,7 +33,7 @@ task 3, lines 26-29:
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::m1::priv (function index 3) at offset 1, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 3, instruction: 1, function_name: Some("priv") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m1::priv at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(2) } }
 
-task 4, lines 31-34:
+task 4, lines 35-38:
 //# programmable --sender A --inputs 0 0 0
 //> 0: test::m1::dirty_u64(Input(1));
 //> 1: MakeMoveVec<u64>([Input(0), Input(1), Input(2)]);

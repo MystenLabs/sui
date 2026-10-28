@@ -36,29 +36,29 @@ fragment E on MoveEnum {
 
 //# publish --upgradeable --sender A
 module P0::M {
-  public enum Status has copy, drop {
-    Active,
-    Inactive { reason: vector<u8> }
-  }
+    public enum Status has copy, drop {
+        Active,
+        Inactive { reason: vector<u8> },
+    }
 }
 
 //# upgrade --package P0 --upgrade-capability 2,1 --sender A
 module P1::M {
-  public enum Status has copy, drop {
-    Active,
-    Inactive { reason: vector<u8> }
-  }
+    public enum Status has copy, drop {
+        Active,
+        Inactive { reason: vector<u8> },
+    }
 
-  public enum Result<T: drop, E: drop> has drop {
-    Ok(T),
-    Err(E)
-  }
+    public enum Result<T: drop, E: drop> has drop {
+        Ok(T),
+        Err(E),
+    }
 
-  public enum Complex<T: store> has store {
-    Empty,
-    Single(T),
-    Pair { first: T, second: T }
-  }
+    public enum Complex<T: store> has store {
+        Empty,
+        Single(T),
+        Pair { first: T, second: T },
+    }
 }
 
 //# create-checkpoint

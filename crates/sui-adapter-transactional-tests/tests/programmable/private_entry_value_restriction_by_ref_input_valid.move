@@ -7,20 +7,22 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    use sui::coin::Coin;
-    use sui::sui::SUI;
+module test::m1;
 
-    public struct R has key, store { id: UID }
-    public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
+use sui::coin::Coin;
+use sui::sui::SUI;
 
-    public fun v(): u64 { 100 }
+public struct R has key, store { id: UID }
 
-    public entry fun clean(_: &mut R, _extra_arg: u64) {}
-    entry fun priv(_: &mut R) { }
+public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
 
-    entry fun coin(_: &mut Coin<SUI>) {}
-}
+public fun v(): u64 { 100 }
+
+public entry fun clean(_: &mut R, _extra_arg: u64) {}
+
+entry fun priv(_: &mut R) {}
+
+entry fun coin(_: &mut Coin<SUI>) {}
 
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();

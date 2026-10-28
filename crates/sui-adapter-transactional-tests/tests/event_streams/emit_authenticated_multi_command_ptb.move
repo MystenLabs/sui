@@ -7,32 +7,32 @@
 
 //# publish
 
-module test::events {
-	use sui::event;
+module test::events;
 
-	public struct RegularEvent has copy, drop {
-		value: u64,
-	}
+use sui::event;
 
-	public struct AuthEvent has copy, drop {
-		value: u64,
-	}
+public struct RegularEvent has copy, drop {
+    value: u64,
+}
 
-	public entry fun emit_regular(value: u64) {
-		event::emit(RegularEvent { value });
-	}
+public struct AuthEvent has copy, drop {
+    value: u64,
+}
 
-	public entry fun emit_regular_multiple(start: u64, count: u64) {
-		let mut i = 0;
-		while (i < count) {
-			event::emit(RegularEvent { value: start + i });
-			i = i + 1;
-		};
-	}
+public entry fun emit_regular(value: u64) {
+    event::emit(RegularEvent { value });
+}
 
-	public entry fun emit_auth(value: u64) {
-		event::emit_authenticated(AuthEvent { value });
-	}
+public entry fun emit_regular_multiple(start: u64, count: u64) {
+    let mut i = 0;
+    while (i < count) {
+        event::emit(RegularEvent { value: start + i });
+        i = i + 1;
+    };
+}
+
+public entry fun emit_auth(value: u64) {
+    event::emit_authenticated(AuthEvent { value });
 }
 
 //# run test::events::emit_auth --sender A --args 42

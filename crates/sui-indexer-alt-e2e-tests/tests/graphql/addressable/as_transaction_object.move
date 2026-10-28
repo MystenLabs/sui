@@ -53,28 +53,28 @@
 */
 
 //# publish
-module P::M {
-    use sui::event;
+module P::M;
 
-    public struct TestAddressEvent has copy, drop {
-        address_event_id: address,
-    }
+use sui::event;
 
-    public struct TestObject has key, store {
-        id: UID,
-        value: u64,
-    }
+public struct TestAddressEvent has copy, drop {
+    address_event_id: address,
+}
 
-    public fun create_object(value: u64, ctx: &mut TxContext): TestObject {
-        TestObject { id: object::new(ctx), value }
-    }
+public struct TestObject has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public fun mutate_and_emit(obj: &mut TestObject, new_value: u64) {
-        obj.value = new_value;
-        event::emit(TestAddressEvent {
-            address_event_id: object::id(obj).to_address(),
-        });
-    }
+public fun create_object(value: u64, ctx: &mut TxContext): TestObject {
+    TestObject { id: object::new(ctx), value }
+}
+
+public fun mutate_and_emit(obj: &mut TestObject, new_value: u64) {
+    obj.value = new_value;
+    event::emit(TestAddressEvent {
+        address_event_id: object::id(obj).to_address(),
+    });
 }
 
 //# create-checkpoint

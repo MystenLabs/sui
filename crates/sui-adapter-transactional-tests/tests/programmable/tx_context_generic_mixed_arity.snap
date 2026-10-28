@@ -7,27 +7,27 @@ processed 5 tasks
 // parameters, whether it leads or trails the user arguments; supplying an
 // extra argument on top of the real arguments is an arity error.
 
-task 1, lines 10-17:
+task 1, lines 10-15:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3731600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 19-21:
+task 2, lines 17-19:
 //# programmable --inputs 0
 // only the u64 is supplied; the leading &mut T (TxContext) is injected
 //> test::m::gen_leading<sui::tx_context::TxContext>(Input(0));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 23-25:
+task 3, lines 21-23:
 //# programmable --inputs 0
 // only the u64 is supplied; the trailing &mut T (TxContext) is injected
 //> test::m::gen_trailing<sui::tx_context::TxContext>(Input(0));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 27-29:
+task 4, lines 25-27:
 //# programmable --inputs 0 0
 // supplying an argument for the injected TxContext slot is one arg too many
 //> test::m::gen_trailing<sui::tx_context::TxContext>(Input(0), Input(1));

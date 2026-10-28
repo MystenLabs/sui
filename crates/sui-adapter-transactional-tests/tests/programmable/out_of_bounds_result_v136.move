@@ -6,14 +6,19 @@
 //# init --addresses test=0x0 --accounts A --protocol-version 136
 
 //# publish
-module test::m1 {
-    public struct R has drop {}
-    public fun r(): R { R{} }
-    public fun copy_(_: u64) { abort 0 }
-    public fun take(_: R) { abort 0 }
-    public fun by_imm(_: &u64) { abort 0 }
-    public fun by_mut(_: &mut u64) { abort 0 }
-}
+module test::m1;
+
+public struct R has drop {}
+
+public fun r(): R { R {} }
+
+public fun copy_(_: u64) { abort 0 }
+
+public fun take(_: R) { abort 0 }
+
+public fun by_imm(_: &u64) { abort 0 }
+
+public fun by_mut(_: &mut u64) { abort 0 }
 
 //# programmable
 //> test::m1::copy_(Result(0))

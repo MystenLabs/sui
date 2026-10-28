@@ -7,23 +7,27 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
+module test::m1;
 
-    public struct R has key, store { id: UID }
-    public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
+public struct R has key, store { id: UID }
 
-    public entry fun clean(_: &mut R) {}
-    public entry fun clean_u64(_: u64) {}
-    entry fun priv1(_: &mut R) {}
-    entry fun priv2(mut v: vector<R>) {
-        while (!vector::is_empty(&v)) {
-            let R { id } = vector::pop_back(&mut v);
-            object::delete(id);
-        };
-        vector::destroy_empty(v)
-    }
-    entry fun priv3(_: vector<u64>) {}
+public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
+
+public entry fun clean(_: &mut R) {}
+
+public entry fun clean_u64(_: u64) {}
+
+entry fun priv1(_: &mut R) {}
+
+entry fun priv2(mut v: vector<R>) {
+    while (!vector::is_empty(&v)) {
+        let R { id } = vector::pop_back(&mut v);
+        object::delete(id);
+    };
+    vector::destroy_empty(v)
 }
+
+entry fun priv3(_: vector<u64>) {}
 
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();

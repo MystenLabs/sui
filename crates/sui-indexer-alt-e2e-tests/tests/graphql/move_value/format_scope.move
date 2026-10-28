@@ -4,59 +4,59 @@
 //# init --protocol-version 118 --accounts A --addresses test=0x0 --simulator
 
 //# publish --sender A
-module test::mod {
-  use sui::derived_object;
-  use sui::dynamic_field as df;
+module test::mod;
 
-  public struct Root has key, store {
+use sui::derived_object;
+use sui::dynamic_field as df;
+
+public struct Root has key, store {
     id: UID,
     key: u64,
-  }
+}
 
-  public struct Parent has key, store {
+public struct Parent has key, store {
     id: UID,
-  }
+}
 
-  public struct Child has key, store {
+public struct Child has key, store {
     id: UID,
     count: u64,
-  }
+}
 
-  public fun root(key: u64, ctx: &mut TxContext): Root {
+public fun root(key: u64, ctx: &mut TxContext): Root {
     Root {
-      id: object::new(ctx),
-      key,
+        id: object::new(ctx),
+        key,
     }
-  }
+}
 
-  public fun parent(ctx: &mut TxContext): Parent {
+public fun parent(ctx: &mut TxContext): Parent {
     Parent { id: object::new(ctx) }
-  }
+}
 
-  public fun dynamic_field(parent: &mut Parent, key: u64, count: u64, ctx: &mut TxContext) {
+public fun dynamic_field(parent: &mut Parent, key: u64, count: u64, ctx: &mut TxContext) {
     let value = Child {
-      id: object::new(ctx),
-      count,
+        id: object::new(ctx),
+        count,
     };
 
     df::add(&mut parent.id, key, value);
-  }
+}
 
-  public fun derived(parent: &mut Parent, key: u64, count: u64): Child {
+public fun derived(parent: &mut Parent, key: u64, count: u64): Child {
     Child {
-      id: derived_object::claim(&mut parent.id, key),
-      count,
+        id: derived_object::claim(&mut parent.id, key),
+        count,
     }
-  }
+}
 
-  public fun inc_field(parent: &mut Parent, key: u64) {
+public fun inc_field(parent: &mut Parent, key: u64) {
     let child: &mut Child = df::borrow_mut(&mut parent.id, key);
     child.inc_child();
-  }
+}
 
-  public fun inc_child(child: &mut Child) {
+public fun inc_child(child: &mut Child) {
     child.count = child.count + 1;
-  }
 }
 
 //# programmable --sender A --inputs @A 7u64

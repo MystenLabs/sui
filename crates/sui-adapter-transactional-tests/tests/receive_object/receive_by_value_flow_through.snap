@@ -3,19 +3,19 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
-task 1, lines 6-28:
+task 1, lines 6-29:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6460000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 30:
+task 2, line 31:
 //# run tto::M1::start
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, line 32:
+task 3, line 33:
 //# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
@@ -27,7 +27,7 @@ Contents: tto::M1::A {
     },
 }
 
-task 4, line 34:
+task 4, line 35:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -39,13 +39,13 @@ Contents: tto::M1::B {
     },
 }
 
-task 5, lines 36-37:
+task 5, lines 37-38:
 // Flow through but don't use the receiving argument. 2,0 should be updated but 2,1 should not.
 //# run tto::M1::flow --args object(2,0) receiving(2,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2203780, non_refundable_storage_fee: 220
 
-task 6, lines 39-40:
+task 6, lines 40-41:
 // Drop the receiving argument. 2,0 should be updated but 2,1 should not.
 //# run tto::M1::drop --args object(2,0) receiving(2,1)
 mutated: object(0,0), object(2,0)

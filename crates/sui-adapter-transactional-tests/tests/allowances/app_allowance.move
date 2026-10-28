@@ -33,7 +33,13 @@ public fun app_pay<C>(
     recipient: address,
     ctx: &TxContext,
 ) {
-    let b = allowance::app_balance_spend(a, allowance::spend_permit(internal::permit<APP>()), w, clock, ctx);
+    let b = allowance::app_balance_spend(
+        a,
+        allowance::spend_permit(internal::permit<APP>()),
+        w,
+        clock,
+        ctx,
+    );
     balance::send_funds(b, recipient)
 }
 

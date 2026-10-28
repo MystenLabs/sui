@@ -7,15 +7,14 @@
 
 //# publish
 
-module test::m {
+module test::m;
 
-    public struct S has store, key { id: UID }
-    public struct Cup<phantom T: store> has store, key { id: UID }
+public struct S has key, store { id: UID }
+public struct Cup<phantom T: store> has key, store { id: UID }
 
-    public entry fun mint_s(ctx: &mut TxContext) {
-        let id = object::new(ctx);
-        transfer::public_freeze_object(S { id })
-    }
+public entry fun mint_s(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    transfer::public_freeze_object(S { id })
 }
 
 //# run test::m::mint_s --sender A

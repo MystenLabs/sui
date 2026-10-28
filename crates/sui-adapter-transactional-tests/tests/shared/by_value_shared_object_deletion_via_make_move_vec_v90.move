@@ -5,43 +5,43 @@
 
 //# publish
 
-module t2::o2 {
-    use sui::sui::SUI;
-    use sui::coin::{Self, Coin};
+module t2::o2;
 
-    public struct Obj2 has key, store {
-        id: UID,
-    }
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
 
-    public fun mint_shared_coin(ctx: &mut TxContext) {
-        transfer::public_share_object(coin::zero<SUI>(ctx))
-    }
+public struct Obj2 has key, store {
+    id: UID,
+}
 
-    public fun create(ctx: &mut TxContext) {
-        let o = Obj2 { id: object::new(ctx) };
-        transfer::public_share_object(o)
-    }
+public fun mint_shared_coin(ctx: &mut TxContext) {
+    transfer::public_share_object(coin::zero<SUI>(ctx))
+}
 
-    public fun delete(mut o2: vector<Obj2>) {
-        let o = vector::pop_back(&mut o2);
-        deleter(o);
-        vector::destroy_empty(o2);
-    }
+public fun create(ctx: &mut TxContext) {
+    let o = Obj2 { id: object::new(ctx) };
+    transfer::public_share_object(o)
+}
 
-    public fun deleter(o2: Obj2) {
-        let Obj2 { id } = o2;
-        object::delete(id);
-    }
+public fun delete(mut o2: vector<Obj2>) {
+    let o = vector::pop_back(&mut o2);
+    deleter(o);
+    vector::destroy_empty(o2);
+}
 
-    public fun pop_coin(mut o2: vector<Coin<SUI>>): Coin<SUI> {
-        let o = vector::pop_back(&mut o2);
-        vector::destroy_empty(o2);
-        o
-    }
+public fun deleter(o2: Obj2) {
+    let Obj2 { id } = o2;
+    object::delete(id);
+}
 
-    public fun share_coin(o2: Coin<SUI>) {
-        transfer::public_share_object(o2);
-    }
+public fun pop_coin(mut o2: vector<Coin<SUI>>): Coin<SUI> {
+    let o = vector::pop_back(&mut o2);
+    vector::destroy_empty(o2);
+    o
+}
+
+public fun share_coin(o2: Coin<SUI>) {
+    transfer::public_share_object(o2);
 }
 
 //# run t2::o2::create

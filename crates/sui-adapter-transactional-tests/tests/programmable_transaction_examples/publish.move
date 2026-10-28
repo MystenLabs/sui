@@ -17,12 +17,10 @@ module p::n {
     }
 }
 
-
 //# stage-package
 module q::m {
     public fun x(): u64 { 0 }
 }
-
 
 //# programmable --sender A --inputs 10 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

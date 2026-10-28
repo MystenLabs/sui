@@ -5,96 +5,96 @@
 
 //# publish
 #[allow(always_errors)]
-module test::execution_error_tests {
-    // Different types of clever errors
-    #[error]
-    const ECleverU8: u8 = 10;
+module test::execution_error_tests;
 
-    #[error]
-    const ECleverU16: u16 = 20;
+// Different types of clever errors
+#[error]
+const ECleverU8: u8 = 10;
 
-    #[error]
-    const ECleverU64: u64 = 100;
+#[error]
+const ECleverU16: u16 = 20;
 
-    #[error]
-    const ECleverAddress: address = @0x42;
+#[error]
+const ECleverU64: u64 = 100;
 
-    #[error]
-    const ECleverString: vector<u8> = b"This is a clever error message";
+#[error]
+const ECleverAddress: address = @0x42;
 
-    #[error(code=15)]
-    const ECleverWithCode: vector<u8> = b"Error with explicit code";
+#[error]
+const ECleverString: vector<u8> = b"This is a clever error message";
 
-    #[error]
-    const ECleverRaw: vector<address> = vector[@0x1, @0x2, @0x3];
+#[error(code = 15)]
+const ECleverWithCode: vector<u8> = b"Error with explicit code";
 
-    /// Function that succeeds (for testing successful transactions)
-    public entry fun success_function(_x: u64) {
-        // Does nothing, just succeeds
-    }
+#[error]
+const ECleverRaw: vector<address> = vector[@0x1, @0x2, @0x3];
 
-    /// Functions that abort with regular codes (no clever errors)
-    public entry fun abort_with_42() {
-        abort 42
-    }
+/// Function that succeeds (for testing successful transactions)
+public entry fun success_function(_x: u64) {
+    // Does nothing, just succeeds
+}
 
-    public entry fun abort_with_255() {
-        abort 255
-    }
+/// Functions that abort with regular codes (no clever errors)
+public entry fun abort_with_42() {
+    abort 42
+}
 
-    /// Functions that abort with clever errors
-    public entry fun abort_with_clever_u8() {
-        abort ECleverU8
-    }
+public entry fun abort_with_255() {
+    abort 255
+}
 
-    public entry fun abort_with_clever_u16() {
-        abort ECleverU16
-    }
+/// Functions that abort with clever errors
+public entry fun abort_with_clever_u8() {
+    abort ECleverU8
+}
 
-    public entry fun abort_with_clever_u64() {
-        abort ECleverU64
-    }
+public entry fun abort_with_clever_u16() {
+    abort ECleverU16
+}
 
-    public entry fun abort_with_clever_address() {
-        abort ECleverAddress
-    }
+public entry fun abort_with_clever_u64() {
+    abort ECleverU64
+}
 
-    public entry fun abort_with_clever_string() {
-        abort ECleverString
-    }
+public entry fun abort_with_clever_address() {
+    abort ECleverAddress
+}
 
-    public entry fun abort_with_clever_code() {
-        abort ECleverWithCode
-    }
+public entry fun abort_with_clever_string() {
+    abort ECleverString
+}
 
-    public entry fun abort_with_clever_raw() {
-        abort ECleverRaw
-    }
+public entry fun abort_with_clever_code() {
+    abort ECleverWithCode
+}
 
-    public entry fun assert_failure() {
-        assert!(false);
-    }
+public entry fun abort_with_clever_raw() {
+    abort ECleverRaw
+}
 
-    // MovePrimitiveRuntimeError test functions
-    public entry fun arithmetic_underflow() {
-        // Direct arithmetic error
-        0 - 1u64;
-    }
+public entry fun assert_failure() {
+    assert!(false);
+}
 
-    public entry fun arithmetic_overflow() {
-        // Direct arithmetic overflow
-        18446744073709551615u64 + 1;
-    }
+// MovePrimitiveRuntimeError test functions
+public entry fun arithmetic_underflow() {
+    // Direct arithmetic error
+    0 - 1u64;
+}
 
-    public entry fun division_by_zero() {
-        // Direct division by zero
-        1 / 0u64;
-    }
+public entry fun arithmetic_overflow() {
+    // Direct arithmetic overflow
+    18446744073709551615u64 + 1;
+}
 
-    public entry fun vector_out_of_bounds() {
-        // Direct vector access
-        std::vector::borrow(&vector[0u64], 1);
-    }
+public entry fun division_by_zero() {
+    // Direct division by zero
+    1 / 0u64;
+}
+
+public entry fun vector_out_of_bounds() {
+    // Direct vector access
+    std::vector::borrow(&vector[0u64], 1);
 }
 
 //# run test::execution_error_tests::success_function --sender A --args 123

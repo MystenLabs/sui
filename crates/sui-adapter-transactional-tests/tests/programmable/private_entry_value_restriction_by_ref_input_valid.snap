@@ -9,13 +9,13 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-23:
+task 1, lines 9-25:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5540400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 25-27:
+task 2, lines 27-29:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();
 //> TransferObjects([Result(0)], Input(0))
@@ -23,7 +23,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 29-36:
+task 3, lines 31-38:
 //# programmable --sender A --inputs object(2,0) 200
 //> 0: test::m1::v();
 //> test::m1::clean(Input(0), Result(0));
@@ -35,7 +35,7 @@ task 3, lines 29-36:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2203780, non_refundable_storage_fee: 220
 
-task 4, lines 38-42:
+task 4, lines 40-44:
 //# programmable --sender A --inputs @A 0  --gas-budget 10000000000
 //> 0: SplitCoins(Gas, [Input(1)]);
 //> test::m1::coin(Gas);

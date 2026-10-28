@@ -18,6 +18,7 @@ module Base_V1::base {
 //# publish --upgradeable --dependencies Base_V1 --sender A
 module Dep_V1::my_module {
     use Base_V1::base;
+
     public fun call_return_0(): u64 { base::return_0() }
 }
 
@@ -29,6 +30,7 @@ module Base_V2::base {
 //# upgrade --package Dep_V1 --upgrade-capability 2,1 --dependencies Base_V2 --sender A
 module Dep_V2::my_module {
     use Base_V2::base;
+
     public fun call_return_0(): u64 { base::return_0() }
 }
 

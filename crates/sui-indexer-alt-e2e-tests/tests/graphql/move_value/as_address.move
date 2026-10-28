@@ -4,46 +4,46 @@
 //# init --protocol-version 108 --accounts A --addresses test=0x0 --simulator
 
 //# publish --sender A
-module test::mod {
-  use sui::bag::{Self, Bag};
+module test::mod;
 
-  public struct Foo has key, store {
+use sui::bag::{Self, Bag};
+
+public struct Foo has key, store {
     id: UID,
     creator: address,
     cap: ID,
     bag: Option<Bag>,
-  }
+}
 
-  public struct FooCap has key, store {
+public struct FooCap has key, store {
     id: UID,
-  }
+}
 
-  public fun cap(ctx: &mut TxContext): FooCap {
+public fun cap(ctx: &mut TxContext): FooCap {
     FooCap {
-      id: object::new(ctx),
+        id: object::new(ctx),
     }
-  }
+}
 
-  public fun foo(cap: &FooCap, ctx: &mut TxContext): Foo {
+public fun foo(cap: &FooCap, ctx: &mut TxContext): Foo {
     Foo {
-      id: object::new(ctx),
-      creator: ctx.sender(),
-      cap: object::id(cap),
-      bag: option::none(),
+        id: object::new(ctx),
+        creator: ctx.sender(),
+        cap: object::id(cap),
+        bag: option::none(),
     }
-  }
+}
 
-  public fun bag(foo: &mut Foo, ctx: &mut TxContext) {
+public fun bag(foo: &mut Foo, ctx: &mut TxContext) {
     foo.bag.fill(bag::new(ctx))
-  }
+}
 
-  public fun add(foo: &mut Foo, key: u64, val: u64) {
+public fun add(foo: &mut Foo, key: u64, val: u64) {
     foo.bag.borrow_mut().add(key, val)
-  }
+}
 
-  public fun set(foo: &mut Foo, key: u64, val: u64) {
+public fun set(foo: &mut Foo, key: u64, val: u64) {
     *(&mut foo.bag.borrow_mut()[key]) = val;
-  }
 }
 
 //# create-checkpoint

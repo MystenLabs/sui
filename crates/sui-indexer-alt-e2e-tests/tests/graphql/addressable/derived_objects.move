@@ -4,34 +4,34 @@
 //# init --protocol-version 108 --accounts A --addresses test=0x0 --simulator
 
 //# publish --sender A
-module test::derived {
-  use sui::derived_object;
+module test::derived;
 
-  public struct Parent has key, store {
+use sui::derived_object;
+
+public struct Parent has key, store {
     id: UID,
-  }
+}
 
-  public struct Child has key, store {
+public struct Child has key, store {
     id: UID,
     key: u64,
     value: u64,
-  }
+}
 
-  public fun new(ctx: &mut TxContext): Parent {
+public fun new(ctx: &mut TxContext): Parent {
     Parent { id: object::new(ctx) }
-  }
+}
 
-  public fun claim(parent: &mut Parent, key: u64): Child {
+public fun claim(parent: &mut Parent, key: u64): Child {
     Child {
-      id: derived_object::claim(&mut parent.id, key),
-      key,
-      value: key,
+        id: derived_object::claim(&mut parent.id, key),
+        key,
+        value: key,
     }
-  }
+}
 
-  public fun set_value(child: &mut Child, value: u64) {
+public fun set_value(child: &mut Child, value: u64) {
     child.value = value;
-  }
 }
 
 //# programmable --sender A --inputs @A

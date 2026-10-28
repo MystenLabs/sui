@@ -6,19 +6,19 @@ processed 15 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-42:
+task 1, lines 6-51:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 8192800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 44:
+task 2, line 53:
 //# run ex::m::mint
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 8375200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 46-47:
+task 3, lines 55-56:
 // fastpath_parent
 //# view-object 2,0
 Owner: Account Address ( _ )
@@ -31,7 +31,7 @@ Contents: ex::m::PubA {
     },
 }
 
-task 4, lines 49-50:
+task 4, lines 58-59:
 // party_parent
 //# view-object 2,1
 Owner: ConsensusAddressOwner( 3, _ )
@@ -44,7 +44,7 @@ Contents: ex::m::PubA {
     },
 }
 
-task 5, lines 52-53:
+task 5, lines 61-62:
 // fastpath_child_fastpath_parent
 //# view-object 2,2
 Owner: Account Address ( fake(2,0) )
@@ -57,7 +57,7 @@ Contents: ex::m::PubB {
     },
 }
 
-task 6, lines 55-56:
+task 6, lines 64-65:
 // fastpath_child_party_parent
 //# view-object 2,4
 Owner: Account Address ( fake(2,1) )
@@ -70,7 +70,7 @@ Contents: ex::m::PubB {
     },
 }
 
-task 7, lines 58-59:
+task 7, lines 67-68:
 // party_child_party_parent
 //# view-object 2,5
 Owner: ConsensusAddressOwner( 3, fake(2,1) )
@@ -83,7 +83,7 @@ Contents: ex::m::PubB {
     },
 }
 
-task 8, lines 61-62:
+task 8, lines 70-71:
 // party_child_fastpath_parent
 //# view-object 2,3
 Owner: ConsensusAddressOwner( 3, fake(2,0) )
@@ -96,13 +96,13 @@ Contents: ex::m::PubB {
     },
 }
 
-task 9, lines 65-66:
+task 9, lines 73-74:
 // 1. Can receive a fastpath object from a fastpath parent.
 //# run ex::m::receiver --args object(2,0) receiving(2,2)
 mutated: object(0,2), object(2,0), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 3450400,  storage_rebate: 3450055, non_refundable_storage_fee: 345
 
-task 10, line 68:
+task 10, line 76:
 //# view-object 2,2
 Owner: Account Address ( _ )
 Version: 4
@@ -114,13 +114,13 @@ Contents: ex::m::PubB {
     },
 }
 
-task 11, lines 71-72:
+task 11, lines 78-79:
 // 2. Can receive a fastpath object from a party parent.
 //# run ex::m::receiver --args object(2,1) receiving(2,4)
 mutated: object(0,2), object(2,1), object(2,4)
 gas summary: computation_cost: 1000000, storage_cost: 3450400,  storage_rebate: 3450055, non_refundable_storage_fee: 345
 
-task 12, line 74:
+task 12, line 81:
 //# view-object 2,4
 Owner: Account Address ( _ )
 Version: 5
@@ -134,10 +134,10 @@ Contents: ex::m::PubB {
 
 // 3. Cannot receive a party object from any parent type.
 
-task 13, line 79:
+task 13, line 85:
 //# run ex::m::receiver --args object(2,0) receiving(2,3)
 Error: Error checking transaction input objects: Object used as shared is not shared
 
-task 14, line 81:
+task 14, line 87:
 //# run ex::m::receiver --args object(2,1) receiving(2,5)
 Error: Error checking transaction input objects: Object used as shared is not shared

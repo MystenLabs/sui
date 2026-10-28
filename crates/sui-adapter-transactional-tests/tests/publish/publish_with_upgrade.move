@@ -4,8 +4,8 @@
 //# init --addresses Test=0x0
 
 //# publish --upgradeable
-module Test::M1 {
-    fun init(_ctx: &mut TxContext) { }
-}
+module Test::M1;
+
+fun init(_ctx: &mut TxContext) {}
 
 //# view-object 1,1

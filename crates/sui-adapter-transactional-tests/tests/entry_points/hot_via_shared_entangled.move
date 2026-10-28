@@ -36,15 +36,13 @@ public fun d(ctx: &mut TxContext): D {
     D { id: object::new(ctx) }
 }
 
-public fun entangle<T1, T2>(_: &T1, _: &T2) {
-}
+public fun entangle<T1, T2>(_: &T1, _: &T2) {}
 
 public fun heat<T>(_: &T, shared: Shared) {
     sui::transfer::share_object(shared)
 }
 
-entry fun play<T: key>(_: &T) {
-}
+entry fun play<T: key>(_: &T) {}
 
 public fun close(a: A, b: B, c: C, d: D) {
     let A { id: id_a } = a;

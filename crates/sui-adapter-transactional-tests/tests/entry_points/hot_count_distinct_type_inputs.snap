@@ -9,13 +9,13 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-48:
+task 1, lines 9-52:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7569600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 50-52:
+task 2, lines 54-56:
 //# programmable --sender A --inputs @A
 //> test::m::a();
 //> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
@@ -23,7 +23,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 56-58:
+task 4, lines 60-62:
 //# programmable --sender A --inputs @a
 //> test::m::a();
 //> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
@@ -31,7 +31,7 @@ created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 60-68:
+task 5, lines 64-72:
 //# programmable --sender A --inputs @0
 // valid since pure args are distinct per type usage
 //> 0: test::m::heat_val<address>(Input(0));
@@ -44,7 +44,7 @@ task 5, lines 60-68:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 70-74:
+task 6, lines 74-78:
 //# programmable --sender A --inputs receiving(4,0)
 // valid since receiving args are distinct per type usage
 //> 0: test::m::heat_imm<sui::transfer::Receiving<test::m::B>>(Input(0));

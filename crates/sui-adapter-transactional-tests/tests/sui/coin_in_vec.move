@@ -5,26 +5,26 @@
 
 //# publish --sender A
 
-module test::coin_in_vec {
-    use sui::coin::Coin;
-    use sui::sui::SUI;
+module test::coin_in_vec;
 
-    public struct Wrapper has key {
-        id: UID,
-        coins: vector<Coin<SUI>>,
-    }
+use sui::coin::Coin;
+use sui::sui::SUI;
 
-    fun init(ctx: &mut TxContext) {
-        transfer::transfer(Wrapper { id: object::new(ctx), coins: vector[] }, tx_context::sender(ctx));
-    }
+public struct Wrapper has key {
+    id: UID,
+    coins: vector<Coin<SUI>>,
+}
 
-    public fun deposit(wrapper: &mut Wrapper, c: Coin<SUI>) {
-        vector::push_back(&mut wrapper.coins, c)
-    }
+fun init(ctx: &mut TxContext) {
+    transfer::transfer(Wrapper { id: object::new(ctx), coins: vector[] }, tx_context::sender(ctx));
+}
 
-    public fun withdraw(wrapper: &mut Wrapper, ctx: &mut TxContext) {
-        transfer::public_transfer(vector::pop_back(&mut wrapper.coins), tx_context::sender(ctx))
-    }
+public fun deposit(wrapper: &mut Wrapper, c: Coin<SUI>) {
+    vector::push_back(&mut wrapper.coins, c)
+}
+
+public fun withdraw(wrapper: &mut Wrapper, ctx: &mut TxContext) {
+    transfer::public_transfer(vector::pop_back(&mut wrapper.coins), tx_context::sender(ctx))
 }
 
 //# programmable --sender A --inputs 10 @A

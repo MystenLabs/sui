@@ -3,8 +3,8 @@
 
 module coin::a_coin;
 
-use sui::coin::{Self, TreasuryCap};
 use sui::balance;
+use sui::coin::{Self, TreasuryCap};
 
 // The type identifier of coin. The coin will have a type
 // tag of kind: `Coin<package_object::a_coin::A_COIN>`

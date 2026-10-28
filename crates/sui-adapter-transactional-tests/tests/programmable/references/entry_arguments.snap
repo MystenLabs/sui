@@ -9,13 +9,13 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-36:
+task 1, lines 9-49:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 9522800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 38-40:
+task 2, lines 51-53:
 //# programmable --sender A --inputs @A
 //> 0: test::m::new();
 //> 1: TransferObjects([Result(0)], Input(0));
@@ -23,14 +23,14 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 42-43:
+task 3, lines 55-56:
 //# programmable --sender A
 //> 0: test::m::share();
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 45-50:
+task 4, lines 58-63:
 //# programmable --sender A --inputs object(2,0)
 // VALID: reference results rooted in an input reach a private entry function by `&` and `&mut`
 //> 0: test::m::inner(Input(0));
@@ -40,7 +40,7 @@ task 4, lines 45-50:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
-task 5, lines 52-57:
+task 5, lines 65-70:
 //# programmable --sender A --inputs object(2,0)
 // VALID: a reference whose source holds a hot potato can reach a public entry function
 //> 0: test::m::heat(Input(0));
@@ -50,7 +50,7 @@ task 5, lines 52-57:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
-task 6, lines 59-64:
+task 6, lines 72-77:
 //# programmable --sender A --inputs object(2,0)
 // VALID: the hot potato is cooled before the reference reaches the private entry function
 //> 0: test::m::heat(Input(0));
@@ -60,7 +60,7 @@ task 6, lines 59-64:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
-task 7, lines 66-71:
+task 7, lines 79-84:
 //# programmable --sender A --inputs object(2,0)
 // VALID: a by-value read of the reference reaches the private entry function once the hot potato is cooled
 //> 0: test::m::heat(Input(0));
@@ -70,7 +70,7 @@ task 7, lines 66-71:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
-task 8, lines 73-79:
+task 8, lines 86-92:
 //# programmable --sender A --inputs 0
 // VALID: a reference into a vector holding a fresh owned object reaches a private entry function
 //> 0: test::m::new();
@@ -81,7 +81,7 @@ task 8, lines 73-79:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 81-86:
+task 9, lines 94-99:
 //# programmable --sender A --inputs object(3,0) 0
 // VALID: a reference into a vector holding a shared object reaches a public function
 //> 0: MakeMoveVec([Input(0)]);

@@ -18,38 +18,38 @@ created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 19-23:
+task 2, lines 19-24:
 //# publish --dependencies Leaf_V1 --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4362400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 25-39:
+task 3, lines 26-41:
 //# publish --dependencies Mid Leaf_V1 --sender A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6984400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, line 41:
+task 4, line 43:
 //# run Root::m::make --sender A
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 43-48:
+task 5, lines 45-50:
 //# upgrade --package Leaf_V1 --upgrade-capability 1,1 --sender A
 created: object(5,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 6, lines 50-52:
+task 6, lines 52-54:
 //# programmable --sender A --inputs object(4,0)
 // Entry locks the whole closure: transitive `Leaf` pinned exact(1) => runs v1 => writes 10.
 //> Root::m::ent_go(Input(0));
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
-task 7, line 54:
+task 7, line 56:
 //# view-object 4,0
 Owner: Shared( 5 )
 Version: 7
@@ -62,7 +62,7 @@ Contents: Root::m::R {
     v: 1u64,
 }
 
-task 8, lines 56-59:
+task 8, lines 58-61:
 //# programmable --sender A --inputs object(4,0)
 // Public + `ping` pinning `Leaf` exact(2): transitive `Leaf` unifies up to v2 => writes 20.
 //> 0: Root::m::pub_go(Input(0));
@@ -70,7 +70,7 @@ task 8, lines 56-59:
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
-task 9, line 61:
+task 9, line 63:
 //# view-object 4,0
 Owner: Shared( 5 )
 Version: 8
@@ -83,7 +83,7 @@ Contents: Root::m::R {
     v: 2u64,
 }
 
-task 10, lines 63-66:
+task 10, lines 65-68:
 //# programmable --sender A --inputs object(4,0)
 // Entry pins transitive `Leaf` exact(1); `ping` pins it exact(2) => exact/exact conflict => InvalidLinkage.
 //> 0: Root::m::ent_go(Input(0));

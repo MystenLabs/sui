@@ -12,7 +12,15 @@ use sui::coin;
 public struct M has drop {}
 
 fun init(witness: M, ctx: &mut TxContext) {
-    let (treasury_cap, metadata) = coin::create_currency(witness, 2, b"M", b"", b"", option::none(), ctx);
+    let (treasury_cap, metadata) = coin::create_currency(
+        witness,
+        2,
+        b"M",
+        b"",
+        b"",
+        option::none(),
+        ctx,
+    );
     transfer::public_freeze_object(metadata);
     transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
 }

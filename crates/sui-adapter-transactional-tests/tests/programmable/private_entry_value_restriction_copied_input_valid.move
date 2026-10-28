@@ -7,10 +7,11 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public fun clean(_: u64) {}
-    entry fun priv(_: u64) {}
-}
+module test::m1;
+
+public fun clean(_: u64) {}
+
+entry fun priv(_: u64) {}
 
 //# programmable --inputs 0
 //> test::m1::clean(Input(0));

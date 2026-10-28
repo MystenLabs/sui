@@ -10,17 +10,22 @@
 module test::m;
 
 public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
+public struct Inner has copy, drop, store { f: u64, g: u64 }
 public struct Hot {}
 public struct Potato { v: u64 }
 
 public fun new(ctx: &mut TxContext): Obj {
     Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
 }
+
 public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
 public fun hot_and_ref(i: &mut Inner): (Hot, &mut u64) { (Hot {}, &mut i.f) }
+
 public fun open(o: &mut Obj): (Potato, &mut Inner) { (Potato { v: 1 }, &mut o.inner) }
+
 public fun use_mut<T>(_: &mut T) {}
+
 public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 
 //# programmable

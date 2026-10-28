@@ -6,19 +6,19 @@ processed 4 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-8:
+task 1, lines 6-9:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 10-14:
+task 2, lines 11-17:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 3, lines 16-18:
+task 3, lines 19-22:
 //# upgrade --package v1 --upgrade-capability 1,1 --sender A
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some("Existing module n not found in next version of package"), command: Some(1) } }

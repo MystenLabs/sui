@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-14:
+task 1, lines 6-19:
 //# publish
 created: object(1,0)
 mutated: object(0,1)

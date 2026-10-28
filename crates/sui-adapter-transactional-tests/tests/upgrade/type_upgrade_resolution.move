@@ -16,6 +16,7 @@ module A1::a {
 //# upgrade --package A1 --upgrade-capability 2,1 --sender A
 module A2::a {
     public struct Base()
+
     public fun new_fun() {}
 }
 
@@ -23,8 +24,7 @@ module A2::a {
 
 //# publish --upgradeable --sender A --dependencies A1
 module B::b {
-    fun f() {
-    }
+    fun f() {}
 }
 
 //# upgrade --package B --upgrade-capability 5,1 --sender A --dependencies A2

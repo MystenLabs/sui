@@ -8,19 +8,19 @@ A: object(0,0)
 
 // 3 versions of the transitive dependency
 
-task 1, lines 10-18:
+task 1, lines 8-15:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 20-28:
+task 2, lines 17-24:
 //# upgrade --package Test_DepDepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 3, lines 30-38:
+task 3, lines 26-33:
 //# upgrade --package Test_DepDepV2 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
@@ -28,13 +28,13 @@ gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 
 
 // 2 versions of the direct dependency
 
-task 4, lines 44-49:
+task 4, lines 37-42:
 //# publish --upgradeable --dependencies Test_DepDepV1 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6558800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 51-56:
+task 5, lines 44-49:
 //# upgrade --package Test_DepV1 --upgrade-capability 4,1 --dependencies Test_DepDepV2 --sender A
 created: object(5,0)
 mutated: object(0,0), object(4,1)
@@ -42,7 +42,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6558800,  storage_rebate: 
 
 // 3 versions of the root package
 
-task 6, lines 62-67:
+task 6, lines 53-58:
 //# publish --upgradeable --dependencies Test_DepV1 Test_DepDepV1 --sender A
 created: object(6,0), object(6,1)
 mutated: object(0,0)
@@ -50,7 +50,7 @@ gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 
 
 // override direct dependency
 
-task 7, lines 71-76:
+task 7, lines 62-67:
 //# upgrade --package Test_V1 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV2 --sender A
 created: object(7,0)
 mutated: object(0,0), object(6,1)
@@ -58,19 +58,19 @@ gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 
 
 // override indirect dependency
 
-task 8, lines 80-85:
+task 8, lines 71-76:
 //# upgrade --package Test_V2 --upgrade-capability 6,1 --dependencies Test_DepV1 Test_DepDepV3 --sender A
 created: object(8,0)
 mutated: object(0,0), object(6,1)
 gas summary: computation_cost: 1000000, storage_cost: 7037600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 9, line 87:
+task 9, line 78:
 //# run Test_V1::M1::baz
 created: object(9,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 10, line 89:
+task 10, line 80:
 //# view-object 9,0
 Owner: Shared( 2 )
 Version: 2
@@ -83,13 +83,13 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
     v: 42u64,
 }
 
-task 11, line 91:
+task 11, line 82:
 //# run Test_V2::M1::baz
 created: object(11,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 12, line 93:
+task 12, line 84:
 //# view-object 11,0
 Owner: Shared( 3 )
 Version: 3
@@ -102,13 +102,13 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
     v: 7u64,
 }
 
-task 13, line 95:
+task 13, line 86:
 //# run Test_V3::M1::baz
 created: object(13,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 14, line 97:
+task 14, line 88:
 //# view-object 13,0
 Owner: Shared( 4 )
 Version: 4
@@ -124,21 +124,21 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
 // call same function from two different module versions but defined in both modules (should produce
 // different result due to overrides)
 
-task 15, lines 102-103:
+task 15, lines 93-94:
 //# programmable --sender A
 //> Test_V2::M1::baz();
 created: object(15,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 16, lines 105-106:
+task 16, lines 96-97:
 //# programmable --sender A
 //> Test_V3::M1::baz();
 created: object(16,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 17, line 108:
+task 17, line 99:
 //# view-object 15,0
 Owner: Shared( 10 )
 Version: 10
@@ -151,7 +151,7 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
     v: 7u64,
 }
 
-task 18, line 110:
+task 18, line 101:
 //# view-object 16,0
 Owner: Shared( 11 )
 Version: 11
@@ -168,21 +168,21 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
 
 // missing direct dependency (should fail)
 
-task 19, lines 117-121:
+task 19, lines 107-112:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepDepV1 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
 
 // missing indirect dependency (should fail)
 
-task 20, lines 125-129:
+task 20, lines 116-121:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
 
 // downgrade indirect dependency (should fail)
 
-task 21, lines 133-137:
+task 21, lines 125-130:
 //# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV1 --sender A
 Error: Transaction Effects Status: Publish/Upgrade Error, Dependency downgrade. Indirect (transitive) dependency of published or upgraded package has been assigned an on-chain version that is less than the version required by one of the package's transitive dependencies.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeDependencyDowngrade, source: None, command: Some(1) } }

@@ -7,7 +7,7 @@
 //# init --addresses a=0x0 --accounts A
 
 //# publish
-module a::m {
+module a::m;
 
 use sui::dynamic_field::{add, exists_with_type, borrow};
 
@@ -55,8 +55,6 @@ entry fun t4(obj: &Obj) {
         assert!(*borrow(id, i) == i, 0);
         i = i + 1;
     }
-}
-
 }
 
 //# run a::m::t0 --sender A

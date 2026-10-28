@@ -4,26 +4,26 @@
 //# init --protocol-version 108 --accounts A --simulator --addresses P=0x0
 
 //# publish
-module P::M {
-  use sui::dynamic_field as df;
-  use sui::dynamic_object_field as dof;
+module P::M;
 
-  public struct O has key, store {
+use sui::dynamic_field as df;
+use sui::dynamic_object_field as dof;
+
+public struct O has key, store {
     id: UID,
     x: u64,
-  }
+}
 
-  public fun o(x: u64, ctx: &mut TxContext): O {
+public fun o(x: u64, ctx: &mut TxContext): O {
     O { id: object::new(ctx), x }
-  }
+}
 
-  public fun df(p: &mut O, k: u64, c: O) {
+public fun df(p: &mut O, k: u64, c: O) {
     df::add(&mut p.id, k, c);
-  }
+}
 
-  public fun dof(p: &mut O, k: u64, c: O) {
+public fun dof(p: &mut O, k: u64, c: O) {
     dof::add(&mut p.id, k, c);
-  }
 }
 
 //# create-checkpoint

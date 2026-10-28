@@ -7,214 +7,213 @@
 
 //# publish
 
-module test::m {
-    use sui::dynamic_field as field;
+module test::m;
 
-    public struct Parent has key, store {
+use sui::dynamic_field as field;
+
+public struct Parent has key, store {
+    id: UID,
+}
+
+public struct S has key, store {
+    id: UID,
+    other: UID,
+    wrapped: Wrapped,
+    many: vector<Wrapped>,
+}
+
+// Use multiple variants to make sure they're properly indexed as well
+public enum Wrapped has store {
+    A {
         id: UID,
-    }
-
-    public struct S has key, store {
+        other: Inner,
+    },
+    B {
         id: UID,
-        other: UID,
-        wrapped: Wrapped,
-        many: vector<Wrapped>,
-    }
+        other: Inner,
+    },
+}
 
-    // Use multiple variants to make sure they're properly indexed as well
-    public enum Wrapped has store {
-        A {
-            id: UID,
-            other: Inner,
+public enum Inner has store {
+    A(UID),
+    B(UID),
+}
+
+const KEY: u64 = 0;
+
+//////////////////////////////////////////////////////////////
+// new
+
+public fun new(ctx: &mut TxContext): Parent {
+    let mut parent = Parent { id: object::new(ctx) };
+    field::add(&mut parent.id, KEY, s(ctx));
+    parent
+}
+
+fun s(ctx: &mut TxContext): S {
+    let mut s = S {
+        id: object::new(ctx),
+        other: object::new(ctx),
+        wrapped: wrapped_a(ctx),
+        many: vector[wrapped_a(ctx), wrapped_b(ctx)],
+    };
+    field::add(&mut s.id, KEY, 0u64);
+    field::add(&mut s.other, KEY, 0u64);
+    s
+}
+
+fun wrapped_a(ctx: &mut TxContext): Wrapped {
+    let mut w = Wrapped::A {
+        id: object::new(ctx),
+        other: Inner::A(object::new(ctx)),
+    };
+    match (&mut w) {
+        Wrapped::A { id, other } => {
+            field::add(id, KEY, 0u64);
+            match (other) {
+                Inner::A(id) => field::add(id, KEY, 0u64),
+                Inner::B(..) => assert!(false),
+            }
         },
-        B {
-            id: UID,
-            other: Inner,
+        Wrapped::B { .. } => assert!(false),
+    };
+    w
+}
+
+fun wrapped_b(ctx: &mut TxContext): Wrapped {
+    let mut w = Wrapped::B {
+        id: object::new(ctx),
+        other: Inner::B(object::new(ctx)),
+    };
+    match (&mut w) {
+        Wrapped::B { id, other } => {
+            field::add(id, KEY, 0u64);
+            match (other) {
+                Inner::B(id) => field::add(id, KEY, 0u64),
+                Inner::A(..) => assert!(false),
+            }
+        },
+        Wrapped::A { .. } => assert!(false),
+    };
+    w
+}
+
+//////////////////////////////////////////////////////////////
+// set
+
+public fun set(parent: &mut Parent, value: u64) {
+    set_s(field::borrow_mut(&mut parent.id, KEY), value);
+}
+
+fun set_s(s: &mut S, value: u64) {
+    set_(&mut s.id, value);
+    set_(&mut s.other, value);
+    set_wrapped(&mut s.wrapped, value);
+    set_wrapped(vector::borrow_mut(&mut s.many, 0), value);
+    set_wrapped(vector::borrow_mut(&mut s.many, 1), value);
+}
+
+fun set_wrapped(w: &mut Wrapped, value: u64) {
+    match (w) {
+        Wrapped::A { id, other } => {
+            set_(id, value);
+            match (other) {
+                Inner::A(id) => set_(id, value),
+                Inner::B(..) => assert!(false),
+            }
+        },
+        Wrapped::B { id, other } => {
+            set_(id, value);
+            match (other) {
+                Inner::B(id) => set_(id, value),
+                Inner::A(..) => assert!(false),
+            }
         },
     }
+}
 
-    public enum Inner has store {
-        A(UID),
-        B(UID),
-    }
+fun set_(id: &mut UID, value: u64) {
+    *field::borrow_mut(id, KEY) = value;
+}
 
-    const KEY: u64 = 0;
+//////////////////////////////////////////////////////////////
+// remove
 
-    //////////////////////////////////////////////////////////////
-    // new
+public fun remove(parent: &mut Parent) {
+    remove_s(field::borrow_mut(&mut parent.id, KEY));
+}
 
-    public fun new(ctx: &mut TxContext): Parent {
-        let mut parent = Parent { id: object::new(ctx) };
-        field::add(&mut parent.id, KEY, s(ctx));
-        parent
-    }
+fun remove_s(s: &mut S) {
+    remove_(&mut s.id);
+    remove_(&mut s.other);
+    remove_wrapped(&mut s.wrapped);
+    remove_wrapped(vector::borrow_mut(&mut s.many, 0));
+    remove_wrapped(vector::borrow_mut(&mut s.many, 1));
+}
 
-    fun s(ctx: &mut TxContext): S {
-        let mut s = S {
-            id: object::new(ctx),
-            other: object::new(ctx),
-            wrapped: wrapped_a(ctx),
-            many: vector[wrapped_a(ctx), wrapped_b(ctx)],
-        };
-        field::add(&mut s.id, KEY, 0u64);
-        field::add(&mut s.other, KEY, 0u64);
-        s
-    }
-
-    fun wrapped_a(ctx: &mut TxContext): Wrapped {
-        let mut w = Wrapped::A {
-            id: object::new(ctx),
-            other: Inner::A(object::new(ctx)),
-        };
-        match (&mut w) {
-            Wrapped::A { id, other } => {
-                field::add(id, KEY, 0u64);
-                match (other) {
-                    Inner::A(id) => field::add(id, KEY, 0u64),
-                    Inner::B(..) => assert!(false),
-                }
-            },
-            Wrapped::B { .. } => assert!(false),
-        };
-        w
-    }
-
-    fun wrapped_b(ctx: &mut TxContext): Wrapped {
-        let mut w = Wrapped::B {
-            id: object::new(ctx),
-            other: Inner::B(object::new(ctx)),
-        };
-        match (&mut w) {
-            Wrapped::B { id, other } => {
-                field::add(id, KEY, 0u64);
-                match (other) {
-                    Inner::B(id) => field::add(id, KEY, 0u64),
-                    Inner::A(..) => assert!(false),
-                }
-            },
-            Wrapped::A { .. } => assert!(false),
-        };
-        w
-    }
-
-    //////////////////////////////////////////////////////////////
-    // set
-
-    public fun set(parent: &mut Parent, value: u64) {
-        set_s(field::borrow_mut(&mut parent.id, KEY), value);
-    }
-
-
-    fun set_s(s: &mut S, value: u64) {
-        set_(&mut s.id, value);
-        set_(&mut s.other, value);
-        set_wrapped(&mut s.wrapped, value);
-        set_wrapped(vector::borrow_mut(&mut s.many, 0), value);
-        set_wrapped(vector::borrow_mut(&mut s.many, 1), value);
-    }
-
-    fun set_wrapped(w: &mut Wrapped, value: u64) {
-        match (w) {
-            Wrapped::A { id, other } => {
-                set_(id, value);
-                match (other) {
-                    Inner::A(id) => set_(id, value),
-                    Inner::B(..) => assert!(false),
-                }
-            },
-            Wrapped::B { id, other } => {
-                set_(id, value);
-                match (other) {
-                    Inner::B(id) => set_(id, value),
-                    Inner::A(..) => assert!(false),
-                }
+fun remove_wrapped(w: &mut Wrapped) {
+    match (w) {
+        Wrapped::A { id, other } => {
+            remove_(id);
+            match (other) {
+                Inner::A(id) => remove_(id),
+                Inner::B(..) => assert!(false),
             }
-        }
-    }
-
-    fun set_(id: &mut UID, value: u64) {
-        *field::borrow_mut(id, KEY) = value;
-    }
-
-    //////////////////////////////////////////////////////////////
-    // remove
-
-    public fun remove(parent: &mut Parent) {
-        remove_s(field::borrow_mut(&mut parent.id, KEY));
-    }
-
-    fun remove_s(s: &mut S) {
-        remove_(&mut s.id);
-        remove_(&mut s.other);
-        remove_wrapped(&mut s.wrapped);
-        remove_wrapped(vector::borrow_mut(&mut s.many, 0));
-        remove_wrapped(vector::borrow_mut(&mut s.many, 1));
-    }
-
-    fun remove_wrapped(w: &mut Wrapped) {
-        match (w) {
-            Wrapped::A { id, other } => {
-                remove_(id);
-                match (other) {
-                    Inner::A(id) => remove_(id),
-                    Inner::B(..) => assert!(false),
-                }
-            },
-            Wrapped::B { id, other } => {
-                remove_(id);
-                match (other) {
-                    Inner::B(id) => remove_(id),
-                    Inner::A(..) => assert!(false),
-                }
+        },
+        Wrapped::B { id, other } => {
+            remove_(id);
+            match (other) {
+                Inner::B(id) => remove_(id),
+                Inner::A(..) => assert!(false),
             }
-        }
+        },
     }
+}
 
-    fun remove_(id: &mut UID) {
-        field::remove<u64, u64>(id, KEY);
-    }
+fun remove_(id: &mut UID) {
+    field::remove<u64, u64>(id, KEY);
+}
 
-    //////////////////////////////////////////////////////////////
-    // check
+//////////////////////////////////////////////////////////////
+// check
 
-    public fun check(parent: &Parent, expected: Option<u64>) {
-        check_s(field::borrow(&parent.id, KEY), expected);
-    }
+public fun check(parent: &Parent, expected: Option<u64>) {
+    check_s(field::borrow(&parent.id, KEY), expected);
+}
 
-    fun check_s(s: &S, expected: Option<u64>) {
-        check_(&s.id, expected);
-        check_(&s.other, expected);
-        check_wrapped(&s.wrapped, expected);
-        check_wrapped(vector::borrow(&s.many, 0), expected);
-        check_wrapped(vector::borrow(&s.many, 1), expected);
-    }
+fun check_s(s: &S, expected: Option<u64>) {
+    check_(&s.id, expected);
+    check_(&s.other, expected);
+    check_wrapped(&s.wrapped, expected);
+    check_wrapped(vector::borrow(&s.many, 0), expected);
+    check_wrapped(vector::borrow(&s.many, 1), expected);
+}
 
-    fun check_wrapped(w: &Wrapped, expected: Option<u64>) {
-        match (w) {
-            Wrapped::A { id, other } => {
-                check_(id, expected);
-                match (other) {
-                    Inner::A(id) => check_(id, expected),
-                    Inner::B(..) => assert!(false),
-                }
-            },
-            Wrapped::B { id, other } => {
-                check_(id, expected);
-                match (other) {
-                    Inner::B(id) => check_(id, expected),
-                    Inner::A(..) => assert!(false),
-                }
+fun check_wrapped(w: &Wrapped, expected: Option<u64>) {
+    match (w) {
+        Wrapped::A { id, other } => {
+            check_(id, expected);
+            match (other) {
+                Inner::A(id) => check_(id, expected),
+                Inner::B(..) => assert!(false),
             }
-        }
+        },
+        Wrapped::B { id, other } => {
+            check_(id, expected);
+            match (other) {
+                Inner::B(id) => check_(id, expected),
+                Inner::A(..) => assert!(false),
+            }
+        },
     }
+}
 
-    fun check_(id: &UID, expected: Option<u64>) {
-        if (option::is_some(&expected)) {
-            let f = field::borrow(id, KEY);
-            assert!(f == option::borrow(&expected), 0);
-        } else {
-            assert!(!field::exists_with_type<u64, u64>(id, KEY), 0);
-        }
+fun check_(id: &UID, expected: Option<u64>) {
+    if (option::is_some(&expected)) {
+        let f = field::borrow(id, KEY);
+        assert!(f == option::borrow(&expected), 0);
+    } else {
+        assert!(!field::exists_with_type<u64, u64>(id, KEY), 0);
     }
 }
 
@@ -233,7 +232,6 @@ module test::m {
 //> test::m::remove(Input(0))
 
 //# view-object 2,0
-
 
 // dev-inspect with 'check' and correct values
 

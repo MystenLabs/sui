@@ -4,39 +4,51 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
+module tto::M1;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::transfer::Receiving;
 
-    public struct B has key, store {
-        id: UID,
-    }
-
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-    }
-
-    public fun call_immut_ref(_parent: &mut A, _x: &Receiving<B>) { }
-    public fun call_mut_ref(_parent: &mut A, _x: &mut Receiving<B>) { }
-    public fun call_mut_ref_ret(_parent: &mut A, x: &mut Receiving<B>): &mut Receiving<B> { x  }
-    public fun call_mut_ref_immut_ret(_parent: &mut A, x: &mut Receiving<B>): &Receiving<B> { x  }
-    public fun immut_immut_ref(_x: &Receiving<B>, _y: &Receiving<B>) { }
-    public fun immut_mut_ref(_x: &Receiving<B>, _y: &mut Receiving<B>) { }
-    public fun mut_immut_ref(_x: &mut Receiving<B>, _y: &Receiving<B>) { }
-    public fun mut_mut_ref(_x: &mut Receiving<B>, _y: &mut Receiving<B>) { }
-    public fun take_mut_ref(_x: Receiving<B>, _y: &mut Receiving<B>) { }
-    public fun take_immut_ref(_x: Receiving<B>, _y: &Receiving<B>) { }
-    public fun immut_ref_take(_x: &Receiving<B>, _y: Receiving<B>) { }
-    public fun mut_ref_take(_x: &mut Receiving<B>, _y: Receiving<B>) { }
-    public fun double_take(_x: Receiving<B>, _y: Receiving<B>) { }
+public struct A has key, store {
+    id: UID,
 }
+
+public struct B has key, store {
+    id: UID,
+}
+
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+}
+
+public fun call_immut_ref(_parent: &mut A, _x: &Receiving<B>) {}
+
+public fun call_mut_ref(_parent: &mut A, _x: &mut Receiving<B>) {}
+
+public fun call_mut_ref_ret(_parent: &mut A, x: &mut Receiving<B>): &mut Receiving<B> { x }
+
+public fun call_mut_ref_immut_ret(_parent: &mut A, x: &mut Receiving<B>): &Receiving<B> { x }
+
+public fun immut_immut_ref(_x: &Receiving<B>, _y: &Receiving<B>) {}
+
+public fun immut_mut_ref(_x: &Receiving<B>, _y: &mut Receiving<B>) {}
+
+public fun mut_immut_ref(_x: &mut Receiving<B>, _y: &Receiving<B>) {}
+
+public fun mut_mut_ref(_x: &mut Receiving<B>, _y: &mut Receiving<B>) {}
+
+public fun take_mut_ref(_x: Receiving<B>, _y: &mut Receiving<B>) {}
+
+public fun take_immut_ref(_x: Receiving<B>, _y: &Receiving<B>) {}
+
+public fun immut_ref_take(_x: &Receiving<B>, _y: Receiving<B>) {}
+
+public fun mut_ref_take(_x: &mut Receiving<B>, _y: Receiving<B>) {}
+
+public fun double_take(_x: Receiving<B>, _y: Receiving<B>) {}
 
 //# run tto::M1::start
 

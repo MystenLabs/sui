@@ -9,13 +9,13 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-51:
+task 1, lines 9-48:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6498000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 53-57:
+task 2, lines 50-54:
 //# programmable
 // transfer parent (dropped child)
 //> 0: test::m::pair();
@@ -24,7 +24,7 @@ task 2, lines 53-57:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 59-64:
+task 3, lines 56-61:
 //# programmable
 // borrow parent, transfer parent (dropped child)
 //> 0: test::m::pair();
@@ -34,7 +34,7 @@ task 3, lines 59-64:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 66-71:
+task 4, lines 63-68:
 //# programmable
 // transfer parent (drop one, use one)
 //> 0: test::m::pair();
@@ -44,7 +44,7 @@ task 4, lines 66-71:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 73-77:
+task 5, lines 70-74:
 //# programmable
 // transfer parent (drop two)
 //> 0: test::m::pair();
@@ -53,7 +53,7 @@ task 5, lines 73-77:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 79-84:
+task 6, lines 76-81:
 //# programmable
 // write to parent with imm child (write mut drop imm)
 //> 0: test::m::pair();

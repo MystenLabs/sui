@@ -8,13 +8,13 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-12:
+task 1, lines 8-13:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 14-16:
+task 2, lines 15-17:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::pub();
 //> sui::transfer::public_transfer<test::m1::Pub>(Result(0), Input(0));
@@ -22,7 +22,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 18:
+task 3, line 19:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 2
@@ -34,7 +34,7 @@ Contents: test::m1::Pub {
     },
 }
 
-task 4, lines 20-22:
+task 4, lines 21-23:
 //# programmable
 //> 0: test::m1::pub();
 //> sui::transfer::public_share_object<test::m1::Pub>(Result(0));
@@ -42,7 +42,7 @@ created: object(4,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, line 24:
+task 5, line 25:
 //# view-object 4,0
 Owner: Shared( 3 )
 Version: 3
@@ -54,7 +54,7 @@ Contents: test::m1::Pub {
     },
 }
 
-task 6, lines 26-28:
+task 6, lines 27-29:
 //# programmable
 //> 0: test::m1::pub();
 //> sui::transfer::public_freeze_object<test::m1::Pub>(Result(0));
@@ -62,7 +62,7 @@ created: object(6,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, line 30:
+task 7, line 31:
 //# view-object 6,0
 Owner: Immutable
 Version: 4

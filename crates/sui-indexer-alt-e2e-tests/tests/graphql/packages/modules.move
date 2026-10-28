@@ -4,32 +4,84 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish --upgradeable --sender A
-module P::A { public fun f(): u64 { 42 } }
-module P::B { public fun f(): u64 { 42 } }
-module P::C { public fun f(): u64 { 42 } }
-module P::D { public fun f(): u64 { 42 } }
-module P::E { public fun f(): u64 { 42 } }
-module P::F { public fun f(): u64 { 42 } }
-module P::G { public fun f(): u64 { 42 } }
-module P::H { public fun f(): u64 { 42 } }
-module P::I { public fun f(): u64 { 42 } }
-module P::J { public fun f(): u64 { 42 } }
-module P::K { public fun f(): u64 { 42 } }
-module P::L { public fun f(): u64 { 42 } }
-module P::M { public fun f(): u64 { 42 } }
-module P::N { public fun f(): u64 { 42 } }
-module P::O { public fun f(): u64 { 42 } }
-module P::P { public fun f(): u64 { 42 } }
-module P::Q { public fun f(): u64 { 42 } }
-module P::R { public fun f(): u64 { 42 } }
-module P::S { public fun f(): u64 { 42 } }
-module P::T { public fun f(): u64 { 42 } }
-module P::U { public fun f(): u64 { 42 } }
-module P::V { public fun f(): u64 { 42 } }
-module P::W { public fun f(): u64 { 42 } }
-module P::X { public fun f(): u64 { 42 } }
-module P::Y { public fun f(): u64 { 42 } }
-module P::Z { public fun f(): u64 { 42 } }
+module P::A {
+    public fun f(): u64 { 42 }
+}
+module P::B {
+    public fun f(): u64 { 42 }
+}
+module P::C {
+    public fun f(): u64 { 42 }
+}
+module P::D {
+    public fun f(): u64 { 42 }
+}
+module P::E {
+    public fun f(): u64 { 42 }
+}
+module P::F {
+    public fun f(): u64 { 42 }
+}
+module P::G {
+    public fun f(): u64 { 42 }
+}
+module P::H {
+    public fun f(): u64 { 42 }
+}
+module P::I {
+    public fun f(): u64 { 42 }
+}
+module P::J {
+    public fun f(): u64 { 42 }
+}
+module P::K {
+    public fun f(): u64 { 42 }
+}
+module P::L {
+    public fun f(): u64 { 42 }
+}
+module P::M {
+    public fun f(): u64 { 42 }
+}
+module P::N {
+    public fun f(): u64 { 42 }
+}
+module P::O {
+    public fun f(): u64 { 42 }
+}
+module P::P {
+    public fun f(): u64 { 42 }
+}
+module P::Q {
+    public fun f(): u64 { 42 }
+}
+module P::R {
+    public fun f(): u64 { 42 }
+}
+module P::S {
+    public fun f(): u64 { 42 }
+}
+module P::T {
+    public fun f(): u64 { 42 }
+}
+module P::U {
+    public fun f(): u64 { 42 }
+}
+module P::V {
+    public fun f(): u64 { 42 }
+}
+module P::W {
+    public fun f(): u64 { 42 }
+}
+module P::X {
+    public fun f(): u64 { 42 }
+}
+module P::Y {
+    public fun f(): u64 { 42 }
+}
+module P::Z {
+    public fun f(): u64 { 42 }
+}
 
 //# create-checkpoint
 

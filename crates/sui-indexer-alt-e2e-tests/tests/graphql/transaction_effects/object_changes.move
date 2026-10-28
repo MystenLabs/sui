@@ -8,47 +8,47 @@
 //> 1: MergeCoins(Gas, [Result(0)])
 
 //# publish
-module P::M {
-  public struct Outer has key, store {
+module P::M;
+
+public struct Outer has key, store {
     id: UID,
     inner: Option<Inner>,
-  }
+}
 
-  public struct Inner has key, store {
+public struct Inner has key, store {
     id: UID,
-    x: u64
-  }
+    x: u64,
+}
 
-  public fun outer(ctx: &mut TxContext): Outer {
+public fun outer(ctx: &mut TxContext): Outer {
     Outer {
-      id: object::new(ctx),
-      inner: option::none(),
+        id: object::new(ctx),
+        inner: option::none(),
     }
-  }
+}
 
-  public fun inner(ctx: &mut TxContext): Inner {
+public fun inner(ctx: &mut TxContext): Inner {
     Inner {
-      id: object::new(ctx),
-      x: 0,
+        id: object::new(ctx),
+        x: 0,
     }
-  }
+}
 
-  public fun inc(inner: &mut Inner) {
+public fun inc(inner: &mut Inner) {
     inner.x = inner.x + 1;
-  }
+}
 
-  public fun wrap(outer: &mut Outer, inner: Inner) {
+public fun wrap(outer: &mut Outer, inner: Inner) {
     outer.inner.fill(inner);
-  }
+}
 
-  public fun unwrap(outer: &mut Outer): Inner {
+public fun unwrap(outer: &mut Outer): Inner {
     outer.inner.extract()
-  }
+}
 
-  public fun burn(inner: Inner) {
+public fun burn(inner: Inner) {
     let Inner { id, x: _ } = inner;
     id.delete();
-  }
 }
 
 //# programmable --sender A --inputs @A

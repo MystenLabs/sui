@@ -12,6 +12,7 @@
 //# publish
 #[allow(deprecated_usage)]
 module test::bulletproofs;
+
 use sui::rangeproofs::verify_bulletproofs_ristretto255;
 use sui::ristretto255;
 

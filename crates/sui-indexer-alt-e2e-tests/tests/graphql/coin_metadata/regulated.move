@@ -5,27 +5,27 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module P::fake {
-    use sui::coin;
+module P::fake;
 
-    public struct FAKE has drop {}
+use sui::coin;
 
-    fun init(witness: FAKE, ctx: &mut TxContext){
-        let (treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
-          witness,
-          2,
-          b"FAKE",
-          b"",
-          b"",
-          option::none(),
-          false,
-          ctx
-        );
+public struct FAKE has drop {}
 
-        transfer::public_freeze_object(metadata);
-        transfer::public_transfer(deny_cap, ctx.sender());
-        transfer::public_transfer(treasury_cap, @0x0);
-    }
+fun init(witness: FAKE, ctx: &mut TxContext) {
+    let (treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
+        witness,
+        2,
+        b"FAKE",
+        b"",
+        b"",
+        option::none(),
+        false,
+        ctx,
+    );
+
+    transfer::public_freeze_object(metadata);
+    transfer::public_transfer(deny_cap, ctx.sender());
+    transfer::public_transfer(treasury_cap, @0x0);
 }
 
 //# create-checkpoint

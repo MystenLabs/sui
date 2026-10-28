@@ -29,11 +29,7 @@ fun init(otw: TRUSTED_COIN, ctx: &mut TxContext) {
     transfer::public_transfer(treasury_cap, ctx.sender())
 }
 
-public fun mint(
-    treasury_cap: &mut TreasuryCap<TRUSTED_COIN>,
-    amount: u64,
-    ctx: &mut TxContext,
-) {
+public fun mint(treasury_cap: &mut TreasuryCap<TRUSTED_COIN>, amount: u64, ctx: &mut TxContext) {
     let coin = treasury_cap.mint(amount, ctx);
     transfer::public_transfer(coin, ctx.sender());
 }

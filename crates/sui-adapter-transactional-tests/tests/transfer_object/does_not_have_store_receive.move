@@ -7,73 +7,73 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish
-module test::m {
-    use sui::transfer::Receiving;
+module test::m;
 
-    public struct Parent has key { id: UID }
-    public struct S has key { id: UID }
-    public struct Cup<phantom T> has key { id: UID }
-    public struct Store has key, store { id: UID }
+use sui::transfer::Receiving;
 
-    public fun mint_s(ctx: &mut TxContext) {
-        let id = object::new(ctx);
-        let parent = Parent { id };
-        let p_address = object::id_address(&parent);
-        transfer::transfer(parent, tx_context::sender(ctx));
+public struct Parent has key { id: UID }
+public struct S has key { id: UID }
+public struct Cup<phantom T> has key { id: UID }
+public struct Store has key, store { id: UID }
 
-        let id = object::new(ctx);
-        transfer::transfer(S { id }, p_address);
-    }
+public fun mint_s(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    let parent = Parent { id };
+    let p_address = object::id_address(&parent);
+    transfer::transfer(parent, tx_context::sender(ctx));
 
-    public fun mint_cup<T>(ctx: &mut TxContext) {
-        let id = object::new(ctx);
-        let parent = Parent { id };
-        let p_address = object::id_address(&parent);
-        transfer::transfer(parent, tx_context::sender(ctx));
+    let id = object::new(ctx);
+    transfer::transfer(S { id }, p_address);
+}
 
-        let id = object::new(ctx);
-        transfer::transfer(Cup<T> { id }, p_address);
-    }
+public fun mint_cup<T>(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    let parent = Parent { id };
+    let p_address = object::id_address(&parent);
+    transfer::transfer(parent, tx_context::sender(ctx));
 
-    public fun mint_store(ctx: &mut TxContext) {
-        let id = object::new(ctx);
-        let parent = Parent { id };
-        let p_address = object::id_address(&parent);
-        transfer::transfer(parent, tx_context::sender(ctx));
+    let id = object::new(ctx);
+    transfer::transfer(Cup<T> { id }, p_address);
+}
 
-        let id = object::new(ctx);
-        transfer::transfer(Store { id }, p_address);
-    }
+public fun mint_store(ctx: &mut TxContext) {
+    let id = object::new(ctx);
+    let parent = Parent { id };
+    let p_address = object::id_address(&parent);
+    transfer::transfer(parent, tx_context::sender(ctx));
 
-    public fun receive_s(parent: &mut Parent, x: Receiving<S>): S {
-        let s = transfer::receive(&mut parent.id, x);
-        s
-    }
+    let id = object::new(ctx);
+    transfer::transfer(Store { id }, p_address);
+}
 
-    public fun receive_cup<T>(parent: &mut Parent, x: Receiving<Cup<T>>): Cup<T> {
-        let s = transfer::receive(&mut parent.id, x);
-        s
-    }
+public fun receive_s(parent: &mut Parent, x: Receiving<S>): S {
+    let s = transfer::receive(&mut parent.id, x);
+    s
+}
 
-    public fun parent_uid(p: Parent): UID {
-        let Parent { id } = p;
-        id
-    }
+public fun receive_cup<T>(parent: &mut Parent, x: Receiving<Cup<T>>): Cup<T> {
+    let s = transfer::receive(&mut parent.id, x);
+    s
+}
 
-    public fun destroy_s(s: S) {
-        let S { id } = s;
-        object::delete(id);
-    }
+public fun parent_uid(p: Parent): UID {
+    let Parent { id } = p;
+    id
+}
 
-    public fun destroy_cup<T>(c: Cup<T>) {
-        let Cup { id } = c;
-        object::delete(id);
-    }
+public fun destroy_s(s: S) {
+    let S { id } = s;
+    object::delete(id);
+}
 
-    public fun destroy_store(s: Store) {
-        let Store { id } = s;
-        object::delete(id);
-    }
+public fun destroy_cup<T>(c: Cup<T>) {
+    let Cup { id } = c;
+    object::delete(id);
+}
+
+public fun destroy_store(s: Store) {
+    let Store { id } = s;
+    object::delete(id);
 }
 
 //# run test::m::mint_s --sender A

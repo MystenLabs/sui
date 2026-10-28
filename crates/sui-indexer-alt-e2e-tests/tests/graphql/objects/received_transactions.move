@@ -4,21 +4,21 @@
 //# init --protocol-version 108 --addresses P0=0x0 --accounts A B --simulator
 
 //# publish
-module P0::m {
-    public struct Obj has key {
-        id: UID,
-        value: u64,
-    }
+module P0::m;
 
-    fun init(ctx: &mut TxContext) {
-        let obj = Obj { id: object::new(ctx), value: 0 };
-        transfer::transfer(obj, @0x2)
-    }
+public struct Obj has key {
+    id: UID,
+    value: u64,
+}
 
-    public fun create_and_transfer(value: u64, recipient: address, ctx: &mut TxContext) {
-        let obj = Obj { id: object::new(ctx), value };
-        transfer::transfer(obj, recipient)
-    }
+fun init(ctx: &mut TxContext) {
+    let obj = Obj { id: object::new(ctx), value: 0 };
+    transfer::transfer(obj, @0x2)
+}
+
+public fun create_and_transfer(value: u64, recipient: address, ctx: &mut TxContext) {
+    let obj = Obj { id: object::new(ctx), value };
+    transfer::transfer(obj, recipient)
 }
 
 //# create-checkpoint
@@ -28,7 +28,7 @@ module P0::m {
 
 //# create-checkpoint
 
-// B transfers an object to 0x2 (checkpoint 3)  
+// B transfers an object to 0x2 (checkpoint 3)
 //# run P0::m::create_and_transfer --sender B --args 200 @0x2
 
 //# create-checkpoint

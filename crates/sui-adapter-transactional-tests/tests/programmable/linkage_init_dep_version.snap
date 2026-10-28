@@ -22,19 +22,19 @@ created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 23-28:
+task 2, lines 23-29:
 //# publish --upgradeable --dependencies Dep_V1 --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 30-39:
+task 3, lines 31-41:
 //# publish --dependencies Dep_V1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, line 41:
+task 4, line 43:
 //# view-object 3,1
 Owner: Shared( 4 )
 Version: 4
@@ -47,25 +47,25 @@ Contents: PInitV1::m::Config {
     v: 1u64,
 }
 
-task 5, lines 43-48:
+task 5, lines 45-50:
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 created: object(5,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 6, lines 50-55:
+task 6, lines 52-58:
 //# upgrade --package ConsumerV1 --upgrade-capability 2,1 --dependencies Dep_V2 --sender A
 created: object(6,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 7, lines 57-66:
+task 7, lines 60-70:
 //# publish --dependencies Dep_V1 --sender A
 created: object(7,0), object(7,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, line 68:
+task 8, line 72:
 //# view-object 7,1
 Owner: Shared( 7 )
 Version: 7
@@ -78,7 +78,7 @@ Contents: PInitOld::m::Config {
     v: 1u64,
 }
 
-task 10, lines 80-83:
+task 10, lines 85-88:
 //# programmable --sender A --inputs @A
 // PTB publish with `init`, dep set to v2 => init runs against v2 => v = 2.
 //> 0: Publish(PPtb, [Dep_V2, sui, std]);
@@ -87,7 +87,7 @@ created: object(10,0), object(10,1), object(10,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 11, line 85:
+task 11, line 90:
 //# view-object 10,1
 Owner: Shared( 8 )
 Version: 8
@@ -100,7 +100,7 @@ Contents: fake(10,0)::m::Config {
     v: 2u64,
 }
 
-task 12, lines 87-91:
+task 12, lines 92-96:
 //# programmable --sender A --inputs @A
 // init pins Dep exact(1); `ping` pins Dep exact(2) => exact/exact conflict => InvalidLinkage.
 //> 0: Publish(PPtb, [Dep_V1, sui, std]);
@@ -109,7 +109,7 @@ task 12, lines 87-91:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly Dep_V1 (version 1) and Dep_V2 (version 2) to be used in the same transaction"), command: Some(1) } }
 
-task 13, lines 93-98:
+task 13, lines 98-103:
 //# programmable --sender A --inputs @A
 // init pins Dep exact(2); ConsumerV1 pins Dep at_least(1) (transitive, lower) => unifies to exact(2)
 // => init runs v2 => v = 2.
@@ -120,7 +120,7 @@ created: object(13,0), object(13,1), object(13,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 14, line 100:
+task 14, line 105:
 //# view-object 13,1
 Owner: Shared( 10 )
 Version: 10
@@ -133,7 +133,7 @@ Contents: fake(13,0)::m::Config {
     v: 2u64,
 }
 
-task 15, lines 102-107:
+task 15, lines 107-112:
 //# programmable --sender A --inputs @A
 // init pins Dep exact(1); ConsumerV2 pins Dep at_least(2) (transitive, higher) => exact(1) < 2 =>
 // InvalidLinkage.

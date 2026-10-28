@@ -9,7 +9,9 @@
 module test::m;
 
 entry fun take_val<T: copy + drop>(_x: T) {}
+
 entry fun take_vec<T: copy + drop>(_x: vector<T>) {}
+
 entry fun take_two<T: copy + drop>(_x: T, _y: T) {}
 
 // T=bool but value is u64

@@ -4,33 +4,33 @@
 //# init --protocol-version 108 --accounts A B --addresses test=0x0 --simulator
 
 //# publish
-module test::events_test {
-    use std::ascii;
-    use sui::event;
+module test::events_test;
 
-    public struct TestEvent has copy, drop {
-        message: ascii::String,
-        value: u64,
-    }
+use std::ascii;
+use sui::event;
 
-    public entry fun emit_event(value: u64) {
-        event::emit(TestEvent {
-            message: ascii::string(b"Hello from test event"),
-            value,
-        });
-    }
+public struct TestEvent has copy, drop {
+    message: ascii::String,
+    value: u64,
+}
 
-    public entry fun emit_multiple_events() {
-        event::emit(TestEvent {
-            message: ascii::string(b"First event"),
-            value: 1,
-        });
+public entry fun emit_event(value: u64) {
+    event::emit(TestEvent {
+        message: ascii::string(b"Hello from test event"),
+        value,
+    });
+}
 
-        event::emit(TestEvent {
-            message: ascii::string(b"Second event"),
-            value: 2,
-        });
-    }
+public entry fun emit_multiple_events() {
+    event::emit(TestEvent {
+        message: ascii::string(b"First event"),
+        value: 1,
+    });
+
+    event::emit(TestEvent {
+        message: ascii::string(b"Second event"),
+        value: 2,
+    });
 }
 
 // Transaction that emits a single event

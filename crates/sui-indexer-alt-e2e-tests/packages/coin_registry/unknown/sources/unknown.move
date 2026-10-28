@@ -46,21 +46,21 @@ fun wrap(cap: TreasuryCap<UNKNOWN>, ctx: &mut TxContext): Treasury {
 }
 
 entry fun show(treasury: &mut Treasury) {
-  let cap = treasury.cap.extract();
-  dof::add(&mut treasury.id, CapKey(), cap);
+    let cap = treasury.cap.extract();
+    dof::add(&mut treasury.id, CapKey(), cap);
 }
 
 entry fun hide(treasury: &mut Treasury) {
-  let cap: TreasuryCap<UNKNOWN> = dof::remove(&mut treasury.id, CapKey());
-  treasury.cap.fill(cap);
+    let cap: TreasuryCap<UNKNOWN> = dof::remove(&mut treasury.id, CapKey());
+    treasury.cap.fill(cap);
 }
 
 entry fun burn(treasury: &mut Treasury, coin: Coin<UNKNOWN>) {
-  let cap = if (treasury.cap.is_some()) {
-      treasury.cap.borrow_mut()
-  } else {
-      dof::borrow_mut(&mut treasury.id, CapKey())
-  };
+    let cap = if (treasury.cap.is_some()) {
+        treasury.cap.borrow_mut()
+    } else {
+        dof::borrow_mut(&mut treasury.id, CapKey())
+    };
 
-  cap.burn(coin);
+    cap.burn(coin);
 }

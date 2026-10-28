@@ -44,7 +44,6 @@ module t2::o2 {
     }
 }
 
-
 //# publish --dependencies t2 t3
 
 module t1::o1 {

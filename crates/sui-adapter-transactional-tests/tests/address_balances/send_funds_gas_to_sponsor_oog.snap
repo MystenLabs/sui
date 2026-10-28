@@ -12,13 +12,13 @@ processed 7 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 12-20:
+task 1, lines 12-22:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5722800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 22-26:
+task 2, lines 24-28:
 // Sponsored tx with tight budget. Workload makes a big W (storage OOG) then
 // send_funds(Gas, @B). Sponsor B's coin (object 0,1) is the gas payment.
 //# programmable --sender A --sponsor B --gas-budget 5000000 --inputs 10000 @B
@@ -27,11 +27,11 @@ task 2, lines 22-26:
 Error: Transaction Effects Status: Insufficient Gas.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: None, command: None } }
 
-task 3, line 28:
+task 3, line 30:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 30-32:
+task 4, lines 32-34:
 // Sponsor B's gas coin should still exist (transfer rolled back), owned by
 // B, with value reduced by the post-reset net gas.
 //# view-object 0,1
@@ -48,12 +48,12 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 5, lines 34-35:
+task 5, lines 36-37:
 // B's AB should not have been created (send_funds and override rolled back).
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 No funds accumulator object found
 
-task 6, lines 37-38:
+task 6, lines 39-40:
 // A's AB should not exist either (A never had one and was never charged).
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 No funds accumulator object found

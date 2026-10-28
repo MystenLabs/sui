@@ -13,51 +13,51 @@
 
 //# publish
 
-module test::object_basics {
-    public struct Object has key, store {
-        id: UID,
-        value: u64,
-    }
+module test::object_basics;
 
-    public struct Wrapper has key {
-        id: UID,
-        o: Object
-    }
+public struct Object has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public entry fun create(value: u64, ctx: &mut TxContext) {
-        transfer::transfer(
-            Object { id: object::new(ctx), value },
-            tx_context::sender(ctx)
-        )
-    }
+public struct Wrapper has key {
+    id: UID,
+    o: Object,
+}
 
-    public entry fun wrap(o: Object, ctx: &mut TxContext) {
-        transfer::transfer(
-            Wrapper { id: object::new(ctx), o },
-            tx_context::sender(ctx)
-        )
-    }
+public entry fun create(value: u64, ctx: &mut TxContext) {
+    transfer::transfer(
+        Object { id: object::new(ctx), value },
+        tx_context::sender(ctx),
+    )
+}
 
-    public entry fun create_and_wrap(value: u64, ctx: &mut TxContext) {
-        let o = Object { id: object::new(ctx), value };
-        transfer::transfer(
-            Wrapper { id: object::new(ctx), o },
-            tx_context::sender(ctx)
-        )
-    }
+public entry fun wrap(o: Object, ctx: &mut TxContext) {
+    transfer::transfer(
+        Wrapper { id: object::new(ctx), o },
+        tx_context::sender(ctx),
+    )
+}
 
-    public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
-        let Wrapper { id, o } = w;
-        object::delete(id);
-        transfer::transfer(o, tx_context::sender(ctx))
-    }
+public entry fun create_and_wrap(value: u64, ctx: &mut TxContext) {
+    let o = Object { id: object::new(ctx), value };
+    transfer::transfer(
+        Wrapper { id: object::new(ctx), o },
+        tx_context::sender(ctx),
+    )
+}
 
-    public entry fun unwrap_and_delete(w: Wrapper) {
-        let Wrapper { id, o } = w;
-        object::delete(id);
-        let Object { id, value: _ } = o;
-        object::delete(id);
-    }
+public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
+    let Wrapper { id, o } = w;
+    object::delete(id);
+    transfer::transfer(o, tx_context::sender(ctx))
+}
+
+public entry fun unwrap_and_delete(w: Wrapper) {
+    let Wrapper { id, o } = w;
+    object::delete(id);
+    let Object { id, value: _ } = o;
+    object::delete(id);
 }
 
 //# run test::object_basics::create --args 10

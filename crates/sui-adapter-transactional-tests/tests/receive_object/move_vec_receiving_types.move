@@ -4,62 +4,62 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
+module tto::M1;
 
-    public struct A has key, store {
-        id: UID,
+use sui::transfer::Receiving;
+
+public struct A has key, store {
+    id: UID,
+}
+
+public struct B has key, store {
+    id: UID,
+}
+
+public struct C has key, store {
+    id: UID,
+}
+
+public struct RecvSpoof<phantom T: key> has drop {
+    id: ID,
+    version: u64,
+}
+
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    let c = B { id: object::new(ctx) };
+    let d = C { id: object::new(ctx) };
+    let e = C { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+    transfer::public_transfer(c, a_address);
+    transfer::public_transfer(d, a_address);
+    transfer::public_transfer(e, a_address);
+}
+
+public fun make_recv_spoof_b(): RecvSpoof<B> {
+    RecvSpoof {
+        id: object::id_from_address(@0x0),
+        version: 0,
     }
+}
 
-    public struct B has key, store {
-        id: UID,
-    }
+public fun spoof_bytes(r: RecvSpoof<B>): vector<u8> {
+    std::bcs::to_bytes(&r)
+}
 
-    public struct C has key, store {
-        id: UID,
-    }
+public fun receive_none(_v: vector<Receiving<B>>) {}
 
-    public struct RecvSpoof<phantom T: key> has drop {
-        id: ID,
-        version: u64,
-    }
+public fun receive_none_a(_v: vector<Receiving<A>>) {}
 
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        let c = B { id: object::new(ctx) };
-        let d = C { id: object::new(ctx) };
-        let e = C { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-        transfer::public_transfer(c, a_address);
-        transfer::public_transfer(d, a_address);
-        transfer::public_transfer(e, a_address);
-    }
-
-    public fun make_recv_spoof_b(): RecvSpoof<B> {
-        RecvSpoof {
-            id: object::id_from_address(@0x0),
-            version: 0,
-        }
-    }
-
-    public fun spoof_bytes(r: RecvSpoof<B>): vector<u8> {
-        std::bcs::to_bytes(&r)
-    }
-
-    public fun receive_none(_v: vector<Receiving<B>>){ }
-
-    public fun receive_none_a(_v: vector<Receiving<A>>){ }
-
-    public fun receive_all(parent: &mut A, mut x: vector<Receiving<B>>) {
-        while (!vector::is_empty(&x)) {
-            let r = vector::pop_back(&mut x);
-            let b = transfer::receive(&mut parent.id, r);
-            transfer::public_transfer(b, @tto);
-        };
-    }
+public fun receive_all(parent: &mut A, mut x: vector<Receiving<B>>) {
+    while (!vector::is_empty(&x)) {
+        let r = vector::pop_back(&mut x);
+        let b = transfer::receive(&mut parent.id, r);
+        transfer::public_transfer(b, @tto);
+    };
 }
 
 //# run tto::M1::start

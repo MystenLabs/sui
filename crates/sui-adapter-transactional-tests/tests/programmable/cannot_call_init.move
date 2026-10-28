@@ -6,9 +6,9 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    fun init(_: &mut sui::tx_context::TxContext) {}
-}
+module test::m1;
+
+fun init(_: &mut sui::tx_context::TxContext) {}
 
 //# programmable
 //> 0: test::m1::init();

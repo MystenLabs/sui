@@ -6,23 +6,24 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    use std::string::String;
-    use std::ascii;
+module test::m1;
 
-    public fun fix<T>(_: &mut T) {}
+use std::ascii;
+use std::string::String;
 
-    public fun addr(_: address) {}
-    public fun id(_: ID) {}
+public fun fix<T>(_: &mut T) {}
 
-    public fun ascii_(_: ascii::String) {}
-    public fun string(_: String) {}
+public fun addr(_: address) {}
 
-    public fun vec<T: drop>(_: vector<T>) {}
-    public fun opt<T: drop>(_: Option<T>) {}
+public fun id(_: ID) {}
 
+public fun ascii_(_: ascii::String) {}
 
-}
+public fun string(_: String) {}
+
+public fun vec<T: drop>(_: vector<T>) {}
+
+public fun opt<T: drop>(_: Option<T>) {}
 
 //# programmable --inputs "hello"
 

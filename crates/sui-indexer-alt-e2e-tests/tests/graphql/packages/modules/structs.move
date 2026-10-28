@@ -37,14 +37,14 @@ fragment S on MoveStruct {
 
 //# publish --upgradeable --sender A
 module P0::M {
-  public struct S has copy, drop { x: u64 }
+    public struct S has copy, drop { x: u64 }
 }
 
 //# upgrade --package P0 --upgrade-capability 2,1 --sender A
 module P1::M {
-  public struct S has copy, drop { x: u64 }
-  public struct T<U: drop> { y: u64, s: S, u: U }
-  public struct V { t: T<S> }
+    public struct S has copy, drop { x: u64 }
+    public struct T<U: drop> { y: u64, s: S, u: U }
+    public struct V { t: T<S> }
 }
 
 //# create-checkpoint

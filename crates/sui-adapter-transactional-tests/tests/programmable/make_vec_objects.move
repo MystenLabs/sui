@@ -6,39 +6,38 @@
 //# init --addresses test=0x0 --accounts A B
 
 //# publish
-module test::m1 {
+module test::m1;
 
-    public struct Pub has key, store {
-        id: UID,
-        value: u64,
-    }
+public struct Pub has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public struct Cap {}
+public struct Cap {}
 
-    public struct Cup<T> has key, store {
-        id: UID,
-        value: T,
-    }
+public struct Cup<T> has key, store {
+    id: UID,
+    value: T,
+}
 
-    public fun new(ctx: &mut TxContext): Pub {
-        Pub { id: object::new(ctx), value: 112 }
-    }
+public fun new(ctx: &mut TxContext): Pub {
+    Pub { id: object::new(ctx), value: 112 }
+}
 
-    public fun cup<T>(value: T, ctx: &mut TxContext): Cup<T> {
-        Cup { id: object::new(ctx), value }
-    }
+public fun cup<T>(value: T, ctx: &mut TxContext): Cup<T> {
+    Cup { id: object::new(ctx), value }
+}
 
-    public fun cap(): Cap {
-        Cap {}
-    }
+public fun cap(): Cap {
+    Cap {}
+}
 
-    public fun pubs(mut v: vector<Pub>) {
-        while (!vector::is_empty(&v)) {
-            let Pub { id, value: _ } = vector::pop_back(&mut v);
-            object::delete(id);
-        };
-        vector::destroy_empty(v);
-    }
+public fun pubs(mut v: vector<Pub>) {
+    while (!vector::is_empty(&v)) {
+        let Pub { id, value: _ } = vector::pop_back(&mut v);
+        object::delete(id);
+    };
+    vector::destroy_empty(v);
 }
 
 // objects

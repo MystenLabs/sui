@@ -6,6 +6,7 @@
 //# publish --upgradeable --sender A
 module v0::a {
     public(package) fun val_for_b(): u64 { abort 0 }
+
     public(package) fun val_for_c(): u64 { abort 0 }
 }
 
@@ -13,7 +14,9 @@ module v0::a {
 // init is added to an existing module so an error is raised and the upgrade fails
 module v1::a {
     public(package) fun val_for_b(): u64 { 0xb }
+
     public(package) fun val_for_c(): u64 { abort 0 }
+
     fun init(_: &mut TxContext) {
         // Adding an `init` to an existing module is an error
         abort 0
@@ -24,6 +27,7 @@ module v1::b {
         id: UID,
         v: u64,
     }
+
     fun init(ctx: &mut TxContext) {
         transfer::transfer(B { id: object::new(ctx), v: v1::a::val_for_b() }, ctx.sender());
     }
@@ -33,6 +37,7 @@ module v1::b {
 // init is called, but aborts -- upgrade fails, and the package is not upgraded
 module v2::a {
     public(package) fun val_for_b(): u64 { abort 0 }
+
     public(package) fun val_for_c(): u64 { 0xc }
 }
 module v2::b {
@@ -40,6 +45,7 @@ module v2::b {
         id: UID,
         v: u64,
     }
+
     fun init(ctx: &mut TxContext) {
         transfer::transfer(B { id: object::new(ctx), v: v1::a::val_for_b() }, ctx.sender());
     }
@@ -49,6 +55,7 @@ module v2::c {
         id: UID,
         v: u64,
     }
+
     fun init(ctx: &mut TxContext) {
         transfer::transfer(C { id: object::new(ctx), v: v2::a::val_for_c() }, ctx.sender());
     }
@@ -57,6 +64,7 @@ module v2::c {
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 module v2::a {
     public(package) fun val_for_b(): u64 { 0xb }
+
     public(package) fun val_for_c(): u64 { 0xc }
 }
 module v2::b {
@@ -64,6 +72,7 @@ module v2::b {
         id: UID,
         v: u64,
     }
+
     fun init(ctx: &mut TxContext) {
         transfer::transfer(B { id: object::new(ctx), v: v1::a::val_for_b() }, ctx.sender());
     }
@@ -73,6 +82,7 @@ module v2::c {
         id: UID,
         v: u64,
     }
+
     fun init(ctx: &mut TxContext) {
         transfer::transfer(C { id: object::new(ctx), v: v2::a::val_for_c() }, ctx.sender());
     }

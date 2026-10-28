@@ -9,7 +9,7 @@ processed 10 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-41:
+task 1, lines 9-40:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
@@ -19,13 +19,13 @@ gas summary: computation_cost: 1000000, storage_cost: 6999600,  storage_rebate: 
 // Test share object allows non-zero child count
 //
 
-task 2, line 47:
+task 2, line 46:
 //# run test::m::mint_and_share --sender A
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 49:
+task 3, line 48:
 //# view-object 2,0
 Owner: Shared( 2 )
 Version: 2
@@ -41,18 +41,18 @@ Contents: test::m::S {
 // Test transfer allows non-zero child count
 //
 
-task 4, line 55:
+task 4, line 54:
 //# run test::m::mint --sender A
 created: object(4,0), object(4,1), object(4,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, line 57:
+task 5, line 56:
 //# run test::m::transfer --sender A --args object(4,0) @B
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
-task 6, line 59:
+task 6, line 58:
 //# view-object 4,0
 Owner: Account Address ( B )
 Version: 4
@@ -68,18 +68,18 @@ Contents: test::m::S {
 // Test TransferObject allows non-zero child count
 //
 
-task 7, line 65:
+task 7, line 64:
 //# run test::m::mint --sender A
 created: object(7,0), object(7,1), object(7,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, line 67:
+task 8, line 66:
 //# transfer-object 7,0 --sender A --recipient B
 mutated: object(0,0), object(7,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
-task 9, line 69:
+task 9, line 68:
 //# view-object 7,0
 Owner: Account Address ( B )
 Version: 6

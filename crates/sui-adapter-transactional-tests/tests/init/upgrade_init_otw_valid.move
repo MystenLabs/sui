@@ -7,15 +7,17 @@
 
 //# publish --upgradeable --sender A
 module v0::m {
+
 }
 
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 module v1::m {
+
 }
 #[allow(deprecated_usage)]
 module v1::has_otw {
-    public struct HAS_OTW has drop {
-    }
+    public struct HAS_OTW has drop {}
+
     fun init(otw: HAS_OTW, ctx: &mut TxContext) {
         let (cap, metadata) = sui::coin::create_currency(
             otw,

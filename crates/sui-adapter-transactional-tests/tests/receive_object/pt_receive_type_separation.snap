@@ -5,19 +5,19 @@ processed 11 tasks
 
 // Tests that reach receiving usage by type has a different logical value/local in PTB execution
 
-task 1, lines 8-56:
+task 1, lines 8-55:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 9226400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 58:
+task 2, line 57:
 //# run tto::m1::start
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, line 60:
+task 3, line 59:
 //# view-object 2,0
 Owner: Account Address ( _ )
 Version: 3
@@ -29,7 +29,7 @@ Contents: tto::m1::A {
     },
 }
 
-task 4, line 62:
+task 4, line 61:
 //# view-object 2,1
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -41,7 +41,7 @@ Contents: tto::m1::B {
     },
 }
 
-task 5, line 64:
+task 5, line 63:
 //# view-object 2,2
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -53,7 +53,7 @@ Contents: tto::m1::B {
     },
 }
 
-task 6, lines 66-71:
+task 6, lines 65-70:
 // Can use receiving multiple times with different types
 //# programmable --inputs receiving(2,1) --dev-inspect
 //> 0: tto::m1::borrow_mut<tto::m1::A>(Input(0));
@@ -63,7 +63,7 @@ task 6, lines 66-71:
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 7, lines 73-78:
+task 7, lines 72-77:
 // But we cannot use them multiple times (by value) with the same type
 //# programmable --inputs receiving(2,1)
 //> tto::m1::id<tto::m1::A>(Input(0));
@@ -73,7 +73,7 @@ task 7, lines 73-78:
 Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(3) } }
 
-task 8, lines 80-85:
+task 8, lines 79-84:
 // And can receive one of them
 //# programmable --inputs object(2,0) receiving(2,1)
 //> tto::m1::id<tto::m1::A>(Input(1));
@@ -83,14 +83,14 @@ task 8, lines 80-85:
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3419658, non_refundable_storage_fee: 342
 
-task 9, lines 87-89:
+task 9, lines 86-88:
 // Cannot double take the same receiving input twice at the same type
 //# programmable --inputs object(2,0) receiving(2,2)
 //> tto::m1::take_two_b(Input(0), Input(1), Input(1))
 Error: Transaction Effects Status: Invalid command argument at 2. Specified argument location does not have a value and cannot be used
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: ArgumentWithoutValue }, source: None, command: Some(0) } }
 
-task 10, lines 91-93:
+task 10, lines 90-92:
 // But can use receiving multiple times with different types all at once
 //# programmable --inputs object(2,0) receiving(2,2)
 //> tto::m1::take_all(Input(0), Input(1), Input(1), Input(1))

@@ -21,35 +21,35 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0
 
 // string of ASCII characters as UTF8 string
 
-task 3, line 31:
+task 3, line 30:
 //# run Test::M::utf8_arg --sender A --args "SomeStringPlusSomeString"
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // string of UTF8 characters as UTF8 string
 
-task 4, line 36:
+task 4, line 34:
 //# run Test::M::utf8_arg --sender A --args "çå∞≠¢õß∂ƒ∫"
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // vector of ASCII character strings as byte strings
 
-task 5, line 41:
+task 5, line 38:
 //# run Test::M::utf8_vec_arg --sender A --args vector[b"SomeStringPlus",b"SomeString"]
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // vector of ASCII character strings as UTF8 strings
 
-task 6, line 46:
+task 6, line 42:
 //# run Test::M::utf8_vec_arg --sender A --args vector["SomeStringPlus","SomeString"]
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // vector of UTF8 character strings as UTF8 strings
 
-task 7, line 51:
+task 7, line 46:
 //# run Test::M::utf8_vec_arg --sender A --args vector["çå∞≠¢","õß∂ƒ∫"]
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
