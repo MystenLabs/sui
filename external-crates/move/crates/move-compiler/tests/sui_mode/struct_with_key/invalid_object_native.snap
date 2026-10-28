@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[EC04015]: invalid use of native item
-  ┌─ tests/sui_mode/id_leak/invalid_object_native.move:5:9
+  ┌─ tests/sui_mode/struct_with_key/invalid_object_native.move:5:9
   │
 2 │     native struct S has key;
   │     ------ Struct declared 'native' here

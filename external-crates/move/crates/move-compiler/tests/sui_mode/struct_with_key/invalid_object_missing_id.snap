@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[EC04016]: too few arguments
-  ┌─ tests/sui_mode/id_leak/invalid_object_missing_id.move:9:9
+  ┌─ tests/sui_mode/struct_with_key/invalid_object_missing_id.move:9:9
   │
 9 │         S {}
   │         ^^^^ Missing argument for field 'id' in 'a::test::S'

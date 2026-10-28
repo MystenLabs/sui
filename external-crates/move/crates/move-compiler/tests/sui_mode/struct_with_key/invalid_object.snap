@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[ESC02007]: invalid object declaration
-  ┌─ tests/sui_mode/id_leak/invalid_object.move:2:12
+  ┌─ tests/sui_mode/struct_with_key/invalid_object.move:2:12
   │
 2 │     struct S has key {}
   │            ^     --- The 'key' ability is used to declare objects in Sui
