@@ -561,7 +561,7 @@ impl AuthorityMetrics {
             object_funds_in_execution_check_result: register_int_counter_vec_with_registry!(
                 "object_funds_in_execution_check_result",
                 "Committed transactions by in-execution object funds check outcome: sufficient \
-                 counts transactions that recorded a net object withdrawal",
+                 counts successful transactions that withdrew from an object account",
                 &["result"],
                 registry,
             )
