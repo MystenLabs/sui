@@ -1045,6 +1045,10 @@ async fn start(
         swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
 
+    // GraphQL pages through and subscribes to transactions and events from the fullnode, so it
+    // needs the fullnode to keep its full history.
+    let disable_fullnode_pruning = with_graphql.is_some();
+
     let fullnode_rpc_address = if no_full_node {
         swarm_builder = swarm_builder.with_fullnode_count(0);
         let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
@@ -1067,6 +1071,11 @@ async fn start(
                 })?;
             fullnode_config.json_rpc_address.set_port(fullnode_rpc_port);
             fullnode_config.rpc = Some(rpc_config);
+            if disable_fullnode_pruning {
+                let pruning = &mut fullnode_config.authority_store_pruning_config;
+                pruning.set_num_epochs_to_retain(u64::MAX);
+                pruning.set_num_epochs_to_retain_for_checkpoints(None);
+            }
             let localhost = sui_config::local_ip_utils::localhost_for_testing();
             fullnode_config.metrics_address =
                 sui_config::local_ip_utils::new_local_tcp_socket_for_testing();
@@ -1095,6 +1104,9 @@ async fn start(
                 .with_fullnode_count(1)
                 .with_fullnode_rpc_addr(fullnode_rpc_address)
                 .with_fullnode_rpc_config(rpc_config);
+            if disable_fullnode_pruning {
+                swarm_builder = swarm_builder.with_disable_fullnode_pruning();
+            }
             fullnode_rpc_address
         }
     };
