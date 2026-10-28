@@ -3,7 +3,7 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 6 tasks
 
-task 1, lines 6-20:
+task 1, lines 6-22:
 //# run-graphql
 Response: {
   "data": {
@@ -22,7 +22,7 @@ Response: {
   }
 }
 
-task 2, lines 22-32:
+task 2, lines 24-36:
 //# run-graphql
 Response: {
   "data": null,
@@ -46,7 +46,7 @@ Response: {
   ]
 }
 
-task 3, lines 34-44:
+task 3, lines 38-50:
 //# run-graphql
 Response: {
   "data": null,
@@ -70,7 +70,7 @@ Response: {
   ]
 }
 
-task 4, lines 46-56:
+task 4, lines 52-64:
 //# run-graphql
 Response: {
   "data": null,
@@ -94,7 +94,7 @@ Response: {
   ]
 }
 
-task 5, lines 58-68:
+task 5, lines 66-78:
 //# run-graphql
 Response: {
   "data": null,

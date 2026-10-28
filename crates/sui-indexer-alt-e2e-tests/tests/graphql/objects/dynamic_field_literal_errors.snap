@@ -8,7 +8,7 @@ A: object(0,0)
 
 // Various error cases related to dynamic field names.
 
-task 1, lines 8-15:
+task 1, lines 8-17:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
@@ -36,7 +36,7 @@ Response: {
   ]
 }
 
-task 2, lines 17-24:
+task 2, lines 19-28:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
@@ -64,7 +64,7 @@ Response: {
   ]
 }
 
-task 3, lines 26-33:
+task 3, lines 30-39:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
@@ -92,7 +92,7 @@ Response: {
   ]
 }
 
-task 4, lines 35-42:
+task 4, lines 41-50:
 //# run-graphql
 Response: {
   "data": {
@@ -120,7 +120,7 @@ Response: {
   ]
 }
 
-task 5, lines 44-51:
+task 5, lines 52-61:
 //# run-graphql
 Response: {
   "data": {

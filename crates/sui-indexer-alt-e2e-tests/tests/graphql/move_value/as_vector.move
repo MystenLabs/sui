@@ -33,6 +33,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Paginate over a vector and recursively inspect nested vector elements.
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -80,8 +81,10 @@ module test::mod {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 1
+/*
 { # Continue pagination from the second element.
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -101,3 +104,4 @@ module test::mod {
     }
   }
 }
+*/

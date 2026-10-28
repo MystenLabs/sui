@@ -27,6 +27,7 @@ module P3::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Fetching packages as objects, to confirm their addresses and versions
   p1: object(address: "@{obj_1_0}") {
     address
@@ -43,8 +44,10 @@ module P3::M {
     version
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Look up package versions using the original package address
 
   # To get the initial version, the version needs to be set explicitly
@@ -71,8 +74,10 @@ module P3::M {
     version
   }
 }
+*/
 
 //# run-graphql
+/*
 { # The ID of any package version works as an anchor
   p1: package(address: "@{obj_4_0}", version: 1) {
     address
@@ -94,8 +99,10 @@ module P3::M {
     version
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Works for system packages as well
   explicit: package(address: "0x1", version: 1) {
     address
@@ -107,8 +114,10 @@ module P3::M {
     version
   }
 }
+*/
 
 //# run-graphql
+/*
 { # If the object is not a move package, then there is no response
   package(address: "@{obj_5_0}", version: 5) {
     address
@@ -120,3 +129,4 @@ module P3::M {
     version
   }
 }
+*/

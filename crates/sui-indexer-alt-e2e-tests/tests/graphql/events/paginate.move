@@ -66,6 +66,7 @@ module P1::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   allEvents: events(first: 50) {
     pageInfo { ...pageInfo }
@@ -101,8 +102,10 @@ fragment E on Event {
     digest
   }
 }
+*/
 
 //# run-graphql --cursors {"t":2,"e":0}
+/*
 {
   eventsAfterT2E0HasPreviousPage: events(first: 50, after: "@{cursor_0}") {
     pageInfo { 
@@ -111,8 +114,10 @@ fragment E on Event {
     }
   }
 }
+*/
 
 //# run-graphql --cursors {"t":4,"e":9}
+/*
 {
   eventsBeforeT3E9HasNextPage: events(last: 50, before: "@{cursor_0}") {
     pageInfo { 
@@ -121,8 +126,10 @@ fragment E on Event {
     }
   }
 }
+*/
 
 //# run-graphql --cursors {"t":2,"e":0} {"t":4,"e":9}
+/*
 {
   firstEventBetweenT2E0AndT4E9: events(first: 1, after: "@{cursor_0}", before: "@{cursor_1}") {
     nodes {
@@ -148,9 +155,11 @@ fragment E on Event {
     digest
   }
 }
+*/
 
 
 //# run-graphql --cursors {"t":2,"e":0}
+/*
 {
   eventsAfterTransaction2AndEvent0: events(first: 1, after: "@{cursor_0}") {
     pageInfo { 
@@ -166,8 +175,10 @@ fragment E on Event {
     }
   }
 }
+*/
 
 //# run-graphql --cursors {"t":3,"e":0}
+/*
 {
   eventsBeforeTransaction3AndEvent0: events(first: 1, before: "@{cursor_0}") {
     pageInfo { 
@@ -183,8 +194,10 @@ fragment E on Event {
     }
   }
 }
+*/
 
 //# run-graphql --cursors {"t":3,"e":1}
+/*
 {
   eventsBeforeTransaction3AndEvent1FromBack: events(last: 2, before: "@{cursor_0}") {
     pageInfo { 
@@ -200,3 +213,4 @@ fragment E on Event {
     }
   }
 }
+*/

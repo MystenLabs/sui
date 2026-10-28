@@ -10,6 +10,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Fetch an object and convert it to a MoveObject. Note that the `objectBcs`
   # and `moveObjectBcs` are different.
 
@@ -25,8 +26,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Fetch a package, and try to convert it to a MoveObject, which will fail.
   object(address: "0x2") {
     asMoveObject {
@@ -34,3 +37,4 @@
     }
   }
 }
+*/

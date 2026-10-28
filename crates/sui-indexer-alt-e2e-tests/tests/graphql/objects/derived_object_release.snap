@@ -36,7 +36,7 @@ task 4, line 53:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 55-62:
+task 5, lines 55-64:
 //# run-graphql
 Response: {
   "data": {
@@ -53,18 +53,18 @@ Response: {
   }
 }
 
-task 6, lines 64-65:
+task 6, lines 66-67:
 //# programmable --sender A --inputs object(2,0) object(3,1)
 //> 0: test::derived::release(Input(0), Input(1));
 mutated: object(0,0), object(2,0)
 deleted: object(3,0), object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 6117388, non_refundable_storage_fee: 612
 
-task 7, line 67:
+task 7, line 69:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 8, lines 69-76:
+task 8, lines 71-80:
 //# run-graphql
 Response: {
   "data": {
@@ -76,7 +76,7 @@ Response: {
   }
 }
 
-task 9, lines 78-80:
+task 9, lines 82-84:
 //# programmable --sender A --inputs object(2,0) 2u64 @A
 //> 0: test::derived::claim(Input(0), Input(1));
 //> 1: TransferObjects([Result(0)], Input(2));
@@ -84,11 +84,11 @@ created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 2279772, non_refundable_storage_fee: 228
 
-task 10, line 82:
+task 10, line 86:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 11, lines 84-91:
+task 11, lines 88-97:
 //# run-graphql
 Response: {
   "data": {
@@ -105,7 +105,7 @@ Response: {
   }
 }
 
-task 12, lines 93-95:
+task 12, lines 99-101:
 // Released and re-created as a different type in separate transactions of one checkpoint.
 //# programmable --sender A --inputs object(2,0) object(3,1)
 //> 0: test::derived::release(Input(0), Input(1));
@@ -113,7 +113,7 @@ mutated: object(0,0), object(2,0)
 deleted: object(3,0), object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 6117388, non_refundable_storage_fee: 612
 
-task 13, lines 97-99:
+task 13, lines 103-105:
 //# programmable --sender A --inputs object(2,0) @A
 //> 0: test::derived::claim_other(Input(0));
 //> 1: TransferObjects([Result(0)], Input(1));
@@ -121,11 +121,11 @@ created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6057200,  storage_rebate: 2279772, non_refundable_storage_fee: 228
 
-task 14, line 101:
+task 14, line 107:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 15, lines 103-113:
+task 15, lines 109-121:
 //# run-graphql
 Response: {
   "data": {
@@ -177,7 +177,7 @@ Response: {
   }
 }
 
-task 16, lines 115-131:
+task 16, lines 123-141:
 //# run-graphql
 Response: {
   "data": {
@@ -267,7 +267,7 @@ Response: {
   }
 }
 
-task 17, lines 133-149:
+task 17, lines 143-161:
 //# run-graphql
 Response: {
   "data": {
@@ -336,7 +336,7 @@ Response: {
   }
 }
 
-task 18, lines 151-175:
+task 18, lines 163-189:
 //# run-graphql
 Response: {
   "data": {
@@ -393,7 +393,7 @@ Response: {
   }
 }
 
-task 19, lines 177-187:
+task 19, lines 191-203:
 //# run-graphql
 Response: {
   "data": {

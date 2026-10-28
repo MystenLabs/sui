@@ -20,6 +20,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   coinHasPublicTransfer: object(address: "@{obj_0_0}") {
     asMoveObject {
@@ -35,3 +36,4 @@ module P::M {
     }
   }
 }
+*/

@@ -15,7 +15,9 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   gas: object(address: "@{obj_2_0}") { storageRebate }
   pkg: package(address: "@{P}") { storageRebate }
 }
+*/

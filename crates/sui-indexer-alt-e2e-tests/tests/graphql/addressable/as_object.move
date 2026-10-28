@@ -20,6 +20,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   objectVersions(address: "@{obj_0_0}") {
     nodes { version}
@@ -39,3 +40,4 @@
     asObject { version }
   }
 }
+*/

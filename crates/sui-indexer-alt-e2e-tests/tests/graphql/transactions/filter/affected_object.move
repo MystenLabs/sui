@@ -127,6 +127,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   all: transactions { ...TX }
   affect2: transactions(filter: { affectedObject: "@{obj_2_0}" }) { ...TX }
@@ -143,3 +144,4 @@ fragment TX on TransactionConnection {
     digest
   }
 }
+*/

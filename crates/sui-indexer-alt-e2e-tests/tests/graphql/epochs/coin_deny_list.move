@@ -59,6 +59,7 @@ module P::coin {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   e0: epoch(epochId: 0) {
     coinDenyList { address version }
@@ -72,3 +73,4 @@ module P::coin {
     coinDenyList { address version }
   }
 }
+*/

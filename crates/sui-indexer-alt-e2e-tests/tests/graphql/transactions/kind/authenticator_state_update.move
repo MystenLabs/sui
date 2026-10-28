@@ -21,6 +21,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test Simple transfer transaction (should NOT match AuthenticatorStateUpdate fragment)
   nonAuthenticatorTransaction: transaction(digest: "@{digest_1}") {
@@ -49,8 +50,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test Single JWK transaction
   singleJwkTransaction: transaction(digest: "@{digest_2}") {
@@ -87,8 +90,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test Multiple JWKs transaction
   multipleJwksTransaction: transaction(digest: "@{digest_5}") {
@@ -125,8 +130,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test Pagination
   paginationFirstJwk: transaction(digest: "@{digest_5}") {
@@ -179,3 +186,4 @@
     }
   }
 }
+*/

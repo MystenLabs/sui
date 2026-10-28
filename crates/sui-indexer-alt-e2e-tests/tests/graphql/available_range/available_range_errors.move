@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --simulator --consistent-range 2
 
 //# run-graphql
+/*
 {
   happyPath: serviceConfig {
     availableRange(type: "Query", field: "checkpoints") {
@@ -18,8 +19,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   typeNotFound: serviceConfig {
     availableRange(type: "InvalidType", field: "checkpoints") {
@@ -30,8 +33,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   fieldNotFound: serviceConfig {
     availableRange(type: "Query", field: "invalidField") {
@@ -42,8 +47,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   invalidTypeAndField: serviceConfig {
     availableRange(type: "InvalidType", field: "invalidField") {
@@ -54,8 +61,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   notAnObjectOrInterface: serviceConfig {
     availableRange(type: "ZkLoginIntentScope", field: "invalidField") {
@@ -66,3 +75,4 @@
     }
   }
 }
+*/

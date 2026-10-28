@@ -34,6 +34,7 @@ module P::Z { public fun f(): u64 { 42 } }
 //# create-checkpoint
 
 //# run-graphql --cursors "J" "P"
+/*
 {
   package(address: "@{P}") {
     all: modules(first: 26) { ...M }
@@ -60,3 +61,4 @@ fragment M on MoveModuleConnection {
     fullyQualifiedName
   }
 }
+*/

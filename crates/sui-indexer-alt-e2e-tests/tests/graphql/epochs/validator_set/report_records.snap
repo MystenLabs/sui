@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0), validator_0: object(0,1), validator_1: object(0,2)
 
-task 1, lines 6-30:
+task 1, lines 6-32:
 //# run-graphql
 Response: {
   "data": {

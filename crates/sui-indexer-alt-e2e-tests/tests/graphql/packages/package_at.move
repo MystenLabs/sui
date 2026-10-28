@@ -23,6 +23,7 @@ module P3::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Fetching packages as objects, to confirm their addresses and versions
   p1: object(address: "@{obj_1_0}") {
     address
@@ -39,8 +40,10 @@ module P3::M {
     version
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   package(address: "@{obj_1_0}") {
     address
@@ -57,3 +60,4 @@ module P3::M {
     }
   }
 }
+*/

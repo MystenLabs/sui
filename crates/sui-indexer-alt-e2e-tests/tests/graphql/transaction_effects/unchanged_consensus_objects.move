@@ -46,6 +46,7 @@ module test::shared_object_tests {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test read-only access to consensus object (should show ConsensusObjectRead)
   readOnlyAccess1: transactionEffects(digest: "@{digest_3}") {
@@ -64,8 +65,10 @@ module test::shared_object_tests {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test mutable access to consensus object (should have no unchanged consensus objects)
   mutableAccess: transactionEffects(digest: "@{digest_4}") {
@@ -83,8 +86,10 @@ module test::shared_object_tests {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test read-only access after mutation (should show ConsensusObjectRead with updated version)
   readOnlyAccess2: transactionEffects(digest: "@{digest_5}") {
@@ -103,3 +108,4 @@ module test::shared_object_tests {
     }
   }
 }
+*/

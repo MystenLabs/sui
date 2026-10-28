@@ -37,6 +37,7 @@
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 
 //# run-graphql
+/*
 { # Test balance_changes field on address balance transfer
   addressBalanceTransferTransaction: transactionEffects(digest: "@{digest_1}") {
     balanceChanges {
@@ -54,8 +55,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test balance_changes field on transaction paid by address balance
   addressBalanceGasTransaction: transactionEffects(digest: "@{digest_5}") {
     balanceChanges {
@@ -73,8 +76,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test balance_changes field on ab transfer transaction paid by address balance
   addressBalanceGasTransaction: transactionEffects(digest: "@{digest_8}") {
     balanceChanges {
@@ -92,3 +97,4 @@
     }
   }
 }
+*/

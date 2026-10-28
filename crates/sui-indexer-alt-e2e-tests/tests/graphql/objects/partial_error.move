@@ -13,6 +13,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Query an object with valid fields and an error field.
   # The response should have both data (for successful fields) AND errors (for failed field)
   object(address: "@{obj_0_0}") {
@@ -24,8 +25,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Partial error at the query root level with multiple objects
   # One succeeds, one fails - both should be in the response
@@ -40,3 +43,4 @@
     }
   }
 }
+*/
