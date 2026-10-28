@@ -15,6 +15,11 @@ use sui_rpc::proto::sui::rpc::v2::TransactionFilter as GrpcTransactionFilter;
 use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
 use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal::Predicate;
+use sui_types::balance::Balance;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::effects::AccumulatorValue;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -167,19 +172,17 @@ impl TransactionFilter {
     }
 
     pub(crate) fn to_grpc_filter(&self) -> Option<GrpcTransactionFilter> {
-        let mut literals = Vec::new();
+        // Literals shared by every term (ANDed together within a term).
+        let mut common = Vec::new();
 
         if let Some(sent) = &self.sent_address {
-            literals.push(include_literal(sender_predicate(sent)));
-        }
-        if let Some(address) = &self.affected_address {
-            literals.push(include_literal(affected_address_predicate(address)));
+            common.push(include_literal(sender_predicate(sent)));
         }
         if let Some(object) = &self.affected_object {
-            literals.push(include_literal(affected_object_predicate(object)));
+            common.push(include_literal(affected_object_predicate(object)));
         }
         if let Some(function) = &self.function {
-            literals.push(include_literal(move_call_predicate(function)));
+            common.push(include_literal(move_call_predicate(function)));
         }
         if let Some(kind) = &self.kind {
             // Every system transaction (Genesis, ConsensusCommitPrologue, ChangeEpoch,
@@ -188,18 +191,38 @@ impl TransactionFilter {
             // `Exclude(Sender = 0x0)` and the bitmap layer synthesizes the TxUniverse anchor for us
             // (sui-rpc-api/src/ledger_history/filter.rs).
             let zero_sender = sender_predicate(&SuiAddress::ZERO);
-            literals.push(match kind {
+            common.push(match kind {
                 TransactionKindInput::SystemTx => include_literal(zero_sender),
                 TransactionKindInput::ProgrammableTx => exclude_literal(zero_sender),
             });
         }
 
-        if literals.is_empty() {
-            return None;
-        }
+        let terms = match &self.affected_address {
+            // The index's `AffectedAddress` dimension only covers addresses whose state the
+            // transaction changed, but `affectedAddress` also matches the sender (as the
+            // `tx_affected_addresses` pipeline does). Express that as `(common AND
+            // AffectedAddress = A) OR (common AND Sender = A)`.
+            Some(address) if self.sent_address.as_ref() == Some(address) => {
+                // `Sender = A` already implies the address is affected.
+                vec![common]
+            }
+            Some(address) => {
+                let mut affected = common.clone();
+                affected.push(include_literal(affected_address_predicate(address)));
+                let mut sent = common;
+                sent.push(include_literal(sender_predicate(address)));
+                vec![affected, sent]
+            }
+            None if common.is_empty() => return None,
+            None => vec![common],
+        };
 
-        let filter = GrpcTransactionFilter::default()
-            .with_terms(vec![TransactionTerm::default().with_literals(literals)]);
+        let filter = GrpcTransactionFilter::default().with_terms(
+            terms
+                .into_iter()
+                .map(|literals| TransactionTerm::default().with_literals(literals))
+                .collect(),
+        );
 
         Some(filter)
     }
@@ -236,19 +259,27 @@ impl TransactionFilter {
             return false;
         }
 
-        // TODO: Verify consistency with the indexed path (tx_affected_addresses).
-        // The indexed path includes sender, gas payer, and recipients from
-        // all_changed_objects(). Confirm this matches for sponsored transactions
-        // and edge cases (deleted/wrapped object owners).
+        // Same addresses as the `tx_affected_addresses` pipeline: the sender, the gas owner, the
+        // owners of changed objects, and addresses whose balance changed.
         if let Some(affected_address) = &self.affected_address {
-            let in_changed_objects = effects.all_changed_objects().iter().any(|(_, owner, _)| {
-                owner
-                    .get_address_owner_address()
-                    .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
+            let target: NativeSuiAddress = (*affected_address).into();
+            let is_sender = data.sender() == target;
+            let is_payer = data.gas_data().owner == target;
+            let in_changed_objects =
+                effects
+                    .all_changed_objects()
+                    .iter()
+                    .any(|(_, owner, _)| match owner {
+                        Owner::AddressOwner(address) => *address == target,
+                        Owner::ConsensusAddressOwner { owner, .. } => *owner == target,
+                        _ => false,
+                    });
+            let in_balance_changes = effects.accumulator_events().iter().any(|event| {
+                event.write.address.address == target
+                    && Balance::is_balance_type(&event.write.address.ty)
+                    && matches!(&event.write.value, AccumulatorValue::Integer(_))
             });
-            let is_sender = SuiAddress::from(data.sender()) == *affected_address;
-            let is_payer = SuiAddress::from(data.gas_data().owner) == *affected_address;
-            if !in_changed_objects && !is_sender && !is_payer {
+            if !is_sender && !is_payer && !in_changed_objects && !in_balance_changes {
                 return false;
             }
         }
@@ -462,20 +493,6 @@ mod tests {
     fn sender_combines_with_each_other_field_in_one_term() {
         let sender = addr("0x2");
 
-        // sender + affected_address: both predicates land as Include literals in the same
-        // term (an AND).
-        let with_address = TransactionFilter {
-            sent_address: Some(sender),
-            affected_address: Some(addr("0xdef")),
-            ..Default::default()
-        }
-        .to_grpc_filter()
-        .expect("valid bitmap filter");
-        let preds = term_includes(&with_address);
-        assert_eq!(preds.len(), 2);
-        assert!(matches!(preds[0], Predicate::Sender(_)));
-        assert!(matches!(preds[1], Predicate::AffectedAddress(_)));
-
         // sender + affected_object
         let with_object = TransactionFilter {
             sent_address: Some(sender),
@@ -505,6 +522,96 @@ mod tests {
         assert_eq!(preds.len(), 2);
         assert!(matches!(preds[0], Predicate::Sender(_)));
         assert!(matches!(preds[1], Predicate::MoveCall(_)));
+    }
+
+    /// Literals of every term, preserving negation.
+    fn all_terms(filter: &GrpcTransactionFilter) -> Vec<Vec<(bool, &Predicate)>> {
+        filter
+            .terms
+            .iter()
+            .map(|term| {
+                term.literals
+                    .iter()
+                    .map(|literal| {
+                        (
+                            literal.negated,
+                            literal.predicate.as_ref().expect("predicate set"),
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn assert_affected_address_literal(literal: &(bool, &Predicate), expected_address: &str) {
+        assert!(!literal.0, "expected non-negated literal");
+        match literal.1 {
+            Predicate::AffectedAddress(f) => {
+                assert_eq!(f.address.as_deref(), Some(expected_address));
+            }
+            other => panic!("expected AffectedAddress predicate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn affected_address_also_matches_sender() {
+        let address = addr("0xdef");
+        let proto = TransactionFilter {
+            affected_address: Some(address),
+            ..Default::default()
+        }
+        .to_grpc_filter()
+        .expect("serviceable");
+
+        // `AffectedAddress = A OR Sender = A`
+        let terms = all_terms(&proto);
+        assert_eq!(terms.len(), 2);
+        assert_eq!(terms[0].len(), 1);
+        assert_affected_address_literal(&terms[0][0], &address.to_string());
+        assert_eq!(terms[1].len(), 1);
+        assert_sender_literal(&terms[1][0], true, &address.to_string());
+    }
+
+    #[test]
+    fn affected_address_distributes_over_other_fields() {
+        let sender = addr("0x2");
+        let address = addr("0xdef");
+        let proto = TransactionFilter {
+            sent_address: Some(sender),
+            affected_address: Some(address),
+            kind: Some(TransactionKindInput::ProgrammableTx),
+            ..Default::default()
+        }
+        .to_grpc_filter()
+        .expect("serviceable");
+
+        // `(Sender = S AND NOT Sender = 0x0 AND AffectedAddress = A)
+        //  OR (Sender = S AND NOT Sender = 0x0 AND Sender = A)`
+        let terms = all_terms(&proto);
+        assert_eq!(terms.len(), 2);
+        for term in &terms {
+            assert_eq!(term.len(), 3);
+            assert_sender_literal(&term[0], true, &sender.to_string());
+            assert_sender_literal(&term[1], false, &SuiAddress::ZERO.to_string());
+        }
+        assert_affected_address_literal(&terms[0][2], &address.to_string());
+        assert_sender_literal(&terms[1][2], true, &address.to_string());
+    }
+
+    #[test]
+    fn affected_address_equal_to_sender_is_just_sender() {
+        let address = addr("0xdef");
+        let proto = TransactionFilter {
+            sent_address: Some(address),
+            affected_address: Some(address),
+            ..Default::default()
+        }
+        .to_grpc_filter()
+        .expect("serviceable");
+
+        let literals = term_literals(&proto);
+        assert_eq!(literals.len(), 1);
+        assert_sender_literal(&literals[0], true, &address.to_string());
     }
 
     #[test]

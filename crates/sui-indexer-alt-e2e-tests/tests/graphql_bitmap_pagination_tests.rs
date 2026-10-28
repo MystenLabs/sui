@@ -1172,6 +1172,117 @@ async fn test_affected_address() {
 }
 
 #[tokio::test]
+async fn test_affected_address_includes_sender() {
+    // `affectedAddress` matches the sender, even when the sender owns no changed object. The
+    // index's `AffectedAddress` dimension only records addresses whose state changed, so the
+    // filter must also match `Sender`. cp 1 has two txs: tx 0 is sent by Alice and sponsored by
+    // Carol, and changes only Carol's gas coin (Alice is affected only as sender); tx 1 is an
+    // unrelated tx from Bob.
+    let (cluster, temp_dir) = alpha_cluster().await;
+
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let bob = TestCheckpointBuilder::derive_address(2);
+    let carol = TestCheckpointBuilder::derive_address(3);
+    let pkg = ObjectID::from_single_byte(0x42);
+
+    let checkpoint = TestCheckpointBuilder::new(1)
+        .with_network_total_transactions(1)
+        // tx 0: Alice sends, Carol pays gas; no object owned by Alice changes.
+        .start_sponsored_transaction(1, 3)
+        .add_move_call(pkg, "m", "f")
+        .finish_transaction()
+        // tx 1: Bob's own transaction; affects neither Alice nor Carol.
+        .start_transaction(2)
+        .create_owned_object(0)
+        .finish_transaction()
+        .build_checkpoint();
+    let [sponsored, bobs]: [String; 2] = checkpoint
+        .contents
+        .iter()
+        .map(|tx| Base58::encode(tx.transaction))
+        .collect::<Vec<_>>()
+        .try_into()
+        .expect("cp 1 should have two transactions");
+
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    fn digests(resp: &Value, pointer: &str) -> HashSet<String> {
+        resp.pointer(pointer)
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("expected edges array at {pointer} in {resp}"))
+            .iter()
+            .map(|e| {
+                e["node"]["digest"]
+                    .as_str()
+                    .expect("edge node digest")
+                    .to_string()
+            })
+            .collect()
+    }
+
+    let query = r#"query($address: SuiAddress) {
+        transactions(first: 50, filter: { affectedAddress: $address }) {
+            edges { node { digest } }
+        }
+    }"#;
+
+    // Sender only.
+    let resp = graphql(&cluster, query, json!({ "address": alice })).await;
+    assert_eq!(
+        digests(&resp, "/transactions/edges"),
+        HashSet::from([sponsored.clone()])
+    );
+
+    // Sponsor, through the gas coin it owns.
+    let resp = graphql(&cluster, query, json!({ "address": carol })).await;
+    assert_eq!(
+        digests(&resp, "/transactions/edges"),
+        HashSet::from([sponsored.clone()])
+    );
+
+    // Bob is both the sender and an owner of a changed object: matching both terms of the OR
+    // must still return the transaction once.
+    let resp = graphql(&cluster, query, json!({ "address": bob })).await;
+    let edges = resp
+        .pointer("/transactions/edges")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("expected edges array in {resp}"));
+    assert_eq!(edges.len(), 1, "expected one edge in {resp}");
+    assert_eq!(edges[0]["node"]["digest"].as_str(), Some(bobs.as_str()));
+
+    // `Address.transactions(relation: AFFECTED)` combined with another filter: the sender
+    // match must still be ANDed with `kind`.
+    let query = r#"query($address: SuiAddress!) {
+        address(address: $address) {
+            programmable: transactions(
+                first: 50,
+                relation: AFFECTED,
+                filter: { kind: PROGRAMMABLE_TX },
+            ) {
+                edges { node { digest } }
+            }
+            system: transactions(
+                first: 50,
+                relation: AFFECTED,
+                filter: { kind: SYSTEM_TX },
+            ) {
+                edges { node { digest } }
+            }
+        }
+    }"#;
+    let resp = graphql(&cluster, query, json!({ "address": alice })).await;
+    assert_eq!(
+        digests(&resp, "/address/programmable/edges"),
+        HashSet::from([sponsored])
+    );
+    assert_eq!(digests(&resp, "/address/system/edges"), HashSet::new());
+}
+
+#[tokio::test]
 async fn test_affected_object() {
     // Proves the graphql `affectedObject` filter translates to an `AffectedObject` include
     // predicate that matches by object id. cp 1 has two txs creating different objects;

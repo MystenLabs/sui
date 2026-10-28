@@ -154,6 +154,14 @@ impl TestEffectsBuilder {
             .collect();
         let executed_epoch = 0;
         let sender = self.transaction.transaction_data().sender();
+        let gas_owner = self.transaction.transaction_data().gas_owner();
+        let gas_ids: BTreeSet<ObjectID> = self
+            .transaction
+            .transaction_data()
+            .gas()
+            .iter()
+            .map(|oref| oref.0)
+            .collect();
         // TODO: Include receiving objects in the object changes as well.
         let changed_objects = self
             .transaction
@@ -167,21 +175,30 @@ impl TestEffectsBuilder {
                 {
                     None
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(oref) => Some((
-                    oref.0,
-                    EffectsObjectChange {
-                        input_state: ObjectIn::Exist((
-                            (oref.1, oref.2),
-                            Owner::AddressOwner(sender),
-                        )),
-                        output_state: ObjectOut::ObjectWrite((
-                            // Digest must change with a mutation.
-                            ObjectDigest::MAX,
-                            Owner::AddressOwner(sender),
-                        )),
-                        id_operation: IDOperation::None,
-                    },
-                )),
+                InputObjectKind::ImmOrOwnedMoveObject(oref) => {
+                    // Gas coins belong to the gas owner (the sponsor, if any); other owned
+                    // inputs belong to the sender.
+                    let owner = if gas_ids.contains(&oref.0) {
+                        gas_owner
+                    } else {
+                        sender
+                    };
+                    Some((
+                        oref.0,
+                        EffectsObjectChange {
+                            input_state: ObjectIn::Exist((
+                                (oref.1, oref.2),
+                                Owner::AddressOwner(owner),
+                            )),
+                            output_state: ObjectOut::ObjectWrite((
+                                // Digest must change with a mutation.
+                                ObjectDigest::MAX,
+                                Owner::AddressOwner(owner),
+                            )),
+                            id_operation: IDOperation::None,
+                        },
+                    ))
+                }
                 InputObjectKind::MovePackage(_) => None,
                 InputObjectKind::SharedMoveObject {
                     id,

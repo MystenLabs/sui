@@ -81,6 +81,7 @@ struct CheckpointBuilder {
 
 struct TransactionBuilder {
     sender_idx: u8,
+    sponsor_idx: Option<u8>,
     gas: ObjectRef,
     move_calls: Vec<(ObjectID, &'static str, &'static str)>,
     created_objects: BTreeMap<ObjectID, Object>,
@@ -99,9 +100,10 @@ struct Shared {
 }
 
 impl TransactionBuilder {
-    pub fn new(sender_idx: u8, gas: ObjectRef) -> Self {
+    pub fn new(sender_idx: u8, sponsor_idx: Option<u8>, gas: ObjectRef) -> Self {
         Self {
             sender_idx,
+            sponsor_idx,
             gas,
             move_calls: vec![],
             created_objects: BTreeMap::new(),
@@ -174,11 +176,21 @@ impl TestCheckpointBuilder {
     /// A proper SuiAddress will be derived from it.
     /// It will also create a gas object for the sender if it doesn't already exist in the live object map.
     /// You do not need to create the gas object yourself.
-    pub fn start_transaction(mut self, sender_idx: u8) -> Self {
+    pub fn start_transaction(self, sender_idx: u8) -> Self {
+        self.start_transaction_impl(sender_idx, None)
+    }
+
+    /// Start creating a new sponsored transaction: sent by `sender_idx`, with gas paid from
+    /// `sponsor_idx`'s gas object (created if it doesn't exist yet).
+    pub fn start_sponsored_transaction(self, sender_idx: u8, sponsor_idx: u8) -> Self {
+        self.start_transaction_impl(sender_idx, Some(sponsor_idx))
+    }
+
+    fn start_transaction_impl(mut self, sender_idx: u8, sponsor_idx: Option<u8>) -> Self {
         assert!(self.checkpoint_builder.next_transaction.is_none());
-        let sender = Self::derive_address(sender_idx);
-        let gas_id = self.gas_map.entry(sender).or_insert_with(|| {
-            let gas = Object::with_owner_for_testing(sender);
+        let gas_owner = Self::derive_address(sponsor_idx.unwrap_or(sender_idx));
+        let gas_id = self.gas_map.entry(gas_owner).or_insert_with(|| {
+            let gas = Object::with_owner_for_testing(gas_owner);
             let id = gas.id();
             self.live_objects.insert(id, gas);
             id
@@ -190,7 +202,7 @@ impl TestCheckpointBuilder {
             .unwrap()
             .compute_object_reference();
         self.checkpoint_builder.next_transaction =
-            Some(TransactionBuilder::new(sender_idx, gas_ref));
+            Some(TransactionBuilder::new(sender_idx, sponsor_idx, gas_ref));
         self
     }
 
@@ -432,6 +444,7 @@ impl TestCheckpointBuilder {
     pub fn finish_transaction(mut self) -> Self {
         let TransactionBuilder {
             sender_idx,
+            sponsor_idx,
             gas,
             move_calls,
             created_objects,
@@ -489,13 +502,18 @@ impl TestCheckpointBuilder {
         }
 
         let pt = pt_builder.finish();
-        let tx_data = TransactionData::new(
-            TransactionKind::ProgrammableTransaction(pt),
-            sender,
-            gas,
-            1,
-            1,
-        );
+        let kind = TransactionKind::ProgrammableTransaction(pt);
+        let tx_data = match sponsor_idx {
+            None => TransactionData::new(kind, sender, gas, 1, 1),
+            Some(sponsor_idx) => TransactionData::new_with_gas_coins_allow_sponsor(
+                kind,
+                sender,
+                vec![gas],
+                1,
+                1,
+                Self::derive_address(sponsor_idx),
+            ),
+        };
 
         let tx = Transaction::new(SenderSignedData::new(tx_data, vec![]));
 

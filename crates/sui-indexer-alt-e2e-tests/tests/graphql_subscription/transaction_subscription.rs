@@ -12,12 +12,19 @@ use std::time::Duration;
 use async_graphql::connection::CursorType;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
+use move_core_types::identifier::Identifier;
 use serde_json::Value;
 use serde_json::json;
+use shared_crypto::intent::Intent;
 use sui_indexer_alt_graphql::CTransaction;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
+use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionKind;
 use test_cluster::TestCluster;
 use tokio_stream::StreamExt;
 
@@ -759,6 +766,98 @@ async fn test_transaction_subscription_live_backfill_parity() {
         live_nodes, backfill_nodes,
         "live and backfill resolved the same transactions differently",
     );
+}
+
+/// Execute a transaction sent by the validator's second address and sponsored by its first, that
+/// changes nothing but the sponsor's gas coin: the sender is affected only as the sender. Returns
+/// its digest.
+async fn execute_sponsored_noop(validator: &TestCluster) -> String {
+    let sponsor = validator.get_address_0();
+    let sender = validator.get_address_1();
+    let rgp = validator.get_reference_gas_price().await;
+    let gas = validator
+        .wallet
+        .gas_for_owner_budget(sponsor, rgp * 50_000, BTreeSet::new())
+        .await
+        .unwrap()
+        .1
+        .compute_object_reference();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let x = builder.pure(1u64).unwrap();
+    let y = builder.pure(2u64).unwrap();
+    builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        Identifier::new("u64").unwrap(),
+        Identifier::new("max").unwrap(),
+        vec![],
+        vec![x, y],
+    );
+    let data = TransactionData::new_with_gas_coins_allow_sponsor(
+        TransactionKind::programmable(builder.finish()),
+        sender,
+        vec![gas],
+        rgp * 50_000,
+        rgp,
+        sponsor,
+    );
+
+    let mut signatures = vec![];
+    for signer in [sender, sponsor] {
+        signatures.push(
+            validator
+                .wallet
+                .sign_secure(&signer.into(), &data, Intent::sui_transaction())
+                .await
+                .unwrap(),
+        );
+    }
+    let tx = Transaction::from_data(data, signatures);
+    let digest = tx.digest().to_string();
+    validator.execute_transaction(tx).await;
+    digest
+}
+
+/// `affectedAddress` matches a sponsored transaction's sender and sponsor on both the live path and
+/// the backfill scan, even when the sender owns no object the transaction changed.
+#[tokio::test]
+async fn test_transaction_subscription_affected_address_sender_live_backfill_parity() {
+    let cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.get_address_1();
+    let sponsor = cluster.validator.get_address_0();
+    let filter = "affectedAddress: $sender";
+
+    // 1. Start live, for both the sender and the sponsor.
+    let mut live_sender = cluster
+        .subscribe_with_variables(&tx_query(filter, None), sender_var(sender))
+        .await;
+    let mut live_sponsor = cluster
+        .subscribe_with_variables(&tx_query(filter, None), sender_var(sponsor))
+        .await;
+
+    // 2. Execute the sponsored transaction.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let expected = vec![execute_sponsored_noop(&cluster.validator).await];
+
+    // 3. Both live subscriptions deliver it.
+    let live_sender_nodes = collect_nodes(&mut live_sender, &expected).await;
+    let live_sponsor_nodes = collect_nodes(&mut live_sponsor, &expected).await;
+    drop((live_sender, live_sponsor));
+
+    // 4. Resume from before it, so it can only arrive through the backfill scan.
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+    let mut backfill_sender = cluster
+        .subscribe_with_variables(&tx_query(filter, Some(resume_from)), sender_var(sender))
+        .await;
+    let mut backfill_sponsor = cluster
+        .subscribe_with_variables(&tx_query(filter, Some(resume_from)), sender_var(sponsor))
+        .await;
+    let backfill_sender_nodes = collect_nodes(&mut backfill_sender, &expected).await;
+    let backfill_sponsor_nodes = collect_nodes(&mut backfill_sponsor, &expected).await;
+
+    // 5. Live and backfill agree.
+    assert_eq!(live_sender_nodes, backfill_sender_nodes);
+    assert_eq!(live_sponsor_nodes, backfill_sponsor_nodes);
 }
 
 #[tokio::test]
