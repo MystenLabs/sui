@@ -147,6 +147,11 @@ pub struct RpcArgs {
     ///
     /// Note that GraphQL requires a running indexer and consistent store, which will be enabled
     /// by default even if those flags are not set.
+    ///
+    /// GraphQL subscriptions are served at `/graphql/subscriptions`, streaming checkpoints from
+    /// the local fullnode. Paginated `transactions` and `events` queries are also served by the
+    /// fullnode instead of the indexer's Postgres tables, matching how public GraphQL services
+    /// run. GraphQL starts once the indexer has caught up with the fullnode.
     #[clap(
         long,
         default_missing_value = "0.0.0.0:9125",
@@ -1040,6 +1045,10 @@ async fn start(
         swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
 
+    // GraphQL pages through and subscribes to transactions and events from the fullnode, so it
+    // needs the fullnode to keep its full history.
+    let disable_fullnode_pruning = with_graphql.is_some();
+
     let fullnode_rpc_address = if no_full_node {
         swarm_builder = swarm_builder.with_fullnode_count(0);
         let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
@@ -1062,6 +1071,11 @@ async fn start(
                 })?;
             fullnode_config.json_rpc_address.set_port(fullnode_rpc_port);
             fullnode_config.rpc = Some(rpc_config);
+            if disable_fullnode_pruning {
+                let pruning = &mut fullnode_config.authority_store_pruning_config;
+                pruning.set_num_epochs_to_retain(u64::MAX);
+                pruning.set_num_epochs_to_retain_for_checkpoints(None);
+            }
             let localhost = sui_config::local_ip_utils::localhost_for_testing();
             fullnode_config.metrics_address =
                 sui_config::local_ip_utils::new_local_tcp_socket_for_testing();
@@ -1090,6 +1104,9 @@ async fn start(
                 .with_fullnode_count(1)
                 .with_fullnode_rpc_addr(fullnode_rpc_address)
                 .with_fullnode_rpc_config(rpc_config);
+            if disable_fullnode_pruning {
+                swarm_builder = swarm_builder.with_disable_fullnode_pruning();
+            }
             fullnode_rpc_address
         }
     };
@@ -1228,7 +1245,9 @@ async fn start(
         graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
 
         // The local fullnode already serves the `LedgerService` gRPC API that
-        // `--ledger-grpc-url` points at, so KV point-lookups can be served from it directly.
+        // `--ledger-grpc-url` points at, so KV point-lookups can be served from it directly. It
+        // also serves the List APIs (used for pagination, and by subscriptions for backfill and
+        // gap recovery) and the checkpoint stream that subscriptions follow.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(
                 fullnode_grpc_url
@@ -1236,7 +1255,17 @@ async fn start(
                     .parse()
                     .context("Failed to parse fullnode gRPC URL into a ledger gRPC URI")?,
             ),
+            enable_list_apis: Some(true),
             ..Default::default()
+        };
+
+        let subscription_args = SubscriptionArgs {
+            checkpoint_stream_url: Some(
+                fullnode_grpc_url
+                    .as_str()
+                    .parse()
+                    .context("Failed to parse fullnode gRPC URL into a checkpoint stream URI")?,
+            ),
         };
 
         rpc_services = rpc_services.merge(
@@ -1248,7 +1277,7 @@ async fn start(
                 consistent_reader_args,
                 graphql_args,
                 SystemPackageTaskArgs::default(),
-                SubscriptionArgs::default(),
+                subscription_args,
                 "0.0.0",
                 graphql_config,
                 pipelines,
