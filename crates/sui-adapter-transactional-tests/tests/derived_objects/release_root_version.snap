@@ -1,0 +1,258 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 30 tasks
+
+// A re-claimed UID inherits its parent's root version, so the funds left in its dynamic fields are
+// read at their latest versions. Older versions of the fields hold more SUI; reading one of them,
+// or reading nothing, would let the funds be spent twice or overwritten.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-118:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 17928400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 120:
+//# run ex::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 122-127:
+// The balance field goes 500 -> 800 -> 200 and the coin field goes 500 -> 100.
+//# programmable --sender A --inputs object(2,0) 1000 @A
+//> 0: ex::m::claim(Input(0));
+//> 1: SplitCoins(Gas, [Input(1)]);
+//> ex::m::fund(Result(0), Result(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(3,0), object(3,1), object(3,2), object(3,3), object(3,4)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 11552000,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 4, lines 129-131:
+//# programmable --sender A --inputs object(3,1) 300
+//> 0: SplitCoins(Gas, [Input(1)]);
+//> ex::m::deposit(Input(0), Result(0))
+mutated: object(0,0), object(3,1), object(3,4)
+gas summary: computation_cost: 1000000, storage_cost: 4370000,  storage_rebate: 4369563, non_refundable_storage_fee: 437
+
+task 5, lines 133-136:
+//# programmable --sender A --inputs object(3,1) 600 400 @A
+//> 0: ex::m::withdraw(Input(0), Input(1));
+//> 1: ex::m::withdraw_coin(Input(0), Input(2));
+//> TransferObjects([Result(0), Result(1)], Input(3))
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(3,0), object(3,1), object(3,4)
+gas summary: computation_cost: 1000000, storage_cost: 7334000,  storage_rebate: 5357464, non_refundable_storage_fee: 536
+
+task 6, lines 138-139:
+//# programmable --sender A --inputs object(2,0) object(3,1)
+//> ex::m::release(Input(0), Input(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 5950205, non_refundable_storage_fee: 595
+
+task 7, lines 141-146:
+// Each of these re-claims X without loading it, so its field reads use the inherited bound.
+// Withdrawing more than the latest balance aborts.
+//# programmable --sender A --inputs object(2,0) 201 @A
+//> 0: ex::m::claim(Input(0));
+//> 1: ex::m::withdraw(Result(0), Input(1));
+//> TransferObjects([Result(0), Result(1)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::balance::split (function index 7) at offset 10, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("balance") }, function: 7, instruction: 10, function_name: Some("split") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: Some("sui::balance::split at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("balance") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 10)] }), command: Some(1) } }
+
+task 8, lines 148-152:
+// Withdrawing more than the latest coin value aborts.
+//# programmable --sender A --inputs object(2,0) 101 @A
+//> 0: ex::m::claim(Input(0));
+//> 1: ex::m::withdraw_coin(Result(0), Input(1));
+//> TransferObjects([Result(0), Result(1)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::balance::split (function index 7) at offset 10, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("balance") }, function: 7, instruction: 10, function_name: Some("split") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: Some("sui::balance::split at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("balance") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 10)] }), command: Some(1) } }
+
+task 9, lines 154-158:
+// The balance field still exists.
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> ex::m::add_balance_field(Result(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::add (function index 0) at offset 15, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 0, instruction: 15, function_name: Some("add") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("sui::dynamic_field::add at offset 15"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 15)] }), command: Some(1) } }
+
+task 10, lines 160-163:
+//# programmable --sender A --inputs object(2,0) 200 100 @A
+//> 0: ex::m::claim(Input(0));
+//> ex::m::assert_funds(Result(0), Input(1), Input(2));
+//> TransferObjects([Result(0)], Input(3))
+created: object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 11, lines 165-166:
+// The parent is a dynamic object field of a root object, so the inherited version is the root's.
+//# run ex::m::create_root --sender A
+created: object(11,0), object(11,1), object(11,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5920400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 168-172:
+//# programmable --sender A --inputs object(11,0) 1000 @A
+//> 0: ex::m::claim_from_root(Input(0));
+//> 1: SplitCoins(Gas, [Input(1)]);
+//> ex::m::fund(Result(0), Result(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(12,0), object(12,1), object(12,2), object(12,3), object(12,4)
+mutated: object(0,0), object(11,0)
+gas summary: computation_cost: 1000000, storage_cost: 11536800,  storage_rebate: 2218978, non_refundable_storage_fee: 222
+
+task 13, lines 174-177:
+//# programmable --sender A --inputs object(12,1) 400 400 @A
+//> 0: ex::m::withdraw(Input(0), Input(1));
+//> 1: ex::m::withdraw_coin(Input(0), Input(2));
+//> TransferObjects([Result(0), Result(1)], Input(3))
+created: object(13,0), object(13,1)
+mutated: object(0,0), object(12,0), object(12,1), object(12,4)
+gas summary: computation_cost: 1000000, storage_cost: 7334000,  storage_rebate: 5357464, non_refundable_storage_fee: 536
+
+task 14, lines 179-180:
+//# programmable --sender A --inputs object(11,0) object(12,1)
+//> ex::m::release_from_root(Input(0), Input(1))
+mutated: object(0,0), object(11,0)
+deleted: object(12,1), object(12,2)
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 5935006, non_refundable_storage_fee: 594
+
+task 15, lines 182-185:
+//# programmable --sender A --inputs object(11,0) 101 @A
+//> 0: ex::m::claim_from_root(Input(0));
+//> 1: ex::m::withdraw(Result(0), Input(1));
+//> TransferObjects([Result(0), Result(1)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::balance::split (function index 7) at offset 10, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("balance") }, function: 7, instruction: 10, function_name: Some("split") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: Some("sui::balance::split at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("balance") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 10)] }), command: Some(1) } }
+
+task 16, lines 187-190:
+//# programmable --sender A --inputs object(11,0) 100 100 @A
+//> 0: ex::m::claim_from_root(Input(0));
+//> ex::m::assert_funds(Result(0), Input(1), Input(2));
+//> TransferObjects([Result(0)], Input(3))
+created: object(12,1), object(12,2)
+mutated: object(0,0), object(11,0)
+gas summary: computation_cost: 1000000, storage_cost: 5935600,  storage_rebate: 2218978, non_refundable_storage_fee: 222
+
+task 17, lines 192-193:
+// The parent is a bare UID wrapped in an input object.
+//# run ex::m::create_holder --sender A
+created: object(17,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2477600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 18, lines 195-199:
+//# programmable --sender A --inputs object(17,0) 1000 @A
+//> 0: ex::m::claim_from_holder(Input(0));
+//> 1: SplitCoins(Gas, [Input(1)]);
+//> ex::m::fund(Result(0), Result(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(18,0), object(18,1), object(18,2), object(18,3), object(18,4)
+mutated: object(0,0), object(17,0)
+gas summary: computation_cost: 1000000, storage_cost: 11795200,  storage_rebate: 2477352, non_refundable_storage_fee: 248
+
+task 19, lines 201-204:
+//# programmable --sender A --inputs object(18,1) 400 400 @A
+//> 0: ex::m::withdraw(Input(0), Input(1));
+//> 1: ex::m::withdraw_coin(Input(0), Input(2));
+//> TransferObjects([Result(0), Result(1)], Input(3))
+created: object(19,0), object(19,1)
+mutated: object(0,0), object(18,0), object(18,1), object(18,4)
+gas summary: computation_cost: 1000000, storage_cost: 7334000,  storage_rebate: 5357464, non_refundable_storage_fee: 536
+
+task 20, lines 206-207:
+//# programmable --sender A --inputs object(17,0) object(18,1)
+//> ex::m::release_from_holder(Input(0), Input(1))
+mutated: object(0,0), object(17,0)
+deleted: object(18,1), object(18,2)
+gas summary: computation_cost: 1000000, storage_cost: 2477600,  storage_rebate: 6193381, non_refundable_storage_fee: 619
+
+task 21, lines 209-212:
+//# programmable --sender A --inputs object(17,0) 101 @A
+//> 0: ex::m::claim_from_holder(Input(0));
+//> 1: ex::m::withdraw(Result(0), Input(1));
+//> TransferObjects([Result(0), Result(1)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::balance::split (function index 7) at offset 10, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("balance") }, function: 7, instruction: 10, function_name: Some("split") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: Some("sui::balance::split at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("balance") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 10)] }), command: Some(1) } }
+
+task 22, lines 214-217:
+//# programmable --sender A --inputs object(17,0) 100 100 @A
+//> 0: ex::m::claim_from_holder(Input(0));
+//> ex::m::assert_funds(Result(0), Input(1), Input(2));
+//> TransferObjects([Result(0)], Input(3))
+created: object(18,1), object(18,2)
+mutated: object(0,0), object(17,0)
+gas summary: computation_cost: 1000000, storage_cost: 6194000,  storage_rebate: 2477352, non_refundable_storage_fee: 248
+
+task 23, lines 219-221:
+// X's parent M is itself derived from P. Both are released, then re-claimed together, so X
+// inherits P's root version through M.
+//# run ex::m::create_parent --sender A
+created: object(23,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 24, lines 223-228:
+//# programmable --sender A --inputs object(23,0) 1000 @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> 2: SplitCoins(Gas, [Input(1)]);
+//> ex::m::fund(Result(1), Result(2));
+//> TransferObjects([Result(0), Result(1)], Input(2))
+created: object(24,0), object(24,1), object(24,2), object(24,3), object(24,4), object(24,5), object(24,6)
+mutated: object(0,0), object(23,0)
+gas summary: computation_cost: 1000000, storage_cost: 15268400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 25, lines 230-233:
+//# programmable --sender A --inputs object(24,2) 400 400 @A
+//> 0: ex::m::withdraw(Input(0), Input(1));
+//> 1: ex::m::withdraw_coin(Input(0), Input(2));
+//> TransferObjects([Result(0), Result(1)], Input(3))
+created: object(25,0), object(25,1)
+mutated: object(0,0), object(24,0), object(24,2), object(24,6)
+gas summary: computation_cost: 1000000, storage_cost: 7334000,  storage_rebate: 5357464, non_refundable_storage_fee: 536
+
+task 26, lines 235-237:
+//# programmable --sender A --inputs object(23,0) object(24,1) object(24,2)
+//> ex::m::release_from_mid(Input(1), Input(2));
+//> ex::m::release_mid(Input(0), Input(1))
+mutated: object(0,0), object(23,0)
+deleted: object(24,1), object(24,2), object(24,3), object(24,4)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 9666233, non_refundable_storage_fee: 967
+
+task 27, lines 239-243:
+//# programmable --sender A --inputs object(23,0) 101 @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> 2: ex::m::withdraw(Result(1), Input(1));
+//> TransferObjects([Result(0), Result(1), Result(2)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::balance::split (function index 7) at offset 10, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("balance") }, function: 7, instruction: 10, function_name: Some("split") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: Some("sui::balance::split at offset 10"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("balance") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 10)] }), command: Some(2) } }
+
+task 28, lines 245-249:
+//# programmable --sender A --inputs object(23,0) @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> ex::m::add_balance_field(Result(1));
+//> TransferObjects([Result(0), Result(1)], Input(1))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::add (function index 0) at offset 15, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 0, instruction: 15, function_name: Some("add") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("sui::dynamic_field::add at offset 15"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 15)] }), command: Some(2) } }
+
+task 29, lines 251-255:
+//# programmable --sender A --inputs object(23,0) 100 100 @A
+//> 0: ex::m::claim_mid(Input(0));
+//> 1: ex::m::claim_from_mid(Result(0));
+//> ex::m::assert_funds(Result(1), Input(1), Input(2));
+//> TransferObjects([Result(0), Result(1)], Input(3))
+created: object(24,1), object(24,2), object(24,3), object(24,4)
+mutated: object(0,0), object(23,0)
+gas summary: computation_cost: 1000000, storage_cost: 9667200,  storage_rebate: 2234177, non_refundable_storage_fee: 223

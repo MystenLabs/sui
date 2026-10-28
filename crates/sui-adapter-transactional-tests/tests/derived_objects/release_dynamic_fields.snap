@@ -1,0 +1,106 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+// Dynamic fields on a released UID persist and are reachable again after it is re-claimed. The
+// field's version is above the parent's version, so the re-claimed UID must keep a root version
+// that bounds the field.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-43:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8390400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 45:
+//# run ex::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 47-50:
+//# programmable --sender A --inputs object(2,0) 0 @A
+//> 0: ex::m::claim(Input(0));
+//> ex::m::add_field(Result(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 7417600,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 4, lines 52-53:
+// Raise the field's version above the parent's.
+//# run ex::m::set_field --sender A --args object(3,0) 1
+mutated: object(0,0), object(3,0), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 3678032, non_refundable_storage_fee: 368
+
+task 5, line 55:
+//# run ex::m::set_field --sender A --args object(3,0) 2
+mutated: object(0,0), object(3,0), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 3678032, non_refundable_storage_fee: 368
+
+task 6, line 57:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: ex::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 7, line 59:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 5
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 8, lines 61-67:
+// Release and re-claim in one transaction, then read and modify the field.
+//# programmable --sender A --inputs object(2,0) object(3,0) 2 3 @A
+//> ex::m::release(Input(0), Input(1));
+//> 1: ex::m::claim(Input(0));
+//> ex::m::assert_field(Result(1), Input(2));
+//> ex::m::set_field(Result(1), Input(3));
+//> TransferObjects([Result(1)], Input(4))
+mutated: object(0,0), object(2,0), object(3,0), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 4924800,  storage_rebate: 4924308, non_refundable_storage_fee: 492
+
+task 9, line 69:
+//# run ex::m::set_field --sender A --args object(3,0) 4
+mutated: object(0,0), object(3,0), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 3678032, non_refundable_storage_fee: 368
+
+task 10, lines 71-73:
+// Release, then re-claim in a later transaction and read the field.
+//# programmable --sender A --inputs object(2,0) object(3,0)
+//> ex::m::release(Input(0), Input(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 5950205, non_refundable_storage_fee: 595
+
+task 11, lines 75-79:
+//# programmable --sender A --inputs object(2,0) 4 5 @A
+//> 0: ex::m::claim(Input(0));
+//> ex::m::assert_field(Result(0), Input(1));
+//> ex::m::set_field(Result(0), Input(2));
+//> TransferObjects([Result(0)], Input(3))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 7417600,  storage_rebate: 3700830, non_refundable_storage_fee: 370
+
+task 12, line 81:
+//# run ex::m::assert_field --sender A --args object(3,0) 5
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2211379, non_refundable_storage_fee: 221
