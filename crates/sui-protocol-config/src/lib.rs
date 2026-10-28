@@ -1362,6 +1362,11 @@ struct FeatureFlags {
     // id.
     #[serde(skip_serializing_if = "is_false")]
     disable_id_leak_verifier: bool,
+
+    // If true, accumulator settlement uses `TransactionKind::AccumulatorSettlement`, which is
+    // executed natively instead of by calls into `0x2::accumulator_settlement`.
+    #[serde(skip_serializing_if = "is_false")]
+    native_accumulator_settlement: bool,
 }
 
 fn is_false(b: &bool) -> bool {
