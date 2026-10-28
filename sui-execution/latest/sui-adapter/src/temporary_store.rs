@@ -29,6 +29,7 @@ use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
+use sui_types::forwarding_address::{ForwardingMaster, MasterRecordKey};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
 use sui_types::storage::{
@@ -38,6 +39,7 @@ use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapp
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -261,21 +263,15 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    /// Checks that the system object `object_id` is available at the version this transaction
-    /// requires, and records the read so it can be emitted into effects
-    /// and reproduced on replay.
-    /// This is expected to return Some in normal cases. If it ever returns None, it should be
-    /// treated as an invariant violation.
+    /// Loads the system object at the version consensus assigned to this transaction and records
+    /// the read so it can be emitted into effects and reproduced on replay.
     pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Option<Object> {
-        let version = match self.system_object_versions.get(object_id) {
-            Some(version) => version,
-            None => {
-                debug_fatal!(
-                    "system_object_versions must contain entry for object_id: {:?}",
-                    object_id
-                );
-                return None;
-            }
+        let Some(version) = self.system_object_versions.get(object_id) else {
+            debug_fatal!(
+                "system_object_versions must contain entry for object_id: {:?}",
+                object_id
+            );
+            return None;
         };
         let object = match self.input_objects.get(object_id) {
             // A declared input is the object this transaction was sequenced against, so it is
@@ -1049,6 +1045,10 @@ impl<'backing> TemporaryStore<'backing> {
         self.invariants.check_published_packages(self)
     }
 
+    pub(crate) fn check_no_forwarding_recipients(&self) -> Result<(), ExecutionError> {
+        self.invariants.check_no_forwarding_recipients(self)
+    }
+
     pub(crate) fn check_ownership_invariants(
         &self,
         sender: &SuiAddress,
@@ -1245,6 +1245,16 @@ impl ImplicitSystemObjectResolver for TemporaryStore<'_> {
     fn clock(&self) -> SuiResult<Object> {
         self.load_implicitly_read_system_object(&SUI_CLOCK_OBJECT_ID)
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
+    }
+
+    fn forwarding_master(&self, master_id: u64) -> SuiResult<Option<ForwardingMaster>> {
+        let registry_version = self
+            .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?
+            .version();
+        Ok(MasterRecordKey(master_id)
+            .load(self, registry_version)?
+            .map(ForwardingMaster::from))
     }
 }
 
@@ -1506,5 +1516,78 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod system_object_resolver_tests {
+    use super::*;
+    use sui_types::base_types::ConsensusObjectVersion;
+    use sui_types::in_memory_storage::InMemoryStorage;
+
+    const ID: ObjectID = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+    const INITIAL_SHARED_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
+    const STORED_VERSION: SequenceNumber = SequenceNumber::from_u64(10);
+
+    fn stored_registry() -> Object {
+        Object::with_id_owner_version_for_testing(
+            ID,
+            STORED_VERSION,
+            Owner::Shared {
+                initial_shared_version: INITIAL_SHARED_VERSION,
+            },
+        )
+    }
+
+    fn load_registry(assigned_version: Option<SequenceNumber>) -> Option<Object> {
+        let backing_store = InMemoryStorage::new(vec![stored_registry()]);
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        TemporaryStore::new_with_input_objects(
+            &backing_store,
+            InputObjects::new(vec![]),
+            vec![],
+            TransactionDigest::default(),
+            &config,
+            0,
+            SystemObjectVersions::from_map(
+                assigned_version
+                    .map(|version| {
+                        BTreeMap::from([(
+                            ID,
+                            ConsensusObjectVersion {
+                                initial_shared_version: INITIAL_SHARED_VERSION,
+                                version,
+                            },
+                        )])
+                    })
+                    .unwrap_or_default(),
+            ),
+            PostExecutionCheckInputs::default(),
+            &EmptyUnsettledObjectFunds,
+        )
+        .load_implicitly_read_system_object(&ID)
+    }
+
+    #[test]
+    fn implicitly_read_system_object_loads_the_assigned_version() {
+        assert_eq!(
+            load_registry(Some(STORED_VERSION))
+                .unwrap()
+                .compute_object_reference(),
+            stored_registry().compute_object_reference(),
+        );
+    }
+
+    // Outside the test configuration the same read returns `None`, which the callers turn into
+    // `ExecutionInvariantViolation`.
+    #[test]
+    #[should_panic(expected = "system_object_versions must contain entry")]
+    fn implicitly_read_system_object_without_an_assigned_version_is_an_invariant_violation() {
+        let _ = load_registry(None);
+    }
+
+    #[test]
+    fn implicitly_read_system_object_missing_at_the_assigned_version_is_none() {
+        assert!(load_registry(Some(STORED_VERSION.next())).is_none());
     }
 }

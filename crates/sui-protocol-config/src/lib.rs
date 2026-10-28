@@ -430,6 +430,8 @@ const MAINNET_USDB: &str =
 //              prepared verifying key length does not match the number of public inputs.
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 //              Add the `object::is_shared_input_impl` native and its cost.
+//              Add the forwarding address resolution and registration costs and the variant
+//              bound on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1182,6 +1184,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_forwarding_addresses: bool,
 
+    // Emergency brake: if true, every deposit to a forwarding address fails, whatever the state
+    // of its registry record. Kept separate from `enable_forwarding_addresses`, which off means
+    // "ordinary address" and would strand funds sent to one.
+    #[serde(skip_serializing_if = "is_false")]
+    freeze_forwarding_addresses: bool,
+
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]
@@ -1848,6 +1856,15 @@ pub struct ProtocolConfig {
 
     package_original_package_id_impl_cost_base: Option<u64>,
     package_original_package_id_impl_cost_per_byte: Option<u64>,
+
+    // `forwarding_address` module
+    forwarding_address_resolve_cost_base: Option<u64>,
+    // Charged once the address parses as a supported forwarding address, before the master record
+    // is read, so it covers the registry and record reads whether or not the record exists.
+    forwarding_address_resolve_lookup_cost_base: Option<u64>,
+    forwarding_address_register_cost_base: Option<u64>,
+    // Highest forwarding address variant the resolver accepts; higher variants abort.
+    forwarding_address_max_variant: Option<u64>,
 
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -2832,6 +2849,12 @@ impl ProtocolConfig {
 
             package_original_package_id_impl_cost_base: None,
             package_original_package_id_impl_cost_per_byte: None,
+
+            // `forwarding_address` module
+            forwarding_address_resolve_cost_base: None,
+            forwarding_address_resolve_lookup_cost_base: None,
+            forwarding_address_register_cost_base: None,
+            forwarding_address_max_variant: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4966,6 +4989,15 @@ impl ProtocolConfig {
                     cfg.clock_borrow_cost_base = Some(52);
                     cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.object_is_shared_input_cost_base = Some(52);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.forwarding_address_resolve_cost_base = Some(52);
+                        // The registry and a master record together meter at about 490 bytes.
+                        cfg.forwarding_address_resolve_lookup_cost_base =
+                            Some(512 * cfg.obj_access_cost_read_per_byte());
+                        // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
+                        cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
+                        cfg.forwarding_address_max_variant = Some(0);
+                    }
                 }
                 // Use this template when making changes:
                 //

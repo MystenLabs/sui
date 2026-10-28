@@ -90,6 +90,17 @@ impl AssignedVersions {
         self
     }
 
+    pub fn with_forwarding_address_registry_version_for_testing(
+        mut self,
+        version: ConsensusObjectVersion,
+    ) -> Self {
+        self.system_object_versions.insert_for_testing(
+            sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            version,
+        );
+        self
+    }
+
     /// Construct with only the accumulator root as the system object read during execution.
     /// Production callers build the full `system_object_versions` map directly.
     #[cfg(test)]

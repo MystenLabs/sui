@@ -93,6 +93,9 @@ pub struct RuntimeResults {
     pub deleted_object_ids: Set<ObjectID>,
     pub settlement_input_sui: u64,
     pub settlement_output_sui: u64,
+    /// Size of the Move events as `event::emit` metered them, so events added after execution
+    /// can be held to the same total limit.
+    pub total_events_size: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -897,7 +900,7 @@ impl ObjectRuntimeState {
             deleted_ids,
             transfers,
             events: user_events,
-            total_events_size: _,
+            total_events_size,
             received,
             accumulator_events,
             settlement_input_sui,
@@ -964,6 +967,7 @@ impl ObjectRuntimeState {
             deleted_object_ids: deleted_ids,
             settlement_input_sui,
             settlement_output_sui,
+            total_events_size,
         })
     }
 
