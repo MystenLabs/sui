@@ -12,7 +12,6 @@ use imbl::hashmap::HashMap;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use shared_crypto::intent::PersonalMessage;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::SUI_AUTHENTICATOR_STATE_ADDRESS;
 use sui_types::TypeTag;
 use sui_types::authenticator_state::ActiveJwk;
@@ -35,7 +34,6 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::scope::Scope;
-use crate::task::chain_identifier::ChainIdentifier;
 
 /// An enum that specifies the intent scope for signature verification.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -110,38 +108,29 @@ pub(crate) async fn fetch_jwks(
     Ok(jwks)
 }
 
-/// The protocol config the chain's validators enforce at `epoch`'s protocol version, so that
-/// verification results here match on-chain acceptance.
-pub(crate) async fn chain_protocol_config(
-    ctx: &Context<'_>,
-    epoch: &Epoch,
-) -> Result<ProtocolConfig, RpcError> {
-    let chain_identifier: &ChainIdentifier = ctx.data()?;
-    let chain = chain_identifier.wait().await.chain();
-
-    let protocol_version = epoch
-        .protocol_version(ctx)
-        .await?
-        .context("Failed to fetch the epoch's protocol version")?;
-
-    ProtocolConfig::get_for_version_if_supported(protocol_version.into(), chain)
-        .with_context(|| format!("Protocol version {protocol_version} is not supported"))
-        .map_err(Into::into)
+/// Verification params to use for checks in RPC. These parameters are more permissive than how the
+/// chain may be configured at any one point in time, because the RPC at time T needs to accept
+/// requests to verify signatures from all times less than or equal to T.
+pub(crate) fn verification_params(
+    config: &ZkLoginConfig,
+    jwks: HashMap<fastcrypto_zkp::bn254::zk_login::JwkId, fastcrypto_zkp::bn254::zk_login::JWK>,
+) -> VerifyParams {
+    VerifyParams::new(
+        jwks,
+        vec![],
+        config.env,
+        1, // Both v1 and v2 zkLogin circuits.
+        true,
+        true,
+        true,
+        config.max_epoch_upper_bound_delta,
+        true,
+        true,
+    )
+    .with_mldsa65_in_multisig(true)
 }
 
-/// The zkLogin circuit mode the chain's validators enforce at `epoch`'s protocol version.
-pub(crate) async fn chain_zklogin_circuit_mode(
-    ctx: &Context<'_>,
-    epoch: &Epoch,
-) -> Result<u64, RpcError> {
-    Ok(chain_protocol_config(ctx, epoch)
-        .await?
-        .zklogin_circuit_mode())
-}
-
-/// Verify any signature type locally. Supports Ed25519, Secp256k1, Secp256r1, MultiSig, ZkLogin,
-/// Passkey, and ML-DSA-65. ML-DSA-65 multisig members are accepted when the chain's protocol
-/// config enables them.
+/// Verify any supported signature type locally.
 pub(crate) async fn verify_signature(
     ctx: &Context<'_>,
     scope: Scope,
@@ -162,21 +151,7 @@ pub(crate) async fn verify_signature(
 
     let jwks = fetch_jwks(ctx, scope).await.map_err(upcast)?;
 
-    let protocol_config = chain_protocol_config(ctx, &epoch).await.map_err(upcast)?;
-
-    let params = VerifyParams::new(
-        jwks,
-        vec![],
-        config.env,
-        protocol_config.zklogin_circuit_mode(),
-        true,
-        true,
-        true,
-        config.max_epoch_upper_bound_delta,
-        true,
-        true,
-    )
-    .with_mldsa65_in_multisig(protocol_config.mldsa65_auth());
+    let params = verification_params(config, jwks);
 
     match intent_scope {
         IntentScope::TransactionData => sig.verify_authenticator(
