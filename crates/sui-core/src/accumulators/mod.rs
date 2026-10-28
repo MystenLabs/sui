@@ -37,7 +37,6 @@ pub mod funds_read;
 // provides balance read functionality for RPC
 pub mod balances;
 pub mod coin_reservations;
-pub mod object_funds_checker;
 pub(crate) mod transaction_rewriting;
 pub mod unsettled_object_withdrawals;
 
