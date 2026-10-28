@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[EC04001]: restricted visibility
-   ┌─ tests/sui_mode/id_leak/private_pack.move:20:9
+   ┌─ tests/sui_mode/struct_with_key/private_pack.move:20:9
    │
  5 │     struct A has key {
    │            - Struct defined in module 'a::a'

@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[EC05001]: ability constraint not satisfied
-   ┌─ tests/sui_mode/id_leak/through_reference.move:11:10
+   ┌─ tests/sui_mode/struct_with_key/through_reference.move:11:10
    │
  9 │     public fun foo(f: Foo, ref: &mut UID) {
    │                                      --- The type 'sui::object::UID' does not have the ability 'drop'
