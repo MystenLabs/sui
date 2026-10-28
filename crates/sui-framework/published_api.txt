@@ -2302,6 +2302,9 @@ ClaimedStatus
 claim
 	public fun
 	0x2::derived_object
+release
+	public fun
+	0x2::derived_object
 exists
 	public fun
 	0x2::derived_object

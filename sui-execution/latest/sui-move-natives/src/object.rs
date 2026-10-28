@@ -124,7 +124,7 @@ pub fn record_new_uid(
  * Implementation of the Move native function
  *   `record_new_uid_from_hash(parent: address, bytes: address)`
  * Marks `bytes` as a newly created id (as `record_new_uid` does) and, when `parent` has a tracked
- * root version, records the same root version for `bytes`.
+ * root version and `bytes` does not, records the same root version for `bytes`.
  *   gas cost: object_record_new_uid_from_hash_cost_base       | this is a simple ID addition
  **************************************************************************************************/
 pub fn record_new_uid_from_hash(
