@@ -1100,7 +1100,13 @@ fn build_allowance_spend_ptb(
 
 #[sim_test]
 async fn test_gasless_allowance_spend() {
-    let mut test_env = setup_gasless_env().await;
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_gasless_allowance_spend_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
     let funder = test_env.get_sender(0);
     let spender = test_env.get_sender(1);
     let recipient = test_env.get_sender(2);
