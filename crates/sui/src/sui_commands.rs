@@ -1256,8 +1256,6 @@ async fn start(
             ),
         };
 
-        info!("Waiting for the indexer to catch up before serving GraphQL subscriptions");
-
         rpc_services = rpc_services.merge(
             start_graphql(
                 database_url.clone(),
