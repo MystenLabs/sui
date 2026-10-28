@@ -132,8 +132,7 @@ move-compiler                                     # Main crate
 │   |   ├── mod.rs                            # Module for Typing step
 │   |   ├── translate.rs                      # Naming ~> Typing
 │   |   ├── core.rs                           # Core type system code. This includes the typing context and rules for types
-│   |   ├── expand.rs                         # After type inference, this expands all of the type variables with the inferred values
-│   |   └── globals.rs                        # After expanding type variables, this checks proper access for resources (checks acquires)
+│   |   └── expand.rs                         # After type inference, this expands all of the type variables with the inferred values
 |   |
 │   ├── hlir                                  # The High Level IR. It changes the AST into a statement based representation as opposed to expression based
 │   │   ├── ast.rs                            # The target AST for statement-ification

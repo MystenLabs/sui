@@ -4,7 +4,6 @@
 
 pub const KEYWORDS: &[&str] = &[
     "abort",
-    "acquires",
     "as",
     "break",
     "const",

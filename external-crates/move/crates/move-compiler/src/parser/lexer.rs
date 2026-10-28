@@ -56,7 +56,6 @@ pub enum Tok {
     GreaterGreater,
     Caret,
     Abort,
-    Acquires,
     As,
     Break,
     Continue,
@@ -144,7 +143,6 @@ impl fmt::Display for Tok {
             GreaterGreater => ">>",
             Caret => "^",
             Abort => "abort",
-            Acquires => "acquires",
             As => "as",
             Break => "break",
             Continue => "continue",
@@ -960,7 +958,6 @@ fn get_string_len(text: &str) -> Option<usize> {
 fn get_name_token(edition: Edition, name: &str) -> Tok {
     match name {
         "abort" => Tok::Abort,
-        "acquires" => Tok::Acquires,
         "as" => Tok::As,
         "break" => Tok::Break,
         "const" => Tok::Const,
