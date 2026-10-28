@@ -265,13 +265,13 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Loads the system object at the version consensus assigned to this transaction and records
     /// the read so it can be emitted into effects and reproduced on replay.
-    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
+    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Option<Object> {
         let Some(version) = self.system_object_versions.get(object_id) else {
             debug_fatal!(
                 "system_object_versions must contain entry for object_id: {:?}",
                 object_id
             );
-            return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+            return None;
         };
         let object = match self.input_objects.get(object_id) {
             // A declared input is the object this transaction was sequenced against, so it is
@@ -299,7 +299,7 @@ impl<'backing> TemporaryStore<'backing> {
         self.loaded_system_objects
             .borrow_mut()
             .insert(*object_id, (object.version(), object.digest()));
-        Ok(object)
+        Some(object)
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
@@ -1224,7 +1224,8 @@ impl ImplicitSystemObjectResolver for TemporaryStore<'_> {
     /// This function is expected never to fail; an error indicates an invariant violation.
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
         let required_version = self
-            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)?
+            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?
             .version();
 
         let settled = AccumulatorRootValue::load(self, Some(required_version), owner, type_)?
@@ -1538,7 +1539,7 @@ mod system_object_resolver_tests {
         )
     }
 
-    fn load_registry(assigned_version: Option<SequenceNumber>) -> SuiResult<Object> {
+    fn load_registry(assigned_version: Option<SequenceNumber>) -> Option<Object> {
         let backing_store = InMemoryStorage::new(vec![stored_registry()]);
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         TemporaryStore::new_with_input_objects(
@@ -1548,12 +1549,18 @@ mod system_object_resolver_tests {
             TransactionDigest::default(),
             &config,
             0,
-            SystemObjectVersions::new(
-                None,
-                assigned_version.map(|version| ConsensusObjectVersion {
-                    initial_shared_version: INITIAL_SHARED_VERSION,
-                    version,
-                }),
+            SystemObjectVersions::from_map(
+                assigned_version
+                    .map(|version| {
+                        BTreeMap::from([(
+                            ID,
+                            ConsensusObjectVersion {
+                                initial_shared_version: INITIAL_SHARED_VERSION,
+                                version,
+                            },
+                        )])
+                    })
+                    .unwrap_or_default(),
             ),
             PostExecutionCheckInputs::default(),
             &EmptyUnsettledObjectFunds,
@@ -1571,7 +1578,8 @@ mod system_object_resolver_tests {
         );
     }
 
-    // Outside the test configuration the same read returns `ExecutionInvariantViolation`.
+    // Outside the test configuration the same read returns `None`, which the callers turn into
+    // `ExecutionInvariantViolation`.
     #[test]
     #[should_panic(expected = "system_object_versions must contain entry")]
     fn implicitly_read_system_object_without_an_assigned_version_is_an_invariant_violation() {
@@ -1579,11 +1587,7 @@ mod system_object_resolver_tests {
     }
 
     #[test]
-    fn implicitly_read_system_object_missing_at_the_assigned_version_is_an_invariant_violation() {
-        let error = load_registry(Some(STORED_VERSION.next())).unwrap_err();
-        assert!(
-            matches!(error.as_inner(), SuiErrorKind::ExecutionInvariantViolation),
-            "{error:?}"
-        );
+    fn implicitly_read_system_object_missing_at_the_assigned_version_is_none() {
+        assert!(load_registry(Some(STORED_VERSION.next())).is_none());
     }
 }

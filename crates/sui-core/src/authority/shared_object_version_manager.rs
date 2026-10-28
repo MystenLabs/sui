@@ -94,10 +94,9 @@ impl AssignedVersions {
         mut self,
         version: ConsensusObjectVersion,
     ) -> Self {
-        self.system_object_versions = SystemObjectVersions::new(
-            self.system_object_versions
-                .get(&sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID),
-            Some(version),
+        self.system_object_versions.insert_for_testing(
+            sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            version,
         );
         self
     }
