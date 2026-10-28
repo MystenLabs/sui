@@ -97,6 +97,10 @@ mod consensus_dag_tests {
         gc_round: u32,
         num_runs: usize,
     ) -> Vec<CommittedSubDag> {
+        // The commit finalizer runs indirect finalization in spawn_blocking. With sim-time latency
+        // on each call, the many runs below exceed the sim_test timeout.
+        sui_simulator::task::set_blocking_latency(None);
+
         let mut rng = StdRng::from_entropy();
 
         tracing::info!(
