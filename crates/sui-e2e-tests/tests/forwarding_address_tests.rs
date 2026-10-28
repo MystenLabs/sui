@@ -956,7 +956,7 @@ async fn test_object_funds_forwarded_alongside_registrations_in_one_commit() {
 
 /// A master id's lifecycle on a real cluster: pausing with the cap makes deposits fail until the
 /// cap unpauses; a rotation proposed by the cap keeps paying the old master until the delay has
-/// passed and anyone finalizes it, after which deposits reach the new master.
+/// passed and the new master finalizes it, after which deposits reach the new master.
 #[sim_test]
 async fn test_pause_and_rotation_policy() {
     let mut env = forwarding_address_test_env(true).build().await;
@@ -1063,10 +1063,27 @@ async fn test_pause_and_rotation_policy() {
         "finalizing before the delay must abort in finalize_rotation: {effects:?}"
     );
 
-    // After the delay anyone can finalize; deposits then reach the new master.
+    // After the delay only the new master can finalize; deposits then reach it.
     env.cluster.trigger_reconfiguration().await;
     env.update_all_gas().await;
-    let tx = registry_call(&env, depositor, "finalize_rotation", vec![master_id]);
+    let tx = registry_call(
+        &env,
+        depositor,
+        "finalize_rotation",
+        vec![master_id.clone()],
+    );
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionFailureStatus::MoveAbort(location, _),
+                ..
+            }) if location.function_name.as_deref() == Some("finalize_rotation")
+        ),
+        "a third party must not finalize a rotation to an ordinary address: {effects:?}"
+    );
+    let tx = registry_call(&env, new_master, "finalize_rotation", vec![master_id]);
     let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok(), "{effects:?}");
     let events = get_events(&env, &digest);
@@ -1085,4 +1102,94 @@ async fn test_pause_and_rotation_policy() {
     assert_eq!(env.get_sui_balance_ab(master), 2 * amount);
     assert_eq!(env.get_sui_balance_ab(new_master), amount);
     assert_forwarding_deposit_event(&env, &digest, forwarding_address, new_master, amount);
+}
+
+/// With the emergency brake on, deposits to forwarding addresses fail whatever the registry says,
+/// while registration itself keeps working.
+#[sim_test]
+async fn test_frozen_forwarding_addresses_fail_deposits() {
+    let mut env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut config| {
+            config.set_create_forwarding_address_registry_for_testing(true);
+            set_forwarding_address_config_for_testing(&mut config);
+            config.set_freeze_forwarding_addresses_for_testing(true);
+            config
+        }))
+        .build()
+        .await;
+    let master = env.get_sender(0);
+    let depositor = env.get_sender(1);
+    let registration = register_master(&mut env, master).await;
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+
+    let tx = forwarding_address_deposit_transaction(&env, depositor, forwarding_address, 1_000_000);
+    let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert_forwarding_unresolvable(effects.status(), "deposit while forwarding is frozen");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_sui_balance_ab(master), 0);
+}
+
+/// A gasless payment stays gasless when the recipient is a forwarding address: the forwarding
+/// work fits the gasless computation cap, the payer pays nothing, and the master receives the
+/// funds with the usual event.
+#[sim_test]
+async fn test_gasless_payment_to_forwarding_address() {
+    let mut env = forwarding_address_test_env(true).build().await;
+    let master = env.get_sender(0);
+    let payer = env.get_sender(1);
+    let funding = 10_000u64;
+    let amount = 1_000u64;
+    let registration = register_master(&mut env, master).await;
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+
+    let (publisher, coin_type) = env.setup_custom_coin().await;
+    let tx = env
+        .tx_builder(publisher)
+        .transfer_funds_to_address_balance(
+            FundSource::address_fund_with_reservation(funding),
+            vec![(funding, payer)],
+            coin_type.clone(),
+        )
+        .build();
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    sui_types::transaction::add_gasless_token_for_testing(coin_type.to_canonical_string(true), 0);
+
+    let tx =
+        env.create_gasless_transaction(amount, coin_type.clone(), payer, forwarding_address, 0, 0);
+    let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    let gas = effects.gas_cost_summary();
+    assert_eq!(
+        (
+            gas.computation_cost,
+            gas.storage_cost,
+            gas.storage_rebate,
+            gas.non_refundable_storage_fee
+        ),
+        (0, 0, 0, 0),
+        "{gas:?}"
+    );
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_balance_ab(master, coin_type.clone()), amount);
+    assert_eq!(
+        env.get_balance_ab(payer, coin_type.clone()),
+        funding - amount
+    );
+
+    let events = get_events(&env, &digest);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(
+        events[0].type_.name.as_ident_str(),
+        FORWARDING_DEPOSIT_STRUCT_NAME
+    );
+    assert_eq!(events[0].type_.type_params, vec![coin_type]);
+    assert_eq!(
+        bcs::from_bytes::<ForwardingDeposit>(&events[0].contents).unwrap(),
+        ForwardingDeposit {
+            forwarding_address,
+            master,
+            amount,
+        }
+    );
 }

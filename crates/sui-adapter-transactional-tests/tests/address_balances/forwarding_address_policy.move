@@ -47,7 +47,11 @@
 //# advance-epoch
 
 //# programmable --sender B --inputs mutshared(250) 0x52ca8647179c
-// Anyone can finalize once the delay has elapsed.
+// Due, but only the new master can finalize a rotation to an ordinary address.
+//> 0: sui::forwarding_address::finalize_rotation(Input(0), Input(1));
+
+//# programmable --sender C --inputs mutshared(250) 0x52ca8647179c
+// The new master finalizes, which is how it agrees to receive the funds.
 //> 0: sui::forwarding_address::finalize_rotation(Input(0), Input(1));
 
 //# programmable --sender B --inputs 4000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101

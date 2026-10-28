@@ -131,6 +131,11 @@ impl<'a> Resolver<'a> {
                 "{forwarding_address} is not a forwarding address"
             )));
         };
+        if self.protocol_config.freeze_forwarding_addresses() {
+            return Err(RerouteError::Unresolvable(format!(
+                "Forwarding address {forwarding_address} cannot be resolved while forwarding addresses are frozen"
+            )));
+        }
         self.gas.charge_resolution()?;
         let max_variant = self.protocol_config.forwarding_address_max_variant();
         if u64::from(parsed.variant) > max_variant {

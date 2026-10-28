@@ -1184,6 +1184,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_forwarding_addresses: bool,
 
+    // Emergency brake: if true, every deposit to a forwarding address fails, whatever the state
+    // of its registry record. Kept separate from `enable_forwarding_addresses`, which off means
+    // "ordinary address" and would strand funds sent to one.
+    #[serde(skip_serializing_if = "is_false")]
+    freeze_forwarding_addresses: bool,
+
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
     #[serde(skip_serializing_if = "is_false")]

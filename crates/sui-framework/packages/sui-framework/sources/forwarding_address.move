@@ -46,6 +46,10 @@ const ENoPendingRotation: vector<u8> = b"No rotation is pending for this master 
 #[error(code = 8)]
 const ERotationNotDue: vector<u8> = b"The pending rotation's delay has not elapsed.";
 
+#[error(code = 9)]
+const ENotNewMaster: vector<u8> =
+    b"Only the proposed new master can finalize a rotation to an ordinary address.";
+
 /// Master ids are 48 bits: the address layout stores them in six bytes.
 const MAX_MASTER_ID: u64 = 0xFFFF_FFFF_FFFF;
 
@@ -254,6 +258,12 @@ public fun finalize_rotation(
     assert!(record.pending.is_some(), ENoPendingRotation);
     let pending = record.pending.extract();
     assert!(ctx.epoch() >= pending.effective_epoch, ERotationNotDue);
+    // An ordinary address becomes a master only by sending the transaction; a forwarding
+    // address cannot sign, so a rotation to one is finalized by anyone.
+    assert!(
+        is_forwarding_address(pending.new_master) || ctx.sender() == pending.new_master,
+        ENotNewMaster,
+    );
     record.master = pending.new_master;
     event::emit(RotationFinalized { master_id, master: pending.new_master });
 }

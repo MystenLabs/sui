@@ -120,17 +120,46 @@ pub fn reroute(
         .collect())
 }
 
-/// Events the adapter emits count against the same per-transaction limit as Move events.
-pub fn check_event_count(
+/// Events the adapter emits count against the same per-transaction limits as Move events: the
+/// number of events, the size of each, and the total size including the `move_events_size`
+/// that `event::emit` already metered. Sizes use the serialized contents where Move uses the
+/// value's abstract size, as `charge_synthesized_event` does.
+pub fn check_event_limits(
     protocol_config: &ProtocolConfig,
-    num_events: usize,
+    num_move_events: usize,
+    move_events_size: u64,
+    events: &[Event],
 ) -> Result<(), ExecutionError> {
-    let max_events = protocol_config.max_num_event_emit();
-    if num_events as u64 > max_events {
-        return Err(ExecutionError::new_with_source(
+    let limit_error = |message: String| {
+        ExecutionError::new_with_source(
             ExecutionErrorKind::MovePrimitiveRuntimeError(MoveLocationOpt(None)),
-            format!("Emitting more than {max_events} events is not allowed"),
-        ));
+            message,
+        )
+    };
+    let max_events = protocol_config.max_num_event_emit();
+    if num_move_events.saturating_add(events.len()) as u64 > max_events {
+        return Err(limit_error(format!(
+            "Emitting more than {max_events} events is not allowed"
+        )));
+    }
+    let max_event_size = protocol_config.max_event_emit_size();
+    let mut total_size = move_events_size;
+    for event in events {
+        let size = u64::from(event.type_.abstract_size_for_gas_metering())
+            .saturating_add(event.contents.len() as u64);
+        if size > max_event_size {
+            return Err(limit_error(format!(
+                "Emitting event of size {size} bytes. Limit is {max_event_size} bytes."
+            )));
+        }
+        total_size = total_size.saturating_add(size);
+    }
+    if let Some(max_total) = protocol_config.max_event_emit_size_total_as_option()
+        && total_size > max_total
+    {
+        return Err(limit_error(format!(
+            "Reached total event size of size {total_size} bytes. Limit is {max_total} bytes."
+        )));
     }
     Ok(())
 }

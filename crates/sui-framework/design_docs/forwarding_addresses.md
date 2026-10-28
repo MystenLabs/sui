@@ -114,7 +114,9 @@ whose target carries the magic:
 
 Then emit one `ForwardingDeposit<T> { forwarding_address, master, amount }` per forwarding address
 and coin type on Move's behalf, with `amount` the sum of that address's credits in the
-transaction, charged like `event::emit` and counted against `max_num_event_emit`. The event states
+transaction, charged like `event::emit` and counted against `max_num_event_emit`, against
+`max_event_emit_size` per event and, together with the size `event::emit` metered for the Move
+events, against `max_event_emit_size_total`. The event states
 what the transaction paid to the address however many commands made up the payment, and splitting
 a payment into many credits cannot exhaust the event limit.
 
@@ -149,14 +151,24 @@ The event carries the whole forwarding address rather than a parsed payload, so 
 record of the variant and payload; indexers slice bytes instead of depending on a parse whose
 meaning variant 0 does not define.
 
-### Objects cannot be sent to a forwarding address
+### Objects sent to a forwarding address
 
 The same pass fails the transaction if any written object is owned by a forwarding address
 (`AddressOwner` or `ConsensusAddressOwner`), whether it got there through `TransferObjects`,
-`transfer::public_transfer` or a coin transfer. Nobody can sign for a forwarding address, so the
-object would be stranded. Rerouting objects to the master is the next step and needs an event of
-its own, since effects alone would lose the forwarding address. The check runs only once the
-feature flag is on, so pre-139 behaviour is untouched.
+`transfer::public_transfer` or a coin transfer, and if a party object grants a forwarding address
+permissions. Nobody can sign for a forwarding address, so the object would be stranded. The check
+runs only once the feature flag is on, so pre-139 behaviour is untouched.
+
+The design (#28246, being reworked) splits objects in two:
+
+- **Coins are melted.** A `Coin<T>` owned by a forwarding address at the end of execution is
+  deleted and its value becomes a credit to the master's `Balance<T>`, exactly as if the payer had
+  called `coin::send_funds`. It joins the funds credits before resolution, so it is summed into the
+  same `ForwardingDeposit<T>` as any balance sent to that address, counted against the same limits,
+  and seen by the deny-list check as a credit to the master. A payment arrives in one form however
+  it was sent, and the master never has to track coin objects. The gas coin stays rejected.
+- **Everything else fails.** Objects that are not coins, including objects that wrap coins, have no
+  amount to record and no event that could name the forwarding address they came through.
 
 ### Protocol gating and rollout
 
@@ -196,6 +208,12 @@ is wiped on every release, and cannot happen on testnet or mainnet, where the fl
   deposit; the accumulator root and the registry are both implicitly read in that transaction.
 - **Simulation and dry run.** The registry shows up in effects as a read-only consensus object, so
   simulated deposits report it like executed ones.
+- **Gasless payments.** A gasless transaction may call `balance::send_funds` or
+  `coin::send_funds` with any recipient, so paying a forwarding address is allowed and stays
+  gasless; the resolution and lookup charges are computation and count against
+  `gasless_max_computation_units`. The gasless minimum per token is a rule on the payer's remaining
+  balance after the withdrawal (zero or at least the minimum), not on what any recipient receives,
+  so forwarding does not change it.
 - **Registry as an input.** `register` takes the registry mutably, which puts an ordinary user
   transaction into the system-object-writer execution pool. A deposit sequenced after such a
   transaction in the same commit waits for its registry version. Whether this is a contention
@@ -314,20 +332,30 @@ is expected to be cold and is the only key that can redirect funds or resume dep
 - **Unpause** is cap-only. If the master key could unpause, a stolen master key would undo the
   owner's pause and keep draining during the rotation delay. A stolen cap can keep an id paused,
   but a stolen cap already controls rotation; the remedy is a new id.
-- **Rotation** is two-step. The cap proposes `new_master`, which must not carry the magic until
-  chaining lands; the proposal records `effective_epoch = current + rotation_delay_epochs`, and
-  anyone may finalize once the current epoch reaches it, so the cap can go back in the safe.
-  Deposits keep going to the old master while pending: the "my key leaked" sequence is pause,
-  propose, wait, finalize, unpause. Cancel is cap or current master, which is what stops a rotation
-  proposed with a stolen cap. A new proposal replaces a pending one.
+- **Rotation** is two-step. The cap proposes `new_master`; the proposal records
+  `effective_epoch = current + rotation_delay_epochs`. Once the current epoch reaches it, the new
+  master finalizes by sending `finalize_rotation`: an ordinary address becomes a master only by
+  signing for it, otherwise anyone could point an id at a well-known merchant and hand out
+  addresses that appear to be the merchant's while keeping the cap. (A forwarding address cannot
+  sign, so once chaining lands a rotation to one is finalized by anyone; today `propose_rotation`
+  rejects the magic.) Deposits keep going to the old master while pending: the "my key leaked"
+  sequence is pause, propose, wait, finalize from the new key, unpause. Cancel is cap or current
+  master, which is what stops a rotation proposed with a stolen cap. A new proposal replaces a
+  pending one, and a proposal the new master never finalizes stays pending until it is cancelled or
+  replaced.
 - **The delay** is the one parameter a registrant chooses, `rotation_delay_epochs` in 1..=30, set
   at `register`. It can later only be increased: a decrease would need its own timelock to stay
   safe against a stolen cap, and a registrant who wants a shorter delay registers a new id.
-- **Brake** (not yet implemented): a protocol flag `freeze_forwarding_addresses` under which
-  resolution fails for every forwarding address, whatever state its record is in. One epoch of
-  latency, which is acceptable for a brake; anything faster needs governance that does not exist.
-  It has to be a separate flag because `enable_forwarding_addresses` off means "ordinary address",
-  which must stay true for every version before 139 on replay.
+- **Brake**: the protocol flag `freeze_forwarding_addresses` (off everywhere) makes resolution fail
+  for every forwarding address, whatever state its record is in; registration and the lifecycle
+  functions keep working so owners can prepare a rotation while frozen. One epoch of latency, which
+  is acceptable for a brake; anything faster needs governance that does not exist. It is a separate
+  flag because `enable_forwarding_addresses` off means "ordinary address", which must stay true for
+  every version before 139 on replay and would strand funds sent while frozen.
+- **Chained ids** (once chaining lands): an id whose master is a forwarding address has only the
+  cap, since nobody can sign as its master for `pause_by_master` or `cancel_rotation_by_master`. A
+  stolen cap is then not survivable for that id; owners of chained ids should keep the cap cold and
+  pick a long delay. Whether the end of the chain should get a second key for such ids is open.
 
 ```mermaid
 stateDiagram-v2
@@ -391,24 +419,27 @@ step adds dynamic fields next to the record instead of changing `MasterRecord`.
 - Address format with variant gating; opaque payload; assigned ids through a mixed counter;
   `MasterCap` (#28236).
 - Registration fee through a native cost param (#28236).
-- Pause (either key, immediate) and two-step rotation (cap proposes, anyone finalizes after the
-  registrant's delay, either key cancels), with lifecycle events (#28236).
+- Pause (either key, immediate) and two-step rotation (cap proposes, the new master finalizes
+  after the registrant's delay, either key cancels), with lifecycle events (#28236).
 - End-of-execution rejection of objects sent to forwarding addresses (#28236).
+- Brake flag `freeze_forwarding_addresses`; adapter-emitted events counted against the event
+  size limits (#28236).
 - Transactional, Move unit (`test_scenario`) and e2e coverage, including the staged upgrade and
   mixes with object funds withdrawals (#28236).
 
 ### Required before testnet
 
-- Object rerouting and chaining, in the same end-of-execution pass: objects owned by a forwarding
-  address go to the master with a `ForwardingTransfer { forwarding_address, master, object_id }`
-  event (effects alone lose the forwarding address); a master that is itself a forwarding address
-  resolves again, bounded by a protocol config `forwarding_address_max_hops`, with the lookup charged
-  per hop and an event per hop.
+- Coin melting and chaining, in the same end-of-execution pass (#28246, rework): a coin owned by a
+  forwarding address is deleted and credited to the master as funds; a master that is itself a
+  forwarding address resolves again, bounded by `forwarding_address_max_hops`, with the lookup
+  charged per hop and one `ForwardingDeposit` per hop recorded in that hop's master's stream.
+- Chain creation in Move: `register_with_forwarding_master(registry, master, delay, ctx)` for a
+  forwarding-address master with a supported variant and a different id, and `propose_rotation`
+  accepting such a master (finalized by anyone, since it cannot sign).
 - Dedicated `ExecutionFailureStatus` variants for unregistered id, unsupported variant, too many
   hops and object-to-forwarding-address, replacing `FeatureNotYetSupported`. On-wire change: the
   Rust SDK types (`sui-sdk-types`) and the gRPC proto must add the variants first, since this repo's
   conversions are exhaustive; produced only under the devnet guard until the SDKs ship.
-- Brake flag `freeze_forwarding_addresses`.
 - Decide the open questions that change the format or the resolver: chaining, non-sender masters,
   object addresses as masters, magic length. These are cheap on devnet (wiped weekly) and expensive
   afterwards.
@@ -433,8 +464,9 @@ step adds dynamic fields next to the record instead of changing `MasterRecord`.
 
 ## Open questions
 
-- Rotation delay bounds: 1..=30 epochs today. Should `finalize_rotation` additionally require a
-  transaction from the new master, proving the new key works before the cutover?
+- Rotation delay bounds: 1..=30 epochs today. Are they right?
+- Should a chained id (master is a forwarding address) get a second key for pause and cancel, for
+  example the end of the chain, so a stolen cap is survivable there too?
 - Should a registrant be able to shorten the delay behind its own timelock, or is "increase only"
   enough?
 - Registration price: 1M gas units (about 1 SUI at a 1,000 MIST gas price) is the starting

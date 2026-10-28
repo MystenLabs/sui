@@ -297,10 +297,10 @@ fun rotation_takes_effect_after_the_delay() {
     scenario.next_tx(BOB);
     assert!(test_scenario::settled_balance<SUI>(ALICE) == 300);
 
-    // One epoch later the delay of two has not elapsed; two epochs later it has, and anyone may
-    // finalize.
+    // One epoch later the delay of two has not elapsed; two epochs later it has, and the new
+    // master finalizes, which is how it agrees to receive the funds.
     scenario.next_epoch(BOB);
-    scenario.next_epoch(BOB);
+    scenario.next_epoch(CAROL);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
     forwarding_address::finalize_rotation(&mut registry, cap.master_id(), scenario.ctx());
     assert!(
@@ -324,6 +324,21 @@ fun rotation_cannot_be_finalized_before_the_delay() {
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
     forwarding_address::propose_rotation(&mut registry, &cap, CAROL, scenario.ctx());
     test_scenario::return_shared(registry);
+    scenario.next_epoch(BOB);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::finalize_rotation(&mut registry, cap.master_id(), scenario.ctx());
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::ENotNewMaster)]
+fun only_the_new_master_can_finalize_a_rotation() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::propose_rotation(&mut registry, &cap, CAROL, scenario.ctx());
+    test_scenario::return_shared(registry);
+    scenario.next_epoch(BOB);
     scenario.next_epoch(BOB);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
     forwarding_address::finalize_rotation(&mut registry, cap.master_id(), scenario.ctx());

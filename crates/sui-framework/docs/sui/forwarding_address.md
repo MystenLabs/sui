@@ -568,6 +568,16 @@ Emitted when a master ID is allocated.
 
 
 
+<a name="sui_forwarding_address_ENotNewMaster"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ENotNewMaster">ENotNewMaster</a>: vector&lt;u8&gt; = b"Only the proposed new master can finalize a rotation to an ordinary <b>address</b>.";
+</code></pre>
+
+
+
 <a name="sui_forwarding_address_MAX_MASTER_ID"></a>
 
 Master ids are 48 bits: the address layout stores them in six bytes.
@@ -957,6 +967,12 @@ Anyone can finalize a due rotation, so the cap can stay cold once it has propose
     <b>assert</b>!(record.pending.is_some(), <a href="../sui/forwarding_address.md#sui_forwarding_address_ENoPendingRotation">ENoPendingRotation</a>);
     <b>let</b> pending = record.pending.extract();
     <b>assert</b>!(ctx.epoch() &gt;= pending.effective_epoch, <a href="../sui/forwarding_address.md#sui_forwarding_address_ERotationNotDue">ERotationNotDue</a>);
+    // An ordinary <b>address</b> becomes a master only by sending the transaction; a forwarding
+    // <b>address</b> cannot sign, so a rotation to one is finalized by anyone.
+    <b>assert</b>!(
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_is_forwarding_address">is_forwarding_address</a>(pending.new_master) || ctx.sender() == pending.new_master,
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_ENotNewMaster">ENotNewMaster</a>,
+    );
     record.master = pending.new_master;
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/forwarding_address.md#sui_forwarding_address_RotationFinalized">RotationFinalized</a> { <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>, master: pending.new_master });
 }

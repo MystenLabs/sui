@@ -593,6 +593,7 @@ where
             mut accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
+            total_events_size,
         } = object_runtime.finish()?;
         assert_invariant!(
             loaded_runtime_objects
@@ -697,6 +698,7 @@ where
             accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
+            total_events_size,
         )?)
     }
 
@@ -2311,6 +2313,7 @@ pub fn finish(
     mut accumulator_events: Vec<MoveAccumulatorEvent>,
     settlement_input_sui: u64,
     settlement_output_sui: u64,
+    total_events_size: u64,
 ) -> Result<ExecutionResults, ExecutionError> {
     // Before finishing, ensure that any shared object taken by value by the transaction is either:
     // 1. Mutated (and still has a shared ownership); or
@@ -2410,9 +2413,11 @@ pub fn finish(
             &written_objects,
             &mut accumulator_events,
         )?;
-        forwarding::check_event_count(
+        forwarding::check_event_limits(
             protocol_config,
-            user_events.len().saturating_add(reroute_events.len()),
+            user_events.len(),
+            total_events_size,
+            &reroute_events,
         )?;
         user_events.extend(reroute_events);
     }

@@ -361,6 +361,7 @@ pub fn end_transaction(
         mut accumulator_events,
         settlement_input_sui: _,
         settlement_output_sui: _,
+        total_events_size: _,
     } = match results {
         Ok(res) => res,
         Err(_) => {
