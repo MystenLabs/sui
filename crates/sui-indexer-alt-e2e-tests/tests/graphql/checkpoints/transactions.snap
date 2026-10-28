@@ -6,7 +6,7 @@ processed 12 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-21:
+task 1, lines 6-23:
 //# run-graphql
 Response: {
   "data": {
@@ -34,7 +34,7 @@ Response: {
   }
 }
 
-task 2, lines 23-25:
+task 2, lines 25-27:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -42,7 +42,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 27-29:
+task 3, lines 29-31:
 //# programmable --sender A --inputs 43 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -50,43 +50,43 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 31-33:
+task 4, lines 33-35:
 //# programmable --sender A --inputs 1
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 35-37:
+task 5, lines 37-39:
 //# programmable --sender A --inputs 2
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 39-41:
+task 6, lines 41-43:
 //# programmable --sender A --inputs 3
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, line 43:
+task 7, line 45:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 8, lines 45-47:
+task 8, lines 47-49:
 //# programmable --sender A --inputs 1
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9, line 49:
+task 9, line 51:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 10, lines 51-75:
+task 10, lines 53-79:
 //# run-graphql
 Response: {
   "data": {
@@ -214,7 +214,7 @@ Response: {
   }
 }
 
-task 11, lines 77-92:
+task 11, lines 81-98:
 //# run-graphql
 Response: {
   "data": {

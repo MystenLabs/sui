@@ -8,6 +8,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test the ConsensusCommitPrologue transaction created by advance-clock
   consensusCommitPrologueTransaction: transaction(digest: "@{digest_1}") {
@@ -27,3 +28,4 @@
     }
   }
 } 
+*/

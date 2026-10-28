@@ -21,6 +21,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   transactions(filter: { function: "@{Test}::M1::create", kind: PROGRAMMABLE_TX }) {
     edges {
@@ -28,8 +29,10 @@ module Test::M1 {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   transactions(filter: { function: "@{Test}::M1::create", affectedAddress: "@{A}" }) {
     edges {
@@ -37,8 +40,10 @@ module Test::M1 {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   transactions(filter: { function: "@{Test}::M1::create", affectedObject: "@{A}" }) {
     edges {
@@ -46,8 +51,10 @@ module Test::M1 {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   transactions(filter: { kind: PROGRAMMABLE_TX, affectedAddress: "@{A}" }) {
     edges {
@@ -55,8 +62,10 @@ module Test::M1 {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   transactions(filter: { kind: PROGRAMMABLE_TX, affectedObject: "@{A}" }) {
     edges {
@@ -64,8 +73,10 @@ module Test::M1 {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   transactions(filter: { affectedAddress: "@{A}", affectedObject: "@{A}" }) {
     edges {
@@ -73,4 +84,5 @@ module Test::M1 {
     }
   }
 }
+*/
 

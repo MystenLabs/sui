@@ -16,6 +16,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   c0: checkpoint(sequenceNumber: 0) { epoch { epochId } }
   c1: checkpoint(sequenceNumber: 1) { epoch { epochId } }
@@ -26,3 +27,4 @@
   c6: checkpoint(sequenceNumber: 6) { epoch { epochId } }
   c7: checkpoint(sequenceNumber: 7) { epoch { epochId } }
 }
+*/

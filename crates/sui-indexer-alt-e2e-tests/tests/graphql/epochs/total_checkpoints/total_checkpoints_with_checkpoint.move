@@ -6,6 +6,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # genesis epoch
   e0: epoch(epochId: 0) { ...E }
   e1: epoch(epochId: 1) { ...E }
@@ -15,12 +16,14 @@
 fragment E on Epoch {
   totalCheckpoints
 }
+*/
 
 //# advance-epoch
 
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # epochs without middle epoch
   e0: epoch(epochId: 0) { ...E }
   e1: epoch(epochId: 1) { ...E }
@@ -30,12 +33,14 @@ fragment E on Epoch {
 fragment E on Epoch {
   totalCheckpoints
 }
+*/
 
 //# advance-epoch
 
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # epochs with middle epoch
   e0: epoch(epochId: 0) { ...E }
   e1: epoch(epochId: 1) { ...E }
@@ -45,3 +50,4 @@ fragment E on Epoch {
 fragment E on Epoch {
   totalCheckpoints
 }
+*/

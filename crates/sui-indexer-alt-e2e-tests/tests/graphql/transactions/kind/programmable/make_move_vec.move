@@ -22,6 +22,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test single element
   singleElement: transaction(digest: "@{digest_1}") {
@@ -44,8 +45,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test multiple elements
   multipleElements: transaction(digest: "@{digest_3}") {
@@ -68,8 +71,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { 
   # Test empty vector with type field
   emptyVector: transaction(digest: "@{digest_5}") {
@@ -96,3 +101,4 @@
     }
   }
 }
+*/

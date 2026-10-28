@@ -10,7 +10,7 @@ task 1, line 6:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 2, lines 8-17:
+task 2, lines 8-19:
 //# run-graphql
 Response: {
   "data": {
@@ -22,15 +22,15 @@ Response: {
   }
 }
 
-task 3, line 19:
+task 3, line 21:
 //# advance-epoch
 Epoch advanced: 1
 
-task 4, line 21:
+task 4, line 23:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 5, lines 23-32:
+task 5, lines 25-36:
 //# run-graphql
 Response: {
   "data": {
@@ -44,15 +44,15 @@ Response: {
   }
 }
 
-task 6, line 34:
+task 6, line 38:
 //# advance-epoch
 Epoch advanced: 2
 
-task 7, line 36:
+task 7, line 40:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 8, lines 38-47:
+task 8, lines 42-53:
 //# run-graphql
 Response: {
   "data": {

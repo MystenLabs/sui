@@ -9,8 +9,10 @@ module P1::M { }
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package(address: "@{P1}") {
     moduleBcs
   }
 }
+*/

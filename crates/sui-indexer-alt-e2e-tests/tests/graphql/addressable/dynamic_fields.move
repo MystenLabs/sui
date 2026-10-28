@@ -69,6 +69,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Paginate dynamic fields at the latest version via `address` and `object`
   address(address: "@{obj_3_0}") {
     dynamicFields {
@@ -123,8 +124,10 @@ module P::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Literal errors are isolated in root, address, object, and Move-object multi-gets.
   fields: multiGetDynamicFields(keys: [
     { parent: "@{obj_3_0}", name: { literal: "20u64" } },
@@ -165,8 +168,10 @@ fragment Fields on IMoveObject {
     { literal: "20u64" }, { literal: "{" }, { literal: "99u64" }, { literal: "20u64" },
   ]) { name { json } }
 }
+*/
 
 //# run-graphql
+/*
 { # It's an error to paginate dynamic fields with a version set
   address(address: "@{obj_4_0}", rootVersion: 8) {
     dynamicFields {
@@ -177,8 +182,10 @@ fragment Fields on IMoveObject {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Another situation that sets a version
   object(address: "@{obj_3_0}", version: 8) {
     asMoveObject {
@@ -191,3 +198,4 @@ fragment Fields on IMoveObject {
     }
   }
 }
+*/

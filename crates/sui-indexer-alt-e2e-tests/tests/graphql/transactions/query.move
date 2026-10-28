@@ -47,6 +47,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 # When a range is not specified, transactions queries should return results starting from the smallest unpruned tx
 {
   transactions(first: 10) {
@@ -70,3 +71,4 @@ module Test::M1 {
     }
   }
 }
+*/

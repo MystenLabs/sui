@@ -17,6 +17,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Merge one coin back into Gas coin
   mergeIntoGas: transaction(digest: "@{digest_1}") {
@@ -42,9 +43,11 @@ fragment Arg on TransactionArgument {
   ... on TxResult { cmd ix }
   ... on GasCoin { _ }
 }
+*/
 
 
 //# run-graphql
+/*
 { 
   # Merge split coins together
   mergeSplitCoins: transaction(digest: "@{digest_3}") {
@@ -70,3 +73,4 @@ fragment Arg on TransactionArgument {
   ... on TxResult { cmd ix }
   ... on GasCoin { _ }
 }
+*/

@@ -30,7 +30,7 @@ task 8, line 20:
 //# advance-epoch
 Epoch advanced: 6
 
-task 9, lines 22-42:
+task 9, lines 22-44:
 //# run-graphql --cursors 0 5
 Response: {
   "data": {

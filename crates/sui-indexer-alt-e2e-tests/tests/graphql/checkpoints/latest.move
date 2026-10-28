@@ -4,26 +4,34 @@
 //# init --protocol-version 108 --accounts A --simulator
 
 //# run-graphql
+/*
 {
   checkpoint { sequenceNumber }
 }
+*/
 
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   checkpoint { sequenceNumber }
 }
+*/
 
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   checkpoint { sequenceNumber }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test that explicit null defaults to latest checkpoint
   checkpoint(sequenceNumber: null) { sequenceNumber }
 }
+*/

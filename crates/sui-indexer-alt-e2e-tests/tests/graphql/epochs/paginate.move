@@ -20,6 +20,7 @@
 //# advance-epoch
 
 //# run-graphql --cursors 0 5
+/*
 {
     all: epochs(first: 10) { ...E }
     first: epochs(first: 3) { ...E }
@@ -40,3 +41,4 @@ fragment E on EpochConnection {
         epochId
     }
 }
+*/

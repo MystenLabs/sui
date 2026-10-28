@@ -35,6 +35,7 @@ module test::clever_error_post_v48 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   originalPackage: object(address: "@{obj_1_0}") {
     address
@@ -63,5 +64,6 @@ module test::clever_error_post_v48 {
     }
   }
 }
+*/
 
 

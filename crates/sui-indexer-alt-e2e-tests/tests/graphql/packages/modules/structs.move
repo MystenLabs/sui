@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --accounts A --addresses P0=0x0 P1=0x0 --simulator
 
 //# run-graphql
+/*
 {
   package(address: "0x2") {
     coin: module(name: "coin") {
@@ -32,6 +33,7 @@ fragment S on MoveStruct {
     }
   }
 }
+*/
 
 //# publish --upgradeable --sender A
 module P0::M {
@@ -48,6 +50,7 @@ module P1::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   packageVersions(address: "@{P0}") {
     nodes {
@@ -77,8 +80,10 @@ fragment S on MoveStruct {
     }
   }
 }
+*/
 
 //# run-graphql --cursors "Coin" "TreasuryCap"
+/*
 {
   package(address: "0x2") {
     module(name: "coin") {
@@ -107,3 +112,4 @@ fragment S on MoveStructConnection {
     fullyQualifiedName
   }
 }
+*/

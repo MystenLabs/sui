@@ -10,6 +10,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Address present in the tx as a newly created object → ObjectChange variant.
   changed: address(address: "@{obj_1_0}") {
@@ -49,6 +50,7 @@
     }
   }
 }
+*/
 
 //# publish
 module P::M {
@@ -89,6 +91,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # `asTransactionObject` is called without a `transactionDigest`. Resolution defaults to
   # the parent event's transaction because `EffectsContents::events` anchors each yielded
@@ -114,8 +117,10 @@ module P::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Same implicit case as above, but entering via `transaction(...).effects` instead of
   # `transactionEffects(...)`. `From<Transaction> for TransactionEffects` propagates the
@@ -143,3 +148,4 @@ module P::M {
     }
   }
 }
+*/

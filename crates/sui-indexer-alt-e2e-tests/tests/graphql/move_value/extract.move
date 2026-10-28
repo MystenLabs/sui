@@ -85,6 +85,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -129,8 +130,10 @@ fragment MV on MoveValue {
   type { repr }
   json
 }
+*/
 
 //# run-graphql
+/*
 {
   versioned: objectVersions(address: "@{obj_3_0}", first: 2) {
     pageInfo {
@@ -151,8 +154,10 @@ fragment MV on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -162,8 +167,10 @@ fragment MV on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -173,8 +180,10 @@ fragment MV on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -184,8 +193,10 @@ fragment MV on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -195,3 +206,4 @@ fragment MV on MoveValue {
     }
   }
 }
+*/

@@ -20,6 +20,7 @@ module P::fake {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   transactionEffects(digest: "@{digest_1}") {
     objectChanges {
@@ -43,8 +44,10 @@ module P::fake {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   objects(filter: { type: "0x2::coin::CoinMetadata<@{P}::fake::FAKE>" }) {
     nodes {
@@ -64,8 +67,10 @@ module P::fake {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   fake: coinMetadata(coinType: "@{P}::fake::FAKE") { ...CM }
   sui: coinMetadata(coinType: "0x2::sui::SUI") { ...CM }
@@ -82,6 +87,7 @@ fragment CM on CoinMetadata {
   regulatedState
   allowGlobalPause
 }
+*/
 
 //# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<P::fake::FAKE>(Input(0), Input(1));
@@ -90,6 +96,7 @@ fragment CM on CoinMetadata {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   coinMetadata(coinType: "@{P}::fake::FAKE") {
     decimals
@@ -102,3 +109,4 @@ fragment CM on CoinMetadata {
     allowGlobalPause
   }
 }
+*/

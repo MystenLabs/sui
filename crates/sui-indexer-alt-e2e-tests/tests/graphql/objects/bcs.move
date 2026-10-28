@@ -30,6 +30,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   a: object(address: "@{obj_2_0}", version: 2) {
     objectBcs
@@ -46,3 +47,4 @@ module P::M {
     objectBcs
   }
 }
+*/

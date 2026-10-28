@@ -35,6 +35,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   transactionsA: transactions(filter: { sentAddress: "@{A}" }) { ...TX }
   transactionsB: transactions(filter: { sentAddress: "@{B}" }) { ...TX }
@@ -60,3 +61,4 @@ fragment TX on TransactionConnection {
     }
   }
 }
+*/

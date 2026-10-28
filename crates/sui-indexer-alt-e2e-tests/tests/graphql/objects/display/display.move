@@ -82,6 +82,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   multiGetObjects(keys: [
     { address: "@{obj_2_0}" },
@@ -97,6 +98,7 @@ module test::mod {
     }
   }
 }
+*/
 
 //# programmable --sender A --inputs object(1,2) "quy" "{bar.baz.qux.quy.val}!"
 //> 0: sui::display::edit<test::mod::Foo>(Input(0), Input(1), Input(2));
@@ -105,6 +107,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   multiGetObjects(keys: [
     { address: "@{obj_2_0}" },
@@ -120,3 +123,4 @@ module test::mod {
     }
   }
 }
+*/

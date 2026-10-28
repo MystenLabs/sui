@@ -30,6 +30,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   failed: transactionEffects(digest: "@{digest_4}") { ...E }
   success: transactionEffects(digest: "@{digest_5}") { ...E }
@@ -64,3 +65,4 @@ fragment E on TransactionEffects {
     }
   }
 }
+*/

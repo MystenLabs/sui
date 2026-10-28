@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# run-graphql
+/*
 { # ADDRESS owner kind without owner specified - should fail validation
   objects(filter: {ownerKind: ADDRESS}) {
     nodes {
@@ -11,8 +12,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # OBJECT owner kind without owner specified - should fail validation
   objects(filter: {ownerKind: OBJECT}) {
     nodes {
@@ -20,8 +23,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # SHARED owner kind with owner specified - should fail validation
   objects(filter: {ownerKind: SHARED, owner: "0x42"}) {
     nodes {
@@ -29,8 +34,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # IMMUTABLE owner kind with owner specified - should fail validation
   objects(filter: {ownerKind: IMMUTABLE, owner: "0x42"}) {
     nodes {
@@ -38,8 +45,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # SHARED owner kind without type specified - should fail validation
   objects(filter: {ownerKind: SHARED}) {
     nodes {
@@ -47,8 +56,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # IMMUTABLE owner kind without type specified - should fail validation
   objects(filter: {ownerKind: IMMUTABLE}) {
     nodes {
@@ -56,8 +67,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Empty filter - should fail validation (when not allowed)
   objects(filter: {}) {
     nodes {
@@ -65,3 +78,4 @@
     }
   }
 }
+*/

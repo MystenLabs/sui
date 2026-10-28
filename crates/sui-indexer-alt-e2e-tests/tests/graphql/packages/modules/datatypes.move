@@ -31,6 +31,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package(address: "@{P}") {
     module(name: "M") {
@@ -67,8 +68,10 @@ fragment D on MoveDatatype {
   asMoveEnum { name }
   asMoveStruct { name }
 }
+*/
 
 //# run-graphql --cursors "A" "V"
+/*
 {
   package(address: "@{P}") {
     module(name: "M") {
@@ -99,3 +102,4 @@ fragment D on MoveDatatypeConnection {
     fullyQualifiedName
   }
 }
+*/

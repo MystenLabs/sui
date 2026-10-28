@@ -85,6 +85,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_2_0}", rootVersion: 3) {
     asMoveObject {
@@ -95,3 +96,4 @@ module test::mod {
     }
   }
 }
+*/

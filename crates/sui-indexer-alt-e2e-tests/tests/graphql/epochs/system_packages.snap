@@ -10,7 +10,7 @@ task 1, line 6:
 //# advance-epoch
 Epoch advanced: 1
 
-task 2, lines 8-25:
+task 2, lines 8-27:
 //# run-graphql
 Response: {
   "data": {
@@ -49,7 +49,7 @@ Response: {
   }
 }
 
-task 3, lines 27-45:
+task 3, lines 29-49:
 //# run-graphql
 Response: {
   "data": {
@@ -88,7 +88,7 @@ Response: {
   }
 }
 
-task 4, lines 47-64:
+task 4, lines 51-70:
 //# run-graphql
 Response: {
   "data": {
@@ -115,7 +115,7 @@ Response: {
   }
 }
 
-task 5, lines 66-83:
+task 5, lines 72-91:
 //# run-graphql
 Response: {
   "data": {
@@ -142,7 +142,7 @@ Response: {
   }
 }
 
-task 6, lines 85-102:
+task 6, lines 93-112:
 //# run-graphql --cursors bcs(bcs(0x2))
 Response: {
   "data": {

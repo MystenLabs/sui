@@ -6,6 +6,8 @@
 // Test of a basic GraphQL query.
 
 //# run-graphql
+/*
 {
   chainIdentifier
 }
+*/

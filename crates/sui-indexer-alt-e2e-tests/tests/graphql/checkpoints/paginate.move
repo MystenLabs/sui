@@ -41,6 +41,7 @@
 
 
 //# run-graphql
+/*
 {
   # Test basic pagination without filters
   allCheckpoints: checkpoints(first: 10) {
@@ -49,7 +50,7 @@
       node { ...CheckpointFields }
     }
   }
-  
+ 
   # Test pagination with epoch filter
   paginatedCheckpointsAtEpochHasNextPage: checkpoints(first: 2, filter: {atEpoch: 1}) {
     pageInfo { ...PageInfoFields }
@@ -65,7 +66,7 @@
       node { ...CheckpointFields }
     }
   }
-  
+ 
   # Test filtering for non-existent epoch
   checkpointsAtNonExistentEpoch: checkpoints(first: 10, filter: {atEpoch: 5}) {
     pageInfo { ...PageInfoFields }
@@ -87,8 +88,10 @@ fragment PageInfoFields on PageInfo {
   hasPreviousPage
   hasNextPage
 }
+*/
 
 //# run-graphql --cursors 6
+/*
 {
   checkpointsAtEpoch1BeforeCp6FromBackHasNextPage: checkpoints(last: 1, before: "@{cursor_0}", filter: {atEpoch: 1}) {
      pageInfo {
@@ -106,8 +109,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 0
+/*
 {
   checkpointsAfterCp0HasPreviousPreviousPage: checkpoints(first: 1, after: "@{cursor_0}") {
      pageInfo {
@@ -125,8 +130,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 4
+/*
 {
   checkpointsBeforeCp4FromBack: checkpoints(last: 2, before: "@{cursor_0}") {
     pageInfo {
@@ -144,8 +151,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 0
+/*
 {
   checkpointsAtEpoch0AfterCp0: checkpoints(first: 10, after: "@{cursor_0}", filter: {atEpoch: 0}) {
     pageInfo {
@@ -163,8 +172,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql  --cursors 3
+/*
 {
   checkpointsAtEpoch0BeforeCp3: checkpoints(first: 10, filter: {atEpoch: 0}, before: "@{cursor_0}") {
     pageInfo {
@@ -182,8 +193,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql  --cursors 0 3
+/*
 {
   checkpointsAtEpoch0BetweenCp03FromFront: checkpoints(first: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {
@@ -216,8 +229,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql  --cursors 6
+/*
 {
   checkpointsAtEpoch1BeforeCp6FromBack: checkpoints(last: 10, filter: {atEpoch: 1}, before: "@{cursor_0}") {
     pageInfo {
@@ -235,8 +250,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 1
+/*
 { 
   # Test that before cursor is exclusive (should not include checkpoint 1)
   checkpointsBeforeCp1: checkpoints(first: 5, before: "@{cursor_0}") {
@@ -253,8 +270,10 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 0
+/*
 { 
   # Test before cursor at 0 (should not include checkpoint 0)
   checkpointsBeforeCp0: checkpoints(first: 5, before: "@{cursor_0}") {
@@ -271,7 +290,9 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+*/
 //# run-graphql --cursors 2 5
+/*
 {
   # An `after` cursor at `afterCheckpoint` is redundant with the bound.
   checkpointsAfterCp2AfterCheckpoint2: checkpoints(first: 2, after: "@{cursor_0}", filter: {afterCheckpoint: 2}) {
@@ -294,3 +315,4 @@ fragment PageInfoFields on PageInfo {
     nodes { sequenceNumber }
   }
 }
+*/

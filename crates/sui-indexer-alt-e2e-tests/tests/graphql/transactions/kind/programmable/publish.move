@@ -13,6 +13,7 @@ module test::simple_module {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test PublishCommand
   publishTest: transaction(digest: "@{digest_1}") {
@@ -31,3 +32,4 @@ module test::simple_module {
     }
   }
 } 
+*/
