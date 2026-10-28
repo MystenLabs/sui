@@ -123,7 +123,7 @@ impl UnsettledObjectWithdrawals {
         self.update_unsettled_metrics(&inner);
     }
 
-    /// Returns whether the transaction recorded any net object withdrawal.
+    /// Returns whether the transaction withdrew from any object account.
     pub fn record_object_funds_withdraws(
         &self,
         tx_data: &TransactionData,
@@ -139,6 +139,9 @@ impl UnsettledObjectWithdrawals {
             .process_funds_withdrawals_for_execution(chain_identifier)
             .into_keys()
             .collect();
+        let withdrew_from_object = accumulator_running_max_withdraws
+            .keys()
+            .any(|account| !address_funds_reservations.contains(account));
         let updates: Vec<_> = effects
             .accumulator_events()
             .into_iter()
@@ -152,7 +155,7 @@ impl UnsettledObjectWithdrawals {
             })
             .collect();
         if updates.is_empty() {
-            return false;
+            return withdrew_from_object;
         }
         debug_assert!(
             updates.iter().all(|(obj_id, net)| {
