@@ -26,6 +26,8 @@ pub(crate) struct KvMetrics {
     pub kv_scan_latency_ms: HistogramVec,
     pub kv_bt_chunk_latency_ms: HistogramVec,
     pub kv_bt_read_rows_started_total: IntCounterVec,
+    pub kv_bt_read_rows_retries_total: IntCounterVec,
+    pub kv_bt_read_rows_gap_timeouts_total: IntCounterVec,
     pub kv_bt_chunk_rows_returned_count: IntCounterVec,
     pub kv_bt_chunk_rows_seen_count: IntCounterVec,
     pub kv_bt_flow_control_effective_qps: GaugeVec,
@@ -157,6 +159,20 @@ impl KvMetrics {
                 "kv_bt_read_rows_started_total",
                 "ReadRows RPCs initiated per table; incremented at RPC start, covering point multi-gets and range scans alike",
                 &["client", "table"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_read_rows_retries_total: register_int_counter_vec_with_registry!(
+                "kv_bt_read_rows_retries_total",
+                "ReadRows attempts started after an earlier attempt of the same read failed, by reason: gap_timeout (no response message within the gap timeout), quarantine (the attempt's channel was quarantined), other (an Unavailable status, a stream BigTable refused with a GOAWAY, a stream cut off by its connection failing, or a request never sent because its connection closed). Each retry is a ReadRows RPC beyond kv_bt_read_rows_started_total and resumes after the last row already returned",
+                &["client", "table", "reason"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_read_rows_gap_timeouts_total: register_int_counter_vec_with_registry!(
+                "kv_bt_read_rows_gap_timeouts_total",
+                "ReadRows attempts abandoned because the caller waited longer than the gap timeout for the next response message, by phase: headers (waiting for the response to start) or body (waiting for a later message)",
+                &["client", "table", "phase"],
                 registry,
             )
             .unwrap(),

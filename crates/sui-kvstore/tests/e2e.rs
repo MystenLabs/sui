@@ -22,7 +22,6 @@ use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_inverted_index::WatermarkPacing;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
@@ -36,10 +35,12 @@ use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::BitmapQuery;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
 use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
+use sui_kvstore::ObjectStatus;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
-use sui_kvstore::tables::object_versions_by_checkpoint::ObjectStatus;
+use sui_kvstore::default_committer_config;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -206,7 +207,7 @@ async fn build_indexer(
         IndexerArgs::default(),
         client_args,
         IngestionConfig::default().into(),
-        CommitterConfig::default(),
+        default_committer_config(),
         IndexerConfig::default(),
         PipelineLayer::default(),
         alpha_pipelines,
@@ -1165,6 +1166,192 @@ async fn test_object_versions_by_checkpoint() -> Result<()> {
             }
         }
     }
+
+    Ok(())
+}
+
+/// Version-bounded object reads see the state left by the object's latest change at or below
+/// that version, through creation, mutation, wrapping, unwrapping, and deletion: tombstones hide
+/// the object at the versions where it was wrapped or deleted, and pages of live versions skip
+/// them.
+#[tokio::test]
+async fn test_object_tombstones() -> Result<()> {
+    let mut harness = TestHarness::new().await?;
+
+    // Alpha pipelines are opt-in: an indexer that does not name them does not register them.
+    let default_indexer = build_indexer(&harness.client, harness.cluster.rpc_url(), &[]).await?;
+    assert!(
+        !default_indexer
+            .pipeline_names()
+            .contains(&OBJECT_TOMBSTONES_PIPELINE),
+        "alpha pipeline registered by default",
+    );
+    drop(default_indexer);
+
+    let publish_tx = harness
+        .tx_builder()
+        .await?
+        .publish_examples("basics")
+        .await
+        .build();
+    let (publish, _) = harness.execute(publish_tx).await?;
+    let package_id = publish
+        .created()
+        .into_iter()
+        .find(|(_, owner)| *owner == Owner::Immutable)
+        .context("publish created no package")?
+        .0
+        .0;
+
+    // Drive an object through its lifecycle, one transaction per step, recording each change as
+    // (object, version, status). Wrapping creates a wrapper object, and unwrapping deletes it.
+    let sender = harness.cluster.get_address_0();
+    let mut changes: Vec<(ObjectID, SequenceNumber, ObjectStatus)> = Vec::new();
+
+    let (create, _) = harness
+        .call_object_basics(
+            package_id,
+            "create",
+            vec![pure_arg(&7u64), pure_arg(&sender)],
+        )
+        .await?;
+    let object = created_object(&create);
+    changes.push((object, create.lamport_version(), ObjectStatus::Live));
+
+    let (set_value, _) = harness
+        .call_object_basics(
+            package_id,
+            "set_value",
+            vec![owned_arg(output_ref(&create, object)), pure_arg(&8u64)],
+        )
+        .await?;
+    changes.push((object, set_value.lamport_version(), ObjectStatus::Live));
+
+    let (wrap, _) = harness
+        .call_object_basics(
+            package_id,
+            "wrap",
+            vec![owned_arg(output_ref(&set_value, object))],
+        )
+        .await?;
+    let wrapper = created_object(&wrap);
+    changes.push((object, wrap.lamport_version(), ObjectStatus::Wrapped));
+    changes.push((wrapper, wrap.lamport_version(), ObjectStatus::Live));
+
+    let (unwrap, _) = harness
+        .call_object_basics(
+            package_id,
+            "unwrap",
+            vec![owned_arg(output_ref(&wrap, wrapper))],
+        )
+        .await?;
+    changes.push((object, unwrap.lamport_version(), ObjectStatus::Live));
+    changes.push((wrapper, unwrap.lamport_version(), ObjectStatus::Deleted));
+
+    let (delete, last_cp) = harness
+        .call_object_basics(
+            package_id,
+            "delete",
+            vec![owned_arg(output_ref(&unwrap, object))],
+        )
+        .await?;
+    changes.push((object, delete.lamport_version(), ObjectStatus::Deleted));
+    harness.wait_for_watermark(last_cp, 0).await?;
+
+    let first_version = create.lamport_version().value();
+    let last_version = delete.lamport_version().value();
+    for id in [object, wrapper] {
+        let history: Vec<(SequenceNumber, ObjectStatus)> = changes
+            .iter()
+            .filter(|(changed, _, _)| *changed == id)
+            .map(|(_, version, status)| (*version, *status))
+            .collect();
+        let live_versions: Vec<SequenceNumber> = history
+            .iter()
+            .filter(|(_, status)| *status == ObjectStatus::Live)
+            .map(|(version, _)| *version)
+            .collect();
+
+        // Every version from just before creation to just after deletion: the newest change at
+        // or below it decides whether the object exists, and which version it is.
+        for version in first_version - 1..=last_version + 1 {
+            let version = SequenceNumber::from_u64(version);
+            let expected = history
+                .iter()
+                .rev()
+                .find(|(changed_at, _)| *changed_at <= version)
+                .and_then(|(changed_at, status)| {
+                    (*status == ObjectStatus::Live).then_some(*changed_at)
+                });
+            let found = harness
+                .bigtable_client()
+                .get_object_lt_or_eq_version(id, version)
+                .await?;
+            assert_eq!(
+                found.map(|o| (o.id(), o.version())),
+                expected.map(|live| (id, live)),
+                "{id} at version {version}",
+            );
+
+            let exact = harness
+                .bigtable_client()
+                .get_objects(&[ObjectKey(id, version)])
+                .await?;
+            let expected_exact = live_versions.contains(&version).then_some(version);
+            assert_eq!(
+                exact.first().map(|o| o.version()),
+                expected_exact,
+                "{id} exactly at version {version}",
+            );
+        }
+
+        // Both objects end deleted, so neither has a latest version.
+        assert!(
+            harness
+                .bigtable_client()
+                .get_latest_object(&id)
+                .await?
+                .is_none(),
+            "{id} has a latest version after deletion",
+        );
+
+        // Pages of live versions skip the tombstones, which never take a slot in a page.
+        let all_versions = SequenceNumber::MIN..=SequenceNumber::MAX;
+        for limit in 1..=live_versions.len() + 1 {
+            for descending in [false, true] {
+                let page: Vec<SequenceNumber> = harness
+                    .bigtable_client()
+                    .get_live_object_versions(id, all_versions.clone(), limit, descending)
+                    .await?
+                    .into_iter()
+                    .map(|o| {
+                        assert_eq!(o.id(), id);
+                        o.version()
+                    })
+                    .collect();
+                let mut expected = live_versions.clone();
+                if descending {
+                    expected.reverse();
+                }
+                expected.truncate(limit);
+                assert_eq!(page, expected, "{id} limit {limit} descending {descending}");
+            }
+        }
+    }
+
+    // A page bounded below a removal: the object's live versions before it was wrapped.
+    let before_wrap = SequenceNumber::MIN..=wrap.lamport_version();
+    let page: Vec<SequenceNumber> = harness
+        .bigtable_client()
+        .get_live_object_versions(object, before_wrap, 10, true)
+        .await?
+        .into_iter()
+        .map(|o| o.version())
+        .collect();
+    assert_eq!(
+        page,
+        vec![set_value.lamport_version(), create.lamport_version()]
+    );
 
     Ok(())
 }

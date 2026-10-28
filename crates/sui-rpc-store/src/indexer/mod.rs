@@ -462,7 +462,8 @@ impl Indexer {
     ///
     /// As with every synchronizer-coordinated pipeline, registers with
     /// `max_batch_checkpoints = 1` so each `commit` (and thus each
-    /// broadcast) is exactly one checkpoint.
+    /// broadcast) is exactly one checkpoint, written as soon as it is
+    /// next in order and the committer has room for it.
     pub async fn add_checkpoint_broadcast(
         &mut self,
         sender: tokio::sync::broadcast::Sender<Arc<Checkpoint>>,

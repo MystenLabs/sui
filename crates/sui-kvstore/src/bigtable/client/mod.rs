@@ -5,10 +5,14 @@ mod auth_channel;
 pub mod bitmap_query;
 mod channel_pool;
 mod flow_control;
+#[cfg(test)]
+mod raw_h2_server;
+mod read_rows_retry;
 
 use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,11 +43,16 @@ use tonic::transport::ClientTlsConfig;
 
 use auth_channel::AuthChannel;
 use auth_channel::bigtable_features_header;
+pub use channel_pool::ChannelHealthConfig;
 use channel_pool::ChannelPool;
 use channel_pool::ChannelPrimer;
 pub use channel_pool::PoolConfig;
+use channel_pool::is_quarantine_cancellation;
 use flow_control::BatchWriteFlowController;
+use flow_control::WriteAdmission;
 use flow_control::is_overload_error;
+pub use read_rows_retry::ReadRowsRetryConfig;
+use read_rows_retry::ResumableReadRows;
 
 use crate::CheckpointData;
 use crate::EpochData;
@@ -78,8 +87,9 @@ use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
 use crate::bigtable::proto::bigtable::v2::value_range;
+use crate::object_status::ObjectStatus;
 use crate::tables;
-use crate::tables::object_versions_by_checkpoint::ObjectStatus;
+use crate::tables::objects::ObjectRow;
 use crate::tables::tx_seq_digest;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
@@ -175,6 +185,15 @@ impl ChannelPrimer for BigtablePrimer {
             Ok(())
         })
     }
+
+    fn fetch_credentials<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            if let Some(token_provider) = &self.token_provider {
+                token_provider.token(&[self.policy.as_str()]).await?;
+            }
+            Ok(())
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -186,6 +205,7 @@ pub struct BigTableClient {
     metrics: Option<Arc<KvMetrics>>,
     flow_controller: Option<Arc<BatchWriteFlowController>>,
     app_profile_id: Option<String>,
+    read_rows_retry: ReadRowsRetryConfig,
 }
 
 impl BigTableClient {
@@ -204,6 +224,21 @@ impl BigTableClient {
         let endpoint = Channel::from_shared(format!("http://{host}"))?;
         let pool =
             ChannelPool::new_connected(endpoint, PoolConfig::singleton(), None, None).await?;
+        Ok(Self::for_local_pool(
+            pool,
+            &instance_id,
+            client_name,
+            batch_write_flow_control,
+        ))
+    }
+
+    /// Client over a connected pool, addressing tables of an emulator-style instance.
+    fn for_local_pool(
+        pool: ChannelPool,
+        instance_id: &str,
+        client_name: &str,
+        batch_write_flow_control: bool,
+    ) -> Self {
         let auth_channel = AuthChannel::new(
             pool,
             "https://www.googleapis.com/auth/bigtable.data".to_string(),
@@ -213,7 +248,7 @@ impl BigTableClient {
         let client_name = client_name.to_string();
         let flow_controller = batch_write_flow_control
             .then(|| BatchWriteFlowController::new(client_name.clone(), None));
-        Ok(Self {
+        Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
             batch_write_flow_control: BatchWriteFlowControl::Disabled,
@@ -221,7 +256,8 @@ impl BigTableClient {
             metrics: None,
             flow_controller,
             app_profile_id: None,
-        })
+            read_rows_retry: ReadRowsRetryConfig::default(),
+        }
     }
 
     pub async fn new_remote(
@@ -318,7 +354,14 @@ impl BigTableClient {
             metrics,
             flow_controller,
             app_profile_id,
+            read_rows_retry: ReadRowsRetryConfig::default(),
         })
+    }
+
+    /// Override the gap timeout and attempt budget of ReadRows calls.
+    pub fn with_read_rows_retry(mut self, config: ReadRowsRetryConfig) -> Self {
+        self.read_rows_retry = config;
+        self
     }
 
     pub(crate) fn with_backfill_through(mut self, checkpoint: u64) -> Self {
@@ -703,6 +746,39 @@ impl BigTableClient {
         Ok(None)
     }
 
+    /// Read the v1 watermark row of every pipeline in `pipelines` with one batched read,
+    /// keyed by pipeline name. Pipelines whose row is missing or lacks the v1 schema are
+    /// absent from the map. Hidden rows (`checkpoint_hi_inclusive == None` or below
+    /// `reader_lo`) are returned as-is so callers decide how to treat them.
+    pub async fn get_pipeline_watermarks(
+        &mut self,
+        pipelines: &[&str],
+    ) -> Result<HashMap<String, WatermarkV1>> {
+        if pipelines.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let pipeline_by_key: HashMap<Vec<u8>, &str> = pipelines
+            .iter()
+            .map(|name| (tables::watermarks::encode_key(name), *name))
+            .collect();
+        let keys: Vec<Vec<u8>> = pipeline_by_key.keys().cloned().collect();
+
+        let rows = self.multi_get(tables::watermarks::NAME, keys, None).await?;
+
+        let mut watermarks = HashMap::with_capacity(rows.len());
+        for (key, row) in rows {
+            let Some(pipeline) = pipeline_by_key.get(&key[..]) else {
+                continue;
+            };
+            if let Some(watermark) = tables::watermarks::decode_v1(&row)? {
+                watermarks.insert(pipeline.to_string(), watermark);
+            }
+        }
+
+        Ok(watermarks)
+    }
+
     /// Write pre-built entries to BigTable.
     ///
     /// On partial failure (some entries succeed, some fail), returns a `PartialWriteError`
@@ -744,9 +820,7 @@ impl BigTableClient {
         let mut response = match self.client.clone().mutate_rows(request).await {
             Ok(response) => response.into_inner(),
             Err(status) => {
-                if let Some(write_admission) = write_admission {
-                    write_admission.fail(status.code());
-                }
+                report_write_failure(write_admission, &status);
                 return Err(status.into());
             }
         };
@@ -782,9 +856,7 @@ impl BigTableClient {
                 }
                 Ok(None) => break,
                 Err(status) => {
-                    if let Some(write_admission) = write_admission {
-                        write_admission.fail(status.code());
-                    }
+                    report_write_failure(write_admission, &status);
                     return Err(status.into());
                 }
             }
@@ -825,6 +897,12 @@ impl BigTableClient {
 
     /// Streaming variant of `read_rows`. Returns rows as they arrive from the
     /// underlying gRPC stream rather than collecting into a Vec.
+    ///
+    /// Each attempt is bounded by the client's [`ReadRowsRetryConfig`] gap timeout
+    /// (except the final attempt). An attempt that times out, is cancelled by a channel
+    /// quarantine, fails with `Unavailable`, is refused by a GOAWAY from BigTable, is cut off by
+    /// its connection failing, or is never sent because its connection closed is retried on
+    /// another channel, resuming after the last row this stream yielded.
     pub async fn read_rows_stream(
         &mut self,
         mut request: ReadRowsRequest,
@@ -840,10 +918,15 @@ impl BigTableClient {
                 .with_label_values(&labels)
                 .inc();
         }
-        let response = self.client.clone().read_rows(request).await?.into_inner();
-        let metrics = self.metrics.clone();
-        let client_name = self.client_name.clone();
-        let table_name = table_name.to_owned();
+        let mut read = ResumableReadRows::new(
+            self.client.clone(),
+            request,
+            self.read_rows_retry,
+            self.metrics.clone(),
+            self.client_name.clone(),
+            table_name.to_owned(),
+        );
+        let response = read.open().await?;
 
         Ok(async_stream::try_stream! {
             // Zero-copy accumulator for cell values. BigTable streams cell data
@@ -889,53 +972,66 @@ impl BigTableClient {
             }
 
             let mut response = response;
-            let mut row_key: Option<Bytes> = None;
-            let mut row = vec![];
-            let mut cell_value = CellValue::Empty;
-            let mut cell_name: Option<Bytes> = None;
-            let mut timestamp = 0i64;
+            // Each pass reads one attempt. A failed attempt is replaced by one that resumes
+            // after the last yielded row, discarding any partially assembled row.
+            while let Some(mut attempt) = response.take() {
+                let mut row_key: Option<Bytes> = None;
+                let mut row = vec![];
+                let mut cell_value = CellValue::Empty;
+                let mut cell_name: Option<Bytes> = None;
+                let mut timestamp = 0i64;
 
-            while let Some(message) = response.message().await? {
-                if let Some(ref metrics) = metrics {
-                    report_bt_stats_inner(metrics, &client_name, &table_name, &message.request_stats);
-                }
-                for chunk in message.chunks.into_iter() {
-                    if !chunk.row_key.is_empty() {
-                        row_key = Some(chunk.row_key);
-                    }
-                    match chunk.qualifier {
-                        Some(qualifier) => {
-                            if let Some(name) = cell_name.take() {
-                                row.push((name, cell_value.into_bytes()));
-                                cell_value = CellValue::Empty;
-                            }
-                            cell_name = Some(Bytes::from(qualifier));
-                            timestamp = chunk.timestamp_micros;
-                            cell_value.extend(chunk.value);
+                let failure = loop {
+                    let message = match read.next_message(&mut attempt).await {
+                        Ok(Some(message)) => message,
+                        Ok(None) => break None,
+                        Err(failure) => break Some(failure),
+                    };
+                    read.report_stats(&message.request_stats);
+                    for chunk in message.chunks.into_iter() {
+                        if !chunk.row_key.is_empty() {
+                            row_key = Some(chunk.row_key);
                         }
-                        None => {
-                            if chunk.timestamp_micros == 0 {
-                                cell_value.extend(chunk.value);
-                            } else if chunk.timestamp_micros >= timestamp {
+                        match chunk.qualifier {
+                            Some(qualifier) => {
+                                if let Some(name) = cell_name.take() {
+                                    row.push((name, cell_value.into_bytes()));
+                                    cell_value = CellValue::Empty;
+                                }
+                                cell_name = Some(Bytes::from(qualifier));
                                 timestamp = chunk.timestamp_micros;
-                                cell_value.replace(chunk.value);
+                                cell_value.extend(chunk.value);
+                            }
+                            None => {
+                                if chunk.timestamp_micros == 0 {
+                                    cell_value.extend(chunk.value);
+                                } else if chunk.timestamp_micros >= timestamp {
+                                    timestamp = chunk.timestamp_micros;
+                                    cell_value.replace(chunk.value);
+                                }
                             }
                         }
-                    }
-                    if chunk.row_status.is_some() {
-                        if let Some(RowStatus::CommitRow(_)) = chunk.row_status {
-                            if let Some(name) = cell_name.take() {
-                                row.push((name, cell_value.into_bytes()));
+                        if chunk.row_status.is_some() {
+                            if let Some(RowStatus::CommitRow(_)) = chunk.row_status {
+                                if let Some(name) = cell_name.take() {
+                                    row.push((name, cell_value.into_bytes()));
+                                }
+                                if let Some(key) = row_key.take() {
+                                    read.record_delivered(&key);
+                                    yield (key, std::mem::take(&mut row));
+                                }
                             }
-                            if let Some(key) = row_key.take() {
-                                yield (key, std::mem::take(&mut row));
-                            }
+                            row_key = None;
+                            row = vec![];
+                            cell_value = CellValue::Empty;
+                            cell_name = None;
                         }
-                        row_key = None;
-                        row = vec![];
-                        cell_value = CellValue::Empty;
-                        cell_name = None;
                     }
+                };
+                // Drop the failed attempt's stream before starting the next attempt.
+                drop(attempt);
+                if let Some(failure) = failure {
+                    response = read.resume(failure).await?;
                 }
             }
         })
@@ -1159,9 +1255,9 @@ impl futures::Stream for MultiGetStreamPollWait {
 impl BigTableClient {
     /// Streaming variant of `multi_get`. Rows arrive on the stream as soon as
     /// BigTable writes them on the wire, so downstream stages in a pipeline
-    /// can start work before the full batch completes. Emits rows in arrival
-    /// order, which is not necessarily key order — callers that need stable
-    /// ordering should sort at the end.
+    /// can start work before the full batch completes. Emits rows in the order
+    /// BigTable returns them, which is row-key order rather than the order of
+    /// `keys` — callers that need request order should reorder at the end.
     pub async fn multi_get_stream(
         &mut self,
         table_name: &str,
@@ -1473,8 +1569,9 @@ impl BigTableClient {
     }
 
     /// Streaming variant of `resolve_tx_checkpoints`. Yields
-    /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (arrival
-    /// order, not key order — callers needing a stable order must reorder).
+    /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (row-key
+    /// order, not the order of `tx_sequence_numbers` — callers needing that
+    /// order must reorder).
     pub async fn resolve_tx_checkpoints_stream(
         &mut self,
         tx_sequence_numbers: Vec<u64>,
@@ -1542,7 +1639,8 @@ impl BigTableClient {
         })
     }
 
-    /// Streaming variant of `get_objects`. Yields each `Object` as it arrives.
+    /// Streaming variant of `get_objects`. Yields each live `Object` as it arrives; keys with no
+    /// row or a tombstone row yield nothing.
     pub async fn get_objects_stream(
         &mut self,
         object_keys: Vec<ObjectKey>,
@@ -1556,7 +1654,9 @@ impl BigTableClient {
             futures::pin_mut!(rows);
             while let Some(row) = rows.next().await {
                 let (_key, cells) = row?;
-                yield tables::objects::decode(&cells)?;
+                if let Some(object) = tables::objects::decode(&cells)?.into_live() {
+                    yield object;
+                }
             }
         })
     }
@@ -1784,6 +1884,16 @@ fn decode_tx_seq_digest_scan_row(
     ))
 }
 
+/// Report a failed MutateRows to batch-write flow control. A quarantine cancellation is decided
+/// locally and says nothing about BigTable's load, so it is not reported.
+fn report_write_failure(write_admission: Option<WriteAdmission<'_>>, status: &tonic::Status) {
+    if let Some(write_admission) = write_admission
+        && !is_quarantine_cancellation(status)
+    {
+        write_admission.fail(status.code());
+    }
+}
+
 fn report_bt_stats_inner(
     metrics: &KvMetrics,
     client_name: &str,
@@ -1843,7 +1953,7 @@ impl KeyValueStoreReader for BigTableClient {
         let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
         let mut objects = vec![];
         for (_, row) in self.multi_get(tables::objects::NAME, keys, None).await? {
-            objects.push(tables::objects::decode(&row)?);
+            objects.extend(tables::objects::decode(&row)?.into_live());
         }
         Ok(objects)
     }
@@ -1877,25 +1987,19 @@ impl KeyValueStoreReader for BigTableClient {
             bail!("at least one watermark pipeline must be provided");
         }
 
-        let keys: Vec<Vec<u8>> = pipelines
-            .iter()
-            .map(|name| tables::watermarks::encode_key(name))
-            .collect();
+        let watermarks = self.get_pipeline_watermarks(pipelines).await?;
 
-        let rows = self.multi_get(tables::watermarks::NAME, keys, None).await?;
-
-        if rows.len() != pipelines.len() {
+        // A pipeline whose row is missing or lacks the v1 schema is absent from `watermarks`. A
+        // row is hidden if `checkpoint_hi_inclusive == None` or
+        // `checkpoint_hi_inclusive < reader_lo`. If any pipeline is absent or hidden, every
+        // consumer of this method (RPC/graphql) treats the whole result as missing, resulting
+        // in `Ok(None)`.
+        if watermarks.len() != pipelines.len() {
             return Ok(None);
         }
 
-        // A row is hidden if `checkpoint_hi_inclusive == None` or
-        // `checkpoint_hi_inclusive < reader_lo`. If any pipeline is hidden, every consumer
-        // of this method (RPC/graphql) treats the whole result as missing, resulting in `Ok(None)`.
         let mut min_wm: Option<(u64, WatermarkV1)> = None;
-        for (_, row) in &rows {
-            let Some(wm) = tables::watermarks::decode_v1(row)? else {
-                return Ok(None);
-            };
+        for wm in watermarks.into_values() {
             let Some(cp) = wm.checkpoint_hi_inclusive.filter(|cp| *cp >= wm.reader_lo) else {
                 return Ok(None);
             };
@@ -1908,43 +2012,72 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
-        let lower_limit = Bytes::from(Self::raw_object_key(&ObjectKey::min_for_id(object_id)));
-        let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
+        self.get_object_lt_or_eq_version(*object_id, SequenceNumber::MAX)
+            .await
+    }
 
-        tracing::debug!(
-            ?object_id,
-            "get_latest_object: scanning range from ObjectKey::min_for_id to ObjectKey::max_for_id"
-        );
-
-        if let Some((row_key, row)) = self
+    async fn get_object_lt_or_eq_version(
+        &mut self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>> {
+        // The newest row in `[(id, 0), (id, version)]`, live or tombstone, is the object's state
+        // at `version`.
+        let start_key = Bytes::from(Self::raw_object_key(&ObjectKey::min_for_id(&object_id)));
+        let end_key = Bytes::from(Self::raw_object_key(&ObjectKey(object_id, version)));
+        let Some((_, row)) = self
             .range_scan(
                 tables::objects::NAME,
-                Some(lower_limit),
-                Some(upper_limit),
+                Some(start_key),
+                Some(end_key),
                 1,
                 true,
                 None,
             )
             .await?
             .pop()
-        {
-            let object = tables::objects::decode(&row)?;
-            let row_key_hex = row_key
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>();
-            tracing::debug!(
-                ?object_id,
-                found_id = ?object.id(),
-                found_version = %object.version(),
-                row_key = %row_key_hex,
-                "get_latest_object: found object"
-            );
-            return Ok(Some(object));
-        }
+        else {
+            return Ok(None);
+        };
+        Ok(tables::objects::decode(&row)?.into_live())
+    }
 
-        tracing::debug!(?object_id, "get_latest_object: object not found in range");
-        Ok(None)
+    async fn get_live_object_versions(
+        &mut self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<Object>> {
+        // A zero `rows_limit` means no limit to BigTable, so an empty page is answered locally.
+        if versions.is_empty() || limit == 0 {
+            return Ok(vec![]);
+        }
+        let rows_limit = i64::try_from(limit).context("object versions limit exceeds i64")?;
+        let start_key = Bytes::from(Self::raw_object_key(&ObjectKey(
+            object_id,
+            *versions.start(),
+        )));
+        let end_key = Bytes::from(Self::raw_object_key(&ObjectKey(object_id, *versions.end())));
+        // Keep only the live-object column, so tombstone rows come back empty and BigTable drops
+        // them before applying `rows_limit`.
+        let live_only = Self::column_filter(&[tables::objects::col::OBJECT]);
+        let rows = self
+            .range_scan(
+                tables::objects::NAME,
+                Some(start_key),
+                Some(end_key),
+                rows_limit,
+                descending,
+                Some(live_only),
+            )
+            .await?;
+        rows.into_iter()
+            .map(|(_, row)| match tables::objects::decode(&row)? {
+                ObjectRow::Live(object) => Ok(object),
+                ObjectRow::Tombstone(_) => bail!("live-only object scan returned a tombstone"),
+            })
+            .collect()
     }
 
     async fn get_object_version_at_checkpoint(
@@ -3139,6 +3272,90 @@ mod tests {
             .unwrap()
             .expect("should find version 70");
         assert_eq!(latest.package_version, 70);
+    }
+
+    /// Tombstones are filtered out by the server, so they never take a slot in a page, in either
+    /// direction, and the version-bounded point read stops at them.
+    #[tokio::test]
+    async fn object_version_reads_skip_or_stop_at_tombstones() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        // Versions 1, 2, 4 and 6 are live; the object is wrapped at 3 and deleted at 5.
+        let id = ObjectID::random();
+        let other = ObjectID::from_bytes([0xff; 32]).unwrap();
+        let v = SequenceNumber::from_u64;
+        for (object_id, version) in [(id, 1), (id, 2), (id, 4), (id, 6), (other, 1)] {
+            let object = Object::with_id_owner_version_for_testing(
+                object_id,
+                v(version),
+                sui_types::object::Owner::AddressOwner(Default::default()),
+            );
+            let key = tables::objects::encode_key(&ObjectKey(object_id, v(version)));
+            mock.insert_row(
+                tables::objects::NAME,
+                key,
+                tables::objects::encode(&object).unwrap(),
+            )
+            .await;
+        }
+        for (version, status) in [(3, ObjectStatus::Wrapped), (5, ObjectStatus::Deleted)] {
+            let key = tables::objects::encode_key(&ObjectKey(id, v(version)));
+            let cells = tables::objects::encode_tombstone(status).unwrap();
+            mock.insert_row(tables::objects::NAME, key, cells).await;
+        }
+
+        let mut page = async |versions: RangeInclusive<u64>, limit, descending| {
+            mock.clear_read_rows_calls().await;
+            let objects = client
+                .get_live_object_versions(
+                    id,
+                    v(*versions.start())..=v(*versions.end()),
+                    limit,
+                    descending,
+                )
+                .await
+                .unwrap();
+            let calls = mock.read_rows_calls().await;
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].row_keys.len(), objects.len(), "rows sent");
+            objects
+                .into_iter()
+                .map(|o| {
+                    assert_eq!(o.id(), id);
+                    o.version().value()
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(page(0..=u64::MAX, 2, false).await, vec![1, 2]);
+        assert_eq!(page(3..=u64::MAX, 2, false).await, vec![4, 6]);
+        assert_eq!(page(0..=u64::MAX, 2, true).await, vec![6, 4]);
+        assert_eq!(page(0..=3, 2, true).await, vec![2, 1]);
+        assert_eq!(page(0..=u64::MAX, 10, true).await, vec![6, 4, 2, 1]);
+        assert_eq!(page(5..=5, 10, false).await, Vec::<u64>::new());
+
+        // Point reads at or below each version: the tombstones at 3 and 5 hide the object.
+        for (version, expected) in [
+            (0, None),
+            (1, Some(1)),
+            (2, Some(2)),
+            (3, None),
+            (4, Some(4)),
+            (5, None),
+            (6, Some(6)),
+            (u64::MAX, Some(6)),
+        ] {
+            let found = client
+                .get_object_lt_or_eq_version(id, v(version))
+                .await
+                .unwrap()
+                .map(|o| o.version().value());
+            assert_eq!(found, expected, "at version {version}");
+        }
     }
 
     #[tokio::test]

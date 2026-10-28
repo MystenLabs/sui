@@ -79,8 +79,6 @@ impl Processor for KvEpochStarts {
 
 #[async_trait]
 impl Handler for KvEpochStarts {
-    const MIN_EAGER_ROWS: usize = 1;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_epoch_starts::table)
             .values(values)

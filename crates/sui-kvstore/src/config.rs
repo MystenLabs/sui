@@ -7,6 +7,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
+use sui_indexer_alt_framework::config::warn_ignored_config_key;
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
@@ -15,6 +16,7 @@ use sui_indexer_alt_framework::{self as framework};
 use tracing::warn;
 
 use crate::bigtable::client::PoolConfig;
+use crate::bigtable::client::ReadRowsRetryConfig;
 
 /// Default maximum rows per BigTable write batch. Matches the official Google
 /// Java client default.
@@ -22,10 +24,16 @@ pub(crate) const DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH: usize = 100;
 
 const DEFAULT_WRITE_CONCURRENCY: usize = 256;
 
+/// Minimum gap between two watermark writes of the same concurrent pipeline (sequential pipelines
+/// write their watermark with every commit). Shorter than the time between checkpoints, so at the
+/// tip every checkpoint's watermark is written as soon as it is complete.
+const DEFAULT_WATERMARK_INTERVAL_MS: u64 = 100;
+
 /// Returns the committer defaults used by sui-kvstore before applying config overrides.
 pub fn default_committer_config() -> CommitterConfig {
     CommitterConfig {
         write_concurrency: DEFAULT_WRITE_CONCURRENCY,
+        watermark_interval_ms: DEFAULT_WATERMARK_INTERVAL_MS,
         ..CommitterConfig::default()
     }
 }
@@ -46,6 +54,14 @@ pub struct IndexerConfig {
     pub bigtable_connection_pool_size: Option<usize>,
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000).
     pub bigtable_channel_timeout_ms: Option<u64>,
+    /// Longest a ReadRows attempt may wait for its response headers or its next response message
+    /// before it is retried on another channel, in milliseconds (default: 5000). The final
+    /// attempt has no gap timeout. A stall before the headers is retried only while
+    /// `bigtable-channel-timeout-ms`, which ends that wait on every attempt, is longer.
+    pub bigtable_read_rows_gap_timeout_ms: Option<u64>,
+    /// Attempts per ReadRows call, including the first (default: 3). 1 turns off the gap
+    /// timeout and retries.
+    pub bigtable_read_rows_max_attempts: Option<u32>,
     /// Enable Bigtable batch write flow control by advertising the mutate-rows
     /// rate-limit feature flags and adaptively throttling MutateRows from
     /// `RateLimitInfo`. Requires a single-cluster-routing app profile and pairs
@@ -65,8 +81,24 @@ impl Default for IndexerConfig {
             max_rows_per_second: None,
             bigtable_connection_pool_size: None,
             bigtable_channel_timeout_ms: None,
+            bigtable_read_rows_gap_timeout_ms: None,
+            bigtable_read_rows_max_attempts: None,
             batch_write_flow_control: true,
             bigtable_pool: BigtablePoolLayer::default(),
+        }
+    }
+}
+
+impl IndexerConfig {
+    pub fn read_rows_retry(&self) -> ReadRowsRetryConfig {
+        let base = ReadRowsRetryConfig::default();
+        ReadRowsRetryConfig {
+            gap_timeout: self
+                .bigtable_read_rows_gap_timeout_ms
+                .map_or(base.gap_timeout, Duration::from_millis),
+            max_attempts: self
+                .bigtable_read_rows_max_attempts
+                .unwrap_or(base.max_attempts),
         }
     }
 }
@@ -76,24 +108,39 @@ impl Default for IndexerConfig {
 pub struct BigtablePoolLayer {
     /// Number of channels to create at startup (default: 10).
     pub initial_pool_size: Option<usize>,
-    /// Minimum number of channels the pool will maintain (default: 1).
+    /// Minimum number of channels the pool will maintain (default: 4).
     pub min_pool_size: Option<usize>,
     /// Maximum number of channels the pool can scale to (default: 200).
     pub max_pool_size: Option<usize>,
-    /// Average load per channel below which the pool considers scaling down (default: 5).
+    /// The pool shrinks when a maintenance interval's peak in-flight requests would leave
+    /// fewer than this many per channel (default: 1).
     pub min_rpcs_per_channel: Option<usize>,
-    /// Average load per channel above which the pool scales up (default: 50).
+    /// The pool grows when a maintenance interval's peak in-flight requests would put more
+    /// than this many on each channel (default: 25). Channel selection also counts a channel
+    /// carrying an error penalty as this many requests busier.
     pub max_rpcs_per_channel: Option<usize>,
-    /// Maximum channels to remove in a single scale-down operation (default: 2).
+    /// Maximum channels to add or remove in a single resize (default: 2).
     pub max_resize_delta: Option<usize>,
-    /// Consecutive low-load observations required before scaling down (default: 3).
-    pub downscale_threshold: Option<usize>,
     /// Milliseconds between maintenance cycles (resize + refresh) (default: 60000).
     pub maintenance_interval_ms: Option<u64>,
     /// Channel age in milliseconds before it is eligible for refresh (default: 2700000 = 45 min).
     pub refresh_age_ms: Option<u64>,
     /// Random jitter in milliseconds added to refresh age (default: 300000 = 5 min).
     pub refresh_jitter_ms: Option<u64>,
+    /// Detect stalled channels, quarantine them, and replace ones that stay unhealthy
+    /// (default: true).
+    pub channel_health_check: Option<bool>,
+    /// HTTP/2 receive window of each BigTable response stream, in bytes (default: 262144 =
+    /// 256 KiB).
+    pub http2_stream_window_bytes: Option<u32>,
+    /// HTTP/2 receive window of each BigTable connection, in bytes (default: 268435456 =
+    /// 256 MiB). While unread response data fills it, no request on that channel receives
+    /// anything.
+    pub http2_connection_window_bytes: Option<u32>,
+
+    /// Deprecated and ignored; setting it logs a warning. The pool sizes itself on
+    /// `min-rpcs-per-channel` and `max-rpcs-per-channel`.
+    pub downscale_threshold: Option<usize>,
 }
 
 impl BigtablePoolLayer {
@@ -102,6 +149,13 @@ impl BigtablePoolLayer {
             warn!(
                 "bigtable-connection-pool-size is deprecated; \
                  use the [bigtable-pool] section instead"
+            );
+        }
+        if self.downscale_threshold.is_some() {
+            warn!(
+                "Config field `downscale-threshold` in [bigtable-pool] is deprecated and ignored. \
+                 Remove it from your config; the pool resizes on `min-rpcs-per-channel` and \
+                 `max-rpcs-per-channel`."
             );
         }
 
@@ -120,7 +174,6 @@ impl BigtablePoolLayer {
                 .max_rpcs_per_channel
                 .unwrap_or(base.max_rpcs_per_channel),
             max_resize_delta: self.max_resize_delta.unwrap_or(base.max_resize_delta),
-            downscale_threshold: self.downscale_threshold.unwrap_or(base.downscale_threshold),
             maintenance_interval: self
                 .maintenance_interval_ms
                 .map(Duration::from_millis)
@@ -133,6 +186,15 @@ impl BigtablePoolLayer {
                 .refresh_jitter_ms
                 .map(Duration::from_millis)
                 .unwrap_or(base.refresh_jitter),
+            health_check: base
+                .health_check
+                .filter(|_| self.channel_health_check.unwrap_or(true)),
+            http2_stream_window_bytes: self
+                .http2_stream_window_bytes
+                .unwrap_or(base.http2_stream_window_bytes),
+            http2_connection_window_bytes: self
+                .http2_connection_window_bytes
+                .unwrap_or(base.http2_connection_window_bytes),
         }
     }
 }
@@ -141,22 +203,38 @@ impl BigtablePoolLayer {
 #[serde(default, rename_all = "kebab-case")]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
-    pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
     pub watermark_interval_jitter_ms: Option<u64>,
+
+    /// Minimum number of pending rows the collector waits for before cutting a batch. `0` cuts a
+    /// batch as soon as the committer has room for it.
+    pub min_batch_rows: Option<usize>,
+
+    /// Longest time, in milliseconds, the oldest pending row waits for `min-batch-rows` to
+    /// accumulate before a batch is cut anyway.
+    pub max_batch_delay_ms: Option<u64>,
+
+    /// Deprecated and ignored: batches are cut as soon as the committer has room; see
+    /// `min-batch-rows` and `max-batch-delay-ms`.
+    pub collect_interval_ms: Option<u64>,
 }
 
 impl CommitterLayer {
     pub fn finish(self, base: CommitterConfig) -> CommitterConfig {
+        if self.collect_interval_ms.is_some() {
+            warn_ignored_config_key("collect-interval-ms");
+        }
+
         CommitterConfig {
             write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
-            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: self
                 .watermark_interval_jitter_ms
                 .unwrap_or(base.watermark_interval_jitter_ms),
+            min_batch_rows: self.min_batch_rows.unwrap_or(base.min_batch_rows),
+            max_batch_delay_ms: self.max_batch_delay_ms.unwrap_or(base.max_batch_delay_ms),
         }
     }
 }
@@ -172,6 +250,8 @@ pub struct ConcurrentLayer {
     /// `IndexerConfig::max_rows_per_second` when set.
     pub max_rows_per_second: Option<u64>,
     pub fanout: Option<ConcurrencyConfig>,
+    /// Deprecated and ignored: batch size is controlled by the committer's `min-batch-rows` and
+    /// `max-batch-delay-ms`.
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
@@ -192,6 +272,10 @@ impl ConcurrentLayer {
     }
 
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
+        if self.min_eager_rows.is_some() {
+            warn_ignored_config_key("min-eager-rows");
+        }
+
         ConcurrentConfig {
             committer: if let Some(c) = self.committer {
                 c.finish(base.committer)
@@ -205,7 +289,6 @@ impl ConcurrentLayer {
             },
             pruner: None,
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
@@ -233,6 +316,8 @@ pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
     pub fanout: Option<ConcurrencyConfig>,
+    /// Deprecated and ignored: batch size is controlled by the committer's `min-batch-rows` and
+    /// `max-batch-delay-ms`.
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
@@ -264,6 +349,10 @@ impl SequentialLayer {
     }
 
     pub fn finish(self, base: ConcurrentConfig) -> SequentialConfig {
+        if self.min_eager_rows.is_some() {
+            warn_ignored_config_key("min-eager-rows");
+        }
+
         let committer = if let Some(c) = self.committer {
             c.finish(base.committer)
         } else {
@@ -277,7 +366,6 @@ impl SequentialLayer {
                 base.ingestion
             },
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_batch_checkpoints: self.max_batch_checkpoints,
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
@@ -304,6 +392,7 @@ pub struct PipelineLayer {
     pub transaction_bitmap_index: SequentialLayer,
     pub event_bitmap_index: SequentialLayer,
     pub object_versions_by_checkpoint: ConcurrentLayer,
+    pub object_tombstones: ConcurrentLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be

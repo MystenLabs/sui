@@ -63,6 +63,7 @@ use bitmap_committer::BitmapIndexMetrics;
 pub(crate) use bitmap_committer::NUM_SHARDS;
 pub(crate) use bitmap_committer::shard_for;
 
+use crate::DurableProgress;
 use crate::WatermarkV1;
 use crate::bigtable::client::BigTableClient;
 use crate::bigtable::client::CheckpointSpan;
@@ -106,6 +107,10 @@ pub struct BigTableStore {
     /// Bitmap committer handles registered by pipeline name. Connections
     /// clone a handle out of this map before awaiting channel sends.
     bitmap_committers: Arc<Mutex<HashMap<String, BitmapCommitterHandle>>>,
+    /// Per pipeline, the highest committer watermark through which this process's data rows are
+    /// durable. Shared with every connection and bitmap generation worker created from this
+    /// store.
+    durable_progress: DurableProgress,
 }
 
 /// A connection to BigTable for watermark operations and data writes.
@@ -130,6 +135,9 @@ pub struct BigTableConnection<'a> {
     init_results: Arc<Mutex<HashMap<String, PipelineInitResult>>>,
     /// Shared registry of store-owned bitmap committers.
     bitmap_committers: Arc<Mutex<HashMap<String, BitmapCommitterHandle>>>,
+    /// Shared with the owning [`BigTableStore`]; records each committer watermark before it is
+    /// written, because the data rows it covers are already durable.
+    durable_progress: DurableProgress,
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
@@ -162,7 +170,29 @@ impl BigTableStore {
             client: client.with_backfill_through(backfill_through),
             init_results: Arc::new(Mutex::new(HashMap::new())),
             bitmap_committers: Arc::new(Mutex::new(HashMap::new())),
+            durable_progress: DurableProgress::new(),
         }
+    }
+
+    /// Per pipeline, the highest committer watermark through which this process's data rows are
+    /// durable. Entries are recorded before the watermark row itself is written.
+    pub fn durable_progress(&self) -> DurableProgress {
+        self.durable_progress.clone()
+    }
+
+    /// The watermark row key of every enabled pipeline, sorted, as recorded by `init_watermark`
+    /// during pipeline registration. These are the keys of [`Self::durable_progress`] and of the
+    /// stored watermark rows.
+    pub(crate) fn pipeline_tasks(&self) -> Vec<String> {
+        let mut pipeline_tasks: Vec<String> = self
+            .init_results
+            .lock()
+            .expect("bitmap initial watermark mutex poisoned")
+            .keys()
+            .cloned()
+            .collect();
+        pipeline_tasks.sort();
+        pipeline_tasks
     }
 
     pub(crate) fn bitmap_initial_watermarks(&self) -> BitmapInitialWatermarks {
@@ -311,6 +341,7 @@ impl BigTableStoreRuntimeBuilder {
             write_chunk_size,
             write_concurrency,
             metrics,
+            durable_progress: self.store.durable_progress.clone(),
         }
         .spawn();
 
@@ -366,6 +397,7 @@ impl Store for BigTableStore {
             skip_watermark_write: false,
             init_results: self.init_results.clone(),
             bitmap_committers: self.bitmap_committers.clone(),
+            durable_progress: self.durable_progress.clone(),
             _marker: std::marker::PhantomData,
         })
     }
@@ -392,10 +424,15 @@ impl SequentialStore for BigTableStore {
         // Closure returned `Ok` — now persist the staged watermark unless a
         // store-owned side effect suppressed it. The flush goes through the
         // CAS-guarded `set_committer_watermark` path (via the client helper),
-        // so concurrent writers cannot cause regressions.
+        // so concurrent writers cannot cause regressions. The closure's rows are
+        // durable at this point, so the watermark is recorded as durable progress
+        // before the watermark row is written. Bitmap commits suppress the flush
+        // because their rows are not durable yet; their committer records progress
+        // once they are.
         if let Some((pipeline, watermark)) = conn.pending_watermark.take()
             && !conn.skip_watermark_write
         {
+            self.durable_progress.record(&pipeline, watermark);
             conn.client
                 .set_committer_watermark_cells(&pipeline, &watermark, None)
                 .await?;
@@ -563,6 +600,9 @@ impl Connection for BigTableConnection<'_> {
             return Ok(true);
         }
 
+        // The framework only hands over watermarks whose data rows are durable, so progress is
+        // recorded before the watermark row is written, regardless of how that write turns out.
+        self.durable_progress.record(pipeline_task, watermark);
         self.client
             .set_committer_watermark_cells(pipeline_task, &watermark, None)
             .await

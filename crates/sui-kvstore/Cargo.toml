@@ -26,7 +26,10 @@ bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
 governor.workspace = true
+h2.workspace = true
 http.workspace = true
+http-body.workspace = true
+hyper.workspace = true
 gcp_auth.workspace = true
 integer-encoding.workspace = true
 mysten-common.workspace = true
@@ -51,7 +54,10 @@ sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true, features = ["transport"] }
+tonic-health.workspace = true
 tonic-prost.workspace = true
+tonic-reflection.workspace = true
+tokio-util.workspace = true
 tokio-stream = { workspace = true, optional = true }
 tracing.workspace = true
 

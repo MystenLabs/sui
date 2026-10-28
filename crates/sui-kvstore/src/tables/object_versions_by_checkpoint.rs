@@ -18,43 +18,13 @@ use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 
+use crate::object_status::ObjectStatus;
+
 pub const NAME: &str = "object_versions_by_checkpoint";
 
 pub mod col {
     pub const VERSION: &str = "v";
     pub const STATUS: &str = "s";
-}
-
-/// An object's status at the end of a checkpoint that changed it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ObjectStatus {
-    /// The object exists; its contents are in the `objects` table at the recorded version.
-    Live,
-    /// The object was deleted. The recorded version is the deleting transaction's lamport
-    /// version and has no `objects` row.
-    Deleted,
-    /// The object was wrapped into another object. The recorded version is the wrapping
-    /// transaction's lamport version and has no `objects` row.
-    Wrapped,
-}
-
-impl ObjectStatus {
-    fn to_byte(self) -> u8 {
-        match self {
-            ObjectStatus::Live => 0,
-            ObjectStatus::Deleted => 1,
-            ObjectStatus::Wrapped => 2,
-        }
-    }
-
-    fn from_byte(byte: u8) -> Result<Self> {
-        Ok(match byte {
-            0 => ObjectStatus::Live,
-            1 => ObjectStatus::Deleted,
-            2 => ObjectStatus::Wrapped,
-            _ => bail!("invalid object status byte {byte}"),
-        })
-    }
 }
 
 pub fn encode_key(object_id: &ObjectID, cp_sequence_number: u64) -> Vec<u8> {

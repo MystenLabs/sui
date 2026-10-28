@@ -13,14 +13,19 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::PoolConfig;
+use sui_kvstore::ReadRowsRetryConfig;
+
+use crate::WatermarkSource;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_RENDER_AHEAD: usize = 4;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 4_000;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 4_000;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
-// Comfortably above the 10ms watermark refresh: a replica slower than this is genuinely behind,
-// and the client is better off retrying elsewhere.
+// Comfortably above how far a replica's served checkpoint trails other replicas': up to one 10ms
+// watermark refresh when polling Bigtable, or the delivery delay of the indexers' watermark streams
+// when following them. A replica slower than this is genuinely behind, and the client is better
+// off retrying elsewhere.
 const DEFAULT_MONOTONIC_READ_WAIT_TIMEOUT_MS: u64 = 100;
 const DEFAULT_BITMAP_DRAIN_PROBE_ROWS: u32 = 50;
 const DEFAULT_WATERMARK_BEACON_BUCKETS: NonZeroU64 = NonZeroU64::new(256).unwrap();
@@ -570,6 +575,39 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_max_pool_size: Option<usize>,
 
+    /// Detect stalled BigTable channels, quarantine them (cancelling their open
+    /// requests so reads retry on other channels), and replace ones that stay
+    /// unhealthy. Defaults to `true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_channel_health_check: Option<bool>,
+
+    /// Longest a BigTable ReadRows attempt may wait for its response headers
+    /// or its next response message before it is retried on another channel,
+    /// in milliseconds. Defaults to `5000`. The final attempt has no gap
+    /// timeout. A stall before the headers is retried only while
+    /// `bigtable-channel-timeout-ms`, which ends that wait on every attempt, is
+    /// longer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_read_rows_gap_timeout_ms: Option<u64>,
+
+    /// Attempts per BigTable ReadRows call, including the first. Defaults to
+    /// `3`; `1` turns off the gap timeout and retries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_read_rows_max_attempts: Option<u32>,
+
+    /// HTTP/2 receive window of each BigTable response stream, in bytes: the
+    /// most unread data one read can hold. Defaults to `262144` (256 KiB).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_http2_stream_window_bytes: Option<u32>,
+
+    /// HTTP/2 receive window of each BigTable connection, in bytes: the most
+    /// unread data all reads on one channel can hold together. While unread
+    /// data fills it, no read on that channel receives anything, so it should
+    /// be at least `bigtable-http2-stream-window-bytes` times the most reads a
+    /// channel carries at once. Defaults to `268435456` (256 MiB).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_http2_connection_window_bytes: Option<u32>,
+
     /// Deprecated and ignored: the `GetServiceInfo` watermark set is derived
     /// from `enable-list-apis` and can no longer be chosen per pipeline.
     /// Still parsed so existing config files keep loading.
@@ -606,6 +644,36 @@ pub struct KvRpcConfig {
     /// Defaults to `100` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub monotonic_read_wait_timeout_ms: Option<u64>,
+
+    /// gRPC URLs of kvstore indexers (for example `http://kvstore-1-grpc:7001`, the address an
+    /// indexer serves with `--rpc-listen-address`) whose watermark streams set the checkpoint this
+    /// instance serves. Each must be a plaintext `http://` URL with a host; startup fails
+    /// otherwise. When the list is not empty, each pipeline counts with the highest watermark
+    /// any indexer has streamed for it, and this instance serves up to the lowest of those across
+    /// the pipelines it serves. Bigtable's watermark rows are then never read: while every stream
+    /// is down, the served checkpoint keeps its last value until a stream delivers again. Unset or
+    /// empty polls Bigtable's watermark rows instead.
+    ///
+    /// This instance must read from the same Bigtable cluster that every listed indexer writes to:
+    /// its app profile must route reads to the cluster the indexers' app profile writes to. A
+    /// streamed watermark means the indexer's rows are durable in the cluster it wrote them to, and
+    /// Bigtable replicates them to other clusters only later, so a read routed to another cluster
+    /// can miss rows below the served checkpoint. Polling has no such requirement, because it reads
+    /// the watermark rows through this instance's own app profile.
+    ///
+    /// Requests that depend on the served checkpoint are answered `Unavailable`, and `/health`
+    /// answers 503, until every served pipeline has a watermark. An indexer's first response holds
+    /// every pipeline it runs that had a readable stored watermark row when it started or has
+    /// advanced since, so the first response from an indexer that runs every served pipeline is
+    /// enough, even during a chain halt. A served pipeline that no listed indexer runs keeps this
+    /// instance unavailable, and is named in a warning. In this mode `/health` reports readiness:
+    /// use it for a readiness probe, not a liveness probe, which would restart an instance that is
+    /// still waiting for watermarks.
+    ///
+    /// Streamed watermarks carry no `reader_lo`, so this mode assumes no pipeline has pruned past
+    /// its watermark; the kvstore does not prune.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexer_urls: Option<Vec<String>>,
 
     /// Per-table-stage read pipeline tunables (read sizes and fan-out
     /// concurrency), shared by the point-get and list APIs. Bounded by
@@ -691,7 +759,28 @@ impl KvRpcConfig {
                 .unwrap_or(base.initial_pool_size),
             min_pool_size: self.bigtable_min_pool_size.unwrap_or(base.min_pool_size),
             max_pool_size: self.bigtable_max_pool_size.unwrap_or(base.max_pool_size),
+            health_check: base
+                .health_check
+                .filter(|_| self.bigtable_channel_health_check.unwrap_or(true)),
+            http2_stream_window_bytes: self
+                .bigtable_http2_stream_window_bytes
+                .unwrap_or(base.http2_stream_window_bytes),
+            http2_connection_window_bytes: self
+                .bigtable_http2_connection_window_bytes
+                .unwrap_or(base.http2_connection_window_bytes),
             ..base
+        }
+    }
+
+    pub fn read_rows_retry(&self) -> ReadRowsRetryConfig {
+        let base = ReadRowsRetryConfig::default();
+        ReadRowsRetryConfig {
+            gap_timeout: self
+                .bigtable_read_rows_gap_timeout_ms
+                .map_or(base.gap_timeout, Duration::from_millis),
+            max_attempts: self
+                .bigtable_read_rows_max_attempts
+                .unwrap_or(base.max_attempts),
         }
     }
 
@@ -715,6 +804,15 @@ impl KvRpcConfig {
         self.stages.clone().unwrap_or_default()
     }
 
+    /// Where this instance learns how far the data in Bigtable goes: the watermark streams of the
+    /// indexers in `indexer-urls` when it lists any, else Bigtable's watermark rows.
+    pub fn watermark_source(&self) -> WatermarkSource {
+        match self.indexer_urls.as_deref() {
+            Some(urls) if !urls.is_empty() => WatermarkSource::IndexerStreams(urls.to_vec()),
+            _ => WatermarkSource::Bigtable,
+        }
+    }
+
     /// Reject configurations that cannot make forward progress. Validates the
     /// shared read-pipeline knobs (concurrency and per-stage chunk/fan-out) and
     /// delegates to [`LedgerHistoryConfig::validate`] for the list-API knobs.
@@ -729,6 +827,8 @@ impl KvRpcConfig {
             self.request_bigtable_concurrency() > 0,
             "request_bigtable_concurrency must be greater than zero",
         );
+        self.read_rows_retry().validate(self.channel_timeout())?;
+        self.pool_config().validate()?;
         let stages = self.stages();
         for stage in [
             PipelineStage::TxSeqDigest,
@@ -1103,6 +1203,29 @@ enable-list-apis: true
             service_info_watermark_pipelines(cfg.enable_list_apis()).len(),
             DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.len()
                 + LIST_API_SERVICE_INFO_WATERMARK_PIPELINES.len(),
+        );
+    }
+
+    #[test]
+    fn watermark_source_polls_bigtable_unless_indexer_urls_lists_any() {
+        assert_eq!(
+            KvRpcConfig::default().watermark_source(),
+            WatermarkSource::Bigtable
+        );
+
+        let cfg: KvRpcConfig = toml::from_str("indexer-urls = []\n").unwrap();
+        assert_eq!(cfg.watermark_source(), WatermarkSource::Bigtable);
+
+        let config_toml = r#"
+indexer-urls = ["http://kvstore-0-grpc:7001", "http://kvstore-1-grpc:7001"]
+"#;
+        let cfg: KvRpcConfig = toml::from_str(config_toml).unwrap();
+        assert_eq!(
+            cfg.watermark_source(),
+            WatermarkSource::IndexerStreams(vec![
+                "http://kvstore-0-grpc:7001".to_string(),
+                "http://kvstore-1-grpc:7001".to_string(),
+            ])
         );
     }
 }

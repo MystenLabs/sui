@@ -15,14 +15,22 @@
 //!   helper shape (`Chain` of family regex, column qualifier regex, optional
 //!   cells-per-column limit, and optional value range) with a
 //!   `PassAllFilter(true)` true branch and no false branch. Rows failing a
-//!   `Condition` predicate are dropped before `rows_limit` is applied, mirroring
-//!   BigTable where the limit counts emitted rows. Records each call for
+//!   `Condition` predicate, and rows the column qualifier filter leaves with no
+//!   cells, are dropped before `rows_limit` is applied, mirroring BigTable where
+//!   the limit counts emitted rows. Records each call for
 //!   assertions, can emit rows in reverse request order, can stream a response
 //!   one row per message with a fixed delay before each row, and serves
 //!   row-range scans in either direction (reversed scans are range-only).
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
+//! - `PingAndWarm`: succeeds unless `ping_should_fail` (answer with an error)
+//!   or `ping_should_stall` (never answer) is set.
+//! - Fault injection: per-connection stalls, where `ReadRows` and `PingAndWarm`
+//!   calls from a stalled peer never get response headers; per-connection
+//!   failures, where those calls fail at once with `Unavailable`; and one-shot
+//!   `ReadRows` interruptions that stall or fail a response after a number of
+//!   complete rows plus the first chunk of the next row.
 //!
 //! Anything outside that subset should return `UNIMPLEMENTED` so tests do not
 //! accidentally rely on BigTable behavior this mock does not model.
@@ -105,6 +113,22 @@ pub enum ReadRowsResponseOrder {
     #[default]
     RequestOrder,
     ReverseRequestOrder,
+}
+
+/// Fault for one `ReadRows` response: after `after_rows` complete rows and the
+/// first chunk of the next row (if any), apply `fault`.
+#[derive(Clone, Debug)]
+pub struct ReadRowsInterruption {
+    pub after_rows: usize,
+    pub fault: ReadRowsFault,
+}
+
+#[derive(Clone, Debug)]
+pub enum ReadRowsFault {
+    /// Keep the response stream open without sending anything more.
+    Stall,
+    /// End the response stream with this status.
+    Fail(Status),
 }
 
 struct Cell {
@@ -218,6 +242,14 @@ struct MockState {
     /// Delay before each row of a `ReadRows` response; when nonzero, rows
     /// are sent one message each, so tests can model backend latency.
     read_rows_latency: std::time::Duration,
+    /// Remote addresses whose `ReadRows` and `PingAndWarm` calls never respond.
+    stalled_peers: HashSet<SocketAddr>,
+    /// Remote addresses whose `ReadRows` and `PingAndWarm` calls fail with `Unavailable`.
+    failing_peers: HashSet<SocketAddr>,
+    /// Remote address of every `PingAndWarm` call, in arrival order.
+    ping_peers: Vec<SocketAddr>,
+    /// Faults for upcoming `ReadRows` calls, one per call, in order.
+    read_rows_interruptions: VecDeque<ReadRowsInterruption>,
 }
 
 /// Mock BigTable server with injectable failures and call recording.
@@ -226,6 +258,8 @@ pub struct MockBigtableServer {
     state: Arc<Mutex<MockState>>,
     /// When true, PingAndWarm returns an error.
     pub ping_should_fail: Arc<AtomicBool>,
+    /// When true, PingAndWarm never responds.
+    pub ping_should_stall: Arc<AtomicBool>,
     /// Total number of requests received across all RPCs.
     pub request_count: Arc<AtomicUsize>,
     /// Total number of MutateRows requests received.
@@ -240,6 +274,7 @@ impl MockBigtableServer {
         Self {
             state: Arc::new(Mutex::new(MockState::default())),
             ping_should_fail: Arc::new(AtomicBool::new(false)),
+            ping_should_stall: Arc::new(AtomicBool::new(false)),
             request_count: Arc::new(AtomicUsize::new(0)),
             mutate_rows_count: Arc::new(AtomicUsize::new(0)),
             check_and_mutate_failures: Arc::new(AtomicUsize::new(0)),
@@ -376,6 +411,60 @@ impl MockBigtableServer {
     /// a paused test clock.
     pub async fn set_read_rows_latency(&self, latency: std::time::Duration) {
         self.state.lock().await.read_rows_latency = latency;
+    }
+
+    /// Never respond to `ReadRows` or `PingAndWarm` calls arriving from `peer`:
+    /// the handler waits forever before sending response headers.
+    pub async fn stall_peer(&self, peer: SocketAddr) {
+        self.state.lock().await.stalled_peers.insert(peer);
+    }
+
+    /// Answer calls from `peer` again. Calls already stalled stay stalled.
+    pub async fn unstall_peer(&self, peer: SocketAddr) {
+        self.state.lock().await.stalled_peers.remove(&peer);
+    }
+
+    /// Fail `ReadRows` and `PingAndWarm` calls from `peer` at once with `Unavailable`.
+    pub async fn fail_peer(&self, peer: SocketAddr) {
+        self.state.lock().await.failing_peers.insert(peer);
+    }
+
+    /// Remote address of every `PingAndWarm` call so far, in arrival order.
+    pub async fn ping_peers(&self) -> Vec<SocketAddr> {
+        self.state.lock().await.ping_peers.clone()
+    }
+
+    /// Queue `interruption` for a later `ReadRows` call: each call the mock accepts takes the
+    /// oldest queued interruption, if any. A call rejected first, by a stalled or failing peer or
+    /// as an unsupported request, leaves the queue alone.
+    pub async fn interrupt_next_read_rows(&self, interruption: ReadRowsInterruption) {
+        self.state
+            .lock()
+            .await
+            .read_rows_interruptions
+            .push_back(interruption);
+    }
+
+    /// Apply the faults injected for the peer that sent `request`: never answer if it is
+    /// stalled, fail with `Unavailable` if it is failing.
+    async fn apply_peer_faults<T>(&self, request: &Request<T>) -> Result<(), Status> {
+        let Some(peer) = request.remote_addr() else {
+            return Ok(());
+        };
+        let (stalled, failing) = {
+            let state = self.state.lock().await;
+            (
+                state.stalled_peers.contains(&peer),
+                state.failing_peers.contains(&peer),
+            )
+        };
+        if stalled {
+            std::future::pending::<()>().await;
+        }
+        if failing {
+            return Err(Status::unavailable("injected peer failure"));
+        }
+        Ok(())
     }
 
     /// Start the mock server on a random available port.
@@ -786,6 +875,7 @@ impl Bigtable for MockBigtableServer {
         request: Request<ReadRowsRequest>,
     ) -> Result<Response<Self::ReadRowsStream>, Status> {
         self.request_count.fetch_add(1, Ordering::Relaxed);
+        self.apply_peer_faults(&request).await?;
         let req = request.into_inner();
         let mut state = self.state.lock().await;
 
@@ -842,17 +932,22 @@ impl Bigtable for MockBigtableServer {
             }
         }
 
-        // A `Condition` filter selects rows server-side: rows whose predicate
-        // does not match are dropped before `rows_limit` is applied, mirroring
-        // BigTable where the limit counts rows actually emitted after filtering.
-        if let Some(predicate) = &condition {
-            requested_keys.retain(|key| {
-                state
-                    .rows
-                    .get(&(table.clone(), key.clone()))
-                    .is_some_and(|row| row_satisfies(row, predicate))
-            });
-        }
+        // Rows are selected server-side before `rows_limit` is applied, mirroring BigTable where
+        // the limit counts rows actually emitted after filtering: a row is dropped if it fails
+        // the `Condition` predicate or if the column qualifier filter leaves it with no cells.
+        // Missing rows stay in the recorded request unless a `Condition` is present.
+        requested_keys.retain(|key| {
+            let Some(row) = state.rows.get(&(table.clone(), key.clone())) else {
+                return condition.is_none();
+            };
+            condition
+                .as_ref()
+                .is_none_or(|predicate| row_satisfies(row, predicate))
+                && allowed_qualifiers.as_ref().is_none_or(|allowed| {
+                    row.keys()
+                        .any(|(_, qualifier)| allowed.contains(qualifier.as_ref()))
+                })
+        });
         if req.rows_limit != 0 {
             requested_keys.truncate(req.rows_limit as usize);
         }
@@ -866,10 +961,9 @@ impl Bigtable for MockBigtableServer {
             requested_keys.reverse();
         }
 
-        // One message per row when the test models row latency, else one
-        // message for the whole response.
         let row_latency = state.read_rows_latency;
-        let mut messages: Vec<Vec<CellChunk>> = vec![Vec::new()];
+        let interruption = state.read_rows_interruptions.pop_front();
+        let mut rows: Vec<Vec<CellChunk>> = Vec::new();
         for row_key in requested_keys {
             let Some(row) = state.rows.get(&(table.clone(), row_key.clone())) else {
                 continue;
@@ -899,19 +993,30 @@ impl Bigtable for MockBigtableServer {
                 continue;
             };
             last.row_status = Some(RowStatus::CommitRow(true));
-            if row_latency.is_zero() {
-                messages[0].extend(row_chunks);
-            } else {
-                messages.push(row_chunks);
-            }
+            rows.push(row_chunks);
         }
+
+        // An interruption cuts the response after its complete rows, sending
+        // the first chunk of the next row uncommitted before the fault.
+        let interruption = interruption.map(|ReadRowsInterruption { after_rows, fault }| {
+            let partial_row = rows.get(after_rows).map(|chunks| CellChunk {
+                row_status: None,
+                ..chunks[0].clone()
+            });
+            rows.truncate(after_rows);
+            (partial_row, fault)
+        });
+        // One message per row when the test models row latency, else one
+        // message for the whole response.
+        let messages: Vec<Vec<CellChunk>> = if row_latency.is_zero() {
+            vec![rows.into_iter().flatten().collect()]
+        } else {
+            rows
+        };
 
         let stream = async_stream::stream! {
             for chunks in messages {
                 if !row_latency.is_zero() {
-                    if chunks.is_empty() {
-                        continue;
-                    }
                     tokio::time::sleep(row_latency).await;
                 }
                 yield Ok(ReadRowsResponse {
@@ -919,6 +1024,19 @@ impl Bigtable for MockBigtableServer {
                     last_scanned_row_key: Bytes::new(),
                     request_stats: None,
                 });
+            }
+            if let Some((partial_row, fault)) = interruption {
+                if let Some(chunk) = partial_row {
+                    yield Ok(ReadRowsResponse {
+                        chunks: vec![chunk],
+                        last_scanned_row_key: Bytes::new(),
+                        request_stats: None,
+                    });
+                }
+                match fault {
+                    ReadRowsFault::Stall => std::future::pending::<()>().await,
+                    ReadRowsFault::Fail(status) => yield Err(status),
+                }
             }
         };
         Ok(Response::new(Box::pin(stream)))
@@ -1014,9 +1132,16 @@ impl Bigtable for MockBigtableServer {
 
     async fn ping_and_warm(
         &self,
-        _request: Request<PingAndWarmRequest>,
+        request: Request<PingAndWarmRequest>,
     ) -> Result<Response<PingAndWarmResponse>, Status> {
         self.request_count.fetch_add(1, Ordering::Relaxed);
+        if let Some(peer) = request.remote_addr() {
+            self.state.lock().await.ping_peers.push(peer);
+        }
+        self.apply_peer_faults(&request).await?;
+        if self.ping_should_stall.load(Ordering::Relaxed) {
+            std::future::pending::<()>().await;
+        }
         if self.ping_should_fail.load(Ordering::Relaxed) {
             return Err(Status::unavailable("injected ping failure"));
         }
