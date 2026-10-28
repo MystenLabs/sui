@@ -1,6 +1,6 @@
 # Native (Rust) Accumulator Settlement
 
-Status: design draft. Open questions are in §6.
+Status: type definitions under review.
 
 ## 1. Goal
 
@@ -20,30 +20,22 @@ The Rust executor must produce the same on-chain objects as the Move code:
 - Event streams append to the `EventStreamHead` MMR.
 - The barrier records the net count of accumulator objects created and deleted.
 
-## 2. Transaction format (proposed)
+## 2. Transaction format
+
+The payload types live in `crates/sui-types/src/accumulator_settlement.rs`. They are added to
+`TransactionKind` as two variants:
 
 ```rust
-pub struct AccumulatorSettlement {
-    // Prologue fields. Together with the update list they make the digest unique.
-    pub epoch: u64,
-    pub checkpoint_height: u64,
-    pub idx: u64,
-    pub checkpoint_seq: u64,               // needed by event-stream updates
-    pub input_sui: u64,
-    pub output_sui: u64,
-    pub accumulator_root_initial_shared_version: SequenceNumber,
-    pub updates: Vec<AccumulatorUpdate>,
-}
-
-pub struct AccumulatorUpdate {
-    pub accumulator_id: ObjectID,          // hashed dynamic-field id
-    pub operation: AccumulatorOperation,   // Merge | Split
-    pub amount: u128,
-}
+AccumulatorSettlementV1(AccumulatorSettlementV1),
+AccumulatorBarrierV1(AccumulatorBarrierV1),
 ```
 
-The barrier is a separate transaction. It takes the root as `Mutable`, carries no updates, and
-carries `objects_created` / `objects_destroyed` (see Q3 for how it is told apart).
+- Updates are grouped by type, so each `TypeTag` appears once per settlement.
+- Within a group, an update is `{ owner, operation, amount }`.
+- Event streams have their own group variant.
+- The executor derives the dynamic-field ID from `(owner, type)`.
+
+The barrier is a separate variant. It carries the object-count changes.
 
 ## 3. Execution semantics
 
@@ -169,43 +161,21 @@ This work adds:
 - Enable the flag after PR 1 ships and sui-rust-sdk, the TypeScript SDK, the indexers and
   GraphQL have released with the new variant.
 
-## 6. Open questions
+## 6. Resolved questions
 
-**Q1. Creating an accumulator needs `T` and the owner address.**
-- The object is `Field<Key<T>, U128> { id, name: Key<T> { address }, value: U128 }`. Both its
-  `MoveObjectType` and its contents need `T` and `owner`.
-- The hashed ID is enough for mutate and delete. It is not enough for create.
-- Options:
-  - (a) Carry `(owner, TypeTag)` on merges that may create. The builder cannot know which merges
-    create, so in practice every merge carries it. The type was already validated by the
-    source transaction (`max_accumulator_type_nodes`).
-  - (b) Carry the type only in a separate per-transaction table of `(id → owner, type)` for
-    merges. This is the same data as (a) in a different layout.
-  - (c) Change the on-chain representation so it does not embed `T`. This breaks parity with
-    Move and with every reader of the field.
-
-**Q2. Event streams are live on mainnet** (`enable_authenticated_event_streams`). An update with
-`{id, op, amount}` cannot express `settle_events(stream_id, merkle_root, event_count,
-checkpoint_seq)`. Proposal: make the update an enum.
-```rust
-enum AccumulatorUpdate {
-    Balance { accumulator_id, operation, amount: u128 },
-    EventStream { stream_id: SuiAddress, merkle_root: Digest, event_count: u64 },
-}
-```
-`EventStreamHead` has a fixed type and needs no type tag. It does need the stream address for
-`Key { address }` on create.
-
-**Q3. How the barrier is told apart.**
-- An empty update list would work, because a settlement chunk is never empty.
-- A separate `AccumulatorBarrier { epoch, checkpoint_height, num_settlements, objects_created,
-  objects_destroyed, root_isv }` variant, or an explicit enum field, is clearer.
-- The barrier key and root mutability (`Mutable` against `NonExclusiveWrite`) depend on it.
+- **Q1 (creation needs `T`):** the type is carried once per group, and owners are listed within
+  the group.
+- **Q2 (event streams):** the update group is an enum with `Balance` and `EventStream` variants.
+- **Q3 (barrier):** the barrier is a separate `TransactionKind` variant.
+- **Abort path:** any settlement abort is fatal for the validator. Bugs in the abort path
+  therefore do not matter.
+- **Effects:** effects must be identical to what the Move implementation produces.
 
 ## 7. Progress
 
 - [x] Audit current settlement path
-- [ ] Resolve open questions
+- [x] Resolve open questions
+- [x] Payload type definitions
 - [ ] sui-types: variant, payload, match arms, recognition helpers, format snapshot
 - [ ] protocol flag
 - [ ] TemporaryStore child create/mutate/delete primitives
