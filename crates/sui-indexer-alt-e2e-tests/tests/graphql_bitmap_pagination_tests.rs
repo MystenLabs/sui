@@ -1111,8 +1111,8 @@ async fn test_function() {
 
 #[tokio::test]
 async fn test_affected_address() {
-    // Proves the graphql `affectedAddress` filter translates to an `AffectedAddress` include
-    // predicate that catches *recipients*, not just senders. cp 1 has two Alice-sent txs: tx 0
+    // Proves the graphql `affectedAddress` filter translates to an `AffectedAddress` predicate
+    // (ORed with `Sender`) that catches *recipients*, not just senders. cp 1 has two Alice-sent txs: tx 0
     // creates obj 0 owned by Alice (Bob is not affected); tx 1 transfers obj 0 to Bob (Bob is
     // affected as the new owner). Filtering by Bob must return only tx 1.
     //

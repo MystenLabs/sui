@@ -362,6 +362,7 @@ impl Transaction {
             affected_address,
             affected_object,
             sent_address,
+            affected_address_is_object: _,
         } = filter;
 
         let tx_sequence_numbers = if let Some(function) = function {

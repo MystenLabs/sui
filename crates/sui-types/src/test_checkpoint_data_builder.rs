@@ -54,7 +54,7 @@ pub struct TestCheckpointBuilder {
     live_objects: HashMap<ObjectID, Object>,
     /// Map of all wrapped objects in the state.
     wrapped_objects: HashMap<ObjectID, Object>,
-    /// A map from sender addresses to gas objects they own.
+    /// A map from gas owners (the sender, or the sponsor) to the gas objects they own.
     /// These are created automatically when a transaction is started.
     /// Users of this builder should not need to worry about them.
     gas_map: HashMap<SuiAddress, ObjectID>,

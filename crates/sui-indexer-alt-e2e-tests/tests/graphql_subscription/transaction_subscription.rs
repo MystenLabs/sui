@@ -19,6 +19,8 @@ use shared_crypto::intent::Intent;
 use sui_indexer_alt_graphql::CTransaction;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
+use sui_test_transaction_builder::FundSource;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -145,6 +147,18 @@ async fn collect_nodes(
         }
     }
     expected.iter().map(|d| by_digest[d].clone()).collect()
+}
+
+/// [`collect_nodes`] with a deadline, so a transaction that never arrives fails the test with
+/// `context` instead of hanging. Shorter than the harness's per-event timeout so this message wins.
+async fn collect_nodes_within(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    expected: &[String],
+    context: &str,
+) -> Vec<Value> {
+    tokio::time::timeout(Duration::from_secs(20), collect_nodes(stream, expected))
+        .await
+        .unwrap_or_else(|_| panic!("timed out waiting for {context}"))
 }
 
 /// Execute `n` matching SUI transfers in soft bundles of four (one bundle per checkpoint) and return
@@ -827,7 +841,8 @@ async fn test_transaction_subscription_affected_address_sender_live_backfill_par
     let sponsor = cluster.validator.get_address_0();
     let filter = "affectedAddress: $sender";
 
-    // 1. Start live, for both the sender and the sponsor.
+    // 1. Start live, for both the sender and the sponsor. `tx_query` names its address variable
+    //    `$sender`, so the sponsor is passed through it too.
     let mut live_sender = cluster
         .subscribe_with_variables(&tx_query(filter, None), sender_var(sender))
         .await;
@@ -840,8 +855,10 @@ async fn test_transaction_subscription_affected_address_sender_live_backfill_par
     let expected = vec![execute_sponsored_noop(&cluster.validator).await];
 
     // 3. Both live subscriptions deliver it.
-    let live_sender_nodes = collect_nodes(&mut live_sender, &expected).await;
-    let live_sponsor_nodes = collect_nodes(&mut live_sponsor, &expected).await;
+    let live_sender_nodes =
+        collect_nodes_within(&mut live_sender, &expected, "the sender's live delivery").await;
+    let live_sponsor_nodes =
+        collect_nodes_within(&mut live_sponsor, &expected, "the sponsor's live delivery").await;
     drop((live_sender, live_sponsor));
 
     // 4. Resume from before it, so it can only arrive through the backfill scan.
@@ -852,12 +869,75 @@ async fn test_transaction_subscription_affected_address_sender_live_backfill_par
     let mut backfill_sponsor = cluster
         .subscribe_with_variables(&tx_query(filter, Some(resume_from)), sender_var(sponsor))
         .await;
-    let backfill_sender_nodes = collect_nodes(&mut backfill_sender, &expected).await;
-    let backfill_sponsor_nodes = collect_nodes(&mut backfill_sponsor, &expected).await;
+    let backfill_sender_nodes = collect_nodes_within(
+        &mut backfill_sender,
+        &expected,
+        "the sender's backfill delivery",
+    )
+    .await;
+    let backfill_sponsor_nodes = collect_nodes_within(
+        &mut backfill_sponsor,
+        &expected,
+        "the sponsor's backfill delivery",
+    )
+    .await;
 
     // 5. Live and backfill agree.
     assert_eq!(live_sender_nodes, backfill_sender_nodes);
     assert_eq!(live_sponsor_nodes, backfill_sponsor_nodes);
+}
+
+/// `affectedAddress` matches an address whose only involvement is receiving funds into its address
+/// balance, on both the live path and the backfill scan.
+#[tokio::test]
+async fn test_transaction_subscription_affected_address_balance_recipient_live_backfill_parity() {
+    let cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.get_address_0();
+    let recipient = SuiAddress::random_for_testing_only();
+    // `tx_query` names its address variable `$sender`; here it carries the recipient.
+    let filter = "affectedAddress: $sender";
+
+    let mut live = cluster
+        .subscribe_with_variables(&tx_query(filter, None), sender_var(recipient))
+        .await;
+
+    // Send SUI from a coin (not the gas coin) to the recipient's address balance.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let gas = cluster
+        .validator
+        .wallet
+        .gas_for_owner_budget(sender, 5000, BTreeSet::new())
+        .await
+        .unwrap()
+        .1
+        .compute_object_reference();
+    let source = cluster
+        .validator
+        .wallet
+        .gas_for_owner_budget(sender, 5000, BTreeSet::from([gas.0]))
+        .await
+        .unwrap()
+        .1
+        .compute_object_reference();
+    let rgp = cluster.validator.get_reference_gas_price().await;
+    let data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui_to_address_balance(FundSource::coin(source), vec![(1_000, recipient)])
+        .build();
+    let tx = cluster.validator.wallet.sign_transaction(&data).await;
+    let expected = vec![tx.digest().to_string()];
+    cluster.validator.execute_transaction(tx).await;
+
+    let live_nodes = collect_nodes_within(&mut live, &expected, "the live delivery").await;
+    drop(live);
+
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+    let mut backfill = cluster
+        .subscribe_with_variables(&tx_query(filter, Some(resume_from)), sender_var(recipient))
+        .await;
+    let backfill_nodes =
+        collect_nodes_within(&mut backfill, &expected, "the backfill delivery").await;
+
+    assert_eq!(live_nodes, backfill_nodes);
 }
 
 #[tokio::test]

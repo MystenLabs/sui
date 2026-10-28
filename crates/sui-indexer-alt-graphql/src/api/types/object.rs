@@ -687,6 +687,7 @@ impl Object {
             // Create filter for transactions that affected this object's address
             let address_filter = TransactionFilter {
                 affected_address: Some(self.super_.address.into()),
+                affected_address_is_object: true,
                 ..Default::default()
             };
 
