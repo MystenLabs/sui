@@ -9,10 +9,19 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use crate::TypeTag;
 use crate::base_types::{SequenceNumber, SuiAddress};
 use crate::digests::Digest;
 use crate::effects::AccumulatorOperation;
+use crate::transaction::{SharedInputObject, SharedObjectMutability};
+
+/// Payload of `TransactionKind::AccumulatorSettlement`.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum AccumulatorSettlementTransaction {
+    SettlementV1(AccumulatorSettlementV1),
+    BarrierV1(AccumulatorBarrierV1),
+}
 
 /// Applies one chunk of the accumulator updates for a checkpoint. Takes the accumulator root as
 /// `NonExclusiveWrite`, so the settlements of a checkpoint run concurrently and leave the root
@@ -87,4 +96,43 @@ pub struct AccumulatorBarrierV1 {
     /// Accumulator objects deleted by the settlements of this checkpoint.
     pub objects_destroyed: u64,
     pub accumulator_root_initial_shared_version: SequenceNumber,
+}
+
+impl AccumulatorSettlementTransaction {
+    pub fn epoch(&self) -> u64 {
+        match self {
+            Self::SettlementV1(s) => s.epoch,
+            Self::BarrierV1(b) => b.epoch,
+        }
+    }
+
+    pub fn checkpoint_height(&self) -> u64 {
+        match self {
+            Self::SettlementV1(s) => s.checkpoint_height,
+            Self::BarrierV1(b) => b.checkpoint_height,
+        }
+    }
+
+    pub fn is_barrier(&self) -> bool {
+        matches!(self, Self::BarrierV1(_))
+    }
+
+    /// The accumulator root, which is the only input of every settlement transaction.
+    pub fn accumulator_root_input(&self) -> SharedInputObject {
+        let (initial_shared_version, mutability) = match self {
+            Self::SettlementV1(s) => (
+                s.accumulator_root_initial_shared_version,
+                SharedObjectMutability::NonExclusiveWrite,
+            ),
+            Self::BarrierV1(b) => (
+                b.accumulator_root_initial_shared_version,
+                SharedObjectMutability::Mutable,
+            ),
+        };
+        SharedInputObject {
+            id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            initial_shared_version,
+            mutability,
+        }
+    }
 }
