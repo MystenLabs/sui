@@ -4,7 +4,6 @@
 
 use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
-use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
@@ -283,6 +282,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
+    pub(crate) object_funds_in_execution_check_result: IntCounterVec,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
     pub(crate) execution_queueing_delay_s: Histogram,
     pub(crate) prepare_cert_gas_latency_ratio: Histogram,
@@ -555,6 +555,14 @@ impl AuthorityMetrics {
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
+                registry,
+            )
+            .unwrap(),
+            object_funds_in_execution_check_result: register_int_counter_vec_with_registry!(
+                "object_funds_in_execution_check_result",
+                "Committed transactions by in-execution object funds check outcome: sufficient \
+                 counts transactions that recorded a net object withdrawal",
+                &["result"],
                 registry,
             )
             .unwrap(),
@@ -1052,7 +1060,6 @@ pub struct AuthorityState {
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
-    object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
     pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
     /// Created once per process, then re-attached to each new `AuthorityPerEpochStore`
@@ -2062,15 +2069,20 @@ impl AuthorityState {
                 ExecutionStatus::Success => {
                     if let Some(accumulator_version) =
                         execution_env.assigned_versions.accumulator_version()
-                    {
-                        self.unsettled_object_withdrawals
+                        && self
+                            .unsettled_object_withdrawals
                             .record_object_funds_withdraws(
                                 certificate.transaction_data(),
                                 &effects,
                                 &inner_temp_store.accumulator_running_max_withdraws,
                                 accumulator_version,
                                 self.chain_identifier,
-                            );
+                            )
+                    {
+                        self.metrics
+                            .object_funds_in_execution_check_result
+                            .with_label_values(&["sufficient"])
+                            .inc();
                     }
                 }
                 ExecutionStatus::Failure(failure) => {
@@ -2079,8 +2091,8 @@ impl AuthorityState {
                     ) {
                         assert_reachable_gated!("object funds insufficient in execution", |pc| pc
                             .check_object_funds_withdraw_in_execution());
-                        self.object_funds_checker_metrics
-                            .in_execution_check_result
+                        self.metrics
+                            .object_funds_in_execution_check_result
                             .with_label_values(&["insufficient"])
                             .inc();
                     }
@@ -2641,9 +2653,6 @@ impl AuthorityState {
                 .clone(),
         ));
 
-        let object_funds_checker_metrics =
-            Arc::new(ObjectFundsCheckerMetrics::new(prometheus_registry));
-
         let transaction_deny_config_manager = TransactionDenyConfigManager::new(
             name,
             config.transaction_deny_config.clone(),
@@ -2691,9 +2700,8 @@ impl AuthorityState {
             // Object funds checking during execution needs fullnodes to track unsettled object
             // withdraws as well similar to validators.
             unsettled_object_withdrawals: Arc::new(UnsettledObjectWithdrawals::new(
-                object_funds_checker_metrics.clone(),
+                prometheus_registry,
             )),
-            object_funds_checker_metrics,
             transaction_deny_config_manager,
         });
 
