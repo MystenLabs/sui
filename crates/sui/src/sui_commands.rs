@@ -147,6 +147,11 @@ pub struct RpcArgs {
     ///
     /// Note that GraphQL requires a running indexer and consistent store, which will be enabled
     /// by default even if those flags are not set.
+    ///
+    /// GraphQL subscriptions are served at `/graphql/subscriptions`, streaming checkpoints from
+    /// the local fullnode. Paginated `transactions` and `events` queries are also served by the
+    /// fullnode instead of the indexer's Postgres tables, matching how public GraphQL services
+    /// run. GraphQL starts once the indexer has caught up with the fullnode.
     #[clap(
         long,
         default_missing_value = "0.0.0.0:9125",
@@ -1228,7 +1233,9 @@ async fn start(
         graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
 
         // The local fullnode already serves the `LedgerService` gRPC API that
-        // `--ledger-grpc-url` points at, so KV point-lookups can be served from it directly.
+        // `--ledger-grpc-url` points at, so KV point-lookups can be served from it directly. It
+        // also serves the List APIs (used for pagination, and by subscriptions for backfill and
+        // gap recovery) and the checkpoint stream that subscriptions follow.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(
                 fullnode_grpc_url
@@ -1236,8 +1243,20 @@ async fn start(
                     .parse()
                     .context("Failed to parse fullnode gRPC URL into a ledger gRPC URI")?,
             ),
+            enable_list_apis: Some(true),
             ..Default::default()
         };
+
+        let subscription_args = SubscriptionArgs {
+            checkpoint_stream_url: Some(
+                fullnode_grpc_url
+                    .as_str()
+                    .parse()
+                    .context("Failed to parse fullnode gRPC URL into a checkpoint stream URI")?,
+            ),
+        };
+
+        info!("Waiting for the indexer to catch up before serving GraphQL subscriptions");
 
         rpc_services = rpc_services.merge(
             start_graphql(
@@ -1248,7 +1267,7 @@ async fn start(
                 consistent_reader_args,
                 graphql_args,
                 SystemPackageTaskArgs::default(),
-                SubscriptionArgs::default(),
+                subscription_args,
                 "0.0.0",
                 graphql_config,
                 pipelines,
