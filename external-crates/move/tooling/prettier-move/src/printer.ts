@@ -62,8 +62,8 @@ export function print(path: AstPath<Node>, options: MoveOptions, print: printFn)
         return null;
     };
 
-    // nodes without a printer (e.g. spec blocks) are expected and are
-    // preserved verbatim; `enableErrorDebug` marks them in the output
+    // nodes without a printer are preserved verbatim; `enableErrorDebug`
+    // marks them in the output
     const defautCb: treeFn = (path, options, print) => {
         if (options.enableErrorDebug && path.node.isNamed) {
             return ['/* UNHANDLED: ' + path.node.type + ' */ ', path.node.text];

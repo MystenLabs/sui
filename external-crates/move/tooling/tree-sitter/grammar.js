@@ -3,7 +3,6 @@
 
 const PRECEDENCE = {
   assign: 1,
-  implies: 2, // ==>
   or: 3, // ||
   and: 4, // &&
   eq: 5, // ==
@@ -12,7 +11,6 @@ const PRECEDENCE = {
   gt: 5, // >
   le: 5, // <=
   ge: 5, // >=
-  range: 6, // ..
   bitor: 7, // |
   xor: 8, // ^
   bitand: 9, // &
@@ -34,7 +32,6 @@ module.exports = grammar({
   name: 'move',
   extras: $ => [$._whitespace, $.line_comment, $.block_comment, $.newline, $.annotation],
   word: $ => $.identifier,
-  supertypes: $ => [$._spec_block_target],
   conflicts: $ => [
     [$.annotation_expr, $.module_access],
     [$._expression, $._expression_term],
@@ -50,7 +47,6 @@ module.exports = grammar({
     [$.module_access],
     [$.break_expression],
     [$.abort_expression],
-    [$.spec_block, $._reserved_identifier],
   ],
 
   rules: {
@@ -135,7 +131,6 @@ module.exports = grammar({
             $._function_item,
             $._struct_item,
             $._enum_item,
-            $.spec_block,
           )),
         optional('}'),
       );
@@ -303,155 +298,6 @@ module.exports = grammar({
       ')',
     ),
 
-    // Spec block start
-    spec_block: $ => seq(
-      'spec',
-      choice(
-        seq(optional(field('target', $._spec_block_target)), field('body', $.spec_body)),
-        $._spec_function,
-      )
-    ),
-    _spec_block_target: $ => choice(
-      $.identifier,
-      alias('module', $.spec_block_target_module),
-      $.spec_block_target_schema,
-    ),
-    spec_block_target_fun: $ => seq('fun', $._function_identifier),
-    spec_block_target_struct: $ => seq('struct', $._struct_identifier),
-    spec_block_target_schema: $ => seq(
-      'schema',
-      field('name', $._struct_identifier),
-      optional(field('type_parameters', $.type_parameters)),
-    ),
-    spec_body: $ => seq(
-      '{',
-      repeat($.use_declaration),
-      repeat($._spec_block_memeber),
-      '}'
-    ),
-    _spec_block_memeber: $ => choice(
-      $.spec_invariant,
-      $._spec_function,
-      $.spec_condition,
-      $.spec_include,
-      $.spec_apply,
-      $.spec_pragma,
-      $.spec_variable,
-      $.spec_let,
-    ),
-    spec_let: $ => seq(
-      'let',
-      optional('post'),
-      field('name', $.identifier),
-      '=',
-      field('def', $._expression),
-      ';'
-    ),
-    spec_condition: $ => choice(
-      $._spec_condition,
-      $._spec_abort_if,
-      $._spec_abort_with_or_modifies,
-    ),
-    _spec_condition_kind: $ => choice(
-      'assert',
-      'assume',
-      'decreases',
-      'ensures',
-      'succeeds_if',
-    ),
-    _spec_condition: $ => seq(
-      choice(
-        field('kind', alias($._spec_condition_kind, $.condition_kind)),
-        seq(
-          field('kind', alias('requires', $.condition_kind)),
-          optional('module'),
-        )
-      ),
-      optional(field('condition_properties', $.condition_properties)),
-      field('expr', $._expression),
-      ';'
-    ),
-    _spec_abort_if: $ => seq(
-      field('kind', alias('aborts_if', $.condition_kind)),
-      optional(field('condition_properties', $.condition_properties)),
-      field('expr', $._expression),
-      optional(seq('with', field('additional_exp', $._expression))),
-      ';'
-    ),
-    _spec_abort_with_or_modifies: $ => seq(
-      field('kind', alias(choice(
-        'aborts_with',
-        'modifies'
-      ), $.condition_kind)),
-      optional(field('condition_properties', $.condition_properties)),
-      sepBy1(',', field('additional_exp', $._expression)),
-      ';'
-    ),
-
-    spec_invariant: $ => seq(
-      field('kind', alias('invariant', $.condition_kind)),
-      optional(field('modifier', alias(choice('update', 'pack', 'unpack', 'module'), $.invariant_modifier))),
-      optional(field('condition_properties', $.condition_properties)),
-      field('expr', $._expression),
-      ';'
-    ),
-    condition_properties: $ => seq('[', sepBy(',', $.spec_property), ']'),
-    spec_include: $ => seq('include', $._expression, ';'),
-
-    spec_apply: $ => seq(
-      'apply',
-      field('expr', $._expression),
-      'to',
-      sepBy1(',', $.spec_apply_pattern),
-      optional(seq('except', sepBy1(',', $.spec_apply_pattern))),
-      ';'
-    ),
-    spec_apply_pattern: $ => seq(
-      optional(choice('public', 'internal')),
-      field('name_pattern', $.spec_apply_name_pattern),
-      optional(field('type_parameters', $.type_parameters)),
-    ),
-    spec_apply_name_pattern: $ => /[0-9a-zA-Z_*]+/,
-
-    spec_pragma: $ => seq(
-      'pragma',
-      sepBy(',', $.spec_property),
-      ';'
-    ),
-    spec_property: $ => seq($.identifier, optional(seq('=', $._literal_value))),
-
-    spec_variable: $ => seq(
-      optional(choice('global', 'local')),
-      field('name', $.identifier),
-      optional(field('type_parameters', $.type_parameters)),
-      ':',
-      field('type', $._type),
-      ';'
-    ),
-
-    _spec_function: $ => choice(
-      $.native_spec_function,
-      $.usual_spec_function,
-      $.uninterpreted_spec_function,
-    ),
-
-    uninterpreted_spec_function: $ => seq('fun', $._spec_function_signature, ';'),
-    native_spec_function: $ => seq('native', 'fun', $._spec_function_signature, ';'),
-    usual_spec_function: $ => seq(
-      'fun',
-      $._spec_function_signature,
-      field('body', $.block)
-    ),
-    _spec_function_signature: $ => seq(
-      field('name', $._function_identifier),
-      optional(field('type_parameters', $.type_parameters)),
-      field('parameters', $.function_parameters),
-      field('return_type', $.ret_type),
-    ),
-
-    // Spec block end
-
-
     // move type grammar
     _type: $ => choice(
       $.apply_type,
@@ -487,7 +333,6 @@ module.exports = grammar({
       seq('$', field('member', $.identifier)),
       // address access
       seq('@', field('member', $.identifier)),
-      field('member', alias($._reserved_identifier, $.identifier)),
       seq(
         field('member', $.identifier),
         optional(field('type_arguments', $.type_arguments)),
@@ -622,7 +467,6 @@ module.exports = grammar({
       $._unary_expression,
       $.binary_expression,
       $.cast_expression,
-      $.quantifier_expression,
       $.match_expression,
       $.vector_expression,
       $.loop_expression,
@@ -648,18 +492,6 @@ module.exports = grammar({
       "]"
     ),
 
-    quantifier_expression: $ => prec.right(seq(
-      choice($._forall, $._exists),
-      $.quantifier_bindings,
-      optional(seq('where', $._expression)),
-      ':',
-      $._expression
-    )),
-    quantifier_bindings: $ => sepBy1(',', $.quantifier_binding),
-    quantifier_binding: $ => choice(
-      seq($.identifier, ':', $._type),
-      seq($.identifier, 'in', $._expression)
-    ),
     lambda_expression: $ => seq(
       field('bindings', $.lambda_bindings),
       optional(seq('->', $._type)),
@@ -771,7 +603,6 @@ module.exports = grammar({
 
     binary_expression: $ => {
       const table = [
-        [PRECEDENCE.implies, '==>'],
         [PRECEDENCE.or, '||'],
         [PRECEDENCE.and, '&&'],
         [PRECEDENCE.eq, '=='],
@@ -780,7 +611,6 @@ module.exports = grammar({
         [PRECEDENCE.gt, '>'],
         [PRECEDENCE.le, '<='],
         [PRECEDENCE.ge, '>='],
-        [PRECEDENCE.range, '..'],
         [PRECEDENCE.bitor, '|'],
         [PRECEDENCE.xor, '^'],
         [PRECEDENCE.bitand, '&'],
@@ -850,7 +680,6 @@ module.exports = grammar({
       $.expression_list,
       $.annotation_expression,
       $.block,
-      $.spec_block,
       $.if_expression,
 
       $.dot_expression,
@@ -950,7 +779,6 @@ module.exports = grammar({
       $.bind_positional_fields,
       $.bind_named_fields,
     ),
-    _spread_operator: _$ => '..',
     bind_positional_fields: $ => seq(
       '(', sepBy(',', choice($.bind_field, $.mut_bind_field)), ')'
     ),
@@ -969,7 +797,7 @@ module.exports = grammar({
         ':',
         field('bind', $.bind_list)
       ))
-    ), $._spread_operator),
+    ), '..'),
     // Fields and Bindings - End
 
     // literals
@@ -1017,10 +845,6 @@ module.exports = grammar({
     _type_parameter_identifier: $ => alias($.identifier, $.type_parameter_identifier),
     identifier: $ => /(`)?[a-zA-Z_][0-9a-zA-Z_]*(`)?/,
     macro_identifier: $ => /[a-zA-Z_][0-9a-zA-Z_]*!/,
-    _reserved_identifier: $ => choice($._forall, $._exists, 'spec'),
-
-    _forall: $ => 'forall',
-    _exists: $ => 'exists',
     line_comment: $ => token(seq(
       '//', /.*/
     )),
