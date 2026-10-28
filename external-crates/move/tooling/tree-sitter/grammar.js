@@ -779,7 +779,6 @@ module.exports = grammar({
       $.bind_positional_fields,
       $.bind_named_fields,
     ),
-    _spread_operator: _$ => '..',
     bind_positional_fields: $ => seq(
       '(', sepBy(',', choice($.bind_field, $.mut_bind_field)), ')'
     ),
@@ -798,7 +797,7 @@ module.exports = grammar({
         ':',
         field('bind', $.bind_list)
       ))
-    ), $._spread_operator),
+    ), '..'),
     // Fields and Bindings - End
 
     // literals

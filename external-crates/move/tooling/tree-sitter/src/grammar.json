@@ -5169,10 +5169,6 @@
         }
       ]
     },
-    "_spread_operator": {
-      "type": "STRING",
-      "value": ".."
-    },
     "bind_positional_fields": {
       "type": "SEQ",
       "members": [
@@ -5356,8 +5352,8 @@
           ]
         },
         {
-          "type": "SYMBOL",
-          "name": "_spread_operator"
+          "type": "STRING",
+          "value": ".."
         }
       ]
     },
