@@ -155,6 +155,17 @@ pub struct RpcArgs {
         value_name = "GRAPHQL_HOST_PORT"
     )]
     with_graphql: Option<String>,
+
+    /// Enable GraphQL subscriptions (at `/graphql/subscriptions`), streaming checkpoints from the
+    /// local fullnode. Paginated `transactions` and `events` queries are also served by the
+    /// fullnode instead of the indexer's Postgres tables, matching how public GraphQL services
+    /// run.
+    ///
+    /// Implies `--with-graphql` (and therefore the indexer and consistent store), on its default
+    /// host and port unless set explicitly. GraphQL starts once the indexer has caught up with
+    /// the fullnode.
+    #[clap(long)]
+    with_graphql_subscriptions: bool,
 }
 
 impl RpcArgs {
@@ -163,6 +174,7 @@ impl RpcArgs {
             with_indexer: None,
             with_consistent_store: None,
             with_graphql: None,
+            with_graphql_subscriptions: false,
         }
     }
 }
@@ -886,8 +898,14 @@ async fn start(
     let RpcArgs {
         with_indexer,
         mut with_consistent_store,
-        with_graphql,
+        mut with_graphql,
+        with_graphql_subscriptions,
     } = rpc_args;
+
+    // Automatically enable GraphQL if GraphQL subscriptions are enabled
+    if with_graphql_subscriptions && with_graphql.is_none() {
+        with_graphql = Some("0.0.0.0:9125".to_string());
+    }
 
     // Automatically enable consistent store if GraphQL is enabled
     if with_graphql.is_some() && with_consistent_store.is_none() {
@@ -1229,6 +1247,8 @@ async fn start(
 
         // The local fullnode already serves the `LedgerService` gRPC API that
         // `--ledger-grpc-url` points at, so KV point-lookups can be served from it directly.
+        // With `--with-graphql-subscriptions`, the List APIs (for backfill and gap recovery) and
+        // the checkpoint stream also come from it.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(
                 fullnode_grpc_url
@@ -1236,8 +1256,20 @@ async fn start(
                     .parse()
                     .context("Failed to parse fullnode gRPC URL into a ledger gRPC URI")?,
             ),
+            enable_list_apis: Some(with_graphql_subscriptions),
             ..Default::default()
         };
+
+        let subscription_args = SubscriptionArgs {
+            checkpoint_stream_url: with_graphql_subscriptions
+                .then(|| fullnode_grpc_url.as_str().parse())
+                .transpose()
+                .context("Failed to parse fullnode gRPC URL into a checkpoint stream URI")?,
+        };
+
+        if with_graphql_subscriptions {
+            info!("Waiting for the indexer to catch up before serving GraphQL subscriptions");
+        }
 
         rpc_services = rpc_services.merge(
             start_graphql(
@@ -1248,7 +1280,7 @@ async fn start(
                 consistent_reader_args,
                 graphql_args,
                 SystemPackageTaskArgs::default(),
-                SubscriptionArgs::default(),
+                subscription_args,
                 "0.0.0",
                 graphql_config,
                 pipelines,
