@@ -247,7 +247,7 @@ struct TxnSummary {
 }
 
 impl AdapterInitConfig {
-    fn from_args(init_cmd: InitCommand, sui_args: SuiInitArgs) -> Self {
+    fn from_args(init_cmd: InitCommand, sui_args: SuiInitArgs, is_graphql: bool) -> Self {
         let InitCommand { named_addresses } = init_cmd;
         let SuiInitArgs {
             accounts,
@@ -284,12 +284,16 @@ impl AdapterInitConfig {
                 ProtocolVersion::max().as_u64(),
             );
             assert!(
-                protocol_version != ProtocolVersion::max().as_u64(),
+                is_graphql || protocol_version != ProtocolVersion::max().as_u64(),
                 "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
                 protocol_version,
             );
             ProtocolConfig::get_for_version(protocol_version.into(), chain)
         } else {
+            assert!(
+                !is_graphql,
+                "GraphQL tests must set --protocol-version, so that their output does not change with the framework once that version is released.",
+            );
             ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain)
         };
         if enable_gasless {
@@ -449,7 +453,17 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             offchain_config,
             file_format_version,
         } = match task_opt.map(|t| t.command) {
-            Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
+            Some((init_cmd, sui_args)) => {
+                // GraphQL tests must pin a version, and may pin the max, to keep a fixed framework
+                // snapshot once that version is released.
+                let is_graphql = tasks.iter().any(|t| {
+                    matches!(
+                        t.command,
+                        TaskCommand::Subcommand(SuiSubcommand::RunGraphql(_))
+                    )
+                });
+                AdapterInitConfig::from_args(init_cmd, sui_args, is_graphql)
+            }
             None => AdapterInitConfig::default(),
         };
 

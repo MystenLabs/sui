@@ -5,7 +5,7 @@
 // a different type). Its history spans every incarnation, and reads at a checkpoint where it is
 // released return nothing.
 
-//# init --accounts A --addresses test=0x0 --simulator
+//# init --protocol-version 141 --accounts A --addresses test=0x0 --simulator
 
 //# publish --sender A
 module test::derived {
