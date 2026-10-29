@@ -313,12 +313,19 @@ pub struct ConsensusTransactionPoolConfig {
     #[serde(default = "bool_true")]
     pub rate_limit_user_bytes: bool,
 
-    /// Rate limit on serialized user transaction bytes this validator proposes,
-    /// as a token bucket that holds one second of budget or one full block,
-    /// whichever is larger. System transactions are not limited. Defaults to
-    /// two maximum-size blocks per second (`max_transactions_in_block_bytes`).
-    /// Must be greater than zero.
+    /// No longer used. The limit is per proposal, see `max_user_bytes_per_block`.
+    #[serde(default)]
     pub max_user_bytes_per_second: Option<u64>,
+
+    /// Budget of serialized user transaction bytes per proposal. Every proposal
+    /// refills this amount and unused budget does not accumulate beyond one
+    /// proposal's worth, so block size follows the budget instead of the round
+    /// rate. A single entry larger than the remaining budget may still be
+    /// proposed; the budget then goes negative and the following proposals carry
+    /// no user transactions until it is repaid. System transactions are not
+    /// limited. Defaults to 32 KiB. Must be greater than zero.
+    #[serde(default)]
+    pub max_user_bytes_per_block: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -328,6 +335,7 @@ impl Default for ConsensusTransactionPoolConfig {
             max_pending_transactions: None,
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
+            max_user_bytes_per_block: None,
         }
     }
 }
@@ -338,11 +346,9 @@ impl ConsensusTransactionPoolConfig {
             .unwrap_or_else(|| consensus_config.max_pending_transactions())
     }
 
-    pub fn max_user_bytes_per_second(&self, max_transactions_in_block_bytes: u64) -> Option<u64> {
-        self.rate_limit_user_bytes.then(|| {
-            self.max_user_bytes_per_second
-                .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
-        })
+    pub fn max_user_bytes_per_block(&self) -> Option<u64> {
+        self.rate_limit_user_bytes
+            .then(|| self.max_user_bytes_per_block.unwrap_or(32 * 1024))
     }
 }
 
