@@ -225,8 +225,9 @@ impl PeerScore {
     /// A contents response is slow when it takes more than 25% (this factor) longer than the peer's
     /// fastest recent response, and at least [`Self::SLOW_RESPONSE_MIN_MARGIN`] longer.
     const SLOW_RESPONSE_FACTOR: f64 = 1.25;
-    /// Keeps jitter in the responses of nearby peers, whose fastest response is under 80 ms, so
-    /// that 25% of it is less than this margin, from counting as slow.
+    /// For a peer whose fastest response is under 80 ms, 25% of it is less than this margin. The
+    /// margin keeps such a peer's jitter, for example 12 ms answers that sometimes take 23 ms, from
+    /// counting as slow.
     const SLOW_RESPONSE_MIN_MARGIN: Duration = Duration::from_millis(20);
     /// A peer is slow when at least this share of its recent contents responses were slow.
     const SLOW_PEER_SHARE: f64 = 0.25;
