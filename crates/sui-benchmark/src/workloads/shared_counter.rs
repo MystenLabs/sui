@@ -221,7 +221,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         if self.basics_package_id.is_some() {
             return;
         }
-        let gas_price = system_state_observer.state.borrow().reference_gas_price;
+        let gas_price = system_state_observer.setup_gas_price();
         let (head, tail) = self
             .init_gas
             .split_first()
