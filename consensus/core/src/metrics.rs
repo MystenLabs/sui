@@ -241,6 +241,12 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetch_once_latency: Histogram,
     pub(crate) commit_sync_fetch_once_errors: IntCounterVec,
     pub(crate) commit_sync_fetch_missing_blocks: IntCounterVec,
+    pub(crate) commit_sync_block_bytes_estimate: IntGauge,
+    pub(crate) commit_sync_stream_bytes_per_second_estimate: IntGauge,
+    pub(crate) commit_sync_inflight_bytes: IntGauge,
+    pub(crate) commit_sync_chunk_errors: IntCounterVec,
+    pub(crate) commit_sync_received_blocks_size: IntCounter,
+    pub(crate) commit_sync_truncated_ranges: IntCounter,
     pub(crate) round_tracker_received_quorum_round_gaps: IntGaugeVec,
     pub(crate) round_tracker_accepted_quorum_round_gaps: IntGaugeVec,
     pub(crate) round_tracker_low_received_quorum_round: IntGaugeVec,
@@ -920,6 +926,37 @@ impl NodeMetrics {
                 "commit_sync_fetch_missing_blocks",
                 "Number of ancestor blocks that are missing when processing blocks via commit sync.",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            commit_sync_block_bytes_estimate: register_int_gauge_with_registry!(
+                "commit_sync_block_bytes_estimate",
+                "Estimated serialized bytes per block used to size commit sync fetches",
+                registry,
+            ).unwrap(),
+            commit_sync_stream_bytes_per_second_estimate: register_int_gauge_with_registry!(
+                "commit_sync_stream_bytes_per_second_estimate",
+                "Estimated throughput of a single commit sync block fetch request stream",
+                registry,
+            ).unwrap(),
+            commit_sync_inflight_bytes: register_int_gauge_with_registry!(
+                "commit_sync_inflight_bytes",
+                "Estimated block bytes across inflight commit sync fetches and fetched ranges not yet sent to Core",
+                registry,
+            ).unwrap(),
+            commit_sync_chunk_errors: register_int_counter_vec_with_registry!(
+                "commit_sync_chunk_errors",
+                "Number of failed block fetch requests during commit sync, by peer and error.",
+                &["authority", "error"],
+                registry
+            ).unwrap(),
+            commit_sync_received_blocks_size: register_int_counter_with_registry!(
+                "commit_sync_received_blocks_size",
+                "Total serialized bytes of blocks received in commit sync block fetch responses, before verification",
+                registry,
+            ).unwrap(),
+            commit_sync_truncated_ranges: register_int_counter_with_registry!(
+                "commit_sync_truncated_ranges",
+                "Number of fetched commit ranges shortened to fit the range byte budget",
                 registry,
             ).unwrap(),
             commit_sync_fetch_commits_handler_uncertified_skipped: register_int_counter_with_registry!(
