@@ -1,0 +1,33 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Simtest Teleport session
+description: >
+  Installs tsh and authorizes against Teleport so that later steps can SSH into
+  simtest-01 with `tsh -i <identity-file> ssh ubuntu@simtest-01`.
+
+outputs:
+  identity-file:
+    description: Teleport identity file to pass to `tsh -i`.
+    value: ${{ steps.auth.outputs.identity-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Teleport
+      uses: teleport-actions/setup@a820ebbf1bc1a496efca348ad21042d6e8df73a6 # pin@v1.1.0
+      with:
+        version: 18.2.0
+    - name: Authorize against Teleport
+      id: auth
+      uses: teleport-actions/auth@d48447391aa28b202c98ae3f3358097025c32511 # pin@v2.0.4
+      with:
+        # Specify the publicly accessible address of your Teleport proxy.
+        proxy: mysten.teleport.sh:443
+        # Specify the name of the join token for your bot.
+        token: sui-simtest-token
+        # The credentials must outlive a job that waits out a full 6h phase.
+        certificate-ttl: 6h
+    - name: Show Teleport cert details
+      shell: bash
+      run: tsh -i ${{ steps.auth.outputs.identity-file }} status

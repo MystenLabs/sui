@@ -19,7 +19,11 @@ if [ -z "$NUM_CPUS" ]; then
   NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 fi
 
-DATE=$(date +%s)
+# SIMTEST_RUN_ID names the log directory and seeds the run. The nightly
+# workflow passes the same id to both of its jobs so that seed search and
+# stress/determinism share one log directory and one seed base.
+: ${SIMTEST_RUN_ID:=$(date +%s)}
+DATE="$SIMTEST_RUN_ID"
 SEED="$DATE"
 
 # create logs directory
@@ -32,6 +36,25 @@ LOG_FILE="$LOG_DIR/log"
 
 # By default run 1 iteration for each test, if not specified.
 : ${TEST_NUM:=1}
+
+# SIMTEST_PHASES selects which phases run, as a comma-separated subset of
+# seed-search, stress and determinism. The nightly workflow runs seed-search in
+# one GitHub job and stress,determinism in a second one so that neither job hits
+# the 6h cap on GitHub-hosted jobs. The default runs all three.
+: ${SIMTEST_PHASES:=seed-search,stress,determinism}
+
+phase_enabled() {
+  case ",$SIMTEST_PHASES," in
+    *",$1,"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+echo "Run id: $SIMTEST_RUN_ID, log directory: $LOG_DIR, phases: $SIMTEST_PHASES"
+
+PHASE1_EXIT=0
+
+if phase_enabled seed-search; then
 
 echo ""
 echo "================================================"
@@ -57,6 +80,10 @@ PHASE1_EXIT=${PIPESTATUS[0]}
 
 # Clean up temp files from the e2e phase to prevent /tmp (tmpfs) from filling up.
 rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
+
+fi
+
+if phase_enabled stress; then
 
 echo ""
 echo "============================================="
@@ -88,6 +115,10 @@ wait
 # Clean up temp files from the stress phase before running determinism tests.
 rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
 
+fi
+
+if phase_enabled determinism; then
+
 echo ""
 echo "==========================="
 echo "Running determinism simtest"
@@ -103,6 +134,8 @@ MSIM_TEST_SEED="$SEED" \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
 scripts/simtest/check-determinism.sh 2>&1 | tee "$LOG_FILE"
 
+fi
+
 echo ""
 echo "============================================="
 echo "All tests completed, checking for failures..."
@@ -115,8 +148,14 @@ PHASE23_FAILED=0
 # Phase 1 is failed if any individual test failed (`failures.ndjson` non-empty)
 # OR if seed-search.py itself exited non-zero (e.g. build failure, infrastructure
 # error). The pipe through tee otherwise hides that exit code.
-if [ -s "$LOG_DIR/e2e/failures.ndjson" ] || [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
-  PHASE1_FAILED=1
+#
+# Only the phases that ran in this invocation count: the log directory is
+# shared across invocations, so a stress-only run must not fail on seed search
+# results that an earlier invocation already reported.
+if phase_enabled seed-search; then
+  if [ -s "$LOG_DIR/e2e/failures.ndjson" ] || [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
+    PHASE1_FAILED=1
+  fi
 fi
 
 # Phase 2/3 logs are flat files in $LOG_DIR (log-* per stress iteration plus
@@ -131,8 +170,10 @@ fi
 # sui-benchmark's `test_simulated_load_large_consensus_commit_prologue_size`
 # SIGABRTs in ~50% of stress iterations on main and silently passes as a
 # result. Same regex is used in collect-failures.sh — keep them in sync.
-if grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/log-* "$LOG_DIR"/determinism-log 2>/dev/null; then
-  PHASE23_FAILED=1
+if phase_enabled stress || phase_enabled determinism; then
+  if grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/log-* "$LOG_DIR"/determinism-log 2>/dev/null; then
+    PHASE23_FAILED=1
+  fi
 fi
 
 if [ "$PHASE1_FAILED" -eq 0 ] && [ "$PHASE23_FAILED" -eq 0 ]; then

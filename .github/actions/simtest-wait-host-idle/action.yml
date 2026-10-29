@@ -1,0 +1,43 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Wait for simtest host to be idle
+description: >
+  Polls simtest-01 until no simtest-run.sh or seed-search.py process is left.
+  A job that lost track of its detached run (repeated SSH failures while
+  polling) can leave the run going on the host; later jobs wait for it here
+  instead of racing it for the build directory or declaring the host idle.
+
+inputs:
+  identity-file:
+    description: Teleport identity file to pass to `tsh -i`.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for simtest host to be idle
+      shell: bash
+      run: |
+        ssh_failures=0
+        max_ssh_failures=3
+        while true; do
+          # RUNNING or IDLE if SSH succeeds, empty if the SSH call itself failed:
+          # an SSH failure must not be mistaken for an idle host.
+          result=$(tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 \
+            "if pgrep -f 'scripts/simtest/(simtest-run|seed-search)' > /dev/null; then echo RUNNING; else echo IDLE; fi" 2>/dev/null) || true
+          if [ "$result" = "IDLE" ]; then
+            break
+          elif [ "$result" = "RUNNING" ]; then
+            ssh_failures=0
+            echo "$(date): a simtest run is still in progress on simtest-01, waiting..."
+          else
+            ssh_failures=$((ssh_failures + 1))
+            echo "$(date): SSH connection failed (attempt $ssh_failures/$max_ssh_failures)"
+            if [ $ssh_failures -ge $max_ssh_failures ]; then
+              echo "::error::Too many consecutive SSH failures while waiting for the host. A simtest run may still be in progress."
+              exit 1
+            fi
+          fi
+          sleep 120
+        done
