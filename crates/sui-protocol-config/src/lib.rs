@@ -430,6 +430,7 @@ const MAINNET_USDB: &str =
 //              prepared verifying key length does not match the number of public inputs.
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 //              Add the `object::is_shared_input_impl` native and its cost.
+//              Allow allowance spends in gasless transactions on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1362,6 +1363,12 @@ struct FeatureFlags {
     // id.
     #[serde(skip_serializing_if = "is_false")]
     disable_id_leak_verifier: bool,
+
+    // Allow `sui::allowance::balance_spend` in gasless transactions. The spent allowance is
+    // written without storage charges or rebates. Requires `enable_gasless` and `enable_allowances`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    gasless_allowance_spend: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2481,6 +2488,12 @@ impl ProtocolConfig {
 
     pub fn enable_allowances(&self) -> bool {
         self.feature_flags.enable_allowances && self.enable_accumulators()
+    }
+
+    pub fn gasless_allowance_spend(&self) -> bool {
+        self.feature_flags.gasless_allowance_spend
+            && self.enable_gasless()
+            && self.enable_allowances()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -4966,6 +4979,9 @@ impl ProtocolConfig {
                     cfg.clock_borrow_cost_base = Some(52);
                     cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.object_is_shared_input_cost_base = Some(52);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.gasless_allowance_spend = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
