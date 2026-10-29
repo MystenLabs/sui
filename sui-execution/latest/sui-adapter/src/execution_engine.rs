@@ -10,6 +10,7 @@ pub(crate) mod checked {
     use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
     use crate::gas_charger::{PaymentKind, PaymentMethod};
+    use crate::native_accumulator_settlement;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
@@ -1719,9 +1720,16 @@ pub(crate) mod checked {
                 }
                 Ok((Mode::empty_results(), vec![]))
             }
-            TransactionKind::AccumulatorSettlement(_) => {
-                // validity_check rejects this kind while native_accumulator_settlement is disabled.
-                panic!("native accumulator settlement is not implemented");
+            TransactionKind::AccumulatorSettlement(settlement) => {
+                let tx_digest = tx_ctx.borrow().digest();
+                native_accumulator_settlement::execute(
+                    temporary_store,
+                    protocol_config,
+                    tx_digest,
+                    settlement,
+                )
+                .map_err(|e| (e.into(), vec![]))?;
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
