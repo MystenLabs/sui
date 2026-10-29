@@ -372,8 +372,8 @@ fun cancelling_without_a_pending_rotation_aborts() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = sui::forwarding_address::EForwardingAddressMaster)]
-fun a_forwarding_address_cannot_become_a_master() {
+#[test, expected_failure(abort_code = sui::forwarding_address::EInvalidForwardingMaster)]
+fun an_id_cannot_point_at_its_own_forwarding_address() {
     let (mut scenario, cap) = register_alice_then_switch_to_bob();
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
     let target = forwarding_address(cap.master_id(), OPAQUE_VARIANT, 1);
@@ -412,5 +412,144 @@ fun shortening_the_rotation_delay_aborts() {
     forwarding_address::increase_rotation_delay(&mut registry, &cap, 1);
     test_scenario::return_shared(registry);
     transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+// === Chains and coins ===
+
+/// Registers an id for ALICE whose master is `master`, from ALICE's own transaction.
+fun register_chained(scenario: &mut Scenario, master: address): u64 {
+    scenario.next_tx(ALICE);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    let cap = forwarding_address::register_with_forwarding_master(
+        &mut registry,
+        master,
+        1,
+        scenario.ctx(),
+    );
+    let master_id = cap.master_id();
+    transfer::public_transfer(cap, ALICE);
+    test_scenario::return_shared(registry);
+    master_id
+}
+
+#[test]
+fun deposits_follow_a_chain_of_forwarding_addresses() {
+    let (mut scenario, alice_id) = register_then_switch_to(ALICE, BOB);
+    let alice_forwarding = forwarding_address(alice_id, OPAQUE_VARIANT, 1);
+    // A second id whose master is one of ALICE's forwarding addresses: two hops to ALICE.
+    let sub_id = register_chained(&mut scenario, alice_forwarding);
+    let sub_forwarding = forwarding_address(sub_id, OPAQUE_VARIANT, 2);
+
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(1000).send_funds(sub_forwarding);
+    scenario.next_tx(BOB);
+    assert!(test_scenario::settled_balance<SUI>(ALICE) == 1000);
+    assert!(test_scenario::settled_balance<SUI>(alice_forwarding) == 0);
+    assert!(test_scenario::settled_balance<SUI>(sub_forwarding) == 0);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::test_scenario::EForwardingAddressUnresolvable)]
+fun deposits_through_more_than_the_allowed_hops_abort() {
+    let (mut scenario, alice_id) = register_then_switch_to(ALICE, BOB);
+    // Four hops to ALICE, one more than `forwarding_address_max_hops` allows.
+    let mut master = forwarding_address(alice_id, OPAQUE_VARIANT, 1);
+    let mut i: u64 = 0;
+    while (i < 3) {
+        let id = register_chained(&mut scenario, master);
+        master = forwarding_address(id, OPAQUE_VARIANT, 1);
+        i = i + 1;
+    };
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(1000).send_funds(master);
+    scenario.next_tx(BOB);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::EInvalidForwardingMaster)]
+fun a_forwarding_master_must_carry_the_magic() {
+    let mut scenario = test_scenario::begin(@0x0);
+    forwarding_address::create_for_testing(scenario.ctx());
+    register_chained(&mut scenario, CAROL);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::EInvalidForwardingMaster)]
+fun a_forwarding_master_must_have_a_supported_variant() {
+    let mut scenario = test_scenario::begin(@0x0);
+    forwarding_address::create_for_testing(scenario.ctx());
+    register_chained(&mut scenario, forwarding_address(1, 1, 1));
+    scenario.end();
+}
+
+#[test]
+fun rotation_to_a_forwarding_address_is_finalized_by_anyone() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    // CAROL has her own id; ALICE rotates hers onto one of CAROL's forwarding addresses.
+    scenario.next_tx(CAROL);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    let carol_cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
+    let carol_forwarding = forwarding_address(carol_cap.master_id(), OPAQUE_VARIANT, 9);
+    transfer::public_transfer(carol_cap, CAROL);
+    test_scenario::return_shared(registry);
+
+    scenario.next_tx(ALICE);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::propose_rotation(&mut registry, &cap, carol_forwarding, scenario.ctx());
+    test_scenario::return_shared(registry);
+    scenario.next_epoch(BOB);
+    scenario.next_epoch(BOB);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::finalize_rotation(&mut registry, cap.master_id(), scenario.ctx());
+    test_scenario::return_shared(registry);
+
+    // Deposits to ALICE's id now pass through CAROL's forwarding address to CAROL.
+    let target = forwarding_address(cap.master_id(), OPAQUE_VARIANT, 1);
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(700).send_funds(target);
+    scenario.next_tx(BOB);
+    assert!(test_scenario::settled_balance<SUI>(CAROL) == 700);
+    assert!(test_scenario::settled_balance<SUI>(ALICE) == 0);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+public struct Thing has key, store {
+    id: UID,
+}
+
+#[test]
+fun coins_sent_to_a_forwarding_address_are_melted_into_the_master_balance() {
+    let (mut scenario, master_id) = register_then_switch_to(ALICE, BOB);
+    let target = forwarding_address(master_id, OPAQUE_VARIANT, 1);
+    transfer::public_transfer(sui::coin::mint_for_testing<SUI>(500, scenario.ctx()), target);
+    balance::create_for_testing<SUI>(200).send_funds(target);
+    scenario.next_tx(ALICE);
+    // One credit, however the payer sent the funds; the coin object is gone.
+    assert!(test_scenario::settled_balance<SUI>(ALICE) == 700);
+    assert!(!test_scenario::has_most_recent_for_address<sui::coin::Coin<SUI>>(ALICE));
+    assert!(!test_scenario::has_most_recent_for_address<sui::coin::Coin<SUI>>(target));
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::test_scenario::EForwardingAddressUnresolvable)]
+fun coins_sent_to_an_unregistered_forwarding_address_abort() {
+    let (mut scenario, _) = register_then_switch_to(ALICE, BOB);
+    let unregistered = forwarding_address::mix_master_id_for_testing(2);
+    transfer::public_transfer(
+        sui::coin::mint_for_testing<SUI>(500, scenario.ctx()),
+        forwarding_address(unregistered, OPAQUE_VARIANT, 1),
+    );
+    scenario.next_tx(BOB);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::test_scenario::EForwardingAddressUnresolvable)]
+fun other_objects_sent_to_a_forwarding_address_abort() {
+    let (mut scenario, master_id) = register_then_switch_to(ALICE, BOB);
+    let target = forwarding_address(master_id, OPAQUE_VARIANT, 1);
+    transfer::public_transfer(Thing { id: object::new(scenario.ctx()) }, target);
+    scenario.next_tx(BOB);
     scenario.end();
 }

@@ -647,11 +647,16 @@ impl InvariantChecker {
                 )));
             }
         }
+        // Only funds must never land at a forwarding address. In a chain, a hop's deposit event is
+        // recorded in the stream of that hop's master, which can itself be a forwarding address.
         for event in &store.execution_results.accumulator_events {
-            let address = event.write.address.address;
-            if ForwardingAddress::has_magic(address) {
+            let address = &event.write.address;
+            if ForwardingAddress::has_magic(address.address)
+                && sui_types::balance::Balance::is_balance_type(&address.ty)
+            {
                 return Err(ExecutionError::invariant_violation(format!(
-                    "accumulator write targets forwarding address {address}"
+                    "funds credited to forwarding address {}",
+                    address.address
                 )));
             }
         }

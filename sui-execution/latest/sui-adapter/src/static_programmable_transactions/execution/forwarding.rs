@@ -8,13 +8,14 @@
 use std::collections::BTreeMap;
 
 use sui_move_natives::{
-    forwarding_address::{ForwardingGas, RerouteError, Resolver},
+    forwarding_address::{ForwardingGas, RerouteError, Resolver, WrittenObject},
     object_runtime::MoveAccumulatorEvent,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
     base_types::{ObjectID, SuiAddress},
+    coin::Coin,
     error::ExecutionError,
     event::Event,
     execution_status::{ExecutionErrorKind, MoveLocationOpt},
@@ -90,8 +91,15 @@ pub fn reject_gas_coin_recipient(
     Ok(())
 }
 
-/// Reroutes the transaction's funds credits and returns the events the adapter emits on Move's
-/// behalf. Fails if any written object is owned by a forwarding address.
+/// The events the adapter emits on Move's behalf and the coins it deletes because their value
+/// was forwarded as funds.
+pub struct Rerouted {
+    pub events: Vec<Event>,
+    pub melted_coins: Vec<ObjectID>,
+}
+
+/// Delivers the transaction's funds credits and coins owned by forwarding addresses to their
+/// masters. Fails if any other object is owned by a forwarding address.
 pub fn reroute(
     protocol_config: &ProtocolConfig,
     registry: &dyn ImplicitSystemObjectResolver,
@@ -100,32 +108,49 @@ pub fn reroute(
     written_objects: &BTreeMap<ObjectID, Object>,
     accumulator_events: &mut Vec<MoveAccumulatorEvent>,
     num_prior_events: usize,
-) -> Result<Vec<Event>, ExecutionError> {
+) -> Result<Rerouted, ExecutionError> {
+    let gas_coin = gas_charger.gas_coin();
+    let objects = written_objects
+        .iter()
+        .map(|(id, object)| {
+            let coin = Coin::extract_balance_if_coin(object).map_err(|err| {
+                ExecutionError::invariant_violation(format!("Failed to read coin {id}: {err}"))
+            })?;
+            Ok(WrittenObject {
+                id: *id,
+                owner: &object.owner,
+                coin,
+            })
+        })
+        .collect::<Result<Vec<_>, ExecutionError>>()?;
     let mut gas = TransactionGas {
         protocol_config,
         gas_charger,
     };
-    let events = Resolver::new(protocol_config, registry, &mut gas)
+    let rerouted = Resolver::new(protocol_config, registry, &mut gas)
         .reroute(
-            written_objects
-                .iter()
-                .map(|(id, object)| (*id, &object.owner)),
+            objects.into_iter(),
             accumulator_events,
             num_prior_events as u64,
+            gas_coin,
         )
         .map_err(execution_error)?;
-    Ok(events
-        .into_iter()
-        .map(|(tag, contents)| {
-            Event::new(
-                &SUI_FRAMEWORK_ADDRESS,
-                FORWARDING_ADDRESS_MODULE_NAME,
-                sender,
-                tag,
-                contents,
-            )
-        })
-        .collect())
+    Ok(Rerouted {
+        events: rerouted
+            .events
+            .into_iter()
+            .map(|(tag, contents)| {
+                Event::new(
+                    &SUI_FRAMEWORK_ADDRESS,
+                    FORWARDING_ADDRESS_MODULE_NAME,
+                    sender,
+                    tag,
+                    contents,
+                )
+            })
+            .collect(),
+        melted_coins: rerouted.melted,
+    })
 }
 
 /// Events the adapter emits count against the same per-transaction limits as Move events: the

@@ -2306,9 +2306,9 @@ pub fn finish(
     by_value_shared_objects: &BTreeSet<ObjectID>,
     consensus_owner_objects: &BTreeMap<ObjectID, Owner>,
     loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
-    written_objects: BTreeMap<ObjectID, Object>,
-    created_object_ids: IndexSet<ObjectID>,
-    deleted_object_ids: IndexSet<ObjectID>,
+    mut written_objects: BTreeMap<ObjectID, Object>,
+    mut created_object_ids: IndexSet<ObjectID>,
+    mut deleted_object_ids: IndexSet<ObjectID>,
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     mut accumulator_events: Vec<MoveAccumulatorEvent>,
     settlement_input_sui: u64,
@@ -2405,7 +2405,10 @@ pub fn finish(
     // Forwarding addresses are rerouted after every Move event is in place, so `EventRef`
     // indices into `user_events` stay valid and the reroute events follow them.
     if protocol_config.enable_forwarding_addresses() {
-        let reroute_events = forwarding::reroute(
+        let forwarding::Rerouted {
+            events: reroute_events,
+            melted_coins,
+        } = forwarding::reroute(
             protocol_config,
             state_view,
             gas_charger,
@@ -2421,6 +2424,14 @@ pub fn finish(
             &reroute_events,
         )?;
         user_events.extend(reroute_events);
+        // A melted coin's value is now a funds credit; the object itself ends like a coin that
+        // Move destroyed: gone if it was created here, deleted otherwise.
+        for id in melted_coins {
+            written_objects.remove(&id);
+            if !created_object_ids.shift_remove(&id) {
+                deleted_object_ids.insert(id);
+            }
+        }
     }
 
     let mut receiving_funds_type_and_owners = BTreeMap::new();

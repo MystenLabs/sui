@@ -433,6 +433,8 @@ const MAINNET_USDB: &str =
 //              Add the forwarding address resolution and registration costs and the variant
 //              bound on devnet.
 //              Add forwarding deposits to authenticated event streams keyed by master on devnet.
+//              Melt coins sent to forwarding addresses and follow chains of forwarding addresses
+//              on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1872,6 +1874,8 @@ pub struct ProtocolConfig {
     forwarding_address_register_cost_base: Option<u64>,
     // Highest forwarding address variant the resolver accepts; higher variants abort.
     forwarding_address_max_variant: Option<u64>,
+    // Most forwarding addresses funds may pass through on the way to an ordinary address.
+    forwarding_address_max_hops: Option<u64>,
 
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -2868,6 +2872,7 @@ impl ProtocolConfig {
             forwarding_address_resolve_lookup_cost_base: None,
             forwarding_address_register_cost_base: None,
             forwarding_address_max_variant: None,
+            forwarding_address_max_hops: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -5011,6 +5016,7 @@ impl ProtocolConfig {
                         cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
                         cfg.forwarding_address_max_variant = Some(0);
                         cfg.feature_flags.forwarding_deposit_event_streams = true;
+                        cfg.forwarding_address_max_hops = Some(3);
                     }
                 }
                 // Use this template when making changes:

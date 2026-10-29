@@ -1,24 +1,25 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 960
+assertion_line: 977
 ---
 processed 13 tasks
 
 // Deposits to forwarding-shaped addresses that cannot resolve fail the transaction instead of
-// stranding funds. Resolution happens at the end of execution, so every failure here is an
+// stranding funds, coins sent to one are melted into the master's balance, and any other object
+// sent to one fails. Resolution happens at the end of execution, so every failure here is an
 // execution error without a command index, not a Move abort.
 // The first registration is assigned master ID 0x52ca8647179c (LE bytes 9c174786ca52).
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
 
-task 1, lines 11-20:
+task 1, lines 12-21:
 //# publish --sender B
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 22-29:
+task 2, lines 23-30:
 //# programmable --sender B --inputs mutshared(250) 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101 1 --gas-budget 2000000000
 // Registering and depositing in one transaction: resolution reads the registry at the version
 // assigned to the transaction, so it does not see the new record and the transaction fails.
@@ -30,7 +31,7 @@ task 2, lines 22-29:
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
 Debug of error: FeatureNotYetSupported at command None
 
-task 3, lines 31-34:
+task 3, lines 32-35:
 //# programmable --sender A --inputs mutshared(250) @A 1 --gas-budget 2000000000
 // Still the first master ID, since the failed registration allocated nothing.
 //> 0: sui::forwarding_address::register(Input(0), Input(2));
@@ -40,7 +41,7 @@ created: object(3,0), object(3,1), object(3,2)
 mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0)
 gas summary: computation_cost: 1001000000, storage_cost: 8116800,  storage_rebate: 1519848, non_refundable_storage_fee: 152
 
-task 4, lines 36-39:
+task 4, lines 37-40:
 //# programmable --sender B --inputs 1000 @0x010000000000fafafafafafafafafa0001010101010101010101010101010101
 // Unregistered master ID.
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -48,7 +49,7 @@ task 4, lines 36-39:
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Forwarding address _ has no registered master (id 1)"), command: None } }
 
-task 5, lines 41-44:
+task 5, lines 42-45:
 //# programmable --sender B --inputs 1000 @0x9c174786ca52fafafafafafafafafa0101010101010101010101010101010101
 // Registered master ID with variant 1, above forwarding_address_max_variant.
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -56,7 +57,7 @@ task 5, lines 41-44:
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Forwarding address _ has variant 1, above the supported 0"), command: None } }
 
-task 6, lines 46-50:
+task 6, lines 47-51:
 //# programmable --sender C --inputs @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101 --gas-budget 10000000
 // Sending the gas coin itself to a forwarding address fails, even though the address is
 // registered: the master would net the coin's value minus gas, which no ForwardingDeposit can
@@ -65,29 +66,33 @@ task 6, lines 46-50:
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("The gas coin cannot be sent to forwarding address _"), command: None } }
 
-task 7, lines 52-55:
+task 7, lines 53-57:
 //# programmable --sender B --inputs 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
-// Transferring a coin object to a forwarding address fails: objects are not rerouted yet.
+// A coin object transferred to a forwarding address is melted: the coin is gone and its value is
+// credited to the master like a balance deposit, with the same event.
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1));
-Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Object _ cannot be sent to forwarding address _"), command: None } }
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 232, 3, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+accumulators_written: (object(7,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0]), (object(7,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 57-59:
+task 8, lines 59-61:
 //# programmable --sender B --inputs @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
-// So does transferring the gas coin itself.
+// Transferring the gas coin itself still fails.
 //> TransferObjects([Gas], Input(0));
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Object fake(0,1) cannot be sent to forwarding address _"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("The gas coin cannot be sent to forwarding address _"), command: None } }
 
-task 9, lines 61-63:
+task 9, lines 63-65:
 //# programmable --sender B --inputs @0x010000000000fafafafafafafafafa0001010101010101010101010101010101
-// And any other object, from Move, whether or not the forwarding address is registered.
+// Any other object fails, from Move or not, whether or not the forwarding address is registered.
 //> test::thing::send(Input(0));
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Object _ cannot be sent to forwarding address _"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Object _ cannot be sent to forwarding address _: only coins and balances are forwarded"), command: None } }
 
-task 10, lines 65-68:
+task 10, lines 67-70:
 //# programmable --sender B --inputs 1000 @0x00000000000000fafafafafafafafafa00010101010101010101010101010101
 // Magic at the wrong offset is an ordinary address and is credited directly.
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -96,10 +101,10 @@ mutated: object(0,1)
 accumulators_written: (object(10,0), _, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 11, line 70:
+task 11, line 72:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 12, line 72:
+task 12, line 74:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
-No funds accumulator object found
+1000

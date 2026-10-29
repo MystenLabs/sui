@@ -40,8 +40,8 @@ task 4, lines 23-25:
 //# programmable --sender B --inputs mutshared(250) 0x52ca8647179c
 // Only the master or the cap can pause; a stranger cannot pause by master id.
 //> 0: sui::forwarding_address::pause_by_master(Input(0), Input(1));
-Error: Transaction Effects Status: Move Abort in sui::forwarding_address::assert_master (function index 12) at offset 12 at line 290 with clever code 5
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 12, instruction: 12, function_name: Some("assert_master") }, 13836466675706626055) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::assert_master (function index 13) at offset 12 at line 334 with clever code 5
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 13, instruction: 12, function_name: Some("assert_master") }, 13836466864685187079) at command Some(0)
 
 task 5, lines 27-29:
 //# programmable --sender A --inputs mutshared(250) object(1,0)
@@ -83,8 +83,8 @@ task 9, lines 43-45:
 //# programmable --sender B --inputs mutshared(250) 0x52ca8647179c
 // Not due yet: the delay is one epoch.
 //> 0: sui::forwarding_address::finalize_rotation(Input(0), Input(1));
-Error: Transaction Effects Status: Move Abort in sui::forwarding_address::finalize_rotation (function index 10) at offset 32 at line 260 with clever code 8
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 10, instruction: 32, function_name: Some("finalize_rotation") }, 13837310971788132365) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::finalize_rotation (function index 11) at offset 32 at line 304 with clever code 8
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 11, instruction: 32, function_name: Some("finalize_rotation") }, 13837311160766693389) at command Some(0)
 
 task 10, line 47:
 //# advance-epoch
@@ -94,8 +94,8 @@ task 11, lines 49-51:
 //# programmable --sender B --inputs mutshared(250) 0x52ca8647179c
 // Due, but only the new master can finalize a rotation to an ordinary address.
 //> 0: sui::forwarding_address::finalize_rotation(Input(0), Input(1));
-Error: Transaction Effects Status: Move Abort in sui::forwarding_address::finalize_rotation (function index 10) at offset 56 at line 265 with clever code 9
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 10, instruction: 56, function_name: Some("finalize_rotation") }, 13837592468239810575) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::finalize_rotation (function index 11) at offset 56 at line 309 with clever code 9
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 11, instruction: 56, function_name: Some("finalize_rotation") }, 13837592657218371599) at command Some(0)
 
 task 12, lines 53-55:
 //# programmable --sender C --inputs mutshared(250) 0x52ca8647179c
@@ -135,8 +135,8 @@ task 16, lines 69-71:
 //# programmable --sender A --inputs mutshared(250) object(1,0) @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
 // A forwarding address cannot become a master.
 //> 0: sui::forwarding_address::propose_rotation(Input(0), Input(1), Input(2));
-Error: Transaction Effects Status: Move Abort in sui::forwarding_address::propose_rotation (function index 6) at offset 12 at line 222 with clever code 6
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 6, instruction: 12, function_name: Some("propose_rotation") }, 13836747858625691657) at command Some(0)
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::propose_rotation (function index 7) at offset 23 at line 265 with clever code 6
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 7, instruction: 23, function_name: Some("propose_rotation") }, 13836748043309285385) at command Some(0)
 
 task 17, line 73:
 //# create-checkpoint

@@ -37,8 +37,8 @@ const EInvalidRotationDelay: vector<u8> =
 const ENotMaster: vector<u8> = b"Only the current master can do this without the MasterCap.";
 
 #[error(code = 6)]
-const EForwardingAddressMaster: vector<u8> =
-    b"A forwarding address cannot be the master of another forwarding address.";
+const EInvalidForwardingMaster: vector<u8> =
+    b"A forwarding-address master must carry the magic with a supported variant and belong to another master ID.";
 
 #[error(code = 7)]
 const ENoPendingRotation: vector<u8> = b"No rotation is pending for this master ID.";
@@ -170,6 +170,44 @@ public fun register(
     cap
 }
 
+/// Allocate a fresh master ID whose master is the forwarding address `master`, which builds a
+/// chain: deposits to the new ID's addresses are forwarded again through `master`. The sender
+/// cannot be a forwarding address, so `register` cannot do this.
+///
+/// `master` must carry the magic with a supported variant and belong to a different master ID.
+/// It does not have to be registered yet, and its ID may belong to someone else: a forwarding
+/// address cannot sign, so it cannot agree to anything, and pointing an ID at it only sends that
+/// ID's own deposits there. An ordinary address, by contrast, becomes a master only by sending
+/// `register` or `finalize_rotation` itself.
+public fun register_with_forwarding_master(
+    registry: &mut ForwardingAddressRegistry,
+    master: address,
+    rotation_delay_epochs: u64,
+    ctx: &mut TxContext,
+): MasterCap {
+    assert!(
+        MIN_ROTATION_DELAY_EPOCHS <= rotation_delay_epochs &&
+            rotation_delay_epochs <= MAX_ROTATION_DELAY_EPOCHS,
+        EInvalidRotationDelay,
+    );
+    charge_registration_fee();
+    let master_id = allocate_master_id(registry);
+    assert!(is_valid_forwarding_master(master, master_id), EInvalidForwardingMaster);
+    dynamic_field::add(
+        &mut registry.id,
+        master_id,
+        MasterRecord { master, paused: false, pending: option::none(), rotation_delay_epochs },
+    );
+    let cap = MasterCap { id: object::new(ctx), master_id };
+    event::emit(MasterRegistered {
+        master_id,
+        master,
+        cap_id: object::id(&cap),
+        rotation_delay_epochs,
+    });
+    cap
+}
+
 public fun master_id(cap: &MasterCap): u64 {
     cap.master_id
 }
@@ -210,16 +248,22 @@ fun pause_impl(registry: &mut ForwardingAddressRegistry, master_id: u64) {
 
 // === Rotation ===
 
-/// Propose a new master. It takes effect once `finalize_rotation` is called in an epoch at least
-/// `rotation_delay_epochs` after this one. Deposits keep going to the current master meanwhile;
-/// pause first if they should stop. A new proposal replaces a pending one.
+/// Propose a new master, either an ordinary address or a forwarding address that
+/// `register_with_forwarding_master` would accept. It takes effect once `finalize_rotation` is
+/// called in an epoch at least `rotation_delay_epochs` after this one. Deposits keep going to the
+/// current master meanwhile; pause first if they should stop. A new proposal replaces a pending
+/// one.
 public fun propose_rotation(
     registry: &mut ForwardingAddressRegistry,
     cap: &MasterCap,
     new_master: address,
     ctx: &TxContext,
 ) {
-    assert!(!is_forwarding_address(new_master), EForwardingAddressMaster);
+    assert!(
+        !is_forwarding_address(new_master) ||
+            is_valid_forwarding_master(new_master, cap.master_id),
+        EInvalidForwardingMaster,
+    );
     let record = record_mut(registry, cap.master_id);
     let effective_epoch = ctx.epoch() + record.rotation_delay_epochs;
     record.pending = option::some(PendingRotation { new_master, effective_epoch });
@@ -295,6 +339,30 @@ fun record_mut(registry: &mut ForwardingAddressRegistry, master_id: u64): &mut M
 }
 
 /// Whether `addr` carries the forwarding magic, whatever its id or variant.
+/// Whether `master` can be the master of `own_id`: a forwarding address with a supported variant
+/// that belongs to another master ID. Chains that loop back on themselves fail at resolution
+/// anyway, but the direct self-reference is cheap to refuse here.
+fun is_valid_forwarding_master(master: address, own_id: u64): bool {
+    is_forwarding_address(master) &&
+        variant_is_supported(master) &&
+        forwarding_master_id(master) != own_id
+}
+
+/// The master ID a forwarding address carries in its first six bytes, little-endian.
+public fun forwarding_master_id(addr: address): u64 {
+    let bytes = addr.to_bytes();
+    let mut id = 0u64;
+    let mut i = MAGIC_START;
+    while (i > 0) {
+        i = i - 1;
+        id = (id << 8) | (bytes[i] as u64);
+    };
+    id
+}
+
+/// Whether the resolver accepts the variant byte of `addr` at the current protocol version.
+native fun variant_is_supported(addr: address): bool;
+
 public fun is_forwarding_address(addr: address): bool {
     let bytes = addr.to_bytes();
     let mut i = MAGIC_START;
