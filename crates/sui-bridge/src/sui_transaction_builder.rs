@@ -192,14 +192,14 @@ fn build_token_bridge_approve_transaction(
 
     let source_chain = builder.pure(source_chain_id as u8).unwrap();
     let seq_num = builder.pure(seq_num_value).unwrap();
-    let sender = builder.pure(sender_bytes.clone()).map_err(|e| {
+    let sender = builder.pure(&sender_bytes).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize sender: {:?}. Err: {:?}",
             sender_bytes, e
         ))
     })?;
     let target_chain = builder.pure(target_chain_id as u8).unwrap();
-    let target = builder.pure(target_bytes.clone()).map_err(|e| {
+    let target = builder.pure(&target_bytes).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize target: {:?}. Err: {:?}",
             target_bytes, e
@@ -252,7 +252,7 @@ fn build_token_bridge_approve_transaction(
     for (_, sig) in sigs.signatures {
         sig_bytes.push(sig.as_bytes().to_vec());
     }
-    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+    let arg_signatures = builder.pure(&sig_bytes).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize signatures: {:?}. Err: {:?}",
             sig_bytes, e
@@ -327,7 +327,7 @@ fn build_emergency_op_approve_transaction(
     for (_, sig) in sigs.signatures {
         sig_bytes.push(sig.as_bytes().to_vec());
     }
-    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+    let arg_signatures = builder.pure(&sig_bytes).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize signatures: {:?}. Err: {:?}",
             sig_bytes, e
@@ -394,7 +394,7 @@ fn build_committee_blocklist_approve_transaction(
     for (_, sig) in sigs.signatures {
         sig_bytes.push(sig.as_bytes().to_vec());
     }
-    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+    let arg_signatures = builder.pure(&sig_bytes).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize signatures: {:?}. Err: {:?}",
             sig_bytes, e
@@ -457,7 +457,7 @@ fn build_limit_update_approve_transaction(
     for (_, sig) in sigs.signatures {
         sig_bytes.push(sig.as_bytes().to_vec());
     }
-    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+    let arg_signatures = builder.pure(&sig_bytes).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize signatures: {:?}. Err: {:?}",
             sig_bytes, e
@@ -520,7 +520,7 @@ fn build_asset_price_update_approve_transaction(
     for (_, sig) in sigs.signatures {
         sig_bytes.push(sig.as_bytes().to_vec());
     }
-    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+    let arg_signatures = builder.pure(&sig_bytes).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize signatures: {:?}. Err: {:?}",
             sig_bytes, e
@@ -601,7 +601,7 @@ pub fn build_add_tokens_on_sui_transaction(
     for (_, sig) in sigs.signatures {
         sig_bytes.push(sig.as_bytes().to_vec());
     }
-    let sigs_arg = builder.pure(sig_bytes.clone()).unwrap();
+    let sigs_arg = builder.pure(&sig_bytes).unwrap();
 
     builder.programmable_move_call(
         BRIDGE_PACKAGE_ID,
