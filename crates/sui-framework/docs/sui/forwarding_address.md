@@ -35,6 +35,7 @@ delay.
 -  [Struct `RotationDelayIncreased`](#sui_forwarding_address_RotationDelayIncreased)
 -  [Constants](#@Constants_0)
 -  [Function `register`](#sui_forwarding_address_register)
+-  [Function `register_with_forwarding_master`](#sui_forwarding_address_register_with_forwarding_master)
 -  [Function `master_id`](#sui_forwarding_address_master_id)
 -  [Function `pause`](#sui_forwarding_address_pause)
 -  [Function `pause_by_master`](#sui_forwarding_address_pause_by_master)
@@ -48,6 +49,9 @@ delay.
 -  [Function `increase_rotation_delay`](#sui_forwarding_address_increase_rotation_delay)
 -  [Function `assert_master`](#sui_forwarding_address_assert_master)
 -  [Function `record_mut`](#sui_forwarding_address_record_mut)
+-  [Function `is_valid_forwarding_master`](#sui_forwarding_address_is_valid_forwarding_master)
+-  [Function `forwarding_master_id`](#sui_forwarding_address_forwarding_master_id)
+-  [Function `variant_is_supported`](#sui_forwarding_address_variant_is_supported)
 -  [Function `is_forwarding_address`](#sui_forwarding_address_is_forwarding_address)
 -  [Function `charge_registration_fee`](#sui_forwarding_address_charge_registration_fee)
 -  [Function `allocate_master_id`](#sui_forwarding_address_allocate_master_id)
@@ -538,12 +542,12 @@ Emitted when a master ID is allocated.
 
 
 
-<a name="sui_forwarding_address_EForwardingAddressMaster"></a>
+<a name="sui_forwarding_address_EInvalidForwardingMaster"></a>
 
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_EForwardingAddressMaster">EForwardingAddressMaster</a>: vector&lt;u8&gt; = b"A forwarding <b>address</b> cannot be the master of another forwarding <b>address</b>.";
+<b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_EInvalidForwardingMaster">EInvalidForwardingMaster</a>: vector&lt;u8&gt; = b"A forwarding-<b>address</b> master must carry the magic with a supported variant and belong to another master ID.";
 </code></pre>
 
 
@@ -668,6 +672,64 @@ Aborts once every master ID has been allocated; IDs are never reused.
     <a href="../sui/forwarding_address.md#sui_forwarding_address_charge_registration_fee">charge_registration_fee</a>();
     <b>let</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a> = <a href="../sui/forwarding_address.md#sui_forwarding_address_allocate_master_id">allocate_master_id</a>(registry);
     <b>let</b> master = ctx.sender();
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(
+        &<b>mut</b> registry.id,
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>,
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterRecord">MasterRecord</a> { master, paused: <b>false</b>, pending: option::none(), rotation_delay_epochs },
+    );
+    <b>let</b> cap = <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a> { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx), <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a> };
+    <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/forwarding_address.md#sui_forwarding_address_MasterRegistered">MasterRegistered</a> {
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>,
+        master,
+        cap_id: <a href="../sui/object.md#sui_object_id">object::id</a>(&cap),
+        rotation_delay_epochs,
+    });
+    cap
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_register_with_forwarding_master"></a>
+
+## Function `register_with_forwarding_master`
+
+Allocate a fresh master ID whose master is the forwarding address <code>master</code>, which builds a
+chain: deposits to the new ID's addresses are forwarded again through <code>master</code>. The sender
+cannot be a forwarding address, so <code><a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a></code> cannot do this.
+
+<code>master</code> must carry the magic with a supported variant and belong to a different master ID.
+It does not have to be registered yet, and its ID may belong to someone else: a forwarding
+address cannot sign, so it cannot agree to anything, and pointing an ID at it only sends that
+ID's own deposits there. An ordinary address, by contrast, becomes a master only by sending
+<code><a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a></code> or <code><a href="../sui/forwarding_address.md#sui_forwarding_address_finalize_rotation">finalize_rotation</a></code> itself.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register_with_forwarding_master">register_with_forwarding_master</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">sui::forwarding_address::ForwardingAddressRegistry</a>, master: <b>address</b>, rotation_delay_epochs: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">sui::forwarding_address::MasterCap</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register_with_forwarding_master">register_with_forwarding_master</a>(
+    registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>,
+    master: <b>address</b>,
+    rotation_delay_epochs: u64,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a> {
+    <b>assert</b>!(
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_MIN_ROTATION_DELAY_EPOCHS">MIN_ROTATION_DELAY_EPOCHS</a> &lt;= rotation_delay_epochs &&
+            rotation_delay_epochs &lt;= <a href="../sui/forwarding_address.md#sui_forwarding_address_MAX_ROTATION_DELAY_EPOCHS">MAX_ROTATION_DELAY_EPOCHS</a>,
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_EInvalidRotationDelay">EInvalidRotationDelay</a>,
+    );
+    <a href="../sui/forwarding_address.md#sui_forwarding_address_charge_registration_fee">charge_registration_fee</a>();
+    <b>let</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a> = <a href="../sui/forwarding_address.md#sui_forwarding_address_allocate_master_id">allocate_master_id</a>(registry);
+    <b>assert</b>!(<a href="../sui/forwarding_address.md#sui_forwarding_address_is_valid_forwarding_master">is_valid_forwarding_master</a>(master, <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>), <a href="../sui/forwarding_address.md#sui_forwarding_address_EInvalidForwardingMaster">EInvalidForwardingMaster</a>);
     <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(
         &<b>mut</b> registry.id,
         <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>,
@@ -828,9 +890,11 @@ Only the cap can resume deposits, so a leaked master key cannot undo a pause.
 
 ## Function `propose_rotation`
 
-Propose a new master. It takes effect once <code><a href="../sui/forwarding_address.md#sui_forwarding_address_finalize_rotation">finalize_rotation</a></code> is called in an epoch at least
-<code>rotation_delay_epochs</code> after this one. Deposits keep going to the current master meanwhile;
-pause first if they should stop. A new proposal replaces a pending one.
+Propose a new master, either an ordinary address or a forwarding address that
+<code><a href="../sui/forwarding_address.md#sui_forwarding_address_register_with_forwarding_master">register_with_forwarding_master</a></code> would accept. It takes effect once <code><a href="../sui/forwarding_address.md#sui_forwarding_address_finalize_rotation">finalize_rotation</a></code> is
+called in an epoch at least <code>rotation_delay_epochs</code> after this one. Deposits keep going to the
+current master meanwhile; pause first if they should stop. A new proposal replaces a pending
+one.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_propose_rotation">propose_rotation</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">sui::forwarding_address::ForwardingAddressRegistry</a>, cap: &<a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">sui::forwarding_address::MasterCap</a>, new_master: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -848,7 +912,11 @@ pause first if they should stop. A new proposal replaces a pending one.
     new_master: <b>address</b>,
     ctx: &TxContext,
 ) {
-    <b>assert</b>!(!<a href="../sui/forwarding_address.md#sui_forwarding_address_is_forwarding_address">is_forwarding_address</a>(new_master), <a href="../sui/forwarding_address.md#sui_forwarding_address_EForwardingAddressMaster">EForwardingAddressMaster</a>);
+    <b>assert</b>!(
+        !<a href="../sui/forwarding_address.md#sui_forwarding_address_is_forwarding_address">is_forwarding_address</a>(new_master) ||
+            <a href="../sui/forwarding_address.md#sui_forwarding_address_is_valid_forwarding_master">is_valid_forwarding_master</a>(new_master, cap.<a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>),
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_EInvalidForwardingMaster">EInvalidForwardingMaster</a>,
+    );
     <b>let</b> record = <a href="../sui/forwarding_address.md#sui_forwarding_address_record_mut">record_mut</a>(registry, cap.<a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>);
     <b>let</b> effective_epoch = ctx.epoch() + record.rotation_delay_epochs;
     record.pending = option::some(<a href="../sui/forwarding_address.md#sui_forwarding_address_PendingRotation">PendingRotation</a> { new_master, effective_epoch });
@@ -1068,11 +1136,95 @@ shorten it and rotate before the master notices.
 
 </details>
 
+<a name="sui_forwarding_address_is_valid_forwarding_master"></a>
+
+## Function `is_valid_forwarding_master`
+
+Whether <code>addr</code> carries the forwarding magic, whatever its id or variant.
+Whether <code>master</code> can be the master of <code>own_id</code>: a forwarding address with a supported variant
+that belongs to another master ID. Chains that loop back on themselves fail at resolution
+anyway, but the direct self-reference is cheap to refuse here.
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_is_valid_forwarding_master">is_valid_forwarding_master</a>(master: <b>address</b>, own_id: u64): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_is_valid_forwarding_master">is_valid_forwarding_master</a>(master: <b>address</b>, own_id: u64): bool {
+    <a href="../sui/forwarding_address.md#sui_forwarding_address_is_forwarding_address">is_forwarding_address</a>(master) &&
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_variant_is_supported">variant_is_supported</a>(master) &&
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_forwarding_master_id">forwarding_master_id</a>(master) != own_id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_forwarding_master_id"></a>
+
+## Function `forwarding_master_id`
+
+The master ID a forwarding address carries in its first six bytes, little-endian.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_forwarding_master_id">forwarding_master_id</a>(addr: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_forwarding_master_id">forwarding_master_id</a>(addr: <b>address</b>): u64 {
+    <b>let</b> bytes = addr.to_bytes();
+    <b>let</b> <b>mut</b> id = 0u64;
+    <b>let</b> <b>mut</b> i = <a href="../sui/forwarding_address.md#sui_forwarding_address_MAGIC_START">MAGIC_START</a>;
+    <b>while</b> (i &gt; 0) {
+        i = i - 1;
+        id = (id &lt;&lt; 8) | (bytes[i] <b>as</b> u64);
+    };
+    id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_variant_is_supported"></a>
+
+## Function `variant_is_supported`
+
+Whether the resolver accepts the variant byte of <code>addr</code> at the current protocol version.
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_variant_is_supported">variant_is_supported</a>(addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_variant_is_supported">variant_is_supported</a>(addr: <b>address</b>): bool;
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_forwarding_address_is_forwarding_address"></a>
 
 ## Function `is_forwarding_address`
 
-Whether <code>addr</code> carries the forwarding magic, whatever its id or variant.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_is_forwarding_address">is_forwarding_address</a>(addr: <b>address</b>): bool

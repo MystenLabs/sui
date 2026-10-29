@@ -46,6 +46,7 @@ use sui_types::{
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_ADDRESS, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     clock::Clock,
+    coin::Coin,
     config,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
@@ -353,11 +354,11 @@ pub fn end_transaction(
     // calculating the effects of the transaction.
     let results = object_runtime_state.finish(received, ChildObjectEffects::new());
     let RuntimeResults {
-        writes,
+        mut writes,
         mut user_events,
         loaded_child_objects: _,
-        created_object_ids,
-        deleted_object_ids,
+        mut created_object_ids,
+        mut deleted_object_ids,
         mut accumulator_events,
         settlement_input_sui: _,
         settlement_output_sui: _,
@@ -377,19 +378,45 @@ pub fn end_transaction(
         let protocol_config = get_extension!(context, ObjectRuntime)?.protocol_config;
         let store: &&InMemoryTestStore = get_extension!(context)?;
         let mut no_gas = forwarding_address::NoForwardingGas;
-        let events = forwarding_address::Resolver::new(protocol_config, *store, &mut no_gas)
+        let mut objects = vec![];
+        for (id, (owner, type_, value)) in writes.iter() {
+            let coin = match type_.coin_type_maybe() {
+                Some(coin_type) => {
+                    let type_tag = TypeTag::Struct(Box::new(type_.clone().into()));
+                    let layout = safe_unwrap!(context.type_tag_to_type_layout(&type_tag));
+                    let bytes = safe_unwrap!(value.typed_serialize(&layout));
+                    let coin = safe_unwrap!(Coin::from_bcs_bytes(&bytes).ok());
+                    Some((coin_type, coin.value()))
+                }
+                None => None,
+            };
+            objects.push(forwarding_address::WrittenObject {
+                id: *id,
+                owner,
+                coin,
+            });
+        }
+        let rerouted = forwarding_address::Resolver::new(protocol_config, *store, &mut no_gas)
             .reroute(
-                writes.iter().map(|(id, (owner, _, _))| (*id, owner)),
+                objects.into_iter(),
                 &mut accumulator_events,
                 user_events.len() as u64,
+                None,
             );
-        match events {
-            Ok(events) => {
-                for (tag, contents) in events {
+        match rerouted {
+            Ok(rerouted) => {
+                for (tag, contents) in rerouted.events {
                     let type_tag = TypeTag::Struct(Box::new(tag.clone()));
                     let layout = safe_unwrap!(context.type_tag_to_type_layout(&type_tag));
                     let value = safe_unwrap!(Value::simple_deserialize(&contents, &layout));
                     user_events.push((tag, value));
+                }
+                // A melted coin ends like one Move destroyed.
+                for id in rerouted.melted {
+                    writes.shift_remove(&id);
+                    if !created_object_ids.shift_remove(&id) {
+                        deleted_object_ids.insert(id);
+                    }
                 }
             }
             Err(forwarding_address::RerouteError::Unresolvable(_)) => {

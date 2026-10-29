@@ -28,7 +28,7 @@ use self::{
         DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
     },
     event::EventEmitCostParams,
-    forwarding_address::ForwardingAddressRegisterCostParams,
+    forwarding_address::{ForwardingAddressRegisterCostParams, ForwardingAddressVariantCostParams},
     object::{
         BorrowUidCostParams, DeleteImplCostParams, IsSharedInputCostParams, RecordNewIdCostParams,
     },
@@ -130,6 +130,7 @@ pub struct NativesCostTable {
 
     // Forwarding address
     pub forwarding_address_register_cost_params: ForwardingAddressRegisterCostParams,
+    pub forwarding_address_variant_cost_params: ForwardingAddressVariantCostParams,
 
     // Dynamic field natives
     pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
@@ -283,6 +284,12 @@ impl NativesCostTable {
             forwarding_address_register_cost_params: ForwardingAddressRegisterCostParams {
                 base: protocol_config
                     .forwarding_address_register_cost_base_as_option()
+                    .map(Into::into),
+            },
+            // Parsing an address is the same work as the resolver's own first step.
+            forwarding_address_variant_cost_params: ForwardingAddressVariantCostParams {
+                base: protocol_config
+                    .forwarding_address_resolve_cost_base_as_option()
                     .map(Into::into),
             },
 
@@ -1208,6 +1215,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "forwarding_address",
             "charge_registration_fee",
             make_native!(forwarding_address::charge_registration_fee),
+        ),
+        (
+            "forwarding_address",
+            "variant_is_supported",
+            make_native!(forwarding_address::variant_is_supported),
         ),
         (
             "groth16",

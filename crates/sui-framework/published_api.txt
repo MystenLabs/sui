@@ -2611,6 +2611,9 @@ RotationDelayIncreased
 register
 	public fun
 	0x2::forwarding_address
+register_with_forwarding_master
+	public fun
+	0x2::forwarding_address
 master_id
 	public fun
 	0x2::forwarding_address
@@ -2648,6 +2651,15 @@ assert_master
 	fun
 	0x2::forwarding_address
 record_mut
+	fun
+	0x2::forwarding_address
+is_valid_forwarding_master
+	fun
+	0x2::forwarding_address
+forwarding_master_id
+	public fun
+	0x2::forwarding_address
+variant_is_supported
 	fun
 	0x2::forwarding_address
 is_forwarding_address

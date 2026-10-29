@@ -1,0 +1,78 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 977
+---
+processed 9 tasks
+
+// A chain: B's master id points at one of A's forwarding addresses, so a deposit to B's
+// forwarding address passes through two hops to A, with one ForwardingDeposit per hop, each
+// recorded in the stream of that hop's master.
+// A is assigned master id 0x52ca8647179c (LE 9c174786ca52) and B 0x2b339572355c (LE 5c357295332b).
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 11-13:
+//# programmable --sender A --inputs mutshared(250) @A 1 --gas-budget 2000000000
+//> 0: sui::forwarding_address::register(Input(0), Input(2));
+//> 1: TransferObjects([Result(0)], Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("MasterRegistered"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 130, 159, 205, 5, 151, 169, 98, 37, 118, 99, 29, 127, 189, 56, 176, 250, 78, 201, 62, 44, 34, 208, 137, 92, 253, 174, 39, 142, 34, 86, 71, 40, 1, 0, 0, 0, 0, 0, 0, 0] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0)
+gas summary: computation_cost: 1001000000, storage_cost: 8116800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-18:
+//# programmable --sender B --inputs mutshared(250) @0x9c174786ca52fafafafafafafafafa00aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa @B 1 --gas-budget 2000000000
+// B registers with A's forwarding address (payload aa..aa) as master.
+//> 0: sui::forwarding_address::register_with_forwarding_master(Input(0), Input(1), Input(3));
+//> 1: TransferObjects([Result(0)], Input(2));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("MasterRegistered"), type_params: [] }, contents: [92, 53, 114, 149, 51, 43, 0, 0, 156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 227, 100, 38, 6, 64, 31, 198, 56, 129, 40, 159, 178, 159, 218, 141, 188, 208, 60, 86, 180, 199, 225, 98, 210, 130, 163, 35, 15, 188, 68, 185, 171, 1, 0, 0, 0, 0, 0, 0, 0] }
+created: object(2,0), object(2,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,1), object(1,1)
+gas summary: computation_cost: 1001000000, storage_cost: 8116800,  storage_rebate: 3450055, non_refundable_storage_fee: 345
+
+task 3, lines 20-23:
+//# programmable --sender C --inputs 1000 @0x5c357295332bfafafafafafafafafa00bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+// Paying B's forwarding address (payload bb..bb) credits A after two hops.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: C, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [92, 53, 114, 149, 51, 43, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 232, 3, 0, 0, 0, 0, 0, 0] }, Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: C, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 232, 3, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,2)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+accumulators_written: (object(3,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[1]), (object(3,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1000), (object(3,2), _, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 25-28:
+//# programmable --sender C --inputs 500 @0x5c357295332bfafafafafafafafafa00bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+// A coin object takes the same path.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: C, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [92, 53, 114, 149, 51, 43, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 244, 1, 0, 0, 0, 0, 0, 0] }, Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: C, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 244, 1, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,2)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+accumulators_written: (object(3,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[1]), (object(3,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 500), (object(3,2), _, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 30-33:
+//# programmable --sender B --inputs mutshared(250) @0x2d2d975175e0fafafafafafafafafa00cccccccccccccccccccccccccccccccc @B 1 --gas-budget 2000000000
+// An id cannot point at its own forwarding address: the next id allocated is 0xe07551972d2d.
+//> 0: sui::forwarding_address::register_with_forwarding_master(Input(0), Input(1), Input(3));
+//> 1: TransferObjects([Result(0)], Input(2));
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::register_with_forwarding_master (function index 1) at offset 34 at line 195 with clever code 6
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 1, instruction: 34, function_name: Some("register_with_forwarding_master") }, 13836747742661574665) at command Some(0)
+
+task 6, lines 35-38:
+//# programmable --sender B --inputs mutshared(250) @0x9c174786ca52fafafafafafafafafa01aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa @B 1 --gas-budget 2000000000
+// Nor at a forwarding address with an unsupported variant.
+//> 0: sui::forwarding_address::register_with_forwarding_master(Input(0), Input(1), Input(3));
+//> 1: TransferObjects([Result(0)], Input(2));
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::register_with_forwarding_master (function index 1) at offset 34 at line 195 with clever code 6
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 1, instruction: 34, function_name: Some("register_with_forwarding_master") }, 13836747742661574665) at command Some(0)
+
+task 7, line 40:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, line 42:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+1500

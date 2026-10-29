@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use futures::StreamExt;
 use move_core_types::identifier::Identifier;
@@ -165,6 +165,7 @@ fn set_forwarding_address_config_for_testing(config: &mut ProtocolConfig) {
     );
     config.set_forwarding_address_register_cost_base_for_testing(REGISTER_COST);
     config.set_forwarding_address_max_variant_for_testing(0);
+    config.set_forwarding_address_max_hops_for_testing(3);
 }
 
 fn forwarding_address_test_env(enable_forwarding_addresses: bool) -> TestEnvBuilder {
@@ -1313,4 +1314,209 @@ async fn test_forwarding_deposits_stream_to_master() {
         .expect("stream ended")
         .expect("event failed verification");
     assert_eq!(event.event.package_id, package_id);
+}
+
+/// Registers a master id for `sender` whose master is the forwarding address `master`, which
+/// builds a chain, and returns the new master id.
+async fn register_with_forwarding_master(
+    env: &mut TestEnv,
+    sender: SuiAddress,
+    master: SuiAddress,
+) -> u64 {
+    let initial_shared_version = forwarding_address_registry_initial_shared_version(env);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let registry = builder
+        .obj(ObjectArg::SharedObject {
+            id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let master_arg = builder.pure(master).unwrap();
+    let rotation_delay = builder.pure(ROTATION_DELAY_EPOCHS).unwrap();
+    let cap = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("forwarding_address").unwrap(),
+        Identifier::new("register_with_forwarding_master").unwrap(),
+        vec![],
+        vec![registry, master_arg, rotation_delay],
+    );
+    builder.transfer_arg(sender, cap);
+    let transaction = TransactionData::new_programmable(
+        sender,
+        vec![env.get_gas_for_sender(sender)[0]],
+        builder.finish(),
+        register_gas_budget(env),
+        env.rgp,
+    );
+    let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    let events = get_events(env, &digest);
+    let registered = events
+        .iter()
+        .find(|event| event.type_.name.as_ident_str() == MASTER_REGISTERED_STRUCT_NAME)
+        .expect("register must emit MasterRegistered");
+    let registered: MasterRegistered = bcs::from_bytes(&registered.contents).unwrap();
+    assert_eq!(registered.master, master);
+    registered.master_id
+}
+
+/// A coin sent to a forwarding address is melted: the master's address balance is credited as if
+/// the payer had sent a `Balance`, the coin object does not survive, and the deposit event is the
+/// same. Any other object sent to a forwarding address fails the transaction.
+#[sim_test]
+async fn test_coins_sent_to_forwarding_addresses_are_melted() {
+    let mut env = forwarding_address_test_env(true).build().await;
+    let master = env.get_sender(0);
+    let sender = env.get_sender(1);
+    let amount = 1_000u64;
+    let registration = register_master(&mut env, master).await;
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let split = builder.pure(amount).unwrap();
+    let coin = builder.command(sui_types::transaction::Command::SplitCoins(
+        Argument::GasCoin,
+        vec![split],
+    ));
+    builder.transfer_arg(forwarding_address, coin);
+    let transaction = TransactionData::new_programmable(
+        sender,
+        vec![env.get_gas_for_sender(sender)[0]],
+        builder.finish(),
+        10_000_000,
+        env.rgp,
+    );
+    let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    assert!(
+        effects.created().is_empty(),
+        "the melted coin must not survive: {effects:?}"
+    );
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_sui_balance_ab(master), amount);
+    assert_forwarding_deposit_event(&env, &digest, forwarding_address, master, amount);
+
+    // The master's own cap is not a coin, so sending it to a forwarding address fails.
+    let cap = env.cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_object_cache_reader()
+            .get_object(&registration.cap_id)
+            .expect("MasterCap must exist")
+            .compute_object_reference()
+    });
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let cap = builder.obj(ObjectArg::ImmOrOwnedObject(cap)).unwrap();
+    builder.transfer_arg(forwarding_address, cap);
+    let transaction = TransactionData::new_programmable(
+        master,
+        vec![env.get_gas_for_sender(master)[0]],
+        builder.finish(),
+        10_000_000,
+        env.rgp,
+    );
+    let (_, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert_forwarding_unresolvable(effects.status(), "object to a forwarding address");
+}
+
+/// A chain on a real cluster: B's id points at one of A's forwarding addresses, so a deposit to
+/// B's forwarding address reaches A through two hops, with one event per hop, and each hop's
+/// event lands in the authenticated stream of that hop's master: `B_fa -> A_fa` in `A_fa`'s
+/// stream and `A_fa -> A` in `A`'s.
+#[sim_test]
+async fn test_chained_deposits_reach_the_end_of_the_chain_with_per_hop_streams() {
+    let mut env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut config| {
+            config.enable_authenticated_event_streams_for_testing();
+            config.set_create_forwarding_address_registry_for_testing(true);
+            set_forwarding_address_config_for_testing(&mut config);
+            config.set_forwarding_deposit_event_streams_for_testing(true);
+            config
+        }))
+        .with_test_cluster_builder_cb(Box::new(|builder| {
+            builder
+                .disable_fullnode_pruning()
+                .with_rpc_config(sui_config::RpcConfig {
+                    enable_indexing: Some(true),
+                    ..Default::default()
+                })
+        }))
+        .build()
+        .await;
+    let a = env.get_sender(0);
+    let b = env.get_sender(1);
+    let payer = env.get_sender(2);
+    let amount = 1_000u64;
+
+    let a_registration = register_master(&mut env, a).await;
+    let a_forwarding = ForwardingAddress::derive_opaque(a_registration.master_id, PAYLOAD);
+    let b_id = register_with_forwarding_master(&mut env, b, a_forwarding).await;
+    let b_forwarding =
+        ForwardingAddress::derive_opaque(b_id, [0x42; FORWARDING_ADDRESS_PAYLOAD_LENGTH]);
+
+    let genesis_committee = env.cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .epoch_store_for_testing()
+            .committee()
+            .as_ref()
+            .clone()
+    });
+    let client = Arc::new(
+        AuthenticatedEventsClient::new(env.cluster.rpc_url(), genesis_committee)
+            .await
+            .unwrap(),
+    );
+    let mut a_stream = Box::pin(client.clone().stream_events(a).await.unwrap());
+    let mut a_forwarding_stream =
+        Box::pin(client.clone().stream_events(a_forwarding).await.unwrap());
+
+    let (digest, effects) = send_to_address_balance(&mut env, payer, b_forwarding, amount).await;
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_sui_balance_ab(a), amount);
+    assert_eq!(env.get_sui_balance_ab(b), 0);
+
+    let events = get_events(&env, &digest);
+    assert_eq!(events.len(), 2, "{events:?}");
+    let deposits: BTreeSet<(SuiAddress, SuiAddress, u64)> = events
+        .iter()
+        .map(|event| {
+            let deposit = bcs::from_bytes::<ForwardingDeposit>(&event.contents).unwrap();
+            (deposit.forwarding_address, deposit.master, deposit.amount)
+        })
+        .collect();
+    assert_eq!(
+        deposits,
+        BTreeSet::from([
+            (b_forwarding, a_forwarding, amount),
+            (a_forwarding, a, amount),
+        ])
+    );
+
+    let hop_into_a_forwarding =
+        tokio::time::timeout(Duration::from_secs(60), a_forwarding_stream.next())
+            .await
+            .expect("timed out waiting for A's forwarding address stream")
+            .expect("stream ended")
+            .expect("event failed verification");
+    let hop_into_a_forwarding =
+        bcs::from_bytes::<ForwardingDeposit>(&hop_into_a_forwarding.event.contents).unwrap();
+    assert_eq!(
+        (
+            hop_into_a_forwarding.forwarding_address,
+            hop_into_a_forwarding.master
+        ),
+        (b_forwarding, a_forwarding)
+    );
+    let hop_into_a = tokio::time::timeout(Duration::from_secs(60), a_stream.next())
+        .await
+        .expect("timed out waiting for A's stream")
+        .expect("stream ended")
+        .expect("event failed verification");
+    let hop_into_a = bcs::from_bytes::<ForwardingDeposit>(&hop_into_a.event.contents).unwrap();
+    assert_eq!(
+        (hop_into_a.forwarding_address, hop_into_a.master),
+        (a_forwarding, a)
+    );
 }
