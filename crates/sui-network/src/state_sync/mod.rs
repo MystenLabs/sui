@@ -2581,7 +2581,7 @@ impl ContentFetch<'_> {
         // Each request still in flight, by peer.
         let mut in_flight_requests: HashMap<PeerId, InFlightContentRequest> = HashMap::new();
         let mut no_hedge_candidate_reported = false;
-        let mut announcements = PeerAnnouncements::new(near_frontier);
+        let mut announcements = PeerAnnouncements::default();
         let next_hedge = tokio::time::sleep(hedge.delay);
         tokio::pin!(next_hedge);
         let next_other_peer_check = tokio::time::sleep(CONTENT_CANDIDATE_POLL_INTERVAL);
@@ -2618,18 +2618,16 @@ impl ContentFetch<'_> {
                     next_hedge.as_mut().reset(
                         tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id),
                     );
-                    if kind == ContentRequestKind::First {
+                    if kind == ContentRequestKind::First && near_frontier {
                         announcements.first_request_sent();
                         next_other_peer_check
                             .as_mut()
                             .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
-                        if announcements.is_measuring() {
-                            announcements.observe(
-                                &self.peers_with_checkpoint(),
-                                self.network,
-                                self.metrics,
-                            );
-                        }
+                        announcements.observe(
+                            &self.peers_with_checkpoint(),
+                            self.network,
+                            self.metrics,
+                        );
                     }
                 } else if hedge.covers(sequence_number) && download_start.elapsed() < wait_interval
                 {
@@ -2729,7 +2727,8 @@ impl ContentFetch<'_> {
                         }
                     }
                 }
-                () = next_other_peer_check.as_mut(), if announcements.is_measuring() => {
+                // Requests are in flight, so the first request has gone out.
+                () = next_other_peer_check.as_mut(), if near_frontier => {
                     next_other_peer_check
                         .as_mut()
                         .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
@@ -2775,35 +2774,18 @@ impl ContentFetch<'_> {
 
 /// For a download near the release frontier, tracks from its first request which peers have the
 /// checkpoint, and records for each peer how long after the first request a check first saw it
-/// having the checkpoint (`state_sync_checkpoint_content_peer_announce_delay`). Once the first
-/// request is out, [`Self::is_measuring`] also turns on the download's checks for early hedges.
+/// having the checkpoint (`state_sync_checkpoint_content_peer_announce_delay`).
+#[derive(Default)]
 struct PeerAnnouncements {
-    /// Whether the download is measured.
-    measured: bool,
-    /// When the first request went out, once it has, if the download is measured.
+    /// When the first request went out, once it has.
     first_request_at: Option<Instant>,
     /// Peers seen having the checkpoint since the first request.
     seen: HashSet<PeerId>,
 }
 
 impl PeerAnnouncements {
-    fn new(measured: bool) -> Self {
-        Self {
-            measured,
-            first_request_at: None,
-            seen: HashSet::new(),
-        }
-    }
-
     fn first_request_sent(&mut self) {
-        if self.measured && self.first_request_at.is_none() {
-            self.first_request_at = Some(Instant::now());
-        }
-    }
-
-    /// Whether the download is measured and its first request has gone out.
-    fn is_measuring(&self) -> bool {
-        self.first_request_at.is_some()
+        self.first_request_at = Some(Instant::now());
     }
 
     /// Records the announce delay of each peer in `peers`, the peers that have the checkpoint
