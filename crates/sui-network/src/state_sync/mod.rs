@@ -2557,47 +2557,24 @@ impl ContentFetch<'_> {
         tokio::pin!(next_other_peer_check);
 
         loop {
-            if in_flight.is_empty() {
+            // The next request to send: a first or fallback request when nothing is in flight,
+            // otherwise a hedge.
+            let (peer, kind, slow_peer) = if in_flight.is_empty() {
                 // Either nothing was sent yet or every request failed. Ask the next peer that has
                 // the checkpoint now instead of waiting for the retry interval.
-                let peer = self.candidate(&asked, near_frontier);
-                if let Some(peer) = peer {
+                if let Some(peer) = self.candidate(&asked, near_frontier) {
                     let kind = if asked.is_empty() {
                         ContentRequestKind::First
                     } else {
                         self.metrics.inc_checkpoint_content_fallback_requests();
                         ContentRequestKind::Fallback
                     };
-                    let peer_id = peer.inner().peer_id();
-                    asked.insert(peer_id);
                     let slow_peer = if near_frontier {
-                        self.classify_new_request(peer_id)
+                        self.classify_new_request(peer.inner().peer_id())
                     } else {
                         SlowPeerRequest::PeerNotSlow
                     };
-                    in_flight_requests.insert(
-                        peer_id,
-                        InFlightContentRequest {
-                            start: Instant::now(),
-                            kind,
-                            slow_peer,
-                        },
-                    );
-                    in_flight.push(self.request(peer, kind));
-                    next_hedge.as_mut().reset(
-                        tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id),
-                    );
-                    if kind == ContentRequestKind::First && near_frontier {
-                        announcements.first_request_sent();
-                        next_other_peer_check
-                            .as_mut()
-                            .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
-                        announcements.observe(
-                            &self.peers_with_checkpoint(),
-                            self.network,
-                            self.metrics,
-                        );
-                    }
+                    (peer, kind, slow_peer)
                 } else if hedge.covers(sequence_number) && download_start.elapsed() < wait_interval
                 {
                     // No peer that hasn't been asked has the checkpoint yet. Near the release
@@ -2609,82 +2586,69 @@ impl ContentFetch<'_> {
                 } else {
                     return None;
                 }
-            }
-
-            tokio::select! {
-                biased;
-                Some(response) = in_flight.next() => {
-                    // Every request in flight is in `in_flight_requests`: each peer is asked at
-                    // most once per download, and a request is tracked from the moment it is sent.
-                    let finished = in_flight_requests
-                        .remove(&response.peer_id)
-                        .expect("every request in flight is tracked");
-                    let (peer_id, elapsed) = (response.peer_id, response.elapsed);
-                    let Some((contents, size)) = self.record_response(response) else {
-                        // The request still running, if any, is now the latest one: hedge it once
-                        // it has run for its own hedge delay, which may already have passed.
-                        if let Some((&running_peer_id, running)) = in_flight_requests.iter().next() {
-                            next_hedge.as_mut().reset(tokio::time::Instant::from_std(
-                                running.start + self.hedge_delay_for(hedge, running_peer_id),
-                            ));
-                        }
-                        continue;
-                    };
-                    if finished.kind == ContentRequestKind::Hedge {
-                        self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Won);
-                    } else if finished.slow_peer.records_response_time() {
-                        self.peer_heights.write().unwrap().record_content_response_time(
-                            peer_id,
-                            ContentResponseTime::Answered(elapsed),
-                        );
-                    }
-                    // Dropping `in_flight` on return cancels the requests that lost.
-                    for (peer_id, request) in in_flight_requests {
-                        let cancelled_after = request.start.elapsed();
-                        self.metrics.record_checkpoint_content_peer_request(
-                            &content_metrics_peer_label(self.network, peer_id),
-                            ContentRequestOutcome::Cancelled,
-                            cancelled_after,
-                        );
-                        let mut peer_heights = self.peer_heights.write().unwrap();
-                        peer_heights.record_cancelled_request(peer_id, size, cancelled_after);
-                        if request.kind != ContentRequestKind::Hedge
-                            && request.slow_peer.records_response_time()
-                        {
-                            peer_heights.record_content_response_time(
+            } else {
+                tokio::select! {
+                    biased;
+                    Some(response) = in_flight.next() => {
+                        // Inference only learns the request type from the `push` below.
+                        let response: ContentResponse = response;
+                        // Every request in flight is in `in_flight_requests`: each peer is asked
+                        // at most once per download, and a request is tracked from the moment it
+                        // is sent.
+                        let finished = in_flight_requests
+                            .remove(&response.peer_id)
+                            .expect("every request in flight is tracked");
+                        let (peer_id, elapsed) = (response.peer_id, response.elapsed);
+                        let Some((contents, size)) = self.record_response(response) else {
+                            // The request still running, if any, is now the latest one: hedge it
+                            // once it has run for its own hedge delay, which may already have
+                            // passed.
+                            if let Some((&running_peer_id, running)) =
+                                in_flight_requests.iter().next()
+                            {
+                                next_hedge.as_mut().reset(tokio::time::Instant::from_std(
+                                    running.start + self.hedge_delay_for(hedge, running_peer_id),
+                                ));
+                            }
+                            continue;
+                        };
+                        if finished.kind == ContentRequestKind::Hedge {
+                            self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Won);
+                        } else if finished.slow_peer.records_response_time() {
+                            self.peer_heights.write().unwrap().record_content_response_time(
                                 peer_id,
-                                ContentResponseTime::LongerThan(cancelled_after),
+                                ContentResponseTime::Answered(elapsed),
                             );
                         }
-                    }
-                    return Some(contents);
-                }
-                () = next_hedge.as_mut(), if in_flight.len() < MAX_CONCURRENT_CONTENT_REQUESTS => {
-                    if !hedge.covers(sequence_number) {
-                        next_hedge
-                            .as_mut()
-                            .reset(tokio::time::Instant::now() + hedge.delay);
-                        continue;
-                    }
-                    match self.candidate(&asked, near_frontier) {
-                        Some(peer) => {
-                            self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Sent);
-                            let peer_id = peer.inner().peer_id();
-                            asked.insert(peer_id);
-                            in_flight_requests.insert(
-                                peer_id,
-                                InFlightContentRequest {
-                                    start: Instant::now(),
-                                    kind: ContentRequestKind::Hedge,
-                                    slow_peer: SlowPeerRequest::PeerNotSlow,
-                                },
+                        // Dropping `in_flight` on return cancels the requests that lost.
+                        for (peer_id, request) in in_flight_requests {
+                            let cancelled_after = request.start.elapsed();
+                            self.metrics.record_checkpoint_content_peer_request(
+                                &content_metrics_peer_label(self.network, peer_id),
+                                ContentRequestOutcome::Cancelled,
+                                cancelled_after,
                             );
-                            in_flight.push(self.request(peer, ContentRequestKind::Hedge));
-                            next_hedge.as_mut().reset(
-                                tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id),
-                            );
+                            let mut peer_heights = self.peer_heights.write().unwrap();
+                            peer_heights.record_cancelled_request(peer_id, size, cancelled_after);
+                            if request.kind != ContentRequestKind::Hedge
+                                && request.slow_peer.records_response_time()
+                            {
+                                peer_heights.record_content_response_time(
+                                    peer_id,
+                                    ContentResponseTime::LongerThan(cancelled_after),
+                                );
+                            }
                         }
-                        None => {
+                        return Some(contents);
+                    }
+                    () = next_hedge.as_mut(), if in_flight.len() < MAX_CONCURRENT_CONTENT_REQUESTS => {
+                        if !hedge.covers(sequence_number) {
+                            next_hedge
+                                .as_mut()
+                                .reset(tokio::time::Instant::now() + hedge.delay);
+                            continue;
+                        }
+                        let Some(peer) = self.candidate(&asked, near_frontier) else {
                             if !no_hedge_candidate_reported {
                                 no_hedge_candidate_reported = true;
                                 self.metrics
@@ -2693,49 +2657,57 @@ impl ContentFetch<'_> {
                             next_hedge
                                 .as_mut()
                                 .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
+                            continue;
+                        };
+                        self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Sent);
+                        (peer, ContentRequestKind::Hedge, SlowPeerRequest::PeerNotSlow)
+                    }
+                    // Requests are in flight, so the first request has gone out.
+                    () = next_other_peer_check.as_mut(), if near_frontier => {
+                        next_other_peer_check
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
+                        let peers = self.peers_with_checkpoint();
+                        announcements.observe(&peers, self.network, self.metrics);
+                        if in_flight.len() >= MAX_CONCURRENT_CONTENT_REQUESTS {
+                            continue;
                         }
-                    }
-                }
-                // Requests are in flight, so the first request has gone out.
-                () = next_other_peer_check.as_mut(), if near_frontier => {
-                    next_other_peer_check
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
-                    let peers = self.peers_with_checkpoint();
-                    announcements.observe(&peers, self.network, self.metrics);
-                    if in_flight.len() >= MAX_CONCURRENT_CONTENT_REQUESTS {
-                        continue;
-                    }
-                    let in_flight_request = in_flight_requests
-                        .iter()
-                        .next()
-                        .map(|(peer_id, request)| (*peer_id, *request));
-                    if let Some((in_flight_peer_id, in_flight_request)) = in_flight_request
-                        && let Some((peer, event)) = self.early_hedge(
-                            &peers,
-                            &asked,
-                            in_flight_peer_id,
-                            &in_flight_request,
-                        )
-                    {
+                        let Some((peer, event)) = in_flight_requests
+                            .iter()
+                            .next()
+                            .and_then(|(&in_flight_peer_id, in_flight_request)| {
+                                self.early_hedge(&peers, &asked, in_flight_peer_id, in_flight_request)
+                            })
+                        else {
+                            continue;
+                        };
                         self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Sent);
                         self.metrics.inc_checkpoint_content_hedge(event);
-                        let peer_id = peer.inner().peer_id();
-                        asked.insert(peer_id);
-                        in_flight_requests.insert(
-                            peer_id,
-                            InFlightContentRequest {
-                                start: Instant::now(),
-                                kind: ContentRequestKind::Hedge,
-                                slow_peer: SlowPeerRequest::PeerNotSlow,
-                            },
-                        );
-                        in_flight.push(self.request(peer, ContentRequestKind::Hedge));
-                        next_hedge.as_mut().reset(
-                            tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id),
-                        );
+                        (peer, ContentRequestKind::Hedge, SlowPeerRequest::PeerNotSlow)
                     }
                 }
+            };
+
+            let peer_id = peer.inner().peer_id();
+            asked.insert(peer_id);
+            in_flight_requests.insert(
+                peer_id,
+                InFlightContentRequest {
+                    start: Instant::now(),
+                    kind,
+                    slow_peer,
+                },
+            );
+            in_flight.push(self.request(peer, kind));
+            next_hedge
+                .as_mut()
+                .reset(tokio::time::Instant::now() + self.new_request_hedge_delay(hedge, peer_id));
+            if kind == ContentRequestKind::First && near_frontier {
+                announcements.first_request_sent();
+                next_other_peer_check
+                    .as_mut()
+                    .reset(tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL);
+                announcements.observe(&self.peers_with_checkpoint(), self.network, self.metrics);
             }
         }
     }
