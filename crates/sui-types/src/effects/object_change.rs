@@ -79,7 +79,7 @@ pub enum ObjectIn {
     Exist((VersionDigest, Owner)),
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum AccumulatorOperation {
     /// Merge the value into the accumulator.
     Merge,
