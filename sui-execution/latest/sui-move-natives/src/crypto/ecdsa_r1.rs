@@ -3,7 +3,6 @@
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::FastCryptoError;
 use fastcrypto::hash::{Keccak256, Sha256};
-use fastcrypto::traits::RecoverableSignature;
 use fastcrypto::{
     secp256r1::{
         Secp256r1PublicKey, Secp256r1Signature, recoverable::Secp256r1RecoverableSignature,
@@ -126,9 +125,10 @@ pub fn ecrecover(
         return Ok(NativeResult::err(cost, INVALID_SIGNATURE));
     };
 
+    // Keep the wrapping recovery of older fastcrypto until a protocol flag enables the strict one.
     let pk = match hash {
-        KECCAK256 => sig.recover_with_hash::<Keccak256>(&msg_ref),
-        SHA256 => sig.recover_with_hash::<Sha256>(&msg_ref),
+        KECCAK256 => sig.recover_with_hash_legacy::<Keccak256>(&msg_ref),
+        SHA256 => sig.recover_with_hash_legacy::<Sha256>(&msg_ref),
         _ => Err(FastCryptoError::InvalidInput),
     };
 
