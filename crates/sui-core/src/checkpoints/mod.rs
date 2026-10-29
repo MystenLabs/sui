@@ -1724,6 +1724,7 @@ impl CheckpointBuilder {
 
         let barrier_digest = *VerifiedTransaction::new_system_transaction(
             accumulators::build_accumulator_barrier_tx(
+                self.epoch_store.protocol_config(),
                 epoch,
                 accumulator_root_obj_initial_shared_version,
                 checkpoint_height,
