@@ -48,3 +48,6 @@ tracing = [
     "sui-types/tracing",
     "sui-execution/tracing",
 ]
+
+[dev-dependencies]
+tempfile.workspace = true

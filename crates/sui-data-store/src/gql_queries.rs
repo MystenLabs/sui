@@ -324,6 +324,33 @@ pub(crate) mod object_query {
     }
 }
 
+pub(crate) mod checkpoint_query {
+    //! Query support for the latest checkpoint currently indexed by GraphQL.
+
+    use super::*;
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Query {
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: u64,
+    }
+
+    /// Return the latest indexed checkpoint sequence number.
+    pub(crate) async fn query(data_store: &DataStore) -> Result<u64, Error> {
+        let query = Query::build(());
+        let response = data_store.run_query(&query).await?;
+        response
+            .data
+            .and_then(|data| data.checkpoint)
+            .map(|checkpoint| checkpoint.sequence_number)
+            .ok_or_else(|| anyhow!("Missing latest checkpoint. Errors: {:?}", response.errors))
+    }
+}
+
 pub(crate) mod chain_id_query {
     use super::*;
 

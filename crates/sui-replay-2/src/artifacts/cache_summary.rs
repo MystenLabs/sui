@@ -31,16 +31,23 @@ pub struct ObjectCacheEntry {
     pub object_type: ObjectType,
 }
 
-/// Compact representation of the replay cache for serialization.
-/// Contains the execution context (epoch_id from transaction effects, checkpoint from transaction info)
-/// and a list of all objects accessed during replay, with their type information but without object content.
-/// The epoch_id represents the epoch in which the original transaction was executed.
-/// The checkpoint represents the checkpoint sequence number where the transaction was included.
+/// Compact representation of replay provenance and accessed objects.
+///
+/// For historical replay, the metadata describes the original execution context. For simulation
+/// replay, `epoch_id` comes from the fullnode effects, while `checkpoint` and `protocol_version` are
+/// resolved from GraphQL. Replay derives the protocol configuration from that version and the
+/// selected network. Because the GraphQL state and metadata are fetched independently of the
+/// fullnode simulation, the resulting replay context may not accurately reflect the context used by
+/// the fullnode.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplayCacheSummary {
+    /// Historical execution epoch or the executed epoch reported by fullnode simulation effects.
     pub epoch_id: u64,
+    /// Inclusion checkpoint for historical replay or fallback read bound for simulation replay.
     pub checkpoint: u64,
+    /// Network selected for replay state reads.
     pub network: String,
+    /// Protocol version resolved from the replay store's epoch metadata.
     pub protocol_version: u64,
     /// List of objects accessed during replay with their version and type information
     pub cache_entries: Vec<ObjectCacheEntry>,

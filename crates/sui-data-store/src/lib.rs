@@ -51,6 +51,8 @@ use sui_types::{
 pub struct TransactionInfo {
     pub data: TransactionData,
     pub effects: TransactionEffects,
+    /// Transaction inclusion checkpoint for historical replay, or the latest GraphQL checkpoint
+    /// used to bound unversioned reads for simulation replay.
     pub checkpoint: u64,
 }
 
@@ -59,8 +61,8 @@ pub struct TransactionInfo {
 /// must be available. Some of that data is not provided by the user. It is naturally available
 /// at runtime on a live system and later saved in effects and in the context of a checkpoint.
 pub trait TransactionStore {
-    /// Given a transaction digest, return transaction info including data, effects,
-    /// and the checkpoint that transaction was executed in.
+    /// Given a transaction digest, return transaction info including data, effects, and the
+    /// checkpoint used to resolve replay reads.
     /// Returns `None` if the transaction is not found.
     fn transaction_data_and_effects(
         &self,
