@@ -435,7 +435,7 @@ async fn test_transaction_pool_epoch_store_swap_waits_for_new_pool() {
 
 #[cfg(msim)]
 async fn submit_padded_transfers_to_one_validator(
-    max_user_bytes_per_second: Option<u64>,
+    max_user_bytes_per_block: Option<u64>,
     count: usize,
 ) -> (std::time::Duration, usize, f64) {
     use std::num::NonZeroUsize;
@@ -443,8 +443,8 @@ async fn submit_padded_transfers_to_one_validator(
     let network_config = ConfigBuilder::new_with_temp_dir()
         .committee_size(NonZeroUsize::new(4).unwrap())
         .with_consensus_transaction_pool_config(ConsensusTransactionPoolConfig {
-            rate_limit_user_bytes: max_user_bytes_per_second.is_some(),
-            max_user_bytes_per_second,
+            rate_limit_user_bytes: max_user_bytes_per_block.is_some(),
+            max_user_bytes_per_block,
             ..pool_config(100)
         })
         .build();
@@ -511,35 +511,18 @@ async fn submit_padded_transfers_to_one_validator(
 
 #[cfg(msim)]
 #[sim_test]
-async fn test_transaction_pool_byte_rate_limit_paces_proposals() {
-    use std::time::Duration;
-    use sui_protocol_config::ProtocolConfig;
-
-    let bytes_per_second = 100_000u64;
+async fn test_transaction_pool_byte_budget_spreads_proposals() {
+    let bytes_per_block = 100_000u64;
     let count = 5;
-    let block_bytes =
-        ProtocolConfig::get_for_max_version_UNSAFE().max_transactions_in_block_bytes();
-    let capacity = bytes_per_second.max(block_bytes);
 
-    let (elapsed, total_bytes, exhausted) =
-        submit_padded_transfers_to_one_validator(Some(bytes_per_second), count).await;
-    let floor = Duration::from_secs_f64(
-        (total_bytes as u64).saturating_sub(capacity) as f64 / bytes_per_second as f64,
-    );
-    assert!(
-        floor > Duration::from_secs(3),
-        "test load must exceed the bucket: {floor:?}"
-    );
-    assert!(
-        elapsed >= floor,
-        "limited run finished in {elapsed:?}, below the byte-budget floor {floor:?}"
-    );
+    // Every padded transaction is larger than the per-proposal budget, so each one is
+    // proposed alone as an overdraw and the budget limit is hit between them. All of them
+    // still land.
+    let (_elapsed, total_bytes, exhausted) =
+        submit_padded_transfers_to_one_validator(Some(bytes_per_block), count).await;
+    assert!(total_bytes as u64 > bytes_per_block * count as u64);
     assert!(exhausted > 0.0);
 
-    let (elapsed, _, exhausted) = submit_padded_transfers_to_one_validator(None, count).await;
-    assert!(
-        elapsed < floor,
-        "unlimited run took {elapsed:?}, not faster than the floor {floor:?}"
-    );
+    let (_elapsed, _, exhausted) = submit_padded_transfers_to_one_validator(None, count).await;
     assert_eq!(exhausted, 0.0);
 }
