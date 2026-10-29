@@ -272,6 +272,7 @@ impl SettlementScheduler {
             )
             .await;
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
+            epoch_store.protocol_config(),
             epoch,
             accumulator_root_obj_initial_shared_version,
             batch_info.checkpoint_height,
