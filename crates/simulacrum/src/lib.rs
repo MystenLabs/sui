@@ -365,9 +365,11 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             }
 
             // Build and execute the barrier transaction using settlement effects
-            let barrier_tx = self
-                .checkpoint_builder
-                .get_barrier_tx(checkpoint_height, &settlement_effects);
+            let barrier_tx = self.checkpoint_builder.get_barrier_tx(
+                self.epoch_state.protocol_config(),
+                checkpoint_height,
+                &settlement_effects,
+            );
             let barrier_effects = self
                 .execute_system_transaction(barrier_tx)
                 .expect("barrier txn cannot fail")

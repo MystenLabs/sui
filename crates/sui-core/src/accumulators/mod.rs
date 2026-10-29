@@ -17,6 +17,10 @@ use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
 
 use sui_types::accumulator_root::ACCUMULATOR_METADATA_MODULE;
+use sui_types::accumulator_settlement::{
+    AccumulatorBarrierV1, AccumulatorSettlementTransaction, AccumulatorSettlementV1,
+    AccumulatorUpdateGroup, BalanceUpdate, EventStreamUpdate,
+};
 use sui_types::digests::Digest;
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, IDOperation,
@@ -41,6 +45,9 @@ pub mod object_funds_checker;
 pub(crate) mod transaction_rewriting;
 pub mod unsettled_object_withdrawals;
 
+#[cfg(test)]
+mod native_settlement_tests;
+
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.
 ///
@@ -55,13 +62,14 @@ enum MergedValue {
     EventDigest(/* merkle root */ Digest, /* event count */ u64),
 }
 
-enum ClassifiedType {
-    Balance,
+enum ClassifiedType<'a> {
+    /// `Balance<T>`, carrying `T`.
+    Balance(&'a TypeTag),
     Unknown,
 }
 
-impl ClassifiedType {
-    fn classify(ty: &TypeTag) -> Self {
+impl<'a> ClassifiedType<'a> {
+    fn classify(ty: &'a TypeTag) -> Self {
         let TypeTag::Struct(struct_tag) = ty else {
             return Self::Unknown;
         };
@@ -69,11 +77,21 @@ impl ClassifiedType {
         if struct_tag.address == SUI_FRAMEWORK_ADDRESS
             && struct_tag.module.as_ident_str() == BALANCE_MODULE_NAME
             && struct_tag.name.as_ident_str() == BALANCE_STRUCT_NAME
+            && let [coin_type] = struct_tag.type_params.as_slice()
         {
-            return Self::Balance;
+            return Self::Balance(coin_type);
         }
 
         Self::Unknown
+    }
+}
+
+/// Nets a merge against a split. Returns `None` if they cancel out.
+fn net_amount(merge: u128, split: u128) -> Option<(AccumulatorOperation, u128)> {
+    match merge.cmp(&split) {
+        std::cmp::Ordering::Greater => Some((AccumulatorOperation::Merge, merge - split)),
+        std::cmp::Ordering::Less => Some((AccumulatorOperation::Split, split - merge)),
+        std::cmp::Ordering::Equal => None,
     }
 }
 
@@ -91,7 +109,7 @@ impl MergedValue {
 
         match (ty, merge, split) {
             (
-                ClassifiedType::Balance,
+                ClassifiedType::Balance(_),
                 MergedValue::SumU128(merge_amount),
                 MergedValue::SumU128(split_amount),
             ) => {
@@ -133,6 +151,46 @@ impl MergedValue {
                     vec![],
                     args,
                 );
+            }
+            _ => fatal!("invalid merge {:?} {:?}", merge, split),
+        }
+    }
+}
+
+impl MergedValue {
+    /// Adds the native form of this update to `groups`, keyed by accumulator type. Mirrors
+    /// `add_move_call`.
+    fn add_native_update(
+        merge: Self,
+        split: Self,
+        address: &AccumulatorAddress,
+        balance_groups: &mut BTreeMap<TypeTag, Vec<BalanceUpdate>>,
+        event_stream_updates: &mut Vec<EventStreamUpdate>,
+    ) {
+        match (ClassifiedType::classify(&address.ty), merge, split) {
+            (
+                ClassifiedType::Balance(coin_type),
+                MergedValue::SumU128(merge_amount),
+                MergedValue::SumU128(split_amount),
+            ) => {
+                if let Some((operation, amount)) = net_amount(merge_amount, split_amount) {
+                    balance_groups
+                        .entry(coin_type.clone())
+                        .or_default()
+                        .push(BalanceUpdate {
+                            owner: address.address,
+                            operation,
+                            amount,
+                        });
+                }
+            }
+            (_, MergedValue::SumU128U128(_v1, _v2), MergedValue::SumU128U128(_w1, _w2)) => todo!(),
+            (_, MergedValue::EventDigest(digest, event_count), MergedValue::EventDigest(_, _)) => {
+                event_stream_updates.push(EventStreamUpdate {
+                    stream_id: address.address,
+                    merkle_root: digest,
+                    event_count,
+                });
             }
             _ => fatal!("invalid merge {:?} {:?}", merge, split),
         }
@@ -355,17 +413,31 @@ impl AccumulatorSettlementTxBuilder {
                         (acc_input + update.input_sui, acc_output + update.output_sui)
                     });
 
-            Self::build_one_settlement_txn(
-                &addresses,
-                epoch,
-                idx,
-                checkpoint_height,
-                accumulator_root_obj_initial_shared_version,
-                updates.drain(..),
-                total_input_sui,
-                total_output_sui,
-                checkpoint_seq,
-            )
+            if protocol_config.native_accumulator_settlement() {
+                Self::build_one_native_settlement_txn(
+                    &addresses,
+                    epoch,
+                    idx,
+                    checkpoint_height,
+                    accumulator_root_obj_initial_shared_version,
+                    updates.drain(..),
+                    total_input_sui,
+                    total_output_sui,
+                    checkpoint_seq,
+                )
+            } else {
+                Self::build_one_settlement_txn(
+                    &addresses,
+                    epoch,
+                    idx,
+                    checkpoint_height,
+                    accumulator_root_obj_initial_shared_version,
+                    updates.drain(..),
+                    total_input_sui,
+                    total_output_sui,
+                    checkpoint_seq,
+                )
+            }
         };
 
         let chunk_size = protocol_config
@@ -462,12 +534,64 @@ impl AccumulatorSettlementTxBuilder {
 
         TransactionKind::ProgrammableSystemTransaction(builder.finish())
     }
+
+    // Chunking happens before this, exactly as for the Move form, so both forms settle the same
+    // accounts in the same transactions and produce the same effects.
+    fn build_one_native_settlement_txn(
+        addresses: &HashMap<AccumulatorObjId, AccumulatorAddress>,
+        epoch: u64,
+        idx: u64,
+        checkpoint_height: u64,
+        accumulator_root_obj_initial_shared_version: SequenceNumber,
+        updates: impl Iterator<Item = (AccumulatorObjId, Update)>,
+        total_input_sui: u64,
+        total_output_sui: u64,
+        checkpoint_seq: u64,
+    ) -> TransactionKind {
+        let mut balance_groups = BTreeMap::<TypeTag, Vec<BalanceUpdate>>::new();
+        let mut event_stream_updates = vec![];
+
+        for (accumulator_obj, update) in updates {
+            let Update { merge, split, .. } = update;
+            let address = addresses.get(&accumulator_obj).unwrap();
+            MergedValue::add_native_update(
+                MergedValue::from(merge),
+                MergedValue::from(split),
+                address,
+                &mut balance_groups,
+                &mut event_stream_updates,
+            );
+        }
+
+        let mut groups: Vec<_> = balance_groups
+            .into_iter()
+            .map(|(coin_type, updates)| AccumulatorUpdateGroup::Balance { coin_type, updates })
+            .collect();
+        if !event_stream_updates.is_empty() {
+            groups.push(AccumulatorUpdateGroup::EventStream(event_stream_updates));
+        }
+
+        TransactionKind::AccumulatorSettlement(AccumulatorSettlementTransaction::SettlementV1(
+            AccumulatorSettlementV1 {
+                epoch,
+                checkpoint_height,
+                idx,
+                checkpoint_seq,
+                input_sui: total_input_sui,
+                output_sui: total_output_sui,
+                accumulator_root_initial_shared_version:
+                    accumulator_root_obj_initial_shared_version,
+                updates: groups,
+            },
+        ))
+    }
 }
 
 /// Builds the barrier transaction that advances the version of the accumulator root object.
 /// This must be called after all settlement transactions have been executed.
 /// `settlement_effects` contains the effects of all settlement transactions.
 pub fn build_accumulator_barrier_tx(
+    protocol_config: &ProtocolConfig,
     epoch: u64,
     accumulator_root_obj_initial_shared_version: SequenceNumber,
     checkpoint_height: u64,
@@ -476,6 +600,20 @@ pub fn build_accumulator_barrier_tx(
     let num_settlements = settlement_effects.len() as u64;
 
     let (objects_created, objects_destroyed) = count_accumulator_object_changes(settlement_effects);
+
+    if protocol_config.native_accumulator_settlement() {
+        return TransactionKind::AccumulatorSettlement(
+            AccumulatorSettlementTransaction::BarrierV1(AccumulatorBarrierV1 {
+                epoch,
+                checkpoint_height,
+                num_settlements,
+                objects_created,
+                objects_destroyed,
+                accumulator_root_initial_shared_version:
+                    accumulator_root_obj_initial_shared_version,
+            }),
+        );
+    }
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let root = builder
@@ -535,6 +673,7 @@ mod barrier_settlement_key_tests {
         let checkpoint_height = 42u64;
 
         let kind = build_accumulator_barrier_tx(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
             epoch,
             SequenceNumber::from_u64(1),
             checkpoint_height,
