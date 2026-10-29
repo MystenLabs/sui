@@ -1,6 +1,6 @@
 [package]
 name = "vesting"
-edition = "2024.beta"
+edition = "2024"
 
 [dependencies]
 Sui = { local = "../../crates/sui-framework/packages/sui-framework"  }
