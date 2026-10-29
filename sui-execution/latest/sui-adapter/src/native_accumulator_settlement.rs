@@ -75,14 +75,8 @@ thread_local! {
 /// use this to check that both forms produce the same effects.
 #[cfg(debug_assertions)]
 pub(crate) fn with_ptb_settlements_in_move<R>(f: impl FnOnce() -> R) -> R {
-    struct Reset;
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            EXECUTE_PTB_SETTLEMENTS_IN_MOVE.set(false);
-        }
-    }
     EXECUTE_PTB_SETTLEMENTS_IN_MOVE.set(true);
-    let _reset = Reset;
+    let _reset = scopeguard::guard((), |()| EXECUTE_PTB_SETTLEMENTS_IN_MOVE.set(false));
     f()
 }
 

@@ -13529,6 +13529,7 @@ dependencies = [
  "nonempty",
  "parking_lot 0.12.3",
  "quick_cache",
+ "scopeguard",
  "serde",
  "serde_json",
  "sui-macros",
