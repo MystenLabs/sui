@@ -14854,6 +14854,7 @@ dependencies = [
  "sui-indexer-alt-graphql",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
+ "sui-keys",
  "sui-kv-rpc",
  "sui-kvstore",
  "sui-macros",
