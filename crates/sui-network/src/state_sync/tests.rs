@@ -2615,9 +2615,55 @@ async fn closer_peer_hedge_keeps_at_most_two_requests_in_flight() {
     );
 }
 
+/// Near the release frontier, the first request goes to the peer with the lowest expected
+/// response time. The other two peers never answer and are expected to be at least 100 ms slower,
+/// so a first request to either of them would get an early hedge to the soonest peer.
+#[tokio::test]
+async fn closer_peer_first_request_goes_to_the_soonest_peer() {
+    use super::metrics::HedgeEvent;
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let silent = || {
+        build_contents_peer(
+            &committee,
+            &checkpoints,
+            &contents,
+            2,
+            Duration::from_secs(30),
+        )
+    };
+    let (peer_300, peer_200) = (silent(), silent());
+    let peer_100 = build_contents_peer(&committee, &checkpoints, &contents, 2, Duration::ZERO);
+    let client = HedgeTestClient::new(
+        *checkpoints[0].digest(),
+        &[(&peer_300, 1), (&peer_100, 1), (&peer_200, 1)],
+    )
+    .await;
+    client.record_answers(peer_300.peer_id(), Duration::from_millis(300));
+    client.record_answers(peer_100.peer_id(), Duration::from_millis(100));
+    client.record_answers(peer_200.peer_id(), Duration::from_millis(200));
+
+    let fetched = client
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(10),
+            0,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("the soonest peer should answer right away");
+
+    assert!(fetched.is_some());
+    assert_eq!(
+        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
+        0
+    );
+}
+
 #[test]
-fn test_closer_peer_to_hedge() {
-    use super::{CLOSER_PEER_MIN_GAIN, closer_peer_to_hedge};
+fn test_worth_hedging_early() {
+    use super::{CLOSER_PEER_MIN_GAIN, worth_hedging_early};
     use std::time::Instant;
 
     let ms = Duration::from_millis;
@@ -2626,68 +2672,46 @@ fn test_closer_peer_to_hedge() {
     let in_flight_expected = ms(500);
     let threshold = in_flight_expected - CLOSER_PEER_MIN_GAIN;
 
-    // A peer expected to finish exactly the minimum gain sooner gets the hedge; one expected to
-    // finish 1 ms later does not.
-    assert_eq!(
-        closer_peer_to_hedge(start, start, in_flight_expected, [("a", threshold)]),
-        Some("a")
-    );
-    assert_eq!(
-        closer_peer_to_hedge(start, start, in_flight_expected, [("a", threshold + ms(1))]),
-        None
-    );
-
-    // The peer expected to finish first is picked.
-    assert_eq!(
-        closer_peer_to_hedge(
-            start,
-            start,
-            in_flight_expected,
-            [("a", ms(300)), ("b", ms(100)), ("c", ms(200))]
-        ),
-        Some("b")
-    );
+    // A peer expected to finish exactly the minimum gain sooner is worth it; one expected to
+    // finish 1 ms later is not.
+    assert!(worth_hedging_early(
+        start,
+        start,
+        in_flight_expected,
+        threshold
+    ));
+    assert!(!worth_hedging_early(
+        start,
+        start,
+        in_flight_expected,
+        threshold + ms(1)
+    ));
 
     // The time the request in flight has already run counts: 300 ms in, it is expected to
     // finish in 200 ms.
     let now = start + ms(300);
     let remaining_threshold = ms(200) - CLOSER_PEER_MIN_GAIN;
-    assert_eq!(
-        closer_peer_to_hedge(now, start, in_flight_expected, [("a", remaining_threshold)]),
-        Some("a")
-    );
-    assert_eq!(
-        closer_peer_to_hedge(
-            now,
-            start,
-            in_flight_expected,
-            [("a", remaining_threshold + ms(1))]
-        ),
-        None
-    );
+    assert!(worth_hedging_early(
+        now,
+        start,
+        in_flight_expected,
+        remaining_threshold
+    ));
+    assert!(!worth_hedging_early(
+        now,
+        start,
+        in_flight_expected,
+        remaining_threshold + ms(1)
+    ));
 
-    // A request that has run past its expected finish is not hedged early, even to a peer
+    // A request that has run past its expected finish is not worth hedging early, even to a peer
     // expected to answer right away.
-    assert_eq!(
-        closer_peer_to_hedge(
-            start + ms(600),
-            start,
-            in_flight_expected,
-            [("a", Duration::ZERO)]
-        ),
-        None
-    );
-
-    // Without candidates, there is nothing to hedge to.
-    assert_eq!(
-        closer_peer_to_hedge(
-            start,
-            start,
-            in_flight_expected,
-            Vec::<(&str, Duration)>::new()
-        ),
-        None
-    );
+    assert!(!worth_hedging_early(
+        start + ms(600),
+        start,
+        in_flight_expected,
+        Duration::ZERO
+    ));
 }
 
 #[test]

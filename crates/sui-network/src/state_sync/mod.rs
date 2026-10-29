@@ -2208,23 +2208,13 @@ struct InFlightContentRequest {
     slow_peer: SlowPeerRequest,
 }
 
-/// Peers that could be asked for a checkpoint's contents, each with its
-/// [`expected_response_time`], by whether they are slow from this node.
-#[derive(Default)]
-struct UnaskedPeers {
-    not_slow: Vec<(anemo::Peer, Duration)>,
-    slow: Vec<(anemo::Peer, Duration)>,
-}
-
-impl UnaskedPeers {
-    /// The peers that are not slow, or the slow ones if every peer is slow.
-    fn preferred(self) -> Vec<(anemo::Peer, Duration)> {
-        if self.not_slow.is_empty() {
-            self.slow
-        } else {
-            self.not_slow
-        }
-    }
+/// A peer that could be asked for a checkpoint's contents.
+struct UnaskedPeer {
+    peer: anemo::Peer,
+    /// See [`expected_response_time`].
+    expected: Duration,
+    /// Whether the peer is slow from this node (see `PeerHeights::slow_peer_hedge_delay`).
+    slow: bool,
 }
 
 /// A finished request for one checkpoint's contents to one peer.
@@ -2293,66 +2283,58 @@ impl ContentFetch<'_> {
             .collect()
     }
 
-    /// The peers in `peers` that are not in `asked` and have no recent failures, each with its
-    /// [`expected_response_time`], split by whether they are slow from this node (see
-    /// `PeerHeights::slow_peer_hedge_delay`).
-    fn unasked_peers_with_expected_response_times(
+    /// Among the peers in `peers` that are not in `asked` and have no recent failures, the one
+    /// with the lowest [`expected_response_time`], preferring peers that are not slow from this
+    /// node (see `PeerHeights::slow_peer_hedge_delay`).
+    fn closest_unasked_peer(
         &self,
         peers: &[anemo::Peer],
         asked: &HashSet<PeerId>,
-    ) -> UnaskedPeers {
+    ) -> Option<UnaskedPeer> {
         let peer_heights = self.peer_heights.read().unwrap();
-        let mut unasked = UnaskedPeers::default();
-        for peer in peers {
-            let peer_id = peer.peer_id();
-            if asked.contains(&peer_id) || peer_heights.is_failing(&peer_id) {
-                continue;
-            }
-            let candidate = (peer.clone(), expected_response_time(peer, &peer_heights));
-            if peer_heights.slow_peer_hedge_delay(&peer_id).is_some() {
-                unasked.slow.push(candidate);
-            } else {
-                unasked.not_slow.push(candidate);
-            }
-        }
-        unasked
-    }
-
-    /// Among the peers not in `asked` that have the checkpoint now and have no recent failures,
-    /// the one with the lowest [`expected_response_time`], preferring peers that are not slow
-    /// from this node.
-    fn closest_candidate(&self, asked: &HashSet<PeerId>) -> Option<StateSyncClient<anemo::Peer>> {
-        self.unasked_peers_with_expected_response_times(&self.peers_with_checkpoint(), asked)
-            .preferred()
-            .into_iter()
-            .min_by_key(|(_, expected)| *expected)
-            .map(|(peer, _)| StateSyncClient::new(peer))
+        peers
+            .iter()
+            .filter(|peer| {
+                let peer_id = peer.peer_id();
+                !asked.contains(&peer_id) && !peer_heights.is_failing(&peer_id)
+            })
+            .map(|peer| {
+                let slow = peer_heights
+                    .slow_peer_hedge_delay(&peer.peer_id())
+                    .is_some();
+                (peer, expected_response_time(peer, &peer_heights), slow)
+            })
+            .min_by_key(|(_, expected, slow)| (*slow, *expected))
+            .map(|(peer, expected, slow)| UnaskedPeer {
+                peer: peer.clone(),
+                expected,
+                slow,
+            })
     }
 
     /// The peer to send a request to other than an early hedge: with `prefer_closest`,
-    /// [`Self::closest_candidate`], or [`Self::next_candidate`] if that finds no peer; otherwise
-    /// [`Self::next_candidate`].
+    /// [`Self::closest_unasked_peer`] among the peers that have the checkpoint now, or
+    /// [`Self::next_candidate`] if that finds no peer; otherwise [`Self::next_candidate`].
     fn candidate(
         &self,
         asked: &HashSet<PeerId>,
         prefer_closest: bool,
     ) -> Option<StateSyncClient<anemo::Peer>> {
-        if prefer_closest {
-            self.closest_candidate(asked)
-                .or_else(|| self.next_candidate(asked))
-        } else {
-            self.next_candidate(asked)
+        if prefer_closest
+            && let Some(closest) = self.closest_unasked_peer(&self.peers_with_checkpoint(), asked)
+        {
+            return Some(StateSyncClient::new(closest.peer));
         }
+        self.next_candidate(asked)
     }
 
     /// With one request in flight, the peer to hedge to right away, if any, and the event that
-    /// counts the hedge. `peers` are the peers that have the checkpoint now. If the request in
-    /// flight is to a peer that is slow from this node and is not a slow-peer probe, this is the
-    /// peer that is not slow with the lowest [`expected_response_time`]
-    /// ([`HedgeEvent::SentAroundSlowPeer`]). Otherwise, or if there is no such peer, it is the
-    /// peer expected to finish at least [`CLOSER_PEER_MIN_GAIN`] before the request in flight
-    /// (see [`closer_peer_to_hedge`]), preferring peers that are not slow
-    /// ([`HedgeEvent::SentToCloserPeer`]). Returns `None` if the in-flight request's peer is no
+    /// counts the hedge. `peers` are the peers that have the checkpoint now; the hedge can only go
+    /// to [`Self::closest_unasked_peer`] among them. It does if that peer is not slow from this
+    /// node while the request in flight is to a slow peer and is not a slow-peer probe
+    /// ([`HedgeEvent::SentAroundSlowPeer`]), or if that peer is expected to finish at least
+    /// [`CLOSER_PEER_MIN_GAIN`] before the request in flight (see [`worth_hedging_early`],
+    /// [`HedgeEvent::SentToCloserPeer`]). Returns `None` if the in-flight request's peer is no
     /// longer connected.
     fn early_hedge(
         &self,
@@ -2371,26 +2353,23 @@ impl ContentFetch<'_> {
                     .is_some(),
             )
         };
-        let unasked = self.unasked_peers_with_expected_response_times(peers, asked);
-        if in_flight_peer_slow
+        let closest = self.closest_unasked_peer(peers, asked)?;
+        let event = if in_flight_peer_slow
             && in_flight.slow_peer != SlowPeerRequest::Probe
-            && let Some((peer, _)) = unasked
-                .not_slow
-                .iter()
-                .min_by_key(|(_, expected)| *expected)
+            && !closest.slow
         {
-            return Some((
-                StateSyncClient::new(peer.clone()),
-                HedgeEvent::SentAroundSlowPeer,
-            ));
-        }
-        closer_peer_to_hedge(
+            HedgeEvent::SentAroundSlowPeer
+        } else if worth_hedging_early(
             Instant::now(),
             in_flight.start,
             in_flight_expected,
-            unasked.preferred(),
-        )
-        .map(|peer| (StateSyncClient::new(peer), HedgeEvent::SentToCloserPeer))
+            closest.expected,
+        ) {
+            HedgeEvent::SentToCloserPeer
+        } else {
+            return None;
+        };
+        Some((StateSyncClient::new(closest.peer), event))
     }
 
     /// How long a request to `peer_id` may run before it is hedged: `hedge.delay`, or the peer's
@@ -2560,7 +2539,7 @@ impl ContentFetch<'_> {
     /// A download near the release frontier when it starts sends its first request, hedges after
     /// the hedge delay, and requests after every request failed to the peer with the lowest
     /// [`expected_response_time`], preferring peers that are not slow from this node (see
-    /// [`Self::closest_candidate`]). From its first request until it ends, it checks every
+    /// [`Self::closest_unasked_peer`]). From its first request until it ends, it checks every
     /// [`CONTENT_CANDIDATE_POLL_INTERVAL`] which peers have the checkpoint (see
     /// [`PeerAnnouncements`]). At each check while only one request is in flight, it hedges right
     /// away to a peer that hasn't been asked yet if the request in flight is to a slow peer and is
@@ -2819,21 +2798,17 @@ fn expected_response_time(peer: &anemo::Peer, peer_heights: &PeerHeights) -> Dur
         .map_or(rtt, |fastest| fastest.max(rtt))
 }
 
-/// Among `candidates`, each with its expected response time, the one expected to finish first
-/// if a request to it were sent at `now`, provided it is expected to finish at least
-/// [`CLOSER_PEER_MIN_GAIN`] before the request in flight. That request was sent at
-/// `in_flight_start` to a peer with expected response time `in_flight_expected`.
-fn closer_peer_to_hedge<T>(
+/// Whether a peer with expected response time `candidate_expected`, asked at `now`, is expected to
+/// finish at least [`CLOSER_PEER_MIN_GAIN`] before the request in flight, which was sent at
+/// `in_flight_start` to a peer with expected response time `in_flight_expected`. A request in
+/// flight that has run past its expected finish never qualifies.
+fn worth_hedging_early(
     now: Instant,
     in_flight_start: Instant,
     in_flight_expected: Duration,
-    candidates: impl IntoIterator<Item = (T, Duration)>,
-) -> Option<T> {
-    let (candidate, expected) = candidates
-        .into_iter()
-        .min_by_key(|(_, expected)| *expected)?;
-    (now + expected + CLOSER_PEER_MIN_GAIN <= in_flight_start + in_flight_expected)
-        .then_some(candidate)
+    candidate_expected: Duration,
+) -> bool {
+    now + candidate_expected + CLOSER_PEER_MIN_GAIN <= in_flight_start + in_flight_expected
 }
 
 /// Label for per-peer content request metrics. Only peers in the network's known-peer set get
