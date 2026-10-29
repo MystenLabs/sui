@@ -430,6 +430,7 @@ const MAINNET_USDB: &str =
 //              prepared verifying key length does not match the number of public inputs.
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 //              Add the `object::is_shared_input_impl` native and its cost.
+//              Reject an overflowing x-coordinate in `secp256r1_ecrecover`.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -827,6 +828,10 @@ struct FeatureFlags {
     // multisig members.
     #[serde(skip_serializing_if = "is_false")]
     mldsa65_auth: bool,
+
+    // Reject an overflowing x-coordinate r + n in `secp256r1_ecrecover` instead of wrapping it.
+    #[serde(skip_serializing_if = "is_false")]
+    secp256r1_ecrecover_checks_x_below_p: bool,
 
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
@@ -4966,6 +4971,7 @@ impl ProtocolConfig {
                     cfg.clock_borrow_cost_base = Some(52);
                     cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.object_is_shared_input_cost_base = Some(52);
+                    cfg.feature_flags.secp256r1_ecrecover_checks_x_below_p = true;
                 }
                 // Use this template when making changes:
                 //
