@@ -386,7 +386,7 @@ jobs:
             --transfer-object 1 --shared-counter 1 --delegation 1 \
             --batch-payment 1 --shared-deletion 1 --randomness 1 \
             --expected-failure 1 --randomized-transaction 1 \
-            --slow 1 --party 1 --composite 1
+            --slow 1 --composite 1
           kill $SUI_PID 2>/dev/null || true
       - name: consensus benchmark (smoke)
         run: |
