@@ -992,6 +992,179 @@ async fn events_empty_window_past_cursor_has_no_more_pages() {
 }
 
 #[tokio::test]
+async fn transactions_cursor_window_ends() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1).to_string();
+
+    // Three Alice transactions in each of cp 1 and cp 2.
+    let mut total_txs = 1u64;
+    for cp in [1u64, 2] {
+        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
+        for i in 0..3u64 {
+            builder = builder
+                .start_transaction(1)
+                .create_owned_object(cp * 10 + i)
+                .finish_transaction();
+        }
+        total_txs += 3;
+        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
+            .await
+            .unwrap();
+    }
+    cluster
+        .wait_for_graphql(2, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
+
+    let all = transactions_page(&cluster, &alice, false, None, None).await;
+    assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
+    let cursor = |i: usize| Some(all[i].0.clone());
+    let filter = json!({ "sentAddress": alice });
+    let empty = json!({
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "startCursor": null,
+        "endCursor": null,
+    });
+
+    let (edges, info) =
+        transactions_page_info(&cluster, &filter, false, cursor(0), cursor(3)).await;
+    assert_eq!(edges, 2, "forward: {info}");
+    let after = info["endCursor"].as_str().map(String::from);
+    let (edges, info) = transactions_page_info(&cluster, &filter, false, after, cursor(3)).await;
+    assert_eq!((edges, info), (0, empty.clone()), "forward, next page");
+
+    let (edges, info) = transactions_page_info(&cluster, &filter, true, cursor(2), cursor(5)).await;
+    assert_eq!(edges, 2, "backward: {info}");
+    let before = info["startCursor"].as_str().map(String::from);
+    let (edges, info) = transactions_page_info(&cluster, &filter, true, cursor(2), before).await;
+    assert_eq!((edges, info), (0, empty.clone()), "backward, next page");
+
+    for (after, before) in [(3, 1), (2, 2), (0, 1), (2, 3)] {
+        for from_back in [false, true] {
+            let (edges, info) =
+                transactions_page_info(&cluster, &filter, from_back, cursor(after), cursor(before))
+                    .await;
+            assert_eq!(
+                (edges, info),
+                (0, empty.clone()),
+                "after tx{after}, before tx{before}, from_back={from_back}"
+            );
+        }
+    }
+
+    let (edges, info) = transactions_page_info(&cluster, &filter, true, cursor(5), None).await;
+    assert_eq!(edges, 0, "last, after tx5: {info}");
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(true),
+        "last, after tx5: {info}"
+    );
+    let (edges, info) = transactions_page_info(&cluster, &filter, false, None, cursor(0)).await;
+    assert_eq!(edges, 0, "first, before tx0: {info}");
+    assert_eq!(
+        info["hasNextPage"],
+        json!(true),
+        "first, before tx0: {info}"
+    );
+}
+
+/// Events counterpart of [`transactions_cursor_window_ends`].
+#[tokio::test]
+async fn events_cursor_window_ends() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let pkg = ObjectID::from_single_byte(0x42);
+
+    // Two Alice transactions in each of cp 1 and cp 2, each emitting two events.
+    let mut total_txs = 1u64;
+    for cp in [1u64, 2] {
+        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
+        for i in 0..2u64 {
+            let ev = || test_event(pkg, "m", alice, "0x42::m::T");
+            builder = builder
+                .start_transaction(1)
+                .with_events(vec![ev(), ev()])
+                .create_owned_object(cp * 10 + i)
+                .finish_transaction();
+        }
+        total_txs += 2;
+        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
+            .await
+            .unwrap();
+    }
+    cluster
+        .wait_for_graphql(2, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
+
+    let filter = json!({ "sender": alice.to_string() });
+    let (all, _) = events_page(&cluster, &filter, Some(50), None, None, None).await;
+    assert_eq!(all.len(), 8, "expected all Alice events, got {all:?}");
+    let cursor = |i: usize| Some(all[i].0.clone());
+    let empty = json!({
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "startCursor": null,
+        "endCursor": null,
+    });
+
+    let (page, info) = events_page(&cluster, &filter, Some(10), cursor(0), None, cursor(3)).await;
+    assert_eq!(page.len(), 2, "forward: {info}");
+    let after = info["endCursor"].as_str().map(String::from);
+    let (page, info) = events_page(&cluster, &filter, Some(10), after, None, cursor(3)).await;
+    assert_eq!((page.len(), info), (0, empty.clone()), "forward, next page");
+
+    let (page, info) = events_page(&cluster, &filter, None, cursor(2), Some(10), cursor(5)).await;
+    assert_eq!(page.len(), 2, "backward: {info}");
+    let before = info["startCursor"].as_str().map(String::from);
+    let (page, info) = events_page(&cluster, &filter, None, cursor(2), Some(10), before).await;
+    assert_eq!(
+        (page.len(), info),
+        (0, empty.clone()),
+        "backward, next page"
+    );
+
+    for (after, before) in [(5, 1), (2, 2), (0, 1), (1, 2), (3, 4)] {
+        for (first, last) in [(Some(10), None), (None, Some(10))] {
+            let (page, info) = events_page(
+                &cluster,
+                &filter,
+                first,
+                cursor(after),
+                last,
+                cursor(before),
+            )
+            .await;
+            assert_eq!(
+                (page.len(), info),
+                (0, empty.clone()),
+                "after e{after}, before e{before}, last={last:?}"
+            );
+        }
+    }
+
+    let (page, info) = events_page(&cluster, &filter, None, cursor(7), Some(10), None).await;
+    assert_eq!(page.len(), 0, "last, after e7: {info}");
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(true),
+        "last, after e7: {info}"
+    );
+    let (page, info) = events_page(&cluster, &filter, Some(10), None, None, cursor(0)).await;
+    assert_eq!(page.len(), 0, "first, before e0: {info}");
+    assert_eq!(info["hasNextPage"], json!(true), "first, before e0: {info}");
+}
+
+#[tokio::test]
 async fn test_sent_address() {
     // Proves the graphql `sentAddress` filter translates to a `Sender` include predicate that
     // selects the right tx on the bitmap path. Two-tx dataset: cp 0's bootstrap advance_epoch
