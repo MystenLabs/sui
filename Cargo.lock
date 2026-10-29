@@ -5445,7 +5445,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.11"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=0a263279c31a45ba4bcd986a82b7e99c63ed16c0#0a263279c31a45ba4bcd986a82b7e99c63ed16c0"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5501,7 +5501,6 @@ dependencies = [
  "static_assertions",
  "thiserror 1.0.69",
  "tokio",
- "tracing",
  "typenum",
  "x509-parser",
  "zeroize",
@@ -5510,16 +5509,16 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=0a263279c31a45ba4bcd986a82b7e99c63ed16c0#0a263279c31a45ba4bcd986a82b7e99c63ed16c0"
 dependencies = [
  "quote",
- "syn 1.0.107",
+ "syn 2.0.117",
 ]
 
 [[package]]
 name = "fastcrypto-pq"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=0a263279c31a45ba4bcd986a82b7e99c63ed16c0#0a263279c31a45ba4bcd986a82b7e99c63ed16c0"
 dependencies = [
  "bincode 1.3.3",
  "digest 0.10.7",
@@ -5536,13 +5535,13 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=0a263279c31a45ba4bcd986a82b7e99c63ed16c0#0a263279c31a45ba4bcd986a82b7e99c63ed16c0"
 dependencies = [
  "bcs",
  "digest 0.10.7",
  "fastcrypto",
  "hex",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "rand 0.8.5",
  "reed-solomon-erasure",
  "serde",
@@ -5556,7 +5555,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=0a263279c31a45ba4bcd986a82b7e99c63ed16c0#0a263279c31a45ba4bcd986a82b7e99c63ed16c0"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5573,7 +5572,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=0a263279c31a45ba4bcd986a82b7e99c63ed16c0#0a263279c31a45ba4bcd986a82b7e99c63ed16c0"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -11643,7 +11642,6 @@ checksum = "7263373d500d4d4f505d43a2a662d475a894aa94503a1ee28e9188b5f3960d4f"
 dependencies = [
  "libm",
  "lru 0.7.8",
- "parking_lot 0.11.2",
  "smallvec",
  "spin 0.9.9",
 ]
