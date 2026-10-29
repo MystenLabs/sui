@@ -1433,6 +1433,87 @@ mod tests {
         );
     }
 
+    #[test]
+    fn build_grpc_connection_empty_cursor_bound_page_ends() {
+        let position = |tx_seq| Position::Transactions {
+            checkpoint: 1,
+            tx_seq,
+        };
+        for page in [
+            page_params_for_testing(
+                Some(2),
+                Some(primary_cursor(1, 2)),
+                None,
+                Some(primary_cursor(1, 3)),
+            ),
+            page_params_for_testing(
+                None,
+                Some(primary_cursor(1, 2)),
+                Some(2),
+                Some(primary_cursor(1, 3)),
+            ),
+        ] {
+            let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+                Vec::new(),
+                Some(CursorToken::boundary(position(3)).encode()),
+                Some(CursorToken::boundary(position(3)).encode()),
+                Some(v2::QueryEndReason::CursorBound),
+            );
+
+            let conn =
+                build_grpc_connection(Scope::for_tests(), &page, result).expect("connection built");
+            assert!(conn.edges.is_empty());
+            assert!(!conn.page_info.has_previous_page);
+            assert!(!conn.page_info.has_next_page);
+            assert_eq!(conn.page_info.start_cursor, None);
+            assert_eq!(conn.page_info.end_cursor, None);
+        }
+    }
+
+    #[test]
+    fn build_grpc_connection_empty_page_not_between_cursors_signals_more() {
+        let boundary = CursorToken::boundary(Position::Transactions {
+            checkpoint: 1,
+            tx_seq: 3,
+        });
+        let cases = [
+            (
+                page_params_for_testing(
+                    Some(2),
+                    Some(primary_cursor(1, 0)),
+                    None,
+                    Some(primary_cursor(1, 9)),
+                ),
+                v2::QueryEndReason::ScanLimit,
+            ),
+            (
+                page_params_for_testing(None, Some(primary_cursor(1, 2)), Some(2), None),
+                v2::QueryEndReason::CursorBound,
+            ),
+        ];
+        for (page, reason) in cases {
+            let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+                Vec::new(),
+                Some(boundary.encode()),
+                Some(boundary.encode()),
+                Some(reason),
+            );
+
+            let conn =
+                build_grpc_connection(Scope::for_tests(), &page, result).expect("connection built");
+            let more = if page.is_from_front() {
+                conn.page_info.has_next_page
+            } else {
+                conn.page_info.has_previous_page
+            };
+            assert!(more, "{reason:?}");
+            assert_eq!(
+                conn.page_info.end_cursor,
+                Some(graphql_cursor(boundary.clone()))
+            );
+        }
+    }
+
     /// If watermark cursors and non-empty, expect watermark cursors on the connection.
     #[test]
     fn build_grpc_connection_non_empty_page_and_wm() {

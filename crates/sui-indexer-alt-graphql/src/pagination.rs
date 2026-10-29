@@ -374,6 +374,15 @@ where
         mut result: StreamPage<T>,
         node: impl Fn(&T) -> Result<N, RpcError>,
     ) -> Result<StreamConnection<N>, RpcError> {
+        // Between two cursors, an empty page that reached the far one has exhausted the window.
+        if self.after().is_some()
+            && self.before().is_some()
+            && result.items.is_empty()
+            && result.end_reason == Some(QueryEndReason::CursorBound)
+        {
+            return Ok(StreamConnection::empty());
+        }
+
         let lookahead_returned = result.items.len() > self.limit();
         result.items.truncate(self.limit());
 
