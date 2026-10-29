@@ -429,6 +429,52 @@ impl EventStreamHead {
     pub fn mmr(&self) -> &Vec<U256> {
         &self.mmr
     }
+
+    /// Appends one checkpoint's merkle root. Mirrors `accumulator_settlement::settle_events`.
+    /// Returns `None` if `num_events` would overflow.
+    pub fn append(
+        &mut self,
+        merkle_root: U256,
+        event_count: u64,
+        checkpoint_seq: u64,
+    ) -> Option<()> {
+        add_to_mmr(&mut self.mmr, merkle_root);
+        self.num_events = self.num_events.checked_add(event_count)?;
+        self.checkpoint_seq = checkpoint_seq;
+        Some(())
+    }
+}
+
+impl MoveTypeTagTrait for EventStreamHead {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: ACCUMULATOR_SETTLEMENT_MODULE.to_owned(),
+            name: ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD.to_owned(),
+            type_params: vec![],
+        }))
+    }
+}
+
+fn hash_two_to_one_u256(left: U256, right: U256) -> U256 {
+    use fastcrypto::hash::{Blake2b256, HashFunction};
+    let mut concatenated = bcs::to_bytes(&left).expect("U256 serialization cannot fail");
+    concatenated.extend_from_slice(&bcs::to_bytes(&right).expect("U256 serialization cannot fail"));
+    U256::from_le_bytes(&Blake2b256::digest(&concatenated).digest)
+}
+
+/// Mirrors `accumulator_settlement::add_to_mmr`. Zero marks an empty slot.
+pub fn add_to_mmr(mmr: &mut Vec<U256>, new_val: U256) {
+    let mut cur = new_val;
+    for slot in mmr.iter_mut() {
+        if *slot == U256::zero() {
+            *slot = cur;
+            return;
+        }
+        cur = hash_two_to_one_u256(*slot, cur);
+        *slot = U256::zero();
+    }
+    mmr.push(cur);
 }
 
 pub fn derive_event_stream_head_object_id(stream_id: SuiAddress) -> SuiResult<ObjectID> {

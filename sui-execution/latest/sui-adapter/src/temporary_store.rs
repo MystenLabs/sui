@@ -725,6 +725,19 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.deleted_object_ids.insert(*id);
     }
 
+    /// Records writes to children of the accumulator root made outside the Move VM by native
+    /// settlement. `loaded` holds the input state of every modified child.
+    pub(crate) fn record_native_settlement_results(
+        &mut self,
+        results: ExecutionResultsV2,
+        loaded: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
+    ) -> Result<(), ExecutionError> {
+        self.save_loaded_runtime_objects(loaded);
+        self.execution_results.merge_results(
+            results, /* consistent_merge */ true, /* invariant_checks */ true,
+        )
+    }
+
     pub fn drop_writes(&mut self) {
         self.execution_results.drop_writes();
         self.invariants = InvariantChecker::default();
