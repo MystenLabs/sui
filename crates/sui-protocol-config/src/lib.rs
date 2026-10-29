@@ -432,6 +432,7 @@ const MAINNET_USDB: &str =
 //              Add the `object::is_shared_input_impl` native and its cost.
 //              Reject an overflowing x-coordinate in `secp256r1_ecrecover`.
 //              Configure explicit Move binary format encoding limits.
+//              Enable native accumulator settlement on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4984,6 +4985,9 @@ impl ProtocolConfig {
                     cfg.object_is_shared_input_cost_base = Some(52);
                     cfg.feature_flags.secp256r1_ecrecover_checks_x_below_p = true;
                     cfg.binary_format_limits_profile = Some(BinaryFormatLimitsProfile::V1);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.native_accumulator_settlement = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
