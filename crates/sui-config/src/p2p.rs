@@ -269,53 +269,20 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_disconnect_threshold_ms: Option<u64>,
 
-    /// Turns on hedged checkpoint contents downloads: a request with no valid response after this
-    /// delay is hedged. A second request for the same contents goes to another peer that has
-    /// announced the checkpoint by then, the first valid response wins, and the other request is
-    /// cancelled. At most two requests per checkpoint are in flight, and only checkpoints close to
-    /// the next one to be released in order are hedged.
+    /// Turns on hedged checkpoint contents downloads, with this delay as the hedge delay. A request
+    /// with no valid response after the hedge delay is also sent to another peer that has the
+    /// checkpoint; the first valid response wins, and the other request is cancelled. At most two
+    /// requests per checkpoint are in flight, and only checkpoints close to the next one to be
+    /// released in order are hedged. Near that checkpoint, a download whose requests have all
+    /// failed keeps looking for a peer that has the checkpoint, for up to
+    /// `wait_interval_when_no_peer_to_sync_content_ms`, instead of sleeping that long.
     ///
-    /// Every request, including one that replaces a failed request, goes to a peer picked from the
-    /// peers that have announced the checkpoint at that moment, not when the download started.
-    /// Near the next checkpoint to be released, when a hedge is due before any other peer has
-    /// announced the checkpoint, or every request has failed, the download checks for newly
-    /// announced peers every 10 ms, so the next request goes out within 10 ms of an announcement.
-    /// After every request failed, it keeps checking until
-    /// `wait_interval_when_no_peer_to_sync_content_ms` has passed, instead of sleeping for it.
-    ///
-    /// Requests to a peer that is slow from this node are hedged sooner than this delay: after the
-    /// peer's slow-response threshold, which is its fastest recent response time plus 25% or plus
-    /// 20 ms, whichever is more. A peer is slow when at least a quarter of its recent responses
-    /// took longer than that threshold. Requests cancelled after the threshold because a hedge won
-    /// count as slow responses, so a peer stays slow while hedges keep beating it, and stops being
-    /// slow once it answers within the threshold again. Requests cancelled sooner count neither
-    /// way.
-    ///
-    /// Near the next checkpoint to be released, requests go to the peers expected to answer
-    /// soonest. A peer's expected response time is the longer of its connection round-trip time
-    /// and its fastest recent response time (just the round-trip time if it has no recent
-    /// responses). The first request, the hedge after the hedge delay, and a request sent after
-    /// every request failed go to the connected peer with the lowest expected response time among
-    /// the peers that have announced the checkpoint, skipping peers with recent failures. Slow
-    /// peers come after all peers that are not.
-    ///
-    /// While only one request is in flight, the download checks every 10 ms which peers have
-    /// announced the checkpoint since, and hedges right away instead of waiting for the hedge
-    /// delay in two cases. If the request in flight is to a slow peer and a peer that isn't slow
-    /// has the checkpoint, the hedge goes to the one of those peers with the lowest expected
-    /// response time. Otherwise, if a peer is expected to finish at least 50 ms before the
-    /// request in flight, the hedge goes to it; a request that has already run past its expected
-    /// finish gets no such hedge.
-    ///
-    /// One in four requests that are not hedges sent to a slow peer is a probe that is not hedged
-    /// right away just because the peer is slow. While a peer is slow, only probes add response
-    /// time samples, so once the samples from before it became slow have been replaced or have
-    /// aged out, probes alone decide whether it is still slow and what its fastest recent
-    /// response time is. Other requests to it are hedged right away, which cuts their slow
-    /// responses short while their fast ones still arrive, so recording them would make the peer
-    /// look less slow than it is. A request cancelled before its peer's slow-response threshold,
-    /// which counts neither way, is not recorded once the peer has a threshold, so it doesn't
-    /// push out samples that count.
+    /// Near that checkpoint, requests also go to the peers expected to answer soonest, based on
+    /// each peer's recent response times, and a request is hedged right away when another peer is
+    /// expected to answer much sooner. A request to a peer that has often been slow from this node
+    /// is hedged sooner than the hedge delay, or right away once a peer that isn't slow has the
+    /// checkpoint. Hedges add download traffic, mostly on nodes with a slow network path to some
+    /// of their peers. The exact rules are documented in `sui_network::state_sync`.
     ///
     /// If unspecified, hedging is disabled: the peers that had announced the checkpoint when the
     /// download started are tried one at a time.
