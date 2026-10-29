@@ -1721,7 +1721,6 @@ pub(crate) mod checked {
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::AccumulatorSettlement(settlement) => {
-                assert!(protocol_config.native_accumulator_settlement());
                 let tx_digest = tx_ctx.borrow().digest();
                 native_accumulator_settlement::execute(
                     temporary_store,
