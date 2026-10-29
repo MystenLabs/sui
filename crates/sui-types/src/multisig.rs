@@ -380,9 +380,8 @@ impl MultiSig {
         }
     }
     /// This combines a list of [enum Signature] `flag || signature || pk` to a MultiSig.
-    /// The order of full_sigs must be the same as the order of public keys in
-    /// [enum MultiSigPublicKey]. e.g. for [pk1, pk2, pk3, pk4, pk5],
-    /// [sig1, sig2, sig5] is valid, but [sig2, sig1, sig5] is invalid.
+    /// `full_sigs` may come in any order. They are stored in the order of their public
+    /// keys in [enum MultiSigPublicKey], which is the order verification walks the bitmap in.
     pub fn combine(
         full_sigs: Vec<GenericSignature>,
         multisig_pk: MultiSigPublicKey,
@@ -400,7 +399,7 @@ impl MultiSig {
             .into());
         }
         let mut bitmap = 0;
-        let mut sigs = Vec::with_capacity(full_sigs.len());
+        let mut indexed_sigs = Vec::with_capacity(full_sigs.len());
         for s in full_sigs {
             let pk = s.to_public_key()?;
             let index = multisig_pk
@@ -415,11 +414,12 @@ impl MultiSig {
                 .into());
             }
             bitmap |= 1 << index;
-            sigs.push(s.to_compressed()?);
+            indexed_sigs.push((index, s.to_compressed()?));
         }
+        indexed_sigs.sort_by_key(|(index, _)| *index);
 
         Ok(MultiSig {
-            sigs,
+            sigs: indexed_sigs.into_iter().map(|(_, sig)| sig).collect(),
             bitmap,
             multisig_pk,
             bytes: OnceCell::new(),
