@@ -16,6 +16,10 @@ public struct Receiving<phantom T: key> has drop {
     version: u64,
 }
 
+/// A privileged witness of the `T` type that can be used to transfer objects of type `T`
+/// even if `T` does not have the `store` ability.
+public struct Permit<phantom T: key>() has drop;
+
 /// Shared an object that was previously created. Shared objects must currently
 /// be constructed in the transaction they are created.
 const ESharedNonNewObject: u64 = 0;
@@ -64,6 +68,13 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
     transfer_impl(obj, recipient)
 }
 
+/// Like `transfer`, but can be invoked outside of the module that defines `T` as long as
+/// a `Permit<T>` is provided. This allows for transferring objects of type `T` that do not have
+/// the `store` ability outside of their defining module.
+public fun internal_transfer<T: key>(obj: T, recipient: address, _: Permit<T>) {
+    transfer_impl(obj, recipient)
+}
+
 /// Transfer ownership of `obj` to the `party`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object is authorized for
 /// use only by the recipient(s), in this case the `party`. This means that only the members
@@ -94,6 +105,15 @@ public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Part
     party_transfer_impl(obj, default, addresses, permissions)
 }
 
+/// Like `party_transfer`, but can be invoked outside of the module that defines `T` as long as
+/// a `Permit<T>` is provided. This allows for transferring objects of type `T` that do not have
+/// the `store` ability outside of their defining module.
+public fun internal_party_transfer<T: key>(obj: T, party: sui::party::Party, _: Permit<T>) {
+    assert!(party.is_single_owner(), EInvalidPartyPermissions);
+    let (default, addresses, permissions) = party.into_native();
+    party_transfer_impl(obj, default, addresses, permissions)
+}
+
 /// Freeze `obj`. After freezing `obj` becomes immutable and can no longer be transferred or
 /// mutated.
 /// This function has custom rules performed by the Sui Move bytecode verifier that ensures
@@ -107,6 +127,13 @@ public fun freeze_object<T: key>(obj: T) {
 /// mutated.
 /// The object must have `store` to be frozen outside of its module.
 public fun public_freeze_object<T: key + store>(obj: T) {
+    freeze_object_impl(obj)
+}
+
+/// Like `freeze_object`, but can be invoked outside of the module that defines `T` as long as
+/// a `Permit<T>` is provided. This allows for freezing objects of type `T` that do not have the
+/// `store` ability outside of their defining module.
+public fun internal_freeze_object<T: key>(obj: T, _: Permit<T>) {
     freeze_object_impl(obj)
 }
 
@@ -130,6 +157,13 @@ public fun public_share_object<T: key + store>(obj: T) {
     share_object_impl(obj)
 }
 
+/// Like `share_object`, but can be invoked outside of the module that defines `T` as long as
+/// a `Permit<T>` is provided. This allows for sharing objects of type `T` that do not have the
+/// `store` ability outside of their defining module.
+public fun internal_share_object<T: key>(obj: T, _: Permit<T>) {
+    share_object_impl(obj)
+}
+
 /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
 /// referencing an object of type `T` owned by `parent` use the `to_receive`
 /// argument to receive and return the referenced owned object of type `T`.
@@ -150,9 +184,28 @@ public fun public_receive<T: key + store>(parent: &mut UID, to_receive: Receivin
     receive_impl(parent.to_address(), id, version)
 }
 
+/// Like `receive`, but can be invoked outside of the module that defines `T` as long as
+/// a `Permit<T>` is provided. This allows for receiving objects of type `T` that do not have
+/// the `store` ability outside of their defining module.
+public fun internal_receive<T: key>(parent: &mut UID, to_receive: Receiving<T>, _: Permit<T>): T {
+    let Receiving { id, version } = to_receive;
+    receive_impl(parent.to_address(), id, version)
+}
+
 /// Return the object ID that the given `Receiving` argument references.
 public fun receiving_object_id<T: key>(receiving: &Receiving<T>): ID {
     receiving.id
+}
+
+/// Given permission from the defining module of `T` via an `internal::Permit`, this constructs
+/// a new transfer `Permit` for the type `T`, which can be used to call various transfer
+/// functions outside of the module that defines `T` even if `T` does not have the `store` ability.
+public fun permit<T: key>(_: internal::Permit<T>): Permit<T> {
+    Permit()
+}
+
+public macro fun mpermit<$T: key>(): Permit<$T> {
+    permit(internal::permit<$T>())
 }
 
 public(package) native fun freeze_object_impl<T: key>(obj: T);
