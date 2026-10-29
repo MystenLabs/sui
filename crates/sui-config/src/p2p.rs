@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, num::NonZeroU32, path::PathBuf, time::Duration};
+use std::{
+    net::SocketAddr,
+    num::{NonZeroU32, NonZeroU64},
+    path::PathBuf,
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
 use sui_types::{
@@ -263,6 +268,26 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `30,000` (30 seconds).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_disconnect_threshold_ms: Option<u64>,
+
+    /// Turns on hedged checkpoint contents downloads, with this delay as the hedge delay. A request
+    /// with no valid response after the hedge delay is also sent to another peer that has the
+    /// checkpoint; the first valid response wins, and the other request is cancelled. At most two
+    /// requests per checkpoint are in flight, and only checkpoints close to the next one to be
+    /// released in order are hedged. Near that checkpoint, a download whose requests have all
+    /// failed keeps looking for a peer that has the checkpoint, for up to
+    /// `wait_interval_when_no_peer_to_sync_content_ms`, instead of sleeping that long.
+    ///
+    /// Near that checkpoint, requests also go to the peers expected to answer soonest, based on
+    /// each peer's recent response times, and a request is hedged right away when another peer is
+    /// expected to answer much sooner. A request to a peer that has often been slow from this node
+    /// is hedged sooner than the hedge delay, or right away once a peer that isn't slow has the
+    /// checkpoint. Hedges add download traffic, mostly on nodes with a slow network path to some
+    /// of their peers. The exact rules are documented in `sui_network::state_sync`.
+    ///
+    /// If unspecified, hedging is disabled: the peers that had announced the checkpoint when the
+    /// download started are tried one at a time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_hedge_delay_ms: Option<NonZeroU64>,
 }
 
 impl StateSyncConfig {
@@ -408,6 +433,11 @@ impl StateSyncConfig {
     pub fn peer_disconnect_threshold(&self) -> Duration {
         const DEFAULT_MS: u64 = 30_000; // 30 seconds
         Duration::from_millis(self.peer_disconnect_threshold_ms.unwrap_or(DEFAULT_MS))
+    }
+
+    pub fn checkpoint_content_hedge_delay(&self) -> Option<Duration> {
+        self.checkpoint_content_hedge_delay_ms
+            .map(|delay_ms| Duration::from_millis(delay_ms.get()))
     }
 
     pub fn randomized_for_testing() -> Self {
