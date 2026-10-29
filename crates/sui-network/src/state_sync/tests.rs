@@ -2072,47 +2072,6 @@ async fn hedged_contents_fetch_does_not_hedge_a_response_within_the_delay() {
     );
 }
 
-/// With three slow peers, a download has at most two requests in flight: the first request
-/// and one hedge.
-#[tokio::test]
-async fn hedged_contents_fetch_keeps_at_most_two_requests_in_flight() {
-    use super::metrics::HedgeEvent;
-
-    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
-    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
-    let slow = || {
-        build_contents_peer(
-            &committee,
-            &checkpoints,
-            &contents,
-            2,
-            Duration::from_secs(30),
-        )
-    };
-    let (peer_a, peer_b, peer_c) = (slow(), slow(), slow());
-    let client = HedgeTestClient::new(
-        *checkpoints[0].digest(),
-        &[(&peer_a, 1), (&peer_b, 1), (&peer_c, 1)],
-    )
-    .await;
-
-    // Ten hedge delays pass while every request is still running.
-    let result = client
-        .fetch_hedged(
-            &checkpoints[1],
-            Duration::from_millis(50),
-            0,
-            Duration::from_millis(500),
-        )
-        .await;
-
-    assert!(result.is_err(), "no peer answers within the limit");
-    assert_eq!(
-        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
-        1
-    );
-}
-
 /// Checkpoints more than `CONTENT_HEDGE_WINDOW` past the highest synced checkpoint are not
 /// hedged, even when another peer has them, and a slow peer's shortened hedge delay, which
 /// can't trigger a hedge there, is not recorded.
@@ -2567,11 +2526,12 @@ async fn slow_peer_cancelled_non_probe_is_not_sampled() {
     );
 }
 
-/// An early hedge to a closer peer respects the limit of two requests in flight: a peer that
-/// announces the checkpoint after the hedge delay's hedge went out gets no request, although it
-/// is expected to answer much sooner.
+/// A download has at most two requests in flight: the first request and one hedge. Neither the
+/// hedge delay, which keeps passing while every request is still running, nor a peer that
+/// announces the checkpoint after the hedge went out and is expected to answer much sooner gets
+/// a third request out.
 #[tokio::test]
-async fn closer_peer_hedge_keeps_at_most_two_requests_in_flight() {
+async fn hedged_contents_fetch_keeps_at_most_two_requests_in_flight() {
     use super::metrics::HedgeEvent;
 
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
