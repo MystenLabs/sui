@@ -1952,7 +1952,8 @@ impl CheckpointBuilder {
                         // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
                         // processed before we reach here.
                     }
-                    TransactionKind::ProgrammableSystemTransaction(_) => {
+                    TransactionKind::ProgrammableSystemTransaction(_)
+                    | TransactionKind::AccumulatorSettlement(_) => {
                         // settlement transactions are added by checkpoint builder
                     }
                     TransactionKind::ChangeEpoch(_)

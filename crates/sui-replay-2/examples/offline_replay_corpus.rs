@@ -342,6 +342,7 @@ fn transaction_shape(transaction_data: &TransactionData) -> String {
         TransactionKind::ProgrammableSystemTransaction(_) => {
             "`ProgrammableSystemTransaction`".to_owned()
         }
+        TransactionKind::AccumulatorSettlement(_) => "`AccumulatorSettlement`".to_owned(),
     }
 }
 
