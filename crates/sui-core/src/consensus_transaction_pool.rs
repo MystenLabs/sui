@@ -283,49 +283,54 @@ impl UserLane {
     }
 }
 
-/// Token bucket over the BCS-encoded, uncompressed bytes of user-lane entries handed to the
-/// proposer: the same measure as `max_transactions_in_block_bytes`, not wire bytes.
+/// Budget over the BCS-encoded, uncompressed bytes of user-lane entries handed to the proposer,
+/// the same measure as `max_transactions_in_block_bytes`, refilled once per proposal.
+///
+/// Refilling per proposal rather than per unit of time ties the bytes a validator emits to the
+/// rate at which it proposes, so slower rounds produce fewer bytes rather than larger blocks.
+/// The balance is capped at one proposal's budget so that skipped proposals do not accumulate
+/// into a burst. It may go negative: a proposal keeps taking entries while any budget remains,
+/// so the entry that overdraws it is still proposed, and the following proposals carry no user
+/// entries until the debt is repaid. That keeps a single transaction larger than the budget
+/// proposable.
 struct UserByteBudget {
-    bytes_per_second: u64,
-    capacity: u64,
-    tokens: f64,
-    last_refill: Instant,
+    bytes_per_block: i64,
+    balance: i64,
 }
 
 impl UserByteBudget {
-    fn new(bytes_per_second: u64, max_block_bytes: u64, now: Instant) -> Self {
-        let capacity = bytes_per_second.max(max_block_bytes);
+    fn new(bytes_per_block: u64) -> Self {
+        let bytes_per_block = i64::try_from(bytes_per_block).unwrap_or(i64::MAX);
         Self {
-            bytes_per_second,
-            capacity,
-            tokens: capacity as f64,
-            last_refill: now,
+            bytes_per_block,
+            balance: bytes_per_block,
         }
     }
 
-    fn available(&mut self, now: Instant) -> usize {
-        let elapsed = now
-            .saturating_duration_since(self.last_refill)
-            .as_secs_f64();
-        self.tokens =
-            (self.tokens + elapsed * self.bytes_per_second as f64).min(self.capacity as f64);
-        self.last_refill = now;
-        self.tokens as usize
+    /// Refills the budget for a new proposal and returns the bytes available to it.
+    fn begin_proposal(&mut self) -> usize {
+        self.balance = self
+            .balance
+            .saturating_add(self.bytes_per_block)
+            .min(self.bytes_per_block);
+        usize::try_from(self.balance.max(0)).unwrap_or(usize::MAX)
     }
 
     fn consume(&mut self, bytes: usize) {
-        let bytes = bytes as f64;
-        if bytes > self.tokens {
-            debug_fatal!(
-                "user byte budget overdrawn: consuming {bytes} with {} tokens available",
-                self.tokens
-            );
-        }
-        self.tokens = (self.tokens - bytes).max(0.0);
+        self.balance = self
+            .balance
+            .saturating_sub(i64::try_from(bytes).unwrap_or(i64::MAX));
     }
 
     fn refund(&mut self, bytes: usize) {
-        self.tokens = (self.tokens + bytes as f64).min(self.capacity as f64);
+        self.balance = self
+            .balance
+            .saturating_add(i64::try_from(bytes).unwrap_or(i64::MAX))
+            .min(self.bytes_per_block);
+    }
+
+    fn balance(&self) -> i64 {
+        self.balance
     }
 }
 
@@ -382,7 +387,7 @@ impl ConsensusTransactionPool {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         max_pending_transactions: usize,
-        max_user_bytes_per_second: Option<u64>,
+        max_user_bytes_per_block: Option<u64>,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -402,18 +407,12 @@ impl ConsensusTransactionPool {
                 .max_num_transactions_in_block()
         );
 
-        let user_byte_budget = max_user_bytes_per_second.map(|bytes_per_second| {
+        let user_byte_budget = max_user_bytes_per_block.map(|bytes_per_block| {
             assert!(
-                bytes_per_second > 0,
-                "consensus transaction pool max_user_bytes_per_second must be > 0"
+                bytes_per_block > 0,
+                "consensus transaction pool max_user_bytes_per_block must be > 0"
             );
-            Box::new(UserByteBudget::new(
-                bytes_per_second,
-                epoch_store
-                    .protocol_config()
-                    .max_transactions_in_block_bytes(),
-                Instant::now(),
-            ))
+            Box::new(UserByteBudget::new(bytes_per_block))
         });
         Self {
             epoch_store,
@@ -1117,12 +1116,12 @@ impl TransactionPool for ConsensusTransactionPool {
             let mut pending_count = transactions.len();
             let mut pending_bytes = system_tx_total_bytes;
             let now = Instant::now();
-            let user_max_bytes = match &mut pool.user_byte_budget {
-                Some(budget) => {
-                    max_bytes.min(system_tx_total_bytes.saturating_add(budget.available(now)))
-                }
-                None => max_bytes,
-            };
+            let user_budget_available = pool
+                .user_byte_budget
+                .as_mut()
+                .map(|budget| budget.begin_proposal());
+            let mut user_bytes_taken = 0usize;
+            let mut budget_limited = false;
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
@@ -1143,30 +1142,33 @@ impl TransactionPool for ConsensusTransactionPool {
                 {
                     return PopAction::Skip;
                 }
-                match entry_limit(
-                    entry,
-                    pending_count,
-                    pending_bytes,
-                    max_count,
-                    user_max_bytes,
-                ) {
+                match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
                     Some(limit) => {
                         limit_reached = limit;
                         PopAction::Stop
                     }
                     None => {
+                        // The budget admits entries while any of it remains, so the entry
+                        // that overdraws it is still included and the shortfall is repaid
+                        // by later proposals.
+                        if let Some(available) = user_budget_available
+                            && user_bytes_taken >= available
+                        {
+                            limit_reached = LimitReached::MaxBytes;
+                            budget_limited = true;
+                            return PopAction::Stop;
+                        }
                         pending_count += entry.transactions.len();
                         pending_bytes += entry.total_bytes;
+                        user_bytes_taken += entry.total_bytes;
                         PopAction::Include
                     }
                 }
             });
             if let Some(budget) = &mut pool.user_byte_budget {
-                budget.consume(pending_bytes.saturating_sub(system_tx_total_bytes));
-                self.metrics
-                    .pool_byte_budget_bytes
-                    .set(budget.tokens as i64);
-                if user_max_bytes < max_bytes && limit_reached == LimitReached::MaxBytes {
+                budget.consume(user_bytes_taken);
+                self.metrics.pool_byte_budget_bytes.set(budget.balance());
+                if budget_limited {
                     self.metrics.pool_byte_budget_exhausted.inc();
                 }
             }
@@ -1576,31 +1578,17 @@ mod tests {
         ))
     }
 
-    // The budget is installed directly because max_transactions_in_block_bytes() is fixed
-    // under msim and ignores protocol config overrides.
     async fn test_state_and_rate_limited_pool(
-        max_block_bytes: u64,
-        max_user_bytes_per_second: u64,
+        max_user_bytes_per_block: u64,
     ) -> (Arc<AuthorityState>, Arc<ConsensusTransactionPool>) {
         let state = TestAuthorityBuilder::new().build().await;
         let pool = Arc::new(ConsensusTransactionPool::new(
             state.epoch_store_for_testing().clone(),
             10,
-            Some(max_user_bytes_per_second),
+            Some(max_user_bytes_per_block),
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
-        {
-            let mut inner = pool.inner.lock();
-            let Inner::Open(open) = &mut *inner else {
-                unreachable!("new pool must be open");
-            };
-            open.user_byte_budget = Some(Box::new(UserByteBudget::new(
-                max_user_bytes_per_second,
-                max_block_bytes,
-                Instant::now(),
-            )));
-        }
         (state, pool)
     }
 
@@ -1701,29 +1689,34 @@ mod tests {
     }
 
     #[test]
-    fn user_byte_budget_refills_at_rate_up_to_capacity() {
-        let start = Instant::now();
-        let mut budget = UserByteBudget::new(1_000, 4_000, start);
-        assert_eq!(budget.available(start), 4_000);
-        budget.consume(4_000);
-        assert_eq!(budget.available(start), 0);
-        assert_eq!(budget.available(start + Duration::from_millis(500)), 500);
-        assert_eq!(budget.available(start + Duration::from_secs(10)), 4_000);
+    fn user_byte_budget_refills_per_proposal_and_repays_debt() {
+        let mut budget = UserByteBudget::new(1_000);
+        // Starts full and does not accumulate beyond one proposal's worth.
+        assert_eq!(budget.begin_proposal(), 1_000);
+        assert_eq!(budget.begin_proposal(), 1_000);
+        budget.consume(400);
+        assert_eq!(budget.balance(), 600);
+        assert_eq!(budget.begin_proposal(), 1_000);
+        // One oversized entry puts the budget into debt, repaid by later proposals.
+        budget.consume(2_500);
+        assert_eq!(budget.balance(), -1_500);
+        assert_eq!(budget.begin_proposal(), 0);
+        assert_eq!(budget.begin_proposal(), 500);
+        assert_eq!(budget.begin_proposal(), 1_000);
+        // Refunds are capped at one proposal's worth too.
         budget.consume(1_000);
         budget.refund(10_000);
-        assert_eq!(budget.available(start + Duration::from_secs(10)), 4_000);
-
-        let mut budget = UserByteBudget::new(5_000, 4_000, start);
-        assert_eq!(budget.available(start), 5_000);
+        assert_eq!(budget.balance(), 1_000);
     }
 
     #[sim_test]
-    async fn take_rate_limits_user_bytes_but_not_system() {
-        let serialized_len = bcs::to_bytes(&transaction()).unwrap().len();
-        let block_bytes = u64::try_from(serialized_len * 2).unwrap();
-        let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+    async fn take_limits_user_bytes_per_proposal_but_not_system() {
+        let serialized_len = u64::try_from(bcs::to_bytes(&transaction()).unwrap().len()).unwrap();
+        // Budget for one and a half entries per proposal: the second entry of a proposal
+        // overdraws it and the proposal after carries nothing.
+        let (_state, pool) = test_state_and_rate_limited_pool(serialized_len * 3 / 2).await;
         let epoch = pool.epoch();
-        for gas_price in [10, 20, 30] {
+        for gas_price in [10, 20, 30, 40] {
             let (_receiver, _) = pool
                 .try_insert(epoch, gas_price, vec![transaction()])
                 .unwrap();
@@ -1735,26 +1728,26 @@ mod tests {
         ack(block(1));
         assert_eq!(pool.metrics.pool_byte_budget_exhausted.get(), 1);
 
+        // Debt from the overdrawn proposal: the refill leaves the balance at exactly one
+        // entry, which admits one entry and then stops.
         let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
-        assert!(transactions.is_empty());
+        assert_eq!(transactions.len(), 1);
         assert_eq!(limit, LimitReached::MaxBytes);
-        drop(ack);
+        ack(block(2));
         assert_eq!(pool.queue_depth("user"), 1);
 
+        // System transactions are never limited.
         let _system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
-        assert_eq!(transactions.len(), 1);
+        assert!(transactions.len() >= 1);
         assert_eq!(pool.queue_depth("system"), 0);
-        assert_eq!(pool.queue_depth("user"), 1);
         drop(ack);
         pool.close();
     }
 
     #[sim_test]
     async fn dropped_ack_refunds_user_byte_budget() {
-        let serialized_len = bcs::to_bytes(&transaction()).unwrap().len();
-        let block_bytes = u64::try_from(serialized_len).unwrap();
-        let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+        let (_state, pool) = test_state_and_rate_limited_pool(1).await;
         let epoch = pool.epoch();
         let (_receiver, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
 
