@@ -52,7 +52,6 @@ mod test {
     use sui_simulator::{SimConfig, configs::*};
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
-    use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
     use sui_types::base_types::{
         AuthorityName, ConciseableName, ObjectID, SequenceNumber, SuiAddress,
     };
@@ -2169,10 +2168,7 @@ mod test {
     }
 
     fn is_accumulator_settlement_tx(kind: &TransactionKind) -> bool {
-        matches!(kind, TransactionKind::ProgrammableSystemTransaction(_))
-            && kind
-                .shared_input_objects()
-                .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        kind.is_accumulator_settle_tx()
     }
 
     #[sim_test(config = "test_config()")]

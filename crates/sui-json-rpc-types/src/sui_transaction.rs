@@ -426,6 +426,7 @@ pub enum SuiTransactionBlockKind {
     ConsensusCommitPrologueV4(SuiConsensusCommitPrologueV4),
 
     ProgrammableSystemTransaction(SuiProgrammableTransactionBlock),
+    AccumulatorSettlement(SuiAccumulatorSettlement),
     // .. more transaction types go here
 }
 
@@ -498,6 +499,11 @@ impl Display for SuiTransactionBlockKind {
             }
             Self::RandomnessStateUpdate(_) => {
                 writeln!(writer, "Transaction Kind: Randomness State Update")?;
+            }
+            Self::AccumulatorSettlement(s) => {
+                writeln!(writer, "Transaction Kind: Accumulator Settlement")?;
+                writeln!(writer, "Checkpoint height: {}", s.checkpoint_height)?;
+                writeln!(writer, "Barrier: {}", s.is_barrier)?;
             }
             Self::EndOfEpochTransaction(_) => {
                 writeln!(writer, "Transaction Kind: End of Epoch Transaction")?;
@@ -573,6 +579,13 @@ impl SuiTransactionBlockKind {
                     epoch: update.epoch,
                     randomness_round: update.randomness_round.0,
                     random_bytes: update.random_bytes,
+                })
+            }
+            TransactionKind::AccumulatorSettlement(settlement) => {
+                Self::AccumulatorSettlement(SuiAccumulatorSettlement {
+                    epoch: settlement.epoch(),
+                    checkpoint_height: settlement.checkpoint_height(),
+                    is_barrier: settlement.is_barrier(),
                 })
             }
             TransactionKind::EndOfEpochTransaction(end_of_epoch_tx) => {
@@ -699,6 +712,7 @@ impl SuiTransactionBlockKind {
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
+            Self::AccumulatorSettlement(_) => "AccumulatorSettlement",
         }
     }
 }
@@ -1785,6 +1799,18 @@ pub struct SuiRandomnessStateUpdate {
     #[serde_as(as = "BigInt<u64>")]
     pub randomness_round: u64,
     pub random_bytes: Vec<u8>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiAccumulatorSettlement {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub checkpoint_height: u64,
+    pub is_barrier: bool,
 }
 
 #[serde_as]
