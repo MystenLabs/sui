@@ -275,14 +275,6 @@ impl<'a, 'b> RootFieldWriter<'a, 'b> {
         let id = derive_dynamic_field_id(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key_type, &key_bytes)
             .map_err(|e| make_invariant_violation!("cannot derive field id: {e}"))?;
 
-        // Each field is updated at most once per settlement, so earlier writes never need to be
-        // read back.
-        if self.results.written_objects.contains_key(&id)
-            || self.results.deleted_object_ids.contains(&id)
-        {
-            invariant_violation!("accumulator {id} updated twice in one settlement")
-        }
-
         let object = self
             .temporary_store
             .read_child_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID, &id, self.root_version)

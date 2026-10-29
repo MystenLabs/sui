@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use itertools::Itertools;
 use move_core_types::ident_str;
 use move_core_types::u256::U256;
-use mysten_common::fatal;
+use mysten_common::{debug_fatal, fatal};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
@@ -552,8 +552,13 @@ impl AccumulatorSettlementTxBuilder {
     ) -> TransactionKind {
         let mut balance_groups = BTreeMap::<TypeTag, Vec<BalanceUpdate>>::new();
         let mut event_stream_updates = vec![];
+        let mut seen = HashSet::new();
 
         for (accumulator_obj, update) in updates {
+            // Execution reads each accumulator once and does not see its own earlier writes.
+            if !seen.insert(accumulator_obj) {
+                debug_fatal!("accumulator {accumulator_obj:?} appears twice in one settlement");
+            }
             let Update { merge, split, .. } = update;
             let address = addresses.get(&accumulator_obj).unwrap();
             MergedValue::add_native_update(
