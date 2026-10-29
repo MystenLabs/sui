@@ -2220,7 +2220,6 @@ struct UnaskedPeer {
 /// A finished request for one checkpoint's contents to one peer.
 struct ContentResponse {
     peer_id: PeerId,
-    kind: ContentRequestKind,
     elapsed: Duration,
     /// `None` if the request failed or timed out, or the peer had no contents.
     contents: Option<VersionedFullCheckpointContents>,
@@ -2459,7 +2458,6 @@ impl ContentFetch<'_> {
             };
             ContentResponse {
                 peer_id,
-                kind,
                 elapsed,
                 contents,
             }
@@ -2476,7 +2474,6 @@ impl ContentFetch<'_> {
             peer_id,
             elapsed,
             contents,
-            ..
         } = response;
         let peer_label = content_metrics_peer_label(self.network, peer_id);
         let Some(contents) = contents else {
@@ -2624,8 +2621,12 @@ impl ContentFetch<'_> {
             tokio::select! {
                 biased;
                 Some(response) = in_flight.next() => {
-                    let finished_request = in_flight_requests.remove(&response.peer_id);
-                    let (peer_id, kind, elapsed) = (response.peer_id, response.kind, response.elapsed);
+                    // Every request in flight is in `in_flight_requests`: each peer is asked at
+                    // most once per download, and a request is tracked from the moment it is sent.
+                    let finished = in_flight_requests
+                        .remove(&response.peer_id)
+                        .expect("every request in flight is tracked");
+                    let (peer_id, elapsed) = (response.peer_id, response.elapsed);
                     let Some((contents, size)) = self.record_response(response) else {
                         // The request still running, if any, is now the latest one: hedge it once
                         // it has run for its own hedge delay, which may already have passed.
@@ -2636,11 +2637,9 @@ impl ContentFetch<'_> {
                         }
                         continue;
                     };
-                    if kind == ContentRequestKind::Hedge {
+                    if finished.kind == ContentRequestKind::Hedge {
                         self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Won);
-                    } else if finished_request
-                        .is_none_or(|request| request.slow_peer.records_response_time())
-                    {
+                    } else if finished.slow_peer.records_response_time() {
                         self.peer_heights.write().unwrap().record_content_response_time(
                             peer_id,
                             ContentResponseTime::Answered(elapsed),
