@@ -14154,6 +14154,7 @@ dependencies = [
  "static_assertions",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "sui-adapter-latest",
  "sui-authority-aggregation",
  "sui-config",
  "sui-consistent-store",
