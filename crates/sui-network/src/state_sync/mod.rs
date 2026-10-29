@@ -2637,26 +2637,7 @@ impl ContentFetch<'_> {
                     // frontier, check again after a short poll interval, or when the retry
                     // interval ends if that is sooner.
                     let next_check = tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL;
-                    let wake =
-                        tokio::time::sleep_until(next_check.min(download_start + wait_interval));
-                    tokio::pin!(wake);
-                    // Keep watching which peers have the checkpoint until then.
-                    loop {
-                        tokio::select! {
-                            biased;
-                            () = wake.as_mut() => break,
-                            () = next_other_peer_check.as_mut(), if announcements.is_measuring() => {
-                                next_other_peer_check.as_mut().reset(
-                                    tokio::time::Instant::now() + CONTENT_CANDIDATE_POLL_INTERVAL,
-                                );
-                                announcements.observe(
-                                    &self.peers_with_checkpoint(),
-                                    self.network,
-                                    self.metrics,
-                                );
-                            }
-                        }
-                    }
+                    tokio::time::sleep_until(next_check.min(download_start + wait_interval)).await;
                     continue;
                 } else {
                     return None;
