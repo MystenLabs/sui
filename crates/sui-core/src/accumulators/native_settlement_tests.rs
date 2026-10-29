@@ -10,6 +10,7 @@
 use std::sync::Arc;
 
 use fastcrypto::ed25519::Ed25519KeyPair;
+use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
@@ -107,7 +108,7 @@ impl TestEnv {
             .await;
         assert_eq!(move_txns.len(), native_txns.len());
 
-        for ((move_tx, _), (native_tx, _)) in move_txns.iter().zip(&native_txns) {
+        for ((move_tx, _), (native_tx, _)) in move_txns.iter().zip_eq(&native_txns) {
             assert!(matches!(
                 move_tx.transaction_data().kind(),
                 TransactionKind::ProgrammableSystemTransaction(_)
@@ -174,7 +175,7 @@ impl TestEnv {
             native_changes.len(),
             "move: {move_changes:#?}\nnative: {native_changes:#?}"
         );
-        for (m, n) in move_changes.iter().zip(&native_changes) {
+        for (m, n) in move_changes.iter().zip_eq(&native_changes) {
             assert_eq!(m.id, n.id);
             assert_eq!(m.input_version, n.input_version);
             assert_eq!(m.output_version, n.output_version);

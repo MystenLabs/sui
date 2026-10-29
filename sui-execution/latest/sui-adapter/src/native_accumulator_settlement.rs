@@ -136,6 +136,9 @@ fn execute_barrier(
     temporary_store.record_native_settlement_results(results, loaded)
 }
 
+/// An existing field object and its deserialized contents.
+type LoadedField<K, V> = (Object, Field<K, V>);
+
 /// Reads and writes dynamic fields of the accumulator root, collecting the writes the same way
 /// the Move object runtime would.
 struct RootFieldWriter<'a, 'b> {
@@ -262,7 +265,7 @@ impl<'a, 'b> RootFieldWriter<'a, 'b> {
         &mut self,
         key_type: &TypeTag,
         key: &K,
-    ) -> Result<(ObjectID, Option<(Object, Field<K, V>)>), ExecutionError>
+    ) -> Result<(ObjectID, Option<LoadedField<K, V>>), ExecutionError>
     where
         K: Serialize + DeserializeOwned,
         V: DeserializeOwned,

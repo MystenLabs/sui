@@ -184,7 +184,9 @@ impl MergedValue {
                         });
                 }
             }
-            (_, MergedValue::SumU128U128(_v1, _v2), MergedValue::SumU128U128(_w1, _w2)) => todo!(),
+            (_, MergedValue::SumU128U128(..), MergedValue::SumU128U128(..)) => {
+                fatal!("SumU128U128 accumulators cannot be produced by execution")
+            }
             (_, MergedValue::EventDigest(digest, event_count), MergedValue::EventDigest(_, _)) => {
                 event_stream_updates.push(EventStreamUpdate {
                     stream_id: address.address,

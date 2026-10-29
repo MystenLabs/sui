@@ -430,6 +430,7 @@ const MAINNET_USDB: &str =
 //              prepared verifying key length does not match the number of public inputs.
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 //              Add the `object::is_shared_input_impl` native and its cost.
+//              Enable native accumulator settlement on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4971,6 +4972,9 @@ impl ProtocolConfig {
                     cfg.clock_borrow_cost_base = Some(52);
                     cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.object_is_shared_input_cost_base = Some(52);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.native_accumulator_settlement = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
