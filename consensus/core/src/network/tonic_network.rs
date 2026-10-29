@@ -216,56 +216,80 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         });
         request.set_timeout(timeout);
 
-        let mut stream = client
-            .fetch_blocks(request)
-            .await
-            .map_err(|e| {
-                if e.code() == tonic::Code::DeadlineExceeded {
-                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
-                } else {
-                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
-                }
-            })?
-            .into_inner();
-
+        // The grpc-timeout header only bounds the time until response headers arrive. The
+        // deadline below covers the whole stream, and blocks received before it expires are
+        // returned since each one is verified individually by the caller.
         let mut blocks = vec![];
-        let mut total_fetched_bytes = 0;
-        loop {
-            match stream.message().await {
-                Ok(Some(response)) => {
-                    for b in &response.blocks {
-                        total_fetched_bytes += b.len();
+        let fetch = async {
+            let mut stream = client
+                .fetch_blocks(request)
+                .await
+                .map_err(|e| {
+                    if e.code() == tonic::Code::DeadlineExceeded {
+                        ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
+                    } else {
+                        ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
                     }
-                    blocks.extend(response.blocks);
-                    if total_fetched_bytes > max_allowed_bytes {
-                        info!(
-                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
-                            total_fetched_bytes, max_allowed_bytes,
-                        );
+                })?
+                .into_inner();
+            let mut total_fetched_bytes = 0;
+            loop {
+                match stream.message().await {
+                    Ok(Some(response)) => {
+                        for b in &response.blocks {
+                            total_fetched_bytes += b.len();
+                        }
+                        blocks.extend(response.blocks);
+                        if total_fetched_bytes > max_allowed_bytes {
+                            info!(
+                                "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
+                                total_fetched_bytes, max_allowed_bytes,
+                            );
+                            break;
+                        }
+                    }
+                    Ok(None) => {
                         break;
                     }
-                }
-                Ok(None) => {
-                    break;
-                }
-                Err(e) => {
-                    if blocks.is_empty() {
-                        if e.code() == tonic::Code::DeadlineExceeded {
-                            return Err(ConsensusError::NetworkRequestTimeout(format!(
+                    Err(e) => {
+                        if blocks.is_empty() {
+                            if e.code() == tonic::Code::DeadlineExceeded {
+                                return Err(ConsensusError::NetworkRequestTimeout(format!(
+                                    "fetch_blocks failed mid-stream: {e:?}"
+                                )));
+                            }
+                            return Err(ConsensusError::NetworkRequest(format!(
                                 "fetch_blocks failed mid-stream: {e:?}"
                             )));
+                        } else {
+                            warn!("fetch_blocks failed mid-stream: {e:?}");
+                            break;
                         }
-                        return Err(ConsensusError::NetworkRequest(format!(
-                            "fetch_blocks failed mid-stream: {e:?}"
-                        )));
-                    } else {
-                        warn!("fetch_blocks failed mid-stream: {e:?}");
-                        break;
                     }
                 }
             }
+            Ok(())
+        };
+        let result = tokio::time::timeout(timeout, fetch).await;
+        match result {
+            Ok(Ok(())) => Ok(blocks),
+            Ok(Err(e)) => Err(e),
+            Err(_) => {
+                if blocks.is_empty() {
+                    return Err(ConsensusError::NetworkRequestTimeout(format!(
+                        "fetch_blocks from {} timed out after {:?}",
+                        peer, timeout
+                    )));
+                }
+                warn!(
+                    "fetch_blocks from {} timed out after {:?}, returning {} blocks received so far",
+                    peer,
+                    timeout,
+                    blocks.len()
+                );
+                Ok(blocks)
+            }
         }
-        Ok(blocks)
     }
 
     async fn fetch_commits(

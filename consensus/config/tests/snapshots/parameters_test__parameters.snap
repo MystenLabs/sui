@@ -26,6 +26,17 @@ commit_sync_batches_ahead: 32
 commit_sync_request_timeout:
   secs: 10
   nanos: 0
+commit_sync_chunk_bytes: 16777216
+commit_sync_range_bytes: 134217728
+commit_sync_inflight_bytes: 1073741824
+commit_sync_chunk_parallelism: 3
+commit_sync_max_chunk_parallelism: 16
+commit_sync_target_bytes_per_second: 268435456
+commit_sync_min_fetch_bytes_per_second: 2097152
+commit_sync_chunk_base_timeout:
+  secs: 5
+  nanos: 0
+commit_sync_ingress_bytes_per_second: ~
 commit_sync_probe_timeout:
   secs: 2
   nanos: 0

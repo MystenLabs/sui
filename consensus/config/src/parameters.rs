@@ -95,10 +95,56 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
     pub commit_sync_batches_ahead: usize,
 
-    // Base per-request timeout for commit sync fetches. The actual timeout grows progressively
-    // with a multiplier to allow larger commit batches to finish downloading.
+    // Timeout for fetching commits and their certifying blocks in commit sync. Block fetch
+    // requests derive their own deadlines from commit_sync_chunk_base_timeout and
+    // commit_sync_min_fetch_bytes_per_second.
     #[serde(default = "Parameters::default_commit_sync_request_timeout")]
     pub commit_sync_request_timeout: Duration,
+
+    // Target serialized bytes of blocks per block fetch request in commit sync. The number of
+    // blocks per request is derived from this and a running estimate of block size, and capped
+    // by max_blocks_per_fetch.
+    #[serde(default = "Parameters::default_commit_sync_chunk_bytes")]
+    pub commit_sync_chunk_bytes: usize,
+
+    // Target serialized bytes of blocks per commit range in commit sync. Ranges are shortened
+    // below commit_sync_batch_size when the estimated block bytes of a full batch exceed this.
+    #[serde(default = "Parameters::default_commit_sync_range_bytes")]
+    pub commit_sync_range_bytes: usize,
+
+    // Bound on the estimated block bytes across inflight commit range fetches and fetched ranges
+    // not yet sent to Core. At least one fetch is always allowed.
+    #[serde(default = "Parameters::default_commit_sync_inflight_bytes")]
+    pub commit_sync_inflight_bytes: usize,
+
+    // Minimum number of block fetch requests in flight per commit range. Parallelism is raised
+    // toward commit_sync_max_chunk_parallelism when the measured throughput per request stream
+    // is too low to reach commit_sync_target_bytes_per_second across the active ranges.
+    #[serde(default = "Parameters::default_commit_sync_chunk_parallelism")]
+    pub commit_sync_chunk_parallelism: usize,
+
+    // Maximum number of block fetch requests in flight per commit range.
+    #[serde(default = "Parameters::default_commit_sync_max_chunk_parallelism")]
+    pub commit_sync_max_chunk_parallelism: usize,
+
+    // Aggregate block fetch throughput a lagging node aims for across its inflight ranges, used to
+    // choose how many request streams to keep open given the measured throughput per stream.
+    #[serde(default = "Parameters::default_commit_sync_target_bytes_per_second")]
+    pub commit_sync_target_bytes_per_second: u64,
+
+    // Throughput floor used to derive block fetch request deadlines from their expected bytes.
+    #[serde(default = "Parameters::default_commit_sync_min_fetch_bytes_per_second")]
+    pub commit_sync_min_fetch_bytes_per_second: u64,
+
+    // Fixed part of a block fetch request deadline, added to expected bytes divided by
+    // commit_sync_min_fetch_bytes_per_second.
+    #[serde(default = "Parameters::default_commit_sync_chunk_base_timeout")]
+    pub commit_sync_chunk_base_timeout: Duration,
+
+    // Cap on bytes per second requested by commit sync block fetches, as a token bucket over the
+    // expected bytes of each request. None disables pacing.
+    #[serde(default)]
+    pub commit_sync_ingress_bytes_per_second: Option<u64>,
 
     // Timeout for the connectivity probe against a peer before committing to a full fetch.
     // Should be short to quickly skip unreachable peers.
@@ -217,6 +263,52 @@ impl Parameters {
         Duration::from_secs(2)
     }
 
+    pub(crate) fn default_commit_sync_chunk_bytes() -> usize {
+        if cfg!(msim) {
+            // Exercise chunking by block size.
+            16 << 10
+        } else {
+            16 << 20
+        }
+    }
+
+    pub(crate) fn default_commit_sync_range_bytes() -> usize {
+        if cfg!(msim) {
+            // Exercise shortening commit ranges by block size.
+            32 << 10
+        } else {
+            128 << 20
+        }
+    }
+
+    pub(crate) fn default_commit_sync_inflight_bytes() -> usize {
+        if cfg!(msim) { 1 << 20 } else { 1 << 30 }
+    }
+
+    pub(crate) fn default_commit_sync_chunk_parallelism() -> usize {
+        3
+    }
+
+    pub(crate) fn default_commit_sync_max_chunk_parallelism() -> usize {
+        if cfg!(msim) { 4 } else { 16 }
+    }
+
+    pub(crate) fn default_commit_sync_target_bytes_per_second() -> u64 {
+        if cfg!(msim) { 1 << 20 } else { 256 << 20 }
+    }
+
+    pub(crate) fn default_commit_sync_min_fetch_bytes_per_second() -> u64 {
+        2 << 20
+    }
+
+    pub(crate) fn default_commit_sync_chunk_base_timeout() -> Duration {
+        if cfg!(msim) {
+            Duration::from_secs(2)
+        } else {
+            Duration::from_secs(5)
+        }
+    }
+
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
         // This is set to be a multiple of default commit_sync_parallel_fetches to allow fetching ahead,
         // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
@@ -245,6 +337,18 @@ impl Default for Parameters {
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             commit_sync_request_timeout: Parameters::default_commit_sync_request_timeout(),
             commit_sync_probe_timeout: Parameters::default_commit_sync_probe_timeout(),
+            commit_sync_chunk_bytes: Parameters::default_commit_sync_chunk_bytes(),
+            commit_sync_range_bytes: Parameters::default_commit_sync_range_bytes(),
+            commit_sync_inflight_bytes: Parameters::default_commit_sync_inflight_bytes(),
+            commit_sync_chunk_parallelism: Parameters::default_commit_sync_chunk_parallelism(),
+            commit_sync_min_fetch_bytes_per_second:
+                Parameters::default_commit_sync_min_fetch_bytes_per_second(),
+            commit_sync_chunk_base_timeout: Parameters::default_commit_sync_chunk_base_timeout(),
+            commit_sync_max_chunk_parallelism:
+                Parameters::default_commit_sync_max_chunk_parallelism(),
+            commit_sync_target_bytes_per_second:
+                Parameters::default_commit_sync_target_bytes_per_second(),
+            commit_sync_ingress_bytes_per_second: None,
             tonic: TonicParameters::default(),
             observer: ObserverParameters::default(),
             internal: InternalParameters::default(),
