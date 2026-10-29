@@ -37,11 +37,16 @@ pub fn format_human_summary<'a, M, F, W: Write>(
         total_instructions += total;
     }
 
+    let coverage_percentage = if total_instructions == 0 {
+        0.0
+    } else {
+        (total_covered as f64 / total_instructions as f64) * 100f64
+    };
     writeln!(summary_writer, "+-------------------------+").unwrap();
     writeln!(
         summary_writer,
         "| % Move Coverage: {:.2}  |",
-        (total_covered as f64 / total_instructions as f64) * 100f64
+        coverage_percentage
     )
     .unwrap();
     writeln!(summary_writer, "+-------------------------+").unwrap();
