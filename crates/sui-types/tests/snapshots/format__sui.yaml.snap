@@ -13,12 +13,59 @@ AccumulatorAddress:
         TYPENAME: SuiAddress
     - ty:
         TYPENAME: TypeTag
+AccumulatorBarrierV1:
+  STRUCT:
+    - epoch: U64
+    - checkpoint_height: U64
+    - num_settlements: U64
+    - objects_created: U64
+    - objects_destroyed: U64
+    - accumulator_root_initial_shared_version:
+        TYPENAME: SequenceNumber
 AccumulatorOperation:
   ENUM:
     0:
       Merge: UNIT
     1:
       Split: UNIT
+AccumulatorSettlementTransaction:
+  ENUM:
+    0:
+      SettlementV1:
+        NEWTYPE:
+          TYPENAME: AccumulatorSettlementV1
+    1:
+      BarrierV1:
+        NEWTYPE:
+          TYPENAME: AccumulatorBarrierV1
+AccumulatorSettlementV1:
+  STRUCT:
+    - epoch: U64
+    - checkpoint_height: U64
+    - idx: U64
+    - checkpoint_seq: U64
+    - input_sui: U64
+    - output_sui: U64
+    - accumulator_root_initial_shared_version:
+        TYPENAME: SequenceNumber
+    - updates:
+        SEQ:
+          TYPENAME: AccumulatorUpdateGroup
+AccumulatorUpdateGroup:
+  ENUM:
+    0:
+      Balance:
+        STRUCT:
+          - coin_type:
+              TYPENAME: TypeTag
+          - updates:
+              SEQ:
+                TYPENAME: BalanceUpdate
+    1:
+      EventStream:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EventStreamUpdate
 AccumulatorValue:
   ENUM:
     0:
@@ -98,6 +145,13 @@ AuthorityQuorumSignInfo:
           CONTENT: U8
           SIZE: 48
     - signers_map: BYTES
+BalanceUpdate:
+  STRUCT:
+    - owner:
+        TYPENAME: SuiAddress
+    - operation:
+        TYPENAME: AccumulatorOperation
+    - amount: U128
 CallArg:
   ENUM:
     0:
@@ -529,6 +583,13 @@ Event:
     - type_:
         TYPENAME: StructTag
     - contents: BYTES
+EventStreamUpdate:
+  STRUCT:
+    - stream_id:
+        TYPENAME: SuiAddress
+    - merkle_root:
+        TYPENAME: Digest
+    - event_count: U64
 ExecutionData:
   STRUCT:
     - transaction:
@@ -1388,6 +1449,10 @@ TransactionKind:
       ProgrammableSystemTransaction:
         NEWTYPE:
           TYPENAME: ProgrammableTransaction
+    11:
+      AccumulatorSettlement:
+        NEWTYPE:
+          TYPENAME: AccumulatorSettlementTransaction
 TypeArgumentError:
   ENUM:
     0:
