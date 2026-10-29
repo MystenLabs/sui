@@ -37,7 +37,7 @@ Impacts only apply to assets in active use by Sui.
 ## Impacts in Scope
 
 
-The following impacts are accepted within this bug bounty program--refer to [Sui's HackenProof Bug Bounty Program Page](https://hackenproof.com/sui/sui/) for an official and up-to-date listing.
+The following impacts are accepted within this bug bounty program--refer to [Sui's HackenProof Bug Bounty Program Page](https://hackenproof.com/programs/sui-protocol) for an official and up-to-date listing.
 All other impacts are considered out-of-scope and ineligible for payout.
 
 
@@ -133,7 +133,7 @@ The following vulnerabilities are excluded from the bug bounty program:
 
 # Eligibility
 
--   Participants must use the [HackenProof dashboard](https://hackenproof.com/sui/sui) to report bugs or vulnerabilities. Reports made via email, Discord, or Twitter will not be eligible for bounties.
+-   Participants must use the [HackenProof dashboard](https://hackenproof.com/programs/sui-protocol) to report bugs or vulnerabilities. Reports made via email, Discord, or Twitter will not be eligible for bounties.
 -   Bug reports that are disclosed publicly are not eligible for bounties.
 -   If multiple reports are submitted for the same class of exploit, the first submission is eligible for the bounty.
 -   Participants must complete KYC prior to distribution of a bounty.
@@ -158,11 +158,11 @@ There is no tolerance for spam/low-quality/incomplete bug reports, “beg bounty
 
 **Where can I find more information on the bug bounty program?**
 
-_All of the program details along with a link to the dashboard to report a bug are available on [HackenProof’s bounty program page for Sui](https://hackenproof.com/sui/sui/)._
+_All of the program details along with a link to the dashboard to report a bug are available on [HackenProof’s bounty program page for Sui](https://hackenproof.com/programs/sui-protocol)._
 
 **How do I join the program?**
 
-_If you find a bug or vulnerability, report it using the [HackenProof dashboard](https://hackenproof.com/sui/sui). You should receive an acknowledgement of your report within 48 hours for critical vulnerabilities and 96 hours for all other vulnerabilities._
+_If you find a bug or vulnerability, report it using the [HackenProof dashboard](https://hackenproof.com/programs/sui-protocol). You should receive an acknowledgement of your report within 48 hours for critical vulnerabilities and 96 hours for all other vulnerabilities._
 
 **Where can I get technical questions answered?**
 
