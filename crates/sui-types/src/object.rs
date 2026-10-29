@@ -401,6 +401,9 @@ impl MoveObject {
                 "SUI balance cannot exceed u64::MAX"
             );
             Ok(v.value as u64)
+        } else if self.type_.is_balance_accumulator_field() {
+            // A balance accumulator for a coin other than SUI.
+            Ok(0)
         } else {
             let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
 
