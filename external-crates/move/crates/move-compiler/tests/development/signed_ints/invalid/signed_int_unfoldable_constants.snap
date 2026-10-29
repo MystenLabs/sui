@@ -1,0 +1,134 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[EC08001]: cannot compute constant value
+  ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:6:22
+  │
+6 │     const DIV0: i8 = 1i8 / 0i8;
+  │                      ^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+  ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:7:23
+  │
+7 │     const DIV1: i64 = 1i64 / 0i64;
+  │                       ^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+  ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:8:24
+  │
+8 │     const DIV2: i256 = 1i256 / 0i256;
+  │                        ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+  ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:9:22
+  │
+9 │     const MOD0: i8 = 1i8 % 0i8;
+  │                      ^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:10:23
+   │
+10 │     const MOD1: i64 = 1i64 % 0i64;
+   │                       ^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:11:24
+   │
+11 │     const MOD2: i256 = 1i256 % 0i256;
+   │                        ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:14:25
+   │
+14 │     const DIVMIN0: i8 = -128i8 / -1i8;
+   │                         ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:15:26
+   │
+15 │     const DIVMIN1: i64 = -9223372036854775808i64 / -1i64;
+   │                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:17:9
+   │  
+17 │ ╭         -57896044618658097711785492504343953926634992332820282019728792003956564819968i256
+18 │ │             / -1i256;
+   │ ╰────────────────────^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:19:25
+   │
+19 │     const MODMIN0: i8 = -128i8 % -1i8;
+   │                         ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:20:26
+   │
+20 │     const MODMIN1: i64 = -9223372036854775808i64 % -1i64;
+   │                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:22:9
+   │  
+22 │ ╭         -57896044618658097711785492504343953926634992332820282019728792003956564819968i256
+23 │ │             % -1i256;
+   │ ╰────────────────────^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:26:22
+   │
+26 │     const ADD0: i8 = 127i8 + 1i8;
+   │                      ^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:27:22
+   │
+27 │     const SUB0: i8 = -128i8 - 1i8;
+   │                      ^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:28:22
+   │
+28 │     const MUL0: i8 = 64i8 * 2i8;
+   │                      ^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:31:22
+   │
+31 │     const NEG0: i8 = -(-128i8);
+   │                      ^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:35:22
+   │
+35 │     const SHL0: i8 = 1i8 << 7u8;
+   │                      ^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:37:22
+   │
+37 │     const SHL1: i8 = 1i8 << 8u8;
+   │                      ^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:38:22
+   │
+38 │     const SHR0: i8 = 1i8 >> 8u8;
+   │                      ^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:41:24
+   │
+41 │     const CAST0: i8 = (128i64 as i8);
+   │                        ^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[EC08001]: cannot compute constant value
+   ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:42:24
+   │
+42 │     const CAST1: i8 = (-129i64 as i8);
+   │                        ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
