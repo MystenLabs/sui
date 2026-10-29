@@ -2193,6 +2193,7 @@ mod test {
         let address_aliases_enabled = protocol_config.address_aliases();
         let auth_events_enabled = protocol_config.enable_authenticated_event_streams();
         let allowances_enabled = protocol_config.enable_allowances();
+        let allowed_proposers_enabled = protocol_config.allowed_proposers();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -2222,6 +2223,7 @@ mod test {
             sponsored_probability: 0.15,
             deny_probability: 0.2,
             multisig_probability: 0.2,
+            allowed_proposers_probability: 0.2,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -2311,6 +2313,23 @@ mod test {
             "cancellation_count too low: {}",
             metrics_sum.cancellation_count
         );
+
+        if allowed_proposers_enabled {
+            let mut restricted_successes = 0u64;
+            for (op_set, stats) in metrics.iter_stats() {
+                if op_set.contains(ALLOWED_PROPOSERS_TX) {
+                    restricted_successes += stats.success_count;
+                }
+            }
+            info!(
+                "proposer-restricted transaction successes: {}",
+                restricted_successes
+            );
+            assert!(
+                restricted_successes > 0,
+                "expected at least one proposer-restricted transaction to commit"
+            );
+        }
 
         if address_aliases_enabled {
             let alias_add_stats = metrics

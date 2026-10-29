@@ -14,18 +14,18 @@ use derive_more::Add;
 use mysten_common::random::get_rng;
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
-    ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
-    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
-    AllowanceWithdraw, AuthenticatedEventEmit, COIN_MERGE, CoinReservationWithdraw,
-    GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, MULTISIG_TX, OWNED_CREATE,
-    OWNED_DELETE, OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF,
-    PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
-    PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
-    RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
-    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSORED_TX, SharedCounterIncrement,
-    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
-    TestCoinObjectWithdraw,
+    ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, ALLOWED_PROPOSERS_TX,
+    AccumulatorBalanceRead, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
+    AllowanceSelfWithdraw, AllowanceWithdraw, AuthenticatedEventEmit, COIN_MERGE,
+    CoinReservationWithdraw, GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, MULTISIG_TX,
+    OWNED_CREATE, OWNED_DELETE, OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw,
+    ObjectBalanceWithdraw, OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM,
+    PARTY_HAND_OFF, PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE,
+    PARTY_RESTART_STREAM, PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD,
+    RECEIVE_CREATE_PARENT, RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE,
+    SHARED_DELETE_INCREMENT, SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSORED_TX,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -125,6 +125,12 @@ fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bo
 fn gasless_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
         .map(|cfg| !cfg.enable_gasless())
+        .unwrap_or(false)
+}
+
+fn allowed_proposers_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.allowed_proposers())
         .unwrap_or(false)
 }
 
@@ -386,6 +392,8 @@ pub struct CompositeWorkloadConfig {
     /// Per-batch probability of adding a tx from the payload's multisig account. Zero
     /// disables multisig accounts.
     pub multisig_probability: f32,
+    /// Per-tx probability that a composite or gasless tx restricts its allowed proposers.
+    pub allowed_proposers_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -422,6 +430,7 @@ impl CompositeWorkloadConfig {
             sponsored_probability: 0.05,
             deny_probability: 0.05,
             multisig_probability: 0.1,
+            allowed_proposers_probability: 0.2,
             ..Default::default()
         }
     }
@@ -513,6 +522,7 @@ impl Default for CompositeWorkloadConfig {
             sponsored_probability: 0.0,
             deny_probability: 0.0,
             multisig_probability: 0.0,
+            allowed_proposers_probability: 0.0,
             metrics: None,
         }
     }
@@ -533,6 +543,7 @@ pub struct OperationPool {
     pub test_coin_type: Option<TypeTag>,
     pub chain_identifier: sui_types::digests::ChainIdentifier,
     pub immutable_object: Option<ObjectRef>,
+    pub committee_size: Option<usize>,
 }
 
 impl OperationPool {
@@ -795,6 +806,28 @@ impl CompositePayload {
         }
     }
 
+    fn sample_restrict_proposers(&self) -> bool {
+        self.pool.committee_size.is_some()
+            && !allowed_proposers_disabled(
+                self.system_state_observer
+                    .state
+                    .borrow()
+                    .protocol_config
+                    .as_ref(),
+            )
+            && get_rng().gen_bool(self.config.allowed_proposers_probability as f64)
+    }
+
+    fn restrict_proposers(&self, data: &mut TransactionData, current_epoch: u64) {
+        operations::restrict_proposers(
+            data,
+            self.pool.committee_size.unwrap(),
+            current_epoch,
+            self.pool.chain_identifier,
+            self.nonce_counter.fetch_add(1, Ordering::Relaxed),
+        );
+    }
+
     /// Samples the ops for one tx. If the tx carries a lifecycle call, isolated ops are
     /// dropped and the result may be empty.
     fn sample_operations(&self, with_lifecycle_call: bool) -> Vec<Box<dyn Operation>> {
@@ -866,6 +899,10 @@ impl CompositePayload {
         if let Some(op) = sponsor.as_ref().and_then(|sponsor| sponsor.op) {
             op_set = op_set.with(op);
         }
+        let restrict = self.sample_restrict_proposers();
+        if restrict {
+            op_set = op_set.with(ALLOWED_PROPOSERS_TX);
+        }
         self.metrics
             .lock()
             .unwrap()
@@ -898,11 +935,13 @@ impl CompositePayload {
             }
         }
 
-        let tx_builder = tx_builder.ensure_unique();
+        let mut data = tx_builder.ensure_unique().build();
+        if restrict {
+            self.restrict_proposers(&mut data, current_epoch);
+        }
         let tx = match sponsor {
-            None => tx_builder.build_and_sign(keypair),
+            None => Transaction::from_data_and_signer(data, vec![keypair]),
             Some(sponsor) => {
-                let mut data = tx_builder.build();
                 data.gas_data_mut().owner = sponsor.address;
                 Transaction::from_data_and_signer(data, vec![keypair, sponsor.keypair.as_ref()])
             }
@@ -1131,7 +1170,7 @@ impl CompositePayload {
             vec![balance, recipient],
         );
         let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
-        let data = TransactionData::new_programmable_with_address_balance_gas(
+        let mut data = TransactionData::new_programmable_with_address_balance_gas(
             sender,
             builder.finish(),
             0,
@@ -1140,7 +1179,11 @@ impl CompositePayload {
             current_epoch,
             nonce,
         );
-        let op_set = OperationSet::new().with(GASLESS_TRANSFER);
+        let mut op_set = OperationSet::new().with(GASLESS_TRANSFER);
+        if self.sample_restrict_proposers() {
+            self.restrict_proposers(&mut data, current_epoch);
+            op_set = op_set.with(ALLOWED_PROPOSERS_TX);
+        }
         self.metrics
             .lock()
             .unwrap()
@@ -2750,6 +2793,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
             test_coin_type,
             chain_identifier: self.chain_identifier.unwrap(),
             immutable_object: self.immutable_object,
+            committee_size: fullnode_proxies
+                .first()
+                .map(|proxy| proxy.clone_committee().num_members()),
         });
 
         let config = Arc::new(self.config.clone());
