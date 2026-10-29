@@ -158,8 +158,8 @@ impl MergedValue {
 }
 
 impl MergedValue {
-    /// Adds the native form of this update to `groups`, keyed by accumulator type. Mirrors
-    /// `add_move_call`.
+    /// Adds the native form of this update to `balance_groups`, keyed by coin type, or to
+    /// `event_stream_updates`. Mirrors `add_move_call`.
     fn add_native_update(
         merge: Self,
         split: Self,
@@ -174,14 +174,17 @@ impl MergedValue {
                 MergedValue::SumU128(split_amount),
             ) => {
                 if let Some((operation, amount)) = net_amount(merge_amount, split_amount) {
-                    balance_groups
-                        .entry(coin_type.clone())
-                        .or_default()
-                        .push(BalanceUpdate {
-                            owner: address.address,
-                            operation,
-                            amount,
-                        });
+                    let update = BalanceUpdate {
+                        owner: address.address,
+                        operation,
+                        amount,
+                    };
+                    match balance_groups.get_mut(coin_type) {
+                        Some(group) => group.push(update),
+                        None => {
+                            balance_groups.insert(coin_type.clone(), vec![update]);
+                        }
+                    }
                 }
             }
             (_, MergedValue::SumU128U128(..), MergedValue::SumU128U128(..)) => {
@@ -415,31 +418,22 @@ impl AccumulatorSettlementTxBuilder {
                         (acc_input + update.input_sui, acc_output + update.output_sui)
                     });
 
-            if protocol_config.native_accumulator_settlement() {
-                Self::build_one_native_settlement_txn(
-                    &addresses,
-                    epoch,
-                    idx,
-                    checkpoint_height,
-                    accumulator_root_obj_initial_shared_version,
-                    updates.drain(..),
-                    total_input_sui,
-                    total_output_sui,
-                    checkpoint_seq,
-                )
+            let build = if protocol_config.native_accumulator_settlement() {
+                Self::build_one_native_settlement_txn
             } else {
-                Self::build_one_settlement_txn(
-                    &addresses,
-                    epoch,
-                    idx,
-                    checkpoint_height,
-                    accumulator_root_obj_initial_shared_version,
-                    updates.drain(..),
-                    total_input_sui,
-                    total_output_sui,
-                    checkpoint_seq,
-                )
-            }
+                Self::build_one_settlement_txn
+            };
+            build(
+                &addresses,
+                epoch,
+                idx,
+                checkpoint_height,
+                accumulator_root_obj_initial_shared_version,
+                updates.drain(..),
+                total_input_sui,
+                total_output_sui,
+                checkpoint_seq,
+            )
         };
 
         let chunk_size = protocol_config

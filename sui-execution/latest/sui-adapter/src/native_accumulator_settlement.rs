@@ -69,8 +69,7 @@ fn execute_settlement(
     for group in updates {
         match group {
             AccumulatorUpdateGroup::Balance { coin_type, updates } => {
-                let key_type =
-                    AccumulatorKey::get_type_tag(&[Balance::type_tag(coin_type.clone())]);
+                let key_type = AccumulatorKey::get_type_tag(&[Balance::type_tag(coin_type)]);
                 for update in updates {
                     writer.settle_balance(&key_type, update)?;
                 }
