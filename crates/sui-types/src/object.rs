@@ -402,7 +402,9 @@ impl MoveObject {
             );
             Ok(v.value as u64)
         } else if self.type_.is_balance_accumulator_field() {
-            // A balance accumulator for a coin other than SUI.
+            // A balance accumulator for a coin other than SUI. Settlement transactions do not take
+            // coin packages as inputs, so the conservation check must never resolve a layout for
+            // the fields they write.
             Ok(0)
         } else {
             let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
