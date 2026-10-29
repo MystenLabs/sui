@@ -22,20 +22,19 @@ The Rust executor must produce the same on-chain objects as the Move code:
 
 ## 2. Transaction format
 
-The payload types live in `crates/sui-types/src/accumulator_settlement.rs`. They are added to
-`TransactionKind` as two variants:
-
-```rust
-AccumulatorSettlementV1(AccumulatorSettlementV1),
-AccumulatorBarrierV1(AccumulatorBarrierV1),
-```
+The payload types live in `crates/sui-types/src/accumulator_settlement.rs`. `TransactionKind`
+gets one variant, `AccumulatorSettlement(AccumulatorSettlementTransaction)`. The enum inside it
+has `SettlementV1` and `BarrierV1` variants.
 
 - Updates are grouped by type, so each `TypeTag` appears once per settlement.
 - Within a group, an update is `{ owner, operation, amount }`.
 - Event streams have their own group variant.
 - The executor derives the dynamic-field ID from `(owner, type)`.
+- The barrier carries the object-count changes.
 
-The barrier is a separate variant. It carries the object-count changes.
+The protocol flag `native_accumulator_settlement` selects the form inside
+`AccumulatorSettlementTxBuilder::build_tx` and `build_accumulator_barrier_tx`. The settlement
+scheduler only passes the protocol config through.
 
 ## 3. Execution semantics
 
@@ -176,11 +175,19 @@ This work adds:
 - [x] Audit current settlement path
 - [x] Resolve open questions
 - [x] Payload type definitions
-- [ ] sui-types: variant, payload, match arms, recognition helpers, format snapshot
-- [ ] protocol flag
-- [ ] TemporaryStore child create/mutate/delete primitives
-- [ ] Rust executor (balance updates, event streams, barrier object count, conservation totals)
-- [ ] Builder emits new kind under flag
-- [ ] Downstream match arms (RPC, JSON-RPC, GraphQL, indexers, replay)
-- [ ] Parity tests (Move vs Rust), e2e, simtests
+- [x] sui-types: variant, match arms, recognition helpers, format snapshot
+- [x] Protocol flag (not enabled)
+- [x] Rust executor (`sui-adapter-latest/src/native_accumulator_settlement.rs`)
+  - Unchanged children are not rewritten, matching the Move runtime's fingerprint check. This
+    matters for a barrier whose net object change is zero.
+- [x] Builder emits the new kind under the flag
+- [x] Downstream match arms (RPC, JSON-RPC, GraphQL, indexers, replay)
+- [x] Parity test: `accumulators/native_settlement_tests.rs` (balances only)
+- [ ] e2e and simtests with the flag on (event streams are covered only here)
 - [ ] PR 1
+
+Follow-ups before PR 2 (enabling the flag):
+- sui-rust-sdk: add the variant to `sui-sdk-types` and the `sui-rpc` proto kind. The BCS
+  round-trip in `sui_sdk_types_conversions` fails for the new variant until then.
+- GraphQL: add a type for the new kind. It currently maps to `None`.
+- TypeScript SDK and indexers: decode the new variant.
