@@ -285,18 +285,12 @@ impl PeerScore {
     /// probes are left out too (see [`SlowPeerRequest::records_response_time`]).
     /// A request that was not a hedge and is cancelled after its peer's slow-response threshold
     /// was slow. One cancelled sooner, for example by a hedge to a closer peer, might still have
-    /// answered in time, so `slow_peer_hedge_delay` counts it neither way. With
-    /// `drop_uncountable`, such a sample is dropped when the peer already has a slow-response
-    /// threshold, so that it doesn't take the place of a sample that counts; without a threshold
-    /// yet, it is kept, because the threshold it is compared against is only known once the peer
-    /// answers.
-    pub(super) fn record_content_response_time(
-        &mut self,
-        response_time: ContentResponseTime,
-        drop_uncountable: bool,
-    ) {
-        if drop_uncountable
-            && let ContentResponseTime::LongerThan(elapsed) = response_time
+    /// answered in time, so `slow_peer_hedge_delay` counts it neither way. Such a sample is
+    /// dropped when the peer already has a slow-response threshold, so that it doesn't take the
+    /// place of a sample that counts; without a threshold yet, it is kept, because the threshold
+    /// it is compared against is only known once the peer answers.
+    pub(super) fn record_content_response_time(&mut self, response_time: ContentResponseTime) {
+        if let ContentResponseTime::LongerThan(elapsed) = response_time
             && self
                 .slow_response_threshold()
                 .is_some_and(|threshold| elapsed < threshold)
@@ -361,8 +355,8 @@ impl PeerScore {
                     slow += 1;
                 }
                 // Cancelled before the threshold: whether the response would have been slow is
-                // unknown. Near the release frontier, such samples are only stored while the
-                // peer has no threshold yet, or under an earlier, lower threshold.
+                // unknown. Such samples are only stored while the peer has no threshold yet, or
+                // under an earlier, lower threshold.
                 ContentResponseTime::LongerThan(_) => {}
             }
         }
@@ -679,7 +673,6 @@ impl PeerHeights {
         &mut self,
         peer_id: PeerId,
         response_time: ContentResponseTime,
-        drop_uncountable: bool,
     ) {
         if !self.peers.contains_key(&peer_id) {
             return;
@@ -687,7 +680,7 @@ impl PeerHeights {
         self.scores
             .entry(peer_id)
             .or_insert_with(|| PeerScore::new(self.peer_scoring_window, self.peer_failure_rate))
-            .record_content_response_time(response_time, drop_uncountable);
+            .record_content_response_time(response_time);
     }
 
     /// If `peer_id` is slow from this node, the delay after which a contents request to it
@@ -2643,7 +2636,6 @@ impl ContentFetch<'_> {
                         self.peer_heights.write().unwrap().record_content_response_time(
                             peer_id,
                             ContentResponseTime::Answered(elapsed),
-                            false,
                         );
                     }
                     // Dropping `in_flight` on return cancels the requests that lost.
@@ -2662,7 +2654,6 @@ impl ContentFetch<'_> {
                             peer_heights.record_content_response_time(
                                 peer_id,
                                 ContentResponseTime::LongerThan(cancelled_after),
-                                near_frontier,
                             );
                         }
                     }

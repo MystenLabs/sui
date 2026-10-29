@@ -1823,10 +1823,10 @@ impl HedgeTestClient {
 
         let mut peer_heights = self.peer_heights.write().unwrap();
         for _ in 0..3 {
-            peer_heights.record_content_response_time(peer_id, Answered(fastest), false);
+            peer_heights.record_content_response_time(peer_id, Answered(fastest));
         }
         for _ in 0..7 {
-            peer_heights.record_content_response_time(peer_id, LongerThan(fastest * 25), false);
+            peer_heights.record_content_response_time(peer_id, LongerThan(fastest * 25));
         }
         assert!(peer_heights.slow_peer_hedge_delay(&peer_id).is_some());
     }
@@ -1838,7 +1838,7 @@ impl HedgeTestClient {
 
         let mut peer_heights = self.peer_heights.write().unwrap();
         for _ in 0..10 {
-            peer_heights.record_content_response_time(peer_id, Answered(elapsed), false);
+            peer_heights.record_content_response_time(peer_id, Answered(elapsed));
         }
     }
 
@@ -2747,62 +2747,83 @@ fn test_peer_score_slow_peer_hedge_delay() {
     // The fastest response is 100 ms, so responses over 125 ms are slow. 3 of 9 are slow, but 9
     // samples are too few to tell.
     for _ in 0..6 {
-        score.record_content_response_time(Answered(ms(100)), false);
+        score.record_content_response_time(Answered(ms(100)));
     }
     for _ in 0..3 {
-        score.record_content_response_time(LongerThan(ms(300)), false);
+        score.record_content_response_time(LongerThan(ms(300)));
     }
     assert_eq!(score.slow_peer_hedge_delay(), None);
 
     // A response of exactly the threshold is not slow: 3 of 10 slow is over a quarter.
-    score.record_content_response_time(Answered(ms(125)), false);
+    score.record_content_response_time(Answered(ms(125)));
     assert_eq!(score.slow_peer_hedge_delay(), Some(ms(125)));
 
     // Two more fast responses: 3 of 12 slow is exactly a quarter, still slow.
     for _ in 0..2 {
-        score.record_content_response_time(Answered(ms(100)), false);
+        score.record_content_response_time(Answered(ms(100)));
     }
     assert_eq!(score.slow_peer_hedge_delay(), Some(ms(125)));
 
     // 3 of 13 is under a quarter.
-    score.record_content_response_time(Answered(ms(110)), false);
-    assert_eq!(score.slow_peer_hedge_delay(), None);
-
-    // Requests cancelled before the threshold might have been answered in time, so they don't
-    // count either way.
-    for _ in 0..5 {
-        score.record_content_response_time(LongerThan(ms(110)), false);
-    }
+    score.record_content_response_time(Answered(ms(110)));
     assert_eq!(score.slow_peer_hedge_delay(), None);
 
     // Only the 20 most recent samples count: 17 slow and 3 fast ones make the peer slow, and 20
     // fast ones after that make it not slow again.
     for _ in 0..17 {
-        score.record_content_response_time(LongerThan(ms(300)), false);
+        score.record_content_response_time(LongerThan(ms(300)));
     }
     for _ in 0..3 {
-        score.record_content_response_time(Answered(ms(100)), false);
+        score.record_content_response_time(Answered(ms(100)));
     }
     assert_eq!(score.slow_peer_hedge_delay(), Some(ms(125)));
     for _ in 0..20 {
-        score.record_content_response_time(Answered(ms(100)), false);
+        score.record_content_response_time(Answered(ms(100)));
     }
     assert_eq!(score.slow_peer_hedge_delay(), None);
 
     // For a nearby peer, the threshold is at least 20 ms over the fastest response.
     let mut nearby = PeerScore::new(Duration::from_secs(60), 0.3);
     for _ in 0..7 {
-        nearby.record_content_response_time(Answered(ms(40)), false);
+        nearby.record_content_response_time(Answered(ms(40)));
     }
     for _ in 0..3 {
-        nearby.record_content_response_time(LongerThan(ms(100)), false);
+        nearby.record_content_response_time(LongerThan(ms(100)));
     }
     assert_eq!(nearby.slow_peer_hedge_delay(), Some(ms(60)));
+
+    // A request cancelled before the threshold might have been answered in time, so it counts
+    // neither way. Such a sample is only stored while the peer has no threshold yet. Here 5 are
+    // stored first; with 7 fast and 3 slow answers after them, 3 of the 10 samples that count are
+    // slow. Counting the 5 as fast would make it 3 of 15, which is not slow.
+    let mut early = PeerScore::new(Duration::from_secs(60), 0.3);
+    for _ in 0..5 {
+        early.record_content_response_time(LongerThan(ms(110)));
+    }
+    for _ in 0..7 {
+        early.record_content_response_time(Answered(ms(100)));
+    }
+    for _ in 0..3 {
+        early.record_content_response_time(LongerThan(ms(300)));
+    }
+    assert_eq!(early.content_response_times.len(), 15);
+    assert_eq!(early.slow_peer_hedge_delay(), Some(ms(125)));
+
+    // Counting such samples as slow would make 5 of 15 slow here.
+    let mut early = PeerScore::new(Duration::from_secs(60), 0.3);
+    for _ in 0..5 {
+        early.record_content_response_time(LongerThan(ms(110)));
+    }
+    for _ in 0..10 {
+        early.record_content_response_time(Answered(ms(100)));
+    }
+    assert_eq!(early.content_response_times.len(), 15);
+    assert_eq!(early.slow_peer_hedge_delay(), None);
 }
 
-/// When asked to, a request cancelled before the peer's slow-response threshold, which can't
-/// count either way, is not stored, so it doesn't push out samples that count. Without a
-/// threshold, or when not asked to, it is stored.
+/// A request cancelled before the peer's slow-response threshold, which can't count either way,
+/// is not stored, so it doesn't push out samples that count. Without a threshold yet, it is
+/// stored.
 #[test]
 fn test_peer_score_drops_samples_cancelled_before_threshold() {
     use super::ContentResponseTime::{Answered, LongerThan};
@@ -2812,33 +2833,29 @@ fn test_peer_score_drops_samples_cancelled_before_threshold() {
 
     // No answers yet, so no threshold to compare against: the sample is kept.
     let mut score = PeerScore::new(Duration::from_secs(60), 0.3);
-    score.record_content_response_time(LongerThan(ms(50)), true);
+    score.record_content_response_time(LongerThan(ms(50)));
     assert_eq!(score.content_response_times.len(), 1);
 
     // 7 slow and 3 fast samples: slow, with a 125 ms threshold.
     let mut score = PeerScore::new(Duration::from_secs(60), 0.3);
     for _ in 0..7 {
-        score.record_content_response_time(LongerThan(ms(300)), true);
+        score.record_content_response_time(LongerThan(ms(300)));
     }
     for _ in 0..3 {
-        score.record_content_response_time(Answered(ms(100)), true);
+        score.record_content_response_time(Answered(ms(100)));
     }
     assert_eq!(score.slow_peer_hedge_delay(), Some(ms(125)));
 
     // Twenty requests cancelled before the threshold take no slots, so the peer stays slow.
     for _ in 0..20 {
-        score.record_content_response_time(LongerThan(ms(110)), true);
+        score.record_content_response_time(LongerThan(ms(110)));
     }
     assert_eq!(score.content_response_times.len(), 10);
     assert_eq!(score.slow_peer_hedge_delay(), Some(ms(125)));
 
     // A request cancelled at the threshold is slow and is kept.
-    score.record_content_response_time(LongerThan(ms(125)), true);
+    score.record_content_response_time(LongerThan(ms(125)));
     assert_eq!(score.content_response_times.len(), 11);
-
-    // Without dropping, a request cancelled before the threshold is stored.
-    score.record_content_response_time(LongerThan(ms(110)), false);
-    assert_eq!(score.content_response_times.len(), 12);
 }
 
 /// While a peer is slow, every fourth request that is not a hedge is a slow-peer probe.
@@ -2860,10 +2877,10 @@ fn test_peer_score_slow_peer_probe_interval() {
     assert_eq!(score.requests_since_probe, 0);
 
     for _ in 0..7 {
-        score.record_content_response_time(LongerThan(ms(300)), true);
+        score.record_content_response_time(LongerThan(ms(300)));
     }
     for _ in 0..3 {
-        score.record_content_response_time(Answered(ms(100)), true);
+        score.record_content_response_time(Answered(ms(100)));
     }
     assert!(score.slow_peer_hedge_delay().is_some());
     let requests: Vec<_> = (0..8).map(|_| score.classify_new_request()).collect();
@@ -2894,10 +2911,10 @@ fn simulate_slow_peer_with_closer_peer_hedging(
     let ms = Duration::from_millis;
     let mut score = PeerScore::new(Duration::from_secs(3600), 0.3);
     for _ in 0..7 {
-        score.record_content_response_time(LongerThan(ms(400)), true);
+        score.record_content_response_time(LongerThan(ms(400)));
     }
     for _ in 0..3 {
-        score.record_content_response_time(Answered(ms(175)), true);
+        score.record_content_response_time(Answered(ms(175)));
     }
     assert!(score.slow_peer_hedge_delay().is_some());
 
@@ -2916,7 +2933,7 @@ fn simulate_slow_peer_with_closer_peer_hedging(
                 (NotProbe, true) => LongerThan(ms(200)),
             };
             if request.records_response_time() {
-                score.record_content_response_time(outcome, true);
+                score.record_content_response_time(outcome);
             }
             score.slow_peer_hedge_delay().is_some()
         })
