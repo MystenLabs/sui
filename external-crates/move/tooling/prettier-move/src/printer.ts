@@ -5,7 +5,7 @@
  * Implements the printing logic for the Move language. Takes a syntax tree and
  * returns a formatted string.
  *
- * @see [Prettier Plugin API](https://prettier.io/docs/en/dev/plugins.html)
+ * @see [Prettier Plugin API](https://prettier.io/docs/plugins)
  * @module printer
  */
 
