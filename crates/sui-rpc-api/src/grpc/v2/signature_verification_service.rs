@@ -76,6 +76,17 @@ fn verify_signature(
         }
     };
 
+    let check_address_aliases = request.check_address_aliases.unwrap_or(false);
+    if check_address_aliases && request.address.is_none() {
+        return Err(FieldViolation::new("address")
+            .with_description("address is required when check_address_aliases is set")
+            .with_reason(ErrorReason::FieldMissing)
+            .into());
+    }
+
+    let mut message = VerifySignatureResponse::default();
+    message.address_aliases_checked = check_address_aliases.then_some(true);
+
     if let Some(address) = request
         .address
         .map(|address| address.parse::<sui_sdk_types::Address>())
@@ -131,18 +142,30 @@ fn verify_signature(
 
         let first_derived_address = derived_addresses[0].unwrap();
 
+        let authorized_addresses = if check_address_aliases {
+            address_aliases(service, address)?
+        } else {
+            vec![address]
+        };
+
         // If none of the possible derived addresses match we need to return that this is invalid
         if !derived_addresses
             .into_iter()
             .flatten()
-            .any(|derived_address| derived_address == address)
+            .any(|derived_address| authorized_addresses.contains(&derived_address))
         {
-            let mut message = VerifySignatureResponse::default();
             message.is_valid = Some(false);
-            message.reason = Some(format!(
-                "provided address `{}` does not match derived address `{}`",
-                address, first_derived_address
-            ));
+            message.reason = Some(if check_address_aliases {
+                format!(
+                    "derived address `{}` is not an alias of `{}`",
+                    first_derived_address, address
+                )
+            } else {
+                format!(
+                    "provided address `{}` does not match derived address `{}`",
+                    address, first_derived_address
+                )
+            });
             return Ok(message);
         }
     }
@@ -153,7 +176,6 @@ fn verify_signature(
         verifier.with_zklogin_verifier(build_zklogin_verifier(service, &request.jwks)?);
     }
 
-    let mut message = VerifySignatureResponse::default();
     match verifier.verify(&signing_digest, &signature) {
         Ok(()) => message.is_valid = Some(true),
         Err(error) => {
@@ -163,6 +185,23 @@ fn verify_signature(
     }
 
     Ok(message)
+}
+
+/// A configured alias set replaces `address`; without one, `address` is its own sole alias.
+fn address_aliases(
+    service: &RpcService,
+    address: sui_sdk_types::Address,
+) -> Result<Vec<sui_sdk_types::Address>> {
+    let Some(aliases) = service.reader.get_address_aliases(address.into())? else {
+        return Ok(vec![address]);
+    };
+
+    Ok(aliases
+        .aliases
+        .contents
+        .into_iter()
+        .map(sui_sdk_types::Address::from)
+        .collect())
 }
 
 fn signature_may_contain_zklogin(signature: &sui_sdk_types::UserSignature) -> bool {
