@@ -1,0 +1,86 @@
+{
+  "name": "suioop",
+  "version": "2.3.2",
+  "description": "Sui Owned Object Pools is a library that provides a set of tools for managing multiple concurrent transactions on the Sui network to help avoiding object equivocation and locking",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "type": "commonjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "format": "prettier --write '**/*.{ts,tsx,js,jsx,json,css,md}'",
+    "lint": "eslint --ext .ts --fix --max-warnings 0 src",
+    "test": "jest test/unit/executorServiceHandler.test.ts && jest test/unit/pool-tx-execution.test.ts && jest test/unit/pool-init.test.ts",
+    "release": "pnpm build:types && pnpm build:tsup && release-it",
+    "build:types": "tsc --build",
+    "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build": "pnpm build:types && pnpm build:tsup"
+  },
+  "keywords": [
+    "sui",
+    "execution",
+    "handler",
+    "manager",
+    "pool",
+    "transaction",
+    "concurrent",
+    "object",
+    "equivocation",
+    "locking"
+  ],
+  "author": "MystenLabs",
+  "license": "MIT",
+  "contributors": [
+    "Alex Tzimas (https://github.com/Tzal3x)",
+    "Theodore Chaikalis (https://github.com/teohaik)"
+  ],
+  "dependencies": {
+    "@mysten/sui.js": "^0.49.1",
+    "dotenv": "^16.3.1",
+    "pino": "^8.16.1"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.23.2",
+    "@babel/preset-typescript": "^7.23.2",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.8.5",
+    "@types/redis": "^4.0.11",
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "eslint": "^8.51.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-import-resolver-typescript": "^3.6.1",
+    "eslint-plugin-header": "^3.1.1",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "eslint-plugin-require-extensions": "^0.1.3",
+    "eslint-plugin-simple-import-sort": "^10.0.0",
+    "eslint-plugin-unused-imports": "^3.0.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.3",
+    "prettier-eslint-cli": "^7.1.0",
+    "release-it": "^16.2.1",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.1",
+    "tsup": "^7.2.0",
+    "typescript": "^5.3.3",
+    "vitest": "^0.33.0"
+  },
+  "release-it": {
+    "github": {
+      "release": true
+    }
+  }
+}
