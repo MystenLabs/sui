@@ -255,6 +255,10 @@ impl AdmissionQueueEntry for PoolEntry {
         self.gas_payment_objects.iter().copied()
     }
 
+    fn byte_size(&self) -> usize {
+        self.total_bytes
+    }
+
     fn notify_evicted(self, min_gas_price: u64) {
         self.metrics.pool_depth.with_label_values(&["user"]).dec();
         self.metrics
@@ -405,6 +409,7 @@ impl ConsensusTransactionPool {
         epoch_store: Arc<AuthorityPerEpochStore>,
         max_pending_transactions: usize,
         max_user_bytes_per_second: Option<u64>,
+        max_pending_user_bytes: Option<u64>,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -449,10 +454,10 @@ impl ConsensusTransactionPool {
                 metrics.pool_stagger_shadow_delay.clone(),
             ),
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
-                user: UserLane::Open(PriorityAdmissionQueue::new(
-                    max_pending_transactions,
-                    metrics,
-                )),
+                user: UserLane::Open(
+                    PriorityAdmissionQueue::new(max_pending_transactions, metrics)
+                        .with_byte_capacity(max_pending_user_bytes),
+                ),
                 user_byte_budget,
                 system: VecDeque::new(),
                 pings: VecDeque::new(),
@@ -470,6 +475,7 @@ impl ConsensusTransactionPool {
         Self::new(
             epoch_store,
             max_pending_transactions,
+            None,
             None,
             metrics,
             ConsensusAdapterMetrics::new_test(),
@@ -1615,6 +1621,7 @@ mod tests {
             state.epoch_store_for_testing().clone(),
             10,
             Some(max_user_bytes_per_second),
+            None,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));

@@ -319,6 +319,11 @@ pub struct ConsensusTransactionPoolConfig {
     /// two maximum-size blocks per second (`max_transactions_in_block_bytes`).
     /// Must be greater than zero.
     pub max_user_bytes_per_second: Option<u64>,
+
+    /// Cap on the total serialized bytes of queued user-lane entries, enforced
+    /// alongside `max_pending_transactions`. Entries are evicted lowest gas price
+    /// first to stay within it. Defaults to 256 MiB when unset.
+    pub max_pending_user_bytes: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -328,6 +333,7 @@ impl Default for ConsensusTransactionPoolConfig {
             max_pending_transactions: None,
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
+            max_pending_user_bytes: None,
         }
     }
 }
@@ -343,6 +349,10 @@ impl ConsensusTransactionPoolConfig {
             self.max_user_bytes_per_second
                 .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
         })
+    }
+
+    pub fn max_pending_user_bytes(&self) -> Option<u64> {
+        Some(self.max_pending_user_bytes.unwrap_or(256 * 1024 * 1024))
     }
 }
 
