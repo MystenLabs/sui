@@ -54,10 +54,6 @@ impl ScalarType for SuiAddress {
 
 impl SuiAddress {
     pub(crate) const ZERO: Self = Self([0u8; SUI_ADDRESS_LENGTH]);
-
-    pub(crate) fn to_inner(self) -> [u8; SUI_ADDRESS_LENGTH] {
-        self.0
-    }
 }
 
 impl FromStr for SuiAddress {
