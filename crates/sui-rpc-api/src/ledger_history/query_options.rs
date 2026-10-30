@@ -10,8 +10,10 @@ use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 
+use crate::ErrorDetails;
 use crate::ErrorReason;
 use crate::RpcError;
+use crate::proto::google::rpc::ErrorInfo;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 
 const ORDERING_ASCENDING: i32 = ProtoOrdering::Ascending as i32;
@@ -178,13 +180,74 @@ impl IntraTxCoordinate {
 
 /// The error for a request that needs data below this server's serving floor, whose lowest
 /// available checkpoint is `floor_checkpoint`: that data is pruned and permanently gone.
+/// It is `OutOfRange` with a `BELOW_EARLIEST_AVAILABLE` [`ErrorInfo`] whose
+/// `lowestAvailableCheckpoint` is `floor_checkpoint`; retrying it on this server fails the same
+/// way.
 pub fn below_serving_floor(floor_checkpoint: u64) -> RpcError {
+    let error_info = ledger_error_info(
+        ErrorReason::BelowEarliestAvailable,
+        [("lowestAvailableCheckpoint", floor_checkpoint.to_string())],
+    );
     RpcError::new(
         tonic::Code::OutOfRange,
         format!(
             "requested data below earliest available; lowest available checkpoint is {floor_checkpoint}"
         ),
     )
+    .with_details(ErrorDetails::new().with_error_info(error_info))
+}
+
+/// The error for a request that reads above the data this server has indexed, all of which lies
+/// below `checkpoint_hi_exclusive`. `bound` names what reads past it: "cursor" for an `after` or
+/// `before` cursor, or the request field, "start_checkpoint" or "end_checkpoint";
+/// `requested_checkpoint` is the cursor's recorded checkpoint or the field's value. It is
+/// `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`] carrying all three, by which
+/// clients recognize a request that becomes servable once this server catches up.
+fn above_latest_available(
+    bound: &str,
+    requested_checkpoint: u64,
+    checkpoint_hi_exclusive: u64,
+) -> RpcError {
+    let message = if bound == "cursor" {
+        format!(
+            "requested data above latest available; cursor is at checkpoint \
+             {requested_checkpoint}, and only checkpoints below {checkpoint_hi_exclusive} are \
+             available"
+        )
+    } else {
+        format!(
+            "requested data above latest available; {bound} is {requested_checkpoint}, and only \
+             checkpoints below {checkpoint_hi_exclusive} are available"
+        )
+    };
+    let error_info = ledger_error_info(
+        ErrorReason::AboveLatestAvailable,
+        [
+            ("bound", bound.to_owned()),
+            ("requestedCheckpoint", requested_checkpoint.to_string()),
+            (
+                "firstUnavailableCheckpoint",
+                checkpoint_hi_exclusive.to_string(),
+            ),
+        ],
+    );
+    RpcError::new(tonic::Code::OutOfRange, message)
+        .with_details(ErrorDetails::new().with_error_info(error_info))
+}
+
+/// An [`ErrorInfo`] in the [`ErrorReason::DOMAIN`] domain with `reason` and `metadata`.
+fn ledger_error_info<const N: usize>(
+    reason: ErrorReason,
+    metadata: [(&str, String); N],
+) -> ErrorInfo {
+    let metadata = metadata
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value))
+        .collect();
+    ErrorInfo::default()
+        .with_reason(reason.as_str_name())
+        .with_domain(ErrorReason::DOMAIN)
+        .with_metadata(metadata)
 }
 
 impl QueryOptions {
@@ -724,13 +787,13 @@ impl ResolvedCheckpointRange {
     /// Validate the requested checkpoint window, clamp it to the indexed tip, and attribute the
     /// exhaustion reason the scan will report once it drains it.
     ///
-    /// A descending window that reaches past the tip returns `OutOfRange`: an `end_checkpoint`
-    /// above the tip, or, with `end_checkpoint` unset, a `start_checkpoint` at or above it. A
-    /// descending scan starts at its window's high end, so answering from this view would skip
-    /// the checkpoints between the tip and that end; like a cursor past the tip, the request
-    /// becomes servable once this server catches up. An ascending window past the tip ends at the
-    /// tip, where the client resumes once this server has caught up, so only an ascending scan
-    /// ends with `LedgerTip`.
+    /// A descending window that reaches past the tip returns `OutOfRange` with the
+    /// `ABOVE_LATEST_AVAILABLE` reason: an `end_checkpoint` above the tip, or, with
+    /// `end_checkpoint` unset, a `start_checkpoint` at or above it. A descending scan starts at
+    /// its window's high end, so answering from this view would skip the checkpoints between the
+    /// tip and that end; like a cursor past the tip, the request becomes servable once this
+    /// server catches up. An ascending window past the tip ends at the tip, where the client
+    /// resumes once this server has caught up, so only an ascending scan ends with `LedgerTip`.
     ///
     /// The request's cursors do not narrow the window here. A cursor's checkpoint field is a
     /// label whose meaning depends on the scan that issued it, so [`ResolvedScan::resolve`]
@@ -750,12 +813,10 @@ impl ResolvedCheckpointRange {
             Some(_) | None => None,
         };
         if let Some((field, requested)) = descending_past_tip {
-            return Err(RpcError::new(
-                tonic::Code::OutOfRange,
-                format!(
-                    "requested data above latest available; {field} is {requested}, and only \
-                     checkpoints below {checkpoint_hi_exclusive} are available"
-                ),
+            return Err(above_latest_available(
+                field,
+                requested,
+                checkpoint_hi_exclusive,
             ));
         }
         let requested_end = end_checkpoint.unwrap_or(checkpoint_hi_exclusive);
@@ -866,10 +927,11 @@ where
 /// ascending scan behind its `after` cursor, replaying items the client already has, start a
 /// descending scan below its `before` cursor, skipping items the client has not seen, or end a
 /// descending scan bounded by its `after` cursor empty, though items lie above that cursor.
-/// `OutOfRange` marks the request as reading past the data this server has, the mirror of a
-/// cursor below the pruned floor; unlike that one, it becomes servable once this server catches
-/// up, so clients may retry it. An ascending scan's `before` cursor may lie past the tip: the
-/// scan stops at the tip, and resumes from there once this server has caught up.
+/// `OutOfRange` with the `ABOVE_LATEST_AVAILABLE` reason (see [`above_latest_available`]) marks
+/// the request as reading past the data this server has, the mirror of a cursor below the pruned
+/// floor; unlike that one, it becomes servable once this server catches up, so clients that
+/// recognize the reason may retry it. An ascending scan's `before` cursor may lie past the tip:
+/// the scan stops at the tip, and resumes from there once this server has caught up.
 fn reject_cursors_past_tip<P: Ord>(
     options: &QueryOptions,
     tip: P,
@@ -891,13 +953,10 @@ where
             sui_rpc_cursor::CursorKind::Boundary => position > tip,
         };
         if past_tip {
-            return Err(RpcError::new(
-                tonic::Code::OutOfRange,
-                format!(
-                    "requested data above latest available; cursor is at checkpoint {}, and only \
-                     checkpoints below {checkpoint_hi_exclusive} are available",
-                    cursor.position.checkpoint(),
-                ),
+            return Err(above_latest_available(
+                "cursor",
+                cursor.position.checkpoint(),
+                checkpoint_hi_exclusive,
             ));
         }
     }
@@ -992,6 +1051,83 @@ fn invalid_cursor(field: &'static str, description: impl Into<String>) -> RpcErr
         .with_description(description)
         .with_reason(ErrorReason::FieldInvalid)
         .into()
+}
+
+/// Asserts `error` is `OutOfRange` with `message` and an [`ErrorInfo`] in the
+/// [`ErrorReason::DOMAIN`] domain whose reason is `reason` and whose metadata is exactly
+/// `metadata`.
+#[cfg(test)]
+fn assert_out_of_range_error_info(
+    error: RpcError,
+    message: &str,
+    reason: ErrorReason,
+    metadata: &[(&str, &str)],
+) {
+    let status = error.into_status_proto();
+    assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
+    assert_eq!(status.message, message);
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    let expected_metadata: std::collections::BTreeMap<String, String> = metadata
+        .iter()
+        .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+        .collect();
+    assert_eq!(error_info.metadata, expected_metadata, "{status:?}");
+}
+
+/// Asserts `error` is [`below_serving_floor`] for `floor_checkpoint`: its message and its
+/// `BELOW_EARLIEST_AVAILABLE` [`ErrorInfo`].
+#[cfg(test)]
+pub(crate) fn assert_below_serving_floor_error(error: RpcError, floor_checkpoint: u64) {
+    assert_out_of_range_error_info(
+        error,
+        &format!(
+            "requested data below earliest available; lowest available checkpoint is \
+             {floor_checkpoint}"
+        ),
+        ErrorReason::BelowEarliestAvailable,
+        &[("lowestAvailableCheckpoint", &floor_checkpoint.to_string())],
+    );
+}
+
+/// Asserts `error` is [`above_latest_available`] for `bound` at `requested_checkpoint` on a
+/// server that has indexed the checkpoints below `checkpoint_hi_exclusive`: its message and its
+/// `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`].
+#[cfg(test)]
+fn assert_above_latest_available_error(
+    error: RpcError,
+    bound: &str,
+    requested_checkpoint: u64,
+    checkpoint_hi_exclusive: u64,
+) {
+    let requested = match bound {
+        "cursor" => format!("cursor is at checkpoint {requested_checkpoint}"),
+        field => format!("{field} is {requested_checkpoint}"),
+    };
+    assert_out_of_range_error_info(
+        error,
+        &format!(
+            "requested data above latest available; {requested}, and only checkpoints below \
+             {checkpoint_hi_exclusive} are available"
+        ),
+        ErrorReason::AboveLatestAvailable,
+        &[
+            ("bound", bound),
+            ("requestedCheckpoint", &requested_checkpoint.to_string()),
+            (
+                "firstUnavailableCheckpoint",
+                &checkpoint_hi_exclusive.to_string(),
+            ),
+        ],
+    );
 }
 
 #[cfg(test)]
@@ -1106,16 +1242,8 @@ mod tests {
     /// Asserts `result` is the `OutOfRange` error for data below a serving floor at
     /// `floor_checkpoint`.
     fn assert_below_serving_floor(result: Result<(), RpcError>, floor_checkpoint: u64) {
-        let status = result
-            .expect_err("expected OutOfRange below the serving floor")
-            .into_status_proto();
-        assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
-        assert_eq!(
-            status.message,
-            format!(
-                "requested data below earliest available; lowest available checkpoint is {floor_checkpoint}"
-            )
-        );
+        let error = result.expect_err("expected OutOfRange below the serving floor");
+        assert_below_serving_floor_error(error, floor_checkpoint);
     }
 
     /// Serving-floor reconciliation for tx intervals: a floor inside the interval starts an
@@ -1695,20 +1823,16 @@ mod tests {
         let mut request = ProtoQueryOptions::default();
         request.ordering = Some(ProtoOrdering::Descending as i32);
         let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        for (start, end) in [
-            (Some(30), None),
-            (Some(20), None),
-            (Some(10), Some(21)),
-            (None, Some(u64::MAX)),
-            (Some(25), Some(30)),
+        for (start, end, bound, requested) in [
+            (Some(30), None, "start_checkpoint", 30),
+            (Some(20), None, "start_checkpoint", 20),
+            (Some(10), Some(21), "end_checkpoint", 21),
+            (None, Some(u64::MAX), "end_checkpoint", u64::MAX),
+            (Some(25), Some(30), "end_checkpoint", 30),
         ] {
             let error = ResolvedCheckpointRange::from_request(start, end, 20, &options)
                 .expect_err("descending window past the tip");
-            assert_eq!(
-                error.into_status_proto().code,
-                tonic::Code::OutOfRange as i32,
-                "window {start:?}..{end:?}"
-            );
+            assert_above_latest_available_error(error, bound, requested, 20);
         }
 
         let resolved = ResolvedCheckpointRange::from_request(Some(10), Some(20), 20, &options);
@@ -2672,25 +2796,20 @@ mod tests {
         assert_eq!(caught_up.end_position, TIP);
 
         // Positions this server has not indexed.
-        assert!(is_out_of_range(resolve_checkpoints(
-            None,
-            &ascending(cp_item(TIP))
-        )));
-        assert!(is_out_of_range(resolve_checkpoints(
-            None,
-            &ascending(CursorToken::boundary(Position::Checkpoints {
-                checkpoint: TIP + 1,
-            })),
-        )));
+        let error = resolve_checkpoints(None, &ascending(cp_item(TIP))).unwrap_err();
+        assert_above_latest_available_error(error, "cursor", TIP, TIP);
+        let past_tip_boundary = CursorToken::boundary(Position::Checkpoints {
+            checkpoint: TIP + 1,
+        });
+        let error = resolve_checkpoints(None, &ascending(past_tip_boundary)).unwrap_err();
+        assert_above_latest_available_error(error, "cursor", TIP + 1, TIP);
 
         // A window the request ends at or below the tip is exhausted, not rejected; one that
         // ends above it is bounded by the tip.
         let past_window = resolve_checkpoints(Some(TIP), &ascending(cp_item(TIP + 5))).unwrap();
         assert!(past_window.is_empty());
-        assert!(is_out_of_range(resolve_checkpoints(
-            Some(TIP + 1),
-            &ascending(cp_item(TIP + 5)),
-        )));
+        let error = resolve_checkpoints(Some(TIP + 1), &ascending(cp_item(TIP + 5))).unwrap_err();
+        assert_above_latest_available_error(error, "cursor", TIP + 5, TIP);
     }
 
     #[test]

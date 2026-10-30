@@ -971,6 +971,7 @@ mod tests {
     use sui_rpc_cursor::CursorToken;
 
     use crate::ledger_history::query_options::ScanBounds;
+    use crate::ledger_history::query_options::assert_below_serving_floor_error;
 
     fn options(ascending: bool) -> QueryOptions {
         let mut proto = ProtoQueryOptions::default();
@@ -1064,25 +1065,15 @@ mod tests {
                 let options = options(ascending);
                 let mut tx_range = 0..40u64;
                 let mut cp_range = filtered_window(ascending);
-                let status = apply_serving_floor_to_filtered_window(
+                let error = apply_serving_floor_to_filtered_window(
                     &mut tx_range,
                     &mut cp_range,
                     floor_tx,
                     10,
                     &options,
                 )
-                .expect_err("a consumed window is OutOfRange")
-                .into_status_proto();
-                assert_eq!(
-                    status.code,
-                    tonic::Code::OutOfRange as i32,
-                    "floor_tx {floor_tx} asc {ascending}"
-                );
-                assert_eq!(
-                    status.message,
-                    "requested data below earliest available; lowest available checkpoint is 10",
-                    "floor_tx {floor_tx} asc {ascending}"
-                );
+                .expect_err("a consumed window is OutOfRange");
+                assert_below_serving_floor_error(error, 10);
             }
         }
     }
