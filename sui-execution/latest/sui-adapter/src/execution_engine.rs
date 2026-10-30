@@ -1719,6 +1719,10 @@ pub(crate) mod checked {
                 }
                 Ok((Mode::empty_results(), vec![]))
             }
+            TransactionKind::AccumulatorSettlement(_) => {
+                // validity_check rejects this kind while native_accumulator_settlement is disabled.
+                panic!("native accumulator settlement is not implemented");
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let len = txns.len();
