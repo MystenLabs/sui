@@ -1,20 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use move_core_types::ident_str;
 use mysten_common::ZipDebugEqIteratorExt;
+use prost::Message;
 use prost::bytes::Bytes;
 use prost_types::FieldMask;
 use sui_macros::sim_test;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::google::rpc::ErrorInfo;
 use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
 use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
+use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::EventLiteral;
 use sui_rpc::proto::sui::rpc::v2::EventStreamHeadFilter;
@@ -450,6 +454,56 @@ async fn list_error<T>(
     response: Result<tonic::Response<tonic::Streaming<T>>, tonic::Status>,
 ) -> tonic::Status {
     list_frames_then_error(response).await.1
+}
+
+/// The `google.rpc.ErrorInfo` among `status`'s details.
+fn error_info(status: &tonic::Status) -> ErrorInfo {
+    sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"))
+}
+
+/// Asserts `status` is `OutOfRange` with a `BELOW_EARLIEST_AVAILABLE` ErrorInfo naming
+/// `floor_checkpoint`.
+fn assert_below_earliest_available(status: &tonic::Status, floor_checkpoint: u64) {
+    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    let error_info = error_info(status);
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::BelowEarliestAvailable.as_str_name()
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+    assert_eq!(
+        error_info.metadata,
+        BTreeMap::from([(
+            "lowestAvailableCheckpoint".to_owned(),
+            floor_checkpoint.to_string()
+        )])
+    );
+}
+
+/// Asserts `status` is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` ErrorInfo for `bound` at
+/// `requested_checkpoint`, whose first unavailable checkpoint lies at or below the requested one.
+fn assert_above_latest_available(status: &tonic::Status, bound: &str, requested_checkpoint: u64) {
+    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    let error_info = error_info(status);
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::AboveLatestAvailable.as_str_name()
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+    let metadata = &error_info.metadata;
+    assert_eq!(metadata.len(), 3, "{metadata:?}");
+    assert_eq!(metadata["bound"], bound);
+    assert_eq!(
+        metadata["requestedCheckpoint"],
+        requested_checkpoint.to_string()
+    );
+    let first_unavailable: u64 = metadata["firstUnavailableCheckpoint"].parse().unwrap();
+    assert!(first_unavailable <= requested_checkpoint, "{metadata:?}");
 }
 
 async fn new_cluster() -> TestCluster {
@@ -2368,21 +2422,36 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     req.start_checkpoint = Some(beyond_tip);
     req.options = Some(query_options_descending(10));
     let status = list_error(client.list_transactions(req).await).await;
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    assert_above_latest_available(&status, "start_checkpoint", beyond_tip);
 
     let mut req = ListEventsRequest::default();
     req.read_mask = Some(event_type_and_position_mask());
     req.end_checkpoint = Some(beyond_tip);
     req.options = Some(query_options_descending(10));
     let status = list_error(client.list_events(req).await).await;
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    assert_above_latest_available(&status, "end_checkpoint", beyond_tip);
 
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     req.end_checkpoint = Some(beyond_tip);
     req.options = Some(query_options_descending(10));
     let status = list_error(client.list_checkpoints(req).await).await;
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    assert_above_latest_available(&status, "end_checkpoint", beyond_tip);
+
+    // A cursor naming a checkpoint this server has not indexed is out of range in either ordering.
+    for mut options in [query_options(10), query_options_descending(10)] {
+        options.after = Some(
+            CursorToken::item(Position::Checkpoints {
+                checkpoint: beyond_tip,
+            })
+            .encode(),
+        );
+        let mut req = ListCheckpointsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        req.options = Some(options);
+        let status = list_error(client.list_checkpoints(req).await).await;
+        assert_above_latest_available(&status, "cursor", beyond_tip);
+    }
 
     let never_sender: SuiAddress =
         "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -2877,7 +2946,7 @@ async fn test_list_checkpoints_pruned_serving_floor() {
     req.start_checkpoint = Some(0);
     req.options = Some(query_options(3));
     let status = list_error(client.list_checkpoints(req).await).await;
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    assert_below_earliest_available(&status, floor);
 
     // A window ending at or below the floor names only pruned checkpoints: OutOfRange in every
     // List API, though the request sets no lower bound of its own. `floor` is at least 1 (tx2
@@ -2912,6 +2981,7 @@ async fn test_list_checkpoints_pruned_serving_floor() {
                     tonic::Code::OutOfRange,
                     "{api} end_checkpoint {end_checkpoint}: {status:?}"
                 );
+                assert_below_earliest_available(&status, floor);
             }
         }
     }
@@ -2925,8 +2995,8 @@ async fn test_list_checkpoints_pruned_serving_floor() {
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     req.options = Some(query_options_descending(1_000));
     let (frames, status) = list_frames_then_error(client.list_checkpoints(req).await).await;
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
     assert_eq!(status.message(), below_floor_message);
+    assert_below_earliest_available(&status, floor);
     let (floor_frame, frames) = frames.split_last().expect("frames before the error");
     assert!(floor_frame.checkpoint.is_none(), "{floor_frame:?}");
     assert!(floor_frame.end.is_none(), "{floor_frame:?}");
@@ -2954,8 +3024,8 @@ async fn test_list_checkpoints_pruned_serving_floor() {
     req.read_mask = Some(FieldMask::from_paths(["digest"]));
     req.options = Some(query_options_descending(1_000));
     let (frames, status) = list_frames_then_error(client.list_transactions(req).await).await;
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
     assert_eq!(status.message(), below_floor_message);
+    assert_below_earliest_available(&status, floor);
     let floor_frame = frames.last().expect("frames before the error");
     assert!(floor_frame.transaction.is_none(), "{floor_frame:?}");
     assert!(floor_frame.end.is_none(), "{floor_frame:?}");
@@ -2972,8 +3042,8 @@ async fn test_list_checkpoints_pruned_serving_floor() {
     req.read_mask = Some(event_type_and_position_mask());
     req.options = Some(query_options_descending(1_000));
     let (frames, status) = list_frames_then_error(client.list_events(req).await).await;
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
     assert_eq!(status.message(), below_floor_message);
+    assert_below_earliest_available(&status, floor);
     let floor_frame = frames.last().expect("frames before the error");
     assert!(floor_frame.event.is_none(), "{floor_frame:?}");
     assert!(floor_frame.end.is_none(), "{floor_frame:?}");
@@ -3009,6 +3079,7 @@ async fn test_list_checkpoints_pruned_serving_floor() {
             below_floor_message,
             "ascending {ascending}"
         );
+        assert_below_earliest_available(&status, floor);
         assert!(frames.is_empty(), "ascending {ascending}: {frames:?}");
     }
 }

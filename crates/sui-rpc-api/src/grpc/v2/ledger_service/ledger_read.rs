@@ -83,33 +83,45 @@ pub(super) fn checkpoint_to_tx_range(
     Ok(start..end)
 }
 
-/// The serving floor in tx-seq space: the first tx_sequence_number whose
-/// checkpoint contents are still retained (the first tx of the lowest available
-/// checkpoint). This is the perpetual-store pruning floor, NOT the index's own
-/// floor — the index prunes *after* the perpetual store, so it can still hold
-/// `tx_seq_digest` rows for transactions whose contents are already gone. Serving
-/// must be bounded by content availability, matching `get_transaction`.
+/// This server's serving floor: the lowest available checkpoint, and the first
+/// tx_sequence_number whose checkpoint contents are still retained (the first tx of
+/// that checkpoint).
+struct LowestAvailable {
+    checkpoint: u64,
+    tx_seq: u64,
+}
+
+/// The serving floor in checkpoint and tx-seq space. This is the perpetual-store
+/// pruning floor, NOT the index's own floor — the index prunes *after* the perpetual
+/// store, so it can still hold `tx_seq_digest` rows for transactions whose contents
+/// are already gone. Serving must be bounded by content availability, matching
+/// `get_transaction`.
 ///
 /// `checkpoint_to_tx_boundary` reads the lowest available checkpoint's predecessor
 /// from `certified_checkpoints`, which is retained across pruning, so this resolves
 /// even at the floor.
-fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
-    let lowest_checkpoint = service.reader.get_lowest_available_checkpoint()?;
-    checkpoint_to_tx_boundary(service, lowest_checkpoint)
+fn lowest_available(service: &RpcService) -> Result<LowestAvailable, RpcError> {
+    let checkpoint = service.reader.get_lowest_available_checkpoint()?;
+    let tx_seq = checkpoint_to_tx_boundary(service, checkpoint)?;
+    Ok(LowestAvailable { checkpoint, tx_seq })
 }
 
 /// Enforce the pruning `floor` on a resolved scan's low end (`start`, tx-seq space).
 /// Returns the effective start: unchanged when at/above the floor; clamped up to
-/// the floor when the low end was open-ended; or `OutOfRange` when an explicitly
-/// requested low end (a `start_checkpoint` or `after` cursor) is below the floor —
-/// that data was pruned and is permanently gone.
-fn apply_tx_seq_floor(start: u64, explicit_lower: bool, floor: u64) -> Result<u64, RpcError> {
-    if start >= floor {
+/// the floor when the low end was open-ended; or [`below_serving_floor`] when an
+/// explicitly requested low end (a `start_checkpoint` or `after` cursor) is below the
+/// floor — that data was pruned and is permanently gone.
+fn apply_tx_seq_floor(
+    start: u64,
+    explicit_lower: bool,
+    floor: &LowestAvailable,
+) -> Result<u64, RpcError> {
+    if start >= floor.tx_seq {
         Ok(start)
     } else if explicit_lower {
-        Err(out_of_range(floor))
+        Err(below_serving_floor(floor.checkpoint))
     } else {
-        Ok(floor)
+        Ok(floor.tx_seq)
     }
 }
 
@@ -187,8 +199,8 @@ pub(super) fn clamp_to_serving_floor(
     options: &crate::ledger_history::query_options::QueryOptions,
 ) -> Result<Option<ServingFloor>, RpcError> {
     let explicit_lower = has_explicit_lower_bound(start_checkpoint, options);
-    let floor = lowest_available_tx_seq(service)?;
-    let clamped = apply_tx_seq_floor(start_tx, explicit_lower, floor)?;
+    let floor = lowest_available(service)?;
+    let clamped = apply_tx_seq_floor(start_tx, explicit_lower, &floor)?;
     if clamped == start_tx {
         return Ok(None);
     }
@@ -196,13 +208,6 @@ pub(super) fn clamp_to_serving_floor(
         tx_seq: clamped,
         checkpoint: tx_checkpoint(service, clamped)?,
     }))
-}
-
-fn out_of_range(floor: u64) -> RpcError {
-    RpcError::new(
-        tonic::Code::OutOfRange,
-        format!("requested data below earliest available; lowest available tx_seq is {floor}"),
-    )
 }
 
 /// Checkpoint-space analogue of [`clamp_to_serving_floor`] for scans that
@@ -339,12 +344,12 @@ pub(super) fn sequence_frontier_checkpoint(
 /// Classify a missing `tx_seq_digest` row encountered during a scan. The serving
 /// floor can advance after a range is resolved (a concurrent prune), so a row
 /// missing below the *current* floor was pruned mid-scan — permanently gone,
-/// surfaced as `OutOfRange`. A row missing at/above the floor is a genuine
+/// surfaced as [`below_serving_floor`]. A row missing at/above the floor is a genuine
 /// inconsistency (`Internal`). A failed floor lookup conservatively reports the
 /// latter.
 fn missing_row_error(service: &RpcService, tx_seq: u64) -> RpcError {
-    match lowest_available_tx_seq(service) {
-        Ok(floor) if tx_seq < floor => out_of_range(floor),
+    match lowest_available(service) {
+        Ok(floor) if tx_seq < floor.tx_seq => below_serving_floor(floor.checkpoint),
         _ => missing_tx_seq_digest(tx_seq),
     }
 }
@@ -372,34 +377,46 @@ pub(super) fn remaining_range_after(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ledger_history::query_options::assert_below_serving_floor_error;
+
+    /// A serving floor at checkpoint 2, whose first transaction is 10.
+    const FLOOR: LowestAvailable = LowestAvailable {
+        checkpoint: 2,
+        tx_seq: 10,
+    };
 
     #[test]
     fn apply_tx_seq_floor_passes_through_at_or_above_floor() {
-        assert_eq!(apply_tx_seq_floor(10, false, 10).unwrap(), 10);
-        assert_eq!(apply_tx_seq_floor(15, true, 10).unwrap(), 15);
+        assert_eq!(apply_tx_seq_floor(10, false, &FLOOR).unwrap(), 10);
+        assert_eq!(apply_tx_seq_floor(15, true, &FLOOR).unwrap(), 15);
     }
 
     #[test]
     fn apply_tx_seq_floor_clamps_open_ended_low_end() {
         // No explicit low bound below the floor → clamp up to the floor.
-        assert_eq!(apply_tx_seq_floor(0, false, 10).unwrap(), 10);
-        assert_eq!(apply_tx_seq_floor(7, false, 10).unwrap(), 10);
+        assert_eq!(apply_tx_seq_floor(0, false, &FLOOR).unwrap(), 10);
+        assert_eq!(apply_tx_seq_floor(7, false, &FLOOR).unwrap(), 10);
     }
 
     #[test]
     fn apply_tx_seq_floor_errors_on_explicit_below_floor() {
+        // The error names the floor checkpoint, not its first transaction.
         for start in [0u64, 9] {
-            let status = tonic::Status::from(apply_tx_seq_floor(start, true, 10).unwrap_err());
-            assert_eq!(status.code(), tonic::Code::OutOfRange);
+            let error = apply_tx_seq_floor(start, true, &FLOOR).unwrap_err();
+            assert_below_serving_floor_error(error, FLOOR.checkpoint);
         }
     }
 
     #[test]
     fn apply_tx_seq_floor_zero_floor_never_clamps_or_errors() {
         // Empty/unpruned index (floor 0): every start is at/above the floor.
-        assert_eq!(apply_tx_seq_floor(0, true, 0).unwrap(), 0);
-        assert_eq!(apply_tx_seq_floor(0, false, 0).unwrap(), 0);
-        assert_eq!(apply_tx_seq_floor(123, true, 0).unwrap(), 123);
+        let floor = LowestAvailable {
+            checkpoint: 0,
+            tx_seq: 0,
+        };
+        assert_eq!(apply_tx_seq_floor(0, true, &floor).unwrap(), 0);
+        assert_eq!(apply_tx_seq_floor(0, false, &floor).unwrap(), 0);
+        assert_eq!(apply_tx_seq_floor(123, true, &floor).unwrap(), 123);
     }
 
     fn window_below_floor(
@@ -414,13 +431,8 @@ mod tests {
     fn window_wholly_below_floor_without_lower_bound_is_out_of_range() {
         // The window's exclusive end at or below the floor: every checkpoint it names is pruned.
         for window in [0..10, 0..5, 3..10] {
-            let status =
-                tonic::Status::from(window_below_floor(window.clone(), false, 10).unwrap_err());
-            assert_eq!(status.code(), tonic::Code::OutOfRange, "{window:?}");
-            assert_eq!(
-                status.message(),
-                "requested data below earliest available; lowest available checkpoint is 10"
-            );
+            let error = window_below_floor(window.clone(), false, 10).unwrap_err();
+            assert_below_serving_floor_error(error, 10);
         }
     }
 
