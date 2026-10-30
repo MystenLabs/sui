@@ -175,9 +175,23 @@ pub enum RunSpec {
         // size, for block-size benchmarking)
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         large_transaction: Vec<u32>,
-        // payload bytes attached to each large transaction (capped by max_tx_size).
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [100_000])]
-        large_transaction_size_bytes: Vec<u64>,
+        // minimum payload bytes attached to a large transaction. Each transaction draws its
+        // size uniformly between the minimum and maximum; 0 means every transaction carries the
+        // maximum.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        large_transaction_min_size_bytes: Vec<u64>,
+        // maximum payload bytes attached to a large transaction (capped by max_tx_size).
+        #[clap(
+            long,
+            alias = "large-transaction-size-bytes",
+            num_args(1..),
+            value_delimiter = ',',
+            default_values_t = [100_000]
+        )]
+        large_transaction_max_size_bytes: Vec<u64>,
+        // pay large transaction gas from the sender's address balance instead of a gas coin.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [false])]
+        large_transaction_address_balance_gas: Vec<bool>,
         // relative weight of shared deletion transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         shared_deletion: Vec<u32>,
