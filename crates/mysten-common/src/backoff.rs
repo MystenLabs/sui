@@ -42,19 +42,20 @@ pub struct ExponentialBackoff {
 
 impl ExponentialBackoff {
     /// Constructs a new exponential backoff generator, specifying the maximum delay.
+    /// All yielded delays, including the initial delay and jitter, are capped at this maximum.
     pub fn new(initial_delay: Duration, max_delay: Duration) -> ExponentialBackoff {
         ExponentialBackoff {
             initial_delay,
-            next: initial_delay,
+            next: initial_delay.min(max_delay),
             factor: 1.2,
             max_delay,
             max_jitter: initial_delay,
         }
     }
 
-    /// Resets the backoff to the initial delay.
+    /// Resets the backoff to the initial delay, capped at the maximum delay.
     pub fn reset(&mut self) {
-        self.next = self.initial_delay;
+        self.next = self.initial_delay.min(self.max_delay);
     }
 
     /// Sets the approximate ratio of consecutive backoff delays, before jitters are applied.
@@ -82,17 +83,18 @@ impl Iterator for ExponentialBackoff {
     fn next(&mut self) -> Option<Duration> {
         let current = self.next;
 
-        let jitter = if self.max_jitter.is_zero() {
+        let max_jitter = self.max_jitter.min(self.max_delay);
+        let jitter = if max_jitter.is_zero() {
             Duration::ZERO
         } else {
-            Duration::from_secs_f64(
-                rand::thread_rng().gen_range(0.0..self.max_jitter.as_secs_f64()),
-            )
+            Duration::from_secs_f64(rand::thread_rng().gen_range(0.0..max_jitter.as_secs_f64()))
         };
+        // Reserve room for jitter so retries remain randomized when the backoff reaches its cap.
         self.next = current
             .mul_f64(self.factor)
-            .min(self.max_delay)
-            .saturating_add(jitter);
+            .min(self.max_delay.saturating_sub(max_jitter))
+            .saturating_add(jitter)
+            .min(self.max_delay);
 
         Some(current)
     }
@@ -152,4 +154,26 @@ fn test_exponential_backoff_reset() {
 
     assert_eq!(backoff.next(), Some(Duration::from_millis(100)));
     assert_eq!(backoff.next(), Some(Duration::from_millis(200)));
+}
+
+#[test]
+fn test_exponential_backoff_caps_initial_delay_and_reset() {
+    let max_delay = Duration::from_millis(100);
+    let mut backoff =
+        ExponentialBackoff::new(Duration::from_secs(1), max_delay).max_jitter(Duration::ZERO);
+
+    assert_eq!(backoff.next(), Some(max_delay));
+    assert_eq!(backoff.next(), Some(max_delay));
+    backoff.reset();
+    assert_eq!(backoff.next(), Some(max_delay));
+}
+
+#[test]
+fn test_exponential_backoff_caps_jittered_delay() {
+    let max_delay = Duration::from_millis(100);
+    let backoff = ExponentialBackoff::new(max_delay, max_delay).max_jitter(Duration::from_secs(1));
+
+    let delays: Vec<_> = backoff.take(100).collect();
+    assert!(delays.iter().all(|delay| *delay <= max_delay));
+    assert!(delays.iter().skip(1).any(|delay| *delay < max_delay));
 }
