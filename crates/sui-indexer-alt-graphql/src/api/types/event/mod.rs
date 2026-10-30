@@ -11,9 +11,9 @@ use async_graphql::Object;
 use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
@@ -210,7 +210,7 @@ impl Event {
             return Ok(StreamConnection::empty());
         };
 
-        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let reader: &LedgerGrpcReader = ctx.data()?;
         let result = Self::scan_grpc(
             reader,
             cp_bounds,
@@ -228,7 +228,7 @@ impl Event {
     /// unbounded end scans forward to whatever is indexed. Items are returned in scan order
     /// (descending when paginating from the back).
     pub(crate) async fn scan_grpc(
-        reader: &AlphaLedgerGrpcReader,
+        reader: &LedgerGrpcReader,
         cp_bounds: impl RangeBounds<u64>,
         page: &Page<CEvent>,
         limit: usize,
@@ -466,7 +466,7 @@ mod tests {
     use fastcrypto::encoding::Base58;
     use fastcrypto::encoding::Base64 as B64;
     use fastcrypto::encoding::Encoding;
-    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
+    use sui_indexer_alt_reader::ledger_grpc_reader::PageItem;
     use sui_types::base_types::ObjectID;
     use sui_types::parse_sui_struct_tag;
 

@@ -8,7 +8,7 @@ use async_graphql::SimpleObject;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use futures::Stream;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use tokio::sync::watch;
 
 use crate::api::scalars::uint53::UInt53;
@@ -96,7 +96,7 @@ impl Subscription {
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
-        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let reader: &LedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
         let subscriber_limit: &SubscriberLimit = ctx.data()?;
 
@@ -139,7 +139,7 @@ impl Subscription {
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
-        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let reader: &LedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
         let subscriber_limit: &SubscriberLimit = ctx.data()?;
 
@@ -184,7 +184,7 @@ impl Subscription {
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
-        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let reader: &LedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
         let subscriber_limit: &SubscriberLimit = ctx.data()?;
 
