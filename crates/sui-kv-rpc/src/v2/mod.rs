@@ -163,7 +163,6 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<ListCheckpointsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListCheckpointsResponse>>, tonic::Status> {
-        self.check_list_apis_enabled()?;
         self.serve_query_stream(
             OperationSpec::new(
                 "list_checkpoints",
@@ -179,7 +178,6 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<ListTransactionsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListTransactionsResponse>>, tonic::Status> {
-        self.check_list_apis_enabled()?;
         self.serve_query_stream(
             OperationSpec::new(
                 "list_transactions",
@@ -195,7 +193,6 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<ListEventsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListEventsResponse>>, tonic::Status> {
-        self.check_list_apis_enabled()?;
         self.serve_query_stream(
             OperationSpec::new("list_events", self.ledger_history.list_events().timeout),
             request,

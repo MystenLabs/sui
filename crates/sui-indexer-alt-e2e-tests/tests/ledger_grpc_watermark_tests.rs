@@ -51,10 +51,6 @@ async fn cluster_with_lagging_list_index_pipelines() -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
         OffchainClusterConfig {
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
-                ..Default::default()
-            },
             bt_pipeline_layer: PipelineLayer {
                 tx_seq_digest: throttled_concurrent,
                 transaction_bitmap_index: throttled_sequential.clone(),
@@ -179,7 +175,6 @@ async fn cluster_at_tip(
         Simulacrum::new(),
         OffchainClusterConfig {
             kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
                 monotonic_read_wait_timeout_ms: monotonic_read_wait
                     .map(|wait| wait.as_millis() as u64),
                 ..Default::default()

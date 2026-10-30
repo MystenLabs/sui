@@ -20,7 +20,6 @@ use sui_indexer_alt_e2e_tests::local_ingestion_client_args;
 use sui_indexer_alt_e2e_tests::write_checkpoint;
 use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
-use sui_kv_rpc::KvRpcConfig;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
@@ -66,10 +65,6 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
     let cluster = OffchainCluster::new(
         client_args,
         OffchainClusterConfig {
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
-                ..Default::default()
-            },
             // Minimum set of PG pipelines. Graphql's watermark task polls the named pipelines.
             indexer_config: IndexerConfig {
                 pipeline: PipelineLayer {
