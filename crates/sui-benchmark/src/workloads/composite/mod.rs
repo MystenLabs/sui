@@ -1604,6 +1604,10 @@ impl Payload for CompositePayload {
                 (tx_info.kind, &result.status)
                 && effects.is_ok()
             {
+                // The simulated workload enables SUI as a gasless token explicitly. Production
+                // chain configs do not, so cataloging this assertion in Antithesis makes it
+                // expected-unreachable there.
+                #[cfg(msim)]
                 assert_reachable!("gasless composite transfer executed");
             }
             if let (BatchTxKind::Multisig, BatchedTransactionStatus::Success { effects }) =
@@ -1657,7 +1661,9 @@ impl Payload for CompositePayload {
                 }
                 BatchedTransactionStatus::PermanentFailure { error } => {
                     if error.contains("denied") {
-                        assert_reachable!("composite tx rejected for a denied address");
+                        // A deny-list violation can surface either as execution effects or a
+                        // submission rejection. Both outcomes cover the same workload behavior.
+                        assert_reachable!("composite tx failed for a denied address");
                     }
                     permanent_failure_count += 1;
                     metrics.record_permanent_failure(tx_info.op_set.clone());
