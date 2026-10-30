@@ -54,9 +54,9 @@ impl Lifecycle for DenyLifecycle {
         1
     }
 
-    /// Each step is one tx, and the address stays denied between steps.
+    /// Each step is one tx, and the address stays denied until a later batch undenies it.
     fn in_progress(&self) -> bool {
-        false
+        self.denied && self.cap.is_some()
     }
 
     fn start_probability(&self) -> f64 {
