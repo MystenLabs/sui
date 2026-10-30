@@ -118,8 +118,7 @@ struct CheckpointsResult {
 fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
     options.map(|o| o.ordering()).unwrap_or(Ordering::Ascending)
 }
-/// A cluster whose kv-rpc server serves the List APIs. They are off by default,
-/// matching production, so every test in this file opts in.
+/// A cluster whose kv-rpc server serves the List APIs, which `KvRpcConfig::default()` leaves off.
 async fn list_api_cluster() -> FullCluster {
     list_api_cluster_with_config(KvRpcConfig::default()).await
 }
@@ -1000,7 +999,16 @@ fn ev_and(filters: Vec<EventFilter>) -> EventFilter {
 /// have not backfilled the pipelines behind them opt in explicitly.
 #[tokio::test]
 async fn test_list_apis_disabled_unless_enabled() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = FullCluster::new_with_configs(
+        Simulacrum::new(),
+        OffchainClusterConfig {
+            kv_rpc_config: KvRpcConfig::default(),
+            ..Default::default()
+        },
+        &prometheus::Registry::new(),
+    )
+    .await
+    .unwrap();
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     transfer_self(&mut cluster, sender, &kp, gas).await;
     let checkpoint = cluster.create_checkpoint().await;

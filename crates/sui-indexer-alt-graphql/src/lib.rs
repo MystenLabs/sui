@@ -374,7 +374,8 @@ pub async fn start_rpc(
             config.limits.ledger_grpc_num_connections,
             Some(ledger_grpc_floor.clone()),
         )
-        .await?;
+        .await?
+        .context("--ledger-grpc-url must be configured")?;
 
     let pg_reader =
         PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
@@ -418,10 +419,6 @@ pub async fn start_rpc(
             let ledger_grpc = ledger_grpc_reader
                 .clone()
                 .context("Ledger gRPC reader is required when streaming is enabled")?;
-
-            alpha_ledger_grpc_reader
-                .as_ref()
-                .context("Alpha ledger gRPC reader is required when streaming is enabled")?;
 
             let streaming_packages = Arc::new(StreamingPackageStore::new(package_store.clone()));
             let streaming_transactions = Arc::new(StreamedTransactionStore::new());
@@ -477,11 +474,8 @@ pub async fn start_rpc(
         .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
+        .data(alpha_ledger_grpc_reader)
         .data(package_store);
-
-    if let Some(reader) = alpha_ledger_grpc_reader {
-        rpc = rpc.data(reader);
-    }
 
     if let Some(fullnode_client) = fullnode_client {
         rpc = rpc.layer(fullnode_client);

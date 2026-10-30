@@ -71,7 +71,7 @@ Response: {
             }
           },
           {
-            "cursor": "KAE6BAgAEAE=",
+            "cursor": "KAE6BAgBEAE=",
             "node": {
               "digest": "GtHkWEVdLDkA1QeXAhPuJBYbUEGPLAGKheGcsguXwoMo",
               "effects": {
@@ -119,7 +119,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "KAE6BAgAEAI=",
+            "cursor": "KAE6BAgCEAI=",
             "node": {
               "digest": "66AZSNZxfPXuoPJ2XLMnSxPqqcSN1y1NZx9G69AEKnDs",
               "effects": {
@@ -133,7 +133,7 @@ Response: {
             }
           },
           {
-            "cursor": "KAE6BAgAEAM=",
+            "cursor": "KAE6BAgCEAM=",
             "node": {
               "digest": "887ZoGG2uRiXqs9ytzyVJom4YDjJjoDXJKruvKcepsT2",
               "effects": {
@@ -154,7 +154,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "KAE6BAgAEAI=",
+            "cursor": "KAE6BAgCEAI=",
             "node": {
               "digest": "66AZSNZxfPXuoPJ2XLMnSxPqqcSN1y1NZx9G69AEKnDs",
               "effects": {
@@ -168,7 +168,7 @@ Response: {
             }
           },
           {
-            "cursor": "KAE6BAgAEAM=",
+            "cursor": "KAE6BAgCEAM=",
             "node": {
               "digest": "887ZoGG2uRiXqs9ytzyVJom4YDjJjoDXJKruvKcepsT2",
               "effects": {
@@ -182,7 +182,7 @@ Response: {
             }
           },
           {
-            "cursor": "KAE6BAgAEAQ=",
+            "cursor": "KAE6BAgCEAQ=",
             "node": {
               "digest": "5QdTEu1h7fuRih364SecoELKZ8BQvetNyZHhrGV8YF2i",
               "effects": {

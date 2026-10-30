@@ -1255,7 +1255,6 @@ async fn start(
                     .parse()
                     .context("Failed to parse fullnode gRPC URL into a ledger gRPC URI")?,
             ),
-            enable_list_apis: Some(true),
             ..Default::default()
         };
 
