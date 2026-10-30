@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::Base64;
-use fastcrypto::encoding::Encoding;
 use serde::Deserialize;
 use serde_json::json;
 
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_indexer_alt_e2e_tests::graphql;
+use sui_indexer_alt_e2e_tests::graphql::place_tx_cursor;
 use sui_indexer_alt_e2e_tests::transaction::DEFAULT_GAS_BUDGET;
 use sui_indexer_alt_e2e_tests::transaction::send_sui;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -180,11 +177,7 @@ async fn test_epoch_transactions_cursor_pagination() {
         .unwrap();
     assert_eq!(window(&page.edges), window(&all.edges[hi - 2..hi]));
 
-    let beyond = CursorToken::item(Position::Transactions {
-        checkpoint: 0,
-        tx_seq: 100,
-    });
-    let beyond_cursor = Base64::encode(beyond.encode());
+    let beyond_cursor = place_tx_cursor(100, 0);
     let page = epoch_transactions(&cluster, 2, None, Some(2), Some(beyond_cursor), None)
         .await
         .unwrap()

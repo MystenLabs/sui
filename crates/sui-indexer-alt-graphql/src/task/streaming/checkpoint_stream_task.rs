@@ -508,7 +508,6 @@ pub(crate) fn process_checkpoint(
 
     let timestamp_ms = summary.timestamp_ms;
     let cp_sequence_number = sequence_number;
-    let tx_lo = summary.network_total_transactions - checkpoint.transactions.len() as u64;
     let checkpoint_objects = deserialize_checkpoint_objects(&checkpoint)?;
 
     // Seed the checkpoint-wide execution-objects map with every existing object version
@@ -521,13 +520,12 @@ pub(crate) fn process_checkpoint(
             .collect();
 
     let mut transactions = Vec::with_capacity(checkpoint.transactions.len());
-    for (i, proto) in checkpoint.transactions.iter().enumerate() {
+    for proto in &checkpoint.transactions {
         add_tombstones(&mut execution_objects, proto)?;
         transactions.push(process_transaction(
             proto,
             timestamp_ms,
             cp_sequence_number,
-            tx_lo + i as u64,
         )?);
     }
 
@@ -544,11 +542,9 @@ fn process_transaction(
     proto: &ProtoExecutedTransaction,
     timestamp_ms: u64,
     cp_sequence_number: u64,
-    tx_sequence_number: u64,
 ) -> anyhow::Result<ProcessedTransaction> {
     let contents = hydrate_executed_transaction(proto, timestamp_ms, cp_sequence_number)?;
     Ok(ProcessedTransaction {
-        tx_sequence_number,
         contents: Arc::new(contents),
     })
 }

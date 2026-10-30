@@ -10,7 +10,7 @@
 //! service's cursor format therefore never changes how GraphQL reads its cursors.
 //!
 //! A cursor in this format is [`FORMAT_MARKER`] followed by the BCS encoding of an envelope naming
-//! the cursor's type. Bytes without the marker are read as a legacy cursor ([`legacy`]).
+//! the cursor's type.
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -20,7 +20,6 @@ use bytes::Bytes;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub(crate) mod legacy;
 pub(crate) mod scan;
 
 /// Leading byte of every cursor in GraphQL's own format. It is not a valid protobuf field key (field
@@ -183,11 +182,12 @@ impl<K: Copy> OwnedCursor<K> {
 }
 
 impl Envelope {
-    /// Decode a cursor in GraphQL's own format, or `None` if `bytes` does not start with
-    /// [`FORMAT_MARKER`].
-    pub(crate) fn decode(bytes: &[u8]) -> Option<anyhow::Result<Self>> {
-        let payload = bytes.strip_prefix(&[FORMAT_MARKER])?;
-        Some(bcs::from_bytes(payload).context("Invalid cursor"))
+    /// Decode a cursor in GraphQL's own format.
+    pub(crate) fn decode(bytes: &[u8]) -> anyhow::Result<Self> {
+        let payload = bytes
+            .strip_prefix(&[FORMAT_MARKER])
+            .context("Invalid cursor")?;
+        bcs::from_bytes(payload).context("Invalid cursor")
     }
 }
 
@@ -328,7 +328,7 @@ mod tests {
         // `tx(7, 2)`: checkpoint, then transaction index, as little-endian u64s.
         const TX_7_2: [u8; 16] = [7, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0];
 
-        let decode_transaction = |bytes: &[u8]| match Envelope::decode(bytes).unwrap().unwrap() {
+        let decode_transaction = |bytes: &[u8]| match Envelope::decode(bytes).unwrap() {
             Envelope::Transaction(cursor) => cursor,
             _ => panic!("expected a transaction cursor"),
         };
@@ -376,7 +376,7 @@ mod tests {
         }));
         let expected = [&[0x00, 0x01, 0x00, 0x00][..], &TX_7_2, &[1, 0, 0, 0]].concat();
         assert_eq!(EnvelopeRef::Event(&event).encode()[..], expected[..]);
-        let Envelope::Event(decoded) = Envelope::decode(&expected).unwrap().unwrap() else {
+        let Envelope::Event(decoded) = Envelope::decode(&expected).unwrap() else {
             panic!("expected an event cursor");
         };
         assert_eq!(decoded, event);
@@ -384,64 +384,18 @@ mod tests {
         // Marker, `Checkpoint`, then the sequence number.
         let expected = [0x00, 0x02, 9, 0, 0, 0, 0, 0, 0, 0];
         assert_eq!(EnvelopeRef::Checkpoint(9).encode()[..], expected[..]);
-        let Envelope::Checkpoint(decoded) = Envelope::decode(&expected).unwrap().unwrap() else {
+        let Envelope::Checkpoint(decoded) = Envelope::decode(&expected).unwrap() else {
             panic!("expected a checkpoint cursor");
         };
         assert_eq!(decoded, 9);
     }
 
-    /// Bytes without the marker are not this format; marked bytes that do not parse are an error.
+    /// Bytes without the marker, and marked bytes that do not parse, are an error.
     #[test]
     fn decode_requires_the_marker() {
-        assert!(Envelope::decode(&[0x28, 0x01]).is_none());
-        assert!(Envelope::decode(&[]).is_none());
-        assert!(Envelope::decode(&[FORMAT_MARKER]).unwrap().is_err());
-        assert!(Envelope::decode(&[FORMAT_MARKER, 0x7f]).unwrap().is_err());
-    }
-
-    /// GraphQL releases before this format read byte cursors as protobuf messages (the schema they
-    /// last minted is frozen in [`legacy`]; `0x00` is not a valid field key in any schema), and
-    /// event and checkpoint cursors with a JSON fallback. Every cursor in this format fails all of
-    /// them, so an earlier release rejects it instead of resuming from a wrong position.
-    #[test]
-    fn earlier_releases_reject_this_format() {
-        // A cursor the ledger minted, valid in the legacy format on its own.
-        let ledger = Bytes::from_static(&[0x28, 0x01, 0x3a, 0x02, 0x10, 0x0a]);
-        let event = EventKey {
-            checkpoint: 5,
-            transaction_index: 1,
-            event_index: 2,
-        };
-
-        let cursors = [
-            EnvelopeRef::Transaction(&OwnedCursor::Point(Point::At(tx(5, 1)))).encode(),
-            EnvelopeRef::Transaction(&OwnedCursor::Point(Point::checkpoint_start(0))).encode(),
-            EnvelopeRef::Transaction(&OwnedCursor::Ledger {
-                bytes: ledger.clone(),
-                point: Some(Point::At(tx(5, 1))),
-            })
-            .encode(),
-            EnvelopeRef::Transaction(&OwnedCursor::Ledger {
-                bytes: ledger.clone(),
-                point: None,
-            })
-            .encode(),
-            EnvelopeRef::Event(&OwnedCursor::Point(Point::At(event))).encode(),
-            EnvelopeRef::Event(&OwnedCursor::Ledger {
-                bytes: ledger,
-                point: Some(Point::Before(event)),
-            })
-            .encode(),
-            EnvelopeRef::Checkpoint(0).encode(),
-            EnvelopeRef::Checkpoint(u64::MAX).encode(),
-        ];
-
-        for bytes in cursors {
-            assert!(legacy::LegacyToken::decode(&bytes).is_err(), "{bytes:?}");
-            assert!(
-                serde_json::from_slice::<serde_json::Value>(&bytes).is_err(),
-                "{bytes:?}"
-            );
-        }
+        assert!(Envelope::decode(&[0x28, 0x01]).is_err());
+        assert!(Envelope::decode(&[]).is_err());
+        assert!(Envelope::decode(&[FORMAT_MARKER]).is_err());
+        assert!(Envelope::decode(&[FORMAT_MARKER, 0x7f]).is_err());
     }
 }

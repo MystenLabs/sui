@@ -24,7 +24,6 @@ pub(crate) struct ProcessedCheckpoint {
 
 /// A transaction from a streamed checkpoint with pre-deserialized contents.
 pub(crate) struct ProcessedTransaction {
-    pub(crate) tx_sequence_number: u64,
     /// Wrapped in `Arc` so that subscribers (and resolvers within them) share a single deep
     /// copy of the per-tx contents instead of each cloning the whole `TransactionContents`.
     pub(crate) contents: Arc<TransactionContents>,

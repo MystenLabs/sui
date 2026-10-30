@@ -10,10 +10,9 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use async_graphql::connection::CursorType;
-use fastcrypto::encoding::Base64;
-use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
+use sui_indexer_alt_e2e_tests::graphql::unplaced_tx_cursor;
 use sui_indexer_alt_graphql::CTransaction;
 use sui_indexer_alt_graphql::Point;
 use sui_rpc_cursor::CursorToken;
@@ -651,10 +650,11 @@ async fn test_transaction_subscription_live_progress_then_resume() {
     wait_for_matching_item(&mut stream, &live, transaction_digest).await;
 }
 
-/// Resume with an `after` cursor ahead of the ledger's indexed tip in both checkpoint and
-/// transaction sequence number, as a client's cursor from a live edge can be. The ledger rejects it
-/// as out of range until it catches up, and the backfill retries rather than resuming from the
-/// ledger's tip: a transaction that lands before the cursor must not be delivered.
+/// Resume with an `after` cursor GraphQL cannot place, whose ledger bytes are ahead of the ledger's
+/// indexed tip in both checkpoint and transaction sequence number. GraphQL sends the bytes as they
+/// are, the ledger rejects them as out of range until it catches up, and the backfill retries
+/// rather than resuming from the ledger's tip: a transaction that lands before the cursor must not
+/// be delivered.
 #[tokio::test]
 async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger() {
     tokio::time::timeout(Duration::from_secs(180), async {
@@ -665,13 +665,11 @@ async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger(
         let (tip, total) = cluster.validator_tip_and_total_transactions();
         let resume_seq = tip + 1;
         let resume_tx = total + RESUME_TX_MARGIN;
-        let cursor = Base64::encode(
-            CursorToken::item(Position::Transactions {
-                checkpoint: resume_seq,
-                tx_seq: resume_tx,
-            })
-            .encode(),
-        );
+        let ledger = CursorToken::item(Position::Transactions {
+            checkpoint: resume_seq,
+            tx_seq: resume_tx,
+        });
+        let cursor = unplaced_tx_cursor(&ledger.encode());
         let query = format!(
             r#"subscription($sender: SuiAddress!) {{
             transactions(after: "{cursor}", filter: {{ sentAddress: $sender }}) {{
