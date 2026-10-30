@@ -30,6 +30,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
@@ -91,6 +92,7 @@ pub(crate) async fn list_events(
     let transactions_stage = ctx.stage(PipelineStage::Transactions);
 
     validate_checkpoint_bounds(request.start_checkpoint, request.end_checkpoint)?;
+    let positions = CheckpointPositions::from_events_request(&request)?;
     let read_mask = Arc::new(validate_event_read_mask(request.read_mask)?);
     let options = QueryOptions::events_from_proto(
         request.options.as_ref(),
@@ -109,7 +111,7 @@ pub(crate) async fn list_events(
     let wants_json = read_mask.contains(ProtoEvent::JSON_FIELD.name);
     let resolution = event_resolution(wants_json);
 
-    let event_range = resolve_event_range(&client, checkpoint_range, &options)
+    let event_range = resolve_event_range(&client, checkpoint_range, &positions, &options)
         .instrument(debug_span!("resolve_event_range"))
         .await?;
     let exhaustion = event_range.exhaustion;
@@ -840,22 +842,20 @@ fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTre
 }
 
 /// Resolve the explicit event-coordinate scan window from the logical checkpoint
-/// bounds. Filtered scans are additionally bounded at runtime by the per-request
-/// bitmap bucket budget; that limit surfaces as SCAN_LIMIT, not as an up-front
-/// cp-range clamp.
+/// bounds, narrowed to the request's `positions`. Filtered scans are additionally
+/// bounded at runtime by the per-request bitmap bucket budget; that limit
+/// surfaces as SCAN_LIMIT, not as an up-front cp-range clamp.
 async fn resolve_event_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
+    positions: &CheckpointPositions,
     options: &QueryOptions,
 ) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
-    let tx_range = client
-        .checkpoint_to_tx_range(cp_range.range.clone())
+    let boundary = client
+        .checkpoint_tx_boundaries(positions.boundary_checkpoints(&cp_range.range))
         .await?;
-    ResolvedScan::<IntraTxCoordinate>::resolve(
-        cp_range,
-        IntraTxCoordinate::tx_window(tx_range),
-        options,
-    )
+    let window = positions.event_window(&cp_range.range, boundary)?;
+    ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, window, options)
 }
 
 #[cfg(test)]
