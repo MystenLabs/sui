@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_error_reports"],"macro":[["sp",1]],"struct":["PTBError","Span","Spanned"],"type":["PTBResult"]};

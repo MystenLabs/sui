@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Ordering","RangeExhaustion"],"fn":["below_serving_floor","validate_checkpoint_bounds"],"struct":["IntraTxCoordinate","QueryOptions","ResolvedCheckpointRange","ResolvedScan","ScanBounds"],"trait":["ScanCursor","ScanPosition"],"type":["IntraTxScanBounds"]};

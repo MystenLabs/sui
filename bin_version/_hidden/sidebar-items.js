@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":[["concat",1],["git_version",1]]};
