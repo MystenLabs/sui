@@ -6670,9 +6670,15 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
         .build();
     let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
 
-    for disable_dependencies in [false, true] {
-        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        config.set_disable_effects_tx_dependencies_for_testing(disable_dependencies);
+    for (protocol_version, disable_dependencies) in [
+        (ProtocolVersion::new(137), false),
+        (ProtocolVersion::max(), true),
+    ] {
+        let config = ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+        assert_eq!(
+            config.disable_effects_tx_dependencies(),
+            disable_dependencies
+        );
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(config)
             .with_starting_objects(&[gas_object.clone()])

@@ -68,6 +68,7 @@ impl Executor {
             generate_df_type_layouts,
             private_generics_verifier_v2,
             disable_id_leak_verifier,
+            disable_effects_tx_dependencies,
             framework_tx_context_mut_restrictions,
             additional_borrow_checks,
             disallow_jump_orphans,

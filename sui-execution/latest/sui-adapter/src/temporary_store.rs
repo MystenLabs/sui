@@ -538,7 +538,6 @@ impl<'backing> TemporaryStore<'backing> {
         mut self,
         shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
-        mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
         gas_coin: Option<ObjectID>,
@@ -557,22 +556,6 @@ impl<'backing> TemporaryStore<'backing> {
         // This must happens before merge_accumulator_events.
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
         self.merge_accumulator_events();
-
-        if !self.protocol_config.disable_effects_tx_dependencies() {
-            // Even on abort, successfully receiving an object creates a dependency.
-            for (id, expected_version, expected_digest) in &self.receiving_objects {
-                if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {
-                    // A dynamic-field load can spoof a receiving input, so authenticate the
-                    // version, digest and owner before registering its dependency.
-                    let loaded_via_receive = obj_meta.version == *expected_version
-                        && obj_meta.digest == *expected_digest
-                        && obj_meta.owner.is_address_owned();
-                    if loaded_via_receive {
-                        transaction_dependencies.insert(obj_meta.previous_transaction);
-                    }
-                }
-            }
-        }
 
         assert!(self.protocol_config.enable_effects_v2());
 
@@ -604,7 +587,7 @@ impl<'backing> TemporaryStore<'backing> {
             } else {
                 Some(inner.events.digest())
             },
-            transaction_dependencies.into_iter().collect(),
+            vec![],
         );
 
         (inner, effects)
@@ -727,8 +710,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Consume this (post-execution) store and return the store used by a `BumpOnly` exit: keep
     /// the input-derived state as well as information about the execution needed for replay,
-    /// discard everything related to the execution results, then bump the mutable
-    /// inputs. Dependencies are retained only when enabled by the protocol.
+    /// discard everything related to the execution results, then bump the mutable inputs.
     pub(crate) fn into_bump_only(self) -> Self {
         let Self {
             // Input-derived - reused verbatim.

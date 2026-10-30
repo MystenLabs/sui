@@ -81,10 +81,16 @@ macro_rules! transfer_test_runner {
 }
 
 fn effects_dependencies_protocol_config(disable_effects_tx_dependencies: bool) -> ProtocolConfig {
-    let mut protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config
-        .set_disable_effects_tx_dependencies_for_testing(disable_effects_tx_dependencies);
+    let protocol_version = if disable_effects_tx_dependencies {
+        ProtocolVersion::max()
+    } else {
+        ProtocolVersion::new(137)
+    };
+    let protocol_config = ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+    assert_eq!(
+        protocol_config.disable_effects_tx_dependencies(),
+        disable_effects_tx_dependencies
+    );
     protocol_config
 }
 

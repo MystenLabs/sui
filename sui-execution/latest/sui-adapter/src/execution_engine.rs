@@ -14,7 +14,7 @@ pub(crate) mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
     use mysten_common::{assert_reachable, debug_fatal_with_metric};
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::BTreeMap;
     use std::{cell::RefCell, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{
         ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE, UnsettledObjectFundsRead,
@@ -178,12 +178,6 @@ pub(crate) mod checked {
         let input_objects = input_objects.into_inner();
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
-        let mut transaction_dependencies = if protocol_config.disable_effects_tx_dependencies() {
-            BTreeSet::new()
-        } else {
-            input_objects.transaction_dependencies()
-        };
-
         let mut temporary_store = TemporaryStore::new(
             store,
             input_objects,
@@ -260,7 +254,7 @@ pub(crate) mod checked {
             }
         };
 
-        // Shared infallible tail: trim the genesis dependency, build effects, telemetry.
+        // Shared infallible tail: build effects and telemetry.
         #[skip_checked_arithmetic]
         trace!(
             tx_digest = ?transaction_digest,
@@ -270,11 +264,9 @@ pub(crate) mod checked {
             "Finished execution of transaction with status {:?}",
             status
         );
-        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
         let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
-            transaction_dependencies,
             cost_summary,
             status,
             gas_coin,
