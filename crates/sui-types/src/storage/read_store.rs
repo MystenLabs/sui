@@ -826,8 +826,31 @@ pub trait RpcIndexes: Send + Sync {
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Option<(u64, ObjectID)>>;
 
+    /// Resolve the version `object_id` had as of the end of `checkpoint`:
+    /// the version recorded by the latest checkpoint at or before
+    /// `checkpoint` that changed the object. That version may be a
+    /// deletion or wrapping tombstone, which has no live object behind it.
+    /// `None` if the object did not exist as of `checkpoint`.
+    ///
+    /// The caller must confirm `checkpoint` is within the index's available
+    /// range, and that [`Self::is_history_backfill_pending`] is `false`; this
+    /// method assumes both.
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<SequenceNumber>>;
+
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
+
+    /// Whether a restore left the checkpoint-pinned indexes behind
+    /// [`Self::get_object_version_at_checkpoint`] and
+    /// [`Self::get_package_at_checkpoint`] still backfilling history below the
+    /// restore checkpoint. While it has, those reads can be wrong at any
+    /// checkpoint the indexes cover, not just above the indexed tip, so callers
+    /// must not serve them.
+    fn is_history_backfill_pending(&self) -> Result<bool>;
 
     /// The highest checkpoint the live-object cohort -- the indexes derivable
     /// from the live object set (owned objects, types, and balances) -- has

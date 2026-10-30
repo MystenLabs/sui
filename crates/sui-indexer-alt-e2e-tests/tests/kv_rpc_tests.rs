@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use itertools::Itertools;
 use move_core_types::ident_str;
+use prost::Message;
 use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
@@ -16,6 +18,7 @@ use sui_kv_rpc::StageConfig;
 use sui_kv_rpc::StagesConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::google::rpc::BadRequest;
 use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
@@ -36,6 +39,7 @@ use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
+use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_rpc::proto::sui::rpc::v2::Ordering;
 use sui_rpc::proto::sui::rpc::v2::PackageWriteFilter;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
@@ -58,9 +62,12 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
+use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
@@ -118,8 +125,8 @@ struct CheckpointsResult {
 fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
     options.map(|o| o.ordering()).unwrap_or(Ordering::Ascending)
 }
-/// A cluster whose kv-rpc server serves the List APIs. They are off by default,
-/// matching production, so every test in this file opts in.
+/// A cluster whose kv-rpc server serves the List APIs and `at_checkpoint` object reads. Both are
+/// off by default, matching production, so every test in this file opts in.
 async fn list_api_cluster() -> FullCluster {
     list_api_cluster_with_config(KvRpcConfig::default()).await
 }
@@ -127,6 +134,7 @@ async fn list_api_cluster() -> FullCluster {
 /// [`list_api_cluster`] for tests that also need to tune the kv-rpc config.
 async fn list_api_cluster_with_config(mut kv_rpc_config: KvRpcConfig) -> FullCluster {
     kv_rpc_config.enable_list_apis = Some(true);
+    kv_rpc_config.enable_object_at_checkpoint = Some(true);
     FullCluster::new_with_configs(
         Simulacrum::new(),
         OffchainClusterConfig {
@@ -1331,6 +1339,543 @@ async fn test_batch_get_objects() {
             other => panic!("expected NotFound error at index 4, got: {other:?}"),
         }
     }
+}
+
+fn basics_pkg_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/basics")
+}
+
+/// Call `basics::object_basics::<function>` and seal it into its own checkpoint. Returns the
+/// effects, that checkpoint's sequence number, and the updated gas ref.
+async fn call_object_basics(
+    cluster: &mut FullCluster,
+    sender: SuiAddress,
+    kp: &AccountKeyPair,
+    gas: ObjectRef,
+    package_id: ObjectID,
+    function: &'static str,
+    args: Vec<CallArg>,
+) -> (TransactionEffects, u64, ObjectRef) {
+    let (fx, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(
+            TestTransactionBuilder::new(sender, gas, cluster.reference_gas_price())
+                .with_gas_budget(DEFAULT_GAS_BUDGET)
+                .move_call(package_id, "object_basics", function, args)
+                .build(),
+            vec![kp],
+        ))
+        .expect("object_basics call failed");
+    assert!(err.is_none(), "object_basics::{function} failed: {err:?}");
+    let checkpoint = cluster.create_checkpoint().await.sequence_number;
+    let gas = output_ref(&fx, gas.0);
+    (fx, checkpoint, gas)
+}
+
+/// The reference `effects` wrote for `object_id`.
+fn output_ref(effects: &TransactionEffects, object_id: ObjectID) -> ObjectRef {
+    effects
+        .all_changed_objects()
+        .into_iter()
+        .map(|(object_ref, _, _)| object_ref)
+        .find(|object_ref| object_ref.0 == object_id)
+        .unwrap_or_else(|| panic!("transaction did not write {object_id}"))
+}
+
+/// The one object `effects` created. Panics unless exactly one object was created.
+fn created_object(effects: &TransactionEffects) -> ObjectID {
+    let created = effects.created();
+    assert_eq!(created.len(), 1, "expected exactly one created object");
+    created[0].0.0
+}
+
+fn owned_arg(object_ref: ObjectRef) -> CallArg {
+    CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))
+}
+
+fn pure_arg<T: serde::Serialize>(value: &T) -> CallArg {
+    CallArg::Pure(bcs::to_bytes(value).unwrap())
+}
+
+/// One `basics::object_basics::Object` driven through create, set_value, wrap, unwrap, and delete,
+/// one step per checkpoint, with an empty checkpoint between create and set_value. Wrapping
+/// creates `wrapper`, and unwrapping deletes it.
+struct ObjectLifecycle {
+    object: ObjectID,
+    wrapper: ObjectID,
+    /// `(checkpoint, object, version, live)` for every change, in checkpoint order. `live` is
+    /// false for a change that deleted or wrapped the object.
+    changes: Vec<(u64, ObjectID, u64, bool)>,
+    /// The checkpoint sealed after publishing, just before the object is created.
+    publish_checkpoint: u64,
+    set_value_checkpoint: u64,
+    delete_checkpoint: u64,
+    /// The sender's gas after the last step.
+    gas: ObjectRef,
+}
+
+impl ObjectLifecycle {
+    async fn run(
+        cluster: &mut FullCluster,
+        sender: SuiAddress,
+        kp: &AccountKeyPair,
+        gas: ObjectRef,
+    ) -> Self {
+        let (package_id, gas) = publish_package(cluster, sender, kp, gas, basics_pkg_path()).await;
+        let publish_checkpoint = cluster.create_checkpoint().await.sequence_number;
+
+        let mut changes = Vec::new();
+        let (create, create_checkpoint, gas) = call_object_basics(
+            cluster,
+            sender,
+            kp,
+            gas,
+            package_id,
+            "create",
+            vec![pure_arg(&7u64), pure_arg(&sender)],
+        )
+        .await;
+        let object = created_object(&create);
+        changes.push((
+            create_checkpoint,
+            object,
+            create.lamport_version().value(),
+            true,
+        ));
+        // Seal an empty checkpoint, in which the object is live but unchanged.
+        cluster.create_checkpoint().await;
+
+        let (set_value, set_value_checkpoint, gas) = call_object_basics(
+            cluster,
+            sender,
+            kp,
+            gas,
+            package_id,
+            "set_value",
+            vec![owned_arg(output_ref(&create, object)), pure_arg(&8u64)],
+        )
+        .await;
+        changes.push((
+            set_value_checkpoint,
+            object,
+            set_value.lamport_version().value(),
+            true,
+        ));
+
+        let (wrap, wrap_checkpoint, gas) = call_object_basics(
+            cluster,
+            sender,
+            kp,
+            gas,
+            package_id,
+            "wrap",
+            vec![owned_arg(output_ref(&set_value, object))],
+        )
+        .await;
+        let wrapper = created_object(&wrap);
+        let wrap_version = wrap.lamport_version().value();
+        changes.push((wrap_checkpoint, object, wrap_version, false));
+        changes.push((wrap_checkpoint, wrapper, wrap_version, true));
+
+        let (unwrap, unwrap_checkpoint, gas) = call_object_basics(
+            cluster,
+            sender,
+            kp,
+            gas,
+            package_id,
+            "unwrap",
+            vec![owned_arg(output_ref(&wrap, wrapper))],
+        )
+        .await;
+        let unwrap_version = unwrap.lamport_version().value();
+        changes.push((unwrap_checkpoint, object, unwrap_version, true));
+        changes.push((unwrap_checkpoint, wrapper, unwrap_version, false));
+
+        let (delete, delete_checkpoint, gas) = call_object_basics(
+            cluster,
+            sender,
+            kp,
+            gas,
+            package_id,
+            "delete",
+            vec![owned_arg(output_ref(&unwrap, object))],
+        )
+        .await;
+        changes.push((
+            delete_checkpoint,
+            object,
+            delete.lamport_version().value(),
+            false,
+        ));
+
+        Self {
+            object,
+            wrapper,
+            changes,
+            publish_checkpoint,
+            set_value_checkpoint,
+            delete_checkpoint,
+            gas,
+        }
+    }
+
+    /// The version `id` was live at at the end of `checkpoint`: the version of its latest change
+    /// at or before `checkpoint`, unless that change deleted or wrapped it, or there is none.
+    fn live_version_at(&self, id: ObjectID, checkpoint: u64) -> Option<u64> {
+        self.changes
+            .iter()
+            .rev()
+            .find(|(changed_at, changed, _, _)| *changed == id && *changed_at <= checkpoint)
+            .and_then(|&(_, _, version, live)| live.then_some(version))
+    }
+}
+
+/// A `GetObjectRequest` for `id` with the given `version` and `at_checkpoint`.
+fn object_request(
+    id: ObjectID,
+    version: Option<u64>,
+    at_checkpoint: Option<u64>,
+) -> GetObjectRequest {
+    let mut req = GetObjectRequest::default();
+    req.object_id = Some(id.to_canonical_string(true));
+    req.version = version;
+    req.at_checkpoint = at_checkpoint;
+    req
+}
+
+fn batch_request(requests: Vec<GetObjectRequest>) -> BatchGetObjectsRequest {
+    let mut req = BatchGetObjectsRequest::default();
+    req.requests = requests;
+    req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+    req
+}
+
+/// One object read: the object, or the error's code and message.
+type ObjectRead = Result<Object, (tonic::Code, String)>;
+
+/// Read one object with `GetObject`.
+async fn get_object_read(
+    client: &mut LedgerServiceClient<Channel>,
+    mut req: GetObjectRequest,
+) -> ObjectRead {
+    req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+    match client.get_object(req).await {
+        Ok(response) => Ok(response
+            .into_inner()
+            .object
+            .expect("object should be present")),
+        Err(status) => Err((status.code(), status.message().to_owned())),
+    }
+}
+
+/// One item of a `BatchGetObjects` response.
+fn batch_item_read(result: &get_object_result::Result) -> ObjectRead {
+    match result {
+        get_object_result::Result::Object(object) => Ok(object.clone()),
+        get_object_result::Result::Error(status) => {
+            Err((tonic::Code::from(status.code), status.message.clone()))
+        }
+        other => panic!("unexpected batch result: {other:?}"),
+    }
+}
+
+/// Read every request in one `BatchGetObjects` call, in request order.
+async fn batch_get_object_reads(
+    client: &mut LedgerServiceClient<Channel>,
+    requests: Vec<GetObjectRequest>,
+) -> Vec<ObjectRead> {
+    let len = requests.len();
+    let response = client
+        .batch_get_objects(batch_request(requests))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.objects.len(), len, "one result per request");
+    response
+        .objects
+        .iter()
+        .map(|item| batch_item_read(item.result.as_ref().expect("result should be set")))
+        .collect()
+}
+
+/// Assert `read` found `id` at `version`.
+fn assert_object_found(read: &ObjectRead, id: ObjectID, version: u64, context: &str) {
+    match read {
+        Ok(object) => {
+            assert_eq!(
+                object.object_id.as_deref(),
+                Some(id.to_canonical_string(true).as_str()),
+                "{context}"
+            );
+            assert_eq!(object.version, Some(version), "{context}");
+        }
+        Err(err) => panic!("{context}: expected version {version}, got error {err:?}"),
+    }
+}
+
+/// Assert `read` is the `NotFound` for `id` having no live state at the end of `checkpoint`.
+fn assert_not_live_at_checkpoint(read: &ObjectRead, id: ObjectID, checkpoint: u64, context: &str) {
+    let expected = format!(
+        "Object {} at checkpoint {checkpoint} not found",
+        id.to_canonical_string(true)
+    );
+    match read {
+        Err((code, message)) => {
+            assert_eq!(*code, tonic::Code::NotFound, "{context}: {message}");
+            assert_eq!(message, &expected, "{context}");
+        }
+        Ok(object) => panic!("{context}: expected NotFound, got {object:?}"),
+    }
+}
+
+/// Assert `read` is the `NotFound` for a checkpoint above the served height.
+fn assert_not_yet_indexed(read: &ObjectRead, context: &str) {
+    match read {
+        Err((code, message)) => {
+            assert_eq!(*code, tonic::Code::NotFound, "{context}: {message}");
+            assert!(
+                message.contains("is not yet indexed"),
+                "{context}: unexpected message {message}"
+            );
+        }
+        Ok(object) => panic!("{context}: expected NotFound, got {object:?}"),
+    }
+}
+
+/// The fields named by the `BadRequest` field violations in `status`'s details.
+fn bad_request_fields(status: &tonic::Status) -> Vec<String> {
+    sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .expect("error details should decode as google.rpc.Status")
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<BadRequest>().ok())
+        .flat_map(|bad_request| bad_request.field_violations)
+        .map(|violation| violation.field)
+        .collect()
+}
+
+/// `at_checkpoint` reads resolve an object to its state at the end of the checkpoint, through
+/// creation, mutation, wrapping, unwrapping, and deletion, and at a checkpoint in which the live
+/// object did not change; `GetObject` and `BatchGetObjects` agree item by item, including in
+/// batches that mix them with exact-version and latest reads.
+#[tokio::test]
+async fn test_get_object_at_checkpoint() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
+    let ObjectLifecycle {
+        object, wrapper, ..
+    } = lifecycle;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let served_height = client
+        .get_service_info(GetServiceInfoRequest::default())
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint_height
+        .expect("served height should be set");
+    assert!(served_height >= lifecycle.delete_checkpoint);
+
+    // 1. Every checkpoint from just before creation through deletion, for both objects.
+    // Checkpoints between two changes resolve to the earlier change.
+    let reads: Vec<(ObjectID, u64)> = (lifecycle.publish_checkpoint..=lifecycle.delete_checkpoint)
+        .flat_map(|checkpoint| [(object, checkpoint), (wrapper, checkpoint)])
+        .collect();
+    let assert_lifecycle_read = |read: &ObjectRead, id: ObjectID, checkpoint: u64, how: &str| {
+        let context = format!("{how}: {id} at checkpoint {checkpoint}");
+        match lifecycle.live_version_at(id, checkpoint) {
+            Some(version) => assert_object_found(read, id, version, &context),
+            None => assert_not_live_at_checkpoint(read, id, checkpoint, &context),
+        }
+    };
+
+    for &(id, checkpoint) in &reads {
+        let read = get_object_read(&mut client, object_request(id, None, Some(checkpoint))).await;
+        assert_lifecycle_read(&read, id, checkpoint, "GetObject");
+    }
+
+    let batch = batch_get_object_reads(
+        &mut client,
+        reads
+            .iter()
+            .map(|&(id, checkpoint)| object_request(id, None, Some(checkpoint)))
+            .collect(),
+    )
+    .await;
+    for (read, &(id, checkpoint)) in batch.iter().zip_eq(&reads) {
+        assert_lifecycle_read(read, id, checkpoint, "BatchGetObjects");
+    }
+
+    // 2. A batch mixing exact-version, latest, and `at_checkpoint` reads, with duplicates, answers
+    // each item in request order.
+    let set_value_version = lifecycle
+        .live_version_at(object, lifecycle.set_value_checkpoint)
+        .unwrap();
+    let gas = lifecycle.gas;
+    let not_yet_indexed = served_height + 1;
+    let batch = batch_get_object_reads(
+        &mut client,
+        vec![
+            object_request(object, Some(set_value_version), None),
+            object_request(gas.0, None, None),
+            object_request(object, None, Some(lifecycle.delete_checkpoint)),
+            object_request(object, None, Some(lifecycle.set_value_checkpoint)),
+            object_request(object, None, Some(lifecycle.set_value_checkpoint)),
+            object_request(object, None, Some(lifecycle.delete_checkpoint)),
+            object_request(object, None, Some(not_yet_indexed)),
+        ],
+    )
+    .await;
+    assert_object_found(&batch[0], object, set_value_version, "exact version");
+    assert_object_found(&batch[1], gas.0, gas.1.value(), "latest gas");
+    assert_not_live_at_checkpoint(
+        &batch[2],
+        object,
+        lifecycle.delete_checkpoint,
+        "deleted object",
+    );
+    assert_object_found(&batch[3], object, set_value_version, "mutated object");
+    assert_object_found(
+        &batch[4],
+        object,
+        set_value_version,
+        "duplicate mutated object",
+    );
+    assert_not_live_at_checkpoint(
+        &batch[5],
+        object,
+        lifecycle.delete_checkpoint,
+        "duplicate deleted object",
+    );
+    assert_not_yet_indexed(&batch[6], "batch item above the served height");
+
+    // 3. A checkpoint above the served height fails a single read with `NotFound`.
+    for checkpoint in [not_yet_indexed, u64::MAX] {
+        let read =
+            get_object_read(&mut client, object_request(object, None, Some(checkpoint))).await;
+        assert_not_yet_indexed(&read, &format!("GetObject at checkpoint {checkpoint}"));
+    }
+
+    // 4. Setting both `version` and `at_checkpoint` is invalid, and fails the whole batch.
+    let both = || {
+        object_request(
+            object,
+            Some(set_value_version),
+            Some(lifecycle.set_value_checkpoint),
+        )
+    };
+    let read = get_object_read(&mut client, both()).await;
+    match read {
+        Err((code, message)) => {
+            assert_eq!(code, tonic::Code::InvalidArgument, "{message}");
+            assert!(message.contains("mutually exclusive"), "{message}");
+        }
+        Ok(object) => panic!("expected InvalidArgument, got {object:?}"),
+    }
+
+    let err = client
+        .batch_get_objects(batch_request(vec![
+            object_request(gas.0, None, None),
+            object_request(object, None, Some(lifecycle.set_value_checkpoint)),
+            both(),
+        ]))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
+    assert_eq!(bad_request_fields(&err), ["requests[2].at_checkpoint"]);
+
+    // 5. Every read above asks only for `object_id` and `version`, which the version index
+    // answers alone. A mask that needs more, such as `digest`, reads the object itself, and gets
+    // the same object as an exact-version read of the version the index resolved.
+    let digest_mask = || FieldMask::from_paths(["object_id", "version", "digest"]);
+    let get_with_digest = |version: Option<u64>, at_checkpoint: Option<u64>| {
+        let mut req = object_request(object, version, at_checkpoint);
+        req.read_mask = Some(digest_mask());
+        req
+    };
+    let exact = client
+        .get_object(get_with_digest(Some(set_value_version), None))
+        .await
+        .unwrap()
+        .into_inner()
+        .object
+        .expect("object should be present");
+    assert!(exact.digest.is_some(), "the digest mask should render it");
+
+    let at_checkpoint = client
+        .get_object(get_with_digest(None, Some(lifecycle.set_value_checkpoint)))
+        .await
+        .unwrap()
+        .into_inner()
+        .object
+        .expect("object should be present");
+    assert_eq!(at_checkpoint, exact, "GetObject with a digest mask");
+
+    let mut req = BatchGetObjectsRequest::default();
+    req.requests = vec![
+        object_request(object, None, Some(lifecycle.set_value_checkpoint)),
+        object_request(object, None, Some(lifecycle.delete_checkpoint)),
+    ];
+    req.read_mask = Some(digest_mask());
+    let response = client.batch_get_objects(req).await.unwrap().into_inner();
+    assert_eq!(response.objects.len(), 2);
+    let reads: Vec<ObjectRead> = response
+        .objects
+        .iter()
+        .map(|item| batch_item_read(item.result.as_ref().expect("result should be set")))
+        .collect();
+    assert_eq!(
+        reads[0].as_ref().ok(),
+        Some(&exact),
+        "BatchGetObjects with a digest mask"
+    );
+    assert_not_live_at_checkpoint(
+        &reads[1],
+        object,
+        lifecycle.delete_checkpoint,
+        "deleted object with a digest mask",
+    );
+}
+
+/// `at_checkpoint` reads are off by default: kv-rpc rejects them with `Unimplemented`, failing a
+/// whole batch that contains one.
+#[tokio::test]
+async fn test_get_object_at_checkpoint_disabled_by_default() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (_, _, gas) = cluster.funded_account(DEFAULT_GAS_BUDGET).unwrap();
+    let checkpoint = cluster.create_checkpoint().await.sequence_number;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let read = get_object_read(&mut client, object_request(gas.0, None, Some(checkpoint))).await;
+    match read {
+        Err((code, message)) => assert_eq!(code, tonic::Code::Unimplemented, "{message}"),
+        Ok(object) => panic!("expected Unimplemented, got {object:?}"),
+    }
+
+    let err = client
+        .batch_get_objects(batch_request(vec![
+            object_request(gas.0, None, None),
+            object_request(gas.0, None, Some(checkpoint)),
+        ]))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::Unimplemented, "{err:?}");
+
+    // Validation runs before the capability check.
+    let err = client
+        .batch_get_objects(batch_request(vec![object_request(
+            gas.0,
+            Some(gas.1.value()),
+            Some(checkpoint),
+        )]))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
 }
 
 #[tokio::test]

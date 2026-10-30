@@ -609,8 +609,9 @@ pub struct KvRpcConfig {
     pub bigtable_http2_connection_window_bytes: Option<u32>,
 
     /// Deprecated and ignored: the `GetServiceInfo` watermark set is derived
-    /// from `enable-list-apis` and can no longer be chosen per pipeline.
-    /// Still parsed so existing config files keep loading.
+    /// from `enable-list-apis` and `enable-object-at-checkpoint`, and can no
+    /// longer be chosen per pipeline. Still parsed so existing config files keep
+    /// loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
 
@@ -624,6 +625,24 @@ pub struct KvRpcConfig {
     /// `enable-list-apis` is unset.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_experimental_query_apis: Option<bool>,
+
+    /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint`, and fold the
+    /// alpha `kvstore_object_versions_by_checkpoint` pipeline into the `GetServiceInfo`
+    /// checkpoint height. Defaults to `false`, which rejects those requests with
+    /// `Unimplemented`.
+    ///
+    /// Enable this only after `kvstore_object_versions_by_checkpoint` has been backfilled from
+    /// genesis. Its table has no restore floor, so an object unchanged since before the
+    /// pipeline's first checkpoint would wrongly read as `NotFound`. The server cannot check
+    /// this: a backfill run as a separate task writes its own watermark row, so the main
+    /// pipeline's `reader_lo` does not say whether history is complete. Setting this flag is the
+    /// operator's statement that it is.
+    ///
+    /// If this is on but the pipeline is not running, the pipeline has no watermark, the
+    /// `GetServiceInfo` height cannot be computed, and every request on this replica fails with
+    /// `Unavailable`, as with `enable-list-apis`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_object_at_checkpoint: Option<bool>,
 
     /// Tunables for the ledger-history list APIs.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -735,6 +754,10 @@ impl KvRpcConfig {
         self.enable_list_apis
             .or(self.enable_experimental_query_apis)
             .unwrap_or(false)
+    }
+
+    pub fn enable_object_at_checkpoint(&self) -> bool {
+        self.enable_object_at_checkpoint.unwrap_or(false)
     }
 
     /// TLS identity, when both cert and key are set and non-empty.
@@ -1161,17 +1184,36 @@ render-ahead = 3
         let cfg = KvRpcConfig::default();
         assert!(!cfg.enable_list_apis());
         assert_eq!(
-            service_info_watermark_pipelines(cfg.enable_list_apis()),
+            service_info_watermark_pipelines(cfg.enable_list_apis(), false),
             DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec(),
         );
 
         let yaml = "enable-list-apis: true\n";
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
         assert!(cfg.enable_list_apis());
-        let pipelines = service_info_watermark_pipelines(cfg.enable_list_apis());
+        let pipelines = service_info_watermark_pipelines(cfg.enable_list_apis(), false);
         for name in LIST_API_SERVICE_INFO_WATERMARK_PIPELINES {
             assert!(pipelines.contains(&name), "{name} must bound the height");
         }
+    }
+
+    #[test]
+    fn object_at_checkpoint_off_by_default_and_bounds_the_watermark_set() {
+        let cfg = KvRpcConfig::default();
+        assert!(!cfg.enable_object_at_checkpoint());
+        assert!(
+            !service_info_watermark_pipelines(false, cfg.enable_object_at_checkpoint())
+                .contains(&sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE)
+        );
+
+        let yaml = "enable-object-at-checkpoint: true\n";
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(cfg.enable_object_at_checkpoint());
+        assert!(
+            service_info_watermark_pipelines(false, cfg.enable_object_at_checkpoint())
+                .contains(&sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE),
+            "the object versions index must bound the height",
+        );
     }
 
     #[test]
@@ -1200,7 +1242,7 @@ enable-list-apis: true
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).expect("stale key must not hard-fail");
         cfg.validate().unwrap();
         assert_eq!(
-            service_info_watermark_pipelines(cfg.enable_list_apis()).len(),
+            service_info_watermark_pipelines(cfg.enable_list_apis(), false).len(),
             DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.len()
                 + LIST_API_SERVICE_INFO_WATERMARK_PIPELINES.len(),
         );

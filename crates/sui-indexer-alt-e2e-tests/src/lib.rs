@@ -47,6 +47,7 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
@@ -130,6 +131,10 @@ pub struct OffchainCluster {
 
     /// The pipelines that the indexer is populating.
     pipelines: Vec<&'static str>,
+
+    /// The BigTable archival indexer's pipelines: [`ALL_PIPELINE_NAMES`] and
+    /// [`ALPHA_PIPELINE_NAMES`].
+    bigtable_pipelines: Vec<&'static str>,
 
     /// Handles to all running services. Held on to so the services are not dropped (and therefore
     /// aborted) until the cluster is stopped.
@@ -261,7 +266,7 @@ impl FullCluster {
             .offchain
             .wait_for_graphql(checkpoint.sequence_number, timeout);
         let bigtable = self.offchain.wait_for_bigtable(
-            &ALL_PIPELINE_NAMES,
+            &self.offchain.bigtable_pipelines,
             checkpoint.sequence_number,
             timeout,
         );
@@ -524,6 +529,11 @@ impl OffchainCluster {
             bigtable_client,
             db,
             pipelines,
+            bigtable_pipelines: ALL_PIPELINE_NAMES
+                .iter()
+                .chain(&ALPHA_PIPELINE_NAMES)
+                .copied()
+                .collect(),
             services,
             bigtable_emulator,
             database,
@@ -939,7 +949,8 @@ async fn start_archival(
         CommitterConfig::default(),
         BtIndexerConfig::default(),
         bt_pipeline_layer,
-        &[],
+        // Run the alpha pipelines too, so tests can enable the reads they back.
+        &ALPHA_PIPELINE_NAMES,
         Chain::Unknown,
         registry,
     )
@@ -963,6 +974,7 @@ async fn start_archival(
         kv_rpc_config.stages(),
         kv_rpc_config.enable_list_apis(),
         kv_rpc_config.watermark_source(),
+        kv_rpc_config.enable_object_at_checkpoint(),
     )
     .await
     .context("Failed to create KvRpcServer")?;
