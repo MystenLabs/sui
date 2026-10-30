@@ -1,38 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::hash::{Blake2b256, HashFunction};
 use move_core_types::u256::U256;
-use sui_types::accumulator_root::{EventCommitment, EventStreamHead, build_event_merkle_root};
-
-const U256_ZERO: U256 = U256::zero();
-
-fn hash_two_to_one_u256(left: U256, right: U256) -> U256 {
-    let mut concatenated = bcs::to_bytes(&left).expect("Failed to serialize left U256");
-    concatenated.extend_from_slice(&bcs::to_bytes(&right).expect("Failed to serialize right U256"));
-    let hash = Blake2b256::digest(&concatenated);
-    U256::from_le_bytes(&hash.digest)
-}
-
-fn add_to_stream(mmr: &mut Vec<U256>, new_val: U256) {
-    let mut i = 0;
-    let mut cur = new_val;
-
-    while i < mmr.len() {
-        let r = &mut mmr[i];
-        if *r == U256_ZERO {
-            *r = cur;
-            return;
-        } else {
-            cur = hash_two_to_one_u256(*r, cur);
-            *r = U256_ZERO;
-        }
-        i += 1;
-    }
-
-    // Vector length insufficient. Increase by 1.
-    mmr.push(cur);
-}
+use sui_types::accumulator_root::{
+    EventCommitment, EventStreamHead, add_to_mmr, build_event_merkle_root,
+};
 
 // Returns the new stream head after applying the updates.
 // - head: the stream head to update.
@@ -59,7 +31,7 @@ pub fn apply_stream_updates(
 
         let digest = build_event_merkle_root(&cp_events);
         let merkle_root = U256::from_le_bytes(&digest.into_inner());
-        add_to_stream(&mut new_head.mmr, merkle_root);
+        add_to_mmr(&mut new_head.mmr, merkle_root);
         new_head.num_events += cp_events.len() as u64;
         new_head.checkpoint_seq = checkpoint_seq;
     }
@@ -77,7 +49,7 @@ mod tests {
     fn test_basic() {
         let mut stream_head = EventStreamHead::new();
         let new_val = U256::from(1u64);
-        add_to_stream(&mut stream_head.mmr, new_val);
+        add_to_mmr(&mut stream_head.mmr, new_val);
         assert_eq!(stream_head.mmr, vec![U256::from(1u64)]);
     }
 
@@ -87,7 +59,7 @@ mod tests {
 
         for i in 0..8 {
             let new_val = U256::from(50u64 + i);
-            add_to_stream(&mut stream_head.mmr, new_val);
+            add_to_mmr(&mut stream_head.mmr, new_val);
         }
 
         // This should match the Move test_mmr_digest_compat_with_rust result
