@@ -390,24 +390,11 @@ impl ObjectNotFoundError {
         }
     }
 
-    /// The object had no live state at the end of `checkpoint`: it did not exist yet, or it had
-    /// been deleted or wrapped.
-    pub fn new_at_checkpoint(
-        object_id: sui_sdk_types::Address,
-        checkpoint: sui_sdk_types::CheckpointSequenceNumber,
-    ) -> Self {
-        Self {
-            checkpoint: Some(checkpoint),
-            ..Self::new(object_id)
-        }
-    }
-
-    /// Bound a `version` or `max_version` read by `checkpoint`: the version it selected was not
-    /// found, or was written after `checkpoint`.
-    pub fn visible_at_checkpoint(
-        self,
-        checkpoint: sui_sdk_types::CheckpointSequenceNumber,
-    ) -> Self {
+    /// Bound the read by `checkpoint`: the object had no live state at the end of `checkpoint`,
+    /// or the exact version was not found or was written after `checkpoint`, or the object had
+    /// no version at or below `max_version` written by `checkpoint`, or was deleted or wrapped
+    /// at the newest one.
+    pub fn at_checkpoint(self, checkpoint: sui_sdk_types::CheckpointSequenceNumber) -> Self {
         Self {
             checkpoint: Some(checkpoint),
             ..self

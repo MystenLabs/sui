@@ -286,7 +286,7 @@ impl StateReader {
     }
 
     /// The upper bound for checkpoint-pinned reads ([`Self::get_object_at_checkpoint`],
-    /// [`Self::is_object_version_visible_at_checkpoint`], and `GetPackage`'s `at_checkpoint`): the
+    /// [`Self::get_object_version_at_checkpoint`], and `GetPackage`'s `at_checkpoint`): the
     /// highest checkpoint every rpc index has committed.
     ///
     /// Read it before the reads. It only grows, and the indexes only add data above it, so it
@@ -359,12 +359,8 @@ impl StateReader {
         checkpoint: u64,
         upper_bound: &AtCheckpointUpperBound,
     ) -> Result<Option<Object>, crate::RpcError> {
-        upper_bound.check(checkpoint)?;
-
-        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
-        let Some(version) = indexes
-            .get_object_version_at_checkpoint(object_id, checkpoint)
-            .map_err(index_error)?
+        let Some(version) =
+            self.get_object_version_at_checkpoint(object_id, checkpoint, upper_bound)?
         else {
             return Ok(None);
         };
@@ -372,26 +368,24 @@ impl StateReader {
         Ok(self.inner().get_object_by_key(&object_id, version))
     }
 
-    /// Whether `version` of `object_id` was written at or before `checkpoint`: whether it is at or
-    /// below the version the object had at the end of `checkpoint`, deletions and wraps included.
-    /// An object's versions increase in checkpoint order, so a version above that one was written
-    /// after `checkpoint`. `false` if the object did not exist yet. `OutOfRange`
+    /// The version `object_id` had at the end of `checkpoint`: its newest version written at or
+    /// before `checkpoint`, including a version at which it was deleted or wrapped. An object's
+    /// versions increase in checkpoint order, so every version above this one was written after
+    /// `checkpoint`. `None` if the object did not exist yet. `OutOfRange`
     /// (`ABOVE_LATEST_AVAILABLE`) if `checkpoint` is above `upper_bound`; check the lower bound
     /// after the read with [`Self::at_checkpoint_lower_bound`].
-    pub fn is_object_version_visible_at_checkpoint(
+    pub fn get_object_version_at_checkpoint(
         &self,
         object_id: ObjectID,
-        version: SequenceNumber,
         checkpoint: u64,
         upper_bound: &AtCheckpointUpperBound,
-    ) -> Result<bool, crate::RpcError> {
+    ) -> Result<Option<SequenceNumber>, crate::RpcError> {
         upper_bound.check(checkpoint)?;
 
         let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
-        Ok(indexes
+        indexes
             .get_object_version_at_checkpoint(object_id, checkpoint)
-            .map_err(index_error)?
-            .is_some_and(|version_at_checkpoint| version <= version_at_checkpoint))
+            .map_err(index_error)
     }
 }
 
