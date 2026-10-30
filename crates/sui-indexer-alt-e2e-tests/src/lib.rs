@@ -830,11 +830,7 @@ impl Default for OffchainClusterConfig {
             consistent_config: ConsistentConfig::for_test(),
             graphql_config: Default::default(),
             bootstrap_genesis: None,
-            // GraphQL pages transactions and events through the ledger gRPC List APIs.
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
-                ..Default::default()
-            },
+            kv_rpc_config: KvRpcConfig::default(),
             bt_pipeline_layer: PipelineLayer::default(),
             kv_rpc_plaintext_listener: false,
         }
@@ -959,7 +955,6 @@ async fn start_archival(
         kv_rpc_config.request_bigtable_concurrency(),
         kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),
-        kv_rpc_config.enable_list_apis(),
         kv_rpc_config.watermark_source(),
     )
     .await
