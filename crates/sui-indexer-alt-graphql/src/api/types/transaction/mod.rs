@@ -38,9 +38,6 @@ use crate::api::types::ledger_cursor::EnvelopeRef;
 use crate::api::types::ledger_cursor::OwnedCursor;
 use crate::api::types::ledger_cursor::Point;
 use crate::api::types::ledger_cursor::TransactionKey;
-use crate::api::types::ledger_cursor::legacy::LegacyKind;
-use crate::api::types::ledger_cursor::legacy::LegacyPosition;
-use crate::api::types::ledger_cursor::legacy::LegacyToken;
 use crate::api::types::ledger_cursor::scan::LedgerPage;
 use crate::api::types::ledger_cursor::scan::RequestBound;
 use crate::api::types::ledger_cursor::scan::ScanCursor;
@@ -73,38 +70,10 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-/// A decoded transaction cursor: in GraphQL's own format, or in the legacy format (see
-/// [`crate::api::types::ledger_cursor::legacy`]).
+/// A decoded transaction cursor.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionToken {
-    Owned(OwnedCursor<TransactionKey>),
-    Legacy(LegacyTransactionToken),
-}
+pub struct TransactionToken(OwnedCursor<TransactionKey>);
 
-/// A transaction cursor in the legacy format: the bytes as received, and the coordinates they hold.
-/// Cursors at the same transaction are equal whatever their kind or checkpoint label.
-#[derive(Clone, Debug)]
-pub struct LegacyTransactionToken {
-    bytes: Bytes,
-    kind: LegacyKind,
-    checkpoint: u64,
-    tx_seq: u64,
-}
-
-/// How a cursor splits a checkpoint's transactions held in memory, whose places and sequence
-/// numbers are both known.
-enum MemoryBound {
-    Point(Point<TransactionKey>),
-
-    /// A legacy cursor places transactions by sequence number. A page after a boundary cursor
-    /// starts at the cursor's transaction.
-    Legacy {
-        tx_seq: u64,
-        kind: LegacyKind,
-    },
-}
-
-/// Compatibility dispatch over the on-wire cursor formats.
 pub type CTransaction = OpaqueCursor<TransactionToken>;
 
 /// Description of a transaction, the unit of activity on Sui.
@@ -296,8 +265,8 @@ impl Transaction {
         page: &Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<StreamConnection<Transaction>, RpcError> {
-        let after = page.after().map(MemoryBound::new).transpose()?;
-        let before = page.before().map(MemoryBound::new).transpose()?;
+        let after = page.after().map(memory_point).transpose()?;
+        let before = page.before().map(memory_point).transpose()?;
 
         // Matches excluded by `after` precede the page, and matches excluded by `before` follow
         // it.
@@ -314,13 +283,9 @@ impl Transaction {
                 transaction_index: index as u64,
             };
 
-            let seq = tx.tx_sequence_number;
-            if after.as_ref().is_some_and(|a| !a.includes_after(&key, seq)) {
+            if after.is_some_and(|a| !a.includes_after(&key)) {
                 matches_before = true;
-            } else if before
-                .as_ref()
-                .is_some_and(|b| !b.includes_before(&key, seq))
-            {
+            } else if before.is_some_and(|b| !b.includes_before(&key)) {
                 matches_after = true;
             } else {
                 window.push((key, tx));
@@ -524,123 +489,49 @@ impl TransactionContents {
 impl TransactionToken {
     /// The cursor of the transaction at `key`, minted from data GraphQL holds.
     pub(crate) fn at(key: TransactionKey) -> CTransaction {
-        OpaqueCursor::new(Self::Owned(OwnedCursor::Point(Point::At(key))))
+        OpaqueCursor::new(Self(OwnedCursor::Point(Point::At(key))))
     }
 
     /// The cursor at the start of `checkpoint`: a page after it starts with the checkpoint's first
     /// transaction.
     pub(crate) fn checkpoint_start(checkpoint: u64) -> CTransaction {
-        OpaqueCursor::new(Self::Owned(OwnedCursor::Point(Point::checkpoint_start(
+        OpaqueCursor::new(Self(OwnedCursor::Point(Point::checkpoint_start(
             checkpoint,
         ))))
     }
 
-    /// Where GraphQL places this cursor: `None` for a legacy cursor, or a ledger page boundary
-    /// that nothing GraphQL saw bounds.
+    /// Where GraphQL places this cursor: `None` for a ledger page boundary that nothing GraphQL saw
+    /// bounds.
     pub fn point(&self) -> Option<Point<TransactionKey>> {
-        match self {
-            Self::Owned(cursor) => cursor.point(),
-            Self::Legacy(_) => None,
-        }
+        self.0.point()
     }
 
     /// The last checkpoint this cursor shows the client has seen any of: the one its place has
-    /// reached, or a legacy cursor's checkpoint label. `None` if it shows none, as for a legacy
-    /// cursor without a label.
+    /// reached, or `None` if it shows none.
     pub(crate) fn last_checkpoint(&self) -> Option<u64> {
-        match self {
-            Self::Owned(cursor) => cursor.point().and_then(|point| point.last_checkpoint()),
-            Self::Legacy(legacy) => (legacy.checkpoint != 0).then_some(legacy.checkpoint),
-        }
+        self.point().and_then(|point| point.last_checkpoint())
     }
 }
 
-impl LegacyTransactionToken {
-    /// The legacy token this cursor holds.
-    fn token(&self) -> LegacyToken {
-        LegacyToken {
-            kind: self.kind,
-            position: LegacyPosition::Transactions {
-                checkpoint: self.checkpoint,
-                tx_seq: self.tx_seq,
-            },
-        }
-    }
-}
-impl MemoryBound {
-    fn new(cursor: &CTransaction) -> Result<Self, RpcError> {
-        match &**cursor {
-            TransactionToken::Owned(owned) => owned
-                .point()
-                .map(Self::Point)
-                .ok_or_else(|| pagination::Error::UnsupportedCursor.into()),
-
-            TransactionToken::Legacy(legacy) => Ok(Self::Legacy {
-                tx_seq: legacy.tx_seq,
-                kind: legacy.kind,
-            }),
-        }
-    }
-
-    fn includes_after(&self, key: &TransactionKey, tx_seq: u64) -> bool {
-        match self {
-            Self::Point(point) => point.includes_after(key),
-            Self::Legacy {
-                tx_seq: at,
-                kind: LegacyKind::Item,
-            } => tx_seq > *at,
-            Self::Legacy {
-                tx_seq: at,
-                kind: LegacyKind::Boundary,
-            } => tx_seq >= *at,
-        }
-    }
-
-    fn includes_before(&self, key: &TransactionKey, tx_seq: u64) -> bool {
-        match self {
-            Self::Point(point) => point.includes_before(key),
-            Self::Legacy { tx_seq: at, .. } => tx_seq < *at,
-        }
-    }
+/// Where `cursor` splits a checkpoint's transactions held in memory. A cursor GraphQL cannot place
+/// is not supported there.
+fn memory_point(cursor: &CTransaction) -> Result<Point<TransactionKey>, RpcError> {
+    cursor
+        .point()
+        .ok_or_else(|| pagination::Error::UnsupportedCursor.into())
 }
 
 impl ByteCursor for TransactionToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let Some(envelope) = Envelope::decode(bytes) else {
-            return Ok(Self::Legacy(LegacyTransactionToken::decode_cursor(bytes)?));
-        };
-
-        match envelope? {
-            Envelope::Transaction(cursor) => Ok(Self::Owned(cursor)),
-            _ => anyhow::bail!("Not a transaction cursor"),
-        }
-    }
-
-    fn encode_cursor(&self) -> Bytes {
-        match self {
-            Self::Owned(cursor) => EnvelopeRef::Transaction(cursor).encode(),
-            Self::Legacy(legacy) => legacy.encode_cursor(),
-        }
-    }
-}
-
-impl ByteCursor for LegacyTransactionToken {
-    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let token = LegacyToken::decode(bytes)?;
-        let LegacyPosition::Transactions { checkpoint, tx_seq } = token.position else {
+        let Envelope::Transaction(cursor) = Envelope::decode(bytes)? else {
             anyhow::bail!("Not a transaction cursor");
         };
 
-        Ok(Self {
-            bytes: Bytes::copy_from_slice(bytes),
-            kind: token.kind,
-            checkpoint,
-            tx_seq,
-        })
+        Ok(Self(cursor))
     }
 
     fn encode_cursor(&self) -> Bytes {
-        self.bytes.clone()
+        EnvelopeRef::Transaction(&self.0).encode()
     }
 }
 
@@ -648,46 +539,19 @@ impl ScanCursor for CTransaction {
     type Key = TransactionKey;
 
     fn bound(&self) -> RequestBound<TransactionKey> {
-        match &**self {
-            TransactionToken::Owned(cursor) => RequestBound {
-                ledger: cursor.ledger_bytes().cloned(),
-                point: cursor.point(),
-            },
-
-            TransactionToken::Legacy(legacy) => RequestBound {
-                ledger: Some(legacy.bytes.clone()),
-                point: None,
-            },
-        }
-    }
-
-    fn before_bound(&self) -> RequestBound<TransactionKey> {
-        match &**self {
-            TransactionToken::Owned(_) => self.bound(),
-
-            TransactionToken::Legacy(legacy) => RequestBound {
-                ledger: Some(legacy.token().before_bytes(&legacy.bytes)),
-                point: None,
-            },
+        let TransactionToken(cursor) = &**self;
+        RequestBound {
+            ledger: cursor.ledger_bytes().cloned(),
+            point: cursor.point(),
         }
     }
 
     fn from_ledger(bytes: Bytes, point: Option<Point<TransactionKey>>) -> Self {
-        OpaqueCursor::new(TransactionToken::Owned(OwnedCursor::Ledger {
-            bytes,
-            point,
-        }))
+        OpaqueCursor::new(TransactionToken(OwnedCursor::Ledger { bytes, point }))
     }
 
     fn from_point(point: Point<TransactionKey>) -> Self {
-        OpaqueCursor::new(TransactionToken::Owned(OwnedCursor::Point(point)))
-    }
-}
-
-impl Eq for LegacyTransactionToken {}
-impl PartialEq for LegacyTransactionToken {
-    fn eq(&self, other: &Self) -> bool {
-        self.tx_seq == other.tx_seq
+        OpaqueCursor::new(TransactionToken(OwnedCursor::Point(point)))
     }
 }
 
@@ -743,7 +607,6 @@ pub(crate) fn build_grpc_connection(
 
 #[cfg(test)]
 mod tests {
-    use fastcrypto::encoding::Base64 as B64;
     use sui_indexer_alt_reader::kv_loader::ExecutedTransactionData;
     use sui_indexer_alt_reader::ledger_grpc_reader::PageItem;
     use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
@@ -887,22 +750,9 @@ mod tests {
             .expect("valid cursor")
     }
 
-    /// A legacy item cursor at transaction `tx_seq`, labelled with `checkpoint`.
-    fn legacy_token(checkpoint: u64, tx_seq: u64) -> LegacyToken {
-        LegacyToken {
-            kind: LegacyKind::Item,
-            position: LegacyPosition::Transactions { checkpoint, tx_seq },
-        }
-    }
-
-    fn legacy_cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
-        let bytes = legacy_token(checkpoint, tx_seq).encode();
-        CTransaction::decode_cursor(&B64::encode(bytes)).expect("legacy cursor")
-    }
-
     /// A `ProcessedTransaction` with just enough content for `TransactionFilter::matches` (sender
     /// and effects) and digest extraction.
-    fn preloaded_tx(tx_sequence_number: u64, sender: NativeSuiAddress) -> ProcessedTransaction {
+    fn preloaded_tx(sender: NativeSuiAddress) -> ProcessedTransaction {
         let pt = ProgrammableTransactionBuilder::new().finish();
         let data = TransactionData::new_programmable(sender, vec![random_object_ref()], pt, 1, 1);
         let contents = NativeTransactionContents::ExecutedTransaction(ExecutedTransactionData {
@@ -918,13 +768,14 @@ mod tests {
         });
 
         ProcessedTransaction {
-            tx_sequence_number,
             contents: Arc::new(contents),
         }
     }
 
-    fn preloaded_txs(seqs: std::ops::Range<u64>) -> Vec<ProcessedTransaction> {
-        seqs.map(|seq| preloaded_tx(seq, NativeSuiAddress::ZERO))
+    /// `count` transactions held in memory, all from the same sender.
+    fn preloaded_txs(count: usize) -> Vec<ProcessedTransaction> {
+        (0..count)
+            .map(|_| preloaded_tx(NativeSuiAddress::ZERO))
             .collect()
     }
 
@@ -944,7 +795,7 @@ mod tests {
     /// Transactions held in memory get item cursors at their place in the checkpoint.
     #[test]
     fn paginate_preloaded_mints_cursors() {
-        let txs = preloaded_txs(10..15);
+        let txs = preloaded_txs(5);
         let conn = preloaded(&page(Some(3), None, None, None), &txs).unwrap();
 
         assert_eq!(edge_keys(&conn), [(42, 0), (42, 1), (42, 2)]);
@@ -960,26 +811,21 @@ mod tests {
         );
     }
 
-    /// In memory, a cursor is placed by its key, or a legacy cursor by its transaction sequence
-    /// number, whatever checkpoint label it carries.
+    /// In memory, a cursor is placed by its key.
     #[test]
     fn paginate_preloaded_resumes_after_cursor() {
-        let txs = preloaded_txs(10..15);
-        for after in [
-            TransactionToken::at(key(STREAMED_CP, 1)),
-            legacy_cursor(0, 11),
-        ] {
-            let conn = preloaded(&page(Some(2), Some(after), None, None), &txs).unwrap();
-            assert_eq!(edge_keys(&conn), [(42, 2), (42, 3)]);
-            assert!(conn.page_info.has_previous_page);
-            assert!(conn.page_info.has_next_page);
-        }
+        let txs = preloaded_txs(5);
+        let after = TransactionToken::at(key(STREAMED_CP, 1));
+        let conn = preloaded(&page(Some(2), Some(after), None, None), &txs).unwrap();
+        assert_eq!(edge_keys(&conn), [(42, 2), (42, 3)]);
+        assert!(conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
     }
 
     /// A cursor in an earlier checkpoint puts the whole checkpoint after it.
     #[test]
     fn paginate_preloaded_after_an_earlier_checkpoint() {
-        let txs = preloaded_txs(10..13);
+        let txs = preloaded_txs(3);
         let after = TransactionToken::at(key(STREAMED_CP - 1, 7));
         let conn = preloaded(&page(Some(10), Some(after), None, None), &txs).unwrap();
         assert_eq!(edge_keys(&conn), [(42, 0), (42, 1), (42, 2)]);
@@ -990,7 +836,7 @@ mod tests {
     /// `last: n` returns the tail of the matching set.
     #[test]
     fn paginate_preloaded_backward_page_returns_tail() {
-        let txs = preloaded_txs(10..15);
+        let txs = preloaded_txs(5);
         let conn = preloaded(&page(None, None, Some(2), None), &txs).unwrap();
         assert_eq!(edge_keys(&conn), [(42, 3), (42, 4)]);
         assert!(conn.page_info.has_previous_page);
@@ -1000,7 +846,7 @@ mod tests {
     /// `last: n, before: <cursor>` returns the transactions immediately preceding the cursor.
     #[test]
     fn paginate_preloaded_backward_page_before_cursor() {
-        let txs = preloaded_txs(10..17);
+        let txs = preloaded_txs(7);
         let before = TransactionToken::at(key(STREAMED_CP, 5));
         let conn = preloaded(&page(None, None, Some(2), Some(before)), &txs).unwrap();
         assert_eq!(edge_keys(&conn), [(42, 3), (42, 4)]);
@@ -1011,7 +857,7 @@ mod tests {
     /// A `last: n` page over fewer matches than `n` returns everything.
     #[test]
     fn paginate_preloaded_backward_page_smaller_than_window() {
-        let txs = preloaded_txs(10..12);
+        let txs = preloaded_txs(2);
         let conn = preloaded(&page(None, None, Some(3), None), &txs).unwrap();
         assert_eq!(edge_keys(&conn), [(42, 0), (42, 1)]);
         assert!(!conn.page_info.has_previous_page);
@@ -1023,7 +869,7 @@ mod tests {
     #[test]
     fn paginate_preloaded_rejects_unplaced_cursors() {
         let unplaced = CTransaction::from_ledger(Bytes::from_static(b"w"), None);
-        let txs = preloaded_txs(10..12);
+        let txs = preloaded_txs(2);
         assert!(preloaded(&page(Some(2), Some(unplaced), None, None), &txs).is_err());
     }
 
@@ -1554,72 +1400,35 @@ mod tests {
         }
     }
 
-    /// A legacy cursor's place is unknown, so a boundary past it is placed only once the page has
-    /// scanned an item. A coverage claim alone could place it behind the cursor, which can sit in
-    /// the checkpoint past the claim, after matches the scan never read.
+    /// An unplaced cursor's place is unknown, so a boundary past it is placed only once the page
+    /// has scanned an item. A coverage claim alone could place it behind the cursor, which can sit
+    /// in the checkpoint past the claim, after matches the scan never read.
     #[test]
-    fn boundary_past_a_legacy_cursor() {
+    fn boundary_past_an_unplaced_cursor() {
+        let unplaced = || CTransaction::from_ledger(Bytes::from_static(b"u"), None);
         let scan_limit = |items| stream(items, None, Some(b"w"), Some(End::ScanLimit));
         let resume = |page: &Page<CTransaction>, stream| {
             let result = ledger_page(page, stream);
             result.last_cursor.expect("resume cursor").point()
         };
 
-        let after_legacy = page(Some(10), Some(legacy_cursor(0, 5)), None, None);
-        assert_eq!(resume(&after_legacy, scan_limit(vec![])), None);
+        let after_unplaced = page(Some(10), Some(unplaced()), None, None);
+        assert_eq!(resume(&after_unplaced, scan_limit(vec![])), None);
         let claimed = scan_limit(vec![]).with_covered_checkpoint(4);
-        assert_eq!(resume(&after_legacy, claimed), None);
+        assert_eq!(resume(&after_unplaced, claimed), None);
         let scanned = scan_limit(vec![tx_item(b"i1", key(6, 1))]).with_covered_checkpoint(7);
         assert_eq!(
-            resume(&after_legacy, scanned),
+            resume(&after_unplaced, scanned),
             Some(Point::checkpoint_start(8))
         );
 
-        let before_legacy = page(None, None, Some(10), Some(legacy_cursor(0, 5)));
+        let before_unplaced = page(None, None, Some(10), Some(unplaced()));
         let claimed = scan_limit(vec![]).with_covered_checkpoint(6);
-        assert_eq!(resume(&before_legacy, claimed), None);
+        assert_eq!(resume(&before_unplaced, claimed), None);
         let scanned = scan_limit(vec![tx_item(b"i1", key(4, 1))]).with_covered_checkpoint(3);
         assert_eq!(
-            resume(&before_legacy, scanned),
+            resume(&before_unplaced, scanned),
             Some(Point::checkpoint_start(3))
         );
-    }
-
-    /// Legacy cursors leave the scan's checkpoint range as it is. A cursor labelled checkpoint 0,
-    /// as Postgres-backed pagination issued them, is sent as received as `after`, and labelled
-    /// `u64::MAX` at the same place as `before`, because ledger servers before 1.83 read a `before`
-    /// label as the end of the range.
-    #[test]
-    fn legacy_cursors_are_forwarded() {
-        let unlabelled = legacy_cursor(0, 5);
-        for (first, last) in [(Some(10), None), (None, Some(10))] {
-            let page = page(
-                first,
-                Some(unlabelled.clone()),
-                last,
-                Some(unlabelled.clone()),
-            );
-            let request = scan_request(&page);
-            assert_eq!(request.options.after, Some(legacy_token(0, 5).encode()));
-            let before = request.options.before.expect("before cursor");
-            assert_eq!(
-                LegacyToken::decode(&before).unwrap(),
-                legacy_token(u64::MAX, 5)
-            );
-            assert_eq!(request.start_checkpoint, 0);
-            assert_eq!(request.end_checkpoint, 101);
-        }
-    }
-
-    /// A labelled legacy `before` cursor, and a `before` cursor carrying ledger bytes in GraphQL's
-    /// own format, are sent as received.
-    #[test]
-    fn labelled_and_owned_before_cursors_are_forwarded() {
-        let labelled = scan_request(&page(None, None, Some(10), Some(legacy_cursor(3, 5))));
-        assert_eq!(labelled.options.before, Some(legacy_token(3, 5).encode()));
-
-        let owned = CTransaction::from_ledger(Bytes::from_static(b"l"), Some(Point::At(key(1, 0))));
-        let owned = scan_request(&page(None, None, Some(10), Some(owned)));
-        assert_eq!(owned.options.before.as_deref(), Some(&b"l"[..]));
     }
 }

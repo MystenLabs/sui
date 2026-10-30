@@ -3,8 +3,7 @@
 
 //! Paging through a ledger List stream (`ListTransactions`, `ListEvents`) from GraphQL cursors.
 //!
-//! A cursor carrying ledger bytes is sent to the ledger service as is, apart from the checkpoint
-//! label of a legacy `before` cursor (see [`ScanCursor::before_bound`]). A cursor GraphQL places
+//! A cursor carrying ledger bytes is sent to the ledger service as is. A cursor GraphQL places
 //! narrows the request's checkpoint range to that place's checkpoint and is sent as the request's
 //! start or end position within it; alongside ledger bytes, the ledger service starts at the later
 //! of the two and ends at the earlier. Ledger servers that predate positions ignore them, so items
@@ -27,13 +26,8 @@ use crate::pagination::Page;
 pub(crate) trait ScanCursor: Clone {
     type Key: LedgerKey;
 
-    /// How this cursor bounds a page as its `after` cursor, and where GraphQL places it.
+    /// How this cursor bounds a page, and where GraphQL places it.
     fn bound(&self) -> RequestBound<Self::Key>;
-
-    /// How this cursor bounds a page as its `before` cursor. It differs from [`Self::bound`] only
-    /// for a legacy cursor labelled checkpoint 0, which is sent relabelled (see
-    /// [`crate::api::types::ledger_cursor::legacy::LegacyToken::before_bytes`]).
-    fn before_bound(&self) -> RequestBound<Self::Key>;
 
     /// A cursor for ledger bytes that GraphQL places at `point`.
     fn from_ledger(bytes: Bytes, point: Option<Point<Self::Key>>) -> Self;
@@ -116,7 +110,7 @@ impl<K: LedgerKey> ScanPlan<K> {
     {
         let ascending = page.is_from_front();
         let after = page.after().map(C::bound);
-        let before = page.before().map(C::before_bound);
+        let before = page.before().map(C::bound);
 
         let range_start = *cp_bounds.start();
         let range_end = cp_bounds.end().saturating_add(1);
@@ -414,8 +408,9 @@ fn in_scan_before<K: LedgerKey>(point: &Point<K>, key: &K, ascending: bool) -> b
 /// either side as the boundary. `None` if nothing bounds it.
 ///
 /// The claim covers only what the scan read, from the near cursor on. A near cursor without a place
-/// (a legacy cursor) can sit inside the checkpoint past the claim, after matches the scan never
-/// read, so past such a cursor the claim places the boundary only once an item was scanned.
+/// (a ledger cursor GraphQL could not place) can sit inside the checkpoint past the claim, after
+/// matches the scan never read, so past such a cursor the claim places the boundary only once an
+/// item was scanned.
 fn resume_point<K: LedgerKey>(
     ascending: bool,
     near_gap: Option<Point<K>>,
