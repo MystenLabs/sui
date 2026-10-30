@@ -90,6 +90,24 @@ pub struct ScanBounds<P> {
 
 pub type IntraTxScanBounds = ScanBounds<IntraTxCoordinate>;
 
+/// A request's checkpoint window in a lane's scan-position space, narrowed to the request's start
+/// and end positions inside the window's edge checkpoints (see
+/// [`CheckpointPositions`](crate::ledger_history::checkpoint_positions::CheckpointPositions)).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScanWindow<P> {
+    /// Half-open scan-position interval. A start position past the end position leaves it
+    /// inverted.
+    pub range: Range<P>,
+    /// Whether `range.start` is not the first position of the window's first checkpoint, so the
+    /// window may leave part of that checkpoint out. An event index past its transaction's events
+    /// sets it even where it leaves nothing out, which only makes coverage claims conservative.
+    pub start_cuts_checkpoint: bool,
+    /// Whether `range.end` is not the end of the window's last checkpoint, so the window may leave
+    /// part of that checkpoint out. As for `start_cuts_checkpoint`, an event index past its
+    /// transaction's events sets it even where it leaves nothing out.
+    pub end_cuts_checkpoint: bool,
+}
+
 /// A request's checkpoint bounds resolved into the scan-position interval to scan, along with the
 /// checkpoint-space facts for watermark rendering.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -108,12 +126,14 @@ pub struct ResolvedScan<P> {
     pub end_position: P,
     /// Why the interval is exhausted once the scan drains it.
     pub exhaustion: RangeExhaustion,
-    /// The window's terminal checkpoint in scan direction (see
-    /// [`ResolvedCheckpointRange::terminal_checkpoint`]), or `None` when the window holds no
-    /// checkpoint. Cursors do not move it, unlike `end_checkpoint`, which carries the checkpoint
-    /// field of a cursor that ends the scan: a non-empty window's natural end claims its edge even
-    /// when the scan reads nothing, because the request's starting cursor vouches for every
-    /// position before it.
+    /// Checkpoint field of the cursor at the window's terminal edge in scan direction, or `None`
+    /// when the window holds no checkpoint. At a checkpoint boundary that is
+    /// [`ResolvedCheckpointRange::terminal_checkpoint`]; at a request position that cuts the
+    /// window's last checkpoint in scan direction, it is the field of a cursor at that position:
+    /// the cut checkpoint ascending, and the checkpoint above it descending. Cursors do not move
+    /// it, unlike `end_checkpoint`, which carries the checkpoint field of a cursor that ends the
+    /// scan: a non-empty window's natural end claims its edge even when the scan reads nothing,
+    /// because the request's starting cursor vouches for every position before it.
     pub window_terminal_checkpoint: Option<u64>,
 }
 
@@ -153,11 +173,6 @@ impl IntraTxCoordinate {
     /// if the transaction has no events.
     pub fn start_of_tx(tx_seq: u64) -> Self {
         Self { tx_seq, index: 0 }
-    }
-
-    /// The event-coordinate window spanning whole transactions `[start, end)`.
-    pub fn tx_window(range: Range<u64>) -> Range<Self> {
-        Self::start_of_tx(range.start)..Self::start_of_tx(range.end)
     }
 }
 
@@ -303,6 +318,17 @@ impl ResolvedCheckpointRange {
     }
 }
 
+impl<P> ScanWindow<P> {
+    /// A window whose edges are checkpoint boundaries.
+    pub fn whole_checkpoints(range: Range<P>) -> Self {
+        Self {
+            range,
+            start_cuts_checkpoint: false,
+            end_cuts_checkpoint: false,
+        }
+    }
+}
+
 impl ResolvedScan<u64> {
     /// Collapse the symbolic bounds to the half-open store range.
     pub fn range(&self) -> Range<u64> {
@@ -407,18 +433,38 @@ impl<P: ScanPosition> ResolvedScan<P>
 where
     CursorToken: ScanCursor<P>,
 {
-    /// Record the request's checkpoint bounds, then apply cursor bounds to tighten the `range`
+    /// Record the request's checkpoint bounds, then apply cursor bounds to tighten the `window`
     /// scanning interval. Cursors bound the scan by position alone; their checkpoint fields only
     /// label the cursors this scan hands back. If the backend data source has a serving floor,
     /// `apply_serving_floor` must be called to reconcile the scanning interval.
+    ///
+    /// The window's request positions and its cursors bound the scan by intersection. A position
+    /// that cuts the window's first checkpoint in scan direction acts as a starting cursor does:
+    /// it vouches for every position before it, so the scan still claims that checkpoint once it
+    /// reaches its end. A position that cuts the window's last checkpoint in scan direction acts as
+    /// a far cursor does: the scan never reaches that checkpoint's end, so its natural end does not
+    /// claim it.
     pub fn resolve(
         cp_range: ResolvedCheckpointRange,
-        range: Range<P>,
+        window: ScanWindow<P>,
         options: &QueryOptions,
     ) -> Result<Self, RpcError> {
+        let ScanWindow {
+            range,
+            start_cuts_checkpoint,
+            end_cuts_checkpoint,
+        } = window;
         if cp_range.reaches_ledger_tip {
             reject_cursors_past_tip(options, range.end, cp_range.range.end)?;
         }
+
+        // Positions that cross leave nothing between them: collapse the window onto its terminal
+        // edge in scan direction.
+        let range = match options.ordering {
+            _ if range.start <= range.end => range,
+            Ordering::Ascending => range.end..range.end,
+            Ordering::Descending => range.start..range.start,
+        };
 
         let entry_checkpoint = if cp_range.is_empty() {
             // No checkpoint entered, pin entry to terminal boundary
@@ -429,24 +475,33 @@ where
             cp_range.range.end - 1
         };
 
+        // A cursor at a position inside checkpoint `C` carries `C` ascending and `C + 1`
+        // descending (see `boundary_cursor_cp`).
+        let terminal_checkpoint = match options.ordering {
+            Ordering::Ascending if end_cuts_checkpoint => cp_range.range.end - 1,
+            Ordering::Descending if start_cuts_checkpoint => cp_range.range.start + 1,
+            Ordering::Ascending | Ordering::Descending => {
+                cp_range.terminal_checkpoint(options.ordering)
+            }
+        };
+
         let resolved = Self {
             bounds: ScanBounds::from_range(range.start..range.end),
             entry_checkpoint,
-            end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
+            end_checkpoint: terminal_checkpoint,
             end_position: match options.ordering {
                 Ordering::Ascending => range.end,
                 Ordering::Descending => range.start,
             },
             exhaustion: cp_range.exhaustion,
-            window_terminal_checkpoint: (!cp_range.is_empty())
-                .then(|| cp_range.terminal_checkpoint(options.ordering)),
+            window_terminal_checkpoint: (!cp_range.is_empty()).then_some(terminal_checkpoint),
         }
         .apply_cursor_bounds(options);
 
         if !cp_range.is_empty()
             && resolved.bounds.admits_no_position()
             && let Some((checkpoint, position)) =
-                starting_cursor_end(options, &cp_range.range, &range)
+                starting_cursor_end(options, terminal_checkpoint, &range)
         {
             // The starting cursor leaves the window nothing to scan, and no far cursor stops the
             // scan first: the page ends with the window's reason, where `starting_cursor_end`
@@ -470,13 +525,19 @@ where
     /// the window's last checkpoint in scan direction, just below its exclusive upper edge
     /// ascending, or its inclusive lower edge descending. A scan that drains its window has
     /// covered every checkpoint up to that edge, and so has a scan its starting cursor leaves
-    /// empty, because the cursor vouches for every position before it. `None` when the window
-    /// has no checkpoint.
+    /// empty, because the cursor vouches for every position before it. A request position that
+    /// cuts that last checkpoint moves the claim to the checkpoint before it in scan direction.
+    /// `None` when the window has no checkpoint, or when the claim would precede
+    /// `entry_checkpoint`.
     pub fn natural_end_claim(&self, options: &QueryOptions) -> Option<u64> {
         let window_terminal_checkpoint = self.window_terminal_checkpoint?;
         match options.ordering {
-            Ordering::Ascending => window_terminal_checkpoint.checked_sub(1),
-            Ordering::Descending => Some(window_terminal_checkpoint),
+            Ordering::Ascending => window_terminal_checkpoint
+                .checked_sub(1)
+                .filter(|claim| *claim >= self.entry_checkpoint),
+            Ordering::Descending => {
+                Some(window_terminal_checkpoint).filter(|claim| *claim <= self.entry_checkpoint)
+            }
         }
     }
 
@@ -742,7 +803,7 @@ impl ResolvedCheckpointRange {
 /// start.
 ///
 /// - At the edge, the page ends at the window's edge, as the page that handed the cursor back
-///   did.
+///   did, under `window_terminal_checkpoint`, the checkpoint field of a cursor at that edge.
 /// - Past the edge, the page ends at the boundary where the starting cursor resumes, under the
 ///   cursor's own checkpoint field: the boundary after an `after` Item cursor's item, or a
 ///   `before` cursor's position. Ending at the window's edge instead would hand back a cursor
@@ -753,7 +814,7 @@ impl ResolvedCheckpointRange {
 /// boundary after it.
 fn starting_cursor_end<P: ScanPosition>(
     options: &QueryOptions,
-    checkpoints: &Range<u64>,
+    window_terminal_checkpoint: u64,
     window: &Range<P>,
 ) -> Option<(u64, P)>
 where
@@ -776,7 +837,7 @@ where
             };
             match first_admitted.cmp(&window.end) {
                 std::cmp::Ordering::Less => None,
-                std::cmp::Ordering::Equal => Some((checkpoints.end, window.end)),
+                std::cmp::Ordering::Equal => Some((window_terminal_checkpoint, window.end)),
                 std::cmp::Ordering::Greater => Some((after.position.checkpoint(), first_admitted)),
             }
         }
@@ -792,7 +853,7 @@ where
             let upper = position(before);
             match upper.cmp(&window.start) {
                 std::cmp::Ordering::Greater => None,
-                std::cmp::Ordering::Equal => Some((checkpoints.start, window.start)),
+                std::cmp::Ordering::Equal => Some((window_terminal_checkpoint, window.start)),
                 std::cmp::Ordering::Less => Some((before.position.checkpoint(), upper)),
             }
         }
@@ -936,6 +997,11 @@ fn invalid_cursor(field: &'static str, description: impl Into<String>) -> RpcErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The event-coordinate window spanning whole transactions `[start, end)`.
+    fn tx_window(range: Range<u64>) -> Range<IntraTxCoordinate> {
+        IntraTxCoordinate::start_of_tx(range.start)..IntraTxCoordinate::start_of_tx(range.end)
+    }
 
     fn query_options_from_proto(
         request: Option<&ProtoQueryOptions>,
@@ -1237,7 +1303,12 @@ mod tests {
             ..resolved_range(0..100)
         };
         assert_eq!(resolved.natural_end_claim(&asc), Some(9));
-        assert_eq!(resolved.natural_end_claim(&desc), Some(10));
+        // A descending scan enters its window at the top, above its terminal edge.
+        let descending = ResolvedScan {
+            entry_checkpoint: 19,
+            ..resolved.clone()
+        };
+        assert_eq!(descending.natural_end_claim(&desc), Some(10));
 
         let at_genesis = ResolvedScan {
             window_terminal_checkpoint: Some(0),
@@ -1600,7 +1671,7 @@ mod tests {
         assert_eq!(
             ResolvedScan::<IntraTxCoordinate>::resolve(
                 cp_range,
-                IntraTxCoordinate::tx_window(100..100),
+                ScanWindow::whole_checkpoints(tx_window(100..100)),
                 &options
             )
             .unwrap(),
@@ -1664,7 +1735,7 @@ mod tests {
             assert_eq!(
                 ResolvedScan::<IntraTxCoordinate>::resolve(
                     cp_range,
-                    IntraTxCoordinate::tx_window(100..100),
+                    ScanWindow::whole_checkpoints(tx_window(100..100)),
                     &options
                 )
                 .unwrap(),
@@ -1699,7 +1770,7 @@ mod tests {
                 ResolvedCheckpointRange::from_request(Some(10), Some(10), 20, &options).unwrap();
             let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
                 cp_range,
-                IntraTxCoordinate::tx_window(100..100),
+                ScanWindow::whole_checkpoints(tx_window(100..100)),
                 &options,
             )
             .unwrap();
@@ -1717,7 +1788,7 @@ mod tests {
         assert_eq!(cp_range.range, 3..10);
         let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
             cp_range.clone(),
-            IntraTxCoordinate::tx_window(100..200),
+            ScanWindow::whole_checkpoints(tx_window(100..200)),
             &options,
         )
         .unwrap();
@@ -1734,7 +1805,7 @@ mod tests {
         let options = directional_options(false);
         let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
             cp_range,
-            IntraTxCoordinate::tx_window(100..200),
+            ScanWindow::whole_checkpoints(tx_window(100..200)),
             &options,
         )
         .unwrap();
@@ -2561,13 +2632,13 @@ mod tests {
     ) -> Result<ResolvedScan<u64>, RpcError> {
         let cp_range = ResolvedCheckpointRange::from_request(None, end_checkpoint, TIP, options)?;
         let range = cp_range.range.clone();
-        ResolvedScan::<u64>::resolve(cp_range, range, options)
+        ResolvedScan::<u64>::resolve(cp_range, ScanWindow::whole_checkpoints(range), options)
     }
 
     fn resolve_transactions(options: &QueryOptions) -> Result<ResolvedScan<u64>, RpcError> {
         let cp_range = ResolvedCheckpointRange::from_request(None, None, TIP, options)?;
         let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
-        ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
+        ResolvedScan::<u64>::resolve(cp_range, ScanWindow::whole_checkpoints(tx_range), options)
     }
 
     fn resolve_events(options: &QueryOptions) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
@@ -2575,7 +2646,7 @@ mod tests {
         let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
         ResolvedScan::<IntraTxCoordinate>::resolve(
             cp_range,
-            IntraTxCoordinate::tx_window(tx_range),
+            ScanWindow::whole_checkpoints(tx_window(tx_range)),
             options,
         )
     }
@@ -2847,7 +2918,7 @@ mod tests {
     ) -> Result<ResolvedScan<u64>, RpcError> {
         let cp_range = ResolvedCheckpointRange::from_request(window.0, window.1, TIP, options)?;
         let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
-        ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
+        ResolvedScan::<u64>::resolve(cp_range, ScanWindow::whole_checkpoints(tx_range), options)
     }
 
     fn resolve_event_request(
@@ -2858,7 +2929,7 @@ mod tests {
         let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
         ResolvedScan::<IntraTxCoordinate>::resolve(
             cp_range,
-            IntraTxCoordinate::tx_window(tx_range),
+            ScanWindow::whole_checkpoints(tx_window(tx_range)),
             options,
         )
     }
@@ -2869,7 +2940,7 @@ mod tests {
     ) -> Result<ResolvedScan<u64>, RpcError> {
         let cp_range = ResolvedCheckpointRange::from_request(window.0, window.1, TIP, options)?;
         let range = cp_range.range.clone();
-        ResolvedScan::<u64>::resolve(cp_range, range, options)
+        ResolvedScan::<u64>::resolve(cp_range, ScanWindow::whole_checkpoints(range), options)
     }
 
     fn ledger_txs() -> Vec<u64> {

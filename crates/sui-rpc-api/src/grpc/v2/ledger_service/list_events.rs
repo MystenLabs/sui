@@ -27,6 +27,7 @@ use tracing::info;
 
 use crate::RpcError;
 use crate::RpcService;
+use crate::ledger_history::checkpoint_positions::CheckpointPositions;
 use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::query_options::IntraTxScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
@@ -49,7 +50,7 @@ use super::event_scan::drain_event_bitmap_hits;
 use super::event_scan::event_frontier_checkpoint;
 use super::event_scan::next_unfiltered_event_refs;
 use super::ledger_read::checkpoint_hi_exclusive;
-use super::ledger_read::checkpoint_to_tx_range;
+use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::reject_window_below_serving_floor;
@@ -78,10 +79,11 @@ pub(crate) async fn list_events(
     let started = Instant::now();
     let start_checkpoint = request.start_checkpoint;
     let end_checkpoint = request.end_checkpoint;
+    validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
+    let positions = CheckpointPositions::from_events_request(&request)?;
     let filter = request.filter;
     let request_options = request.options;
     let filtered = filter.is_some();
-    validate_checkpoint_bounds(start_checkpoint, end_checkpoint)?;
     let read_mask = read_mask_defaults::validate_read_mask::<ProtoEvent>(
         request.read_mask,
         read_mask_defaults::EVENT,
@@ -113,6 +115,7 @@ pub(crate) async fn list_events(
     let initial_state = EventScanState::Init {
         start_checkpoint,
         end_checkpoint,
+        positions,
         filter_query,
     };
 
@@ -247,6 +250,7 @@ enum EventScanState {
     Init {
         start_checkpoint: Option<u64>,
         end_checkpoint: Option<u64>,
+        positions: CheckpointPositions,
         filter_query: Option<BitmapQuery>,
     },
     Unfiltered {
@@ -297,6 +301,7 @@ fn next_event_chunk(
         EventScanState::Init {
             start_checkpoint,
             end_checkpoint,
+            positions,
             filter_query,
         } => {
             let checkpoint_range = ResolvedCheckpointRange::from_request(
@@ -305,8 +310,13 @@ fn next_event_chunk(
                 checkpoint_hi_exclusive(&service)?,
                 &options,
             )?;
-            let event_range =
-                resolve_event_range(&service, start_checkpoint, checkpoint_range, &options)?;
+            let event_range = resolve_event_range(
+                &service,
+                start_checkpoint,
+                checkpoint_range,
+                &positions,
+                &options,
+            )?;
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
@@ -761,22 +771,21 @@ fn tx_seq_digest_rows_for_event_refs(
         .collect()
 }
 
-/// Resolve the request's scan, raising its low end to the serving floor. A request with no lower
-/// bound of its own whose window lies wholly below the floor, or whose remaining scan lies wholly
-/// below the floor, is `OutOfRange`.
+/// Resolve the request's scan, narrowed to its `positions` and raised at its low end to the
+/// serving floor. A request with no lower bound of its own whose window lies wholly below the
+/// floor, or whose remaining scan lies wholly below the floor, is `OutOfRange`.
 fn resolve_event_range(
     service: &RpcService,
     start_checkpoint: Option<u64>,
     cp_range: ResolvedCheckpointRange,
+    positions: &CheckpointPositions,
     options: &QueryOptions,
 ) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
     reject_window_below_serving_floor(service, &cp_range.range, start_checkpoint, options)?;
-    let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
-    let mut resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
-        cp_range,
-        IntraTxCoordinate::tx_window(tx_range),
-        options,
-    )?;
+    let window = positions.event_window(&cp_range.range, |checkpoint| {
+        checkpoint_to_tx_boundary(service, checkpoint)
+    })?;
+    let mut resolved = ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, window, options)?;
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,

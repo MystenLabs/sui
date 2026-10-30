@@ -1668,35 +1668,52 @@ impl BigTableClient {
         &mut self,
         checkpoint_range: Range<u64>,
     ) -> Result<Range<u64>> {
-        use crate::tables::checkpoints;
+        let boundaries = self
+            .checkpoint_tx_boundaries(&[checkpoint_range.start, checkpoint_range.end])
+            .await?;
+        Ok(boundaries[&checkpoint_range.start]..boundaries[&checkpoint_range.end])
+    }
 
-        let mut keys: Vec<u64> = [checkpoint_range.start, checkpoint_range.end]
-            .into_iter()
-            .filter(|&cp| cp > 0)
+    /// Resolve each of `checkpoints` to the tx_sequence_number of its first transaction, one past
+    /// the last transaction of the checkpoint before it, in one read. Checkpoint 0 resolves to
+    /// tx_sequence_number 0.
+    pub async fn checkpoint_tx_boundaries(
+        &mut self,
+        checkpoints: &[u64],
+    ) -> Result<HashMap<u64, u64>> {
+        let mut keys: Vec<u64> = checkpoints
+            .iter()
+            .filter(|&&cp| cp > 0)
             .map(|cp| cp - 1)
             .collect();
+        keys.sort_unstable();
         keys.dedup();
 
         let rows = if keys.is_empty() {
             vec![]
         } else {
-            self.get_checkpoints_filtered(&keys, Some(&[checkpoints::col::SUMMARY]))
+            self.get_checkpoints_filtered(&keys, Some(&[tables::checkpoints::col::SUMMARY]))
                 .await?
         };
+        let network_totals: HashMap<u64, u64> = rows
+            .iter()
+            .filter_map(|row| row.summary.as_ref())
+            .map(|summary| (summary.sequence_number, summary.network_total_transactions))
+            .collect();
 
-        let boundary = |cp: u64| -> Result<u64> {
-            if cp == 0 {
-                return Ok(0);
-            }
-            let lookup_cp = cp - 1;
-            rows.iter()
-                .filter_map(|row| row.summary.as_ref())
-                .find(|summary| summary.sequence_number == lookup_cp)
-                .map(|summary| summary.network_total_transactions)
-                .with_context(|| format!("checkpoint summary {} not found", lookup_cp))
-        };
-
-        Ok(boundary(checkpoint_range.start)?..boundary(checkpoint_range.end)?)
+        checkpoints
+            .iter()
+            .map(|&cp| {
+                if cp == 0 {
+                    return Ok((cp, 0));
+                }
+                let lookup_cp = cp - 1;
+                network_totals
+                    .get(&lookup_cp)
+                    .map(|total| (cp, *total))
+                    .with_context(|| format!("checkpoint summary {} not found", lookup_cp))
+            })
+            .collect()
     }
 
     /// Resolve `tx_sequence_number`s to fully-populated transaction rows in

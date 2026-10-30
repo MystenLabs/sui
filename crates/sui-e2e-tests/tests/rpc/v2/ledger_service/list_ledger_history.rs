@@ -557,13 +557,7 @@ async fn call_move(
     execute_programmable(cluster, sender, gas, builder).await
 }
 
-async fn call_emit_many(
-    cluster: &TestCluster,
-    sender: SuiAddress,
-    pkg: ObjectID,
-    count: u64,
-) -> ExecutedTransaction {
-    let gas = gas_object(cluster, sender).await;
+fn emit_many_builder(pkg: ObjectID, count: u64) -> ProgrammableTransactionBuilder {
     let mut builder = ProgrammableTransactionBuilder::new();
     let arg = builder.pure(count).unwrap();
     builder.programmable_move_call(
@@ -573,7 +567,17 @@ async fn call_emit_many(
         vec![],
         vec![arg],
     );
-    execute_programmable(cluster, sender, gas, builder).await
+    builder
+}
+
+async fn call_emit_many(
+    cluster: &TestCluster,
+    sender: SuiAddress,
+    pkg: ObjectID,
+    count: u64,
+) -> ExecutedTransaction {
+    let gas = gas_object(cluster, sender).await;
+    execute_programmable(cluster, sender, gas, emit_many_builder(pkg, count)).await
 }
 
 async fn transfer_self(cluster: &TestCluster, sender: SuiAddress) -> ExecutedTransaction {
@@ -4386,5 +4390,1130 @@ async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
             tonic::Code::OutOfRange,
             "ascending {ascending}: {status:?}"
         );
+    }
+}
+
+// --- Start and end positions inside checkpoints ---
+
+/// `(checkpoint, transaction_index)` of a listed transaction.
+type TransactionKey = (u64, u64);
+
+/// `(checkpoint, transaction_index, event_index)` of a listed event.
+type EventKey = (u64, u64, u32);
+
+/// An event position inside a checkpoint: a transaction index and an optional event index.
+type EventPosition = (u64, Option<u32>);
+
+/// A checkpoint window around one busy checkpoint, for requests whose start and end positions
+/// fall inside checkpoints.
+struct CheckpointPositionsFixture {
+    cluster: TestCluster,
+    sender: SuiAddress,
+    /// A checkpoint window whose first and last checkpoints each hold a transaction of `sender`
+    /// emitting two events.
+    window: (u64, u64),
+    /// A checkpoint strictly inside `window` holding at least three transactions of `sender`
+    /// (emitting 3, 2, and 1 events), one of another sender, and two adjacent transactions that
+    /// both emit events, so that a start event index past a transaction's events skips to events
+    /// of the next transaction and the result shows it.
+    busy_checkpoint: u64,
+}
+
+async fn checkpoint_positions_fixture() -> CheckpointPositionsFixture {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let other_sender = cluster.get_address_1();
+    let (pkg, _) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let first = call_emit_many(&cluster, sender, pkg, 2).await;
+    let window_start = tx_checkpoint(&first);
+    let mut client = new_ledger_client(&cluster).await;
+    for _ in 0..10 {
+        // One transaction per gas coin, submitted together so that consensus tends to sequence
+        // them into one checkpoint. Every transaction emits events.
+        let sender_gas = cluster
+            .wallet
+            .get_all_gas_objects_owned_by_address(sender)
+            .await
+            .unwrap();
+        let other_gas = cluster
+            .wallet
+            .get_all_gas_objects_owned_by_address(other_sender)
+            .await
+            .unwrap();
+        let submissions = sender_gas
+            .into_iter()
+            .take(3)
+            .zip_debug_eq([3, 2, 1])
+            .map(|(gas, count)| (sender, gas, count))
+            .chain(
+                other_gas
+                    .into_iter()
+                    .take(2)
+                    .zip_debug_eq([2, 3])
+                    .map(|(gas, count)| (other_sender, gas, count)),
+            );
+        let round = futures::future::join_all(submissions.map(|(signer, gas, count)| {
+            execute_programmable(&cluster, signer, gas, emit_many_builder(pkg, count))
+        }))
+        .await;
+        let round_end = round
+            .iter()
+            .map(tx_checkpoint)
+            .max()
+            .expect("a round submits transactions")
+            + 1;
+        let window = (window_start, round_end);
+        let sender_transactions =
+            list_transaction_keys(&mut client, window, Some(tx_sender(sender))).await;
+        let other_transactions =
+            list_transaction_keys(&mut client, window, Some(tx_sender(other_sender))).await;
+        let events = list_event_keys(&mut client, window, None).await;
+        let emits = |checkpoint: u64, transaction: u64| {
+            events
+                .iter()
+                .any(|key| key.0 == checkpoint && key.1 == transaction)
+        };
+        let busy = (window_start..round_end).find(|&checkpoint| {
+            sender_transactions
+                .iter()
+                .filter(|key| key.0 == checkpoint)
+                .count()
+                >= 3
+                && other_transactions.iter().any(|key| key.0 == checkpoint)
+                && events
+                    .iter()
+                    .any(|key| key.0 == checkpoint && emits(checkpoint, key.1 + 1))
+        });
+        if let Some(busy_checkpoint) = busy {
+            // Events in a later checkpoint keep the busy checkpoint off the window's end.
+            let last = call_emit_many(&cluster, sender, pkg, 2).await;
+            return CheckpointPositionsFixture {
+                cluster,
+                sender,
+                window: (window_start, tx_checkpoint(&last) + 1),
+                busy_checkpoint,
+            };
+        }
+    }
+    panic!("no round of concurrent transactions shared a checkpoint");
+}
+
+fn ordered_options(limit: u32, ascending: bool) -> QueryOptions {
+    if ascending {
+        query_options(limit)
+    } else {
+        query_options_descending(limit)
+    }
+}
+
+/// A transaction listing of the checkpoint `window` from the transaction position `start` in its
+/// first checkpoint to the transaction position `end` in its last.
+fn positioned_transactions_request(
+    window: (u64, u64),
+    start: Option<u64>,
+    end: Option<u64>,
+    filter: &Option<TransactionFilter>,
+    options: QueryOptions,
+) -> ListTransactionsRequest {
+    let mut request = ListTransactionsRequest::default();
+    request.read_mask = Some(FieldMask::from_paths([
+        "digest",
+        "checkpoint",
+        "transaction_index",
+    ]));
+    request.start_checkpoint = Some(window.0);
+    request.end_checkpoint = Some(window.1);
+    request.start_transaction_index = start;
+    request.end_transaction_index = end;
+    request.filter = filter.clone();
+    request.options = Some(options);
+    request
+}
+
+/// An event listing of the checkpoint `window` from the event position `start` in its first
+/// checkpoint to the event position `end` in its last.
+fn positioned_events_request(
+    window: (u64, u64),
+    start: Option<EventPosition>,
+    end: Option<EventPosition>,
+    filter: &Option<EventFilter>,
+    options: QueryOptions,
+) -> ListEventsRequest {
+    let mut request = ListEventsRequest::default();
+    request.read_mask = Some(FieldMask::from_paths([
+        "checkpoint",
+        "transaction_index",
+        "event_index",
+    ]));
+    request.start_checkpoint = Some(window.0);
+    request.end_checkpoint = Some(window.1);
+    request.start_transaction_index = start.map(|(transaction, _)| transaction);
+    request.start_event_index = start.and_then(|(_, event)| event);
+    request.end_transaction_index = end.map(|(transaction, _)| transaction);
+    request.end_event_index = end.and_then(|(_, event)| event);
+    request.filter = filter.clone();
+    request.options = Some(options);
+    request
+}
+
+fn transaction_key(item: &ListTransactionsResponse) -> TransactionKey {
+    let transaction = item.transaction.as_ref().expect("transaction item");
+    (
+        transaction.checkpoint.expect("transaction checkpoint"),
+        transaction
+            .transaction_index
+            .expect("transaction index within its checkpoint"),
+    )
+}
+
+fn transaction_keys(result: &TransactionsResult) -> Vec<TransactionKey> {
+    result.transactions.iter().map(transaction_key).collect()
+}
+
+fn event_key(item: &ListEventsResponse) -> EventKey {
+    let event = item.event.as_ref().expect("event item");
+    (
+        event.checkpoint.expect("event checkpoint"),
+        event
+            .transaction_index
+            .expect("event transaction index within its checkpoint"),
+        event.event_index.expect("event index"),
+    )
+}
+
+fn event_keys(result: &EventsResult) -> Vec<EventKey> {
+    result.events.iter().map(event_key).collect()
+}
+
+fn event_position_key(checkpoint: u64, position: EventPosition) -> EventKey {
+    (checkpoint, position.0, position.1.unwrap_or(0))
+}
+
+/// Every transaction of `window` matching `filter`, ascending.
+async fn list_transaction_keys(
+    client: &mut LedgerServiceClient<Channel>,
+    window: (u64, u64),
+    filter: Option<TransactionFilter>,
+) -> Vec<TransactionKey> {
+    let request =
+        positioned_transactions_request(window, None, None, &filter, ordered_options(500, true));
+    let result = list_transactions_result(client, request).await;
+    assert_eq!(result.end_reason, Some(QueryEndReason::CheckpointBound));
+    transaction_keys(&result)
+}
+
+/// Every event of `window` matching `filter`, ascending.
+async fn list_event_keys(
+    client: &mut LedgerServiceClient<Channel>,
+    window: (u64, u64),
+    filter: Option<EventFilter>,
+) -> Vec<EventKey> {
+    let request =
+        positioned_events_request(window, None, None, &filter, ordered_options(500, true));
+    let result = list_events_result(client, request).await;
+    assert_eq!(result.end_reason, Some(QueryEndReason::CheckpointBound));
+    event_keys(&result)
+}
+
+/// The number of transactions in each checkpoint of an unfiltered listing.
+fn checkpoint_sizes(transactions: &[TransactionKey]) -> HashMap<u64, u64> {
+    let mut sizes = HashMap::new();
+    for &(checkpoint, index) in transactions {
+        let size = sizes.entry(checkpoint).or_insert(0);
+        assert_eq!(*size, index, "transaction indexes count up from 0");
+        *size += 1;
+    }
+    sizes
+}
+
+/// The keys of `listed`, an ascending listing covering `window`, that lie in `window` from the
+/// start position `start` (inclusive) to the end position `end` (exclusive), in scan order. A
+/// position is the gap before the item with its key, so an index past the items of its
+/// transaction or checkpoint lands on the next one's first item.
+fn keys_between<K: Copy + Ord>(
+    listed: &[K],
+    checkpoint: fn(&K) -> u64,
+    window: (u64, u64),
+    start: Option<K>,
+    end: Option<K>,
+    ascending: bool,
+) -> Vec<K> {
+    let mut keys: Vec<K> = listed
+        .iter()
+        .copied()
+        .filter(|key| (window.0..window.1).contains(&checkpoint(key)))
+        .filter(|key| start.is_none_or(|start| *key >= start))
+        .filter(|key| end.is_none_or(|end| *key < end))
+        .collect();
+    if !ascending {
+        keys.reverse();
+    }
+    keys
+}
+
+/// How a scan between the positions `start..end`, also bounded by the cursor of the item `item`
+/// (sent as `before` when `before`, else as `after`), must end: at the position that stops it,
+/// or at the cursor where the cursor is the nearer bound. `None` where the cursor meets a
+/// position or leaves nothing to scan.
+fn cursor_intersection_end<K: Ord>(
+    start: K,
+    end: K,
+    item: K,
+    ascending: bool,
+    before: bool,
+) -> Option<QueryEndReason> {
+    match (ascending, before) {
+        // The `after` cursor starts the scan; the end position stops it.
+        (true, false) => (item < end).then_some(QueryEndReason::CheckpointBound),
+        (true, true) if start < item && item < end => Some(QueryEndReason::CursorBound),
+        (true, true) => (item > end).then_some(QueryEndReason::CheckpointBound),
+        // The `before` cursor starts the scan; the start position stops it.
+        (false, true) => (item > start).then_some(QueryEndReason::CheckpointBound),
+        (false, false) => (start <= item && item < end).then_some(QueryEndReason::CursorBound),
+    }
+}
+
+/// The keys of `in_positions`, in ascending order, beyond the cursor of the item `item` (sent as
+/// `before` when `before`, else as `after`), in scan order.
+fn keys_beyond_cursor<K: Copy + Ord>(
+    in_positions: &[K],
+    item: K,
+    ascending: bool,
+    before: bool,
+) -> Vec<K> {
+    let mut keys: Vec<K> = in_positions
+        .iter()
+        .copied()
+        .filter(|key| if before { *key < item } else { *key > item })
+        .collect();
+    if !ascending {
+        keys.reverse();
+    }
+    keys
+}
+
+/// Lists the transactions between `start` and `end` and checks that they are exactly the items
+/// of `listed` between those positions, and that the scan ends at the positions.
+async fn assert_transactions_between(
+    client: &mut LedgerServiceClient<Channel>,
+    listed: &[TransactionKey],
+    window: (u64, u64),
+    start: Option<u64>,
+    end: Option<u64>,
+    filter: &Option<TransactionFilter>,
+    ascending: bool,
+) -> TransactionsResult {
+    let request = positioned_transactions_request(
+        window,
+        start,
+        end,
+        filter,
+        ordered_options(500, ascending),
+    );
+    let result = list_transactions_result(client, request).await;
+    let expected = keys_between(
+        listed,
+        |key| key.0,
+        window,
+        start.map(|index| (window.0, index)),
+        end.map(|index| (window.1 - 1, index)),
+        ascending,
+    );
+    let case = format!(
+        "window {window:?}, positions {start:?}..{end:?}, ascending {ascending}, filtered {}",
+        filter.is_some()
+    );
+    assert_eq!(transaction_keys(&result), expected, "{case}");
+    assert_eq!(
+        result.end_reason,
+        Some(QueryEndReason::CheckpointBound),
+        "{case}"
+    );
+    result
+}
+
+/// Lists the events between `start` and `end` and checks that they are exactly the items of
+/// `listed` between those positions, and that the scan ends at the positions.
+async fn assert_events_between(
+    client: &mut LedgerServiceClient<Channel>,
+    listed: &[EventKey],
+    window: (u64, u64),
+    start: Option<EventPosition>,
+    end: Option<EventPosition>,
+    filter: &Option<EventFilter>,
+    ascending: bool,
+) -> EventsResult {
+    let request =
+        positioned_events_request(window, start, end, filter, ordered_options(500, ascending));
+    let result = list_events_result(client, request).await;
+    let expected = keys_between(
+        listed,
+        |key| key.0,
+        window,
+        start.map(|position| event_position_key(window.0, position)),
+        end.map(|position| event_position_key(window.1 - 1, position)),
+        ascending,
+    );
+    let case = format!(
+        "window {window:?}, positions {start:?}..{end:?}, ascending {ascending}, filtered {}",
+        filter.is_some()
+    );
+    assert_eq!(event_keys(&result), expected, "{case}");
+    assert_eq!(
+        result.end_reason,
+        Some(QueryEndReason::CheckpointBound),
+        "{case}"
+    );
+    result
+}
+
+/// Pages the transactions between `start` and `end`, `limit` items a page, sending each page's
+/// last watermark cursor back with the same positions. Returns the items and the closing cursor.
+async fn page_transactions_between(
+    client: &mut LedgerServiceClient<Channel>,
+    window: (u64, u64),
+    start: Option<u64>,
+    end: Option<u64>,
+    filter: &Option<TransactionFilter>,
+    ascending: bool,
+    limit: u32,
+) -> (Vec<TransactionKey>, Bytes) {
+    let mut items = Vec::new();
+    let mut resume = None;
+    for _ in 0..1_000 {
+        let mut options = ordered_options(limit, ascending);
+        if ascending {
+            options.after = resume;
+        } else {
+            options.before = resume;
+        }
+        let request = positioned_transactions_request(window, start, end, filter, options);
+        let page = list_transactions_result(client, request).await;
+        items.extend(transaction_keys(&page));
+        let cursor = page.end_cursor.expect("every page carries a resume cursor");
+        match page.end_reason {
+            Some(QueryEndReason::ItemLimit | QueryEndReason::ScanLimit) => resume = Some(cursor),
+            reason => {
+                assert_eq!(reason, Some(QueryEndReason::CheckpointBound));
+                return (items, cursor);
+            }
+        }
+    }
+    panic!("paging did not reach the end position");
+}
+
+/// Pages the events between `start` and `end`, `limit` items a page, sending each page's last
+/// watermark cursor back with the same positions. Returns the items and the closing cursor.
+async fn page_events_between(
+    client: &mut LedgerServiceClient<Channel>,
+    window: (u64, u64),
+    start: Option<EventPosition>,
+    end: Option<EventPosition>,
+    filter: &Option<EventFilter>,
+    ascending: bool,
+    limit: u32,
+) -> (Vec<EventKey>, Bytes) {
+    let mut items = Vec::new();
+    let mut resume = None;
+    for _ in 0..1_000 {
+        let mut options = ordered_options(limit, ascending);
+        if ascending {
+            options.after = resume;
+        } else {
+            options.before = resume;
+        }
+        let request = positioned_events_request(window, start, end, filter, options);
+        let page = list_events_result(client, request).await;
+        items.extend(event_keys(&page));
+        let cursor = page.end_cursor.expect("every page carries a resume cursor");
+        match page.end_reason {
+            Some(QueryEndReason::ItemLimit | QueryEndReason::ScanLimit) => resume = Some(cursor),
+            reason => {
+                assert_eq!(reason, Some(QueryEndReason::CheckpointBound));
+                return (items, cursor);
+            }
+        }
+    }
+    panic!("paging did not reach the end position");
+}
+
+/// The checkpoint the terminal watermark of a naturally ended transaction listing claims.
+fn transactions_terminal_claim(result: &TransactionsResult) -> Option<u64> {
+    let terminal = result.frames.last().expect("a listing has a final frame");
+    assert!(terminal.end.is_some() && terminal.transaction.is_none());
+    terminal.watermark.as_ref().and_then(|w| w.checkpoint)
+}
+
+/// The checkpoint the terminal watermark of a naturally ended event listing claims.
+fn events_terminal_claim(result: &EventsResult) -> Option<u64> {
+    let terminal = result.frames.last().expect("a listing has a final frame");
+    assert!(terminal.end.is_some() && terminal.event.is_none());
+    terminal.watermark.as_ref().and_then(|w| w.checkpoint)
+}
+
+/// Event positions inside the checkpoint `checkpoint` of `transaction_count` transactions:
+/// before each transaction, inside and past each event-emitting transaction's events, and past
+/// the checkpoint's end, with and without an event index.
+fn event_positions_in(
+    events: &[EventKey],
+    checkpoint: u64,
+    transaction_count: u64,
+) -> Vec<EventPosition> {
+    let mut positions = Vec::new();
+    for transaction in 0..=transaction_count + 1 {
+        positions.push((transaction, None));
+        let emitted = events
+            .iter()
+            .filter(|key| key.0 == checkpoint && key.1 == transaction)
+            .count() as u32;
+        if emitted > 0 {
+            positions
+                .extend([Some(1), Some(emitted), Some(u32::MAX)].map(|event| (transaction, event)));
+        }
+    }
+    positions.extend([(transaction_count, Some(1)), (u64::MAX, Some(u32::MAX))]);
+    positions.dedup();
+    positions
+}
+
+/// A transaction listing between a start position inside its first checkpoint and an end
+/// position inside its last returns exactly the transactions between them, in either ordering,
+/// with or without a filter, intersected with `after` / `before` cursors, and across resumed
+/// pages. A position that cuts the checkpoint where a scan ends leaves that checkpoint unclaimed.
+#[sim_test]
+async fn test_list_transactions_checkpoint_positions() {
+    let fixture = checkpoint_positions_fixture().await;
+    let window = fixture.window;
+    let busy = fixture.busy_checkpoint;
+    let mut client = new_ledger_client(&fixture.cluster).await;
+    let unfiltered = list_transaction_keys(&mut client, window, None).await;
+    let sizes = checkpoint_sizes(&unfiltered);
+    let busy_size = sizes[&busy];
+    let sender_filter = Some(tx_sender(fixture.sender));
+    let sender_listed = list_transaction_keys(&mut client, window, sender_filter.clone()).await;
+    let in_busy = (busy, busy + 1);
+    let from_busy = (busy, window.1);
+    let to_busy = (window.0, busy + 1);
+
+    for (filter, listed) in [(None, &unfiltered), (sender_filter.clone(), &sender_listed)] {
+        for ascending in [true, false] {
+            // Positions at the window's checkpoint boundaries scan exactly as no positions do.
+            let request = positioned_transactions_request(
+                window,
+                None,
+                None,
+                &filter,
+                ordered_options(500, ascending),
+            );
+            let plain = list_transactions_result(&mut client, request).await;
+            for (start, end) in [
+                (Some(0), None),
+                (None, Some(u64::MAX)),
+                (Some(0), Some(u64::MAX)),
+            ] {
+                let request = positioned_transactions_request(
+                    window,
+                    start,
+                    end,
+                    &filter,
+                    ordered_options(500, ascending),
+                );
+                let bounded = list_transactions_result(&mut client, request).await;
+                assert_eq!(bounded.frames, plain.frames, "positions {start:?}..{end:?}");
+            }
+
+            // Every start and end position in the busy checkpoint, including indexes past its
+            // end, alone and in pairs.
+            let indexes = |checkpoint: u64| (0..=sizes[&checkpoint] + 1).chain([u64::MAX]);
+            for sub in [in_busy, from_busy, to_busy] {
+                for start in indexes(sub.0) {
+                    assert_transactions_between(
+                        &mut client,
+                        listed,
+                        sub,
+                        Some(start),
+                        None,
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                }
+                for end in indexes(sub.1 - 1) {
+                    assert_transactions_between(
+                        &mut client,
+                        listed,
+                        sub,
+                        None,
+                        Some(end),
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                }
+            }
+            for start in indexes(busy) {
+                for end in indexes(busy) {
+                    assert_transactions_between(
+                        &mut client,
+                        listed,
+                        in_busy,
+                        Some(start),
+                        Some(end),
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                }
+            }
+        }
+    }
+
+    // Positions intersect with item cursors: the later start and the earlier end bound the
+    // scan, and the scan ends at whichever bound stops it.
+    let request =
+        positioned_transactions_request(window, None, None, &None, ordered_options(500, true));
+    let cursor_listing = list_transactions_result(&mut client, request).await;
+    let cursors: Vec<(TransactionKey, Bytes)> = cursor_listing
+        .transactions
+        .iter()
+        .map(|item| {
+            let cursor = item.watermark.as_ref().and_then(|w| w.cursor.clone());
+            (transaction_key(item), cursor.expect("item cursor"))
+        })
+        .filter(|(key, _)| key.0 + 1 >= busy)
+        .collect();
+    for (sub, start, end) in [(in_busy, 1, busy_size - 1), (from_busy, 2, 1)] {
+        let start_key = (sub.0, start);
+        let end_key = (sub.1 - 1, end);
+        let in_positions = keys_between(
+            &unfiltered,
+            |key| key.0,
+            sub,
+            Some(start_key),
+            Some(end_key),
+            true,
+        );
+        for (item, cursor) in &cursors {
+            for ascending in [true, false] {
+                for before in [false, true] {
+                    let mut options = ordered_options(500, ascending);
+                    if before {
+                        options.before = Some(cursor.clone());
+                    } else {
+                        options.after = Some(cursor.clone());
+                    }
+                    let request = positioned_transactions_request(
+                        sub,
+                        Some(start),
+                        Some(end),
+                        &None,
+                        options,
+                    );
+                    let result = list_transactions_result(&mut client, request).await;
+                    let case = format!(
+                        "window {sub:?}, positions {start}..{end}, cursor at {item:?}, \
+                         ascending {ascending}, before {before}"
+                    );
+                    assert_eq!(
+                        transaction_keys(&result),
+                        keys_beyond_cursor(&in_positions, *item, ascending, before),
+                        "{case}"
+                    );
+                    if let Some(reason) =
+                        cursor_intersection_end(start_key, end_key, *item, ascending, before)
+                    {
+                        assert_eq!(result.end_reason, Some(reason), "{case}");
+                    }
+                }
+            }
+        }
+    }
+
+    for (filter, listed) in [(None, &unfiltered), (sender_filter.clone(), &sender_listed)] {
+        // Paging two items at a time, resuming from each page's last cursor with the positions
+        // kept, returns the one-shot items once each. The closing cursor, sent back with the
+        // positions, has nothing left; without them, it resumes past the position it stopped at.
+        for (sub, start, end) in [(in_busy, 1, busy_size - 1), (from_busy, 1, 1)] {
+            for ascending in [true, false] {
+                let one_shot = assert_transactions_between(
+                    &mut client,
+                    listed,
+                    sub,
+                    Some(start),
+                    Some(end),
+                    &filter,
+                    ascending,
+                )
+                .await;
+                let (paged, closing) = page_transactions_between(
+                    &mut client,
+                    sub,
+                    Some(start),
+                    Some(end),
+                    &filter,
+                    ascending,
+                    2,
+                )
+                .await;
+                assert_eq!(paged, transaction_keys(&one_shot));
+
+                let mut options = ordered_options(500, ascending);
+                if ascending {
+                    options.after = Some(closing.clone());
+                } else {
+                    options.before = Some(closing.clone());
+                }
+                let request = positioned_transactions_request(
+                    sub,
+                    Some(start),
+                    Some(end),
+                    &filter,
+                    options.clone(),
+                );
+                let resumed = list_transactions_result(&mut client, request).await;
+                assert!(resumed.transactions.is_empty());
+                assert_eq!(resumed.end_reason, Some(QueryEndReason::CheckpointBound));
+
+                let request = positioned_transactions_request(sub, None, None, &filter, options);
+                let resumed = list_transactions_result(&mut client, request).await;
+                let beyond = if ascending {
+                    keys_between(listed, |key| key.0, sub, Some((sub.1 - 1, end)), None, true)
+                } else {
+                    keys_between(listed, |key| key.0, sub, None, Some((sub.0, start)), false)
+                };
+                assert_eq!(transaction_keys(&resumed), beyond);
+            }
+        }
+
+        // A position cutting the checkpoint where the scan ends leaves that checkpoint
+        // unclaimed: ascending the end position's, descending the start position's.
+        for (sub, claim) in [(to_busy, Some(busy - 1)), (in_busy, None)] {
+            for end in [0, 1] {
+                let result = assert_transactions_between(
+                    &mut client,
+                    listed,
+                    sub,
+                    None,
+                    Some(end),
+                    &filter,
+                    true,
+                )
+                .await;
+                assert_eq!(
+                    transactions_terminal_claim(&result),
+                    claim,
+                    "end {end} in {sub:?}"
+                );
+            }
+        }
+        // A start index past the start checkpoint's end leaves none of that checkpoint in the
+        // scan, so it stays unclaimed too.
+        for (sub, claim) in [(from_busy, Some(busy + 1)), (in_busy, None)] {
+            for start in [1, busy_size, u64::MAX] {
+                let result = assert_transactions_between(
+                    &mut client,
+                    listed,
+                    sub,
+                    Some(start),
+                    None,
+                    &filter,
+                    false,
+                )
+                .await;
+                assert_eq!(
+                    transactions_terminal_claim(&result),
+                    claim,
+                    "start {start} in {sub:?}"
+                );
+            }
+        }
+        // A position where the scan begins, or at a checkpoint boundary, claims as no position
+        // does.
+        for ascending in [true, false] {
+            for sub in [to_busy, from_busy] {
+                let plain = assert_transactions_between(
+                    &mut client,
+                    listed,
+                    sub,
+                    None,
+                    None,
+                    &filter,
+                    ascending,
+                )
+                .await;
+                let near_side = if ascending {
+                    (Some(1), None)
+                } else {
+                    (None, Some(1))
+                };
+                let boundary = if ascending {
+                    (None, Some(sizes[&(sub.1 - 1)]))
+                } else {
+                    (Some(0), None)
+                };
+                for (start, end) in [near_side, boundary] {
+                    let result = assert_transactions_between(
+                        &mut client,
+                        listed,
+                        sub,
+                        start,
+                        end,
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                    assert_eq!(
+                        transactions_terminal_claim(&result),
+                        transactions_terminal_claim(&plain),
+                        "positions {start:?}..{end:?} in {sub:?}, ascending {ascending}"
+                    );
+                }
+            }
+        }
+    }
+
+    // A transaction index needs the checkpoint bound it is relative to.
+    let mut request = ListTransactionsRequest::default();
+    request.end_checkpoint = Some(window.1);
+    request.start_transaction_index = Some(1);
+    expect_invalid_list_transactions(&mut client, request).await;
+    let mut request = ListTransactionsRequest::default();
+    request.start_checkpoint = Some(window.0);
+    request.end_transaction_index = Some(1);
+    expect_invalid_list_transactions(&mut client, request).await;
+}
+
+/// An event listing between a start position inside its first checkpoint and an end position
+/// inside its last, each down to an event of a transaction, returns exactly the events between
+/// them, in either ordering, with or without a filter, intersected with `after` / `before`
+/// cursors, and across resumed pages. A position that cuts the checkpoint where a scan ends
+/// leaves that checkpoint unclaimed.
+#[sim_test]
+async fn test_list_events_checkpoint_positions() {
+    let fixture = checkpoint_positions_fixture().await;
+    let window = fixture.window;
+    let busy = fixture.busy_checkpoint;
+    let mut client = new_ledger_client(&fixture.cluster).await;
+    let sizes = checkpoint_sizes(&list_transaction_keys(&mut client, window, None).await);
+    let busy_size = sizes[&busy];
+    let unfiltered = list_event_keys(&mut client, window, None).await;
+    for checkpoint in [window.0, busy, window.1 - 1] {
+        assert!(
+            unfiltered.iter().any(|key| key.0 == checkpoint),
+            "checkpoint {checkpoint} at a position edge holds events"
+        );
+    }
+    let sender_filter = Some(ev_sender(fixture.sender));
+    let sender_listed = list_event_keys(&mut client, window, sender_filter.clone()).await;
+    let in_busy = (busy, busy + 1);
+    let from_busy = (busy, window.1);
+    let to_busy = (window.0, busy + 1);
+    let emitted = |transaction: u64| {
+        unfiltered
+            .iter()
+            .filter(|key| key.0 == busy && key.1 == transaction)
+            .count() as u32
+    };
+    // Transactions of the busy checkpoint emitting several events, so positions fall inside them.
+    let multi_event: Vec<u64> = (0..busy_size).filter(|&tx| emitted(tx) >= 2).collect();
+    let (first_multi, last_multi) = (multi_event[0], *multi_event.last().unwrap());
+    assert!(first_multi < last_multi);
+
+    for (filter, listed) in [(None, &unfiltered), (sender_filter.clone(), &sender_listed)] {
+        for ascending in [true, false] {
+            // Positions at the window's checkpoint boundaries scan exactly as no positions do.
+            let request = positioned_events_request(
+                window,
+                None,
+                None,
+                &filter,
+                ordered_options(500, ascending),
+            );
+            let plain = list_events_result(&mut client, request).await;
+            for (start, end) in [
+                (Some((0, None)), None),
+                (Some((0, Some(0))), Some((u64::MAX, None))),
+                (None, Some((u64::MAX, Some(u32::MAX)))),
+            ] {
+                let request = positioned_events_request(
+                    window,
+                    start,
+                    end,
+                    &filter,
+                    ordered_options(500, ascending),
+                );
+                let bounded = list_events_result(&mut client, request).await;
+                assert_eq!(bounded.frames, plain.frames, "positions {start:?}..{end:?}");
+            }
+
+            // Every start and end position in the busy checkpoint: before, inside, and past each
+            // transaction's events, and past the checkpoint's end.
+            let positions =
+                |checkpoint: u64| event_positions_in(&unfiltered, checkpoint, sizes[&checkpoint]);
+            for sub in [in_busy, from_busy, to_busy] {
+                for start in positions(sub.0) {
+                    assert_events_between(
+                        &mut client,
+                        listed,
+                        sub,
+                        Some(start),
+                        None,
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                }
+                for end in positions(sub.1 - 1) {
+                    assert_events_between(
+                        &mut client,
+                        listed,
+                        sub,
+                        None,
+                        Some(end),
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                }
+            }
+            // Pairs of transaction boundaries and first-event splits in the busy checkpoint.
+            let paired: Vec<_> = positions(busy)
+                .into_iter()
+                .filter(|(_, event)| matches!(event, None | Some(1)))
+                .collect();
+            for &start in &paired {
+                for &end in &paired {
+                    assert_events_between(
+                        &mut client,
+                        listed,
+                        in_busy,
+                        Some(start),
+                        Some(end),
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                }
+            }
+        }
+    }
+
+    // Positions intersect with item cursors: the later start and the earlier end bound the
+    // scan, and the scan ends at whichever bound stops it.
+    let request = positioned_events_request(window, None, None, &None, ordered_options(500, true));
+    let cursor_listing = list_events_result(&mut client, request).await;
+    let cursors: Vec<(EventKey, Bytes)> = cursor_listing
+        .events
+        .iter()
+        .map(|item| {
+            let cursor = item.watermark.as_ref().and_then(|w| w.cursor.clone());
+            (event_key(item), cursor.expect("item cursor"))
+        })
+        .filter(|(key, _)| key.0 + 1 >= busy)
+        .collect();
+    let split_bounds = [
+        (in_busy, (first_multi, Some(1)), (last_multi, Some(1))),
+        (from_busy, (first_multi, Some(1)), (1, None)),
+    ];
+    for (sub, start, end) in split_bounds {
+        let start_key = event_position_key(sub.0, start);
+        let end_key = event_position_key(sub.1 - 1, end);
+        let in_positions = keys_between(
+            &unfiltered,
+            |key| key.0,
+            sub,
+            Some(start_key),
+            Some(end_key),
+            true,
+        );
+        for (item, cursor) in &cursors {
+            for ascending in [true, false] {
+                for before in [false, true] {
+                    let mut options = ordered_options(500, ascending);
+                    if before {
+                        options.before = Some(cursor.clone());
+                    } else {
+                        options.after = Some(cursor.clone());
+                    }
+                    let request =
+                        positioned_events_request(sub, Some(start), Some(end), &None, options);
+                    let result = list_events_result(&mut client, request).await;
+                    let case = format!(
+                        "window {sub:?}, positions {start:?}..{end:?}, cursor at {item:?}, \
+                         ascending {ascending}, before {before}"
+                    );
+                    assert_eq!(
+                        event_keys(&result),
+                        keys_beyond_cursor(&in_positions, *item, ascending, before),
+                        "{case}"
+                    );
+                    if let Some(reason) =
+                        cursor_intersection_end(start_key, end_key, *item, ascending, before)
+                    {
+                        assert_eq!(result.end_reason, Some(reason), "{case}");
+                    }
+                }
+            }
+        }
+    }
+
+    for (filter, listed) in [(None, &unfiltered), (sender_filter.clone(), &sender_listed)] {
+        // Paging two items at a time, resuming from each page's last cursor with the positions
+        // kept, returns the one-shot items once each. The closing cursor, sent back with the
+        // positions, has nothing left; without them, it resumes past the position it stopped at.
+        for (sub, start, end) in split_bounds {
+            for ascending in [true, false] {
+                let one_shot = assert_events_between(
+                    &mut client,
+                    listed,
+                    sub,
+                    Some(start),
+                    Some(end),
+                    &filter,
+                    ascending,
+                )
+                .await;
+                let (paged, closing) = page_events_between(
+                    &mut client,
+                    sub,
+                    Some(start),
+                    Some(end),
+                    &filter,
+                    ascending,
+                    2,
+                )
+                .await;
+                assert_eq!(paged, event_keys(&one_shot));
+
+                let mut options = ordered_options(500, ascending);
+                if ascending {
+                    options.after = Some(closing.clone());
+                } else {
+                    options.before = Some(closing.clone());
+                }
+                let request = positioned_events_request(
+                    sub,
+                    Some(start),
+                    Some(end),
+                    &filter,
+                    options.clone(),
+                );
+                let resumed = list_events_result(&mut client, request).await;
+                assert!(resumed.events.is_empty());
+                assert_eq!(resumed.end_reason, Some(QueryEndReason::CheckpointBound));
+
+                let request = positioned_events_request(sub, None, None, &filter, options);
+                let resumed = list_events_result(&mut client, request).await;
+                let beyond = if ascending {
+                    let end_key = event_position_key(sub.1 - 1, end);
+                    keys_between(listed, |key| key.0, sub, Some(end_key), None, true)
+                } else {
+                    let start_key = event_position_key(sub.0, start);
+                    keys_between(listed, |key| key.0, sub, None, Some(start_key), false)
+                };
+                assert_eq!(event_keys(&resumed), beyond);
+            }
+        }
+
+        // A position cutting the checkpoint where the scan ends leaves that checkpoint
+        // unclaimed: ascending the end position's, descending the start position's.
+        for (sub, claim) in [(to_busy, Some(busy - 1)), (in_busy, None)] {
+            for end in [(0, None), (first_multi, Some(1))] {
+                let result =
+                    assert_events_between(&mut client, listed, sub, None, Some(end), &filter, true)
+                        .await;
+                assert_eq!(
+                    events_terminal_claim(&result),
+                    claim,
+                    "end {end:?} in {sub:?}"
+                );
+            }
+        }
+        // A start transaction index past the start checkpoint's end leaves none of that
+        // checkpoint in the scan, so it stays unclaimed too.
+        for (sub, claim) in [(from_busy, Some(busy + 1)), (in_busy, None)] {
+            let starts = [
+                (1, None),
+                (first_multi, Some(1)),
+                (busy_size, Some(1)),
+                (u64::MAX, None),
+            ];
+            for start in starts {
+                let result = assert_events_between(
+                    &mut client,
+                    listed,
+                    sub,
+                    Some(start),
+                    None,
+                    &filter,
+                    false,
+                )
+                .await;
+                assert_eq!(
+                    events_terminal_claim(&result),
+                    claim,
+                    "start {start:?} in {sub:?}"
+                );
+            }
+        }
+        // A position where the scan begins, or at a checkpoint boundary, claims as no position
+        // does.
+        for ascending in [true, false] {
+            for sub in [to_busy, from_busy] {
+                let plain =
+                    assert_events_between(&mut client, listed, sub, None, None, &filter, ascending)
+                        .await;
+                let split = (first_multi, Some(1));
+                let near_side = if ascending {
+                    (Some(split), None)
+                } else {
+                    (None, Some(split))
+                };
+                let boundary = if ascending {
+                    (None, Some((sizes[&(sub.1 - 1)], Some(1))))
+                } else {
+                    (Some((0, Some(0))), None)
+                };
+                for (start, end) in [near_side, boundary] {
+                    let result = assert_events_between(
+                        &mut client,
+                        listed,
+                        sub,
+                        start,
+                        end,
+                        &filter,
+                        ascending,
+                    )
+                    .await;
+                    assert_eq!(
+                        events_terminal_claim(&result),
+                        events_terminal_claim(&plain),
+                        "positions {start:?}..{end:?} in {sub:?}, ascending {ascending}"
+                    );
+                }
+            }
+        }
+    }
+
+    // A transaction index needs the checkpoint bound it is relative to, and an event index the
+    // transaction index it is relative to.
+    let invalid: [fn(&mut ListEventsRequest); 6] = [
+        |request| request.start_transaction_index = Some(1),
+        |request| request.end_transaction_index = Some(1),
+        |request| request.start_event_index = Some(1),
+        |request| request.end_event_index = Some(1),
+        |request| {
+            request.start_checkpoint = Some(1);
+            request.start_event_index = Some(1);
+        },
+        |request| {
+            request.end_checkpoint = Some(1);
+            request.end_event_index = Some(1);
+        },
+    ];
+    for set_fields in invalid {
+        let mut request = ListEventsRequest::default();
+        set_fields(&mut request);
+        expect_invalid_list_events(&mut client, request).await;
     }
 }
