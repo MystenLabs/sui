@@ -26,6 +26,7 @@ use crate::consensus_adapter::{
     processing_error,
 };
 use crate::consensus_handler::{SequencedConsensusTransactionKey, tx_type_label};
+use crate::execution_cache::ExecutionCacheWrite;
 use crate::staggered_submission::{StaggerQuota, StaggeredSlot, proposers_metric_label};
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
@@ -42,13 +43,14 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, ObjectRef};
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::{
-    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
+use sui_types::transaction::{InputObjectKind, TransactionDataAPI};
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
@@ -217,6 +219,14 @@ struct PoolEntry {
     /// Empty for system and ping submissions: the `ConsensusAdapter` already
     /// checks those before they reach the pool.
     processed: Vec<ProcessedWatch>,
+    /// Owned input objects of every transaction in the entry, minus the objects the
+    /// submitter claimed immutable. Validated against live object versions each time the
+    /// entry is considered for a proposal, so an entry whose inputs were consumed while it
+    /// waited in the pool is dropped before it occupies block space.
+    owned_object_refs: Vec<ObjectRef>,
+    /// Set by `take()` when the owned-object validation fails. The entry is excluded from
+    /// the proposal and resolved with this error outside the pool mutex.
+    rejection: Option<SuiError>,
     /// Staggered submission of transactions without allowed proposers: `Some` for held
     /// entries, carrying the eligibility time — `take()` leaves the entry queued until
     /// then, so a copy committed by an earlier-slotted validator during the hold
@@ -372,6 +382,7 @@ enum Inner {
 /// quota in [`StaggerQuota::submission_slot`].
 pub struct ConsensusTransactionPool {
     epoch_store: Arc<AuthorityPerEpochStore>,
+    cache_writer: Arc<dyn ExecutionCacheWrite>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
     stagger_quota: StaggerQuota,
@@ -381,6 +392,7 @@ pub struct ConsensusTransactionPool {
 impl ConsensusTransactionPool {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
+        cache_writer: Arc<dyn ExecutionCacheWrite>,
         max_pending_transactions: usize,
         max_user_bytes_per_second: Option<u64>,
         metrics: Arc<AdmissionQueueMetrics>,
@@ -417,6 +429,7 @@ impl ConsensusTransactionPool {
         });
         Self {
             epoch_store,
+            cache_writer,
             metrics: metrics.clone(),
             adapter_metrics,
             stagger_quota: StaggerQuota::new(
@@ -442,11 +455,13 @@ impl ConsensusTransactionPool {
     #[cfg(test)]
     pub(crate) fn new_for_tests(
         epoch_store: Arc<AuthorityPerEpochStore>,
+        cache_writer: Arc<dyn ExecutionCacheWrite>,
         max_pending_transactions: usize,
         metrics: Arc<AdmissionQueueMetrics>,
     ) -> Self {
         Self::new(
             epoch_store,
+            cache_writer,
             max_pending_transactions,
             None,
             metrics,
@@ -494,6 +509,7 @@ impl ConsensusTransactionPool {
 
         let tx_type = tx_type_label(&transactions);
         let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
+        let owned_object_refs = owned_object_refs(&transactions);
 
         let user_transactions: Vec<_> = transactions
             .iter()
@@ -513,6 +529,8 @@ impl ConsensusTransactionPool {
             ack: PendingAck::new(EntryAck::User(sender), keys),
             metrics: self.metrics.clone(),
             processed,
+            owned_object_refs,
+            rejection: None,
             staggered_slot,
         };
 
@@ -602,6 +620,8 @@ impl ConsensusTransactionPool {
             ),
             metrics: self.metrics.clone(),
             processed: Vec::new(),
+            owned_object_refs: Vec::new(),
+            rejection: None,
             staggered_slot: None,
         };
 
@@ -817,6 +837,14 @@ impl ConsensusTransactionPool {
     #[cfg(test)]
     pub fn abandoned_count(&self, lane: &str) -> u64 {
         self.metrics.pool_abandoned.with_label_values(&[lane]).get()
+    }
+
+    #[cfg(test)]
+    pub fn rejected_at_proposal_count(&self, error: &str) -> u64 {
+        self.metrics
+            .pool_rejected_at_proposal
+            .with_label_values(&[error])
+            .get()
     }
 }
 
@@ -1109,7 +1137,7 @@ impl TransactionPool for ConsensusTransactionPool {
             entries.push(TakenEntry::new(TakenLane::System, entry));
         }
 
-        let mut already_processed = Vec::new();
+        let mut excluded = Vec::new();
         if !user_take_disabled
             && matches!(limit_reached, LimitReached::AllTransactionsIncluded)
             && let UserLane::Open(user) = &mut pool.user
@@ -1124,7 +1152,7 @@ impl TransactionPool for ConsensusTransactionPool {
                 None => max_bytes,
             };
             let popped;
-            (popped, already_processed) = user.pop_batch_while(|entry| {
+            (popped, excluded) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
                 // Checked before the staggered hold, so a copy committed elsewhere
                 // resolves a held entry immediately instead of after its delay.
@@ -1142,6 +1170,15 @@ impl TransactionPool for ConsensusTransactionPool {
                     .is_some_and(|slot| slot.eligible_at() > now)
                 {
                     return PopAction::Skip;
+                }
+                // Checked before the block limits so a rejected entry consumes neither block
+                // space nor byte budget, and never stops the iteration.
+                if let Err(error) = self
+                    .cache_writer
+                    .validate_owned_object_versions(&entry.owned_object_refs)
+                {
+                    entry.rejection = Some(error);
+                    return PopAction::Exclude;
                 }
                 match entry_limit(
                     entry,
@@ -1196,8 +1233,16 @@ impl TransactionPool for ConsensusTransactionPool {
                 .inc();
             ping.drop_deliberately("submitter stopped waiting before proposal");
         }
-        for mut entry in already_processed {
+        for mut entry in excluded {
             self.decrement_lane_metrics("user", &entry);
+            if let Some(error) = entry.rejection.take() {
+                self.metrics
+                    .pool_rejected_at_proposal
+                    .with_label_values(&[error.as_inner().to_variant_name()])
+                    .inc();
+                entry.ack.resolve_error(error);
+                continue;
+            }
             let method = all_processed(&mut entry.processed)
                 .expect("excluded entries are already processed");
             self.metrics
@@ -1333,6 +1378,29 @@ fn consensus_client_error(error: ClientError) -> SuiError {
     SuiErrorKind::FailedToSubmitToConsensus(error.to_string()).into()
 }
 
+/// Owned input object refs of the user transactions in `transactions`, excluding the
+/// objects their submitter claimed immutable. Mirrors the set `handle_vote_transaction`
+/// validates at admission.
+fn owned_object_refs(transactions: &[ConsensusTransaction]) -> Vec<ObjectRef> {
+    let mut refs = Vec::new();
+    for transaction in transactions {
+        let ConsensusTransactionKind::UserTransactionV2(tx) = &transaction.kind else {
+            continue;
+        };
+        let immutable = tx.get_immutable_objects();
+        let Ok(input_objects) = tx.tx().data().transaction_data().input_objects() else {
+            continue;
+        };
+        refs.extend(input_objects.into_iter().filter_map(|input| match input {
+            InputObjectKind::ImmOrOwnedMoveObject(obj_ref) if !immutable.contains(&obj_ref.0) => {
+                Some(obj_ref)
+            }
+            _ => None,
+        }));
+    }
+    refs
+}
+
 #[derive(Clone)]
 enum PoolState {
     /// Before the first consensus start.
@@ -1355,18 +1423,21 @@ pub struct TransactionPoolContext {
     state: watch::Sender<PoolState>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    cache_writer: Arc<dyn ExecutionCacheWrite>,
 }
 
 impl TransactionPoolContext {
     pub fn new(
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
+        cache_writer: Arc<dyn ExecutionCacheWrite>,
     ) -> Self {
         let (state, _) = watch::channel(PoolState::Absent);
         Self {
             state,
             metrics,
             adapter_metrics,
+            cache_writer,
         }
     }
 
@@ -1470,9 +1541,16 @@ impl TransactionPoolContext {
         &self.adapter_metrics
     }
 
+    pub fn cache_writer(&self) -> &Arc<dyn ExecutionCacheWrite> {
+        &self.cache_writer
+    }
+
     #[cfg(test)]
-    pub(crate) fn new_for_tests(metrics: Arc<AdmissionQueueMetrics>) -> Self {
-        Self::new(metrics, ConsensusAdapterMetrics::new_test())
+    pub(crate) fn new_for_tests(
+        metrics: Arc<AdmissionQueueMetrics>,
+        cache_writer: Arc<dyn ExecutionCacheWrite>,
+    ) -> Self {
+        Self::new(metrics, ConsensusAdapterMetrics::new_test(), cache_writer)
     }
 }
 
@@ -1541,8 +1619,10 @@ mod tests {
     use consensus_types::block::BlockDigest;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::{AuthorityName, random_object_ref};
+    use sui_types::base_types::{AuthorityName, ObjectID, random_object_ref};
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
+    use sui_types::error::UserInputError;
+    use sui_types::object::{Object, Owner};
     use sui_types::transaction::PlainTransactionWithClaims;
 
     async fn test_state_and_pool(
@@ -1571,6 +1651,7 @@ mod tests {
     ) -> Arc<ConsensusTransactionPool> {
         Arc::new(ConsensusTransactionPool::new_for_tests(
             state.epoch_store_for_testing().clone(),
+            state.get_cache_writer().clone(),
             capacity,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
         ))
@@ -1585,6 +1666,7 @@ mod tests {
         let state = TestAuthorityBuilder::new().build().await;
         let pool = Arc::new(ConsensusTransactionPool::new(
             state.epoch_store_for_testing().clone(),
+            state.get_cache_writer().clone(),
             10,
             Some(max_user_bytes_per_second),
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
@@ -1608,10 +1690,21 @@ mod tests {
         ConsensusTransaction::new_end_of_publish(AuthorityName::ZERO)
     }
 
-    fn user_transaction() -> ConsensusTransaction {
+    /// A user transaction whose gas object exists in `state` at the referenced version, so
+    /// it passes the owned-object validation in `take()`.
+    fn user_transaction(state: &AuthorityState) -> ConsensusTransaction {
+        let (sender, _) = get_key_pair::<AccountKeyPair>();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let gas_object_ref = gas_object.compute_object_reference();
+        state.insert_genesis_object(gas_object);
+        user_transaction_with_gas(gas_object_ref)
+    }
+
+    /// A user transaction paying with `gas_object_ref`, which need not exist.
+    fn user_transaction_with_gas(gas_object_ref: ObjectRef) -> ConsensusTransaction {
         let (sender, keypair) = get_key_pair::<AccountKeyPair>();
         let transaction = crate::test_utils::make_transfer_sui_transaction(
-            random_object_ref(),
+            gas_object_ref,
             sender,
             Some(1),
             sender,
@@ -1665,6 +1758,8 @@ mod tests {
             ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
             metrics,
             processed: Vec::new(),
+            owned_object_refs: Vec::new(),
+            rejection: None,
             staggered_slot: None,
         };
         let UserLane::Open(user) = &mut lane else {
@@ -2094,7 +2189,7 @@ mod tests {
 
     #[sim_test]
     async fn notify_committed_reports_proposed_user_outcomes() {
-        let (_state, pool) = test_state_and_pool(10).await;
+        let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
         let status = |status: &str| {
             pool.adapter_metrics
@@ -2110,11 +2205,15 @@ mod tests {
         };
 
         // Block 1: one user transaction, later garbage collected.
-        let (_first, _) = pool.try_insert(epoch, 1, vec![user_transaction()]).unwrap();
+        let (_first, _) = pool
+            .try_insert(epoch, 1, vec![user_transaction(&state)])
+            .unwrap();
         let (_, ack, _) = pool.take(1, usize::MAX);
         ack(block(1));
         // Block 2: one user transaction and one system transaction, committed.
-        let (_second, _) = pool.try_insert(epoch, 1, vec![user_transaction()]).unwrap();
+        let (_second, _) = pool
+            .try_insert(epoch, 1, vec![user_transaction(&state)])
+            .unwrap();
         let _system = pool.submit(epoch, &[transaction()]).unwrap();
         let (_, ack, _) = pool.take(2, usize::MAX);
         ack(block(2));
@@ -2178,6 +2277,100 @@ mod tests {
     }
 
     #[sim_test]
+    async fn take_rejects_entries_with_stale_owned_objects_without_consuming_budget() {
+        let block_bytes = 1 << 20;
+        let (state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+        let epoch = pool.epoch();
+
+        // Both bid highest, so they head the pop order: one whose gas object never
+        // existed, one whose gas object was consumed after it entered the pool.
+        let missing = user_transaction_with_gas(random_object_ref());
+        let (missing_receiver, _) = pool.try_insert(epoch, 100, vec![missing]).unwrap();
+        let (sender, _) = get_key_pair::<AccountKeyPair>();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let gas_object_ref = gas_object.compute_object_reference();
+        state.insert_genesis_object(gas_object);
+        let stale = user_transaction_with_gas(gas_object_ref);
+        let (stale_receiver, _) = pool.try_insert(epoch, 90, vec![stale]).unwrap();
+        state.get_cache_writer().write_object_entry_for_test(
+            Object::with_id_owner_version_for_testing(
+                gas_object_ref.0,
+                gas_object_ref.1.next(),
+                Owner::AddressOwner(sender),
+            ),
+        );
+
+        let mut live_bytes = 0;
+        let live = (0..2)
+            .map(|_| {
+                let transaction = user_transaction(&state);
+                live_bytes += bcs::to_bytes(&transaction).unwrap().len() as i64;
+                pool.try_insert(epoch, 10, vec![transaction]).unwrap().0
+            })
+            .collect::<Vec<_>>();
+
+        let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(limit, LimitReached::AllTransactionsIncluded);
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(
+            pool.metrics.pool_byte_budget_bytes.get(),
+            block_bytes as i64 - live_bytes
+        );
+        assert_eq!(pool.rejected_at_proposal_count("ObjectNotFound"), 1);
+        assert_eq!(
+            pool.rejected_at_proposal_count("ObjectVersionUnavailableForConsumption"),
+            1
+        );
+        assert!(matches!(
+            missing_receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectNotFound { .. }
+            }
+        ));
+        assert!(matches!(
+            stale_receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption { .. }
+            }
+        ));
+
+        ack(block(1));
+        for receiver in live {
+            assert_eq!(receiver.await.unwrap().unwrap().len(), 1);
+        }
+    }
+
+    #[sim_test]
+    async fn bundle_is_rejected_at_proposal_when_any_owned_object_is_stale() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+
+        let (receiver, _) = pool
+            .try_insert(
+                epoch,
+                10,
+                vec![
+                    user_transaction(&state),
+                    user_transaction_with_gas(random_object_ref()),
+                ],
+            )
+            .unwrap();
+
+        let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
+        assert!(transactions.is_empty());
+        assert_eq!(limit, LimitReached::AllTransactionsIncluded);
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert!(matches!(
+            receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectNotFound { .. }
+            }
+        ));
+        drop(ack);
+    }
+
+    #[sim_test]
     async fn take_skips_already_processed_entries_without_shrinking_the_block() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -2186,15 +2379,15 @@ mod tests {
         // Both bid highest, so they head the pop order and would consume the whole
         // budget below if they were not skipped — one observed through consensus
         // output, one through checkpoint execution.
-        let processed = user_transaction();
+        let processed = user_transaction(&state);
         let (processed_consensus, _) = pool
             .try_insert(epoch, 100, vec![processed.clone()])
             .unwrap();
-        let executed = user_transaction();
+        let executed = user_transaction(&state);
         let (processed_checkpoint, _) = pool.try_insert(epoch, 90, vec![executed.clone()]).unwrap();
         let live = (0..3)
             .map(|_| {
-                pool.try_insert(epoch, 10, vec![user_transaction()])
+                pool.try_insert(epoch, 10, vec![user_transaction(&state)])
                     .unwrap()
                     .0
             })
@@ -2236,8 +2429,8 @@ mod tests {
         let epoch = pool.epoch();
         let epoch_store = state.epoch_store_for_testing();
 
-        let first = user_transaction();
-        let second = user_transaction();
+        let first = user_transaction(&state);
+        let second = user_transaction(&state);
         let (receiver, _) = pool
             .try_insert(epoch, 10, vec![first.clone(), second.clone()])
             .unwrap();
@@ -2275,7 +2468,7 @@ mod tests {
 
         // An already-processed insert must fail before the ack is armed — a regression detonates
         // the drop bomb and panics this test.
-        let via_consensus = user_transaction();
+        let via_consensus = user_transaction(&state);
         epoch_store.test_insert_user_signature(digest_of(&via_consensus), vec![]);
         assert!(matches!(
             pool.try_insert(epoch, 10, vec![via_consensus])
@@ -2288,7 +2481,7 @@ mod tests {
             1
         );
 
-        let via_checkpoint = user_transaction();
+        let via_checkpoint = user_transaction(&state);
         epoch_store
             .insert_finalized_transactions(&[digest_of(&via_checkpoint)], 1)
             .unwrap();
@@ -2317,7 +2510,7 @@ mod tests {
         // Each user key registers with both the consensus and the checkpoint registry.
         let baseline = epoch_store.num_pending_processed_notifications();
 
-        let evicted_tx = user_transaction();
+        let evicted_tx = user_transaction(&state);
         let (evicted, _) = pool
             .try_insert(epoch, 10, vec![evicted_tx.clone()])
             .unwrap();
@@ -2326,7 +2519,7 @@ mod tests {
             baseline + 2
         );
 
-        let taken_tx = user_transaction();
+        let taken_tx = user_transaction(&state);
         let (taken, _) = pool.try_insert(epoch, 20, vec![taken_tx.clone()]).unwrap();
         assert!(matches!(
             evicted.await.unwrap().unwrap_err().as_inner(),
@@ -2343,7 +2536,7 @@ mod tests {
         taken.await.unwrap().unwrap();
         assert_eq!(epoch_store.num_pending_processed_notifications(), baseline);
 
-        let closed_tx = user_transaction();
+        let closed_tx = user_transaction(&state);
         let (closed, _) = pool.try_insert(epoch, 10, vec![closed_tx.clone()]).unwrap();
         assert_eq!(
             epoch_store.num_pending_processed_notifications(),
@@ -2372,6 +2565,7 @@ mod tests {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             ConsensusTransactionPool::new_for_tests(
                 epoch_store,
+                state.get_cache_writer().clone(),
                 0,
                 Arc::new(AdmissionQueueMetrics::new_for_tests()),
             )
@@ -2382,8 +2576,11 @@ mod tests {
     #[sim_test]
     async fn context_observes_installed_pool_and_waits_for_matching_epoch() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
-        let context = Arc::new(TransactionPoolContext::new_for_tests(metrics));
         let state = TestAuthorityBuilder::new().build().await;
+        let context = Arc::new(TransactionPoolContext::new_for_tests(
+            metrics,
+            state.get_cache_writer().clone(),
+        ));
         let pool = pool_for_current_epoch(&state, 10);
         let epoch = pool.epoch();
         let absent_waiter = tokio::spawn({
@@ -2400,9 +2597,10 @@ mod tests {
         // send_replace retains the active state after the only receiver is gone.
         assert_eq!(context.wait_for_pool(epoch).await.unwrap().epoch(), epoch);
 
-        let race_context = Arc::new(TransactionPoolContext::new_for_tests(Arc::new(
-            AdmissionQueueMetrics::new_for_tests(),
-        )));
+        let race_context = Arc::new(TransactionPoolContext::new_for_tests(
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+            state.get_cache_writer().clone(),
+        ));
         let setter = race_context.clone();
         let race_pool = pool.clone();
         assert_eq!(
@@ -2432,9 +2630,11 @@ mod tests {
 
     #[sim_test]
     async fn context_fails_promptly_when_active_pool_is_dropped() {
-        let context =
-            TransactionPoolContext::new_for_tests(Arc::new(AdmissionQueueMetrics::new_for_tests()));
         let state = TestAuthorityBuilder::new().build().await;
+        let context = TransactionPoolContext::new_for_tests(
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+            state.get_cache_writer().clone(),
+        );
         let pool = pool_for_current_epoch(&state, 10);
         let epoch = pool.epoch();
         context.set_active(epoch, pool.clone());
@@ -2454,10 +2654,12 @@ mod tests {
 
     #[sim_test]
     async fn context_fails_stale_and_unavailable_epochs_promptly() {
-        let context =
-            TransactionPoolContext::new_for_tests(Arc::new(AdmissionQueueMetrics::new_for_tests()));
         // Advance to epoch 1 so a stale (older-epoch) caller can exist.
         let state = TestAuthorityBuilder::new().build().await;
+        let context = TransactionPoolContext::new_for_tests(
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+            state.get_cache_writer().clone(),
+        );
         state.reconfigure_for_testing().await;
         let pool = pool_for_current_epoch(&state, 10);
         let active_epoch = pool.epoch();
@@ -2497,9 +2699,13 @@ mod tests {
         let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing().clone();
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
-        let context = Arc::new(TransactionPoolContext::new_for_tests(metrics.clone()));
+        let context = Arc::new(TransactionPoolContext::new_for_tests(
+            metrics.clone(),
+            state.get_cache_writer().clone(),
+        ));
         let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
             epoch_store.clone(),
+            state.get_cache_writer().clone(),
             10,
             metrics,
         ));
@@ -2523,7 +2729,7 @@ mod tests {
         pool.notify_committed(vec![block_ref], 0);
         assert_eq!(status.await.unwrap(), BlockStatus::Sequenced(block_ref));
 
-        let user_transaction = user_transaction();
+        let user_transaction = user_transaction(&state);
         let task = tokio::spawn({
             let client = client.clone();
             let epoch_store = epoch_store.clone();
