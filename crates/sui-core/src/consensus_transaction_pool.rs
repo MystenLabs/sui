@@ -42,13 +42,14 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef};
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
 };
+use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
@@ -207,6 +208,9 @@ impl ProcessedWatch {
 /// included in a block atomically or not at all.
 struct PoolEntry {
     transactions: Vec<Transaction>,
+    /// Owned gas payment objects consumed by this entry, captured before serialization
+    /// so the admission queue can dedup on them without re-parsing the consensus bytes.
+    owned_objects: Vec<ObjectRef>,
     total_bytes: usize,
     gas_price: u64,
     tx_type: &'static str, // tx label for metrics
@@ -247,6 +251,10 @@ impl AdmissionQueueEntry for PoolEntry {
         self.ack.keys.iter().cloned()
     }
 
+    fn owned_object_keys(&self) -> impl Iterator<Item = ObjectRef> {
+        self.owned_objects.iter().copied()
+    }
+
     fn notify_evicted(self, min_gas_price: u64) {
         self.metrics.pool_depth.with_label_values(&["user"]).dec();
         self.metrics
@@ -263,6 +271,17 @@ impl AdmissionQueueEntry for PoolEntry {
         self.ack.resolve_error(
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price }
                 .into(),
+        );
+    }
+
+    fn notify_owned_object_conflict(self, object_id: ObjectID) {
+        self.ack.resolve_error(
+            SuiErrorKind::TooManyTransactionsPendingOnObject {
+                object_id,
+                queue_len: 2,
+                threshold: 1,
+            }
+            .into(),
         );
     }
 }
@@ -357,6 +376,9 @@ struct ProposedEntry {
     created: Instant,
 }
 
+// One Inner exists per epoch pool, behind an Arc<Mutex<_>>, so the unused Closed variant's
+// layout slack is a single allocation; boxing Open would only add indirection on take().
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     Open(Pool),
     Closed,
@@ -499,6 +521,10 @@ impl ConsensusTransactionPool {
             .iter()
             .filter_map(|transaction| transaction.kind.as_user_transaction())
             .collect();
+        let owned_objects: Vec<ObjectRef> = user_transactions
+            .iter()
+            .flat_map(|tx| tx.transaction_data().gas_data().payment.iter().copied())
+            .collect();
         let staggered_slot = self
             .stagger_quota
             .submission_slot(&user_transactions, &self.epoch_store)?;
@@ -506,6 +532,7 @@ impl ConsensusTransactionPool {
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: serialized,
+            owned_objects,
             total_bytes,
             gas_price,
             tx_type,
@@ -592,6 +619,7 @@ impl ConsensusTransactionPool {
         };
         let entry = PoolEntry {
             transactions: serialized,
+            owned_objects: Vec::new(),
             total_bytes,
             gas_price: 0,
             tx_type: tx_type_label(transactions),
@@ -1658,6 +1686,7 @@ mod tests {
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: vec![Transaction::new(serialized.clone())],
+            owned_objects: Vec::new(),
             total_bytes: serialized.len(),
             gas_price: 1,
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
