@@ -14,8 +14,8 @@ use anyhow::Context;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc::proto::sui::rpc::v2;
 use tokio::sync::OnceCell;
 
@@ -49,7 +49,7 @@ impl Subscribable for Event {
     }
 
     fn scan<'a>(
-        reader: &'a AlphaLedgerGrpcReader,
+        reader: &'a LedgerGrpcReader,
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<CEvent>,
         filter: &'a EventFilter,

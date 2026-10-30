@@ -25,7 +25,6 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
-use crate::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use crate::checkpoints::CheckpointKey;
 use crate::error::Error;
 use crate::events::TransactionEventsKey;
@@ -133,35 +132,6 @@ impl KvArgs {
                 max_batch_get_objects
                     .unwrap_or(MAX_BATCH_GET_OBJECTS)
                     .min(MAX_BATCH_GET_OBJECTS),
-                min_checkpoint,
-            )
-            .await?,
-        ))
-    }
-
-    /// Construct a streaming list reader when a ledger gRPC URL is configured. Returns `None`
-    /// otherwise. Spreads its requests over `num_connections` HTTP/2 connections, and asks for a
-    /// view at least as new as `min_checkpoint` when it is set.
-    pub async fn alpha_ledger_grpc_reader(
-        &self,
-        prefix: Option<&str>,
-        registry: &Registry,
-        num_connections: usize,
-        min_checkpoint: Option<CheckpointFloor>,
-    ) -> anyhow::Result<Option<AlphaLedgerGrpcReader>> {
-        let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            AlphaLedgerGrpcReader::new(
-                ledger_grpc_url.clone(),
-                LedgerGrpcArgs {
-                    ledger_grpc_num_connections: num_connections,
-                    ..self.ledger_grpc_args()
-                },
-                prefix,
-                registry,
                 min_checkpoint,
             )
             .await?,

@@ -25,8 +25,8 @@ use async_graphql::connection::EmptyFields;
 use async_stream::stream;
 use backoff::ExponentialBackoff;
 use futures::Stream;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use tokio::sync::broadcast;
@@ -87,7 +87,7 @@ pub(super) trait Subscribable {
 
     /// Scan one page of matches over `cp_bounds`, starting after `page`'s cursor.
     fn scan<'a>(
-        reader: &'a AlphaLedgerGrpcReader,
+        reader: &'a LedgerGrpcReader,
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<Self::Cursor>,
         filter: &'a Self::Filter,
@@ -343,7 +343,7 @@ impl Handoff {
 /// tip, so even a deep backfill catches up within one connection instead of lagging the receiver.
 #[allow(clippy::type_complexity)]
 pub(super) fn subscribe<S: Subscribable>(
-    reader: AlphaLedgerGrpcReader,
+    reader: LedgerGrpcReader,
     broadcast: Arc<SubscriptionBroadcast>,
     caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
@@ -512,7 +512,7 @@ fn reject_if_start_too_far_ahead(
 /// Scan matches from the resume point toward the tip, yielding each match and a per-page coverage
 /// marker. Open-ended: the caller stops it once the handoff is covered.
 fn backfill<S: Subscribable>(
-    reader: AlphaLedgerGrpcReader,
+    reader: LedgerGrpcReader,
     caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
     mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
@@ -730,7 +730,7 @@ impl LedgerPoll {
 /// Scan the next page of matches, waiting at the indexer tip if nothing is ready yet. Returns the
 /// matches, a trailing coverage marker, and the cursor to resume from.
 async fn scan_page<S: Subscribable>(
-    reader: &AlphaLedgerGrpcReader,
+    reader: &LedgerGrpcReader,
     caches: &Arc<StreamedCaches>,
     resolver_limits: &sui_package_resolver::Limits,
     limits: &PageLimits,
@@ -801,7 +801,7 @@ where
 
 /// Scan one page over `cp_bounds`, retrying transient failures under a bounded budget.
 async fn scan_with_retry<S: Subscribable>(
-    reader: &AlphaLedgerGrpcReader,
+    reader: &LedgerGrpcReader,
     limits: &PageLimits,
     cp_bounds: RangeInclusive<u64>,
     after: Option<&S::Cursor>,

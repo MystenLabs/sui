@@ -14,8 +14,8 @@ use anyhow::Context as _;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorToken;
 
@@ -54,7 +54,7 @@ impl Subscribable for Checkpoint {
     }
 
     fn scan<'a>(
-        reader: &'a AlphaLedgerGrpcReader,
+        reader: &'a LedgerGrpcReader,
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<CCheckpoint>,
         _filter: &'a (),
@@ -109,7 +109,7 @@ impl Subscribable for Checkpoint {
 /// Scan one page of checkpoints over `cp_bounds`, resuming after `page`'s cursor. Unfiltered, so the
 /// server does one sequential scan rather than an inverted-index lookup.
 async fn list_checkpoints_page(
-    reader: &AlphaLedgerGrpcReader,
+    reader: &LedgerGrpcReader,
     cp_bounds: RangeInclusive<u64>,
     page: &Page<CCheckpoint>,
 ) -> Result<StreamPage<v2::Checkpoint>, RpcError> {
