@@ -4,10 +4,12 @@
 //! Paging through a ledger List stream (`ListTransactions`, `ListEvents`) from GraphQL cursors.
 //!
 //! A cursor carrying ledger bytes is sent to the ledger service as is, apart from the checkpoint
-//! label of a legacy `before` cursor (see [`ScanCursor::before_bound`]). A cursor carrying only a
-//! place GraphQL knows narrows the request's checkpoint range to that place's checkpoint, and items
-//! on the wrong side of it are dropped as they arrive. The page that comes back has GraphQL cursors
-//! minted for its items and boundaries.
+//! label of a legacy `before` cursor (see [`ScanCursor::before_bound`]). A cursor GraphQL places
+//! narrows the request's checkpoint range to that place's checkpoint and is sent as the request's
+//! start or end position within it; alongside ledger bytes, the ledger service starts at the later
+//! of the two and ends at the earlier. Ledger servers that predate positions ignore them, so items
+//! on the wrong side of a place are also dropped as they arrive. The page that comes back has
+//! GraphQL cursors minted for its items and boundaries.
 
 use std::ops::RangeInclusive;
 
@@ -46,18 +48,25 @@ pub(crate) struct RequestBound<K> {
     /// Ledger bytes to send as the request's cursor.
     pub(crate) ledger: Option<Bytes>,
 
-    /// Where GraphQL places the cursor. Items on the wrong side of it are dropped.
+    /// Where GraphQL places the cursor. It is sent as the request's start or end position, and
+    /// items on the wrong side of it are dropped.
     pub(crate) point: Option<Point<K>>,
 }
 
 /// What one page asks a ledger List stream for.
-pub(crate) struct ScanRequest {
+pub(crate) struct ScanRequest<K> {
     /// The page's ledger cursors, size, and ordering.
     pub(crate) options: v2::QueryOptions,
     /// Inclusive.
     pub(crate) start_checkpoint: u64,
     /// Exclusive.
     pub(crate) end_checkpoint: u64,
+    /// The request's start position within `start_checkpoint` (inclusive), or `None` to start at
+    /// the beginning of that checkpoint.
+    pub(crate) start_position: Option<K>,
+    /// The request's end position within `end_checkpoint - 1` (exclusive), or `None` to end after
+    /// the whole checkpoint.
+    pub(crate) end_position: Option<K>,
 }
 
 /// How a page's cursors and checkpoint range map onto a List request, and how its response maps
@@ -66,11 +75,13 @@ pub(crate) struct ScanPlan<K> {
     ascending: bool,
     after: Option<RequestBound<K>>,
     before: Option<RequestBound<K>>,
-    /// The page's checkpoint range, `[start, end)`, narrowed by cursors that carry no ledger bytes.
+    /// The page's checkpoint range, `[start, end)`, narrowed to the checkpoints of the places its
+    /// cursors name, and the positions of those places within them.
     start_checkpoint: u64,
     end_checkpoint: u64,
-    /// Whether the range is narrowed on the far side, so that it ends at the far cursor's
-    /// checkpoint rather than at the end of the data.
+    start_position: Option<K>,
+    end_position: Option<K>,
+    /// Whether the request's far edge is the far cursor's place rather than the end of the data.
     far_narrowed: bool,
 }
 
@@ -109,15 +120,36 @@ impl<K: LedgerKey> ScanPlan<K> {
 
         let range_start = *cp_bounds.start();
         let range_end = cp_bounds.end().saturating_add(1);
-        let start_checkpoint = point_only(after.as_ref())
-            .map_or(range_start, |p| range_start.max(p.key().checkpoint()));
-        let end_checkpoint = point_only(before.as_ref())
-            .map_or(range_end, |p| range_end.min(end_checkpoint_before(p)));
+        let narrow = |with_ledger_bytes: bool| {
+            let place = |bound: Option<&RequestBound<K>>| {
+                bound
+                    .filter(|b| with_ledger_bytes || b.ledger.is_none())
+                    .and_then(|b| b.point)
+            };
+            let (start_checkpoint, start_position) =
+                request_start(range_start, place(after.as_ref()));
+            let (end_checkpoint, end_position) = request_end(range_end, place(before.as_ref()));
+            (
+                start_checkpoint,
+                start_position,
+                end_checkpoint,
+                end_position,
+            )
+        };
+
+        // Cursors carrying ledger bytes narrow the request too, unless that leaves it empty. The
+        // ledger service then reads their bytes over the whole range, and places the page's end
+        // where they resume, which GraphQL cannot from their places alone.
+        let mut narrowed = narrow(true);
+        if narrowed.0 >= narrowed.2 {
+            narrowed = narrow(false);
+        }
+        let (start_checkpoint, start_position, end_checkpoint, end_position) = narrowed;
 
         let far_narrowed = if ascending {
-            end_checkpoint != range_end
+            end_checkpoint != range_end || end_position.is_some()
         } else {
-            start_checkpoint != range_start
+            start_checkpoint != range_start || start_position.is_some()
         };
 
         Self {
@@ -126,12 +158,14 @@ impl<K: LedgerKey> ScanPlan<K> {
             before,
             start_checkpoint,
             end_checkpoint,
+            start_position,
+            end_position,
             far_narrowed,
         }
     }
 
     /// The request for up to `limit` items, or `None` if the narrowed range is empty.
-    pub(crate) fn request(&self, limit: usize) -> Option<ScanRequest> {
+    pub(crate) fn request(&self, limit: usize) -> Option<ScanRequest<K>> {
         if self.start_checkpoint >= self.end_checkpoint {
             return None;
         }
@@ -150,6 +184,8 @@ impl<K: LedgerKey> ScanPlan<K> {
             options,
             start_checkpoint: self.start_checkpoint,
             end_checkpoint: self.end_checkpoint,
+            start_position: self.start_position,
+            end_position: self.end_position,
         })
     }
 
@@ -179,8 +215,9 @@ impl<K: LedgerKey> ScanPlan<K> {
         let last_watermark = stream.last_watermark_cursor().cloned();
         let mut end_reason = stream.end_reason;
 
-        // A range narrowed on the far side ends at the far cursor's checkpoint, not at the end of
-        // the data, so reaching that end means reaching the far cursor.
+        // A request whose far edge is the far cursor's place (its checkpoint, or its position
+        // within it) ends there rather than at the end of the data, so reaching that end means
+        // reaching the far cursor.
         let mut reached_far =
             self.far_narrowed && end_reason == Some(QueryEndReason::CheckpointBound);
 
@@ -287,17 +324,6 @@ impl<T, C> LedgerPage<T, C> {
             Some(_) => true,
         }
     }
-
-    /// A page over an empty range.
-    fn empty() -> Self {
-        Self {
-            items: vec![],
-            first_cursor: None,
-            last_cursor: None,
-            covered_checkpoint: None,
-            end_reason: Some(QueryEndReason::CheckpointBound),
-        }
-    }
 }
 
 /// Request one page of `page` over `cp_bounds` through `list`, asking for up to `limit` items, and
@@ -307,7 +333,7 @@ pub(crate) async fn scan<C, T, F>(
     cp_bounds: RangeInclusive<u64>,
     limit: usize,
     key: impl Fn(&T) -> anyhow::Result<C::Key>,
-    list: impl FnOnce(ScanRequest) -> F,
+    list: impl FnOnce(ScanRequest<C::Key>) -> F,
 ) -> Result<LedgerPage<T, C>, RpcError>
 where
     C: ScanCursor,
@@ -315,25 +341,52 @@ where
 {
     let plan = ScanPlan::new(page, cp_bounds);
     let Some(request) = plan.request(limit) else {
-        return Ok(LedgerPage::empty());
+        // The cursors' places leave the range empty: the page ends at the range's edge, as the
+        // ledger service ends a scan of an empty range, and reaches the far cursor when it narrowed
+        // that edge.
+        let mut stream = StreamPage::default();
+        stream.end_reason = Some(QueryEndReason::CheckpointBound);
+        return plan.page(stream, key);
     };
 
     let stream = list(request).await?;
     plan.page(stream, key)
 }
 
-/// The place a cursor names when it has no ledger bytes to send.
-fn point_only<K: Copy>(bound: Option<&RequestBound<K>>) -> Option<Point<K>> {
-    bound.filter(|b| b.ledger.is_none()).and_then(|b| b.point)
+/// The start of a request over a range from `range_start`, holding every item after `point`: its
+/// start checkpoint, and its start position within that checkpoint. A position is relative to the
+/// checkpoint sent with it, so one is sent only when the request starts at the place's own
+/// checkpoint, and not when the place is that checkpoint's start.
+fn request_start<K: LedgerKey>(range_start: u64, point: Option<Point<K>>) -> (u64, Option<K>) {
+    let Some(place) = point.map(|p| p.gap_after().key()) else {
+        return (range_start, None);
+    };
+
+    let checkpoint = place.checkpoint();
+    if checkpoint < range_start {
+        (range_start, None)
+    } else {
+        let position = (place != K::checkpoint_start(checkpoint)).then_some(place);
+        (checkpoint, position)
+    }
 }
 
-/// The exclusive end checkpoint of a range holding every item before `point`.
-fn end_checkpoint_before<K: LedgerKey>(point: Point<K>) -> u64 {
-    let checkpoint = point.key().checkpoint();
-    if point.includes_before(&K::checkpoint_start(checkpoint)) {
-        checkpoint.saturating_add(1)
+/// The end of a request over a range up to `range_end` (exclusive), holding every item before
+/// `point`: its exclusive end checkpoint, and its end position within the checkpoint before it. A
+/// position is relative to the last checkpoint of the range, so one is sent only when that is the
+/// place's own checkpoint, and not when the place is that checkpoint's start.
+fn request_end<K: LedgerKey>(range_end: u64, point: Option<Point<K>>) -> (u64, Option<K>) {
+    let Some(place) = point.map(|p| p.gap_before().key()) else {
+        return (range_end, None);
+    };
+
+    let checkpoint = place.checkpoint();
+    if place == K::checkpoint_start(checkpoint) {
+        (range_end.min(checkpoint), None)
+    } else if checkpoint < range_end {
+        (checkpoint.saturating_add(1), Some(place))
     } else {
-        checkpoint
+        (range_end, None)
     }
 }
 

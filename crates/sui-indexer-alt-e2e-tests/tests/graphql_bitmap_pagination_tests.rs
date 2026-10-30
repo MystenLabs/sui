@@ -412,6 +412,25 @@ fn legacy_cursor(checkpoint: u64, tx_seq: u64) -> String {
     Base64::encode(CursorToken::item(Position::Transactions { checkpoint, tx_seq }).encode())
 }
 
+/// A GraphQL cursor at the transaction at `(checkpoint, transaction_index)`, with no ledger bytes,
+/// as subscriptions mint them: the format marker, then the BCS envelope `Transaction` (0),
+/// `OwnedCursor::Point` (0), `Point::At` (0), and the key.
+fn place_tx_cursor(checkpoint: u64, transaction_index: u64) -> String {
+    let mut bytes = vec![0x00, 0, 0, 0];
+    bytes.extend(checkpoint.to_le_bytes());
+    bytes.extend(transaction_index.to_le_bytes());
+    Base64::encode(bytes)
+}
+
+/// The event counterpart of [`place_tx_cursor`]: envelope `Event` (1).
+fn place_event_cursor(checkpoint: u64, transaction_index: u64, event_index: u32) -> String {
+    let mut bytes = vec![0x00, 1, 0, 0];
+    bytes.extend(checkpoint.to_le_bytes());
+    bytes.extend(transaction_index.to_le_bytes());
+    bytes.extend(event_index.to_le_bytes());
+    Base64::encode(bytes)
+}
+
 fn test_event(package: ObjectID, module: &str, sender: SuiAddress, type_str: &str) -> Event {
     Event::new(
         &package,
@@ -2052,5 +2071,126 @@ async fn paging_back_from_empty_last_after_page_skips_nothing() {
         page_count == 0 || collected == expected,
         "paging back skipped a transaction: got {collected:?} over {page_count} pages, expected \
          {expected:?} or no previous page"
+    );
+}
+
+/// Cursors that carry only a place inside a checkpoint (as subscriptions mint them) resume there:
+/// GraphQL sends the place as the request's start or end position. Each page asks for one item
+/// and its lookahead, too few to reach the place from the checkpoint's start or end, so a ledger
+/// service that started at the checkpoint's edge would return only items GraphQL drops.
+#[tokio::test]
+async fn place_cursors_resume_inside_a_checkpoint() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let pkg = ObjectID::from_single_byte(0x42);
+    let ev = || test_event(pkg, "m", alice, "0x42::m::T");
+
+    // Six Alice transactions in cp 1, with two events each.
+    let mut builder = TestCheckpointBuilder::new(1).with_network_total_transactions(1);
+    for i in 0..6u64 {
+        builder = builder
+            .start_transaction(1)
+            .with_events(vec![ev(), ev()])
+            .create_owned_object(i)
+            .finish_transaction();
+    }
+    let checkpoint = builder.build_checkpoint();
+    let digest = |i: usize| Base58::encode(checkpoint.transactions[i].transaction.digest());
+    let digests: Vec<String> = (0..6).map(digest).collect();
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let query = r#"query($sender: SuiAddress, $first: Int, $last: Int, $after: String, $before: String) {
+        transactions(first: $first, last: $last, filter: { sentAddress: $sender }, after: $after, before: $before) {
+            edges { node { digest } }
+            pageInfo { hasNextPage hasPreviousPage }
+        }
+    }"#;
+    let transactions = |variables: Value| {
+        let cluster = &cluster;
+        async move {
+            let resp = graphql(cluster, query, variables).await;
+            let edges = resp["transactions"]["edges"]
+                .as_array()
+                .unwrap_or_else(|| panic!("expected edges array in {resp}"))
+                .iter()
+                .map(|e| e["node"]["digest"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>();
+            (edges, resp["transactions"]["pageInfo"].clone())
+        }
+    };
+    let sender = alice.to_string();
+
+    let (page, info) = transactions(json!({
+        "sender": sender, "first": 1, "after": place_tx_cursor(1, 3),
+    }))
+    .await;
+    assert_eq!(page, digests[4..5], "first: 1 after tx3: {info}");
+    assert_eq!(
+        info["hasNextPage"],
+        json!(true),
+        "first: 1 after tx3: {info}"
+    );
+
+    let (page, info) = transactions(json!({
+        "sender": sender, "last": 1, "before": place_tx_cursor(1, 3),
+    }))
+    .await;
+    assert_eq!(page, digests[2..3], "last: 1 before tx3: {info}");
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(true),
+        "last: 1 before tx3: {info}"
+    );
+
+    // The window ends at a position inside the last checkpoint the ledger has: the page reaches
+    // the `before` cursor, with more past it.
+    let (page, info) = transactions(json!({
+        "sender": sender,
+        "first": 10,
+        "after": place_tx_cursor(1, 1),
+        "before": place_tx_cursor(1, 4),
+    }))
+    .await;
+    assert_eq!(page, digests[2..4], "between tx1 and tx4: {info}");
+    assert_eq!(
+        info["hasNextPage"],
+        json!(true),
+        "between tx1 and tx4: {info}"
+    );
+
+    let filter = json!({ "sender": sender });
+    let events = |page: Vec<(String, String, u64)>| {
+        page.into_iter()
+            .map(|(_, digest, index)| (digest, index))
+            .collect::<Vec<_>>()
+    };
+
+    // After a transaction's last event, the page resumes at the next transaction.
+    let after = Some(place_event_cursor(1, 2, 1));
+    let (page, info) = events_page(&cluster, &filter, Some(1), after, None, None).await;
+    assert_eq!(
+        events(page),
+        [(digests[3].clone(), 0)],
+        "after tx2's last event: {info}"
+    );
+
+    let after = Some(place_event_cursor(1, 2, 0));
+    let (page, info) = events_page(&cluster, &filter, Some(1), after, None, None).await;
+    assert_eq!(
+        events(page),
+        [(digests[2].clone(), 1)],
+        "after tx2's first event: {info}"
+    );
+
+    let before = Some(place_event_cursor(1, 3, 1));
+    let (page, info) = events_page(&cluster, &filter, None, None, Some(1), before).await;
+    assert_eq!(
+        events(page),
+        [(digests[3].clone(), 0)],
+        "before tx3's last event: {info}"
     );
 }

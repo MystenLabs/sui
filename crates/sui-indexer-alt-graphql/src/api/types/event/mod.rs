@@ -252,6 +252,10 @@ impl Event {
             ]));
             request.start_checkpoint = Some(scan.start_checkpoint);
             request.end_checkpoint = Some(scan.end_checkpoint);
+            request.start_transaction_index = scan.start_position.map(|k| k.transaction_index);
+            request.start_event_index = scan.start_position.map(|k| k.event_index);
+            request.end_transaction_index = scan.end_position.map(|k| k.transaction_index);
+            request.end_event_index = scan.end_position.map(|k| k.event_index);
             request.filter = filter;
             request.options = Some(scan.options);
 
@@ -557,7 +561,7 @@ mod tests {
     }
 
     /// The request `page` sends over checkpoints 0 to 100.
-    fn scan_request(page: &Page<CEvent>) -> ScanRequest {
+    fn scan_request(page: &Page<CEvent>) -> ScanRequest<EventKey> {
         ScanPlan::new(page, 0..=100)
             .request(page.limit_with_lookahead())
             .expect("non-empty range")
@@ -713,17 +717,28 @@ mod tests {
     }
 
     /// A live cursor with no ledger bytes places events within a transaction: the scan starts at
-    /// its checkpoint and drops the events at or before it.
+    /// the next event of its transaction, and ends before the cursor's own event when it is the
+    /// `before` cursor. A ledger server that predates positions starts at the checkpoint, so the
+    /// events at or before the cursor are also dropped.
     #[test]
     fn point_cursor_drops_earlier_events() {
-        let page = page(Some(10), Some(EventToken::at(key(3, 2, 1))), None, None);
+        let after = page(Some(10), Some(EventToken::at(key(3, 2, 1))), None, None);
+        let request = scan_request(&after);
+        assert_eq!(request.start_checkpoint, 3);
+        assert_eq!(request.start_position, Some(key(3, 2, 2)));
+
         let items = vec![
             ev_item(b"a", key(3, 1, 5)),
             ev_item(b"b", key(3, 2, 1)),
             ev_item(b"c", key(3, 2, 2)),
             ev_item(b"d", key(3, 3, 0)),
         ];
-        let conn = connection(&page, items, End::CheckpointBound).expect("connection built");
+        let conn = connection(&after, items, End::CheckpointBound).expect("connection built");
         assert_eq!(edge_keys(&conn), [key(3, 2, 2), key(3, 3, 0)]);
+
+        let before = page(None, None, Some(10), Some(EventToken::at(key(3, 2, 1))));
+        let request = scan_request(&before);
+        assert_eq!(request.end_checkpoint, 4);
+        assert_eq!(request.end_position, Some(key(3, 2, 1)));
     }
 }

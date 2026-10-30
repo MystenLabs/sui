@@ -435,6 +435,8 @@ impl Transaction {
             request.read_mask = Some(read_mask);
             request.start_checkpoint = Some(scan.start_checkpoint);
             request.end_checkpoint = Some(scan.end_checkpoint);
+            request.start_transaction_index = scan.start_position.map(|k| k.transaction_index);
+            request.end_transaction_index = scan.end_position.map(|k| k.transaction_index);
             request.filter = filter;
             request.options = Some(scan.options);
 
@@ -844,7 +846,7 @@ mod tests {
     }
 
     /// The request `page` sends over checkpoints 0 to 100.
-    fn scan_request(page: &Page<CTransaction>) -> ScanRequest {
+    fn scan_request(page: &Page<CTransaction>) -> ScanRequest<TransactionKey> {
         ScanPlan::new(page, 0..=100)
             .request(page.limit_with_lookahead())
             .expect("non-empty range")
@@ -1233,16 +1235,20 @@ mod tests {
         assert!(!conn.page_info.has_previous_page);
     }
 
-    /// A cursor with no ledger bytes (minted from data GraphQL holds) starts the scan at its
-    /// checkpoint and drops the items at or before it. The page starts at the gap after the
-    /// cursor, and its resume cursor keeps the cursor's place, so the next page keeps dropping.
+    /// A cursor with no ledger bytes (minted from data GraphQL holds) starts the scan at its place:
+    /// at its checkpoint, from the position after it. A ledger server that predates positions
+    /// returns the whole checkpoint, so items at or before the cursor are also dropped. The page
+    /// starts at the gap after the cursor, and its resume cursor keeps the cursor's place, so the
+    /// next page keeps starting there.
     #[test]
     fn point_cursor_narrows_the_scan_and_drops_earlier_items() {
         let first = page(Some(10), Some(TransactionToken::at(key(5, 1))), None, None);
         let request = scan_request(&first);
         assert_eq!(request.options.after, None);
         assert_eq!(request.start_checkpoint, 5);
+        assert_eq!(request.start_position, Some(key(5, 2)));
         assert_eq!(request.end_checkpoint, 101);
+        assert_eq!(request.end_position, None);
 
         // Every item returned is at or before the cursor.
         let items = vec![tx_item(b"i0", key(5, 0)), tx_item(b"i1", key(5, 1))];
@@ -1257,11 +1263,13 @@ mod tests {
         assert_eq!(ledger_bytes(&resume).as_deref(), Some(&b"i1"[..]));
         assert_eq!(resume.point(), Some(Point::Before(key(5, 2))));
 
-        // The next page resumes from the ledger bytes, still dropping what the cursor already saw.
+        // The next page sends both the ledger bytes and the place, and the ledger service starts
+        // at the later of the two.
         let second = page(Some(10), Some(resume), None, None);
         let request = scan_request(&second);
         assert_eq!(request.options.after.as_deref(), Some(&b"i1"[..]));
-        assert_eq!(request.start_checkpoint, 0);
+        assert_eq!(request.start_checkpoint, 5);
+        assert_eq!(request.start_position, Some(key(5, 2)));
 
         let items = vec![tx_item(b"i2", key(5, 2)), tx_item(b"i3", key(5, 3))];
         let conn = connection(
@@ -1271,13 +1279,16 @@ mod tests {
         assert_eq!(edge_keys(&conn), [(5, 2), (5, 3)]);
     }
 
-    /// Paging forward with a `before` cursor that has no ledger bytes, the scan ends at the
-    /// cursor's checkpoint and drops items at or after it. Reaching it ends the page on its last
-    /// item, with more to come.
+    /// Paging forward with a `before` cursor that has no ledger bytes, the scan ends at the cursor:
+    /// at its checkpoint, at the position of the cursor itself. A ledger server that predates
+    /// positions returns the whole checkpoint, so items at or after the cursor are also dropped.
+    /// Reaching it ends the page on its last item, with more to come.
     #[test]
     fn point_cursor_before_ends_the_page() {
         let bounded = page(Some(10), None, None, Some(TransactionToken::at(key(5, 1))));
-        assert_eq!(scan_request(&bounded).end_checkpoint, 6);
+        let request = scan_request(&bounded);
+        assert_eq!(request.end_checkpoint, 6);
+        assert_eq!(request.end_position, Some(key(5, 1)));
 
         let items = vec![
             tx_item(b"i0", key(5, 0)),
@@ -1302,7 +1313,97 @@ mod tests {
             None,
             Some(TransactionToken::checkpoint_start(5)),
         );
-        assert_eq!(scan_request(&at_start).end_checkpoint, 5);
+        let request = scan_request(&at_start);
+        assert_eq!(request.end_checkpoint, 5);
+        assert_eq!(request.end_position, None);
+    }
+
+    /// A ledger server that stops at the far cursor's position, inside the last checkpoint of the
+    /// page's range, has reached the far cursor, not the end of the data: the page ends on its last
+    /// item, with more to come.
+    #[test]
+    fn stopping_at_the_far_position_reaches_the_far_cursor() {
+        let bounded = page(Some(10), None, None, Some(TransactionToken::at(key(5, 1))));
+        let plan = ScanPlan::new(&bounded, 0..=5);
+        let request = plan.request(bounded.limit_with_lookahead()).unwrap();
+        assert_eq!(request.end_checkpoint, 6);
+        assert_eq!(request.end_position, Some(key(5, 1)));
+
+        let items = vec![tx_item(b"i0", key(5, 0))];
+        let stream = stream(items, None, None, Some(End::CheckpointBound));
+        let result = plan.page(stream, transaction_key).unwrap();
+        let conn = build_grpc_connection(Scope::for_tests(), &bounded, result).unwrap();
+        assert_eq!(edge_keys(&conn), [(5, 0)]);
+        assert!(conn.page_info.has_next_page);
+    }
+
+    /// A position is relative to the checkpoint it is sent with, so a cursor's position is sent
+    /// only when the request's range reaches the cursor's own checkpoint. When a checkpoint filter
+    /// already bounds the range past the cursor, the range is left as is and no position is sent.
+    #[test]
+    fn positions_are_sent_only_with_their_own_checkpoint() {
+        let request = |page: &Page<CTransaction>, cp_bounds| {
+            ScanPlan::new(page, cp_bounds)
+                .request(page.limit_with_lookahead())
+                .unwrap()
+        };
+
+        let after = page(Some(10), Some(TransactionToken::at(key(5, 1))), None, None);
+        let reaches = request(&after, 5..=100);
+        assert_eq!(reaches.start_checkpoint, 5);
+        assert_eq!(reaches.start_position, Some(key(5, 2)));
+        let clamped = request(&after, 7..=100);
+        assert_eq!(clamped.start_checkpoint, 7);
+        assert_eq!(clamped.start_position, None);
+
+        let before = page(None, None, Some(10), Some(TransactionToken::at(key(5, 1))));
+        let reaches = request(&before, 0..=5);
+        assert_eq!(reaches.end_checkpoint, 6);
+        assert_eq!(reaches.end_position, Some(key(5, 1)));
+        let clamped = request(&before, 0..=3);
+        assert_eq!(clamped.end_checkpoint, 4);
+        assert_eq!(clamped.end_position, None);
+    }
+
+    /// Cursors whose places cross leave nothing between them. With places alone, the page ends
+    /// empty without a request, as an exhausted window: no further page either way. Cursors with
+    /// ledger bytes are sent over the whole range instead, so that the ledger service places the
+    /// page's end.
+    #[tokio::test]
+    async fn crossed_cursors_end_the_page() {
+        let crossed = page(
+            Some(10),
+            Some(TransactionToken::at(key(2, 0))),
+            None,
+            Some(TransactionToken::at(key(1, 1))),
+        );
+        let no_request = |_| async { Err(anyhow::anyhow!("an empty range needs no request")) };
+        let result = scan(
+            &crossed,
+            0..=100,
+            crossed.limit_with_lookahead(),
+            transaction_key,
+            no_request,
+        )
+        .await
+        .unwrap();
+        let conn = build_grpc_connection(Scope::for_tests(), &crossed, result).unwrap();
+        assert!(conn.edges.is_empty());
+        assert!(!conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+
+        let item = |bytes: &'static [u8], key| {
+            CTransaction::from_ledger(Bytes::from_static(bytes), Some(Point::At(key)))
+        };
+        let crossed = page(
+            Some(10),
+            Some(item(b"i3", key(2, 0))),
+            None,
+            Some(item(b"i1", key(1, 1))),
+        );
+        let request = scan_request(&crossed);
+        assert_eq!((request.start_checkpoint, request.end_checkpoint), (0, 101));
+        assert_eq!((request.start_position, request.end_position), (None, None));
     }
 
     /// A page boundary is placed past the furthest of what bounds it: the last item scanned, and
@@ -1343,35 +1444,37 @@ mod tests {
 
     /// Between two cursors, an empty page that stopped at the far cursor has read the whole window:
     /// it reports no further page and no cursors, in either direction. The far cursor is reached
-    /// either by the server (`CursorBound`) or locally, at a place the ledger never saw.
+    /// by the server, at its ledger bytes (`CursorBound`) or at its position (`CheckpointBound`),
+    /// or locally, at a place a ledger server that predates positions does not stop at.
     #[test]
     fn empty_page_between_cursors_ends() {
         let item = |bytes: &'static [u8], index| {
             CTransaction::from_ledger(Bytes::from_static(bytes), Some(Point::At(key(1, index))))
         };
-        let ledger_window = [
-            page(Some(2), Some(item(b"i2", 2)), None, Some(item(b"i3", 3))),
-            page(None, Some(item(b"i2", 2)), Some(2), Some(item(b"i3", 3))),
-        ];
-        let mut cases: Vec<_> = ledger_window
-            .into_iter()
-            .map(|page| {
-                let stream = stream(vec![], Some(b"w3"), Some(b"w3"), Some(End::CursorBound));
-                (page, stream)
-            })
-            .collect();
+        let mut cases = vec![];
+        for (first, last) in [(Some(2), None), (None, Some(2))] {
+            for end in [End::CursorBound, End::CheckpointBound] {
+                let ledger_window = page(first, Some(item(b"i2", 2)), last, Some(item(b"i3", 3)));
+                let stream = stream(vec![], Some(b"w3"), Some(b"w3"), Some(end));
+                cases.push((ledger_window, stream));
+            }
+        }
 
         // Between two places the ledger never saw, the scan covers their checkpoint and the page
-        // ends at the item at the far place.
-        let point_window = page(
-            Some(10),
-            Some(TransactionToken::at(key(1, 2))),
-            None,
-            Some(TransactionToken::at(key(1, 3))),
-        );
+        // ends at the item at the far place, or at the far position.
+        let point_window = || {
+            page(
+                Some(10),
+                Some(TransactionToken::at(key(1, 2))),
+                None,
+                Some(TransactionToken::at(key(1, 3))),
+            )
+        };
         let items = (0..5).map(|index| tx_item(b"i", key(1, index))).collect();
-        let stream = stream(items, None, None, Some(End::CheckpointBound));
-        cases.push((point_window, stream));
+        let stream_without_positions = stream(items, None, None, Some(End::CheckpointBound));
+        cases.push((point_window(), stream_without_positions));
+        let stream_with_positions = stream(vec![], None, None, Some(End::CheckpointBound));
+        cases.push((point_window(), stream_with_positions));
 
         for (page, stream) in cases {
             let conn = connection(&page, stream);
