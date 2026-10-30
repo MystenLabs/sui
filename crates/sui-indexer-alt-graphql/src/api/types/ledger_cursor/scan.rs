@@ -3,10 +3,11 @@
 
 //! Paging through a ledger List stream (`ListTransactions`, `ListEvents`) from GraphQL cursors.
 //!
-//! A cursor carrying ledger bytes is sent to the ledger service as is. A cursor carrying only a place
-//! GraphQL knows narrows the request's checkpoint range to that place's checkpoint, and items on the
-//! wrong side of it are dropped as they arrive. The page that comes back has GraphQL cursors minted
-//! for its items and boundaries.
+//! A cursor carrying ledger bytes is sent to the ledger service as is, apart from the checkpoint
+//! label of a legacy `before` cursor (see [`ScanCursor::before_bound`]). A cursor carrying only a
+//! place GraphQL knows narrows the request's checkpoint range to that place's checkpoint, and items
+//! on the wrong side of it are dropped as they arrive. The page that comes back has GraphQL cursors
+//! minted for its items and boundaries.
 
 use std::ops::RangeInclusive;
 
@@ -24,8 +25,13 @@ use crate::pagination::Page;
 pub(crate) trait ScanCursor: Clone {
     type Key: LedgerKey;
 
-    /// How this cursor bounds a page, as its `after` or its `before` cursor.
+    /// How this cursor bounds a page as its `after` cursor, and where GraphQL places it.
     fn bound(&self) -> RequestBound<Self::Key>;
+
+    /// How this cursor bounds a page as its `before` cursor. It differs from [`Self::bound`] only
+    /// for a legacy cursor labelled checkpoint 0, which is sent relabelled (see
+    /// [`crate::api::types::ledger_cursor::legacy::LegacyToken::before_bytes`]).
+    fn before_bound(&self) -> RequestBound<Self::Key>;
 
     /// A cursor for ledger bytes that GraphQL places at `point`.
     fn from_ledger(bytes: Bytes, point: Option<Point<Self::Key>>) -> Self;
@@ -99,7 +105,7 @@ impl<K: LedgerKey> ScanPlan<K> {
     {
         let ascending = page.is_from_front();
         let after = page.after().map(C::bound);
-        let before = page.before().map(C::bound);
+        let before = page.before().map(C::before_bound);
 
         let range_start = *cp_bounds.start();
         let range_end = cp_bounds.end().saturating_add(1);

@@ -6,8 +6,8 @@
 //!
 //! GraphQL accepts these cursors so that cursors issued by earlier releases, and cursors a client got
 //! straight from the ledger service, keep working. That includes the cursors Postgres-backed
-//! pagination issued (labelled checkpoint 0), which clients may still hold, and which the ledger
-//! service is handed unchanged.
+//! pagination issued (labelled checkpoint 0), which clients may still hold. The ledger service is
+//! handed them unchanged, except as a page's `before` cursor ([`LegacyToken::before_bytes`]).
 //!
 //! This copy never follows changes to the ledger service's format, and rejects anything it does not
 //! recognize rather than guessing at a position.
@@ -138,6 +138,45 @@ impl LegacyToken {
         }
         .encode_to_vec()
         .into()
+    }
+
+    /// The bytes to send the ledger service when this cursor, received as `bytes`, is a page's
+    /// `before` cursor.
+    ///
+    /// Postgres-backed pagination labels its transaction and event cursors with checkpoint 0.
+    /// Ledger servers before 1.83 read a `before` cursor's label as the end of the scan's
+    /// checkpoint range, so that label would end every scan at checkpoint 1. Such a cursor is sent
+    /// labelled `u64::MAX` instead, which leaves the range to the request. The first transaction
+    /// and its first event really are in checkpoint 0 and keep their label, as does every other
+    /// cursor, which is sent as received.
+    pub fn before_bytes(&self, bytes: &Bytes) -> Bytes {
+        let position = match self.position {
+            LegacyPosition::Transactions {
+                checkpoint: 0,
+                tx_seq,
+            } if tx_seq != 0 => LegacyPosition::Transactions {
+                checkpoint: u64::MAX,
+                tx_seq,
+            },
+
+            LegacyPosition::Events {
+                checkpoint: 0,
+                tx_seq,
+                event_index,
+            } if tx_seq != 0 || event_index != 0 => LegacyPosition::Events {
+                checkpoint: u64::MAX,
+                tx_seq,
+                event_index,
+            },
+
+            _ => return bytes.clone(),
+        };
+
+        Self {
+            kind: self.kind,
+            position,
+        }
+        .encode()
     }
 }
 
@@ -302,5 +341,47 @@ mod tests {
         }
 
         assert!(LegacyToken::decode(&[]).is_err());
+    }
+
+    /// As a `before` cursor, a transaction or event cursor labelled checkpoint 0 is sent labelled
+    /// `u64::MAX` at the same place. The cursor of the first transaction or its first event, a
+    /// labelled cursor, and a checkpoint cursor are sent as received.
+    #[test]
+    fn before_bytes_relabel_checkpoint_zero() {
+        let transaction = |checkpoint, tx_seq| LegacyToken {
+            kind: LegacyKind::Boundary,
+            position: LegacyPosition::Transactions { checkpoint, tx_seq },
+        };
+        let event = |checkpoint, tx_seq, event_index| LegacyToken {
+            kind: LegacyKind::Item,
+            position: LegacyPosition::Events {
+                checkpoint,
+                tx_seq,
+                event_index,
+            },
+        };
+
+        fn sent_before(token: LegacyToken) -> LegacyToken {
+            LegacyToken::decode(&token.before_bytes(&token.encode())).unwrap()
+        }
+
+        assert_eq!(sent_before(transaction(0, 10)), transaction(u64::MAX, 10));
+        assert_eq!(sent_before(event(0, 12, 0)), event(u64::MAX, 12, 0));
+        assert_eq!(sent_before(event(0, 0, 3)), event(u64::MAX, 0, 3));
+
+        let checkpoint = LegacyToken {
+            kind: LegacyKind::Item,
+            position: LegacyPosition::Checkpoints { checkpoint: 0 },
+        };
+        let received = Bytes::from_static(b"received");
+        for unchanged in [
+            transaction(0, 0),
+            transaction(9, 10),
+            event(0, 0, 0),
+            event(11, 12, 13),
+            checkpoint,
+        ] {
+            assert_eq!(unchanged.before_bytes(&received), received, "{unchanged:?}");
+        }
     }
 }

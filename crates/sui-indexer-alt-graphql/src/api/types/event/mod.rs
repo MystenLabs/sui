@@ -32,6 +32,7 @@ use crate::api::types::ledger_cursor::EnvelopeRef;
 use crate::api::types::ledger_cursor::EventKey;
 use crate::api::types::ledger_cursor::OwnedCursor;
 use crate::api::types::ledger_cursor::Point;
+use crate::api::types::ledger_cursor::legacy::LegacyKind;
 use crate::api::types::ledger_cursor::legacy::LegacyPosition;
 use crate::api::types::ledger_cursor::legacy::LegacyToken;
 use crate::api::types::ledger_cursor::scan::LedgerPage;
@@ -65,6 +66,7 @@ pub enum EventToken {
 #[derive(Clone, Debug)]
 pub struct LegacyEventToken {
     bytes: Bytes,
+    kind: LegacyKind,
     checkpoint: u64,
     tx_seq: u64,
     event_index: u32,
@@ -296,6 +298,19 @@ impl EventToken {
     }
 }
 
+impl LegacyEventToken {
+    /// The legacy token this cursor holds.
+    fn token(&self) -> LegacyToken {
+        LegacyToken {
+            kind: self.kind,
+            position: LegacyPosition::Events {
+                checkpoint: self.checkpoint,
+                tx_seq: self.tx_seq,
+                event_index: self.event_index,
+            },
+        }
+    }
+}
 impl ByteCursor for EventToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
         let Some(envelope) = Envelope::decode(bytes) else {
@@ -330,6 +345,7 @@ impl ByteCursor for LegacyEventToken {
 
         Ok(Self {
             bytes: Bytes::copy_from_slice(bytes),
+            kind: token.kind,
             checkpoint,
             tx_seq,
             event_index,
@@ -353,6 +369,17 @@ impl ScanCursor for CEvent {
 
             EventToken::Legacy(legacy) => RequestBound {
                 ledger: Some(legacy.bytes.clone()),
+                point: None,
+            },
+        }
+    }
+
+    fn before_bound(&self) -> RequestBound<EventKey> {
+        match &**self {
+            EventToken::Owned(_) => self.bound(),
+
+            EventToken::Legacy(legacy) => RequestBound {
+                ledger: Some(legacy.token().before_bytes(&legacy.bytes)),
                 point: None,
             },
         }
@@ -446,8 +473,8 @@ mod tests {
     use sui_types::base_types::ObjectID;
     use sui_types::parse_sui_struct_tag;
 
-    use crate::api::types::ledger_cursor::legacy::LegacyKind;
     use crate::api::types::ledger_cursor::scan::ScanPlan;
+    use crate::api::types::ledger_cursor::scan::ScanRequest;
     use crate::api::types::transaction::TransactionToken;
     use crate::pagination::PageLimits;
 
@@ -461,8 +488,9 @@ mod tests {
         }
     }
 
-    /// A legacy protobuf event cursor.
-    fn legacy_bytes(checkpoint: u64, tx_seq: u64, event_index: u32) -> Bytes {
+    /// A legacy item cursor at event `event_index` of transaction `tx_seq`, labelled with
+    /// `checkpoint`.
+    fn legacy_token(checkpoint: u64, tx_seq: u64, event_index: u32) -> LegacyToken {
         LegacyToken {
             kind: LegacyKind::Item,
             position: LegacyPosition::Events {
@@ -471,7 +499,11 @@ mod tests {
                 event_index,
             },
         }
-        .encode()
+    }
+
+    /// A legacy protobuf event cursor.
+    fn legacy_bytes(checkpoint: u64, tx_seq: u64, event_index: u32) -> Bytes {
+        legacy_token(checkpoint, tx_seq, event_index).encode()
     }
 
     fn legacy_cursor(checkpoint: u64, tx_seq: u64, event_index: u32) -> CEvent {
@@ -524,6 +556,13 @@ mod tests {
         build_grpc_connection(Scope::for_tests(), page, result)
     }
 
+    /// The request `page` sends over checkpoints 0 to 100.
+    fn scan_request(page: &Page<CEvent>) -> ScanRequest {
+        ScanPlan::new(page, 0..=100)
+            .request(page.limit_with_lookahead())
+            .expect("non-empty range")
+    }
+
     /// The place of each edge, read back from its cursor.
     fn edge_keys(conn: &StreamConnection<Event>) -> Vec<EventKey> {
         conn.edges
@@ -547,6 +586,44 @@ mod tests {
         assert_eq!(decoded.point(), Some(Point::At(key(1, 2, 3))));
     }
 
+    /// Legacy cursors leave the scan's checkpoint range as it is. A cursor labelled checkpoint 0,
+    /// as Postgres-backed pagination issued them, is sent as received as `after`, and labelled
+    /// `u64::MAX` at the same place as `before`, because ledger servers before 1.83 read a `before`
+    /// label as the end of the range.
+    #[test]
+    fn legacy_cursors_are_forwarded() {
+        let unlabelled = legacy_cursor(0, 9, 1);
+        for (first, last) in [(Some(10), None), (None, Some(10))] {
+            let page = page(
+                first,
+                Some(unlabelled.clone()),
+                last,
+                Some(unlabelled.clone()),
+            );
+            let request = scan_request(&page);
+            assert_eq!(request.options.after, Some(legacy_bytes(0, 9, 1)));
+            let before = request.options.before.expect("before cursor");
+            assert_eq!(
+                LegacyToken::decode(&before).unwrap(),
+                legacy_token(u64::MAX, 9, 1)
+            );
+            assert_eq!(request.start_checkpoint, 0);
+            assert_eq!(request.end_checkpoint, 101);
+        }
+    }
+
+    /// A labelled legacy `before` cursor, and a `before` cursor carrying ledger bytes in GraphQL's
+    /// own format, are sent as received.
+    #[test]
+    fn labelled_and_owned_before_cursors_are_forwarded() {
+        let labelled = legacy_cursor(7, 9, 1);
+        let labelled = scan_request(&page(None, None, Some(10), Some(labelled)));
+        assert_eq!(labelled.options.before, Some(legacy_bytes(7, 9, 1)));
+
+        let owned = CEvent::from_ledger(Bytes::from_static(b"l"), Some(Point::At(key(1, 0, 0))));
+        let owned = scan_request(&page(None, None, Some(10), Some(owned)));
+        assert_eq!(owned.options.before.as_deref(), Some(&b"l"[..]));
+    }
     /// A cursor for another type must not decode as an event cursor, in either format.
     #[test]
     fn rejects_other_cursor_types() {

@@ -553,6 +553,18 @@ impl TransactionToken {
     }
 }
 
+impl LegacyTransactionToken {
+    /// The legacy token this cursor holds.
+    fn token(&self) -> LegacyToken {
+        LegacyToken {
+            kind: self.kind,
+            position: LegacyPosition::Transactions {
+                checkpoint: self.checkpoint,
+                tx_seq: self.tx_seq,
+            },
+        }
+    }
+}
 impl MemoryBound {
     fn new(cursor: &CTransaction) -> Result<Self, RpcError> {
         match &**cursor {
@@ -642,6 +654,17 @@ impl ScanCursor for CTransaction {
 
             TransactionToken::Legacy(legacy) => RequestBound {
                 ledger: Some(legacy.bytes.clone()),
+                point: None,
+            },
+        }
+    }
+
+    fn before_bound(&self) -> RequestBound<TransactionKey> {
+        match &**self {
+            TransactionToken::Owned(_) => self.bound(),
+
+            TransactionToken::Legacy(legacy) => RequestBound {
+                ledger: Some(legacy.token().before_bytes(&legacy.bytes)),
                 point: None,
             },
         }
@@ -862,12 +885,17 @@ mod tests {
             .expect("valid cursor")
     }
 
-    fn legacy_cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
-        let token = LegacyToken {
+    /// A legacy item cursor at transaction `tx_seq`, labelled with `checkpoint`.
+    fn legacy_token(checkpoint: u64, tx_seq: u64) -> LegacyToken {
+        LegacyToken {
             kind: LegacyKind::Item,
             position: LegacyPosition::Transactions { checkpoint, tx_seq },
-        };
-        CTransaction::decode_cursor(&B64::encode(token.encode())).expect("legacy cursor")
+        }
+    }
+
+    fn legacy_cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
+        let bytes = legacy_token(checkpoint, tx_seq).encode();
+        CTransaction::decode_cursor(&B64::encode(bytes)).expect("legacy cursor")
     }
 
     /// A `ProcessedTransaction` with just enough content for `TransactionFilter::matches` (sender
@@ -1406,29 +1434,41 @@ mod tests {
         );
     }
 
-    /// Legacy cursors are sent as received, whatever their checkpoint label, and leave the scan's
-    /// checkpoint range as it is.
+    /// Legacy cursors leave the scan's checkpoint range as it is. A cursor labelled checkpoint 0,
+    /// as Postgres-backed pagination issued them, is sent as received as `after`, and labelled
+    /// `u64::MAX` at the same place as `before`, because ledger servers before 1.83 read a `before`
+    /// label as the end of the range.
     #[test]
     fn legacy_cursors_are_forwarded() {
-        let encoded = LegacyToken {
-            kind: LegacyKind::Item,
-            position: LegacyPosition::Transactions {
-                checkpoint: 0,
-                tx_seq: 5,
-            },
-        }
-        .encode();
-
         let unlabelled = legacy_cursor(0, 5);
-        let both = scan_request(&page(
-            Some(10),
-            Some(unlabelled.clone()),
-            None,
-            Some(unlabelled),
-        ));
-        assert_eq!(both.options.after, Some(encoded.clone()));
-        assert_eq!(both.options.before, Some(encoded));
-        assert_eq!(both.start_checkpoint, 0);
-        assert_eq!(both.end_checkpoint, 101);
+        for (first, last) in [(Some(10), None), (None, Some(10))] {
+            let page = page(
+                first,
+                Some(unlabelled.clone()),
+                last,
+                Some(unlabelled.clone()),
+            );
+            let request = scan_request(&page);
+            assert_eq!(request.options.after, Some(legacy_token(0, 5).encode()));
+            let before = request.options.before.expect("before cursor");
+            assert_eq!(
+                LegacyToken::decode(&before).unwrap(),
+                legacy_token(u64::MAX, 5)
+            );
+            assert_eq!(request.start_checkpoint, 0);
+            assert_eq!(request.end_checkpoint, 101);
+        }
+    }
+
+    /// A labelled legacy `before` cursor, and a `before` cursor carrying ledger bytes in GraphQL's
+    /// own format, are sent as received.
+    #[test]
+    fn labelled_and_owned_before_cursors_are_forwarded() {
+        let labelled = scan_request(&page(None, None, Some(10), Some(legacy_cursor(3, 5))));
+        assert_eq!(labelled.options.before, Some(legacy_token(3, 5).encode()));
+
+        let owned = CTransaction::from_ledger(Bytes::from_static(b"l"), Some(Point::At(key(1, 0))));
+        let owned = scan_request(&page(None, None, Some(10), Some(owned)));
+        assert_eq!(owned.options.before.as_deref(), Some(&b"l"[..]));
     }
 }
