@@ -239,6 +239,7 @@ pub struct AdmissionQueueMetrics {
     pub pool_gc_notified: IntCounter,
     pub pool_waiting_inserts: IntGauge,
     pub pool_already_processed: IntCounterVec,
+    pub pool_rejected_at_proposal: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
     pub pool_byte_budget_bytes: IntGauge,
@@ -362,6 +363,13 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_already_processed",
                 "User submissions not proposed because they were already processed elsewhere, by the stage that detected it and the path that processed them",
                 &["stage", "method"],
+                registry,
+            )
+            .unwrap(),
+            pool_rejected_at_proposal: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_rejected_at_proposal",
+                "User submissions dropped at proposal time because their owned input objects no longer match live state, by error",
+                &["error"],
                 registry,
             )
             .unwrap(),
