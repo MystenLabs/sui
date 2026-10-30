@@ -8,23 +8,18 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
-use diesel::prelude::QueryableByName;
-use diesel::sql_types::BigInt;
-use itertools::Itertools;
 use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_sdk_types::Event as SdkEvent;
-use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::Event as NativeEvent;
@@ -38,7 +33,6 @@ use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
-use crate::api::types::available_range::AvailableRangeKey;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::lookups::CheckpointBounds;
@@ -53,10 +47,8 @@ use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::pagination::StreamConnection;
 use crate::scope::Scope;
-use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
-mod lookups;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
 pub struct EventCursor {
@@ -183,7 +175,9 @@ impl Event {
 }
 
 impl Event {
-    /// Paginates events based on the provided filters and page parameters.
+    /// Paginates events based on the provided filters and page parameters, served by the ledger
+    /// gRPC List APIs. Pages may be partially filled, with valid cursors if there are more pages to
+    /// paginate through.
     ///
     /// Returns empty results when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn paginate(
@@ -194,75 +188,6 @@ impl Event {
     ) -> Result<StreamConnection<Event>, RpcError> {
         query_limits::rich::debit(ctx)?;
 
-        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
-            return Self::paginate_grpc(reader, scope, page, filter).await;
-        }
-
-        let pg_reader: &PgReader = ctx.data()?;
-
-        let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let available_range_key = AvailableRangeKey {
-            type_: "Query".to_string(),
-            field: Some("events".to_string()),
-            filters: Some(filter.active_filters()),
-        };
-        let reader_lo = available_range_key.reader_lo(watermarks)?;
-
-        let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
-            return Ok(StreamConnection::empty());
-        };
-
-        #[derive(QueryableByName)]
-        struct TxSequenceNumber(
-            #[diesel(sql_type = BigInt, column_name = "tx_sequence_number")] i64,
-        );
-
-        query += filter.query()?;
-        query += query!(
-            r#" ORDER BY tx_sequence_number {} LIMIT {BigInt}"#,
-            page.order_by_direction(),
-            page.limit_with_overhead() as i64,
-        );
-
-        let mut conn = pg_reader
-            .connect()
-            .await
-            .context("Failed to connect to database")?;
-
-        let tx_sequence_numbers: Vec<u64> = conn
-            .results(query)
-            .await
-            .context("Failed to execute query")?
-            .into_iter()
-            .map(|tx_seq: TxSequenceNumber| tx_seq.0 as u64)
-            .unique()
-            .collect();
-
-        let events = lookups::events_from_sequence_numbers(
-            &scope,
-            ctx,
-            &page,
-            &tx_sequence_numbers,
-            &filter,
-        )
-        .await?;
-
-        page.paginate_results(
-            events,
-            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number),
-            |(_, e)| Ok(e),
-        )
-        .map(Into::into)
-    }
-
-    /// Serve event pagination by streaming gRPC. Returns pages that may be partially filled,
-    /// with valid cursors if there are more pages to paginate through.
-    async fn paginate_grpc(
-        reader: &AlphaLedgerGrpcReader,
-        scope: Scope,
-        page: Page<CEvent>,
-        filter: EventFilter,
-    ) -> Result<StreamConnection<Event>, RpcError> {
         if page.limit() == 0 {
             return Ok(StreamConnection::empty());
         }
@@ -285,6 +210,7 @@ impl Event {
             return Ok(StreamConnection::empty());
         };
 
+        let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let result = Self::scan_grpc(
             reader,
             cp_bounds,
@@ -310,9 +236,10 @@ impl Event {
     ) -> Result<StreamPage<v2::Event>, RpcError> {
         // Extract the cursor and pass through to grpc.
         let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
-        // Pg-minted cursors set checkpoint as 0 (as do legacy JSON cursors, which carry no
-        // checkpoint at all). Substitute the checkpoint with u64::max on the `before` bound to
-        // avoid collapsing the checkpoint window.
+        // Cursors that Postgres-backed pagination issued, which clients may still hold, carry
+        // checkpoint 0 (as do legacy JSON cursors, which carry no checkpoint at all). Substitute
+        // the checkpoint with u64::max on the `before` bound to avoid collapsing the checkpoint
+        // window.
         let before = page.before().map(|c| {
             let mut token = c.token();
             if token.checkpoint == 0 && (token.tx_seq != 0 || token.event_index != 0) {

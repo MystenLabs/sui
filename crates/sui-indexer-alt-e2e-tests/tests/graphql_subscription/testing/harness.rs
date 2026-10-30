@@ -202,11 +202,6 @@ impl SubscriptionTestCluster {
         // directly so `disconnect_all()` cannot interfere with gap-recovery reads.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(rpc_url.parse().unwrap()),
-            // The alpha ledger reader (v2alpha `list_transactions` / `list_events`) is a hard
-            // dependency of the streaming feature, so it is always configured. Whether a backfill
-            // scan returns data is a separate concern, gated by ledger-history indexing on the
-            // validator (`ledger_history`).
-            enable_list_apis: Some(true),
             ..Default::default()
         };
 
