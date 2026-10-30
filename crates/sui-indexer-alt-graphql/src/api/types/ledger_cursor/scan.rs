@@ -412,12 +412,20 @@ fn in_scan_before<K: LedgerKey>(point: &Point<K>, key: &K, ascending: bool) -> b
 /// from, the gap past the last item scanned, and the coverage claim. Each sits at or before the
 /// boundary in scan order with no match in between, so the furthest of them has the same matches on
 /// either side as the boundary. `None` if nothing bounds it.
+///
+/// The claim covers only what the scan read, from the near cursor on. A near cursor without a place
+/// (a legacy cursor) can sit inside the checkpoint past the claim, after matches the scan never
+/// read, so past such a cursor the claim places the boundary only once an item was scanned.
 fn resume_point<K: LedgerKey>(
     ascending: bool,
     near_gap: Option<Point<K>>,
     last_scanned: Option<K>,
     covered_checkpoint: Option<u64>,
 ) -> Option<Point<K>> {
+    if near_gap.is_none() && last_scanned.is_none() {
+        return None;
+    }
+
     if ascending {
         let past_item = last_scanned.map(|key| Point::Before(key.successor()));
         let past_claim = covered_checkpoint.map(|c| Point::checkpoint_start(c.saturating_add(1)));

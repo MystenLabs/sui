@@ -1406,6 +1406,42 @@ mod tests {
         assert_eq!((request.start_position, request.end_position), (None, None));
     }
 
+    /// A cursor whose place is past the page's range (as a subscription's cursor can be ahead of
+    /// the checkpoint a query views) ends the page empty without a request: no further page, and a
+    /// resume cursor at the cursor's own place, to poll from.
+    #[tokio::test]
+    async fn cursor_past_the_range_resumes_at_itself() {
+        let no_request = |_| async { Err(anyhow::anyhow!("an empty range needs no request")) };
+        let ahead = key(150, 2);
+        let behind = key(10, 1);
+        let cases = [
+            (
+                page(Some(10), Some(TransactionToken::at(ahead)), None, None),
+                Point::At(ahead).gap_after(),
+            ),
+            (
+                page(None, None, Some(10), Some(TransactionToken::at(behind))),
+                Point::At(behind).gap_before(),
+            ),
+        ];
+        for (page, place) in cases {
+            let limit = page.limit_with_lookahead();
+            let result = scan(&page, 50..=100, limit, transaction_key, no_request)
+                .await
+                .unwrap();
+            let conn = build_grpc_connection(Scope::for_tests(), &page, result).unwrap();
+            assert!(conn.edges.is_empty());
+            let (more, resume) = if page.is_from_front() {
+                (conn.page_info.has_next_page, end_cursor(&conn))
+            } else {
+                (conn.page_info.has_previous_page, start_cursor(&conn))
+            };
+            assert!(!more);
+            assert_eq!(ledger_bytes(&resume), None);
+            assert_eq!(resume.point(), Some(place));
+        }
+    }
+
     /// A page boundary is placed past the furthest of what bounds it: the last item scanned, and
     /// the coverage claim.
     #[test]
@@ -1518,22 +1554,34 @@ mod tests {
         }
     }
 
-    /// A legacy cursor's place is unknown, so a boundary after it is placed only by what the page
-    /// saw, and not at all when it saw nothing.
+    /// A legacy cursor's place is unknown, so a boundary past it is placed only once the page has
+    /// scanned an item. A coverage claim alone could place it behind the cursor, which can sit in
+    /// the checkpoint past the claim, after matches the scan never read.
     #[test]
-    fn boundary_after_a_legacy_cursor() {
+    fn boundary_past_a_legacy_cursor() {
+        let scan_limit = |items| stream(items, None, Some(b"w"), Some(End::ScanLimit));
+        let resume = |page: &Page<CTransaction>, stream| {
+            let result = ledger_page(page, stream);
+            result.last_cursor.expect("resume cursor").point()
+        };
+
         let after_legacy = page(Some(10), Some(legacy_cursor(0, 5)), None, None);
-
-        let unclaimed = stream(vec![], None, Some(b"w"), Some(End::ScanLimit));
-        let result = ledger_page(&after_legacy, unclaimed);
-        assert_eq!(result.last_cursor.expect("resume cursor").point(), None);
-
-        let claimed =
-            stream(vec![], None, Some(b"w"), Some(End::ScanLimit)).with_covered_checkpoint(4);
-        let result = ledger_page(&after_legacy, claimed);
+        assert_eq!(resume(&after_legacy, scan_limit(vec![])), None);
+        let claimed = scan_limit(vec![]).with_covered_checkpoint(4);
+        assert_eq!(resume(&after_legacy, claimed), None);
+        let scanned = scan_limit(vec![tx_item(b"i1", key(6, 1))]).with_covered_checkpoint(7);
         assert_eq!(
-            result.last_cursor.expect("resume cursor").point(),
-            Some(Point::checkpoint_start(5))
+            resume(&after_legacy, scanned),
+            Some(Point::checkpoint_start(8))
+        );
+
+        let before_legacy = page(None, None, Some(10), Some(legacy_cursor(0, 5)));
+        let claimed = scan_limit(vec![]).with_covered_checkpoint(6);
+        assert_eq!(resume(&before_legacy, claimed), None);
+        let scanned = scan_limit(vec![tx_item(b"i1", key(4, 1))]).with_covered_checkpoint(3);
+        assert_eq!(
+            resume(&before_legacy, scanned),
+            Some(Point::checkpoint_start(3))
         );
     }
 

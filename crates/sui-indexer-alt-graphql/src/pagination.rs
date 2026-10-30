@@ -383,11 +383,14 @@ impl<C: CursorType + Clone> Page<C> {
         let ends_on_last_item =
             lookahead_returned || result.end_reason == Some(QueryEndReason::CursorBound);
         let more = lookahead_returned || result.has_more();
+        let start = result.first_cursor;
         let end = match result.items.last() {
             Some(item) if ends_on_last_item => Some(item.cursor.clone()),
-            _ => result.last_cursor,
+            // A page with nothing to resume from scanned nothing, as when its cursors' places
+            // leave its range empty and the ledger is not asked. It resumes where it started, so a
+            // client polling with its end cursor waits there until the range reaches it.
+            _ => result.last_cursor.or_else(|| start.clone()),
         };
-        let start = result.first_cursor;
         let mut items = result.items;
 
         let (has_previous_page, has_next_page, start, end) = if self.is_from_front() {
