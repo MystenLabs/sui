@@ -16,10 +16,11 @@
 //! their cursors come mostly from page ends rather than progress beacons.
 //!
 //! Every response is also checked against the ledger: each item frame's
-//! cursor and the item's own checkpoint field name the checkpoint the ledger
-//! put the item in, and each frame's checkpoint coverage claim is sound (every
-//! item of the request in the claimed checkpoints has been delivered by that
-//! frame or by earlier pages) and never moves backwards within the response.
+//! cursor names an item the ledger holds, the item's own checkpoint field
+//! names the checkpoint the ledger put it in, and each frame's checkpoint
+//! coverage claim is sound (every item of the request in the claimed
+//! checkpoints has been delivered by that frame or by earlier pages) and never
+//! moves backwards within the response.
 //!
 //! Filtered scans run over a sparse synthetic ledger: bitmap rows spread over
 //! many buckets (so a small bucket budget ends in `SCAN_LIMIT`), and
@@ -518,16 +519,15 @@ fn scan_key(position: Position) -> (u64, u32) {
         Position::Events {
             tx_seq,
             event_index,
-            ..
         } => (tx_seq, event_index),
-        Position::Transactions { tx_seq, .. } => (tx_seq, 0),
+        Position::Transactions { tx_seq } => (tx_seq, 0),
         Position::Checkpoints { checkpoint } => (checkpoint, 0),
     }
 }
 
 /// Check an item frame against the ledger: the item is one the ledger holds
-/// for the request's filter, and both its cursor and its own checkpoint field
-/// name the checkpoint the ledger put it in.
+/// for the request's filter, and its own checkpoint field names the checkpoint
+/// the ledger put it in.
 fn assert_ledger_checkpoint(
     ledger: &BTreeMap<(u64, u32), u64>,
     position: Position,
@@ -538,11 +538,6 @@ fn assert_ledger_checkpoint(
     let checkpoint = *ledger
         .get(&key)
         .unwrap_or_else(|| panic!("item {key:?} is not in the ledger: {request:?}"));
-    assert_eq!(
-        position.checkpoint(),
-        checkpoint,
-        "cursor checkpoint of item {key:?}: {request:?}"
-    );
     assert_eq!(
         item_checkpoint,
         Some(checkpoint),
@@ -784,33 +779,6 @@ fn expected_items(request: &Request, checkpoint_hi_exclusive: u64) -> Vec<(u64, 
     items
 }
 
-/// The checkpoint coordinate a boundary cursor at `position` carries on the
-/// sparse ledger: the checkpoint of the last transaction the scan covered,
-/// plus one descending, where a boundary's checkpoint is an exclusive upper
-/// bound. `None` for checkpoint positions, which this does not model.
-fn sparse_boundary_checkpoint(position: Position, ascending: bool) -> Option<u64> {
-    let last_covered_tx = match position {
-        Position::Events {
-            tx_seq,
-            event_index,
-            ..
-        } if ascending && event_index > 0 => Some(tx_seq),
-        Position::Events { tx_seq, .. } | Position::Transactions { tx_seq, .. } => {
-            if ascending {
-                tx_seq.checked_sub(1)
-            } else {
-                Some(tx_seq)
-            }
-        }
-        Position::Checkpoints { .. } => return None,
-    };
-    Some(match last_covered_tx {
-        Some(tx) if ascending => tx / SPARSE_TXS_PER_CHECKPOINT,
-        Some(tx) => tx / SPARSE_TXS_PER_CHECKPOINT + 1,
-        None => 0,
-    })
-}
-
 fn is_natural_end(reason: QueryEndReason) -> bool {
     matches!(
         reason,
@@ -985,20 +953,6 @@ async fn assert_resume_property(
         most_advancing_beacons =
             most_advancing_beacons.max(advancing_beacons(page, request.ascending));
         for (cut, frame) in page.iter().enumerate() {
-            let resolved_cursor =
-                frame.item.is_none() && matches!(frame.end, None | Some(QueryEndReason::ScanLimit));
-            if request.filter != Filter::None && resolved_cursor {
-                let position = CursorToken::decode(&frame.cursor)
-                    .expect("cursor decodes")
-                    .position;
-                if let Some(checkpoint) = sparse_boundary_checkpoint(position, request.ascending) {
-                    assert_eq!(
-                        position.checkpoint(),
-                        checkpoint,
-                        "checkpoint of {position:?}: {request:?}"
-                    );
-                }
-            }
             let mut received = received_before.clone();
             received.extend(items(&page[..=cut]));
             if !frame.end.is_some_and(is_natural_end) {
@@ -1185,17 +1139,12 @@ async fn assert_cursor_bound_claim(
         },
     )
     .await;
-    let checkpoint = BOUND_TX / SPARSE_TXS_PER_CHECKPOINT;
     let position = match base.endpoint {
         Endpoint::Events => Position::Events {
-            checkpoint,
             tx_seq: BOUND_TX,
             event_index: 0,
         },
-        Endpoint::Transactions => Position::Transactions {
-            checkpoint,
-            tx_seq: BOUND_TX,
-        },
+        Endpoint::Transactions => Position::Transactions { tx_seq: BOUND_TX },
         Endpoint::Checkpoints => unreachable!("checkpoint positions are not modeled"),
     };
     let request = Request {

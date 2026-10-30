@@ -3960,19 +3960,18 @@ struct CursorPage {
     end_reason: QueryEndReason,
 }
 
-/// A cursor's kind, the checkpoint field of its position, and its position's scan-order key.
-fn cursor_key(cursor: &[u8]) -> (CursorKind, u64, (u64, u32)) {
+/// A cursor's kind and its position's scan-order key.
+fn cursor_key(cursor: &[u8]) -> (CursorKind, (u64, u32)) {
     let token = CursorToken::decode(cursor).expect("cursor decodes");
     let key = match token.position {
-        Position::Transactions { tx_seq, .. } => (tx_seq, 0),
+        Position::Transactions { tx_seq } => (tx_seq, 0),
         Position::Events {
             tx_seq,
             event_index,
-            ..
         } => (tx_seq, event_index),
         Position::Checkpoints { checkpoint } => (checkpoint, 0),
     };
-    (token.kind, token.position.checkpoint(), key)
+    (token.kind, key)
 }
 
 /// One page from `resume`. A `None` window start leaves it open.
@@ -4037,7 +4036,7 @@ async fn cursor_page(
         .map(|(_, watermark)| cursor(watermark))
         .collect();
     CursorPage {
-        items: item_cursors.iter().map(|item| cursor_key(item).2).collect(),
+        items: item_cursors.iter().map(|item| cursor_key(item).1).collect(),
         item_cursors,
         cursors: frames
             .iter()
@@ -4094,42 +4093,23 @@ async fn walk(
     panic!("paging did not reach the end: {query:?}");
 }
 
-/// What [`assert_cursors_resume_in_the_opposite_direction`] exercised.
-struct OppositeDirectionCoverage {
-    /// Every page's end reason.
-    end_reasons: Vec<QueryEndReason>,
-    /// Boundary cursors from ascending and from descending pages whose checkpoint field, read as
-    /// written in the opposite direction, would exclude an item their position admits.
-    misread_fields: (usize, usize),
-}
-
 /// Cursors paging `query` with two items a page returns in either ordering, with and without a
 /// far cursor bound, sent back with the opposite ordering, return exactly the items their
 /// position and kind admit: every distinct boundary cursor (scan frontiers and restated bounds)
 /// and a few item cursors. A bounded paging's closing cursor, sent back in its own ordering
-/// without the far bound (an item), resumes with exactly the items the bound excluded.
+/// without the far bound (an item), resumes with exactly the items the bound excluded. Returns
+/// every page's end reason.
 async fn assert_cursors_resume_in_the_opposite_direction(
     client: &mut LedgerServiceClient<Channel>,
     query: &CursorQuery,
     window: (Option<u64>, u64),
-) -> OppositeDirectionCoverage {
+) -> Vec<QueryEndReason> {
     let all = walk(client, query, window, true, 100, None, None).await;
     assert!(all.items.len() >= 4, "too few items to page: {query:?}");
-    let item_checkpoints: HashMap<(u64, u32), u64> = all
-        .item_cursors
-        .iter()
-        .map(|cursor| {
-            let (_, checkpoint, key) = cursor_key(cursor);
-            (key, checkpoint)
-        })
-        .collect();
     // Far bounds at every third item: the bounded pages end on a restatement of the bound.
     let far_bounds: Vec<_> = all.item_cursors.iter().step_by(3).cloned().collect();
 
-    let mut coverage = OppositeDirectionCoverage {
-        end_reasons: Vec::new(),
-        misread_fields: (0, 0),
-    };
+    let mut end_reasons = Vec::new();
     for ascending in [true, false] {
         let mut boundaries = Vec::new();
         let mut items = Vec::new();
@@ -4145,7 +4125,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
                     cursors.push(cursor.clone());
                 }
             }
-            coverage.end_reasons.extend(paged.end_reasons);
+            end_reasons.extend(paged.end_reasons);
             if let Some(far_bound) = far_bound {
                 let closing = paged
                     .cursors
@@ -4159,7 +4139,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
         let item_stride = items.len().div_ceil(4).max(1);
         let sampled_items = items.into_iter().step_by(item_stride);
         for cursor in boundaries.into_iter().chain(sampled_items) {
-            let (kind, field, key) = cursor_key(&cursor);
+            let (kind, key) = cursor_key(&cursor);
             let expected: Vec<_> = if ascending {
                 all.items
                     .iter()
@@ -4177,23 +4157,6 @@ async fn assert_cursors_resume_in_the_opposite_direction(
                     })
                     .collect()
             };
-            // As written, a `before` field is an exclusive upper checkpoint bound and an `after`
-            // field an inclusive lower one.
-            let field_excludes_an_item = expected.iter().any(|item| {
-                let checkpoint = item_checkpoints[item];
-                if ascending {
-                    checkpoint >= field
-                } else {
-                    checkpoint < field
-                }
-            });
-            if kind == CursorKind::Boundary && field_excludes_an_item {
-                if ascending {
-                    coverage.misread_fields.0 += 1;
-                } else {
-                    coverage.misread_fields.1 += 1;
-                }
-            }
             let opposite = walk(client, query, window, !ascending, 100, Some(cursor), None).await;
             assert_eq!(
                 opposite.items, expected,
@@ -4203,7 +4166,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
         }
 
         for (far_bound, closing) in closings {
-            let (_, _, far_key) = cursor_key(&far_bound);
+            let (_, far_key) = cursor_key(&far_bound);
             let excluded: Vec<_> = if ascending {
                 all.items
                     .iter()
@@ -4226,7 +4189,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
             );
         }
     }
-    coverage
+    end_reasons
 }
 
 /// A cluster whose unfiltered event scan reads two transactions per request, so it stops on
@@ -4271,19 +4234,13 @@ async fn test_list_cursors_resume_in_the_opposite_direction() {
     let (start, end) = checkpoint_range(&txs.iter().collect::<Vec<_>>());
     let mut client = new_ledger_client(&cluster).await;
 
-    let coverage = assert_cursors_resume_in_the_opposite_direction(
+    let end_reasons = assert_cursors_resume_in_the_opposite_direction(
         &mut client,
         &CursorQuery::Events,
         (Some(start), end),
     )
     .await;
-    assert!(coverage.end_reasons.contains(&QueryEndReason::ScanLimit));
-    let (from_ascending, from_descending) = coverage.misread_fields;
-    assert!(
-        from_ascending > 0 && from_descending > 0,
-        "event frontiers must include ones whose field, read as written, excludes an item: \
-         {from_ascending} from ascending pages, {from_descending} from descending pages"
-    );
+    assert!(end_reasons.contains(&QueryEndReason::ScanLimit));
     assert_cursors_resume_in_the_opposite_direction(
         &mut client,
         &CursorQuery::Transactions(Some(tx_sender(sender))),
@@ -4292,10 +4249,9 @@ async fn test_list_cursors_resume_in_the_opposite_direction() {
     .await;
 }
 
-/// A descending event frontier whose transaction lies in the last pruned checkpoint names the
-/// floor checkpoint as its field. Sent back as `after`, it asks for the positions from its pruned
-/// transaction on, so the request is `OutOfRange` in either ordering, though events remain above
-/// the floor.
+/// A descending event frontier whose transaction lies in the last pruned checkpoint, sent back as
+/// `after`, asks for the positions from its pruned transaction on, so the request is `OutOfRange`
+/// in either ordering, though events remain above the floor.
 #[sim_test]
 async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
     let cluster = transaction_capped_event_cluster().await;
@@ -4309,24 +4265,23 @@ async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
     let (start, end) = checkpoint_range(&txs.iter().collect::<Vec<_>>());
     let mut client = new_ledger_client(&cluster).await;
 
-    let transactions = walk(
-        &mut client,
-        &CursorQuery::Transactions(None),
-        (Some(start), end),
-        true,
-        100,
-        None,
-        None,
-    )
-    .await;
-    let tx_checkpoints: HashMap<u64, u64> = transactions
-        .item_cursors
-        .iter()
-        .map(|cursor| {
-            let (_, checkpoint, (tx_seq, _)) = cursor_key(cursor);
-            (tx_seq, checkpoint)
-        })
-        .collect();
+    // Each transaction's checkpoint, from walking the window one checkpoint at a time.
+    let mut tx_checkpoints: HashMap<u64, u64> = HashMap::new();
+    for checkpoint in start..end {
+        let transactions = walk(
+            &mut client,
+            &CursorQuery::Transactions(None),
+            (Some(checkpoint), checkpoint + 1),
+            true,
+            100,
+            None,
+            None,
+        )
+        .await;
+        for (tx_seq, _) in transactions.items {
+            tx_checkpoints.insert(tx_seq, checkpoint);
+        }
+    }
     let events = walk(
         &mut client,
         &CursorQuery::Events,
@@ -4337,27 +4292,22 @@ async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
         None,
     )
     .await;
-    let event_checkpoints: HashMap<(u64, u32), u64> = events
-        .item_cursors
-        .iter()
-        .map(|cursor| {
-            let (_, checkpoint, key) = cursor_key(cursor);
-            (key, checkpoint)
-        })
-        .collect();
 
-    // A descending frontier with events above it, two checkpoints clear of the window start.
+    // A descending frontier with events above its transaction's checkpoint, two checkpoints clear
+    // of the window start.
     let (frontier, floor) = events
         .cursors
         .iter()
         .find_map(|cursor| {
-            let (kind, field, (tx_seq, _)) = cursor_key(cursor);
+            let (kind, (tx_seq, _)) = cursor_key(cursor);
             let checkpoint = *tx_checkpoints.get(&tx_seq)?;
             let floor = checkpoint + 1;
             (kind == CursorKind::Boundary
-                && field == floor
                 && checkpoint > start
-                && event_checkpoints.values().any(|&cp| cp >= floor))
+                && events
+                    .items
+                    .iter()
+                    .any(|(event_tx_seq, _)| tx_checkpoints[event_tx_seq] >= floor))
             .then(|| (cursor.clone(), floor))
         })
         .expect("a descending frontier below the last events");

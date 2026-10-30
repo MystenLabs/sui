@@ -257,7 +257,6 @@ enum CheckpointScanState {
     Unfiltered {
         range: Range<u64>,
         exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
         end_position: u64,
         natural_end_claim: Option<u64>,
     },
@@ -271,7 +270,6 @@ enum CheckpointScanState {
         /// The window's first checkpoint in scan direction; no coverage claim passes it.
         entry_checkpoint: u64,
         exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
         end_position: u64,
         natural_end_claim: Option<u64>,
     },
@@ -382,7 +380,6 @@ fn next_checkpoint_chunk(
                     covered_checkpoint_bound: None,
                     entry_checkpoint: cp_range.entry_checkpoint,
                     exhaustion: cp_range.exhaustion,
-                    end_checkpoint: cp_range.end_checkpoint,
                     end_position: cp_range.end_position,
                     natural_end_claim: cp_range.natural_end_claim(&options),
                 }
@@ -390,7 +387,6 @@ fn next_checkpoint_chunk(
                 CheckpointScanState::Unfiltered {
                     range,
                     exhaustion: cp_range.exhaustion,
-                    end_checkpoint: cp_range.end_checkpoint,
                     end_position: cp_range.end_position,
                     natural_end_claim: cp_range.natural_end_claim(&options),
                 }
@@ -411,14 +407,12 @@ fn next_checkpoint_chunk(
         CheckpointScanState::Unfiltered {
             range,
             exhaustion,
-            end_checkpoint,
             end_position,
             natural_end_claim,
         } => next_unfiltered_checkpoint_chunk(
             service,
             range,
             exhaustion,
-            end_checkpoint,
             end_position,
             natural_end_claim,
             read_mask,
@@ -437,7 +431,6 @@ fn next_checkpoint_chunk(
             covered_checkpoint_bound,
             entry_checkpoint,
             exhaustion,
-            end_checkpoint,
             end_position,
             natural_end_claim,
         } => next_filtered_checkpoint_chunk(
@@ -450,7 +443,6 @@ fn next_checkpoint_chunk(
             covered_checkpoint_bound,
             entry_checkpoint,
             exhaustion,
-            end_checkpoint,
             end_position,
             natural_end_claim,
             read_mask,
@@ -469,7 +461,6 @@ fn next_unfiltered_checkpoint_chunk(
     service: RpcService,
     range: Range<u64>,
     exhaustion: RangeExhaustion,
-    end_checkpoint: u64,
     end_position: u64,
     natural_end_claim: Option<u64>,
     read_mask: FieldMaskTree,
@@ -487,7 +478,6 @@ fn next_unfiltered_checkpoint_chunk(
         .map(|range| CheckpointScanState::Unfiltered {
             range,
             exhaustion,
-            end_checkpoint,
             end_position,
             natural_end_claim,
         });
@@ -521,7 +511,6 @@ fn next_filtered_checkpoint_chunk(
     mut covered_checkpoint_bound: Option<u64>,
     entry_checkpoint: u64,
     exhaustion: RangeExhaustion,
-    end_checkpoint: u64,
     end_position: u64,
     natural_end_claim: Option<u64>,
     read_mask: FieldMaskTree,
@@ -649,7 +638,6 @@ fn next_filtered_checkpoint_chunk(
                 covered_checkpoint_bound,
                 entry_checkpoint,
                 exhaustion,
-                end_checkpoint,
                 end_position,
                 natural_end_claim,
             },
@@ -670,13 +658,12 @@ fn next_filtered_checkpoint_chunk(
     if let Some(watermark) = scan_watermark {
         items.push(watermark);
     }
-    let terminal_position = Position::Checkpoints {
-        checkpoint: end_position,
-    };
     let terminal = scan_limit_or_range(
         request_scan_limit_reached,
         exhaustion,
-        terminal_position,
+        Position::Checkpoints {
+            checkpoint: end_position,
+        },
         natural_end_claim,
         || {
             frontier_watermark.ok_or_else(|| {
@@ -914,7 +901,6 @@ fn apply_serving_floor_to_filtered_window(
     if options.is_ascending() {
         cp_range.entry_checkpoint = cp_range.entry_checkpoint.max(floor_checkpoint);
     } else {
-        cp_range.end_checkpoint = floor_checkpoint;
         cp_range.end_position = floor_checkpoint;
         cp_range.exhaustion = RangeExhaustion::ServingFloor { floor_checkpoint };
     }
@@ -1010,21 +996,12 @@ mod tests {
     /// consumes it and is `OutOfRange` in both directions.
     #[test]
     fn filtered_window_serving_floor_matrix() {
-        // (ascending, floor_tx, floor_cp, expected: tx_range, entry, end_cp, end_pos, exhaustion)
+        // (ascending, floor_tx, floor_cp, expected: tx_range, entry, end_pos, exhaustion)
         // Window: txs 0..40 spanning checkpoints 0..=8. A floor tx inside
         // the window maps to a checkpoint inside the interval (tx 20 -> cp 4).
-        for (ascending, floor_tx, floor_cp, expected_range, entry, end_cp, end_pos, exhaustion) in [
+        for (ascending, floor_tx, floor_cp, expected_range, entry, end_pos, exhaustion) in [
             // Floor inside: ascending raises the entry claim only.
-            (
-                true,
-                20,
-                4,
-                20..40,
-                4,
-                8,
-                40,
-                RangeExhaustion::CheckpointBound,
-            ),
+            (true, 20, 4, 20..40, 4, 40, RangeExhaustion::CheckpointBound),
             // Floor inside: descending ends at the floor.
             (
                 false,
@@ -1032,7 +1009,6 @@ mod tests {
                 4,
                 20..40,
                 8,
-                4,
                 4,
                 RangeExhaustion::ServingFloor {
                     floor_checkpoint: 4,
@@ -1053,7 +1029,6 @@ mod tests {
             let context = format!("floor_tx {floor_tx} asc {ascending}");
             assert_eq!(tx_range, expected_range, "{context}");
             assert_eq!(cp_range.entry_checkpoint, entry, "{context}");
-            assert_eq!(cp_range.end_checkpoint, end_cp, "{context}");
             assert_eq!(cp_range.end_position, end_pos, "{context}");
             assert_eq!(cp_range.exhaustion, exhaustion, "{context}");
         }
@@ -1089,15 +1064,14 @@ mod tests {
 
     /// The checkpoint metadata of a filtered scan over checkpoints 0..=8 (txs 0..40).
     fn filtered_window(ascending: bool) -> ResolvedScan<u64> {
-        let (entry_checkpoint, end_checkpoint, end_position) =
+        let (entry_checkpoint, terminal_checkpoint, end_position) =
             if ascending { (0, 8, 40) } else { (8, 0, 0) };
         ResolvedScan {
             bounds: ScanBounds::from_range(0..9),
             entry_checkpoint,
-            end_checkpoint,
             end_position,
             exhaustion: RangeExhaustion::CheckpointBound,
-            window_terminal_checkpoint: Some(end_checkpoint),
+            window_terminal_checkpoint: Some(terminal_checkpoint),
         }
     }
 
