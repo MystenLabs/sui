@@ -333,12 +333,14 @@ fn multisig_get_indices() {
     )
     .unwrap();
 
-    let invalid_multisig = MultiSig::combine(vec![sig3, sig2, sig1], multisig_pk).unwrap();
+    let reordered_multisig = MultiSig::combine(vec![sig3, sig2, sig1], multisig_pk).unwrap();
 
     // Indexes of public keys in multisig public key instance according to the combined sigs.
     assert!(multi_sig1.get_indices().unwrap() == vec![1, 2]);
     assert!(multi_sig2.get_indices().unwrap() == vec![0, 1, 2]);
-    assert!(invalid_multisig.get_indices().unwrap() == vec![0, 1, 2]);
+    assert!(reordered_multisig.get_indices().unwrap() == vec![0, 1, 2]);
+    // Signatures are stored in public key order whatever order they were given in.
+    assert!(reordered_multisig.get_sigs() == multi_sig2.get_sigs());
 }
 
 #[test]
