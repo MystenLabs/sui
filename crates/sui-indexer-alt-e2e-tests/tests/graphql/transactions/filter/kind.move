@@ -27,6 +27,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   programmable: transactions(filter: { kind: PROGRAMMABLE_TX }) { ...TX }
   programmableA: transactions(filter: { kind: PROGRAMMABLE_TX, sentAddress: "@{A}" }) { ...TX }
@@ -56,3 +57,4 @@ fragment TX on TransactionConnection {
     }
   }
 }
+*/

@@ -28,6 +28,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Fetch each checkpoint individually, and then in a multi-get
   c0: checkpoint(sequenceNumber: 0) { ...Cp }
   c1: checkpoint(sequenceNumber: 1) { ...Cp }
@@ -51,8 +52,10 @@ fragment Cp on Checkpoint {
     nonRefundableStorageFee
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Fetch partial fields on rollingGasSummary with non-zero values
   c4: checkpoint(sequenceNumber: 4) { ...Cp }
   c5: checkpoint(sequenceNumber: 5) { ...Cp }
@@ -66,9 +69,11 @@ fragment Cp on Checkpoint {
     storageCost
   }
 }
+*/
 
 
 //# run-graphql
+/*
 { # Multi-get a mix of existing and non-existing checkpoints and partial fields
   multiGetCheckpoints(keys: [2, 100, 0, 5, 200]) {
     sequenceNumber
@@ -79,3 +84,4 @@ fragment Cp on Checkpoint {
     }
   }
 }
+*/

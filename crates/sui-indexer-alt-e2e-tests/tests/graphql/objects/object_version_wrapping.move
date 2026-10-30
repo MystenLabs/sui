@@ -47,6 +47,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   objectVersions(address: "@{obj_2_0}") {
     pageInfo {
@@ -62,3 +63,4 @@ module P::M {
     }
   }
 }
+*/

@@ -14,6 +14,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {  # Test single signature transaction
   singleSig: transaction(digest: "@{digest_1}") {
     digest
@@ -29,8 +30,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test multiple signature transaction (sender + sponsor)
   multiSig: transaction(digest: "@{digest_2}") {
     digest
@@ -46,3 +49,4 @@
     }
   }
 }
+*/

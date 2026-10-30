@@ -52,6 +52,7 @@ module P1::M2 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package_P1: transactions(filter: { function: "@{P1}" }) { ...TX }
   package_module_P1M1: transactions(filter: { function: "@{P1}::M1" }) { ...TX }
@@ -79,3 +80,4 @@ fragment TX on TransactionConnection {
     }
   }
 }
+*/

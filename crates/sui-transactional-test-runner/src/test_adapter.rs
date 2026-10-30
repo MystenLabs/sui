@@ -777,7 +777,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 cursors,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
-                let contents = std::fs::read_to_string(file.path())?;
+                let text = std::fs::read_to_string(file.path())?;
+                let contents = unwrap_graphql_query(&text)?;
                 let offchain_reader = self
                     .offchain_reader
                     .as_ref()
@@ -794,7 +795,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 }
 
                 let interpolated =
-                    self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
+                    self.interpolate_query(contents, &cursors, highest_checkpoint)?;
                 let resp = offchain_reader
                     .execute_graphql(interpolated.trim().to_owned(), show_usage)
                     .await?;
@@ -1622,6 +1623,32 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
     )> {
         unimplemented!()
     }
+}
+
+/// Returns the query inside a `/* ... */` block comment, whose delimiters may carry a
+/// ```` ```graphql ```` fence.
+fn unwrap_graphql_query(text: &str) -> anyhow::Result<&str> {
+    let Some(rest) = text.trim().strip_prefix("/*") else {
+        bail!("GraphQL queries must be wrapped in a /* ... */ block comment");
+    };
+    let (opening, rest) = rest.split_once('\n').unwrap_or((rest, ""));
+    let fenced = match opening.trim() {
+        "" => false,
+        "```graphql" => true,
+        o => bail!("Unexpected text after /* in a GraphQL query: {o}"),
+    };
+    let Some(rest) = rest.strip_suffix("*/") else {
+        bail!("GraphQL queries must end with */ on its own line");
+    };
+    let (query, closing) = rest.rsplit_once('\n').unwrap_or(("", rest));
+    match (fenced, closing.trim()) {
+        (false, "") | (true, "```") => (),
+        (_, c) => bail!("Unexpected text before */ in a GraphQL query: {c}"),
+    }
+    if query.contains("/*") || query.contains("*/") {
+        bail!("GraphQL queries cannot contain /* or */");
+    }
+    Ok(query)
 }
 
 fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {

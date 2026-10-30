@@ -31,6 +31,7 @@ module P::fake {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   coinMetadata(coinType: "@{P}::fake::FAKE") {
     decimals
@@ -50,3 +51,4 @@ module P::fake {
     }
   }
 }
+*/

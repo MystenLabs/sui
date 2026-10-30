@@ -44,6 +44,7 @@ module test::simple {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test basic single gas payment transaction
   basicTransaction: transaction(digest: "@{digest_2}") {
     gasInput {
@@ -65,8 +66,10 @@ module test::simple {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test multiple gas payments using split coins from previous transaction
   multipleGasPaymentsTransaction: transaction(digest: "@{digest_4}") {
     gasInput {
@@ -88,9 +91,11 @@ module test::simple {
     }
   }
 }
+*/
 
 
 //# run-graphql
+/*
 { # Test pagination functionality with multiple gas payments
   paginationTest: transaction(digest: "@{digest_4}") {
     gasInput {
@@ -108,8 +113,10 @@ module test::simple {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test backward pagination functionality with multiple gas payments
   backwardPaginationTest: transaction(digest: "@{digest_4}") {
     gasInput {
@@ -127,8 +134,10 @@ module test::simple {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test system transaction GasInput
   systemTransaction: transaction(digest: "@{digest_6}") {
     gasInput {
@@ -150,3 +159,4 @@ module test::simple {
     }
   }
 }
+*/

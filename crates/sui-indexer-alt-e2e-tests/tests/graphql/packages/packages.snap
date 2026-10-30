@@ -65,7 +65,7 @@ task 10, line 49:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 11, lines 51-59:
+task 11, lines 51-61:
 //# run-graphql
 Response: {
   "data": {
@@ -90,7 +90,7 @@ Response: {
   }
 }
 
-task 12, lines 61-78:
+task 12, lines 63-82:
 //# run-graphql
 Response: {
   "data": {
@@ -184,7 +184,7 @@ Response: {
   }
 }
 
-task 13, lines 80-97:
+task 13, lines 84-103:
 //# run-graphql
 Response: {
   "data": {
@@ -215,7 +215,7 @@ Response: {
   }
 }
 
-task 14, lines 99-116:
+task 14, lines 105-124:
 //# run-graphql
 Response: {
   "data": {
@@ -246,7 +246,7 @@ Response: {
   }
 }
 
-task 15, lines 118-135:
+task 15, lines 126-145:
 //# run-graphql --cursors bcs(1,bcs(@{obj_1_0}),1)
 Response: {
   "data": {
@@ -270,7 +270,7 @@ Response: {
   }
 }
 
-task 16, lines 137-154:
+task 16, lines 147-166:
 //# run-graphql --cursors bcs(4,bcs(@{obj_4_0}),2)
 Response: {
   "data": {
@@ -294,7 +294,7 @@ Response: {
   }
 }
 
-task 17, lines 156-173:
+task 17, lines 168-187:
 //# run-graphql --cursors bcs(4,bcs(@{obj_4_0}),2)
 Response: {
   "data": {
@@ -318,7 +318,7 @@ Response: {
   }
 }
 
-task 18, lines 175-192:
+task 18, lines 189-208:
 //# run-graphql --cursors bcs(4,bcs(@{obj_4_0}),2)
 Response: {
   "data": {
@@ -342,7 +342,7 @@ Response: {
   }
 }
 
-task 19, lines 194-211:
+task 19, lines 210-229:
 //# run-graphql --cursors bcs(4,bcs(@{obj_4_0}),2)
 Response: {
   "data": {
@@ -366,7 +366,7 @@ Response: {
   }
 }
 
-task 20, lines 213-230:
+task 20, lines 231-250:
 //# run-graphql --cursors bcs(0,bcs(0x2),1)
 Response: {
   "data": {
@@ -390,7 +390,7 @@ Response: {
   }
 }
 
-task 21, lines 232-249:
+task 21, lines 252-271:
 //# run-graphql --cursors bcs(0,bcs(0x2),1)
 Response: {
   "data": {
@@ -414,7 +414,7 @@ Response: {
   }
 }
 
-task 22, lines 251-268:
+task 22, lines 273-292:
 //# run-graphql --cursors bcs(1,bcs(@{obj_1_0}),1) bcs(4,bcs(@{obj_4_0}),2)
 Response: {
   "data": {
@@ -452,7 +452,7 @@ Response: {
   }
 }
 
-task 23, lines 270-287:
+task 23, lines 294-313:
 //# run-graphql
 Response: {
   "data": {
@@ -490,7 +490,7 @@ Response: {
   }
 }
 
-task 24, lines 289-311:
+task 24, lines 315-339:
 //# run-graphql
 Response: {
   "data": {

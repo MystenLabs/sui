@@ -50,6 +50,7 @@ module T::test {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
     address(address: "@{A}") {
         balance(coinType: "@{T}::test::TEST") {
@@ -82,3 +83,4 @@ module T::test {
         addressBalance
     }
 }
+*/

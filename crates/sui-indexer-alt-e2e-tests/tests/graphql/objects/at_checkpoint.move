@@ -33,16 +33,20 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Object created
   object(address: "@{obj_3_0}") { version }
 }
+*/
 
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Object not touched
   object(address: "@{obj_3_0}") { version }
 }
+*/
 
 //# programmable --sender A --inputs 43 object(3,0)
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -51,9 +55,11 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Object modified
   object(address: "@{obj_3_0}") { version }
 }
+*/
 
 //# programmable --sender A --inputs 44 object(3,0)
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -66,9 +72,11 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Object modified twice in one checkpoint
   object(address: "@{obj_3_0}") { version }
 }
+*/
 
 //# programmable --sender A --inputs object(3,0) @A
 //> 0: P::M::wrap(Input(0));
@@ -77,9 +85,11 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Object wrapped
   object(address: "@{obj_3_0}") { version }
 }
+*/
 
 //# programmable --sender A --inputs object(15,0) @A
 //> 0: P::M::unwrap(Input(0));
@@ -88,9 +98,11 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Object unwrapped
   object(address: "@{obj_3_0}") { version }
 }
+*/
 
 //# programmable --sender A --inputs object(3,0)
 //> 0: MergeCoins(Gas, [Input(0)])
@@ -98,11 +110,14 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Object deleted
   object(address: "@{obj_3_0}") { version }
 }
+*/
 
 //# run-graphql
+/*
 { # Querying at the checkpoint before the object was created should return no
   # result.
   beforeCreate: object(address: "@{obj_3_0}", atCheckpoint: 1) { version }
@@ -131,8 +146,11 @@ module P::M {
   # Deleting the object makes it disappear for good.
   afterDelete: object(address: "@{obj_3_0}", atCheckpoint: 8) { version }
 }
+*/
 
 //# run-graphql
+/*
 { # Error - Querying a checkpoint in the future.
   object(address: "@{obj_3_0}", atCheckpoint: 9) { version }
 }
+*/

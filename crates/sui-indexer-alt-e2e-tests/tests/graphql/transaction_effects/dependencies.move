@@ -36,6 +36,7 @@ module test::dependency_test {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test dependencies with no dependencies
   genesisTransaction: transactions(first: 1) {
     nodes {
@@ -54,8 +55,10 @@ module test::dependency_test {
       }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test dependencies field on first user transaction (depends on system transactions)
   systemTransactionDependencies: transactionEffects(digest: "@{digest_2}") {
     digest
@@ -73,8 +76,10 @@ module test::dependency_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test dependencies field on second user transaction (depends on both previous user transactions + system transactions)
   userTransactionDependencies: transactionEffects(digest: "@{digest_3}") {
     digest
@@ -99,8 +104,10 @@ module test::dependency_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test pagination functionality with multiple dependencies
   paginationTest: transactionEffects(digest: "@{digest_3}") {
     digest
@@ -140,3 +147,4 @@ module test::dependency_test {
     }
   }
 }
+*/

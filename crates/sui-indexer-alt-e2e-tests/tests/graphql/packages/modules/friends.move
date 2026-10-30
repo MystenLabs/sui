@@ -23,6 +23,7 @@ module P::P {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package(address: "@{P}") {
     modules {
@@ -35,3 +36,4 @@ module P::P {
     }
   }
 }
+*/

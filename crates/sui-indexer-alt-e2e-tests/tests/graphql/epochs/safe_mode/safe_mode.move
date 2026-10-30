@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --accounts A --simulator
 
 //# run-graphql
+/*
 { # todo create test with safeMode enabled
   e0: epoch(epochId: 0) {
     systemState {
@@ -15,3 +16,4 @@
     }
   }
 }
+*/

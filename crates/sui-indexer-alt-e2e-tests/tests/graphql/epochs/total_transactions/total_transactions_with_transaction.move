@@ -8,6 +8,7 @@
 //> 1: TransferObjects([Result(0)], Input(1))
 
 //# run-graphql
+/*
 { # genesis epoch
   e0: epoch(epochId: 0) { ...E }
   e1: epoch(epochId: 1) { ...E }
@@ -17,6 +18,7 @@
 fragment E on Epoch {
   totalTransactions
 }
+*/
 
 //# advance-epoch
 
@@ -25,6 +27,7 @@ fragment E on Epoch {
 //> 1: TransferObjects([Result(0)], Input(1))
 
 //# run-graphql
+/*
 { # epochs without middle epoch
   e0: epoch(epochId: 0) { ...E }
   e1: epoch(epochId: 1) { ...E }
@@ -34,6 +37,7 @@ fragment E on Epoch {
 fragment E on Epoch {
   totalTransactions
 }
+*/
 
 //# advance-epoch
 
@@ -42,6 +46,7 @@ fragment E on Epoch {
 //> 1: TransferObjects([Result(0)], Input(1))
 
 //# run-graphql
+/*
 { # epochs with middle epoch
   e0: epoch(epochId: 0) { ...E }
   e1: epoch(epochId: 1) { ...E }
@@ -51,3 +56,4 @@ fragment E on Epoch {
 fragment E on Epoch {
   totalTransactions
 }
+*/

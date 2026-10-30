@@ -18,6 +18,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package(address: "@{P}") {
     module(name: "M") {
@@ -40,8 +41,10 @@ fragment F on MoveFunction {
   typeParameters { constraints }
   visibility
 }
+*/
 
 //# run-graphql --cursors "f" "i"
+/*
 {
   package(address: "@{P}") {
     module(name: "M") {
@@ -70,3 +73,4 @@ fragment F on MoveFunctionConnection {
     fullyQualifiedName
   }
 }
+*/

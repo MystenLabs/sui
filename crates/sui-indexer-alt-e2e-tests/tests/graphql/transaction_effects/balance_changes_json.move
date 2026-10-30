@@ -18,20 +18,25 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test balanceChangesJson field on single transfer transaction
   singleTransferTransaction: transactionEffects(digest: "@{digest_1}") {
     balanceChangesJson
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test balanceChangesJson field on multiple transfer transaction
   multipleTransferTransaction: transactionEffects(digest: "@{digest_2}") {
     balanceChangesJson
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test balanceChangesJson through transaction.effects
   transaction(digest: "@{digest_1}") {
     digest
@@ -40,10 +45,13 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test balanceChangesJson for non-existent transaction
   transactionEffects(digest: "11111111111111111111111111111111") {
     balanceChangesJson
   }
 }
+*/

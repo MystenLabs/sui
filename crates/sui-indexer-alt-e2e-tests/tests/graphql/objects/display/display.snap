@@ -41,7 +41,7 @@ task 4, line 82:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 84-99:
+task 5, lines 84-101:
 //# run-graphql
 Response: {
   "data": {
@@ -80,7 +80,7 @@ Response: {
   }
 }
 
-task 6, lines 101-103:
+task 6, lines 103-105:
 //# programmable --sender A --inputs object(1,2) "quy" "{bar.baz.qux.quy.val}!"
 //> 0: sui::display::edit<test::mod::Foo>(Input(0), Input(1), Input(2));
 //> 1: sui::display::update_version<test::mod::Foo>(Input(0));
@@ -88,11 +88,11 @@ events: Event { package_id: sui, transaction_module: Identifier("display"), send
 mutated: object(0,0), object(1,2)
 gas summary: computation_cost: 1000000, storage_cost: 3822800,  storage_rebate: 3807144, non_refundable_storage_fee: 38456
 
-task 7, line 105:
+task 7, line 107:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 8, lines 107-122:
+task 8, lines 109-126:
 //# run-graphql
 Response: {
   "data": {

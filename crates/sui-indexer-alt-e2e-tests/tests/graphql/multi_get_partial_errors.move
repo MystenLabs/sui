@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --simulator
 
 //# run-graphql
+/*
 { # Per-key execution errors must not discard successful siblings or unrelated fields.
   addresses: multiGetAddresses(keys: [
     { address: "0x1" },
@@ -29,8 +30,10 @@
     "bool",
   ]) { repr }
 }
+*/
 
 //# run-graphql
+/*
 { # The same Query resolvers are exposed under checkpoints.
   checkpoint(sequenceNumber: 0) {
     query {
@@ -42,3 +45,4 @@
     }
   }
 }
+*/

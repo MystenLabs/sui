@@ -22,6 +22,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Fetch the latest known checkpoint and version of the object
   ...State
 
@@ -46,8 +47,10 @@ fragment State on Query {
   checkpoint { sequenceNumber }
   object(address: "@{obj_1_0}") { version }
 }
+*/
 
 //# run-graphql
+/*
 { # Querying at a checkpoint hides objects that exist, but at a future
   # checkpoint.
   checkpoint(sequenceNumber: 1) {
@@ -60,8 +63,10 @@ fragment State on Query {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # "atCheckpoint" will override the fact that this field is nested inside
   # a `Checkpoint.query`, but it still can't travel to the future relative to
   # the current latest checkpoint (which is checkpoint 1).
@@ -72,3 +77,4 @@ fragment State on Query {
   }
 
 }
+*/

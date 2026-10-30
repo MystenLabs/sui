@@ -63,6 +63,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   all: address(address: "@{A}") {
     objects {
@@ -148,8 +149,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   timeTravel: checkpoint(sequenceNumber: 2) {
     query {
@@ -169,3 +172,4 @@
     }
   }
 }
+*/

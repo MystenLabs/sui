@@ -80,6 +80,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Extract an address and fetch its owned objects
   object(address: "@{obj_4_0}") {
     asMoveObject {
@@ -100,8 +101,10 @@ module test::mod {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Extract an address and then fetch its transactions and their object changes.
   object(address: "@{obj_4_0}") {
     asMoveObject {
@@ -136,8 +139,10 @@ fragment O on Object {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Fetch another object being pointed to.
   object(address: "@{obj_4_0}") {
     asMoveObject {
@@ -158,8 +163,10 @@ fragment O on Object {
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(1u64)
+/*
 { # Fetch a wrapped object and request one of its dynamic fields, two ways.
   object(address: "@{obj_4_0}") {
     asMoveObject {
@@ -179,8 +186,10 @@ fragment O on Object {
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(3u64)
+/*
 { # Fetch the object at multiple versions and fetch one of its dynamic fields, two ways.
   objectVersions(address: "@{obj_4_0}") {
     nodes {
@@ -202,8 +211,10 @@ fragment O on Object {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Fetch a wrapped object and request all its dynamic fields at one checkpoint
   # before, and the current checkpoint.
   #
@@ -237,3 +248,4 @@ fragment DF on Address {
 }
 
 fragment MV on MoveValue { json }
+*/

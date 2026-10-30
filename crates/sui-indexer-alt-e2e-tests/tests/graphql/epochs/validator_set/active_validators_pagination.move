@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --accounts A --simulator --num-custom-validator-accounts 8
 
 //# run-graphql --cursors 0 1 2 3 4 5 6 7
+/*
 {
   epoch(epochId: 0) {
     epochId
@@ -33,3 +34,4 @@ fragment VC on ValidatorConnection {
     }
   }
 }
+*/

@@ -82,6 +82,7 @@ module test::simple {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test 1: MoveValue input (Pure with inferred type layout) only
   pureInputTest: transaction(digest: "@{digest_2}") {
@@ -101,8 +102,10 @@ module test::simple {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test 2: SharedInput only
   sharedInputTest: transaction(digest: "@{digest_4}") {
@@ -124,8 +127,10 @@ module test::simple {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test 3: OwnedOrImmutable input only
   ownedOrImmutableTest: transaction(digest: "@{digest_6}") {
@@ -149,8 +154,10 @@ module test::simple {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test 4: Receiving input only
   receivingInputTest: transaction(digest: "@{digest_10}") {
@@ -174,3 +181,4 @@ module test::simple {
     }
   }
 }
+*/

@@ -15,15 +15,19 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test timestamp field on transfer transaction
   transferTransaction: transactionEffects(digest: "@{digest_1}") {
     timestamp
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test timestamp field on system transaction
   systemTransaction: transactionEffects(digest: "@{digest_3}") {
     timestamp
   }
 }
+*/

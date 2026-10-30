@@ -14,12 +14,14 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test lamport_version field progression across multiple transactions using the same gas coin
   firstTransaction: transactionEffects(digest: "@{digest_1}") {
     lamportVersion
   }
-  
+ 
   secondTransaction: transactionEffects(digest: "@{digest_2}") {
     lamportVersion
   }
 } 
+*/

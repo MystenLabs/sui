@@ -133,6 +133,7 @@ module test::execution_error_tests {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test execution_error on successful transaction (should be null)
   successTransaction: transactionEffects(digest: "@{digest_2}") {
@@ -154,8 +155,10 @@ module test::execution_error_tests {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test execution_error on non-clever abort codes
   abort42: transactionEffects(digest: "@{digest_3}") {
@@ -196,8 +199,10 @@ module test::execution_error_tests {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test execution_error on various clever error types
   cleverU8: transactionEffects(digest: "@{digest_5}") {
@@ -371,8 +376,10 @@ module test::execution_error_tests {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test MovePrimitiveRuntimeError cases - these test different error paths
   arithmeticUnderflow: transactionEffects(digest: "@{digest_14}") {
@@ -451,3 +458,4 @@ module test::execution_error_tests {
     }
   }
 }
+*/
