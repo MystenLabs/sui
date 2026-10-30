@@ -158,10 +158,12 @@ impl MockCheckpointBuilder {
     /// Returns the barrier transaction using the effects from the executed settlement transactions.
     pub fn get_barrier_tx(
         &self,
+        protocol_config: &ProtocolConfig,
         checkpoint_height: CheckpointHeight,
         settlement_effects: &[TransactionEffects],
     ) -> Transaction {
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
+            protocol_config,
             self.epoch,
             OBJECT_START_VERSION,
             checkpoint_height,
