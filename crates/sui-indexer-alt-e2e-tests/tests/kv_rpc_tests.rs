@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use move_core_types::ident_str;
+use prost::Message;
 use simulacrum::Simulacrum;
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
@@ -16,10 +17,12 @@ use sui_kv_rpc::StageConfig;
 use sui_kv_rpc::StagesConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::google::rpc::ErrorInfo;
 use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
+use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::EventLiteral;
 use sui_rpc::proto::sui::rpc::v2::EventStreamHeadFilter;
@@ -461,6 +464,32 @@ fn checkpoint_sequence(response: &ListCheckpointsResponse) -> u64 {
         .as_ref()
         .and_then(|checkpoint| checkpoint.sequence_number)
         .expect("checkpoint sequence number should be populated")
+}
+
+/// Asserts `status` is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` ErrorInfo for `bound` at
+/// `requested_checkpoint`, whose first unavailable checkpoint lies at or below the requested one.
+fn assert_above_latest_available(status: &tonic::Status, bound: &str, requested_checkpoint: u64) {
+    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    let error_info = sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"));
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::AboveLatestAvailable.as_str_name()
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+    let metadata = &error_info.metadata;
+    assert_eq!(metadata.len(), 3, "{metadata:?}");
+    assert_eq!(metadata["bound"], bound);
+    assert_eq!(
+        metadata["requestedCheckpoint"],
+        requested_checkpoint.to_string()
+    );
+    let first_unavailable: u64 = metadata["firstUnavailableCheckpoint"].parse().unwrap();
+    assert!(first_unavailable <= requested_checkpoint, "{metadata:?}");
 }
 
 async fn list_transactions_result(
@@ -3411,21 +3440,21 @@ async fn test_list_filter_edge_cases() {
     req.start_checkpoint = Some(9999);
     req.options = Some(query_options_descending(10));
     let status = client.list_transactions(req).await.expect_err("OutOfRange");
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    assert_above_latest_available(&status, "start_checkpoint", 9999);
 
     let mut req = ListEventsRequest::default();
     req.read_mask = Some(event_type_and_position_mask());
     req.end_checkpoint = Some(9999);
     req.options = Some(query_options_descending(10));
     let status = client.list_events(req).await.expect_err("OutOfRange");
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    assert_above_latest_available(&status, "end_checkpoint", 9999);
 
     let mut req = ListCheckpointsRequest::default();
     req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
     req.end_checkpoint = Some(9999);
     req.options = Some(query_options_descending(10));
     let status = client.list_checkpoints(req).await.expect_err("OutOfRange");
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    assert_above_latest_available(&status, "end_checkpoint", 9999);
 
     // Filter that matches nothing returns an empty stream.
     let never_sender: SuiAddress =
