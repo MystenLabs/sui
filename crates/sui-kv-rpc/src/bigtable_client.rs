@@ -24,6 +24,7 @@
 //! can be sliced by call-site type. Per-request peak permits and successful
 //! acquisition count are recorded once on `BigTableClientContext` drop.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -309,6 +310,30 @@ impl BigTableClient {
             inner.checkpoint_to_tx_range(checkpoint_range),
         )
         .await
+    }
+
+    /// Read the tx_sequence_number of each of `checkpoints`' first transaction in one call, and
+    /// return a lookup over them, as `CheckpointPositions` windows take it. Looking up a
+    /// checkpoint outside `checkpoints` is `Internal`.
+    pub(crate) async fn checkpoint_tx_boundaries(
+        &self,
+        checkpoints: Vec<u64>,
+    ) -> Result<impl Fn(u64) -> Result<u64, RpcError> + use<>, RpcError> {
+        let mut inner = self.inner.clone();
+        let boundaries: HashMap<u64, u64> = self
+            .call_gated(
+                stage::CHECKPOINTS,
+                inner.checkpoint_tx_boundaries(&checkpoints),
+            )
+            .await?;
+        Ok(move |checkpoint| {
+            boundaries.get(&checkpoint).copied().ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("tx boundary of checkpoint {checkpoint} was not read"),
+                )
+            })
+        })
     }
 
     pub(crate) async fn resolve_tx_checkpoints(

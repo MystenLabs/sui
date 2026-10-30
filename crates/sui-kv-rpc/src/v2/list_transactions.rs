@@ -24,6 +24,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
@@ -96,6 +97,7 @@ pub(crate) async fn list_transactions(
     let objects_stage = ctx.stage(PipelineStage::Objects);
 
     validate_checkpoint_bounds(request.start_checkpoint, request.end_checkpoint)?;
+    let positions = CheckpointPositions::from_transactions_request(&request)?;
     let read_mask = validate_read_mask(request.read_mask)?;
     let needs_objects = needs_transaction_objects(&read_mask);
     let render_transaction_contents = should_render_transaction_contents(&read_mask);
@@ -115,7 +117,7 @@ pub(crate) async fn list_transactions(
     let ordering = options.ordering;
     let direction = options.scan_direction();
 
-    let tx_range = resolve_tx_range(&client, checkpoint_range, &options)
+    let tx_range = resolve_tx_range(&client, checkpoint_range, &positions, &options)
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let exhaustion = tx_range.exhaustion;
@@ -628,20 +630,22 @@ fn transaction_response_from_tx_seq_digest(
 }
 
 /// Determine the tx_sequence_number scan window from the logical checkpoint
-/// bounds. The checkpoint window is already clamped to indexed history and
-/// any cursor bounds before this converts it into tx sequence space.
-/// Filtered scans are additionally bounded at runtime by the per-request
+/// bounds, narrowed to the request's `positions`. The checkpoint window is
+/// already clamped to indexed history; cursor bounds apply when resolving the
+/// scan. Filtered scans are additionally bounded at runtime by the per-request
 /// bitmap bucket budget; that limit surfaces as SCAN_LIMIT, not as an
 /// up-front cp-range clamp.
 async fn resolve_tx_range(
     client: &BigTableClient,
     cp_range: ResolvedCheckpointRange,
+    positions: &CheckpointPositions,
     options: &QueryOptions,
 ) -> Result<ResolvedScan<u64>, RpcError> {
-    let tx_range = client
-        .checkpoint_to_tx_range(cp_range.range.clone())
+    let boundary = client
+        .checkpoint_tx_boundaries(positions.boundary_checkpoints(&cp_range.range))
         .await?;
-    ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
+    let window = positions.transaction_window(&cp_range.range, boundary)?;
+    ResolvedScan::<u64>::resolve(cp_range, window, options)
 }
 
 fn transaction_item_response(
