@@ -91,8 +91,9 @@ pub(super) trait Subscribable {
     fn resume_from(cursor: &Self::Cursor) -> Option<u64>;
 
     /// Whether a scan page that ended at `end` moved past `after`, the cursor it started from.
-    /// `reached_tip` is whether the page ended at the ledger's indexed tip, the only place a page
-    /// can end where it started.
+    /// `reached_tip` is whether the page ended with `LEDGER_TIP`: at the ledger's indexed tip, or,
+    /// for an `after` ahead of that tip, where `after` resumes. Only such a page can end where it
+    /// started.
     fn made_progress(end: &Self::Cursor, after: &Self::Cursor, reached_tip: bool) -> bool;
 
     /// Build the GraphQL node from one scanned item's payload, which sits in `checkpoint`,
@@ -590,10 +591,10 @@ fn backfill<S: Subscribable>(
 /// the tip claims coverage through it.
 ///
 /// Where either cursor has no place (a legacy `after`, or a page that claimed nothing), the ledger
-/// bytes decide. A page that drains the tip echoes `after`'s bytes, and the ledger rejects an
-/// `after` ahead of its indexed tip as out of range rather than answering from its own tip
-/// (#28308), so a page never ends behind `after`. A cursor without ledger bytes was never sent to
-/// the ledger, so any page moves past it.
+/// bytes decide. A page that drains the tip echoes `after`'s bytes, and a page whose `after` is
+/// ahead of the ledger's indexed tip ends where that cursor resumes, claiming nothing, rather than
+/// at the ledger's own tip, so a page never ends behind `after`. A cursor without ledger bytes was
+/// never sent to the ledger, so any page moves past it.
 pub(super) fn ledger_scan_moved<C: ScanCursor>(end: &C, after: &C, reached_tip: bool) -> bool {
     let end = end.bound();
     let after = after.bound();
