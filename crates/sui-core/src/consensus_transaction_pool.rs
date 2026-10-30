@@ -213,6 +213,7 @@ struct PoolEntry {
     gas_payment_objects: Vec<ObjectRef>,
     total_bytes: usize,
     gas_price: u64,
+    enqueued: Instant,
     tx_type: &'static str, // tx label for metrics
     /// See `proposers_metric_label`.
     proposers: &'static str,
@@ -287,6 +288,20 @@ impl AdmissionQueueEntry for PoolEntry {
             }
             .into(),
         );
+    }
+
+    fn enqueue_time(&self) -> Instant {
+        self.enqueued
+    }
+
+    fn notify_expired(self, retry_after_secs: u64) {
+        self.metrics.pool_depth.with_label_values(&["user"]).dec();
+        self.metrics
+            .pool_bytes
+            .with_label_values(&["user"])
+            .sub(self.total_bytes as i64);
+        self.ack
+            .resolve_error(SuiErrorKind::ValidatorOverloadedRetryAfter { retry_after_secs }.into());
     }
 }
 
@@ -401,6 +416,8 @@ pub struct ConsensusTransactionPool {
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
     stagger_quota: StaggerQuota,
+    /// When set, user-lane entries queued longer than this are dropped at proposal time.
+    max_queue_age: Option<Duration>,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -410,6 +427,7 @@ impl ConsensusTransactionPool {
         max_pending_transactions: usize,
         max_user_bytes_per_second: Option<u64>,
         max_pending_user_bytes: Option<u64>,
+        max_queue_age: Option<Duration>,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -446,6 +464,7 @@ impl ConsensusTransactionPool {
             epoch_store,
             metrics: metrics.clone(),
             adapter_metrics,
+            max_queue_age,
             stagger_quota: StaggerQuota::new(
                 max_pending_transactions,
                 metrics.pool_staggered_held.clone(),
@@ -475,6 +494,7 @@ impl ConsensusTransactionPool {
         Self::new(
             epoch_store,
             max_pending_transactions,
+            None,
             None,
             None,
             metrics,
@@ -541,6 +561,7 @@ impl ConsensusTransactionPool {
             gas_payment_objects,
             total_bytes,
             gas_price,
+            enqueued: Instant::now(),
             tx_type,
             proposers: proposers_metric_label(&transactions, &self.epoch_store),
             ack: PendingAck::new(EntryAck::User(sender), keys),
@@ -628,6 +649,7 @@ impl ConsensusTransactionPool {
             gas_payment_objects: Vec::new(),
             total_bytes,
             gas_price: 0,
+            enqueued: Instant::now(),
             tx_type: tx_type_label(transactions),
             proposers: "na",
             ack: PendingAck::new(
@@ -1065,6 +1087,7 @@ impl TransactionPool for ConsensusTransactionPool {
             .epoch_store
             .get_reconfig_state_read_lock_guard()
             .should_accept_user_certs();
+        let max_queue_age = self.max_queue_age;
         #[allow(unused_mut)]
         let mut disabled = false;
         fail_point_if!("consensus_transaction_pool_disable_take", || {
@@ -1144,6 +1167,7 @@ impl TransactionPool for ConsensusTransactionPool {
         }
 
         let mut already_processed = Vec::new();
+        let mut expired_user = Vec::new();
         if !user_take_disabled
             && matches!(limit_reached, LimitReached::AllTransactionsIncluded)
             && let UserLane::Open(user) = &mut pool.user
@@ -1151,6 +1175,9 @@ impl TransactionPool for ConsensusTransactionPool {
             let mut pending_count = transactions.len();
             let mut pending_bytes = system_tx_total_bytes;
             let now = Instant::now();
+            if let Some(ttl) = max_queue_age {
+                expired_user = user.evict_expired(now, ttl);
+            }
             let user_max_bytes = match &mut pool.user_byte_budget {
                 Some(budget) => {
                     max_bytes.min(system_tx_total_bytes.saturating_add(budget.available(now)))
@@ -1214,6 +1241,12 @@ impl TransactionPool for ConsensusTransactionPool {
 
         // Resolve flushed/processed items outside the mutex.
         self.resolve_flushed_user_entries(flushed);
+        if let Some(ttl) = max_queue_age {
+            let retry_after_secs = ttl.as_secs();
+            for entry in expired_user {
+                entry.notify_expired(retry_after_secs);
+            }
+        }
         for entry in abandoned {
             self.metrics
                 .pool_abandoned
@@ -1622,6 +1655,7 @@ mod tests {
             10,
             Some(max_user_bytes_per_second),
             None,
+            None,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
@@ -1696,6 +1730,7 @@ mod tests {
             gas_payment_objects: Vec::new(),
             total_bytes: serialized.len(),
             gas_price: 1,
+            enqueued: Instant::now(),
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
             proposers: "na",
             ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),

@@ -324,6 +324,11 @@ pub struct ConsensusTransactionPoolConfig {
     /// alongside `max_pending_transactions`. Entries are evicted lowest gas price
     /// first to stay within it. Defaults to 256 MiB when unset.
     pub max_pending_user_bytes: Option<u64>,
+
+    /// Drop user-lane entries that have waited longer than this many seconds,
+    /// bounding how long a transaction sits in the pool rather than only how many
+    /// are queued. Defaults to 60 seconds when unset.
+    pub max_queue_age_secs: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -334,6 +339,7 @@ impl Default for ConsensusTransactionPoolConfig {
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
             max_pending_user_bytes: None,
+            max_queue_age_secs: None,
         }
     }
 }
@@ -353,6 +359,10 @@ impl ConsensusTransactionPoolConfig {
 
     pub fn max_pending_user_bytes(&self) -> Option<u64> {
         Some(self.max_pending_user_bytes.unwrap_or(256 * 1024 * 1024))
+    }
+
+    pub fn max_queue_age(&self) -> Option<Duration> {
+        Some(Duration::from_secs(self.max_queue_age_secs.unwrap_or(60)))
     }
 }
 
