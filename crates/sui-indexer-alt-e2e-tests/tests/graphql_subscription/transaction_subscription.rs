@@ -652,9 +652,10 @@ async fn test_transaction_subscription_live_progress_then_resume() {
 }
 
 /// Resume with an `after` cursor ahead of the ledger's indexed tip in both checkpoint and
-/// transaction sequence number, as a client's cursor from a live edge can be. The ledger rejects it
-/// as out of range until it catches up, and the backfill retries rather than resuming from the
-/// ledger's tip: a transaction that lands before the cursor must not be delivered.
+/// transaction sequence number, as a client's cursor from a live edge can be. Until the ledger
+/// catches up, its pages end where the cursor resumes, and the backfill waits there rather than
+/// resuming from the ledger's tip: a transaction that lands before the cursor must not be
+/// delivered.
 #[tokio::test]
 async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger() {
     tokio::time::timeout(Duration::from_secs(180), async {
