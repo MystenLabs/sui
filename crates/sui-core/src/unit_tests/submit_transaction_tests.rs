@@ -1539,10 +1539,14 @@ async fn test_pool_mode_reports_processed_transactions_per_transaction() {
     let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
     let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
         epoch_store.clone(),
+        state.get_cache_writer().clone(),
         10,
         metrics.clone(),
     ));
-    let context = Arc::new(TransactionPoolContext::new_for_tests(metrics));
+    let context = Arc::new(TransactionPoolContext::new_for_tests(
+        metrics,
+        state.get_cache_writer().clone(),
+    ));
     context.set_active(epoch_store.epoch(), pool.clone());
     let service = ValidatorService::new(
         state.clone(),
