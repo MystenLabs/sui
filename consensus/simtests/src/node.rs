@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     net::{IpAddr, SocketAddr},
     sync::Arc,
     time::Duration,
@@ -20,6 +21,7 @@ use consensus_core::{
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use mysten_metrics::monitored_mpsc::unbounded_channel;
+use mysten_network::Multiaddr;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use tempfile::TempDir;
@@ -39,6 +41,7 @@ pub struct Config {
     pub protocol_config: ConsensusProtocolConfig,
     pub transaction_verifier: Arc<dyn TransactionVerifier>,
     pub parameters: Parameters,
+    pub peer_address_overrides: BTreeMap<AuthorityIndex, Multiaddr>,
     /// Optional network keypair for Observer nodes (which are not part of the committee)
     pub observer_network_keypair: Option<NetworkKeyPair>,
     /// Optional pre-allocated IP for Observer nodes (allows controlled IP assignment in tests)
@@ -63,6 +66,13 @@ impl AuthorityNode {
     /// Return the `index` of this Node
     pub fn index(&self) -> AuthorityIndex {
         self.config.authority_index
+    }
+
+    /// Set a peer route for subsequent starts. Start the peer after this node,
+    /// because an existing subscription keeps its connection when the route changes.
+    pub fn with_peer_address(mut self, peer: AuthorityIndex, address: Multiaddr) -> Self {
+        self.config.peer_address_overrides.insert(peer, address);
+        self
     }
 
     /// Start this Node
@@ -259,14 +269,19 @@ impl AuthorityNodeInner {
             // For Observer nodes, use "Observer" as the name prefix
             (ip, format!("Observer-{}", config.authority_index))
         } else {
-            // Validator node: use the committee-defined address
             let authority = config.committee.authority(config.authority_index);
-            let socket_addr = to_socket_addr(&authority.address).unwrap();
+            // Instances with the same keys need separate simulator IPs and listen addresses.
+            let address = config
+                .parameters
+                .listen_address_override
+                .as_ref()
+                .unwrap_or(&authority.address);
+            let socket_addr = to_socket_addr(address).unwrap();
             let ip = match socket_addr {
                 SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
                 _ => panic!("unsupported protocol"),
             };
-            (ip, format!("{}", config.authority_index))
+            (ip, format!("{}@{ip}", config.authority_index))
         };
 
         let init_receiver_swap = Arc::new(ArcSwapOption::empty());
@@ -394,6 +409,7 @@ pub(crate) async fn make_authority(
         clock_drift,
         transaction_verifier,
         parameters,
+        peer_address_overrides,
         observer_network_keypair,
         observer_ip: _, // Not used in make_authority, only used in spawn
     } = config;
@@ -412,7 +428,11 @@ pub(crate) async fn make_authority(
             (Some(protocol_keypair), network_keypair)
         };
 
-    ConsensusAuthority::start(
+    let peer_addresses = peer_address_overrides
+        .into_iter()
+        .map(|(peer, address)| (committee.authority(peer).network_key.clone(), address))
+        .collect::<Vec<_>>();
+    let authority = ConsensusAuthority::start(
         NetworkType::Tonic,
         0,
         committee,
@@ -428,7 +448,11 @@ pub(crate) async fn make_authority(
         boot_counter,
         None,
     )
-    .await
+    .await;
+    for (peer, address) in peer_addresses {
+        authority.update_peer_address(peer, Some(address));
+    }
+    authority
 }
 
 pub fn default_parameters() -> Parameters {
