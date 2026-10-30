@@ -226,6 +226,94 @@ pub(crate) mod checked {
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        move_vm: &Arc<MoveRuntime>,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> ExecutionOutput<Mode> {
+        // Programmable settlement transactions execute natively. Debug builds also execute them
+        // through their Move calls and check that the effects are identical.
+        #[cfg(debug_assertions)]
+        let move_effects = match &transaction_kind {
+            TransactionKind::ProgrammableSystemTransaction(pt)
+                if native_accumulator_settlement::native_form_of_ptb_settlement(pt).is_some() =>
+            {
+                Some(native_accumulator_settlement::with_ptb_settlements_in_move(
+                    || {
+                        execute_transaction_to_effects_impl::<Mode>(
+                            store,
+                            input_objects.clone(),
+                            system_object_versions.clone(),
+                            unsettled_object_funds,
+                            gas_data.clone(),
+                            SuiGasStatus::new_unmetered(protocol_config),
+                            transaction_kind.clone(),
+                            rewritten_inputs.clone(),
+                            transaction_signer,
+                            transaction_digest,
+                            move_vm,
+                            epoch_id,
+                            epoch_timestamp_ms,
+                            protocol_config,
+                            metrics.clone(),
+                            enable_expensive_checks,
+                            execution_params.clone(),
+                            &mut None,
+                        )
+                        .effects
+                    },
+                ))
+            }
+            _ => None,
+        };
+
+        let output = execute_transaction_to_effects_impl::<Mode>(
+            store,
+            input_objects,
+            system_object_versions,
+            unsettled_object_funds,
+            gas_data,
+            gas_status,
+            transaction_kind,
+            rewritten_inputs,
+            transaction_signer,
+            transaction_digest,
+            move_vm,
+            epoch_id,
+            epoch_timestamp_ms,
+            protocol_config,
+            metrics,
+            enable_expensive_checks,
+            execution_params,
+            trace_builder_opt,
+        );
+
+        #[cfg(debug_assertions)]
+        if let Some(move_effects) = move_effects {
+            assert_eq!(
+                move_effects, output.effects,
+                "native settlement effects differ from Move settlement effects"
+            );
+        }
+
+        output
+    }
+
+    fn execute_transaction_to_effects_impl<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
+        input_objects: CheckedInputObjects,
+        system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -1693,30 +1781,43 @@ pub(crate) mod checked {
                 trace_builder_opt,
             ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
-                for ExecutionBatch {
-                    transaction: pt,
-                    command_indices,
-                } in execution_batches(pt)
+                if let Some(settlement) =
+                    native_accumulator_settlement::native_form_of_ptb_settlement(&pt)
                 {
-                    SPT::execute::<execution_mode::System<Mode::Error>>(
-                        protocol_config,
-                        metrics.clone(),
-                        move_vm,
+                    let tx_digest = tx_ctx.borrow().digest();
+                    native_accumulator_settlement::execute(
                         temporary_store,
-                        store,
-                        tx_ctx.clone(),
-                        gas_charger,
-                        None,
-                        pt,
-                        trace_builder_opt,
+                        protocol_config,
+                        tx_digest,
+                        settlement,
                     )
-                    .map_err(|(e, _)| {
-                        let e = match e.command().and_then(|i| command_indices.get(i)) {
-                            Some(index) => e.with_command_index(*index),
-                            None => e,
-                        };
-                        (e, vec![])
-                    })?;
+                    .map_err(|e| (e.into(), vec![]))?;
+                } else {
+                    for ExecutionBatch {
+                        transaction: pt,
+                        command_indices,
+                    } in execution_batches(pt)
+                    {
+                        SPT::execute::<execution_mode::System<Mode::Error>>(
+                            protocol_config,
+                            metrics.clone(),
+                            move_vm,
+                            temporary_store,
+                            store,
+                            tx_ctx.clone(),
+                            gas_charger,
+                            None,
+                            pt,
+                            trace_builder_opt,
+                        )
+                        .map_err(|(e, _)| {
+                            let e = match e.command().and_then(|i| command_indices.get(i)) {
+                                Some(index) => e.with_command_index(*index),
+                                None => e,
+                            };
+                            (e, vec![])
+                        })?;
+                    }
                 }
                 Ok((Mode::empty_results(), vec![]))
             }
