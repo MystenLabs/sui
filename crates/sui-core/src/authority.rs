@@ -67,6 +67,7 @@ use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
+use sui_package_resolver::SyncResolver;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_protocol_config::assert_reachable_gated;
 use sui_types::accumulator_root::AccumulatorObjId;
@@ -78,7 +79,7 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::execution_params::FundsWithdrawStatus;
 use sui_types::execution_params::get_early_execution_error;
-use sui_types::layout_resolver::into_struct_layout;
+use sui_types::layout_resolver::{LayoutResolver, into_struct_layout};
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::node_role::NodeRole;
 use sui_types::storage::InputKey;
@@ -2507,14 +2508,8 @@ impl AuthorityState {
         let layout = if let (LayoutGenerationOption::Generate, Some(move_obj)) =
             (request.generate_layout, object.data.try_as_move())
         {
-            let epoch_store = self.load_epoch_store_one_call_per_task();
             Some(into_struct_layout(
-                epoch_store
-                    .executor()
-                    .type_layout_resolver(
-                        epoch_store.protocol_config(),
-                        Box::new(self.get_backing_package_store().as_ref()),
-                    )
+                SyncResolver::new(self.get_backing_package_store().as_ref())
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
             )?)
         } else {
@@ -3542,15 +3537,9 @@ impl AuthorityState {
             .data
             .try_as_move()
             .map(|object| {
-                let epoch_store = self.load_epoch_store_one_call_per_task();
+                // TODO(cache) - must read through cache
                 into_struct_layout(
-                    epoch_store
-                        .executor()
-                        // TODO(cache) - must read through cache
-                        .type_layout_resolver(
-                            epoch_store.protocol_config(),
-                            Box::new(self.get_backing_package_store().as_ref()),
-                        )
+                    SyncResolver::new(self.get_backing_package_store().as_ref())
                         .get_annotated_layout(&object.type_().clone().into())?,
                 )
             })
