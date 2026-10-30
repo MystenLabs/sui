@@ -190,11 +190,11 @@ mod tests {
     use tokio::time::timeout;
 
     use super::*;
-    use crate::DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES;
     use crate::KvRpcConfig;
     use crate::LedgerHistoryConfig;
     use crate::ServerConfig;
     use crate::StagesConfig;
+    use crate::service_info_watermark_pipelines;
     use crate::tests::watermark_reads;
 
     /// Covers subscribing to an indexer that restarted, which waits out the follower's 2 s
@@ -214,10 +214,10 @@ mod tests {
         }
     }
 
-    /// A watermark for every pipeline a replica without the List APIs serves, at the checkpoint
-    /// `checkpoint` picks for it.
+    /// A watermark for every pipeline a replica serves, at the checkpoint `checkpoint` picks for
+    /// it.
     fn served_watermarks(checkpoint: impl Fn(&str) -> u64) -> HashMap<String, CommitterWatermark> {
-        DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES
+        service_info_watermark_pipelines()
             .iter()
             .map(|&pipeline| (pipeline.to_string(), watermark(checkpoint(pipeline))))
             .collect()
@@ -277,7 +277,6 @@ mod tests {
             KvRpcConfig::default().request_bigtable_concurrency(),
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
-            false,
             WatermarkSource::IndexerStreams(indexer_urls),
         )
         .await
@@ -296,7 +295,7 @@ mod tests {
         let mut client = BigTableClient::new_local(bigtable.to_string(), "test".to_string())
             .await
             .expect("connect to mock Bigtable");
-        for pipeline in DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES {
+        for pipeline in service_info_watermark_pipelines() {
             client
                 .create_pipeline_watermark_if_absent(
                     pipeline,
