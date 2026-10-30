@@ -319,6 +319,11 @@ pub struct ConsensusTransactionPoolConfig {
     /// two maximum-size blocks per second (`max_transactions_in_block_bytes`).
     /// Must be greater than zero.
     pub max_user_bytes_per_second: Option<u64>,
+
+    /// Drop user-lane entries that have waited longer than this many seconds,
+    /// bounding how long a transaction sits in the pool rather than only how many
+    /// are queued. Defaults to 60 seconds when unset.
+    pub max_queue_age_secs: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -328,6 +333,7 @@ impl Default for ConsensusTransactionPoolConfig {
             max_pending_transactions: None,
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
+            max_queue_age_secs: None,
         }
     }
 }
@@ -343,6 +349,10 @@ impl ConsensusTransactionPoolConfig {
             self.max_user_bytes_per_second
                 .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
         })
+    }
+
+    pub fn max_queue_age(&self) -> Option<Duration> {
+        Some(Duration::from_secs(self.max_queue_age_secs.unwrap_or(60)))
     }
 }
 
