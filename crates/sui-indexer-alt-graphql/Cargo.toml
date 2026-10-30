@@ -40,7 +40,6 @@ imbl.workspace = true
 itertools.workspace = true
 pin-project.workspace = true
 prometheus.workspace = true
-prost.workspace = true
 prost-types.workspace = true
 rustls.workspace = true
 serde.workspace = true

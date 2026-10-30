@@ -153,9 +153,9 @@ struct Handoff {
     /// The last checkpoint the client has seen any of, when known up front (from `afterCheckpoint`
     /// or the `after` cursor).
     resume_from: Option<u64>,
-    /// The client resumed from a cursor. Its checkpoint is unknown up front (a legacy cursor), or
-    /// comes from the client, so `resume_from` is raised to the first scan output, which the ledger
-    /// only returns once it is past the cursor.
+    /// The client resumed from a cursor. Its checkpoint is unknown up front (a ledger cursor GraphQL
+    /// could not place), or comes from the client, so `resume_from` is raised to the first scan
+    /// output, which the ledger only returns once it is past the cursor.
     resume_unknown: bool,
     pinned: Option<u64>,
 }
@@ -590,11 +590,11 @@ fn backfill<S: Subscribable>(
 /// different bytes. Its place moves whenever it scanned anything, because a page that scans up to
 /// the tip claims coverage through it.
 ///
-/// Where either cursor has no place (a legacy `after`, or a page that claimed nothing), the ledger
-/// bytes decide. A page that drains the tip echoes `after`'s bytes, and a page whose `after` is
-/// ahead of the ledger's indexed tip ends where that cursor resumes, claiming nothing, rather than
-/// at the ledger's own tip, so a page never ends behind `after`. A cursor without ledger bytes was
-/// never sent to the ledger, so any page moves past it.
+/// Where either cursor has no place (an `after` GraphQL could not place, or a page that claimed
+/// nothing), the ledger bytes decide. A page that drains the tip echoes `after`'s bytes, and a
+/// page whose `after` is ahead of the ledger's indexed tip ends where that cursor resumes, claiming
+/// nothing, rather than at the ledger's own tip, so a page never ends behind `after`. A cursor
+/// without ledger bytes was never sent to the ledger, so any page moves past it.
 pub(super) fn ledger_scan_moved<C: ScanCursor>(end: &C, after: &C, reached_tip: bool) -> bool {
     let end = end.bound();
     let after = after.bound();
@@ -847,14 +847,8 @@ async fn scan_with_retry<S: Subscribable>(
 
 #[cfg(test)]
 mod tests {
-    use fastcrypto::encoding::Base64;
-    use fastcrypto::encoding::Encoding;
-
     use crate::api::types::ledger_cursor::Point;
     use crate::api::types::ledger_cursor::TransactionKey;
-    use crate::api::types::ledger_cursor::legacy::LegacyKind;
-    use crate::api::types::ledger_cursor::legacy::LegacyPosition;
-    use crate::api::types::ledger_cursor::legacy::LegacyToken;
     use crate::api::types::transaction::CTransaction;
     use crate::api::types::transaction::Transaction;
     use crate::api::types::transaction::TransactionToken;
@@ -1166,9 +1160,8 @@ mod tests {
         }
     }
 
-    /// A cursor in GraphQL's own format names its checkpoint up front: an item's own, or the one
-    /// before a checkpoint's start. A legacy cursor names the checkpoint it is labelled with, or none
-    /// if it is unlabelled.
+    /// A cursor names its checkpoint up front: an item's own, or the one before a checkpoint's
+    /// start. A ledger cursor GraphQL could not place names none.
     #[test]
     fn resume_point_from_cursors() {
         let resume = |cursor: CTransaction, after_checkpoint| {
@@ -1196,19 +1189,9 @@ mod tests {
         assert_eq!(from_genesis.checkpoint, None);
         assert!(from_genesis.is_set());
 
-        let legacy = |checkpoint| {
-            let token = LegacyToken {
-                kind: LegacyKind::Item,
-                position: LegacyPosition::Transactions {
-                    checkpoint,
-                    tx_seq: 5,
-                },
-            };
-            CTransaction::decode_cursor(&Base64::encode(token.encode())).unwrap()
-        };
-        assert_eq!(resume(legacy(99), None).checkpoint, Some(99));
+        let unplaced = CTransaction::from_ledger(bytes::Bytes::from_static(b"u"), None);
         assert_eq!(
-            resume(legacy(0), None),
+            resume(unplaced, None),
             ResumePoint {
                 checkpoint: None,
                 from_cursor: true,

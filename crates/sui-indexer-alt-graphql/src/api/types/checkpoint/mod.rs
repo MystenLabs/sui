@@ -32,9 +32,6 @@ use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
 use crate::api::types::ledger_cursor::Envelope;
 use crate::api::types::ledger_cursor::EnvelopeRef;
-use crate::api::types::ledger_cursor::legacy::LegacyKind;
-use crate::api::types::ledger_cursor::legacy::LegacyPosition;
-use crate::api::types::ledger_cursor::legacy::LegacyToken;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
@@ -78,12 +75,10 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-/// A decoded checkpoint cursor: the sequence number of the checkpoint it names. Decodes GraphQL's
-/// own format, and legacy cursors (see `ledger_cursor::legacy`) that name a returned checkpoint.
+/// A decoded checkpoint cursor: the sequence number of the checkpoint it names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CheckpointToken(u64);
 
-/// Compatibility dispatch over the on-wire cursor formats.
 pub type CCheckpoint = OpaqueCursor<CheckpointToken>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
@@ -430,25 +425,11 @@ impl CheckpointToken {
     }
 }
 
-/// A legacy scan frontier (`Boundary`) fails to decode: GraphQL never minted one for checkpoints.
 impl ByteCursor for CheckpointToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        if let Some(envelope) = Envelope::decode(bytes) {
-            let Envelope::Checkpoint(checkpoint) = envelope? else {
-                anyhow::bail!("Not a checkpoint cursor");
-            };
-
-            return Ok(Self(checkpoint));
-        }
-
-        let token = LegacyToken::decode(bytes)?;
-        let LegacyPosition::Checkpoints { checkpoint } = token.position else {
+        let Envelope::Checkpoint(checkpoint) = Envelope::decode(bytes)? else {
             anyhow::bail!("Not a checkpoint cursor");
         };
-        anyhow::ensure!(
-            token.kind == LegacyKind::Item,
-            "Not a checkpoint cursor GraphQL issued"
-        );
 
         Ok(Self(checkpoint))
     }
@@ -465,17 +446,6 @@ mod tests {
     use fastcrypto::encoding::Base64 as B64;
     use fastcrypto::encoding::Encoding;
 
-    /// A legacy protobuf cursor of the given kind.
-    fn legacy_token_cursor(kind: LegacyKind, checkpoint: u64) -> String {
-        B64::encode(
-            LegacyToken {
-                kind,
-                position: LegacyPosition::Checkpoints { checkpoint },
-            }
-            .encode(),
-        )
-    }
-
     #[test]
     fn primary_cursor_roundtrips() {
         let cursor = CheckpointToken::cursor(42);
@@ -484,30 +454,13 @@ mod tests {
         assert_eq!(decoded, cursor);
     }
 
-    /// A legacy cursor naming a returned checkpoint decodes to GraphQL's own cursor at the same
-    /// sequence number; a legacy scan frontier does not decode.
-    #[test]
-    fn legacy_items_match_primary() {
-        let decoded = CCheckpoint::decode_cursor(&legacy_token_cursor(LegacyKind::Item, 42))
-            .expect("legacy protobuf cursor");
-        assert_eq!(decoded, CheckpointToken::cursor(42));
-
-        assert!(
-            CCheckpoint::decode_cursor(&legacy_token_cursor(LegacyKind::Boundary, 42)).is_err()
-        );
-    }
-
-    /// A cursor for another type must not decode as a checkpoint cursor, in either format.
+    /// A cursor for another type, or in the protobuf format earlier releases issued, must not
+    /// decode as a checkpoint cursor.
     #[test]
     fn rejects_other_cursor_types() {
-        let legacy = LegacyToken {
-            kind: LegacyKind::Item,
-            position: LegacyPosition::Transactions {
-                checkpoint: 1,
-                tx_seq: 2,
-            },
-        };
-        assert!(CCheckpoint::decode_cursor(&B64::encode(legacy.encode())).is_err());
+        // kind=ITEM, checkpoints { checkpoint: 7 }.
+        let protobuf = [0x28, 0x01, 0x32, 0x02, 0x08, 0x07];
+        assert!(CCheckpoint::decode_cursor(&B64::encode(protobuf)).is_err());
 
         let owned = crate::api::types::transaction::TransactionToken::checkpoint_start(1);
         assert!(CCheckpoint::decode_cursor(&owned.encode_cursor()).is_err());

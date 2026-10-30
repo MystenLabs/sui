@@ -5,7 +5,6 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use fastcrypto::encoding::Base58;
-use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use move_core_types::identifier::Identifier;
 use serde_json::Value;
@@ -16,12 +15,12 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::PipelineLayer;
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
+use sui_indexer_alt_e2e_tests::graphql::place_event_cursor;
+use sui_indexer_alt_e2e_tests::graphql::place_tx_cursor;
 use sui_indexer_alt_e2e_tests::local_ingestion_client_args;
 use sui_indexer_alt_e2e_tests::write_checkpoint;
 use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::event::Event;
@@ -406,31 +405,6 @@ async fn checkpoint_transactions_page(
     (digests, page_info)
 }
 
-/// A legacy transactions cursor at `tx_seq` labelled with `checkpoint`, as Postgres-backed
-/// pagination issued it (with label 0) or a client gets it straight from the ledger service.
-fn legacy_cursor(checkpoint: u64, tx_seq: u64) -> String {
-    Base64::encode(CursorToken::item(Position::Transactions { checkpoint, tx_seq }).encode())
-}
-
-/// A GraphQL cursor at the transaction at `(checkpoint, transaction_index)`, with no ledger bytes,
-/// as subscriptions mint them: the format marker, then the BCS envelope `Transaction` (0),
-/// `OwnedCursor::Point` (0), `Point::At` (0), and the key.
-fn place_tx_cursor(checkpoint: u64, transaction_index: u64) -> String {
-    let mut bytes = vec![0x00, 0, 0, 0];
-    bytes.extend(checkpoint.to_le_bytes());
-    bytes.extend(transaction_index.to_le_bytes());
-    Base64::encode(bytes)
-}
-
-/// The event counterpart of [`place_tx_cursor`]: envelope `Event` (1).
-fn place_event_cursor(checkpoint: u64, transaction_index: u64, event_index: u32) -> String {
-    let mut bytes = vec![0x00, 1, 0, 0];
-    bytes.extend(checkpoint.to_le_bytes());
-    bytes.extend(transaction_index.to_le_bytes());
-    bytes.extend(event_index.to_le_bytes());
-    Base64::encode(bytes)
-}
-
 fn test_event(package: ObjectID, module: &str, sender: SuiAddress, type_str: &str) -> Event {
     Event::new(
         &package,
@@ -653,97 +627,6 @@ async fn exact_fit_page_reports_no_further_page() {
     );
 }
 
-/// A transactions cursor's checkpoint is a hint: the grpc scan window is driven by the tx_seq
-/// position clamp, so the placeholder hint `0` that position-only cursor sources (e.g. graphql's pg
-/// path) mint must page identically to the real checkpoints grpc mints.
-#[tokio::test]
-async fn cursor_checkpoint_hint_is_redundant() {
-    let (cluster, temp_dir) = alpha_cluster().await;
-    let alice = TestCheckpointBuilder::derive_address(1).to_string();
-
-    // Six Alice transactions spread over two checkpoints.
-    let mut total_txs = 1u64;
-    for cp in [1u64, 2] {
-        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
-        for i in 0..3u64 {
-            builder = builder
-                .start_transaction(1)
-                .create_owned_object(cp * 10 + i)
-                .finish_transaction();
-        }
-        total_txs += 3;
-        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
-            .await
-            .unwrap();
-    }
-    cluster
-        .wait_for_graphql(2, Duration::from_secs(30))
-        .await
-        .expect("graphql did not reach checkpoint 2");
-
-    fn digests(page: &[(String, String)]) -> Vec<String> {
-        page.iter().map(|(_, digest)| digest.clone()).collect()
-    }
-
-    let all = transactions_page(&cluster, &alice, false, None, None).await;
-    assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
-    let after_real = all[0].0.clone();
-    let before_real = all[4].0.clone();
-    let expected = digests(&all[1..4]);
-
-    // Checkpoint 0 holds one transaction, so Alice's six are sequence numbers 1 to 6.
-    let (after_seq, before_seq) = (1, 5);
-
-    // Baseline: the between-page with the cursors GraphQL minted from the ledger's pages.
-    let real = transactions_page(
-        &cluster,
-        &alice,
-        false,
-        Some(after_real.clone()),
-        Some(before_real.clone()),
-    )
-    .await;
-    assert_eq!(digests(&real), expected);
-
-    // Pg-minted cursors carry the `checkpoint: 0` placeholder, which graphql forwards unchanged and
-    // the ledger does not bound the scan by: a client passing a pg-minted cursor as `before` must
-    // see the same page.
-    let pg_minted = transactions_page(
-        &cluster,
-        &alice,
-        false,
-        Some(after_real.clone()),
-        Some(legacy_cursor(0, before_seq)),
-    )
-    .await;
-    assert_eq!(digests(&pg_minted), expected);
-
-    // Ordering-invariance: the same placeholder-labelled window paged from the back (`last`, a
-    // descending scan). `after`/`before` bound coordinate sides, not scan-order sides, so the
-    // placeholder hints hold in both orderings.
-    let neutral_desc = transactions_page(
-        &cluster,
-        &alice,
-        true,
-        Some(legacy_cursor(0, after_seq)),
-        Some(legacy_cursor(0, before_seq)),
-    )
-    .await;
-    assert_eq!(digests(&neutral_desc), expected);
-
-    // A genuinely wrong (nonzero) hint is redundant too: the backend bounds the scan by cursor
-    // positions, so `1` as the `before` hint still admits the cp 2 transaction.
-    let wrong = transactions_page(
-        &cluster,
-        &alice,
-        false,
-        Some(after_real),
-        Some(legacy_cursor(1, before_seq)),
-    )
-    .await;
-    assert_eq!(digests(&wrong), expected);
-}
-
 /// A cursor that already sits at or past the checkpoint filter's end leaves nothing to scan. The
 /// page must report no further pages in that direction; otherwise a client following
 /// `hasNextPage`/`hasPreviousPage` re-requests the same empty page forever.
@@ -784,9 +667,6 @@ async fn transactions_empty_window_past_cursor_has_no_more_pages() {
         // Forward, cursor in a checkpoint at or past `beforeCheckpoint`.
         (&before_cp2, false, Some(cursor(3)), None),
         (&before_cp2, false, Some(cursor(5)), None),
-        // Forward, a legacy cursor with the placeholder checkpoint label pg-minted cursors carry,
-        // at Alice's fifth transaction (sequence number 5), which still lies past the window.
-        (&before_cp2, false, Some(legacy_cursor(0, 5)), None),
     ];
 
     for (filter, from_back, after, before) in cases {
