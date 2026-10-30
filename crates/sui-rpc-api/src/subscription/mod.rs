@@ -551,9 +551,9 @@ impl SubscriptionService {
         loop {
             let event = match &mut admission_state {
                 AdmissionState::Accepting => {
+                    // Poll both queues fairly: a checkpoint backlog must not starve
+                    // subscription admission (or cancellation while waiting for a shard).
                     tokio::select! {
-                        biased;
-
                         result = self.checkpoint_mailbox.recv() => {
                             SubscriptionServiceEvent::Checkpoint(result)
                         },
@@ -575,9 +575,9 @@ impl SubscriptionService {
                         })
                         .collect();
 
+                    // Poll both queues fairly: a checkpoint backlog must not starve
+                    // subscription admission (or cancellation while waiting for a shard).
                     tokio::select! {
-                        biased;
-
                         result = self.checkpoint_mailbox.recv() => {
                             SubscriptionServiceEvent::Checkpoint(result)
                         },
@@ -1333,12 +1333,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn checkpoint_backlog_drains_before_registration() {
+    async fn checkpoint_backlog_preserves_stream_order_across_registration() {
         // Queue one admission and two checkpoints before starting the actor,
         // making both select branches ready on its first poll.
         let (service, checkpoint_sender, request_sender, mut shards) =
             actor_service_with(1, 25, None, 4, DEFAULT_MAX_SUBSCRIBERS);
-        let metrics = service.metrics.clone();
         let (reply_sender, reply_receiver) = oneshot::channel();
         assert!(
             request_sender
@@ -1352,29 +1351,34 @@ mod tests {
         assert_eq!(checkpoint_sender.send(checkpoint(1)).unwrap(), 1);
         assert_eq!(checkpoint_sender.send(checkpoint(2)).unwrap(), 1);
 
-        // The biased select must process both checkpoints before acknowledging
-        // the registration.
+        // Admission may interleave with the backlog, but every checkpoint after
+        // registration must still be delivered in order.
         let actor = tokio::spawn(service.start());
         let mut receiver = tokio::time::timeout(Duration::from_secs(1), reply_receiver)
             .await
             .expect("admission remained blocked after the checkpoint backlog drained")
             .unwrap();
-        assert_eq!(metrics.last_recieved_checkpoint.get(), 2);
-
-        // The subscriber was admitted after checkpoints 1 and 2, so its first
-        // deliverable checkpoint is 3.
+        // Checkpoint 3 is sent after admission and must be delivered. Depending
+        // on the fair select, checkpoints 1 and 2 may also follow registration.
         assert_eq!(checkpoint_sender.send(checkpoint(3)).unwrap(), 1);
         drop(checkpoint_sender);
         actor.await.unwrap();
 
         drain(&mut shards);
-        assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 3);
+        let first = matched_sequence_number(receiver.recv().await.unwrap());
+        assert!((1..=3).contains(&first));
+        for sequence in first + 1..=3 {
+            assert_eq!(
+                matched_sequence_number(receiver.recv().await.unwrap()),
+                sequence
+            );
+        }
         assert!(receiver.recv().await.is_none());
     }
 
     #[tokio::test]
     async fn queued_admission_releases_reservation_when_actor_shuts_down() {
-        let (service, checkpoint_sender, request_sender, _shards) =
+        let (service, checkpoint_sender, request_sender, mut shards) =
             actor_service_with(1, 25, None, 4, 1);
         let counters = Arc::clone(&service.counters);
         let (response_sender, response_receiver) = oneshot::channel();
@@ -1392,7 +1396,12 @@ mod tests {
         drop(checkpoint_sender);
         service.start().await;
 
-        assert!(response_receiver.await.is_err());
+        drain(&mut shards);
+        // Fair selection may admit the request before observing shutdown. In
+        // that case the following Clear must close its stream and release it.
+        if let Ok(mut receiver) = response_receiver.await {
+            assert!(receiver.recv().await.is_none());
+        }
         assert_eq!(counters.reserved(), 0);
     }
 
@@ -1559,6 +1568,37 @@ mod tests {
         let _ = actor.await;
         drop(shards);
         assert_eq!(counters.reserved(), 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn checkpoint_backlog_does_not_starve_subscription_admission() {
+        // A checkpoint queue that stays ready used to win every biased select, even
+        // with no active subscribers. New subscriptions then timed out before execution.
+        let (service, checkpoint_sender, request_sender, _shards) = actor_service_with(
+            1,
+            25,
+            Some(Arc::new(|| Some(0))),
+            256,
+            DEFAULT_MAX_SUBSCRIBERS,
+        );
+        for sequence in 1..=256 {
+            checkpoint_sender.send(checkpoint(sequence)).unwrap();
+        }
+        let (reply, receiver) = oneshot::channel();
+        request_sender
+            .send(subscription_request(&service.counters, unfiltered(), reply))
+            .unwrap();
+        let actor = tokio::spawn(service.start());
+        // Allow many fair-select turns while leaving the checkpoint backlog nonempty.
+        // Time is paused: each unindexed checkpoint consumes INDEX_WAIT_TIMEOUT.
+        let result = tokio::time::timeout(INDEX_WAIT_TIMEOUT * 64, receiver).await;
+        actor.abort();
+        let _ = actor.await;
+        assert!(
+            result.is_ok(),
+            "checkpoint backlog starved subscription admission"
+        );
+        assert!(result.unwrap().is_ok(), "subscription dispatcher stopped");
     }
 
     #[tokio::test]
