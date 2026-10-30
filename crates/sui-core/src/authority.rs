@@ -4,8 +4,6 @@
 
 use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
-use crate::accumulators::object_funds_checker::ObjectFundsCheckerDEPRECATED;
-use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
@@ -22,7 +20,7 @@ use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_deny_config_manager::TransactionDenyConfigManager;
 use crate::transaction_outputs::TransactionOutputs;
-use arc_swap::{ArcSwap, ArcSwapOption, Guard};
+use arc_swap::{ArcSwap, Guard};
 use authority_per_epoch_store::CertLockGuard;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
@@ -284,7 +282,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
-    pub(crate) execution_driver_paused_transactions: IntCounter,
+    pub(crate) object_funds_in_execution_check_result: IntCounterVec,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
     pub(crate) execution_queueing_delay_s: Histogram,
     pub(crate) prepare_cert_gas_latency_ratio: Histogram,
@@ -560,9 +558,11 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            execution_driver_paused_transactions: register_int_counter_with_registry!(
-                "execution_driver_paused_transactions",
-                "Cumulative number of transactions paused by execution driver",
+            object_funds_in_execution_check_result: register_int_counter_vec_with_registry!(
+                "object_funds_in_execution_check_result",
+                "Committed transactions by in-execution object funds check outcome: sufficient \
+                 counts successful transactions that withdrew from an object account",
+                &["result"],
                 registry,
             )
             .unwrap(),
@@ -945,14 +945,6 @@ impl ExecutionEnv {
         self
     }
 
-    /// For tests that drive scheduler-internal paths directly, standing in for the
-    /// index the ExecutionScheduler assigns at enqueue time.
-    #[cfg(test)]
-    pub(crate) fn with_causal_index(mut self, index: u64) -> Self {
-        self.causal_index = Some(index);
-        self
-    }
-
     pub fn with_barrier_dependencies(
         mut self,
         barrier_dependencies: BTreeSet<TransactionDigest>,
@@ -1068,8 +1060,6 @@ pub struct AuthorityState {
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
-    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsCheckerDEPRECATED>,
-    object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
     pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
     /// Created once per process, then re-attached to each new `AuthorityPerEpochStore`
@@ -1593,8 +1583,6 @@ impl AuthorityState {
             return ExecutionOutput::EpochEnded;
         }
 
-        let accumulator_version = execution_env.assigned_versions.accumulator_version();
-
         let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
             &tx_guard,
             &execution_guard,
@@ -1647,20 +1635,6 @@ impl AuthorityState {
                 active_jwks.sort();
 
                 assert_eq!(sys_jwks, active_jwks);
-            }
-        }
-
-        if certificate
-            .transaction_data()
-            .kind()
-            .is_accumulator_barrier_settle_tx()
-        {
-            let object_funds_checker = self.object_funds_checker.load();
-            if let Some(object_funds_checker) = object_funds_checker.as_ref() {
-                // unwrap safe because we assign accumulator version for every transaction
-                // when accumulator is enabled.
-                let next_accumulator_version = accumulator_version.unwrap().next();
-                object_funds_checker.settle_accumulator_version(next_accumulator_version);
             }
         }
 
@@ -2090,39 +2064,25 @@ impl AuthorityState {
                 tx_digest,
             );
 
-        if !protocol_config.check_object_funds_withdraw_in_execution() {
-            // TODO: Move the object funds checker to the executor so that it can eventually be
-            // removed from the active code path.
-            let object_funds_checker = self.object_funds_checker.load();
-            if let Some(object_funds_checker) = object_funds_checker.as_ref()
-                && !object_funds_checker.should_commit_object_funds_withdraws(
-                    certificate,
-                    &effects,
-                    &inner_temp_store.accumulator_running_max_withdraws,
-                    &execution_env,
-                    self.get_account_funds_read(),
-                    &self.execution_scheduler,
-                    epoch_store,
-                )
-            {
-                assert_reachable_gated!("retry object withdraw later", |pc| !pc
-                    .check_object_funds_withdraw_in_execution());
-                return ExecutionOutput::RetryLater;
-            }
-        } else {
+        if protocol_config.check_object_funds_withdraw_in_execution() {
             match effects.status() {
                 ExecutionStatus::Success => {
                     if let Some(accumulator_version) =
                         execution_env.assigned_versions.accumulator_version()
-                    {
-                        self.unsettled_object_withdrawals
+                        && self
+                            .unsettled_object_withdrawals
                             .record_object_funds_withdraws(
                                 certificate.transaction_data(),
                                 &effects,
                                 &inner_temp_store.accumulator_running_max_withdraws,
                                 accumulator_version,
                                 self.chain_identifier,
-                            );
+                            )
+                    {
+                        self.metrics
+                            .object_funds_in_execution_check_result
+                            .with_label_values(&["sufficient"])
+                            .inc();
                     }
                 }
                 ExecutionStatus::Failure(failure) => {
@@ -2131,8 +2091,8 @@ impl AuthorityState {
                     ) {
                         assert_reachable_gated!("object funds insufficient in execution", |pc| pc
                             .check_object_funds_withdraw_in_execution());
-                        self.object_funds_checker_metrics
-                            .in_execution_check_result
+                        self.metrics
+                            .object_funds_in_execution_check_result
                             .with_label_values(&["insufficient"])
                             .inc();
                     }
@@ -2693,9 +2653,6 @@ impl AuthorityState {
                 .clone(),
         ));
 
-        let object_funds_checker_metrics =
-            Arc::new(ObjectFundsCheckerMetrics::new(prometheus_registry));
-
         let transaction_deny_config_manager = TransactionDenyConfigManager::new(
             name,
             config.transaction_deny_config.clone(),
@@ -2739,17 +2696,14 @@ impl AuthorityState {
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
-            object_funds_checker: ArcSwapOption::empty(),
             // unsettled_object_withdrawals needs to be initialized unconditionally, even on fullnodes.
-            // Once we enable object funds checking during execution, fullnodes will need it to track
-            // unsettled object withdraws as well similar to validators.
+            // Object funds checking during execution needs fullnodes to track unsettled object
+            // withdraws as well similar to validators.
             unsettled_object_withdrawals: Arc::new(UnsettledObjectWithdrawals::new(
-                object_funds_checker_metrics.clone(),
+                prometheus_registry,
             )),
-            object_funds_checker_metrics,
             transaction_deny_config_manager,
         });
-        state.init_object_funds_checker().await;
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
@@ -2787,27 +2741,6 @@ impl AuthorityState {
         }
 
         state
-    }
-
-    async fn init_object_funds_checker(&self) {
-        let epoch_store = self.epoch_store.load();
-        // TODO: Once we enable object funds checking during execution, we will no longer need to initialize the object funds checker here.
-        if self.node_role(&epoch_store).runs_consensus()
-            && epoch_store.protocol_config().enable_object_funds_withdraw()
-        {
-            if self.object_funds_checker.load().is_none() {
-                let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
-                    Arc::new(ObjectFundsCheckerDEPRECATED::new(
-                        o.version(),
-                        self.unsettled_object_withdrawals.clone(),
-                        self.object_funds_checker_metrics.clone(),
-                    ))
-                });
-                self.object_funds_checker.store(inner);
-            }
-        } else {
-            self.object_funds_checker.store(None);
-        }
     }
 
     // TODO: Consolidate our traits to reduce the number of methods here.
@@ -3008,7 +2941,6 @@ impl AuthorityState {
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.execution_scheduler
             .reconfigure(&new_epoch_store, self.get_account_funds_read());
-        self.init_object_funds_checker().await;
 
         // Update the committee and drop entries for peers no longer in it before tx
         // processing resumes for the new epoch.

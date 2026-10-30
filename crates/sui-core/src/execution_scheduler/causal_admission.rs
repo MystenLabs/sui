@@ -341,14 +341,6 @@ pub struct InFlightSlot {
     retire_on_drop: Option<u64>,
 }
 
-impl InFlightSlot {
-    /// Keeps the admitted causal index alive past this execution attempt, for a
-    /// transaction that will be re-submitted under the same index (RetryLater).
-    pub fn skip_retire(&mut self) {
-        self.retire_on_drop = None;
-    }
-}
-
 impl Drop for InFlightSlot {
     fn drop(&mut self) {
         let mut inner = self.admission.inner.lock();
@@ -429,24 +421,16 @@ mod tests {
         assign(&admission, 2);
 
         // Fill the single concurrency slot with index 2.
-        let mut slot2 = admission.try_admit(2).unwrap();
+        let slot2 = admission.try_admit(2).unwrap();
         // The capacity branch is closed, but index 1 == watermark+1 is still admitted.
-        let mut slot1 = admission.try_admit(1).unwrap();
+        let slot1 = admission.try_admit(1).unwrap();
         // Only one causal-next admission may be outstanding at a time.
         assert!(admission.try_admit(1).is_none());
-        // A RetryLater release keeps the index alive, and it can be admitted again.
-        slot1.skip_retire();
-        drop(slot1);
-        let slot1b = admission.try_admit(1).unwrap();
 
         // Completing index 1 retires it via the slot drop.
-        drop(slot1b);
+        drop(slot1);
         assert_eq!(admission.watermark_for_testing(), 1);
-        // Index 2 is now watermark+1; re-admitting it bypasses the (full) limit.
-        slot2.skip_retire();
         drop(slot2);
-        let slot2b = admission.try_admit(2).unwrap();
-        drop(slot2b);
         assert_eq!(admission.watermark_for_testing(), 2);
     }
 
@@ -497,15 +481,6 @@ mod tests {
         let settle = admission.try_take_slot().unwrap();
         assert!(!admission.is_quiescent());
         drop(settle);
-        assert!(admission.is_quiescent());
-
-        // A retry that kept its index alive (skip_retire) leaves it unretired.
-        assign(&admission, 1);
-        let mut slot4 = admission.try_admit(4).unwrap();
-        slot4.skip_retire();
-        drop(slot4);
-        assert!(!admission.is_quiescent());
-        admission.mark_done(4);
         assert!(admission.is_quiescent());
     }
 }
