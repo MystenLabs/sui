@@ -5776,12 +5776,7 @@ fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> 
         .append(true)
         .open(package_path.join("Move.toml"))
         .unwrap();
-    writeln!(
-        toml,
-        "{}",
-        &format!("[environments]\nlocalnet=\"{chain_id}\"")
-    )
-    .unwrap();
+    writeln!(toml, "[environments]\nlocalnet=\"{chain_id}\"").unwrap();
 
     orig_toml
 }
