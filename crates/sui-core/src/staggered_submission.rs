@@ -1715,6 +1715,7 @@ mod pool_tests {
     fn pool_for(state: &Arc<AuthorityState>) -> Arc<ConsensusTransactionPool> {
         Arc::new(ConsensusTransactionPool::new_for_tests(
             state.epoch_store_for_testing().clone(),
+            state.get_cache_writer().clone(),
             10,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
         ))
@@ -1970,6 +1971,7 @@ mod pool_tests {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
             epoch_store.clone(),
+            state.get_cache_writer().clone(),
             10,
             metrics.clone(),
         ));
@@ -2011,6 +2013,7 @@ mod pool_tests {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
             epoch_store.clone(),
+            state.get_cache_writer().clone(),
             10,
             metrics.clone(),
         ));

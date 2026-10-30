@@ -309,6 +309,7 @@ impl ConsensusManager {
             let config = &node_config.consensus_transaction_pool;
             let pool = Arc::new(ConsensusTransactionPool::new(
                 epoch_store.clone(),
+                context.cache_writer().clone(),
                 config.max_pending_transactions(&self.consensus_config),
                 config.max_user_bytes_per_second(
                     epoch_store

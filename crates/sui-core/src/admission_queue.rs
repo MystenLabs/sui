@@ -262,6 +262,7 @@ pub struct AdmissionQueueMetrics {
     pub pool_gc_notified: IntCounter,
     pub pool_waiting_inserts: IntGauge,
     pub pool_already_processed: IntCounterVec,
+    pub pool_rejected_at_proposal: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
     pub pool_byte_budget_bytes: IntGauge,
@@ -391,6 +392,13 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_already_processed",
                 "User submissions not proposed because they were already processed elsewhere, by the stage that detected it and the path that processed them",
                 &["stage", "method"],
+                registry,
+            )
+            .unwrap(),
+            pool_rejected_at_proposal: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_rejected_at_proposal",
+                "User submissions dropped at proposal time because their owned input objects no longer match live state, by error",
+                &["error"],
                 registry,
             )
             .unwrap(),
@@ -652,7 +660,10 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.map.retain(|_, deque| !deque.is_empty());
         self.total_len -= removed.len();
         if self.byte_capacity.is_some() {
-            self.total_bytes -= removed.iter().map(|entry| entry.byte_size() as u64).sum::<u64>();
+            self.total_bytes -= removed
+                .iter()
+                .map(|entry| entry.byte_size() as u64)
+                .sum::<u64>();
         }
         for entry in &removed {
             self.remove_keys(entry);
@@ -1423,12 +1434,20 @@ mod tests {
         }
     }
 
-    fn byte_capped_queue(capacity: usize, byte_capacity: u64) -> PriorityAdmissionQueue<ByteMockEntry> {
+    fn byte_capped_queue(
+        capacity: usize,
+        byte_capacity: u64,
+    ) -> PriorityAdmissionQueue<ByteMockEntry> {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         PriorityAdmissionQueue::new(capacity, metrics).with_byte_capacity(Some(byte_capacity))
     }
 
-    fn byte_mock_entry(id: u64, gas_price: u64, bytes: usize, log: &MockOutcomeLog) -> ByteMockEntry {
+    fn byte_mock_entry(
+        id: u64,
+        gas_price: u64,
+        bytes: usize,
+        log: &MockOutcomeLog,
+    ) -> ByteMockEntry {
         ByteMockEntry {
             id,
             gas_price,
