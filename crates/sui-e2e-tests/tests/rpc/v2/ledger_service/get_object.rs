@@ -217,8 +217,8 @@ async fn batch_get_objects() {
 /// that checkpoint, through creation, mutation, wrapping, unwrapping, and deletion, and at a
 /// checkpoint in which the live object did not change. `max_version` reads see the newest
 /// version at or below the bound, and `NotFound` from a deletion or wrap until the object is
-/// unwrapped. `at_checkpoint` with `version` or `max_version` keeps the selected version only
-/// if it was written by the end of the checkpoint.
+/// unwrapped. `at_checkpoint` with `version` keeps that version only if it was written by the
+/// end of the checkpoint, and with `max_version` selects among the versions written by then.
 #[sim_test]
 async fn get_object_lifecycle() {
     let cluster = TestClusterBuilder::new()
@@ -262,16 +262,27 @@ async fn get_object_lifecycle() {
     let object = created_object(&create);
     changes.push((cp, object, create.lamport_version().value(), true));
     step_checkpoints.push(cp);
-    // A checkpoint passes before the next step, so the object is live but unchanged in it.
-    wait_for_fullnode_checkpoint_above(&cluster, cp).await;
+    // Bump the gas coin `create` paid with in a checkpoint of its own, in which the object is live
+    // but unchanged, and pay for `set_value` with that coin, so the object skips a version between
+    // creation and the mutation.
+    let bump_tx = cluster
+        .test_transaction_builder_with_gas_object(sender, create.gas_object().unwrap().0)
+        .await
+        .transfer_sui(None, sender)
+        .build();
+    let (bump, _) = execute(&cluster, bump_tx).await;
 
-    let (set_value, cp) = call_object_basics(
-        &cluster,
-        package_id,
-        "set_value",
-        vec![owned_arg(output_ref(&create, object)), pure_arg(&8u64)],
-    )
-    .await;
+    let set_value_tx = cluster
+        .test_transaction_builder_with_gas_object(sender, bump.gas_object().unwrap().0)
+        .await
+        .move_call(
+            package_id,
+            "object_basics",
+            "set_value",
+            vec![owned_arg(output_ref(&create, object)), pure_arg(&8u64)],
+        )
+        .build();
+    let (set_value, cp) = execute(&cluster, set_value_tx).await;
     changes.push((cp, object, set_value.lamport_version().value(), true));
     step_checkpoints.push(cp);
 
@@ -377,7 +388,12 @@ async fn get_object_lifecycle() {
                     bounded(exact, at_checkpoint),
                     format!("Object {address} with version {version}{at} not found"),
                 ));
-                let at_most = changes_of(id).rfind(|(_, _, changed, _)| *changed <= version);
+                // The newest change at or below `version` among those made by the bound.
+                let at_most = changes_of(id)
+                    .filter(|&&(changed_at, ..)| {
+                        at_checkpoint.is_none_or(|bound| changed_at <= bound)
+                    })
+                    .rfind(|(_, _, changed, _)| *changed <= version);
                 cases.push((
                     selector_request(address, None, Some(version), at_checkpoint),
                     bounded(at_most, at_checkpoint),
@@ -409,14 +425,12 @@ async fn get_object_lifecycle() {
         }
     }
 
-    // The bound does not fall back: at the checkpoint that created the object, its created
-    // version is visible, but a `max_version` that resolves to the mutation is `NotFound`.
+    // At the checkpoint that created the object, `max_version` set to the created version or to
+    // the mutation's version reads the created version: the mutation was written after that
+    // checkpoint, so it does not count, however far past the checkpoint the fullnode has indexed.
     let (create_cp, _, create_version, _) = changes[0];
-    let (_, _, set_value_version, _) = changes[1];
-    for (max_version, expected) in [
-        (create_version, Some(create_version)),
-        (set_value_version, None),
-    ] {
+    let (set_value_cp, _, set_value_version, _) = changes[1];
+    for max_version in [create_version, set_value_version] {
         let request = selector_request(
             Address::from(object),
             None,
@@ -428,7 +442,18 @@ async fn get_object_lifecycle() {
             Address::from(object),
         );
         let outcome = single_outcome(client.get_object(request.clone()).await);
-        assert_outcome(outcome, &request, expected, &not_found);
+        assert_outcome(outcome, &request, Some(create_version), &not_found);
+    }
+
+    // The object skips a version between creation and the mutation, so the cases above include
+    // a `max_version` between two of its versions. One in that gap reads the created version,
+    // unbounded and bounded by the mutation's checkpoint.
+    let in_gap = create_version + 1;
+    assert!(in_gap < set_value_version, "no version gap: {changes:?}");
+    for at_checkpoint in [None, Some(set_value_cp)] {
+        let request = selector_request(Address::from(object), None, Some(in_gap), at_checkpoint);
+        let outcome = single_outcome(client.get_object(request.clone()).await);
+        assert_outcome(outcome, &request, Some(create_version), "");
     }
 
     // Setting both `version` and `max_version` is invalid, and fails the whole batch.
@@ -747,28 +772,6 @@ async fn tx_builder(cluster: &TestCluster) -> TestTransactionBuilder {
     cluster
         .test_transaction_builder_with_gas_object(sender, gas)
         .await
-}
-
-/// Wait until the fullnode has executed a checkpoint above `checkpoint`.
-async fn wait_for_fullnode_checkpoint_above(cluster: &TestCluster, checkpoint: u64) {
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    loop {
-        let highest_executed = cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("db error")
-                .unwrap_or(0)
-        });
-        if highest_executed > checkpoint {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for the fullnode to execute a checkpoint above {checkpoint}"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
 }
 
 /// Sign and execute `tx_data` as address 0, wait for it to be checkpointed, and return its
