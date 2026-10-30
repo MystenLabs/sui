@@ -3610,6 +3610,170 @@ async fn test_list_filter_edge_cases() {
     expect_invalid_list_checkpoints(&mut client, req).await;
 }
 
+/// An `after` cursor past this server's indexed tip comes from a newer view of the ledger, such as
+/// another replica's. An ascending scan resumes where that cursor does, so its page is empty and
+/// ends there with `LedgerTip` and no checkpoint claim, also in a window that starts past the tip.
+/// A `before` cursor at or below that position ends the page at `before` instead, and a window
+/// that ends at the tip ends it with `CheckpointBound`, claiming the window's last checkpoint. A
+/// cursor at the tip is not past it. A descending scan from a cursor past the tip is out of range.
+#[tokio::test]
+async fn test_list_after_cursor_past_the_tip() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    transfer_self(&mut cluster, sender, &kp, gas).await;
+    cluster.create_checkpoint().await;
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // An unbounded ascending scan ends at the tip: the first transaction not yet indexed, and the
+    // checkpoint that will hold it. It claims the last indexed checkpoint.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.options = Some(query_options(1000));
+    let resp = list_transactions_result(&mut client, req).await;
+    assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+    let tip = CursorToken::decode(&resp.end_cursor.unwrap()).unwrap();
+    assert_eq!(tip.kind, CursorKind::Boundary);
+    let Position::Transactions {
+        checkpoint: tip_checkpoint,
+        tx_seq: tip_tx,
+    } = tip.position
+    else {
+        panic!("unexpected tip cursor {tip:?}");
+    };
+    let last_indexed = Some(tip_checkpoint - 1);
+    assert_eq!(resp.frames.last().unwrap().1.checkpoint, last_indexed);
+
+    let request = |after: &CursorToken,
+                   before: Option<&CursorToken>,
+                   start_checkpoint: Option<u64>,
+                   end_checkpoint: Option<u64>| {
+        let mut options = query_options(10);
+        options.after = Some(after.encode());
+        options.before = before.map(|before| before.encode());
+        let mut req = ListTransactionsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["digest"]));
+        req.start_checkpoint = start_checkpoint;
+        req.end_checkpoint = end_checkpoint;
+        req.options = Some(options);
+        req
+    };
+    let tx = |checkpoint, tx_seq| Position::Transactions { checkpoint, tx_seq };
+    let past_tip = CursorToken::boundary(tx(tip_checkpoint + 1, tip_tx + 3));
+    let crossing = CursorToken::boundary(tx(tip_checkpoint + 1, tip_tx + 2));
+    // Each case: the request, then the page's end cursor, end reason, and checkpoint claim.
+    let cases = [
+        (
+            request(&tip, None, None, None),
+            tip.clone(),
+            QueryEndReason::LedgerTip,
+            last_indexed,
+        ),
+        // An Item resumes at the boundary after it.
+        (
+            request(
+                &CursorToken::item(tx(tip_checkpoint, tip_tx)),
+                None,
+                None,
+                None,
+            ),
+            CursorToken::boundary(tx(tip_checkpoint, tip_tx + 1)),
+            QueryEndReason::LedgerTip,
+            None,
+        ),
+        (
+            request(&past_tip, None, None, None),
+            past_tip.clone(),
+            QueryEndReason::LedgerTip,
+            None,
+        ),
+        // The window GraphQL sends for a cursor: from the cursor's checkpoint on.
+        (
+            request(&past_tip, None, Some(tip_checkpoint + 1), None),
+            past_tip.clone(),
+            QueryEndReason::LedgerTip,
+            None,
+        ),
+        (
+            request(&past_tip, Some(&crossing), None, None),
+            crossing.clone(),
+            QueryEndReason::CursorBound,
+            None,
+        ),
+        (
+            request(&past_tip, None, None, Some(tip_checkpoint)),
+            past_tip.clone(),
+            QueryEndReason::CheckpointBound,
+            last_indexed,
+        ),
+    ];
+    for (req, end, reason, claim) in cases {
+        let context = format!("{req:?}");
+        let resp = list_transactions_result(&mut client, req).await;
+        assert!(resp.transactions.is_empty(), "{context}");
+        assert_eq!(resp.end_reason, Some(reason), "{context}");
+        let end_cursor = CursorToken::decode(&resp.end_cursor.unwrap()).unwrap();
+        assert_eq!(end_cursor, end, "{context}");
+        assert_eq!(resp.frames.last().unwrap().1.checkpoint, claim, "{context}");
+    }
+
+    let mut options = query_options(10);
+    options.after = Some(
+        CursorToken::item(Position::Events {
+            checkpoint: tip_checkpoint,
+            tx_seq: tip_tx,
+            event_index: 0,
+        })
+        .encode(),
+    );
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(event_type_and_position_mask());
+    req.options = Some(options);
+    let resp = list_events_result(&mut client, req).await;
+    assert!(resp.events.is_empty());
+    assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+    assert_eq!(
+        CursorToken::decode(&resp.end_cursor.unwrap()).unwrap(),
+        CursorToken::boundary(Position::Events {
+            checkpoint: tip_checkpoint,
+            tx_seq: tip_tx,
+            event_index: 1,
+        })
+    );
+    assert_eq!(resp.frames.last().unwrap().1.checkpoint, None);
+
+    let checkpoints_after = |options: QueryOptions| {
+        let mut req = ListCheckpointsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        req.options = Some(options);
+        req
+    };
+    let unindexed_checkpoint = CursorToken::item(Position::Checkpoints {
+        checkpoint: tip_checkpoint,
+    })
+    .encode();
+    let req = checkpoints_after(query_options_after(10, unindexed_checkpoint.clone()));
+    let resp = list_checkpoints_result(&mut client, req).await;
+    assert!(resp.checkpoints.is_empty());
+    assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+    assert_eq!(
+        CursorToken::decode(&resp.end_cursor.unwrap()).unwrap(),
+        CursorToken::boundary(Position::Checkpoints {
+            checkpoint: tip_checkpoint + 1,
+        })
+    );
+    assert_eq!(resp.frames.last().unwrap().1.checkpoint, None);
+
+    let mut options = query_options_descending(10);
+    options.after = Some(unindexed_checkpoint);
+    let status = client
+        .list_checkpoints(checkpoints_after(options))
+        .await
+        .expect_err("OutOfRange");
+    assert_above_latest_available(&status, "cursor", tip_checkpoint);
+}
+
 #[tokio::test]
 async fn test_list_limit_items_over_cap_is_coerced() {
     let mut cluster = list_api_cluster().await;

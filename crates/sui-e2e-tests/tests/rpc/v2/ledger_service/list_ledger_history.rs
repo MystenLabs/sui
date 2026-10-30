@@ -2438,8 +2438,10 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     let status = list_error(client.list_checkpoints(req).await).await;
     assert_above_latest_available(&status, "end_checkpoint", beyond_tip);
 
-    // A cursor naming a checkpoint this server has not indexed is out of range in either ordering.
-    for mut options in [query_options(10), query_options_descending(10)] {
+    // A cursor naming a position this server has not indexed comes from a newer view of the
+    // ledger. An ascending scan resumes where that cursor does, so its page is empty and ends
+    // there with `LedgerTip` and no checkpoint claim; a descending one is out of range.
+    let checkpoints_after = |mut options: QueryOptions| {
         options.after = Some(
             CursorToken::item(Position::Checkpoints {
                 checkpoint: beyond_tip,
@@ -2449,9 +2451,43 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
         let mut req = ListCheckpointsRequest::default();
         req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
         req.options = Some(options);
-        let status = list_error(client.list_checkpoints(req).await).await;
-        assert_above_latest_available(&status, "cursor", beyond_tip);
-    }
+        req
+    };
+    let resp = list_checkpoints_result(&mut client, checkpoints_after(query_options(10))).await;
+    assert!(resp.checkpoints.is_empty());
+    assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+    assert_eq!(
+        CursorToken::decode(&resp.end_cursor.unwrap()).unwrap(),
+        CursorToken::boundary(Position::Checkpoints {
+            checkpoint: beyond_tip + 1,
+        })
+    );
+    assert_eq!(resp.watermarks.last().unwrap().checkpoint, None);
+    let req = checkpoints_after(query_options_descending(10));
+    let status = list_error(client.list_checkpoints(req).await).await;
+    assert_above_latest_available(&status, "cursor", beyond_tip);
+
+    let past_tip_tx = CursorToken::boundary(Position::Transactions {
+        checkpoint: beyond_tip,
+        tx_seq: beyond_tip,
+    });
+    let mut options = query_options(10);
+    options.after = Some(past_tip_tx.encode());
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.options = Some(options);
+    let resp = list_transactions_result(&mut client, req).await;
+    assert!(resp.transactions.is_empty());
+    assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
+    assert_eq!(
+        CursorToken::decode(&resp.end_cursor.unwrap()).unwrap(),
+        past_tip_tx
+    );
+    let last_watermark = resp
+        .frames
+        .last()
+        .and_then(|frame| frame.watermark.as_ref());
+    assert_eq!(last_watermark.unwrap().checkpoint, None);
 
     let never_sender: SuiAddress =
         "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
