@@ -30,6 +30,7 @@ use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
 use crate::ledger_history::query_options::ResolvedScan;
+use crate::ledger_history::query_options::ScanWindow;
 use crate::ledger_history::query_options::below_serving_floor;
 use crate::ledger_history::query_options::validate_checkpoint_bounds;
 use crate::metrics::ListRequestMetrics;
@@ -936,7 +937,7 @@ fn resolve_cp_range(
     options: &QueryOptions,
 ) -> Result<ResolvedScan<u64>, RpcError> {
     let range = cp_range.range.clone();
-    ResolvedScan::<u64>::resolve(cp_range, range, options)
+    ResolvedScan::<u64>::resolve(cp_range, ScanWindow::whole_checkpoints(range), options)
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {

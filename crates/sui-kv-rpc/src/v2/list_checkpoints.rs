@@ -31,6 +31,7 @@ use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
+use sui_rpc_api::ledger_history::query_options::ScanWindow;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -671,7 +672,7 @@ fn resolve_cp_range(
     options: &QueryOptions,
 ) -> Result<ResolvedScan<u64>, RpcError> {
     let range = cp_range.range.clone();
-    ResolvedScan::<u64>::resolve(cp_range, range, options)
+    ResolvedScan::<u64>::resolve(cp_range, ScanWindow::whole_checkpoints(range), options)
 }
 
 fn decode_checkpoint_row_key(key: &Bytes) -> Result<u64, RpcError> {
