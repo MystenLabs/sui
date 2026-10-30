@@ -287,6 +287,8 @@ mod tests {
     use super::*;
     use sui_rpc_cursor::{CursorKind, Position};
 
+    use crate::ledger_history::query_options::assert_below_serving_floor_error;
+
     fn options(ascending: bool) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2::QueryOptions::default();
         request.ordering = Some(if ascending {
@@ -492,15 +494,10 @@ mod tests {
             floor_checkpoint: 7,
         };
 
-        let status = terminal
+        let error = terminal
             .reason()
-            .expect_err("a serving floor ends with no QueryEnd")
-            .into_status_proto();
-        assert_eq!(status.code, tonic::Code::OutOfRange as i32);
-        assert_eq!(
-            status.message,
-            "requested data below earliest available; lowest available checkpoint is 7"
-        );
+            .expect_err("a serving floor ends with no QueryEnd");
+        assert_below_serving_floor_error(error, 7);
 
         for covered_checkpoint_bound in [None, Some(9)] {
             let watermark = terminal.clone().into_watermark(covered_checkpoint_bound);
