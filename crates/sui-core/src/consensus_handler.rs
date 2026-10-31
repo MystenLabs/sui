@@ -2961,6 +2961,55 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
+                // Expiry is checked only when a transaction is first sequenced, before it takes
+                // owned object locks. A transaction deferred from an earlier commit keeps the
+                // validity it had then, and a copy of an already-processed transaction is left
+                // to deduplication so that its waiters still receive effects.
+                //
+                // The dropped key is deliberately not recorded as processed. Otherwise a later
+                // copy would bypass this check, acquire locks, and then be discarded by
+                // deduplication, leaving its owned objects locked for the rest of the epoch.
+                // It also lets a transaction sequenced before its `min_timestamp` be resubmitted.
+                if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                    &parsed.transaction.kind
+                    && self
+                        .epoch_store
+                        .protocol_config()
+                        .enable_timestamp_transaction_expiration()
+                {
+                    let tx = tx_with_claims.tx();
+                    if !tx
+                        .transaction_data()
+                        .expiration()
+                        .is_valid_at_timestamp(commit_info.timestamp)
+                        && !self
+                            .epoch_store
+                            .is_consensus_message_processed(
+                                &SequencedConsensusTransactionKey::External(
+                                    parsed.transaction.key(),
+                                ),
+                            )
+                            .expect("db error")
+                    {
+                        debug!(
+                            "Dropping transaction {} expired at commit timestamp {}",
+                            tx.digest(),
+                            commit_info.timestamp
+                        );
+                        self.metrics
+                            .consensus_handler_dropped_transactions
+                            .with_label_values(&["expired"])
+                            .inc();
+                        status_updates.push((position, ConsensusTxStatus::Dropped));
+                        num_dropped_user_transactions[author] += 1;
+                        self.epoch_store.set_rejection_vote_reason(
+                            position,
+                            &SuiErrorKind::TransactionExpired.into(),
+                        );
+                        continue;
+                    }
+                }
+
                 // Perform post-consensus owned object conflict detection. If lock acquisition
                 // fails, the transaction has invalid/conflicting owned inputs and should be dropped.
                 // This must happen AFTER all filtering checks above to avoid acquiring locks
