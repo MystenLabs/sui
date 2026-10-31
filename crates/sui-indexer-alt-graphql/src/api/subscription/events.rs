@@ -3,19 +3,17 @@
 
 //! Events as a scan-then-live feed: each matching event is delivered as its own edge, ordered by
 //! checkpoint, then by transaction position within the checkpoint, then by position within the
-//! transaction. The cursor is a three-part position (checkpoint, transaction, event index), and
-//! matching tests each event against the filter.
+//! transaction. The cursor places the event by those three indices, and matching tests each event
+//! against the filter.
 
 use std::future::Future;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use anyhow::Context;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
-use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc::proto::sui::rpc::v2;
 use tokio::sync::OnceCell;
 
@@ -24,6 +22,8 @@ use crate::api::types::event::Event;
 use crate::api::types::event::EventToken;
 use crate::api::types::event::event_from_stream_item;
 use crate::api::types::event::filter::EventFilter;
+use crate::api::types::ledger_cursor::EventKey;
+use crate::api::types::ledger_cursor::scan::LedgerPage;
 use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::scope::Scope;
@@ -32,6 +32,7 @@ use crate::task::streaming::StreamedCaches;
 
 use super::EventSubscriptionEdge;
 use super::scan_then_live::Subscribable;
+use super::scan_then_live::ledger_scan_moved;
 
 impl Subscribable for Event {
     type Item = Self;
@@ -53,18 +54,24 @@ impl Subscribable for Event {
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<CEvent>,
         filter: &'a EventFilter,
-    ) -> impl Future<Output = Result<StreamPage<v2::Event>, RpcError>> + Send + 'a {
+    ) -> impl Future<Output = Result<LedgerPage<v2::Event, CEvent>, RpcError>> + Send + 'a {
         Event::scan_grpc(reader, cp_bounds, page, page.limit(), filter)
+    }
+
+    fn resume_from(cursor: &CEvent) -> Option<u64> {
+        cursor.last_checkpoint()
+    }
+
+    fn made_progress(end: &CEvent, after: &CEvent, reached_tip: bool) -> bool {
+        ledger_scan_moved(end, after, reached_tip)
     }
 
     fn build_node(
         caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
+        checkpoint: u64,
         payload: &v2::Event,
     ) -> Result<Self, RpcError> {
-        let checkpoint = payload
-            .checkpoint
-            .context("ListEvents item missing checkpoint")?;
         let scope = Scope::for_backfill(caches.clone(), resolver_limits.clone(), checkpoint);
         event_from_stream_item(scope, payload)
     }
@@ -82,7 +89,8 @@ impl Subscribable for Event {
             checkpoint.clone(),
         );
         let mut edges = Vec::new();
-        for tx in &checkpoint.transactions {
+        // `transactions` holds every transaction in the checkpoint, in order.
+        for (transaction_index, tx) in checkpoint.transactions.iter().enumerate() {
             let digest = tx
                 .contents
                 .digest()
@@ -92,11 +100,11 @@ impl Subscribable for Event {
                 if !filter.matches(&native) {
                     continue;
                 }
-                let cursor = EventToken::cursor(
-                    checkpoint.summary.sequence_number,
-                    tx.tx_sequence_number,
-                    idx as u32,
-                )
+                let cursor = EventToken::at(EventKey {
+                    checkpoint: checkpoint.summary.sequence_number,
+                    transaction_index: transaction_index as u64,
+                    event_index: idx as u32,
+                })
                 .encode_cursor();
                 edges.push(Edge::new(
                     cursor,
@@ -114,40 +122,8 @@ impl Subscribable for Event {
     }
 
     fn boundary_after(checkpoint: &ProcessedCheckpoint) -> Option<CEvent> {
-        // `network_total_transactions` counts through this checkpoint, so it is the sequence number
-        // of the next checkpoint's first transaction, whose first event is index 0.
-        Some(EventToken::boundary(
+        Some(EventToken::checkpoint_start(
             checkpoint.summary.sequence_number + 1,
-            checkpoint.summary.network_total_transactions,
-            0,
         ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use sui_rpc_cursor::CursorKind;
-    use sui_rpc_cursor::CursorToken;
-    use sui_rpc_cursor::Position;
-
-    use super::*;
-
-    /// `boundary_after` marks the start of the next checkpoint: a `Boundary` at that checkpoint's
-    /// first transaction and event index 0, so resuming after it begins at the first event of
-    /// `checkpoint + 1`.
-    #[test]
-    fn boundary_after_marks_start_of_next_checkpoint() {
-        let checkpoint = ProcessedCheckpoint::for_test(10, 42);
-        let cursor = Event::boundary_after(&checkpoint).expect("event feed mints a boundary");
-        let token = CursorToken::from(&cursor);
-        assert_eq!(token.kind, CursorKind::Boundary);
-        assert_eq!(
-            token.position,
-            Position::Events {
-                checkpoint: 11,
-                tx_seq: 42,
-                event_index: 0,
-            }
-        );
     }
 }

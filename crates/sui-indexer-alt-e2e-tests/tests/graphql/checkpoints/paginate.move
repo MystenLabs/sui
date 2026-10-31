@@ -88,8 +88,8 @@ fragment PageInfoFields on PageInfo {
   hasNextPage
 }
 
-//# run-graphql --cursors 6
-{
+//# run-graphql --cursors bcs(0u8,2u8,6)
+{ # Checkpoint cursors are a format marker (0), a checkpoint tag (2), then the sequence number.
   checkpointsAtEpoch1BeforeCp6FromBackHasNextPage: checkpoints(last: 1, before: "@{cursor_0}", filter: {atEpoch: 1}) {
      pageInfo {
       startCursor
@@ -107,7 +107,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql --cursors 0
+//# run-graphql --cursors bcs(0u8,2u8,0)
 {
   checkpointsAfterCp0HasPreviousPreviousPage: checkpoints(first: 1, after: "@{cursor_0}") {
      pageInfo {
@@ -126,7 +126,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql --cursors 4
+//# run-graphql --cursors bcs(0u8,2u8,4)
 {
   checkpointsBeforeCp4FromBack: checkpoints(last: 2, before: "@{cursor_0}") {
     pageInfo {
@@ -145,7 +145,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql --cursors 0
+//# run-graphql --cursors bcs(0u8,2u8,0)
 {
   checkpointsAtEpoch0AfterCp0: checkpoints(first: 10, after: "@{cursor_0}", filter: {atEpoch: 0}) {
     pageInfo {
@@ -164,7 +164,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql  --cursors 3
+//# run-graphql  --cursors bcs(0u8,2u8,3)
 {
   checkpointsAtEpoch0BeforeCp3: checkpoints(first: 10, filter: {atEpoch: 0}, before: "@{cursor_0}") {
     pageInfo {
@@ -183,7 +183,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql  --cursors 0 3
+//# run-graphql  --cursors bcs(0u8,2u8,0) bcs(0u8,2u8,3)
 {
   checkpointsAtEpoch0BetweenCp03FromFront: checkpoints(first: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {
@@ -217,7 +217,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql  --cursors 6
+//# run-graphql  --cursors bcs(0u8,2u8,6)
 {
   checkpointsAtEpoch1BeforeCp6FromBack: checkpoints(last: 10, filter: {atEpoch: 1}, before: "@{cursor_0}") {
     pageInfo {
@@ -236,7 +236,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql --cursors 1
+//# run-graphql --cursors bcs(0u8,2u8,1)
 { 
   # Test that before cursor is exclusive (should not include checkpoint 1)
   checkpointsBeforeCp1: checkpoints(first: 5, before: "@{cursor_0}") {
@@ -254,7 +254,7 @@ fragment PageInfoFields on PageInfo {
   }
 }
 
-//# run-graphql --cursors 0
+//# run-graphql --cursors bcs(0u8,2u8,0)
 { 
   # Test before cursor at 0 (should not include checkpoint 0)
   checkpointsBeforeCp0: checkpoints(first: 5, before: "@{cursor_0}") {
@@ -271,7 +271,7 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
-//# run-graphql --cursors 2 5
+//# run-graphql --cursors bcs(0u8,2u8,2) bcs(0u8,2u8,5)
 {
   # An `after` cursor at `afterCheckpoint` is redundant with the bound.
   checkpointsAfterCp2AfterCheckpoint2: checkpoints(first: 2, after: "@{cursor_0}", filter: {afterCheckpoint: 2}) {

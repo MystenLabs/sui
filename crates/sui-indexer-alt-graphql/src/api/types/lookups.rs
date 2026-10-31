@@ -8,7 +8,3 @@ pub(crate) trait CheckpointBounds {
     fn at_checkpoint(&self) -> Option<UInt53>;
     fn before_checkpoint(&self) -> Option<UInt53>;
 }
-
-pub(crate) trait TxBoundsCursor {
-    fn tx_sequence_number(&self) -> u64;
-}
