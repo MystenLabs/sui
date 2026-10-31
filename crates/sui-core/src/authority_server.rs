@@ -822,6 +822,8 @@ impl ValidatorService {
             // Reject up front rather than proposing a block that peers would reject: the client
             // must submit to one of the proposers the transaction allows.
             epoch_store.check_self_allowed_proposer(transaction.data().transaction_data())?;
+            epoch_store
+                .check_timestamp_expiration_at_submission(transaction.data().transaction_data())?;
 
             // A request must not repeat a transaction.
             if !request_digests.insert(tx_digest) {

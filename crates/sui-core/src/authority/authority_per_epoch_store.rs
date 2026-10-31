@@ -1381,6 +1381,27 @@ impl AuthorityPerEpochStore {
         self.check_allowed_proposer(tx, own_index)
     }
 
+    /// Rejects a transaction whose timestamp window does not contain the local wall-clock time.
+    /// This check is advisory, because the local clock can differ from consensus commit
+    /// timestamps. The consensus handler makes the binding decision with the commit timestamp.
+    pub fn check_timestamp_expiration_at_submission(&self, tx: &TransactionData) -> SuiResult {
+        if !self
+            .protocol_config()
+            .enable_timestamp_transaction_expiration()
+        {
+            return Ok(());
+        }
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time is before the Unix epoch")
+            .as_millis() as u64;
+        fp_ensure!(
+            tx.expiration().is_valid_at_timestamp(now_ms),
+            SuiErrorKind::TransactionExpired.into()
+        );
+        Ok(())
+    }
+
     pub fn get_state_hash_for_checkpoint(
         &self,
         checkpoint: &CheckpointSequenceNumber,

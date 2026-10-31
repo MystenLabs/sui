@@ -2444,9 +2444,11 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
+        /// before this value.
         min_timestamp: Option<u64>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
+        /// after this value.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2460,9 +2462,11 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
+        /// before this value.
         min_timestamp: Option<u64>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
+        /// after this value.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2523,6 +2527,27 @@ impl TransactionExpiration {
                 ..
             } if *max_epoch == *min_epoch || *max_epoch == min_epoch.saturating_add(1)
         )
+    }
+
+    /// Whether `timestamp_ms` lies within the inclusive `[min_timestamp, max_timestamp]` window.
+    /// An absent bound does not restrict the window.
+    pub fn is_valid_at_timestamp(&self, timestamp_ms: u64) -> bool {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => true,
+            TransactionExpiration::ValidDuring {
+                min_timestamp,
+                max_timestamp,
+                ..
+            }
+            | TransactionExpiration::Validity {
+                min_timestamp,
+                max_timestamp,
+                ..
+            } => {
+                min_timestamp.is_none_or(|min| timestamp_ms >= min)
+                    && max_timestamp.is_none_or(|max| timestamp_ms <= max)
+            }
+        }
     }
 
     /// The validators allowed to propose this transaction in consensus during `epoch`.
@@ -3522,10 +3547,25 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
 
                 if min_timestamp.is_some() || max_timestamp.is_some() {
-                    return Err(UserInputError::Unsupported(
-                        "Timestamp-based transaction expiration is not yet supported".to_string(),
-                    )
-                    .into());
+                    fp_ensure!(
+                        config.enable_timestamp_transaction_expiration(),
+                        UserInputError::Unsupported(
+                            "Timestamp-based transaction expiration is not yet supported"
+                                .to_string(),
+                        )
+                        .into()
+                    );
+                    if let (Some(min), Some(max)) = (min_timestamp, max_timestamp) {
+                        fp_ensure!(
+                            min <= max,
+                            UserInputError::InvalidExpiration {
+                                error: format!(
+                                    "min_timestamp {min} is greater than max_timestamp {max}"
+                                ),
+                            }
+                            .into()
+                        );
+                    }
                 }
 
                 // Legacy behavior: If a validity window is present, it must have either one- or
