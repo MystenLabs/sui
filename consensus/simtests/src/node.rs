@@ -236,6 +236,12 @@ impl AuthorityNodeInner {
         if let Some(consensus_authority) = self.consensus_authority.take() {
             consensus_authority.stop().await;
         }
+        if let Some(handle) = self.handle.take() {
+            drop(handle);
+            // `delete_node` schedules the node's remaining task futures for destruction under
+            // msim. Wait until that ready queue has drained before a restart reopens RocksDB.
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
     }
 
     /// Spawn a new Node.
