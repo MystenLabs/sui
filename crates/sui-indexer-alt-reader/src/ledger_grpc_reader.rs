@@ -85,6 +85,8 @@ pub struct StreamPage<T> {
     pub items: Vec<PageItem<T>>,
     first_wm_cursor: Option<Bytes>,
     last_wm_cursor: Option<Bytes>,
+    /// The latest `Watermark.checkpoint` received on this page (see [`Self::covered_checkpoint`]).
+    covered_checkpoint: Option<u64>,
     pub end_reason: Option<grpc::QueryEndReason>,
 }
 
@@ -93,6 +95,7 @@ enum FrameKind<T> {
     Frame {
         payload: Option<T>,
         cursor: Option<Bytes>,
+        covered_checkpoint: Option<u64>,
         end_reason: Option<grpc::QueryEndReason>,
     },
     /// A frame with none of the known fields set (unknown/future frame kind).
@@ -456,20 +459,31 @@ impl<T> StreamPage<T> {
         }
     }
 
-    /// The page's starting cursor: the standalone-watermark cursor if one preceded any items,
-    /// otherwise the first item's own cursor.
-    pub fn first_cursor(&self) -> Option<&Bytes> {
-        self.first_wm_cursor
-            .as_ref()
-            .or_else(|| self.items.first().map(|item| &item.cursor))
-    }
-
     /// The page's resume cursor: a standalone-watermark cursor emitted after the last item if one
     /// exists, otherwise the last item's own cursor.
     pub fn last_cursor(&self) -> Option<&Bytes> {
         self.last_wm_cursor
             .as_ref()
             .or_else(|| self.items.last().map(|item| &item.cursor))
+    }
+
+    /// The cursor of a standalone watermark that came before every item, if one did.
+    pub fn first_watermark_cursor(&self) -> Option<&Bytes> {
+        self.first_wm_cursor.as_ref()
+    }
+
+    /// The cursor of a standalone watermark that came after the last item, if one did.
+    pub fn last_watermark_cursor(&self) -> Option<&Bytes> {
+        self.last_wm_cursor.as_ref()
+    }
+
+    /// The server's latest checkpoint coverage claim on this page (`Watermark.checkpoint`), or
+    /// `None` if no frame carried one. In the scan's direction, every match within the request's
+    /// interval at checkpoints up to and including this one (ascending) or down to and including it
+    /// (descending) has been emitted. Claims never regress within a stream but may repeat, so a
+    /// frame without a claim leaves the latest one in place.
+    pub fn covered_checkpoint(&self) -> Option<u64> {
+        self.covered_checkpoint
     }
 
     /// Construct a page directly for cross-crate tests, bypassing the drain loop. The watermark
@@ -486,8 +500,16 @@ impl<T> StreamPage<T> {
             items,
             first_wm_cursor,
             last_wm_cursor,
+            covered_checkpoint: None,
             end_reason,
         }
+    }
+
+    /// Set the page's coverage claim, for cross-crate tests built with [`Self::for_test`].
+    #[cfg(feature = "testing")]
+    pub fn with_covered_checkpoint(mut self, checkpoint: u64) -> Self {
+        self.covered_checkpoint = Some(checkpoint);
+        self
     }
 
     /// Fold one frame into the page.
@@ -497,6 +519,7 @@ impl<T> StreamPage<T> {
         let FrameKind::Frame {
             payload,
             cursor,
+            covered_checkpoint,
             end_reason,
         } = frame
         else {
@@ -518,6 +541,9 @@ impl<T> StreamPage<T> {
                 }
             }
         }
+        if covered_checkpoint.is_some() {
+            self.covered_checkpoint = covered_checkpoint;
+        }
         if let Some(reason) = end_reason {
             // `QueryEnd::reason()` folds an absent or unknown reason into
             // `Unknown`, so `None` here remains unambiguous shorthand for
@@ -535,6 +561,7 @@ impl<T> Default for StreamPage<T> {
             items: Vec::new(),
             first_wm_cursor: None,
             last_wm_cursor: None,
+            covered_checkpoint: None,
             end_reason: None,
         }
     }
@@ -571,7 +598,7 @@ fn classify_frame<T>(
     watermark: Option<grpc::Watermark>,
     end: Option<grpc::QueryEnd>,
 ) -> anyhow::Result<FrameKind<T>> {
-    let cursor = watermark.and_then(|w| w.cursor);
+    let (cursor, covered_checkpoint) = watermark.map_or((None, None), |w| (w.cursor, w.checkpoint));
     let end_reason = end.map(|e| e.reason());
 
     if payload.is_none() && cursor.is_none() && end_reason.is_none() {
@@ -584,6 +611,7 @@ fn classify_frame<T>(
     Ok(FrameKind::Frame {
         payload,
         cursor,
+        covered_checkpoint,
         end_reason,
     })
 }
@@ -811,6 +839,18 @@ mod list_stream_tests {
         response
     }
 
+    /// `response` with its watermark claiming coverage through `checkpoint`.
+    fn with_covered_checkpoint(
+        mut response: grpc::ListTransactionsResponse,
+        checkpoint: u64,
+    ) -> grpc::ListTransactionsResponse {
+        response
+            .watermark
+            .get_or_insert_with(grpc::Watermark::default)
+            .checkpoint = Some(checkpoint);
+        response
+    }
+
     fn frame(r: grpc::ListTransactionsResponse) -> FrameKind<grpc::ExecutedTransaction> {
         r.try_into().expect("test fixture should be well-formed")
     }
@@ -838,10 +878,6 @@ mod list_stream_tests {
         // payload/cursor split. The standalone watermark at `w2` does not produce a `PageItem`.
         assert_eq!(page.items[0].cursor.as_ref(), b"c1".as_ref());
         assert_eq!(page.items[1].cursor.as_ref(), b"c3".as_ref());
-        assert_eq!(
-            page.first_cursor().map(|c| c.as_ref()),
-            Some(b"c1".as_ref())
-        );
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c3".as_ref()));
         assert_eq!(page.end_reason, Some(grpc::QueryEndReason::ItemLimit));
     }
@@ -857,7 +893,7 @@ mod list_stream_tests {
 
         assert!(page.items.is_empty());
         assert_eq!(
-            page.first_cursor().map(|c| c.as_ref()),
+            page.first_watermark_cursor().map(|c| c.as_ref()),
             Some(b"w1".as_ref())
         );
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"w2".as_ref()));
@@ -894,7 +930,7 @@ mod list_stream_tests {
         page.apply(frame(item_response(b"c4")));
 
         assert_eq!(
-            page.first_cursor().map(|c| c.as_ref()),
+            page.first_watermark_cursor().map(|c| c.as_ref()),
             Some(b"w1".as_ref())
         );
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c4".as_ref()));
@@ -909,10 +945,6 @@ mod list_stream_tests {
         page.apply(frame(item_response(b"c4")));
         page.apply(frame(watermark_response(b"w1")));
 
-        assert_eq!(
-            page.first_cursor().map(|c| c.as_ref()),
-            Some(b"c2".as_ref())
-        );
         assert!(page.first_wm_cursor.is_none());
     }
 
@@ -925,11 +957,27 @@ mod list_stream_tests {
         // The trailing watermark's cursor wins over the item's — it represents
         // server progress past the last delivered item.
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"w2".as_ref()));
-        // first_cursor falls back to the item, since no watermark preceded it.
-        assert_eq!(
-            page.first_cursor().map(|c| c.as_ref()),
-            Some(b"c1".as_ref())
-        );
+    }
+
+    #[test]
+    fn covered_checkpoint_keeps_the_latest_claim() {
+        let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+        page.apply(frame(item_response(b"c1")));
+        assert_eq!(page.covered_checkpoint(), None);
+
+        page.apply(frame(with_covered_checkpoint(watermark_response(b"w2"), 4)));
+        assert_eq!(page.covered_checkpoint(), Some(4));
+        page.apply(frame(with_covered_checkpoint(item_response(b"c3"), 6)));
+        assert_eq!(page.covered_checkpoint(), Some(6));
+
+        // Frames without a claim leave the latest one in place.
+        page.apply(frame(item_response(b"c4")));
+        page.apply(frame(end_response_with_cursor(
+            b"w5",
+            grpc::QueryEndReason::ScanLimit,
+        )));
+        assert_eq!(page.covered_checkpoint(), Some(6));
+        assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"w5".as_ref()));
     }
 
     #[test]
@@ -1002,7 +1050,7 @@ mod list_stream_tests {
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
         page.apply(frame(response));
         assert!(page.items.is_empty());
-        assert_eq!(page.first_cursor(), None);
+        assert_eq!(page.first_watermark_cursor(), None);
         assert_eq!(page.last_cursor(), None);
         assert_eq!(page.end_reason, None);
     }

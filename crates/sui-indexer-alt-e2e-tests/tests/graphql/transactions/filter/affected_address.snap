@@ -73,14 +73,14 @@ Response: {
   "data": {
     "transactionsA": {
       "pageInfo": {
-        "startCursor": "KAE6BAgAEAA=",
-        "endCursor": "KAI6BAgHEA0=",
+        "startCursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
+        "endCursor": "AAABCCgCOgQIBxANAQEHAAAAAAAAAAAAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgAEAA=",
+          "cursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -92,7 +92,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgBEAI=",
+          "cursor": "AAABCCgBOgQIARACAQABAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "74XecJe2t2baP9fJgfxrBuc7YpX1Nrc7S38wwoYTxdLL",
             "effects": {
@@ -104,7 +104,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgDEAU=",
+          "cursor": "AAABCCgBOgQIAxAFAQADAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "eWoMLEnM56LdkHTKN2wovLADEPDwdWgs64FNFrZjwTB",
             "effects": {
@@ -116,7 +116,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgFEAg=",
+          "cursor": "AAABCCgBOgQIBRAIAQAFAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -128,7 +128,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgGEAo=",
+          "cursor": "AAABCCgBOgQIBhAKAQAGAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {
@@ -143,14 +143,14 @@ Response: {
     },
     "transactionsA_sentByC": {
       "pageInfo": {
-        "startCursor": "KAE6BAgFEAg=",
-        "endCursor": "KAI6BAgHEA0=",
+        "startCursor": "AAABCCgBOgQIBRAIAQAFAAAAAAAAAAAAAAAAAAAA",
+        "endCursor": "AAABCCgCOgQIBxANAQEHAAAAAAAAAAAAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgFEAg=",
+          "cursor": "AAABCCgBOgQIBRAIAQAFAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -165,14 +165,14 @@ Response: {
     },
     "transactionsB": {
       "pageInfo": {
-        "startCursor": "KAE6BAgAEAA=",
-        "endCursor": "KAI6BAgHEA0=",
+        "startCursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
+        "endCursor": "AAABCCgCOgQIBxANAQEHAAAAAAAAAAAAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgAEAA=",
+          "cursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -184,7 +184,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgDEAU=",
+          "cursor": "AAABCCgBOgQIAxAFAQADAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "eWoMLEnM56LdkHTKN2wovLADEPDwdWgs64FNFrZjwTB",
             "effects": {
@@ -196,7 +196,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgGEAo=",
+          "cursor": "AAABCCgBOgQIBhAKAQAGAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {
@@ -211,14 +211,14 @@ Response: {
     },
     "transactionsC": {
       "pageInfo": {
-        "startCursor": "KAE6BAgAEAA=",
-        "endCursor": "KAI6BAgHEA0=",
+        "startCursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
+        "endCursor": "AAABCCgCOgQIBxANAQEHAAAAAAAAAAAAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgAEAA=",
+          "cursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -230,7 +230,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgFEAg=",
+          "cursor": "AAABCCgBOgQIBRAIAQAFAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -242,7 +242,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgGEAo=",
+          "cursor": "AAABCCgBOgQIBhAKAQAGAAAAAAAAAAAAAAAAAAAA",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {

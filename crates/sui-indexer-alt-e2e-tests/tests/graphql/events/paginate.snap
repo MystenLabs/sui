@@ -52,8 +52,8 @@ Response: {
   "data": {
     "allEvents": {
       "pageInfo": {
-        "startCursor": "KAFCBggBEAIYAA==",
-        "endCursor": "KAJCBggCEAcYAA==",
+        "startCursor": "AAEBCigBQgYIARACGAABAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
+        "endCursor": "AAEBCigCQgYIAhAHGAABAQIAAAAAAAAAAAAAAAAAAAAAAAAA",
         "hasNextPage": false,
         "hasPreviousPage": false
       },
@@ -153,8 +153,8 @@ Response: {
     },
     "eventsHasNext": {
       "pageInfo": {
-        "startCursor": "KAFCBggBEAIYAA==",
-        "endCursor": "KAFCBggBEAMYAA==",
+        "startCursor": "AAEBCigBQgYIARACGAABAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
+        "endCursor": "AAEBCigBQgYIARADGAABAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -177,8 +177,8 @@ Response: {
     },
     "eventsHasPrevious": {
       "pageInfo": {
-        "startCursor": "KAFCBggBEAQYCA==",
-        "endCursor": "KAFCBggBEAQYCQ==",
+        "startCursor": "AAEBCigBQgYIARAEGAgBAAEAAAAAAAAAAwAAAAAAAAAIAAAA",
+        "endCursor": "AAEBCigBQgYIARAEGAkBAAEAAAAAAAAAAwAAAAAAAAAJAAAA",
         "hasNextPage": false,
         "hasPreviousPage": true
       },
@@ -203,7 +203,7 @@ Response: {
 }
 
 task 8, lines 105-113:
-//# run-graphql --cursors {"t":2,"e":0}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8)
 Response: {
   "data": {
     "eventsAfterT2E0HasPreviousPage": {
@@ -216,7 +216,7 @@ Response: {
 }
 
 task 9, lines 115-123:
-//# run-graphql --cursors {"t":4,"e":9}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,4u8,24u8,9u8)
 Response: {
   "data": {
     "eventsBeforeT3E9HasNextPage": {
@@ -229,7 +229,7 @@ Response: {
 }
 
 task 10, lines 125-150:
-//# run-graphql --cursors {"t":2,"e":0} {"t":4,"e":9}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8) bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,4u8,24u8,9u8)
 Response: {
   "data": {
     "firstEventBetweenT2E0AndT4E9": {
@@ -261,13 +261,13 @@ Response: {
 }
 
 task 11, lines 153-168:
-//# run-graphql --cursors {"t":2,"e":0}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8)
 Response: {
   "data": {
     "eventsAfterTransaction2AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggBEAMYAA==",
-        "endCursor": "KAFCBggBEAMYAA==",
+        "startCursor": "AAEBCigBQgYIARADGAABAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
+        "endCursor": "AAEBCigBQgYIARADGAABAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": true
       },
@@ -285,13 +285,13 @@ Response: {
 }
 
 task 12, lines 170-185:
-//# run-graphql --cursors {"t":3,"e":0}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,3u8,24u8,0u8)
 Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggBEAIYAA==",
-        "endCursor": "KAFCBggBEAIYAA==",
+        "startCursor": "AAEBCigBQgYIARACGAABAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
+        "endCursor": "AAEBCigBQgYIARACGAABAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -309,13 +309,13 @@ Response: {
 }
 
 task 13, lines 187-202:
-//# run-graphql --cursors {"t":3,"e":1}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,3u8,24u8,1u8)
 Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent1FromBack": {
       "pageInfo": {
-        "startCursor": "KAJCBggAEAAYAA==",
-        "endCursor": "KAFCBggBEAMYAA==",
+        "startCursor": "AAEBCigCQgYIABAAGAABAQAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "endCursor": "AAEBCigBQgYIARADGAABAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": false
       },

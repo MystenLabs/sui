@@ -15,6 +15,7 @@ use crate::api::scalars::module_filter::ModuleFilter;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::scalars::uint53::UInt53;
+
 use crate::api::types::lookups::CheckpointBounds;
 use crate::error::RpcError;
 use crate::error::feature_unavailable;

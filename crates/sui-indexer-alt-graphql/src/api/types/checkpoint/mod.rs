@@ -7,10 +7,8 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
+use bytes::Bytes;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_rpc_cursor::CursorKind;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::CheckpointDigest;
 use sui_types::message_envelope::Message;
@@ -21,8 +19,6 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 use crate::api::query::Query;
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
-use crate::api::scalars::cursor::JsonCursor;
-use crate::api::scalars::cursor::MultiCursor;
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
@@ -34,6 +30,11 @@ use crate::api::types::checkpoint::filter::cp_by_epoch;
 use crate::api::types::checkpoint::filter::cp_unfiltered;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas::GasCostSummary;
+use crate::api::types::ledger_cursor::Envelope;
+use crate::api::types::ledger_cursor::EnvelopeRef;
+use crate::api::types::ledger_cursor::legacy::LegacyKind;
+use crate::api::types::ledger_cursor::legacy::LegacyPosition;
+use crate::api::types::ledger_cursor::legacy::LegacyToken;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
@@ -77,17 +78,13 @@ struct CheckpointContents {
     streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
-/// Validated checkpoint cursor coordinates.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CheckpointToken {
-    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
-    kind: CursorKind,
-    checkpoint: u64,
-}
+/// A decoded checkpoint cursor: the sequence number of the checkpoint it names. Decodes GraphQL's
+/// own format, and legacy cursors (see `ledger_cursor::legacy`) that name a returned checkpoint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CheckpointToken(u64);
 
-/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
-/// legacy JSON cursor (secondary).
-pub type CCheckpoint = MultiCursor<OpaqueCursor<CheckpointToken>, JsonCursor<u64>>;
+/// Compatibility dispatch over the on-wire cursor formats.
+pub type CCheckpoint = OpaqueCursor<CheckpointToken>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -424,92 +421,40 @@ impl CheckpointContents {
 impl CheckpointToken {
     /// Mint the edge cursor for the checkpoint at the given sequence number.
     pub fn cursor(checkpoint: u64) -> CCheckpoint {
-        CCheckpoint::new(OpaqueCursor::new(Self {
-            kind: CursorKind::Item,
-            checkpoint,
-        }))
+        OpaqueCursor::new(Self(checkpoint))
     }
-}
 
-impl CCheckpoint {
+    /// The checkpoint the cursor names.
     pub(crate) fn sequence_number(&self) -> u64 {
-        match self {
-            CCheckpoint::Primary(c) => c.checkpoint,
-            CCheckpoint::Secondary(c) => **c,
-        }
-    }
-
-    /// The underlying checkpoint cursor token. A legacy JSON cursor carries only the sequence
-    /// number, so it is reproduced as an `Item` token.
-    pub(crate) fn token(&self) -> CheckpointToken {
-        match self {
-            CCheckpoint::Primary(c) => (**c).clone(),
-            CCheckpoint::Secondary(c) => CheckpointToken {
-                kind: CursorKind::Item,
-                checkpoint: **c,
-            },
-        }
+        self.0
     }
 }
 
+/// A legacy scan frontier (`Boundary`) fails to decode: GraphQL never minted one for checkpoints.
 impl ByteCursor for CheckpointToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        CursorToken::decode(bytes)?.try_into()
-    }
+        if let Some(envelope) = Envelope::decode(bytes) {
+            let Envelope::Checkpoint(checkpoint) = envelope? else {
+                anyhow::bail!("Not a checkpoint cursor");
+            };
 
-    fn encode_cursor(&self) -> bytes::Bytes {
-        CursorToken::from(self).encode()
-    }
-}
-
-impl From<&CCheckpoint> for CursorToken {
-    fn from(cursor: &CCheckpoint) -> Self {
-        CursorToken::from(&cursor.token())
-    }
-}
-
-impl From<&CheckpointToken> for CursorToken {
-    fn from(token: &CheckpointToken) -> Self {
-        CursorToken {
-            kind: token.kind,
-            position: Position::Checkpoints {
-                checkpoint: token.checkpoint,
-            },
+            return Ok(Self(checkpoint));
         }
-    }
-}
 
-impl TryFrom<CursorToken> for CheckpointToken {
-    type Error = anyhow::Error;
-
-    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
-        let Position::Checkpoints { checkpoint } = token.position else {
-            anyhow::bail!("invalid cursor");
+        let token = LegacyToken::decode(bytes)?;
+        let LegacyPosition::Checkpoints { checkpoint } = token.position else {
+            anyhow::bail!("Not a checkpoint cursor");
         };
-        Ok(Self {
-            kind: token.kind,
-            checkpoint,
-        })
+        anyhow::ensure!(
+            token.kind == LegacyKind::Item,
+            "Not a checkpoint cursor GraphQL issued"
+        );
+
+        Ok(Self(checkpoint))
     }
-}
 
-impl TryFrom<CursorToken> for CCheckpoint {
-    type Error = anyhow::Error;
-
-    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
-        Ok(CCheckpoint::new(OpaqueCursor::new(
-            CheckpointToken::try_from(token)?,
-        )))
-    }
-}
-
-impl Eq for CCheckpoint {}
-
-/// Cursors minted by different paths can disagree on the kind, so pagination only compares the
-/// checkpoint coordinate.
-impl PartialEq for CCheckpoint {
-    fn eq(&self, other: &Self) -> bool {
-        self.sequence_number() == other.sequence_number()
+    fn encode_cursor(&self) -> Bytes {
+        EnvelopeRef::Checkpoint(self.0).encode()
     }
 }
 
@@ -520,9 +465,15 @@ mod tests {
     use fastcrypto::encoding::Base64 as B64;
     use fastcrypto::encoding::Encoding;
 
-    /// Legacy pg-style cursor: a bare JSON-encoded checkpoint sequence number.
-    fn legacy_cursor(checkpoint: u64) -> CCheckpoint {
-        CCheckpoint::Secondary(JsonCursor::new(checkpoint))
+    /// A legacy protobuf cursor of the given kind.
+    fn legacy_token_cursor(kind: LegacyKind, checkpoint: u64) -> String {
+        B64::encode(
+            LegacyToken {
+                kind,
+                position: LegacyPosition::Checkpoints { checkpoint },
+            }
+            .encode(),
+        )
     }
 
     #[test]
@@ -533,21 +484,32 @@ mod tests {
         assert_eq!(decoded, cursor);
     }
 
-    /// A legacy cursor paginates the same as a grpc cursor at the same sequence number.
+    /// A legacy cursor naming a returned checkpoint decodes to GraphQL's own cursor at the same
+    /// sequence number; a legacy scan frontier does not decode.
     #[test]
-    fn legacy_cursor_matches_primary() {
-        assert_eq!(legacy_cursor(42).sequence_number(), 42);
-        assert_eq!(legacy_cursor(42), CheckpointToken::cursor(42));
+    fn legacy_items_match_primary() {
+        let decoded = CCheckpoint::decode_cursor(&legacy_token_cursor(LegacyKind::Item, 42))
+            .expect("legacy protobuf cursor");
+        assert_eq!(decoded, CheckpointToken::cursor(42));
+
+        assert!(
+            CCheckpoint::decode_cursor(&legacy_token_cursor(LegacyKind::Boundary, 42)).is_err()
+        );
     }
 
-    /// A token scoped to another endpoint must not decode as a checkpoint cursor.
+    /// A cursor for another type must not decode as a checkpoint cursor, in either format.
     #[test]
-    fn rejects_wrong_variant_cursor() {
-        let token = CursorToken::item(Position::Transactions {
-            checkpoint: 1,
-            tx_seq: 2,
-        });
-        let encoded = B64::encode(token.encode());
-        assert!(CCheckpoint::decode_cursor(&encoded).is_err());
+    fn rejects_other_cursor_types() {
+        let legacy = LegacyToken {
+            kind: LegacyKind::Item,
+            position: LegacyPosition::Transactions {
+                checkpoint: 1,
+                tx_seq: 2,
+            },
+        };
+        assert!(CCheckpoint::decode_cursor(&B64::encode(legacy.encode())).is_err());
+
+        let owned = crate::api::types::transaction::TransactionToken::checkpoint_start(1);
+        assert!(CCheckpoint::decode_cursor(&owned.encode_cursor()).is_err());
     }
 }
