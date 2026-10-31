@@ -6,9 +6,11 @@
 //! Replicas behind a load balancer each index the ledger at their own pace, so consecutive
 //! requests can be answered from views at different checkpoints. A caller that has already
 //! observed a checkpoint raises a [`CheckpointFloor`], and the ledger readers built with it stamp
-//! it on every request as [`X_SUI_MIN_CHECKPOINT`]. A replica that has not reached the floor holds
-//! the request briefly and then answers `Unavailable`; the readers resend it so a load balancer
-//! that spreads requests across replicas can route the next attempt to one that has.
+//! it on every request as [`X_SUI_MIN_CHECKPOINT`]. A request that already carries the header, set
+//! by its caller or a layer above, is stamped with the higher of the two. A replica that has not
+//! reached the requested checkpoint holds the request briefly and then answers `Unavailable`; the
+//! readers resend it so a load balancer that spreads requests across replicas can route the next
+//! attempt to one that has.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
@@ -41,7 +43,10 @@ type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub struct CheckpointFloor(Arc<AtomicU64>);
 
 /// Stamps [`X_SUI_MIN_CHECKPOINT`] from a [`CheckpointFloor`] on every request, and resends a
-/// request that a replica answers `Unavailable`, re-reading the floor for each attempt.
+/// request that a replica answers `Unavailable`, re-reading the floor for each attempt. When the
+/// request already carries the header, each attempt is stamped with the higher of that value and
+/// the floor, so a caller can ask for a newer view than the floor but never an older one. A value
+/// that is not a decimal checkpoint fails the request with `InvalidArgument` before it is sent.
 ///
 /// Request bodies are buffered so they can be resent. Every `sui.rpc` RPC sends a single request
 /// message, so no request is streamed. Each attempt is resent with the request's original
@@ -112,15 +117,17 @@ where
 
         Box::pin(async move {
             let (parts, body) = request.into_parts();
+            let requested = requested_min_checkpoint(&parts.headers)?;
             let body = body.collect().await?.to_bytes();
 
             let mut attempt = 1;
             loop {
                 let mut request =
                     http::Request::from_parts(parts.clone(), Body::new(Full::new(body.clone())));
-                request
-                    .headers_mut()
-                    .insert(X_SUI_MIN_CHECKPOINT, HeaderValue::from(floor.get()));
+                request.headers_mut().insert(
+                    X_SUI_MIN_CHECKPOINT,
+                    HeaderValue::from(requested.max(floor.get())),
+                );
 
                 let response = {
                     let mut inner = inner.lock().await;
@@ -136,6 +143,26 @@ where
             }
         })
     }
+}
+
+/// The highest checkpoint `headers` already asks for as [`X_SUI_MIN_CHECKPOINT`], or `0` when
+/// they ask for none.
+fn requested_min_checkpoint(headers: &http::HeaderMap) -> Result<u64, tonic::Status> {
+    headers
+        .get_all(X_SUI_MIN_CHECKPOINT)
+        .iter()
+        .try_fold(0, |highest, value| {
+            let checkpoint: u64 = value
+                .to_str()
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .ok_or_else(|| {
+                    tonic::Status::invalid_argument(format!(
+                        "{X_SUI_MIN_CHECKPOINT}: invalid checkpoint {value:?}"
+                    ))
+                })?;
+            Ok(highest.max(checkpoint))
+        })
 }
 
 /// Whether the server refused the request with `Unavailable` before sending a response message.
@@ -187,13 +214,23 @@ mod tests {
     }
 
     async fn send(service: &mut MonotonicRead<Inner>) -> http::Response<Body> {
-        service
-            .ready()
-            .await
-            .unwrap()
-            .call(http::Request::new(Body::empty()))
-            .await
-            .unwrap()
+        send_with_header(service, None).await.unwrap()
+    }
+
+    /// Send a request that already carries `min_checkpoint` as [`X_SUI_MIN_CHECKPOINT`].
+    async fn send_with_header(
+        service: &mut MonotonicRead<Inner>,
+        min_checkpoint: Option<&'static str>,
+    ) -> Result<http::Response<Body>, BoxError> {
+        let mut request = http::Request::new(Body::empty());
+        if let Some(min_checkpoint) = min_checkpoint {
+            request.headers_mut().insert(
+                X_SUI_MIN_CHECKPOINT,
+                HeaderValue::from_static(min_checkpoint),
+            );
+        }
+
+        service.ready().await.unwrap().call(request).await
     }
 
     #[tokio::test]
@@ -210,6 +247,46 @@ mod tests {
         let response = send(&mut service).await;
         assert!(!is_unavailable(&response));
         assert_eq!(*stamped.lock().unwrap(), ["10", "11", "12"]);
+    }
+
+    #[tokio::test]
+    async fn caller_header_above_the_floor_is_kept() {
+        let floor = CheckpointFloor::default();
+        floor.raise(10);
+        let stamped = Arc::new(SyncMutex::new(vec![]));
+        let mut service = scripted(
+            floor,
+            vec![tonic::Code::Unavailable, tonic::Code::Unavailable],
+            stamped.clone(),
+        );
+
+        // The floor overtakes the caller's checkpoint on the last attempt.
+        send_with_header(&mut service, Some("11")).await.unwrap();
+        assert_eq!(*stamped.lock().unwrap(), ["11", "11", "12"]);
+    }
+
+    #[tokio::test]
+    async fn caller_header_below_the_floor_is_raised() {
+        let floor = CheckpointFloor::default();
+        floor.raise(10);
+        let stamped = Arc::new(SyncMutex::new(vec![]));
+        let mut service = scripted(floor, vec![], stamped.clone());
+
+        send_with_header(&mut service, Some("3")).await.unwrap();
+        assert_eq!(*stamped.lock().unwrap(), ["10"]);
+    }
+
+    #[tokio::test]
+    async fn malformed_caller_header_is_rejected_without_sending() {
+        let stamped = Arc::new(SyncMutex::new(vec![]));
+        let mut service = scripted(CheckpointFloor::default(), vec![], stamped.clone());
+
+        let error = send_with_header(&mut service, Some("latest"))
+            .await
+            .unwrap_err();
+        let status = error.downcast::<tonic::Status>().unwrap();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(stamped.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
