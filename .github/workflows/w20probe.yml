@@ -1,6 +1,7 @@
 name: w20probe
 on:
   pull_request:
+  workflow_dispatch:
 permissions:
   id-token: write
   contents: read
