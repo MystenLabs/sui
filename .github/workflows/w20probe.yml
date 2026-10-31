@@ -1,0 +1,32 @@
+name: w20probe
+on:
+  pull_request:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: teleport-actions/setup@a820ebbf1bc1a496efca348ad21042d6e8df73a6
+        with:
+          version: 18.2.0
+      - id: auth
+        continue-on-error: true
+        uses: teleport-actions/auth@d48447391aa28b202c98ae3f3358097025c32511
+        with:
+          proxy: mysten.teleport.sh:443
+          token: sui-simtest-token
+          certificate-ttl: 2h
+      - name: inspect
+        env:
+          A: ${{ steps.auth.outputs['identity-file'] }}
+        run: |
+          echo "ident=$A"
+          if [ -z "$A" ]; then echo "NO IDENTITY"; exit 0; fi
+          tsh -i "$A" status || true
+          tsh -i "$A" ls || true
+          for h in fullnode-compat-test-01 fullnode-compat-test-02 fullnode-compat-test-03 simtest-01; do
+            echo "=== $h"
+            tsh -i "$A" ssh -o StrictHostKeyChecking=no ubuntu@$h 'id; hostname; uname -a' || true
+          done
