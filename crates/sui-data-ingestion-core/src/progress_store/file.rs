@@ -36,7 +36,7 @@ impl ProgressStore for FileProgressStore {
         let mut content: Value = if raw_content.is_empty() {
             Value::Object(serde_json::Map::new())
         } else {
-            serde_json::from_slice(&std::fs::read(self.path.clone())?)?
+            serde_json::from_slice(&raw_content)?
         };
         content[task_name] = Value::Number(Number::from(checkpoint_number));
         std::fs::write(self.path.clone(), serde_json::to_string_pretty(&content)?)?;
