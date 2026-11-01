@@ -89,16 +89,15 @@ impl ModuleSummary {
         )?;
 
         for (fn_name, fn_summary) in self.function_summaries.iter() {
+            // Native functions have no bytecode. Counting them makes the percentage 0/0.
+            if fn_summary.fn_is_native {
+                continue;
+            }
             all_total += fn_summary.total;
             all_covered += fn_summary.covered;
 
             if summarize_function_coverage {
-                let native = if fn_summary.fn_is_native {
-                    "native "
-                } else {
-                    ""
-                };
-                writeln!(summary_writer, "\t{}fun {}", native, fn_name)?;
+                writeln!(summary_writer, "\tfun {}", fn_name)?;
                 writeln!(summary_writer, "\t\ttotal: {}", fn_summary.total)?;
                 writeln!(summary_writer, "\t\tcovered: {}", fn_summary.covered)?;
                 writeln!(
@@ -129,6 +128,9 @@ impl ModuleSummary {
 
 impl FunctionSummary {
     pub fn percent_coverage(&self) -> f64 {
+        if self.total == 0 {
+            return 0.0;
+        }
         (self.covered as f64) / (self.total as f64) * 100f64
     }
 }
@@ -469,5 +471,35 @@ impl ExecCoverageMapWithModules {
                 (module_path, module_summary)
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod percent_coverage_tests {
+    use super::*;
+    use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+
+    #[test]
+    fn native_function_summary_does_not_report_nan() {
+        let mut function_summaries = BTreeMap::new();
+        function_summaries.insert(
+            Identifier::new("hash").unwrap(),
+            FunctionSummary {
+                fn_is_native: true,
+                total: 0,
+                covered: 0,
+            },
+        );
+        let summary = ModuleSummary {
+            module_name: ModuleId::new(AccountAddress::ZERO, Identifier::new("m").unwrap()),
+            function_summaries,
+        };
+        let mut buf = Vec::new();
+        summary.summarize_human(&mut buf, true).unwrap();
+        let text = String::from_utf8(buf).unwrap();
+        assert!(
+            !text.contains("NaN"),
+            "native functions have no bytecode; coverage must not be NaN:\n{text}"
+        );
     }
 }
