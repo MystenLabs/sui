@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SINGLETON_KEY"],"enum":["DkgStatus","VersionedProcessedMessage","VersionedUsedProcessedMessages"],"struct":["RandomnessManager","RandomnessReporter"]};

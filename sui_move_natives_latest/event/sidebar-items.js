@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NOT_SUPPORTED"],"fn":["emit","emit_authenticated_impl","get_events_by_type","num_events"],"struct":["EventEmitCostParams"]};

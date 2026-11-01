@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["X_SUI_CLIENT_PROTOCOL_VERSION"],"enum":["Error"],"struct":["FullnodeArgs","FullnodeClient"]};

@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Decides when this instance has caught up after startup and can report ready."><title>sui_kvstore::readiness - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_kvstore" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module readiness</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_kvstore/index.html">sui_<wbr>kvstore</a><span class="version">1.84.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module readiness</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>kvstore</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sui_kvstore</a></div><h1>Module <span>readiness</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_kvstore/readiness.rs.html#4-676">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Decides when this instance has caught up after startup and can report ready.</p>
+<p>For every pipeline, this instance compares its durable watermark (<a href="../struct.DurableProgress.html" title="struct sui_kvstore::DurableProgress"><code>crate::DurableProgress</code></a>)
+with two references, in chain time (<code>timestamp_ms_hi_inclusive</code>):</p>
+<ul>
+<li>the pipeline’s stored watermark row, read once at startup: how far the instances running at
+that moment had got, and</li>
+<li>the most advanced durable watermark any peer instance has streamed
+(<a href="../streamed_watermarks/index.html" title="mod sui_kvstore::streamed_watermarks"><code>crate::streamed_watermarks</code></a>).</li>
+</ul>
+<p>The instance is ready once every pipeline has recorded durable progress since startup and is
+at most <code>max_lag_ms</code> of chain time behind both references.</p>
+<p>Recording durable progress proves this instance can ingest and write: each pipeline must
+commit at least once after startup. A pipeline records progress only when it commits new
+checkpoints, so while no new checkpoints arrive (for example during a chain halt), a restarted
+instance stays not ready. A rolling deployment then waits on it, and the instances it would
+replace keep serving.</p>
+<p>The stored rows read at startup are fixed, so an instance that keeps making progress always
+catches up to them. Peers keep advancing: a restarted instance catches up faster than the chain
+advances and closes in on them, but an instance that stays more than <code>max_lag_ms</code> behind its
+peers (for example because its checkpoint source lags theirs) would never match them. Peers
+can therefore hold up readiness only for a bounded time after the instance has caught up to the
+stored rows: as long again as that took, and at least <a href="constant.MIN_PEER_WAIT.html" title="constant sui_kvstore::readiness::MIN_PEER_WAIT"><code>MIN_PEER_WAIT</code></a>. While catching up to
+the stored rows, the chain moved on by the time that took; an instance that catches up at least
+twice as fast as the chain advances closes that gap within the same time again. Once the peer
+wait is over, the instance reports ready and logs the pipelines still behind its peers.</p>
+<p>Peers that cannot be reached do not hold up readiness. Before reporting ready, the instance
+waits for every peer’s first response or for its first attempt to subscribe to fail, which is
+bounded by timeouts, so an instance that catches up to the stored rows quickly still compares
+itself with its peers.</p>
+<p>Peers only hold back pipelines near their tip. A pipeline whose peer watermark is more than
+<a href="constant.PEER_TIP_WINDOW.html" title="constant sui_kvstore::readiness::PEER_TIP_WINDOW"><code>PEER_TIP_WINDOW</code></a> of chain time behind the peers’ most advanced watermark across all
+pipelines is backfilling. Instances backfilling the same pipeline advance through chain time
+much faster than the chain does, so they rarely stay within <code>max_lag_ms</code> of each other; such a
+pipeline is compared only with its stored row read at startup.</p>
+<p>Comparisons use chain time, not wall-clock time: if the whole system lags behind the chain tip,
+instances still become ready as soon as they match each other.</p>
+<p>Readiness latches: <a href="fn.wait_until_caught_up.html" title="fn sui_kvstore::readiness::wait_until_caught_up"><code>wait_until_caught_up</code></a> returns the first time every pipeline is caught
+up, and later lag does not make the instance unready again.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ReadinessArgs.html" title="struct sui_kvstore::readiness::ReadinessArgs">Readiness<wbr>Args</a></dt></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.MIN_PEER_WAIT.html" title="constant sui_kvstore::readiness::MIN_PEER_WAIT">MIN_<wbr>PEER_<wbr>WAIT</a></dt><dd>Minimum time peers can hold up readiness after the instance has caught up to the stored
+watermark rows read at startup.</dd><dt><a class="constant" href="constant.PEER_TIP_WINDOW.html" title="constant sui_kvstore::readiness::PEER_TIP_WINDOW">PEER_<wbr>TIP_<wbr>WINDOW</a></dt><dd>How far, in chain time, a pipeline’s peer watermark can trail the peers’ most advanced
+watermark across all pipelines before the pipeline counts as backfilling and its peer
+watermark stops holding up readiness.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.wait_until_caught_up.html" title="fn sui_kvstore::readiness::wait_until_caught_up">wait_<wbr>until_<wbr>caught_<wbr>up</a></dt><dd>Resolves once every pipeline in <code>pipelines</code> is caught up according to the module-level rule.</dd></dl></section></div></main></body></html>

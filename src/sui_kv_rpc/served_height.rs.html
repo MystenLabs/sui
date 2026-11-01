@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-kv-rpc/src/served_height.rs`."><title>served_height.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_kv_rpc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">sui_kv_rpc/</div>served_height.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! The checkpoint height a replica serves, and the bound it puts on answers.
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! The indexer's pipelines write their rows independently, so a checkpoint's `checkpoints` row can
+<a href=#7 id=7 data-nosnippet>7</a>//! exist before its `transactions` and `objects` rows do. Only the pipelines' watermarks promise
+<a href=#8 id=8 data-nosnippet>8</a>//! that every row of a checkpoint is written, so every answer that depends on how far the ledger
+<a href=#9 id=9 data-nosnippet>9</a>//! has been indexed is bounded by the lowest of them: the height `GetServiceInfo` reports, read
+<a href=#10 id=10 data-nosnippet>10</a>//! from the replica's cached service info. A caller that has seen a higher checkpoint from another
+<a href=#11 id=11 data-nosnippet>11</a>//! replica asks for it with `x-sui-min-checkpoint` (see [`crate::monotonic_read`]).
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">use </span>sui_rpc_api::RpcError;
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::KvRpcServer;
+<a href=#16 id=16 data-nosnippet>16</a>
+<a href=#17 id=17 data-nosnippet>17</a><span class="doccomment">/// The highest checkpoint served (inclusive) and the epoch it belongs to.
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ServedHeight {
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) checkpoint: u64,
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) epoch: u64,
+<a href=#22 id=22 data-nosnippet>22</a>}
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">impl </span>KvRpcServer {
+<a href=#25 id=25 data-nosnippet>25</a>    <span class="doccomment">/// This replica's served height, from its cached service info. `Unavailable` before the
+<a href=#26 id=26 data-nosnippet>26</a>    /// first refresh.
+<a href=#27 id=27 data-nosnippet>27</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>served_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ServedHeight, RpcError&gt; {
+<a href=#28 id=28 data-nosnippet>28</a>        <span class="kw">let </span>cache = <span class="self">self</span>.cache.borrow();
+<a href=#29 id=29 data-nosnippet>29</a>        <span class="kw">let </span>info = cache.as_ref();
+<a href=#30 id=30 data-nosnippet>30</a>        <span class="kw">match </span>(
+<a href=#31 id=31 data-nosnippet>31</a>            info.and_then(|info| info.checkpoint_height),
+<a href=#32 id=32 data-nosnippet>32</a>            info.and_then(|info| info.epoch),
+<a href=#33 id=33 data-nosnippet>33</a>        ) {
+<a href=#34 id=34 data-nosnippet>34</a>            (<span class="prelude-val">Some</span>(checkpoint), <span class="prelude-val">Some</span>(epoch)) =&gt; <span class="prelude-val">Ok</span>(ServedHeight { checkpoint, epoch }),
+<a href=#35 id=35 data-nosnippet>35</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(RpcError::new(
+<a href=#36 id=36 data-nosnippet>36</a>                tonic::Code::Unavailable,
+<a href=#37 id=37 data-nosnippet>37</a>                <span class="string">"service info cache missing checkpoint height"</span>,
+<a href=#38 id=38 data-nosnippet>38</a>            )),
+<a href=#39 id=39 data-nosnippet>39</a>        }
+<a href=#40 id=40 data-nosnippet>40</a>    }
+<a href=#41 id=41 data-nosnippet>41</a>}
+</code></pre></div></section></main></body></html>

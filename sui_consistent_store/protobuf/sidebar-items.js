@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["decode","encode","encode_into"],"struct":["Protobuf"]};
