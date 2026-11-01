@@ -105,7 +105,7 @@ ok: field 1 still reads 10 on the localnet
 ok: add executed on the fork
 ok: the new field reads 30 on the fork
 ok: the registry's size is 3 on the fork
-the localnet lists 2 fields, the fork lists 0
+the localnet lists 2 fields, the fork lists 2
 ok: the localnet still lists two fields
 === localnet: move on after the fork ===
 ok: field 2 reads 21 on the localnet

@@ -21,6 +21,7 @@ tracing.workspace = true
 
 once_cell.workspace = true
 sui-core.workspace = true
+sui-package-resolver.workspace = true
 sui-protocol-config.workspace = true
 sui-types = { workspace = true, features = ["fuzzing"] }
 sui-move-build.workspace = true
