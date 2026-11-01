@@ -1965,7 +1965,7 @@ async fn paging_back_from_empty_last_after_page_skips_nothing() {
 /// Cursors that carry only a place inside a checkpoint (as subscriptions mint them) resume there:
 /// GraphQL sends the place as the request's start or end position. Each page asks for one item
 /// and its lookahead, too few to reach the place from the checkpoint's start or end, so a ledger
-/// service that started at the checkpoint's edge would return only items GraphQL drops.
+/// service that started at the checkpoint's edge would return the wrong items.
 #[tokio::test]
 async fn place_cursors_resume_inside_a_checkpoint() {
     let (cluster, temp_dir) = alpha_cluster().await;

@@ -10,9 +10,6 @@ use std::future::Future;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use async_graphql::connection::CursorType;
-use async_graphql::connection::Edge;
-use async_graphql::connection::EmptyFields;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc::proto::sui::rpc::v2;
 use tokio::sync::OnceCell;
@@ -23,6 +20,7 @@ use crate::api::types::event::EventToken;
 use crate::api::types::event::event_from_stream_item;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::ledger_cursor::EventKey;
+use crate::api::types::ledger_cursor::LedgerKey;
 use crate::api::types::ledger_cursor::scan::LedgerPage;
 use crate::error::RpcError;
 use crate::pagination::Page;
@@ -32,11 +30,11 @@ use crate::task::streaming::StreamedCaches;
 
 use super::EventSubscriptionEdge;
 use super::scan_then_live::Subscribable;
-use super::scan_then_live::ledger_scan_moved;
 
 impl Subscribable for Event {
     type Item = Self;
     type Cursor = CEvent;
+    type Position = EventKey;
     type Filter = EventFilter;
     type ScanItem = v2::Event;
     type Output = EventSubscriptionEdge;
@@ -59,11 +57,15 @@ impl Subscribable for Event {
     }
 
     fn resume_from(cursor: &CEvent) -> Option<u64> {
-        cursor.last_checkpoint()
+        cursor.point().last_checkpoint()
     }
 
-    fn made_progress(end: &CEvent, after: &CEvent, reached_tip: bool) -> bool {
-        ledger_scan_moved(end, after, reached_tip)
+    fn resume_position(cursor: &CEvent) -> EventKey {
+        cursor.point().gap_after().key()
+    }
+
+    fn checkpoint_start(checkpoint: u64) -> EventKey {
+        EventKey::checkpoint_start(checkpoint)
     }
 
     fn build_node(
@@ -76,19 +78,19 @@ impl Subscribable for Event {
         event_from_stream_item(scope, payload)
     }
 
-    fn matching_edges(
+    fn matching_items(
         checkpoint: &Arc<ProcessedCheckpoint>,
         caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
         filter: &EventFilter,
-    ) -> Result<Vec<Edge<String, Self, EmptyFields>>, RpcError> {
+    ) -> Result<Vec<(CEvent, Self)>, RpcError> {
         let timestamp_ms = Some(checkpoint.summary.timestamp_ms);
         let scope = Scope::for_streamed_checkpoint(
             caches.clone(),
             resolver_limits.clone(),
             checkpoint.clone(),
         );
-        let mut edges = Vec::new();
+        let mut items = Vec::new();
         // `transactions` holds every transaction in the checkpoint, in order.
         for (transaction_index, tx) in checkpoint.transactions.iter().enumerate() {
             let digest = tx
@@ -104,9 +106,8 @@ impl Subscribable for Event {
                     checkpoint: checkpoint.summary.sequence_number,
                     transaction_index: transaction_index as u64,
                     event_index: idx as u32,
-                })
-                .encode_cursor();
-                edges.push(Edge::new(
+                });
+                items.push((
                     cursor,
                     Event {
                         scope: scope.with_active_transaction_contents(digest, tx.contents.clone()),
@@ -118,7 +119,7 @@ impl Subscribable for Event {
                 ));
             }
         }
-        Ok(edges)
+        Ok(items)
     }
 
     fn boundary_after(checkpoint: &ProcessedCheckpoint) -> Option<CEvent> {

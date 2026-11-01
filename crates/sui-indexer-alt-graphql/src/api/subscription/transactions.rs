@@ -10,12 +10,10 @@ use std::future::Future;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use async_graphql::connection::CursorType;
-use async_graphql::connection::Edge;
-use async_graphql::connection::EmptyFields;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc::proto::sui::rpc::v2;
 
+use crate::api::types::ledger_cursor::LedgerKey;
 use crate::api::types::ledger_cursor::TransactionKey;
 use crate::api::types::ledger_cursor::scan::LedgerPage;
 use crate::api::types::transaction::CTransaction;
@@ -31,11 +29,11 @@ use crate::task::streaming::StreamedCaches;
 
 use super::TransactionSubscriptionEdge;
 use super::scan_then_live::Subscribable;
-use super::scan_then_live::ledger_scan_moved;
 
 impl Subscribable for Transaction {
     type Item = Self;
     type Cursor = CTransaction;
+    type Position = TransactionKey;
     type Filter = TransactionFilter;
     type ScanItem = v2::ExecutedTransaction;
     type Output = TransactionSubscriptionEdge;
@@ -60,11 +58,15 @@ impl Subscribable for Transaction {
     }
 
     fn resume_from(cursor: &CTransaction) -> Option<u64> {
-        cursor.last_checkpoint()
+        cursor.point().last_checkpoint()
     }
 
-    fn made_progress(end: &CTransaction, after: &CTransaction, reached_tip: bool) -> bool {
-        ledger_scan_moved(end, after, reached_tip)
+    fn resume_position(cursor: &CTransaction) -> TransactionKey {
+        cursor.point().gap_after().key()
+    }
+
+    fn checkpoint_start(checkpoint: u64) -> TransactionKey {
+        TransactionKey::checkpoint_start(checkpoint)
     }
 
     fn build_node(
@@ -77,18 +79,18 @@ impl Subscribable for Transaction {
         transaction_from_stream_item(scope, payload)
     }
 
-    fn matching_edges(
+    fn matching_items(
         checkpoint: &Arc<ProcessedCheckpoint>,
         caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
         filter: &TransactionFilter,
-    ) -> Result<Vec<Edge<String, Self, EmptyFields>>, RpcError> {
+    ) -> Result<Vec<(CTransaction, Self)>, RpcError> {
         let scope = Scope::for_streamed_checkpoint(
             caches.clone(),
             resolver_limits.clone(),
             checkpoint.clone(),
         );
-        let mut edges = Vec::new();
+        let mut items = Vec::new();
         // `transactions` holds every transaction in the checkpoint, in order.
         for (index, tx) in checkpoint.transactions.iter().enumerate() {
             if !filter.matches(&tx.contents) {
@@ -98,11 +100,10 @@ impl Subscribable for Transaction {
             let cursor = TransactionToken::at(TransactionKey {
                 checkpoint: checkpoint.summary.sequence_number,
                 transaction_index: index as u64,
-            })
-            .encode_cursor();
-            edges.push(Edge::new(cursor, transaction));
+            });
+            items.push((cursor, transaction));
         }
-        Ok(edges)
+        Ok(items)
     }
 
     fn boundary_after(checkpoint: &ProcessedCheckpoint) -> Option<CTransaction> {

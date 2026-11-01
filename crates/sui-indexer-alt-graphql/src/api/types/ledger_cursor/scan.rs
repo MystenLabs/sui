@@ -3,79 +3,56 @@
 
 //! Paging through a ledger List stream (`ListTransactions`, `ListEvents`) from GraphQL cursors.
 //!
-//! A cursor carrying ledger bytes is sent to the ledger service as is. A cursor GraphQL places
-//! narrows the request's checkpoint range to that place's checkpoint and is sent as the request's
-//! start or end position within it; alongside ledger bytes, the ledger service starts at the later
-//! of the two and ends at the earlier. Ledger servers that predate positions ignore them, so items
-//! on the wrong side of a place are also dropped as they arrive. The page that comes back has
-//! GraphQL cursors minted for its items and boundaries.
+//! Every GraphQL cursor has an exact place in ledger order. A page's request starts and ends at its
+//! cursors' places, narrowed to the page's checkpoint range, and carries each cursor's ledger bytes
+//! (if it has any) in the matching slot: `after` with the start, `before` with the end. The page
+//! that comes back has GraphQL cursors minted for its items, at their keys, and for its boundaries,
+//! at the `cursor_position` the ledger service reports for them.
 
 use std::ops::RangeInclusive;
 
 use bytes::Bytes;
+use sui_indexer_alt_reader::ledger_grpc_reader::PageBoundary;
 use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
 use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 
+use crate::api::types::ledger_cursor::LedgerCursor;
 use crate::api::types::ledger_cursor::LedgerKey;
+use crate::api::types::ledger_cursor::LedgerToken;
 use crate::api::types::ledger_cursor::Point;
 use crate::error::RpcError;
 use crate::pagination::Page;
 
-/// A cursor type that pages through a ledger List stream.
-pub(crate) trait ScanCursor: Clone {
-    type Key: LedgerKey;
-
-    /// How this cursor bounds a page, and where GraphQL places it.
-    fn bound(&self) -> RequestBound<Self::Key>;
-
-    /// A cursor for ledger bytes that GraphQL places at `point`.
-    fn from_ledger(bytes: Bytes, point: Option<Point<Self::Key>>) -> Self;
-
-    /// A cursor at `point`, with no ledger bytes.
-    fn from_point(point: Point<Self::Key>) -> Self;
-}
-
-/// One side of a List request, read from a GraphQL cursor.
-#[derive(Clone)]
-pub(crate) struct RequestBound<K> {
-    /// Ledger bytes to send as the request's cursor.
-    pub(crate) ledger: Option<Bytes>,
-
-    /// Where GraphQL places the cursor. It is sent as the request's start or end position, and
-    /// items on the wrong side of it are dropped.
-    pub(crate) point: Option<Point<K>>,
+/// A List request's start or end fields, naming one position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PositionFields {
+    pub(crate) checkpoint: u64,
+    pub(crate) transaction_index: Option<u64>,
+    pub(crate) event_index: Option<u32>,
 }
 
 /// What one page asks a ledger List stream for.
-pub(crate) struct ScanRequest<K> {
+pub(crate) struct ScanRequest {
     /// The page's ledger cursors, size, and ordering.
     pub(crate) options: v2::QueryOptions,
-    /// Inclusive.
-    pub(crate) start_checkpoint: u64,
-    /// Exclusive.
-    pub(crate) end_checkpoint: u64,
-    /// The request's start position within `start_checkpoint` (inclusive), or `None` to start at
-    /// the beginning of that checkpoint.
-    pub(crate) start_position: Option<K>,
-    /// The request's end position within `end_checkpoint - 1` (exclusive), or `None` to end after
-    /// the whole checkpoint.
-    pub(crate) end_position: Option<K>,
+    /// The request's start: it holds the matches at or after this position.
+    pub(crate) start: PositionFields,
+    /// The request's end: it holds the matches before this position.
+    pub(crate) end: PositionFields,
 }
 
 /// How a page's cursors and checkpoint range map onto a List request, and how its response maps
 /// back onto GraphQL cursors.
 pub(crate) struct ScanPlan<K> {
     ascending: bool,
-    after: Option<RequestBound<K>>,
-    before: Option<RequestBound<K>>,
-    /// The page's checkpoint range, `[start, end)`, narrowed to the checkpoints of the places its
-    /// cursors name, and the positions of those places within them.
-    start_checkpoint: u64,
-    end_checkpoint: u64,
-    start_position: Option<K>,
-    end_position: Option<K>,
-    /// Whether the request's far edge is the far cursor's place rather than the end of the data.
+    after_bytes: Option<Bytes>,
+    before_bytes: Option<Bytes>,
+    /// The page's span, `[start, end)`: its checkpoint range narrowed to its cursors' places.
+    start: K,
+    end: K,
+    /// Whether the span's far edge, in scan order, is the far cursor's place rather than the edge
+    /// of the checkpoint range.
     far_narrowed: bool,
 }
 
@@ -103,71 +80,78 @@ pub(crate) struct LedgerItem<T, C> {
     pub(crate) checkpoint: u64,
 }
 
-impl<K: LedgerKey> ScanPlan<K> {
-    pub(crate) fn new<C>(page: &Page<C>, cp_bounds: RangeInclusive<u64>) -> Self
-    where
-        C: ScanCursor<Key = K>,
-    {
-        let ascending = page.is_from_front();
-        let after = page.after().map(C::bound);
-        let before = page.before().map(C::bound);
-
-        let range_start = *cp_bounds.start();
-        let range_end = cp_bounds.end().saturating_add(1);
-        let narrow = |with_ledger_bytes: bool| {
-            let place = |bound: Option<&RequestBound<K>>| {
-                bound
-                    .filter(|b| with_ledger_bytes || b.ledger.is_none())
-                    .and_then(|b| b.point)
-            };
-            let (start_checkpoint, start_position) =
-                request_start(range_start, place(after.as_ref()));
-            let (end_checkpoint, end_position) = request_end(range_end, place(before.as_ref()));
-            (
-                start_checkpoint,
-                start_position,
-                end_checkpoint,
-                end_position,
-            )
-        };
-
-        // Cursors carrying ledger bytes narrow the request too, unless that leaves it empty. The
-        // ledger service then reads their bytes over the whole range, and places the page's end
-        // where they resume, which GraphQL cannot from their places alone.
-        let mut narrowed = narrow(true);
-        if narrowed.0 >= narrowed.2 {
-            narrowed = narrow(false);
+impl PositionFields {
+    /// The start fields of a request holding the matches at or after `position`.
+    pub(crate) fn start<K: LedgerKey>(position: K) -> Self {
+        let (transaction_index, event_index) = position.transaction_and_event_index();
+        Self {
+            checkpoint: position.checkpoint(),
+            transaction_index: (transaction_index != 0 || event_index != 0)
+                .then_some(transaction_index),
+            event_index: (event_index != 0).then_some(event_index),
         }
-        let (start_checkpoint, start_position, end_checkpoint, end_position) = narrowed;
+    }
+
+    /// The end fields of a request holding the matches before `position`. A position at a
+    /// checkpoint's start ends the request before that checkpoint; any other position ends it
+    /// within its own checkpoint.
+    pub(crate) fn end<K: LedgerKey>(position: K) -> Self {
+        let (transaction_index, event_index) = position.transaction_and_event_index();
+        if transaction_index == 0 && event_index == 0 {
+            Self {
+                checkpoint: position.checkpoint(),
+                transaction_index: None,
+                event_index: None,
+            }
+        } else {
+            Self {
+                checkpoint: position.checkpoint().saturating_add(1),
+                transaction_index: Some(transaction_index),
+                event_index: (event_index != 0).then_some(event_index),
+            }
+        }
+    }
+}
+
+impl<K: LedgerKey> ScanPlan<K> {
+    pub(crate) fn new(page: &Page<LedgerCursor<K>>, cp_bounds: RangeInclusive<u64>) -> Self {
+        let ascending = page.is_from_front();
+        let after = page.after();
+        let before = page.before();
+
+        let range_start = K::checkpoint_start(*cp_bounds.start());
+        let range_end = K::checkpoint_start(cp_bounds.end().saturating_add(1));
+        let start = after.map_or(range_start, |c| {
+            c.point().gap_after().key().max(range_start)
+        });
+        let end = before.map_or(range_end, |c| c.point().gap_before().key().min(range_end));
 
         let far_narrowed = if ascending {
-            end_checkpoint != range_end || end_position.is_some()
+            end < range_end
         } else {
-            start_checkpoint != range_start || start_position.is_some()
+            start > range_start
         };
 
         Self {
             ascending,
-            after,
-            before,
-            start_checkpoint,
-            end_checkpoint,
-            start_position,
-            end_position,
+            after_bytes: after.and_then(|c| c.ledger_bytes()).cloned(),
+            before_bytes: before.and_then(|c| c.ledger_bytes()).cloned(),
+            start,
+            end,
             far_narrowed,
         }
     }
 
-    /// The request for up to `limit` items, or `None` if the narrowed range is empty.
-    pub(crate) fn request(&self, limit: usize) -> Option<ScanRequest<K>> {
-        if self.start_checkpoint >= self.end_checkpoint {
+    /// The request for up to `limit` items, or `None` if the page's span is empty.
+    pub(crate) fn request(&self, limit: usize) -> Option<ScanRequest> {
+        if self.start >= self.end {
             return None;
         }
 
         let mut options = v2::QueryOptions::default();
         options.limit = Some(limit as u32);
-        options.after = self.after.as_ref().and_then(|b| b.ledger.clone());
-        options.before = self.before.as_ref().and_then(|b| b.ledger.clone());
+        options.after = self.after_bytes.clone();
+        options.before = self.before_bytes.clone();
         options.ordering = Some(if self.ascending {
             v2::Ordering::Ascending as i32
         } else {
@@ -176,123 +160,58 @@ impl<K: LedgerKey> ScanPlan<K> {
 
         Some(ScanRequest {
             options,
-            start_checkpoint: self.start_checkpoint,
-            end_checkpoint: self.end_checkpoint,
-            start_position: self.start_position,
-            end_position: self.end_position,
+            start: PositionFields::start(self.start),
+            end: PositionFields::end(self.end),
         })
     }
 
-    /// Mint GraphQL cursors for the response to [`Self::request`], dropping items on the wrong
-    /// side of a cursor's place. `key` reads an item's place from its payload.
-    pub(crate) fn page<T, C>(
+    /// Mint GraphQL cursors for the response to [`Self::request`]. `key` reads an item's place from
+    /// its payload.
+    pub(crate) fn page<T>(
         &self,
         stream: StreamPage<T>,
         key: impl Fn(&T) -> anyhow::Result<K>,
-    ) -> Result<LedgerPage<T, C>, RpcError>
-    where
-        C: ScanCursor<Key = K>,
-    {
-        let ascending = self.ascending;
-
-        // The near cursor is the one the scan starts from, the far cursor the one it runs toward.
-        let (near, far) = if ascending {
-            (self.after.as_ref(), self.before.as_ref())
+    ) -> Result<LedgerPage<T, LedgerCursor<K>>, RpcError> {
+        // The edge of the span the scan starts from, and the one it runs toward.
+        let (near, far) = if self.ascending {
+            (self.start, self.end)
         } else {
-            (self.before.as_ref(), self.after.as_ref())
+            (self.end, self.start)
         };
-        let near_point = near.and_then(|b| b.point);
-        let far_point = far.and_then(|b| b.point);
 
+        let first_watermark = stream.first_watermark().map(boundary_cursor);
+        let last_watermark = stream.last_watermark().map(boundary_cursor);
         let covered_checkpoint = stream.covered_checkpoint();
-        let first_watermark = stream.first_watermark_cursor().cloned();
-        let last_watermark = stream.last_watermark_cursor().cloned();
-        let mut end_reason = stream.end_reason;
 
-        // A request whose far edge is the far cursor's place (its checkpoint, or its position
-        // within it) ends there rather than at the end of the data, so reaching that end means
-        // reaching the far cursor.
-        let mut reached_far =
-            self.far_narrowed && end_reason == Some(QueryEndReason::CheckpointBound);
+        // A request whose far edge is the far cursor's place ends there rather than at the end of
+        // the data, so reaching that end means reaching the far cursor.
+        let reached_far_place =
+            self.far_narrowed && stream.end_reason == Some(QueryEndReason::CheckpointBound);
+        let end_reason = if reached_far_place {
+            Some(QueryEndReason::CursorBound)
+        } else {
+            stream.end_reason
+        };
 
         let mut items = Vec::with_capacity(stream.items.len());
-
-        // The last item scanned short of the far cursor, and whether it is on the page.
-        let mut last_scanned: Option<(Bytes, K, bool)> = None;
         for item in stream.items {
             let key = key(&item.payload)?;
-            if far_point.is_some_and(|p| !in_scan_before(&p, &key, ascending)) {
-                reached_far = true;
-                break;
-            }
-
-            let on_page = near_point.is_none_or(|p| in_scan_after(&p, &key, ascending));
-            last_scanned = Some((item.cursor.clone(), key, on_page));
-            if on_page {
-                items.push(LedgerItem {
-                    payload: item.payload,
-                    cursor: C::from_ledger(item.cursor, Some(Point::At(key))),
-                    checkpoint: key.checkpoint(),
-                });
-            }
+            items.push(LedgerItem {
+                payload: item.payload,
+                cursor: LedgerToken::from_ledger(item.cursor, Point::At(key)),
+                checkpoint: key.checkpoint(),
+            });
         }
 
-        if reached_far {
-            end_reason = Some(QueryEndReason::CursorBound);
-        }
+        // With no frame to start from, the page starts at the near edge of its span.
+        let first_cursor = first_watermark
+            .or_else(|| items.first().map(|item| item.cursor.clone()))
+            .or_else(|| Some(LedgerToken::from_point(Point::Before(near))));
 
-        // The gap the page starts from in scan order: just past the near cursor, or the range's
-        // edge.
-        let near_gap = match near {
-            Some(bound) => bound.point.map(|p| {
-                if ascending {
-                    p.gap_after()
-                } else {
-                    p.gap_before()
-                }
-            }),
-            None if ascending => Some(Point::checkpoint_start(self.start_checkpoint)),
-            None => Some(Point::checkpoint_start(self.end_checkpoint)),
-        };
-
-        let first_cursor = if near.is_some_and(|b| b.ledger.is_none()) {
-            // The ledger never saw the near cursor, so no ledger bytes mark where the page starts.
-            near_gap.map(C::from_point)
-        } else if let Some(bytes) = first_watermark {
-            Some(C::from_ledger(bytes, near_gap))
-        } else {
-            items.first().map(|item| item.cursor.clone())
-        };
-
-        let last_cursor = if reached_far {
-            // The page ends at its last item, or at the far cursor itself when it has none.
-            match items.last() {
-                Some(item) => Some(item.cursor.clone()),
-                None => far_point.map(|p| {
-                    C::from_point(if ascending {
-                        p.gap_before()
-                    } else {
-                        p.gap_after()
-                    })
-                }),
-            }
-        } else {
-            let resume = || {
-                resume_point(
-                    ascending,
-                    near_gap,
-                    last_scanned.as_ref().map(|(_, key, _)| *key),
-                    covered_checkpoint,
-                )
-            };
-
-            match (last_watermark, &last_scanned) {
-                (Some(bytes), _) => Some(C::from_ledger(bytes, resume())),
-                (None, Some((_, _, true))) => items.last().map(|item| item.cursor.clone()),
-                (None, Some((bytes, _, false))) => Some(C::from_ledger(bytes.clone(), resume())),
-                (None, None) => None,
-            }
-        };
+        // With no frame to resume from, a page that reached the far cursor's place resumes there.
+        let last_cursor = last_watermark
+            .or_else(|| items.last().map(|item| item.cursor.clone()))
+            .or_else(|| reached_far_place.then(|| LedgerToken::from_point(Point::Before(far))));
 
         Ok(LedgerPage {
             items,
@@ -322,20 +241,20 @@ impl<T, C> LedgerPage<T, C> {
 
 /// Request one page of `page` over `cp_bounds` through `list`, asking for up to `limit` items, and
 /// mint cursors for what comes back. `key` reads an item's place from its payload.
-pub(crate) async fn scan<C, T, F>(
-    page: &Page<C>,
+pub(crate) async fn scan<K, T, F>(
+    page: &Page<LedgerCursor<K>>,
     cp_bounds: RangeInclusive<u64>,
     limit: usize,
-    key: impl Fn(&T) -> anyhow::Result<C::Key>,
-    list: impl FnOnce(ScanRequest<C::Key>) -> F,
-) -> Result<LedgerPage<T, C>, RpcError>
+    key: impl Fn(&T) -> anyhow::Result<K>,
+    list: impl FnOnce(ScanRequest) -> F,
+) -> Result<LedgerPage<T, LedgerCursor<K>>, RpcError>
 where
-    C: ScanCursor,
+    K: LedgerKey,
     F: Future<Output = anyhow::Result<StreamPage<T>>>,
 {
     let plan = ScanPlan::new(page, cp_bounds);
     let Some(request) = plan.request(limit) else {
-        // The cursors' places leave the range empty: the page ends at the range's edge, as the
+        // The cursors' places leave the span empty: the page ends at the span's edge, as the
         // ledger service ends a scan of an empty range, and reaches the far cursor when it narrowed
         // that edge.
         let mut stream = StreamPage::default();
@@ -347,93 +266,81 @@ where
     plan.page(stream, key)
 }
 
-/// The start of a request over a range from `range_start`, holding every item after `point`: its
-/// start checkpoint, and its start position within that checkpoint. A position is relative to the
-/// checkpoint sent with it, so one is sent only when the request starts at the place's own
-/// checkpoint, and not when the place is that checkpoint's start.
-fn request_start<K: LedgerKey>(range_start: u64, point: Option<Point<K>>) -> (u64, Option<K>) {
-    let Some(place) = point.map(|p| p.gap_after().key()) else {
-        return (range_start, None);
-    };
-
-    let checkpoint = place.checkpoint();
-    if checkpoint < range_start {
-        (range_start, None)
-    } else {
-        let position = (place != K::checkpoint_start(checkpoint)).then_some(place);
-        (checkpoint, position)
-    }
+/// The cursor of a frame without an item, at the position the ledger service reports for it.
+fn boundary_cursor<K: LedgerKey>(boundary: &PageBoundary) -> LedgerCursor<K> {
+    LedgerToken::from_ledger(
+        boundary.cursor.clone(),
+        Point::Before(K::from_position(&boundary.position)),
+    )
 }
 
-/// The end of a request over a range up to `range_end` (exclusive), holding every item before
-/// `point`: its exclusive end checkpoint, and its end position within the checkpoint before it. A
-/// position is relative to the last checkpoint of the range, so one is sent only when that is the
-/// place's own checkpoint, and not when the place is that checkpoint's start.
-fn request_end<K: LedgerKey>(range_end: u64, point: Option<Point<K>>) -> (u64, Option<K>) {
-    let Some(place) = point.map(|p| p.gap_before().key()) else {
-        return (range_end, None);
-    };
+#[cfg(test)]
+mod tests {
+    use crate::api::types::ledger_cursor::EventKey;
+    use crate::api::types::ledger_cursor::TransactionKey;
 
-    let checkpoint = place.checkpoint();
-    if place == K::checkpoint_start(checkpoint) {
-        (range_end.min(checkpoint), None)
-    } else if checkpoint < range_end {
-        (checkpoint.saturating_add(1), Some(place))
-    } else {
-        (range_end, None)
-    }
-}
+    use super::*;
 
-/// Whether the item at `key` comes after the near cursor at `point`, in scan order.
-fn in_scan_after<K: LedgerKey>(point: &Point<K>, key: &K, ascending: bool) -> bool {
-    if ascending {
-        point.includes_after(key)
-    } else {
-        point.includes_before(key)
-    }
-}
-
-/// Whether the item at `key` comes before the far cursor at `point`, in scan order.
-fn in_scan_before<K: LedgerKey>(point: &Point<K>, key: &K, ascending: bool) -> bool {
-    if ascending {
-        point.includes_before(key)
-    } else {
-        point.includes_after(key)
-    }
-}
-
-/// Where a page boundary at the end of the scan sits, from what bounds it: the gap the page started
-/// from, the gap past the last item scanned, and the coverage claim. Each sits at or before the
-/// boundary in scan order with no match in between, so the furthest of them has the same matches on
-/// either side as the boundary. `None` if nothing bounds it.
-///
-/// The claim covers only what the scan read, from the near cursor on. A near cursor without a place
-/// (a ledger cursor GraphQL could not place) can sit inside the checkpoint past the claim, after
-/// matches the scan never read, so past such a cursor the claim places the boundary only once an
-/// item was scanned.
-fn resume_point<K: LedgerKey>(
-    ascending: bool,
-    near_gap: Option<Point<K>>,
-    last_scanned: Option<K>,
-    covered_checkpoint: Option<u64>,
-) -> Option<Point<K>> {
-    if near_gap.is_none() && last_scanned.is_none() {
-        return None;
+    fn tx(checkpoint: u64, transaction_index: u64) -> TransactionKey {
+        TransactionKey {
+            checkpoint,
+            transaction_index,
+        }
     }
 
-    if ascending {
-        let past_item = last_scanned.map(|key| Point::Before(key.successor()));
-        let past_claim = covered_checkpoint.map(|c| Point::checkpoint_start(c.saturating_add(1)));
-        [near_gap, past_item, past_claim]
-            .into_iter()
-            .flatten()
-            .max()
-    } else {
-        let past_item = last_scanned.map(Point::Before);
-        let past_claim = covered_checkpoint.map(Point::checkpoint_start);
-        [near_gap, past_item, past_claim]
-            .into_iter()
-            .flatten()
-            .min()
+    fn ev(checkpoint: u64, transaction_index: u64, event_index: u32) -> EventKey {
+        EventKey {
+            checkpoint,
+            transaction_index,
+            event_index,
+        }
+    }
+
+    fn fields(
+        checkpoint: u64,
+        transaction_index: Option<u64>,
+        event_index: Option<u32>,
+    ) -> PositionFields {
+        PositionFields {
+            checkpoint,
+            transaction_index,
+            event_index,
+        }
+    }
+
+    /// A start sends the indexes it needs: none at a checkpoint's start, and the transaction index
+    /// whenever the event index is set.
+    #[test]
+    fn start_fields_from_positions() {
+        assert_eq!(PositionFields::start(tx(5, 0)), fields(5, None, None));
+        assert_eq!(PositionFields::start(tx(5, 2)), fields(5, Some(2), None));
+        assert_eq!(PositionFields::start(ev(5, 0, 0)), fields(5, None, None));
+        assert_eq!(PositionFields::start(ev(5, 2, 0)), fields(5, Some(2), None));
+        assert_eq!(
+            PositionFields::start(ev(5, 0, 1)),
+            fields(5, Some(0), Some(1))
+        );
+        assert_eq!(
+            PositionFields::start(ev(5, 2, 1)),
+            fields(5, Some(2), Some(1))
+        );
+    }
+
+    /// An end at a checkpoint's start ends before that checkpoint; any other end ends within its
+    /// own checkpoint, the last one the request covers.
+    #[test]
+    fn end_fields_from_positions() {
+        assert_eq!(PositionFields::end(tx(5, 0)), fields(5, None, None));
+        assert_eq!(PositionFields::end(tx(5, 2)), fields(6, Some(2), None));
+        assert_eq!(PositionFields::end(ev(5, 0, 0)), fields(5, None, None));
+        assert_eq!(PositionFields::end(ev(5, 2, 0)), fields(6, Some(2), None));
+        assert_eq!(
+            PositionFields::end(ev(5, 0, 1)),
+            fields(6, Some(0), Some(1))
+        );
+        assert_eq!(
+            PositionFields::end(ev(5, 2, 1)),
+            fields(6, Some(2), Some(1))
+        );
     }
 }
