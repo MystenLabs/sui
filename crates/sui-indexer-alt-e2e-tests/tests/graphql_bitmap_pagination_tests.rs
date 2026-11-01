@@ -654,6 +654,10 @@ async fn transactions_empty_window_past_cursor_has_no_more_pages() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     let all = transactions_page(&cluster, &alice, false, None, None).await;
     assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
@@ -773,6 +777,10 @@ async fn events_empty_window_past_cursor_has_no_more_pages() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     let sender = json!({ "sender": alice.to_string() });
     let (all, _) = events_page(&cluster, &sender, Some(50), None, None, None).await;
@@ -1957,7 +1965,7 @@ async fn paging_back_from_empty_last_after_page_skips_nothing() {
 /// Cursors that carry only a place inside a checkpoint (as subscriptions mint them) resume there:
 /// GraphQL sends the place as the request's start or end position. Each page asks for one item
 /// and its lookahead, too few to reach the place from the checkpoint's start or end, so a ledger
-/// service that started at the checkpoint's edge would return only items GraphQL drops.
+/// service that started at the checkpoint's edge would return the wrong items.
 #[tokio::test]
 async fn place_cursors_resume_inside_a_checkpoint() {
     let (cluster, temp_dir) = alpha_cluster().await;

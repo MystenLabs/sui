@@ -3,5 +3,6 @@
 
 pub mod checkpoint_positions;
 pub mod filter;
+pub mod ledger_point;
 pub mod query_options;
 pub mod watermark;
