@@ -25,7 +25,9 @@ use tracing::info;
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
 use super::composite::{CompositeWorkloadBuilder, CompositeWorkloadConfig};
 use super::expected_failure::{ExpectedFailurePayloadCfg, ExpectedFailureWorkloadBuilder};
-use super::large_transaction::LargeTransactionWorkloadBuilder;
+use super::large_transaction::{
+    LargeTransactionGas, LargeTransactionSizeRange, LargeTransactionWorkloadBuilder,
+};
 use super::randomized_transaction::RandomizedTransactionWorkloadBuilder;
 use super::randomness::RandomnessWorkloadBuilder;
 use super::shared_object_deletion::SharedCounterDeletionWorkloadBuilder;
@@ -54,7 +56,8 @@ pub struct WorkloadConfig {
     pub num_transfer_accounts: u64,
     pub weights: WorkloadWeights,
     pub adversarial_cfg: AdversarialPayloadCfg,
-    pub large_transaction_size_bytes: u64,
+    pub large_transaction_size: LargeTransactionSizeRange,
+    pub large_transaction_gas: LargeTransactionGas,
     pub expected_failure_cfg: ExpectedFailurePayloadCfg,
     pub batch_payment_size: u32,
     pub shared_counter_hotness_factor: u32,
@@ -94,7 +97,9 @@ impl WorkloadConfiguration {
                 batch_payment,
                 adversarial,
                 large_transaction,
-                large_transaction_size_bytes,
+                large_transaction_min_size_bytes,
+                large_transaction_max_size_bytes,
+                large_transaction_address_balance_gas,
                 expected_failure,
                 randomness,
                 randomized_transaction,
@@ -176,7 +181,15 @@ impl WorkloadConfiguration {
                             composite: composite[i],
                             gas_double_spend: gas_double_spend[i],
                         },
-                        large_transaction_size_bytes: large_transaction_size_bytes[i],
+                        large_transaction_size: LargeTransactionSizeRange::new(
+                            large_transaction_min_size_bytes[i],
+                            large_transaction_max_size_bytes[i],
+                        )?,
+                        large_transaction_gas: if large_transaction_address_balance_gas[i] {
+                            LargeTransactionGas::AddressBalance
+                        } else {
+                            LargeTransactionGas::Coin
+                        },
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
                         expected_failure_cfg: ExpectedFailurePayloadCfg {
@@ -294,7 +307,8 @@ impl WorkloadConfiguration {
             num_transfer_accounts,
             weights,
             adversarial_cfg,
-            large_transaction_size_bytes,
+            large_transaction_size,
+            large_transaction_gas,
             expected_failure_cfg,
             batch_payment_size,
             shared_counter_hotness_factor,
@@ -429,7 +443,8 @@ impl WorkloadConfiguration {
             target_qps,
             num_workers,
             in_flight_ratio,
-            large_transaction_size_bytes,
+            large_transaction_size,
+            large_transaction_gas,
             duration,
             group,
         );
