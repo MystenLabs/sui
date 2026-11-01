@@ -1548,27 +1548,8 @@ impl BigTableClient {
         .boxed())
     }
 
-    /// Resolve tx_sequence_numbers to their containing checkpoint numbers.
-    /// Reads only the checkpoint-number column from `tx_seq_digest`.
-    pub async fn resolve_tx_checkpoints(
-        &mut self,
-        tx_sequence_numbers: &[u64],
-    ) -> Result<Vec<(u64, CheckpointSequenceNumber)>> {
-        if tx_sequence_numbers.is_empty() {
-            return Ok(Vec::new());
-        }
-        let rows = self
-            .resolve_tx_checkpoints_stream(tx_sequence_numbers.to_vec())
-            .await?;
-        futures::pin_mut!(rows);
-        let mut result = Vec::with_capacity(tx_sequence_numbers.len());
-        while let Some(row) = rows.next().await {
-            result.push(row?);
-        }
-        Ok(result)
-    }
-
-    /// Streaming variant of `resolve_tx_checkpoints`. Yields
+    /// Resolve tx_sequence_numbers to their containing checkpoint numbers, reading only the
+    /// checkpoint-number column from `tx_seq_digest`. Yields
     /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (row-key
     /// order, not the order of `tx_sequence_numbers` — callers needing that
     /// order must reorder).

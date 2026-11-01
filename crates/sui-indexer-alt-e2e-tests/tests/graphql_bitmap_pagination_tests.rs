@@ -680,6 +680,10 @@ async fn cursor_checkpoint_hint_is_redundant() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     fn digests(page: &[(String, String)]) -> Vec<String> {
         page.iter().map(|(_, digest)| digest.clone()).collect()
@@ -771,6 +775,10 @@ async fn transactions_empty_window_past_cursor_has_no_more_pages() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     let all = transactions_page(&cluster, &alice, false, None, None).await;
     assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
@@ -893,6 +901,10 @@ async fn events_empty_window_past_cursor_has_no_more_pages() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     let sender = json!({ "sender": alice.to_string() });
     let (all, _) = events_page(&cluster, &sender, Some(50), None, None, None).await;
