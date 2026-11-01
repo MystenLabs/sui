@@ -11,11 +11,13 @@ use std::sync::Arc;
 
 use fastcrypto::ed25519::Ed25519KeyPair;
 use itertools::Itertools;
+use sui_adapter::native_accumulator_settlement::from_programmable_transaction;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, TypeTag,
     accumulator_root::AccumulatorValue,
+    accumulator_settlement::{AccumulatorSettlementTransaction, AccumulatorUpdateGroup},
     balance::Balance,
     base_types::{ObjectRef, SuiAddress},
     crypto::get_account_key_pair,
@@ -109,14 +111,20 @@ impl TestEnv {
         assert_eq!(move_txns.len(), native_txns.len());
 
         for ((move_tx, _), (native_tx, _)) in move_txns.iter().zip_eq(&native_txns) {
-            assert!(matches!(
-                move_tx.transaction_data().kind(),
-                TransactionKind::ProgrammableSystemTransaction(_)
-            ));
-            assert!(matches!(
-                native_tx.transaction_data().kind(),
-                TransactionKind::AccumulatorSettlement(_)
-            ));
+            let TransactionKind::ProgrammableSystemTransaction(pt) =
+                move_tx.transaction_data().kind()
+            else {
+                panic!("expected a programmable settlement transaction");
+            };
+            let TransactionKind::AccumulatorSettlement(native) =
+                native_tx.transaction_data().kind()
+            else {
+                panic!("expected a native settlement transaction");
+            };
+            assert_eq!(
+                from_programmable_transaction(pt),
+                Some(without_unused_checkpoint_seq(native.clone()))
+            );
             let move_effects = self.executed_effects(&self.move_authority, move_tx);
             let native_effects = self.executed_effects(&self.native_authority, native_tx);
             self.compare_effects(&move_effects, &native_effects);
@@ -235,6 +243,21 @@ impl TestEnv {
         assert_eq!(exists_move, exists(&self.native_authority));
         exists_move
     }
+}
+
+/// The programmable form carries the checkpoint sequence number only in event stream updates.
+fn without_unused_checkpoint_seq(
+    mut settlement: AccumulatorSettlementTransaction,
+) -> AccumulatorSettlementTransaction {
+    if let AccumulatorSettlementTransaction::SettlementV1(s) = &mut settlement
+        && !s
+            .updates
+            .iter()
+            .any(|group| matches!(group, AccumulatorUpdateGroup::EventStream(_)))
+    {
+        s.checkpoint_seq = 0;
+    }
+    settlement
 }
 
 fn new_account() -> (Account, Object) {

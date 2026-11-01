@@ -160,6 +160,22 @@ This work adds:
 - Enable the flag after PR 1 ships and sui-rust-sdk, the TypeScript SDK, the indexers and
   GraphQL have released with the new variant.
 
+### Native execution of programmable settlements
+
+Settlement and barrier transactions in the programmable form are converted to the native form and
+executed natively, without a protocol upgrade. The conversion accepts only the exact shape that the
+builder produces: a prologue, then one `settle_u128` or `settle_events` call per accumulator, or a
+prologue and `record_accumulator_object_changes` for the barrier. Anything else, including a field
+updated twice, runs its Move calls. A programmable transaction that takes the accumulator root but
+has no native form is a `debug_fatal!`.
+
+Debug builds execute every converted transaction a second time through Move and assert that the
+effects are equal.
+
+Replaying older checkpoints also uses this path, because execution version 4 runs every protocol
+version from 119. The Move settlement source has not changed observably since then. Protocol-gated
+behavior in the Move runtime that could affect these effects has not been audited.
+
 ## 6. Resolved questions
 
 - **Q1 (creation needs `T`):** the type is carried once per group, and owners are listed within
@@ -183,8 +199,9 @@ This work adds:
 - [x] Builder emits the new kind under the flag
 - [x] Downstream match arms (RPC, JSON-RPC, GraphQL, indexers, replay)
 - [x] Parity test: `accumulators/native_settlement_tests.rs` (balances only)
-- [ ] e2e and simtests with the flag on (event streams are covered only here)
-- [ ] PR 1
+- [x] e2e and simtests with the flag on (event streams are covered only here)
+- [x] PR 1, split into a stack of four branches
+- [x] Programmable settlements execute natively; e2e and composite pass with the flag off
 
 Follow-ups before PR 2 (enabling the flag):
 - sui-rust-sdk: add the variant to `sui-sdk-types` and the `sui-rpc` proto kind. The BCS

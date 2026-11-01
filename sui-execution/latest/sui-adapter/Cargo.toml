@@ -19,6 +19,7 @@ serde.workspace = true
 indexmap.workspace = true
 serde_json.workspace = true
 quick_cache.workspace = true
+scopeguard.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
