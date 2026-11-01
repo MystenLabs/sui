@@ -1,0 +1,71 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[EC04021]: numeric literal out of range
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:10:22
+   │
+10 │         let _x: i8 = 128;
+   │                 --   ^^^
+   │                 │    │
+   │                 │    Invalid numerical literal
+   │                 │    Annotating the literal might help inference: '128i16'
+   │                 This literal does not fit into the type 'i8'.
+
+error[EC04021]: numeric literal out of range
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:15:22
+   │
+14 │         let x: i16 = 0;
+   │                --- This literal does not fit into the type 'i16'.
+15 │         let _y = x + 32768;
+   │                      ^^^^^
+   │                      │
+   │                      Invalid numerical literal
+   │                      Annotating the literal might help inference: '32768i32'
+
+error[EC04021]: numeric literal out of range
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:19:9
+   │
+18 │     fun signed_overflow_through_return_i32(): i32 {
+   │                                               --- This literal does not fit into the type 'i32'.
+19 │         2147483648
+   │         ^^^^^^^^^^
+   │         │
+   │         Invalid numerical literal
+   │         Annotating the literal might help inference: '2147483648i64'
+
+error[EC04021]: numeric literal out of range
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:24:22
+   │
+23 │         let a: i64 = 0;
+   │                --- This literal does not fit into the type 'i64'.
+24 │         let _b = a + 9223372036854775808;
+   │                      ^^^^^^^^^^^^^^^^^^^
+   │                      │
+   │                      Invalid numerical literal
+   │                      Annotating the literal might help inference: '9223372036854775808i128'
+
+error[EC04021]: numeric literal out of range
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:32:22
+   │
+31 │         let x: u8 = 0;
+   │                -- This literal does not fit into the type 'u8'.
+32 │         let _y = x + 256;
+   │                      ^^^
+   │                      │
+   │                      Invalid numerical literal
+   │                      Annotating the literal might help inference: '256u16'
+
+error[EC04021]: numeric literal out of range
+   ┌─ tests/development/signed_ints/invalid/signed_int_inferred_through_variable_invalid.move:37:22
+   │
+36 │         let x: u16 = 0;
+   │                --- This literal does not fit into the type 'u16'.
+37 │         let _y = x + 65536;
+   │                      ^^^^^
+   │                      │
+   │                      Invalid numerical literal
+   │                      Annotating the literal might help inference: '65536u32'
