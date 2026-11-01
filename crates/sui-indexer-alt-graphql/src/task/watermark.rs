@@ -36,16 +36,15 @@ use tracing::warn;
 use crate::config::WatermarkConfig;
 use crate::metrics::RpcMetrics;
 
+/// Watermark pipeline key for the ledger gRPC backend that `KvLoader` and the package resolver read
+/// (see `watermark_from_ledger_grpc`). The streamed transaction, object, and package stores evict
+/// against its progress.
+pub(crate) const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
+
 /// Background task responsible for tracking per-pipeline upper- and lower-bounds.
 ///
 /// Each request takes a snapshot of these bounds when it starts and makes sure all queries to the
 /// store are consistent with data from this snapshot.
-pub(crate) const KV_PACKAGES_PIPELINE: &str = "kv_packages";
-
-/// Watermark pipeline key for the ledger gRPC backend that `KvLoader` reads (see
-/// `watermark_from_ledger_grpc`). The streamed transaction store evicts against its progress.
-pub(crate) const LEDGER_GRPC_PIPELINE: &str = "ledger_grpc";
-
 pub(crate) struct WatermarkTask {
     /// Thread-safe watermark that avoids writer starvation. The outer `Arc` is used to share the
     /// watermarks between the schema and this task. The inner `Arc` is used to allow the task to
