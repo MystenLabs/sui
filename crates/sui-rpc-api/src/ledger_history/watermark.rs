@@ -6,8 +6,10 @@
 //! Both ledger-history backends — the fullnode (`sui-rpc-api`) and bigtable
 //! (`sui-kv-rpc`) — and all three list handlers (`list_transactions`,
 //! `list_events`, `list_checkpoints`) emit the same wire `Watermark`: a resume
-//! cursor plus a completion boundary (`checkpoint`, the inclusive boundary
-//! checkpoint the scan has fully covered in the request's ordering direction).
+//! cursor, the same resume point in ledger coordinates (`cursor_position`, see
+//! [`crate::ledger_history::ledger_point`]), and a completion boundary
+//! (`checkpoint`, the inclusive boundary checkpoint the scan has fully covered
+//! in the request's ordering direction).
 //! The cursor encoding and the boundary bookkeeping are identical; what differs
 //! per API is how a scan position resolves into a completion-boundary candidate:
 //!
@@ -29,6 +31,8 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_cursor::{CursorKind, CursorToken, Position};
 
 use crate::RpcError;
+use crate::ledger_history::ledger_point::LedgerPoint;
+use crate::ledger_history::ledger_point::TerminalLedgerPosition;
 use crate::ledger_history::query_options::{QueryOptions, RangeExhaustion, below_serving_floor};
 
 /// Populate the completion-boundary `checkpoint` field of a `Watermark` from
@@ -93,40 +97,72 @@ pub fn advance_covered_bound_before_checkpoint(
 
 /// Build the embedded `Watermark` for an item: the cursor encodes this
 /// item's position (so the next request's `after`/`before` resumes past it)
-/// plus the current direction-matching checkpoint boundary. `cp` /
-/// `position` are the item's cursor coordinates (`list_checkpoints` passes
-/// its cp_seq for both).
-pub fn item_watermark(position: Position, boundary: Option<u64>) -> Watermark {
-    let mut wm = Watermark::default();
-    wm.cursor = Some(CursorToken::item(position).encode());
-    set_checkpoint_bound(&mut wm, boundary);
-    wm
+/// plus the current direction-matching checkpoint boundary. `position` is the
+/// item's cursor coordinates (`list_checkpoints` passes its cp_seq), and
+/// `item_key` its key in ledger coordinates, which the cursor carries as its
+/// public position and from which the frame's `cursor_position` follows (see
+/// [`LedgerPoint::item_resume`]).
+pub fn item_watermark(
+    position: Position,
+    item_key: LedgerPoint,
+    direction: ScanDirection,
+    boundary: Option<u64>,
+) -> Watermark {
+    cursor_watermark(
+        position,
+        CursorKind::Item,
+        TerminalLedgerPosition {
+            cursor_position: Some(item_key.item_resume(&position, direction)),
+            cursor_point: Some(item_key),
+        },
+        boundary,
+    )
 }
 
-/// Build a standalone scan-frontier `Watermark`. `cursor_cp` / `position`
-/// are the boundary cursor coordinates the caller has already resolved for
-/// its scan domain (see [`boundary_cursor_cp`] for the per-checkpoint
-/// scanners' direction adjustment); `boundary` is the accumulated
-/// completion boundary.
-pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermark {
-    cursor_watermark(position, boundary, sui_rpc_cursor::CursorKind::Boundary)
+/// Build a standalone scan-frontier `Watermark`. `position` is the boundary
+/// cursor coordinates the caller has already resolved for its scan domain (see
+/// [`boundary_cursor_cp`] for the per-checkpoint scanners' direction
+/// adjustment); `cursor_position` the same boundary in ledger coordinates,
+/// which the cursor also carries as its public position; `boundary` the
+/// accumulated completion boundary.
+pub fn boundary_watermark(
+    position: Position,
+    cursor_position: LedgerPoint,
+    boundary: Option<u64>,
+) -> Watermark {
+    cursor_watermark(
+        position,
+        CursorKind::Boundary,
+        TerminalLedgerPosition::known(cursor_position),
+        boundary,
+    )
 }
 
-/// Build a watermark whose cursor kind has been resolved by query-range
-/// bookkeeping (see [`RangeExhaustion::CursorBound`]): an `after` Item cursor
-/// at the last position names no boundary after it, so its closing cursor keeps
-/// Item kind where a Boundary at its position would re-include the item on resume.
+/// Build a watermark with a `cursor_kind` cursor at `position`, the one place
+/// every frame's cursor is minted. The cursor carries `ledger.cursor_point` as
+/// its public position, and the frame resumes at `ledger.cursor_position`. A
+/// terminal's kind comes from query-range bookkeeping (see
+/// [`RangeExhaustion::CursorBound`]): an `after` Item cursor at the last
+/// position names no boundary after it, so its closing cursor keeps Item kind
+/// where a Boundary at its position would re-include the item on resume.
 fn cursor_watermark(
     position: Position,
+    cursor_kind: CursorKind,
+    ledger: TerminalLedgerPosition,
     boundary: Option<u64>,
-    cursor_kind: sui_rpc_cursor::CursorKind,
 ) -> Watermark {
-    let cursor = match cursor_kind {
-        sui_rpc_cursor::CursorKind::Item => CursorToken::item(position),
-        sui_rpc_cursor::CursorKind::Boundary => CursorToken::boundary(position),
+    let cursor = CursorToken {
+        kind: cursor_kind,
+        position,
+        public_position: ledger
+            .cursor_point
+            .and_then(|point| point.public_position(&position)),
     };
     let mut wm = Watermark::default();
     wm.cursor = Some(cursor.encode());
+    wm.cursor_position = ledger
+        .cursor_position
+        .map(|point| point.to_proto(&position));
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -179,6 +215,38 @@ pub enum NaturalRangeEnd {
     CheckpointBound,
 }
 
+/// Where a list scan ends once it drains its resolved range, as its terminal frame renders it
+/// (see [`ResolvedScan::range_end`]).
+///
+/// [`ResolvedScan::range_end`]: crate::ledger_history::query_options::ResolvedScan::range_end
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RangeEnd {
+    /// Why the range is exhausted.
+    pub exhaustion: RangeExhaustion,
+    /// The terminal cursor's coordinates.
+    pub position: Position,
+    /// `position` in ledger coordinates (see [`ResolvedScan::end_ledger_position`]).
+    ///
+    /// [`ResolvedScan::end_ledger_position`]: crate::ledger_history::query_options::ResolvedScan::end_ledger_position
+    pub ledger: TerminalLedgerPosition,
+    /// The checkpoint a natural end claims (see [`ResolvedScan::natural_end_claim`]).
+    ///
+    /// [`ResolvedScan::natural_end_claim`]: crate::ledger_history::query_options::ResolvedScan::natural_end_claim
+    pub natural_end_claim: Option<u64>,
+}
+
+impl RangeEnd {
+    /// The terminal a scan reaches at this end.
+    pub fn terminal(self) -> ScanTerminal {
+        ScanTerminal::from_range_exhaustion(
+            self.exhaustion,
+            self.position,
+            self.ledger,
+            self.natural_end_claim,
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScanTerminal {
     /// Scan budget exhausted. Owns the mandatory authoritative frontier
@@ -188,6 +256,11 @@ pub enum ScanTerminal {
     NaturalRange {
         end: NaturalRangeEnd,
         position: Position,
+        /// The frame's resume point and its cursor's public position (see
+        /// [`ResolvedScan::end_ledger_position`]).
+        ///
+        /// [`ResolvedScan::end_ledger_position`]: crate::ledger_history::query_options::ResolvedScan::end_ledger_position
+        ledger: TerminalLedgerPosition,
         /// The checkpoint this page's natural end reports as fully covered in
         /// `Watermark.checkpoint`, or `None` when nothing remains to claim: the window has no
         /// checkpoint, or an ascending scan ends at genesis. See
@@ -199,6 +272,7 @@ pub enum ScanTerminal {
     /// The caller-provided cursor bound truncates the interval at `position`.
     CursorBound {
         position: Position,
+        ledger: TerminalLedgerPosition,
         kind: CursorKind,
     },
     /// A descending scan with no lower bound of its own reached this server's serving floor at
@@ -207,30 +281,41 @@ pub enum ScanTerminal {
     /// then fails with the error [`Self::reason`] returns for it.
     ServingFloor {
         position: Position,
+        ledger: TerminalLedgerPosition,
         floor_checkpoint: u64,
     },
 }
 
 impl ScanTerminal {
+    /// The terminal a scan reaches once it exhausts its resolved interval at `position`, placed
+    /// in ledger coordinates by `ledger`.
     pub fn from_range_exhaustion(
         exhaustion: RangeExhaustion,
         position: Position,
+        ledger: TerminalLedgerPosition,
         claimed_checkpoint: Option<u64>,
     ) -> Self {
         match exhaustion {
             RangeExhaustion::LedgerTip => Self::NaturalRange {
                 end: NaturalRangeEnd::LedgerTip,
                 position,
+                ledger,
                 claimed_checkpoint,
             },
             RangeExhaustion::CheckpointBound => Self::NaturalRange {
                 end: NaturalRangeEnd::CheckpointBound,
                 position,
+                ledger,
                 claimed_checkpoint,
             },
-            RangeExhaustion::CursorBound { kind } => Self::CursorBound { position, kind },
+            RangeExhaustion::CursorBound { kind } => Self::CursorBound {
+                position,
+                ledger,
+                kind,
+            },
             RangeExhaustion::ServingFloor { floor_checkpoint } => Self::ServingFloor {
                 position,
+                ledger,
                 floor_checkpoint,
             },
         }
@@ -268,16 +353,25 @@ impl ScanTerminal {
             Self::ScanLimit { watermark } => watermark,
             Self::NaturalRange {
                 position,
+                ledger,
                 claimed_checkpoint,
                 ..
-            } => boundary_watermark(position, claimed_checkpoint),
-            Self::CursorBound { position, kind } => {
-                cursor_watermark(position, covered_checkpoint_bound, kind)
-            }
+            } => cursor_watermark(position, CursorKind::Boundary, ledger, claimed_checkpoint),
+            Self::CursorBound {
+                position,
+                ledger,
+                kind,
+            } => cursor_watermark(position, kind, ledger, covered_checkpoint_bound),
             Self::ServingFloor {
                 position,
+                ledger,
                 floor_checkpoint,
-            } => boundary_watermark(position, Some(floor_checkpoint)),
+            } => cursor_watermark(
+                position,
+                CursorKind::Boundary,
+                ledger,
+                Some(floor_checkpoint),
+            ),
         }
     }
 }
@@ -400,19 +494,43 @@ mod tests {
 
     /// The direction-correct boundary is recorded in the single `checkpoint` field regardless of
     /// ordering. A client reads the bound off the wire frame and interprets it per the request's
-    /// ordering.
+    /// ordering. The resume point is above the item's key ascending, and the key descending; the
+    /// cursor carries the key either way.
     #[test]
-    fn item_watermark_sets_direction_matching_bound() {
+    fn item_watermark_sets_direction_matching_bound_and_resume_point() {
         let pos = Position::Transactions {
             checkpoint: 9,
             tx_seq: 42,
         };
-        let wm = item_watermark(pos, Some(8));
+        let key = LedgerPoint::transaction(9, 3);
+        let cursor = CursorToken::item(pos)
+            .with_public_position(key.public_position(&pos))
+            .encode();
+        let wm = item_watermark(pos, key, ScanDirection::Ascending, Some(8));
         assert_eq!(wm.checkpoint, Some(8));
-        assert_eq!(wm.cursor.as_ref(), Some(&CursorToken::item(pos).encode()));
+        assert_eq!(wm.cursor.as_ref(), Some(&cursor));
+        assert_eq!(
+            wm.cursor_position,
+            Some(LedgerPoint::transaction(9, 4).to_proto(&pos))
+        );
 
-        let wm = item_watermark(pos, None);
+        let wm = item_watermark(pos, key, ScanDirection::Descending, None);
         assert_eq!(wm.checkpoint, None);
+        assert_eq!(wm.cursor.as_ref(), Some(&cursor));
+        assert_eq!(wm.cursor_position, Some(key.to_proto(&pos)));
+
+        // A checkpoint cursor carries no public position: its checkpoint is its point.
+        let checkpoint = Position::Checkpoints { checkpoint: 9 };
+        let wm = item_watermark(
+            checkpoint,
+            LedgerPoint::checkpoint_start(9),
+            ScanDirection::Ascending,
+            Some(9),
+        );
+        assert_eq!(
+            wm.cursor.as_ref(),
+            Some(&CursorToken::item(checkpoint).encode())
+        );
     }
 
     #[test]
@@ -421,6 +539,11 @@ mod tests {
             checkpoint: 9,
             tx_seq: 4,
         };
+        // A frame clamped past its cursor resumes at a point other than the cursor's own.
+        let ledger = TerminalLedgerPosition {
+            cursor_position: Some(LedgerPoint::transaction(9, 2)),
+            cursor_point: Some(LedgerPoint::transaction(9, 1)),
+        };
         let cases = [
             (
                 RangeExhaustion::LedgerTip,
@@ -428,6 +551,7 @@ mod tests {
                 ScanTerminal::NaturalRange {
                     end: NaturalRangeEnd::LedgerTip,
                     position,
+                    ledger,
                     claimed_checkpoint: Some(8),
                 },
             ),
@@ -437,6 +561,7 @@ mod tests {
                 ScanTerminal::NaturalRange {
                     end: NaturalRangeEnd::CheckpointBound,
                     position,
+                    ledger,
                     claimed_checkpoint: None,
                 },
             ),
@@ -447,6 +572,7 @@ mod tests {
                 Some(8),
                 ScanTerminal::CursorBound {
                     position,
+                    ledger,
                     kind: CursorKind::Item,
                 },
             ),
@@ -457,6 +583,7 @@ mod tests {
                 None,
                 ScanTerminal::CursorBound {
                     position,
+                    ledger,
                     kind: CursorKind::Item,
                 },
             ),
@@ -467,15 +594,31 @@ mod tests {
                 Some(7),
                 ScanTerminal::ServingFloor {
                     position,
+                    ledger,
                     floor_checkpoint: 7,
                 },
             ),
         ];
 
         for (exhaustion, claimed_checkpoint, expected) in cases {
+            let terminal = ScanTerminal::from_range_exhaustion(
+                exhaustion,
+                position,
+                ledger,
+                claimed_checkpoint,
+            );
+            assert_eq!(terminal, expected);
+            let watermark = terminal.into_watermark(Some(3));
             assert_eq!(
-                ScanTerminal::from_range_exhaustion(exhaustion, position, claimed_checkpoint),
-                expected
+                watermark.cursor_position,
+                ledger
+                    .cursor_position
+                    .map(|point| point.to_proto(&position))
+            );
+            let cursor = CursorToken::decode(&watermark.cursor.unwrap()).unwrap();
+            assert_eq!(
+                cursor.public_position,
+                LedgerPoint::transaction(9, 1).public_position(&position)
             );
         }
     }
@@ -489,8 +632,10 @@ mod tests {
             checkpoint: 7,
             tx_seq: 35,
         };
+        let floor = LedgerPoint::checkpoint_start(7);
         let terminal = ScanTerminal::ServingFloor {
             position,
+            ledger: TerminalLedgerPosition::known(floor),
             floor_checkpoint: 7,
         };
 
@@ -503,9 +648,14 @@ mod tests {
             let watermark = terminal.clone().into_watermark(covered_checkpoint_bound);
             assert_eq!(
                 watermark.cursor,
-                Some(CursorToken::boundary(position).encode())
+                Some(
+                    CursorToken::boundary(position)
+                        .with_public_position(floor.public_position(&position))
+                        .encode()
+                )
             );
             assert_eq!(watermark.checkpoint, Some(7));
+            assert_eq!(watermark.cursor_position, Some(floor.to_proto(&position)));
         }
     }
 
@@ -522,6 +672,7 @@ mod tests {
             let checkpoint_bound = ScanTerminal::NaturalRange {
                 end: NaturalRangeEnd::CheckpointBound,
                 position,
+                ledger: TerminalLedgerPosition::default(),
                 claimed_checkpoint: Some(claimed_checkpoint),
             };
             assert_eq!(
@@ -538,6 +689,7 @@ mod tests {
             let ledger_tip = ScanTerminal::NaturalRange {
                 end: NaturalRangeEnd::LedgerTip,
                 position,
+                ledger: TerminalLedgerPosition::default(),
                 claimed_checkpoint: Some(claimed_checkpoint),
             };
             assert_eq!(ledger_tip.reason().unwrap(), QueryEndReason::LedgerTip);
@@ -570,6 +722,7 @@ mod tests {
             let terminal = ScanTerminal::NaturalRange {
                 end,
                 position,
+                ledger: TerminalLedgerPosition::default(),
                 claimed_checkpoint: None,
             };
             assert_eq!(terminal.reason().unwrap(), reason);
@@ -596,6 +749,7 @@ mod tests {
         };
         let terminal = ScanTerminal::CursorBound {
             position,
+            ledger: TerminalLedgerPosition::default(),
             kind: CursorKind::Boundary,
         };
         assert_eq!(terminal.reason().unwrap(), QueryEndReason::CursorBound);
@@ -624,6 +778,7 @@ mod tests {
         };
         let terminal = ScanTerminal::CursorBound {
             position,
+            ledger: TerminalLedgerPosition::default(),
             kind: CursorKind::Item,
         };
         assert_eq!(terminal.reason().unwrap(), QueryEndReason::CursorBound);
