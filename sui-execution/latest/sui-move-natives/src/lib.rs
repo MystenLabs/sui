@@ -1087,6 +1087,16 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(clock::set_timestamp_ms_for_testing),
         ),
         (
+            "clock",
+            "native_create_for_testing",
+            make_native!(clock::create_for_testing),
+        ),
+        (
+            "clock",
+            "native_clear_for_testing",
+            make_native!(clock::clear_for_testing),
+        ),
+        (
             "config",
             "read_setting_impl",
             make_native!(config::read_setting_impl),
