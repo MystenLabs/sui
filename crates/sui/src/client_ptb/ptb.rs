@@ -3,7 +3,8 @@
 
 use crate::{
     client_commands::{
-        GasDataArgs, SuiClientCommandResult, TxProcessingArgs, dry_run_or_execute_or_serialize,
+        GasDataArgs, SuiClientCommandResult, TxProcessingArgs, USER_AGENT,
+        dry_run_or_execute_or_serialize,
     },
     client_ptb::{
         ast::{ParsedProgram, Program},
@@ -14,6 +15,7 @@ use crate::{
     displays::Pretty,
     mvr_resolver::MvrResolver,
     sp,
+    sui_commands::get_replay_node,
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
@@ -23,7 +25,9 @@ use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use sui_keys::keystore::AccountKeystore;
+use sui_replay_2::simulation::{SimulatedTransactionTrace, trace_simulated_transaction};
 use sui_rpc_api::Client;
+use sui_rpc_api::client::SimulateTransactionResponse;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::ObjectID,
@@ -117,6 +121,20 @@ impl PTB {
             !program_metadata.serialize_unsigned_set || !program_metadata.serialize_signed_set,
             "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
         );
+        if program_metadata.trace_set {
+            ensure!(
+                (program_metadata.dry_run_set || program_metadata.dev_inspect_set)
+                    && !program_metadata.preview_set
+                    && !program_metadata.tx_digest_set
+                    && !program_metadata.serialize_unsigned_set
+                    && !program_metadata.serialize_signed_set,
+                "--trace can only be combined with --dry-run or --dev-inspect."
+            );
+            #[cfg(not(feature = "tracing"))]
+            anyhow::bail!(
+                "tracing is not enabled in this build; rebuild `sui` with `--features tracing`"
+            );
+        }
 
         if program_metadata.preview_set {
             println!(
@@ -214,6 +232,8 @@ impl PTB {
                 .map(|x| x.value.into_inner().into()),
         };
 
+        let gas_payment = client.transaction_builder().input_refs(&gas).await?;
+
         let processing = TxProcessingArgs {
             tx_digest: program_metadata.tx_digest_set,
             dry_run: program_metadata.dry_run_set,
@@ -224,8 +244,6 @@ impl PTB {
             skip_signing: false,
         };
 
-        let gas_payment = client.transaction_builder().input_refs(&gas).await?;
-
         let transaction_response = dry_run_or_execute_or_serialize(
             sender,
             tx_kind,
@@ -235,6 +253,22 @@ impl PTB {
             processing,
         )
         .await?;
+
+        if program_metadata.trace_set {
+            let response = match &transaction_response {
+                SuiClientCommandResult::DryRun(response)
+                | SuiClientCommandResult::DevInspect(response) => response,
+                _ => return Err(anyhow!("Internal error, expected a simulation response.")),
+            };
+            let trace_result = replay_simulation_with_trace(context, response).await;
+            match trace_result {
+                Ok(trace) => print_trace_summary(&trace),
+                Err(error) => eprintln!(
+                    "Warning: trace generation failed; preserving the fullnode simulation result: \
+                     {error:#}"
+                ),
+            }
+        }
 
         let transaction_response = match transaction_response {
             SuiClientCommandResult::ComputeTransactionDigest(_)
@@ -310,6 +344,47 @@ impl PTB {
     }
 }
 
+/// Replay a completed fullnode simulation with Move tracing.
+async fn replay_simulation_with_trace(
+    context: &WalletContext,
+    response: &SimulateTransactionResponse,
+) -> Result<SimulatedTransactionTrace, Error> {
+    let node = get_replay_node(context).await?;
+    let transaction = response.transaction.transaction.clone();
+    let effects = response.transaction.effects.clone();
+    let output_root = std::env::current_dir()?.join(".dry-run");
+
+    trace_simulated_transaction(transaction, effects, node, USER_AGENT, &output_root).await
+}
+
+/// Print trace provenance and warn when the traced execution diverges or produces no trace.
+fn print_trace_summary(trace: &SimulatedTransactionTrace) {
+    match trace.effects_match {
+        Some(true) => eprintln!(
+            "Trace note: The traced execution used GraphQL state near checkpoint {} and \
+             reproduced the fullnode simulation effects.",
+            trace.read_checkpoint,
+        ),
+        Some(false) => eprintln!(
+            "Warning: Effects from the traced execution differ from the fullnode simulation \
+             effects. The generated trace is best-effort and may not represent the fullnode \
+             execution."
+        ),
+        None => eprintln!(
+            "Trace note: The fullnode simulation reported an early execution error, so tracing \
+             was skipped and no effects comparison was available.",
+        ),
+    }
+    if !trace.trace_generated {
+        eprintln!("Warning: no Move trace was generated for this execution result.");
+    }
+    if let Some(mock_gas_id) = trace.mock_gas_id {
+        eprintln!("Mock gas: {mock_gas_id} (synthetic; no real gas balance was checked)");
+    }
+    eprintln!("Trace digest: {}", trace.digest);
+    eprintln!("Trace artifacts: {}", trace.artifact_path.display());
+}
+
 /// Convert a vector of shell tokens into a single string, with each shell token separated by a
 /// space with each command starting on a new line.
 /// NB: we add a space to the end of the source string to ensure that for unexpected EOF
@@ -362,6 +437,19 @@ pub fn ptb_description() -> clap::Command {
         .arg(arg!(
             --"dry-run"
             "Perform a dry run of the PTB instead of executing it."
+        ))
+        .arg(arg!(
+            --"trace"
+            "Generate a best-effort Move trace for a fullnode dry run or dev inspect. Requires \
+            --dry-run or --dev-inspect."
+        )
+        .long_help(
+            "Run a fullnode dry-run or dev-inspect first, then trace the resulting transaction. \
+            Artifacts are written under <current-directory>/.dry-run/<digest>. The traced \
+            execution uses independently fetched GraphQL state, so its effects may differ from \
+            the fullnode simulation; divergence is reported as a warning. Currently supported \
+            for mainnet and testnet. Requires --dry-run or --dev-inspect and a binary built with \
+            the `tracing` feature. [Experimental]"
         ))
         .arg(arg!(
             --"dev-inspect"
