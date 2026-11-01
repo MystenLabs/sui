@@ -8,6 +8,7 @@ use std::time::Instant;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::BitmapQuery;
+use sui_inverted_index::ScanDirection;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
@@ -26,6 +27,9 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
+use crate::ledger_history::ledger_point::LedgerPoint;
+use crate::ledger_history::ledger_point::RowPlacement;
+use crate::ledger_history::query_options::LedgerWindow;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
@@ -33,6 +37,7 @@ use crate::ledger_history::query_options::ResolvedScan;
 use crate::ledger_history::query_options::ScanWindow;
 use crate::ledger_history::query_options::below_serving_floor;
 use crate::ledger_history::query_options::validate_checkpoint_bounds;
+use crate::ledger_history::watermark::RangeEnd;
 use crate::metrics::ListRequestMetrics;
 use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
@@ -53,10 +58,9 @@ use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::clamp_checkpoints_to_serving_floor;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
+use super::ledger_read::place_frontier;
 use super::ledger_read::reject_window_below_serving_floor;
 use super::ledger_read::remaining_range_after;
-use super::ledger_read::sequence_frontier_checkpoint;
-use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
@@ -256,10 +260,7 @@ enum CheckpointScanState {
     },
     Unfiltered {
         range: Range<u64>,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: u64,
-        natural_end_claim: Option<u64>,
+        range_end: RangeEnd,
     },
     Filtered {
         query: BitmapQuery,
@@ -270,10 +271,7 @@ enum CheckpointScanState {
         covered_checkpoint_bound: Option<u64>,
         /// The window's first checkpoint in scan direction; no coverage claim passes it.
         entry_checkpoint: u64,
-        exhaustion: RangeExhaustion,
-        end_checkpoint: u64,
-        end_position: u64,
-        natural_end_claim: Option<u64>,
+        range_end: RangeEnd,
     },
 }
 
@@ -309,7 +307,8 @@ fn next_checkpoint_chunk(
                 start_checkpoint,
                 &options,
             )?;
-            let mut cp_range = resolve_cp_range(checkpoint_range, &options)?;
+            let (mut cp_range, window) =
+                resolve_cp_range(checkpoint_range, start_checkpoint, end_checkpoint, &options)?;
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
@@ -335,7 +334,12 @@ fn next_checkpoint_chunk(
                 cp_range.apply_serving_floor(floor, floor, &options)?;
             }
             let range = cp_range.range();
-            let mut terminal = range_terminal(&cp_range, &options);
+            let range_end = |cp_range: &ResolvedScan<u64>| {
+                cp_range.range_end(&window, &options, |_, checkpoint| Position::Checkpoints {
+                    checkpoint,
+                })
+            };
+            let mut terminal = range_end(&cp_range).terminal();
             if range.is_empty() {
                 return Ok(CheckpointChunkDone {
                     items: Vec::new(),
@@ -362,7 +366,7 @@ fn next_checkpoint_chunk(
                         floor.checkpoint,
                         &options,
                     )?;
-                    terminal = range_terminal(&cp_range, &options);
+                    terminal = range_end(&cp_range).terminal();
                 }
                 if tx_range.is_empty() {
                     return Ok(CheckpointChunkDone {
@@ -381,18 +385,12 @@ fn next_checkpoint_chunk(
                     last_cp_seq: None,
                     covered_checkpoint_bound: None,
                     entry_checkpoint: cp_range.entry_checkpoint,
-                    exhaustion: cp_range.exhaustion,
-                    end_checkpoint: cp_range.end_checkpoint,
-                    end_position: cp_range.end_position,
-                    natural_end_claim: cp_range.natural_end_claim(&options),
+                    range_end: range_end(&cp_range),
                 }
             } else {
                 CheckpointScanState::Unfiltered {
                     range,
-                    exhaustion: cp_range.exhaustion,
-                    end_checkpoint: cp_range.end_checkpoint,
-                    end_position: cp_range.end_position,
-                    natural_end_claim: cp_range.natural_end_claim(&options),
+                    range_end: range_end(&cp_range),
                 }
             };
             next_checkpoint_chunk(
@@ -408,19 +406,10 @@ fn next_checkpoint_chunk(
                 metrics,
             )
         }
-        CheckpointScanState::Unfiltered {
-            range,
-            exhaustion,
-            end_checkpoint,
-            end_position,
-            natural_end_claim,
-        } => next_unfiltered_checkpoint_chunk(
+        CheckpointScanState::Unfiltered { range, range_end } => next_unfiltered_checkpoint_chunk(
             service,
             range,
-            exhaustion,
-            end_checkpoint,
-            end_position,
-            natural_end_claim,
+            range_end,
             read_mask,
             options,
             scan_budget,
@@ -436,10 +425,7 @@ fn next_checkpoint_chunk(
             last_cp_seq,
             covered_checkpoint_bound,
             entry_checkpoint,
-            exhaustion,
-            end_checkpoint,
-            end_position,
-            natural_end_claim,
+            range_end,
         } => next_filtered_checkpoint_chunk(
             service,
             query,
@@ -449,10 +435,7 @@ fn next_checkpoint_chunk(
             last_cp_seq,
             covered_checkpoint_bound,
             entry_checkpoint,
-            exhaustion,
-            end_checkpoint,
-            end_position,
-            natural_end_claim,
+            range_end,
             read_mask,
             options,
             scan_budget,
@@ -468,10 +451,7 @@ fn next_checkpoint_chunk(
 fn next_unfiltered_checkpoint_chunk(
     service: RpcService,
     range: Range<u64>,
-    exhaustion: RangeExhaustion,
-    end_checkpoint: u64,
-    end_position: u64,
-    natural_end_claim: Option<u64>,
+    range_end: RangeEnd,
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
@@ -484,13 +464,7 @@ fn next_unfiltered_checkpoint_chunk(
     let next_state = seqs
         .last()
         .and_then(|cp_seq| remaining_range_after(range, *cp_seq, ascending))
-        .map(|range| CheckpointScanState::Unfiltered {
-            range,
-            exhaustion,
-            end_checkpoint,
-            end_position,
-            natural_end_claim,
-        });
+        .map(|range| CheckpointScanState::Unfiltered { range, range_end });
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
@@ -500,13 +474,7 @@ fn next_unfiltered_checkpoint_chunk(
         items,
         produced,
         next_state,
-        terminal: ScanTerminal::from_range_exhaustion(
-            exhaustion,
-            Position::Checkpoints {
-                checkpoint: end_position,
-            },
-            natural_end_claim,
-        ),
+        terminal: range_end.terminal(),
         remaining_scan_budget: scan_budget,
     })
 }
@@ -520,10 +488,7 @@ fn next_filtered_checkpoint_chunk(
     mut last_cp_seq: Option<u64>,
     mut covered_checkpoint_bound: Option<u64>,
     entry_checkpoint: u64,
-    exhaustion: RangeExhaustion,
-    end_checkpoint: u64,
-    end_position: u64,
-    natural_end_claim: Option<u64>,
+    range_end: RangeEnd,
     read_mask: FieldMaskTree,
     options: QueryOptions,
     scan_budget: usize,
@@ -533,7 +498,6 @@ fn next_filtered_checkpoint_chunk(
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
 ) -> Result<CheckpointChunkDone, RpcError> {
-    let ascending = options.is_ascending();
     let item_limit = chunk_item_limit.min(remaining_request_item_limit);
     let mut remaining_scan_budget = scan_budget;
     let mut cp_seqs = buffered_cp_seqs
@@ -624,7 +588,6 @@ fn next_filtered_checkpoint_chunk(
                 frontier,
                 covered_checkpoint_bound,
                 entry_checkpoint,
-                ascending,
             )?)
         }
         _ => None,
@@ -648,10 +611,7 @@ fn next_filtered_checkpoint_chunk(
                 last_cp_seq,
                 covered_checkpoint_bound,
                 entry_checkpoint,
-                exhaustion,
-                end_checkpoint,
-                end_position,
-                natural_end_claim,
+                range_end,
             },
         )
     };
@@ -670,23 +630,14 @@ fn next_filtered_checkpoint_chunk(
     if let Some(watermark) = scan_watermark {
         items.push(watermark);
     }
-    let terminal_position = Position::Checkpoints {
-        checkpoint: end_position,
-    };
-    let terminal = scan_limit_or_range(
-        request_scan_limit_reached,
-        exhaustion,
-        terminal_position,
-        natural_end_claim,
-        || {
-            frontier_watermark.ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    "request scan limit missing checkpoint frontier watermark",
-                )
-            })
-        },
-    )?;
+    let terminal = scan_limit_or_range(request_scan_limit_reached, range_end, || {
+        frontier_watermark.ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                "request scan limit missing checkpoint frontier watermark",
+            )
+        })
+    })?;
     Ok(CheckpointChunkDone {
         items,
         produced,
@@ -767,12 +718,15 @@ fn scan_checkpoint_watermark(
     frontier: u64,
     covered_checkpoint_bound: Option<u64>,
     entry_checkpoint: u64,
-    ascending: bool,
 ) -> Result<Watermark, RpcError> {
+    let placed = place_frontier(
+        service,
+        RowPlacement::transaction_boundary(frontier, options.scan_direction()),
+    )?;
     checkpoint_frontier_watermark(
         options,
         frontier,
-        sequence_frontier_checkpoint(service, frontier, ascending)?,
+        placed.checkpoint,
         covered_checkpoint_bound,
         entry_checkpoint,
     )
@@ -809,10 +763,12 @@ fn checkpoint_frontier_watermark(
                 ),
             )
         })?;
+    // A checkpoint cursor's coordinate is its own ledger point.
     Ok(boundary_watermark(
         Position::Checkpoints {
             checkpoint: cursor_cp,
         },
+        LedgerPoint::checkpoint_start(cursor_cp),
         boundary,
     ))
 }
@@ -859,7 +815,13 @@ fn render_checkpoint_seqs(
         }
         checkpoint_boundary = merge_covered_checkpoint_bound(checkpoint_boundary, cp_seq, options);
         let render_started = metrics.map(|_| Instant::now());
-        let response = render_checkpoint_seq(service, cp_seq, read_mask, checkpoint_boundary)?;
+        let response = render_checkpoint_seq(
+            service,
+            cp_seq,
+            read_mask,
+            options.scan_direction(),
+            checkpoint_boundary,
+        )?;
         if let (Some(metrics), Some(render_started)) = (metrics, render_started) {
             metrics.observe_render(render_started.elapsed());
         }
@@ -872,6 +834,7 @@ fn render_checkpoint_seq(
     service: &RpcService,
     cp_seq: u64,
     read_mask: &FieldMaskTree,
+    direction: ScanDirection,
     checkpoint_boundary: Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
     let read_mask = read_mask.to_field_mask();
@@ -888,6 +851,8 @@ fn render_checkpoint_seq(
         })?;
     let watermark = item_watermark(
         Position::Checkpoints { checkpoint: cp_seq },
+        LedgerPoint::checkpoint_start(cp_seq),
+        direction,
         checkpoint_boundary,
     );
     Ok(response_for(watermark, checkpoint))
@@ -921,23 +886,17 @@ fn apply_serving_floor_to_filtered_window(
     Ok(())
 }
 
-/// The terminal a checkpoint scan over `cp_range` reaches once it drains the range.
-fn range_terminal(cp_range: &ResolvedScan<u64>, options: &QueryOptions) -> ScanTerminal {
-    ScanTerminal::from_range_exhaustion(
-        cp_range.exhaustion,
-        Position::Checkpoints {
-            checkpoint: cp_range.end_position,
-        },
-        cp_range.natural_end_claim(options),
-    )
-}
-
 fn resolve_cp_range(
     cp_range: ResolvedCheckpointRange,
+    start_checkpoint: Option<u64>,
+    end_checkpoint: Option<u64>,
     options: &QueryOptions,
-) -> Result<ResolvedScan<u64>, RpcError> {
+) -> Result<(ResolvedScan<u64>, ScanWindow<u64>), RpcError> {
     let range = cp_range.range.clone();
-    ResolvedScan::<u64>::resolve(cp_range, ScanWindow::whole_checkpoints(range), options)
+    let ledger = LedgerWindow::checkpoints(&range, start_checkpoint, end_checkpoint);
+    let window = ScanWindow::whole_checkpoints(range, ledger);
+    let resolved = ResolvedScan::<u64>::resolve(cp_range, window.clone(), options)?;
+    Ok((resolved, window))
 }
 
 fn response_for(watermark: Watermark, message: Checkpoint) -> ListCheckpointsResponse {
@@ -969,6 +928,8 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
+
+    use crate::ledger_history::watermark::ScanTerminal;
 
     use crate::ledger_history::query_options::ScanBounds;
     use crate::ledger_history::query_options::assert_below_serving_floor_error;
@@ -1365,6 +1326,11 @@ mod tests {
                 "{case}",
             );
             assert_eq!(watermark.checkpoint, expected_proof, "{case}");
+            assert_eq!(
+                watermark.cursor_position,
+                Some(LedgerPoint::checkpoint_start(expected_cursor).to_proto(&expected_position)),
+                "{case}: a checkpoint cursor names its own ledger point",
+            );
             if let Some(covered) = covered {
                 if ascending && covered != u64::MAX {
                     assert!(
