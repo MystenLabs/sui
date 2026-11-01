@@ -2440,7 +2440,9 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
 
     // A cursor naming a position this server has not indexed comes from a newer view of the
     // ledger. An ascending scan resumes where that cursor does, so its page is empty and ends
-    // there with `LedgerTip` and no checkpoint claim; a descending one is out of range.
+    // there with `LedgerTip` and no checkpoint claim, at the checkpoint cursor's own position
+    // (transaction and event cursors past the tip: see `assert_past_tip_positions`). A descending
+    // one is out of range.
     let checkpoints_after = |mut options: QueryOptions| {
         options.after = Some(
             CursorToken::item(Position::Checkpoints {
@@ -2462,32 +2464,15 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
             checkpoint: beyond_tip + 1,
         })
     );
-    assert_eq!(resp.watermarks.last().unwrap().checkpoint, None);
+    let checkpoints_end = resp.watermarks.last().unwrap();
+    assert_eq!(checkpoints_end.checkpoint, None);
+    assert_eq!(
+        cursor_position_of(checkpoints_end),
+        Some((beyond_tip + 1, 0, 0))
+    );
     let req = checkpoints_after(query_options_descending(10));
     let status = list_error(client.list_checkpoints(req).await).await;
     assert_above_latest_available(&status, "cursor", beyond_tip);
-
-    let past_tip_tx = CursorToken::boundary(Position::Transactions {
-        checkpoint: beyond_tip,
-        tx_seq: beyond_tip,
-    });
-    let mut options = query_options(10);
-    options.after = Some(past_tip_tx.encode());
-    let mut req = ListTransactionsRequest::default();
-    req.read_mask = Some(FieldMask::from_paths(["digest"]));
-    req.options = Some(options);
-    let resp = list_transactions_result(&mut client, req).await;
-    assert!(resp.transactions.is_empty());
-    assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
-    assert_eq!(
-        CursorToken::decode(&resp.end_cursor.unwrap()).unwrap(),
-        past_tip_tx
-    );
-    let last_watermark = resp
-        .frames
-        .last()
-        .and_then(|frame| frame.watermark.as_ref());
-    assert_eq!(last_watermark.unwrap().checkpoint, None);
 
     let never_sender: SuiAddress =
         "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -3117,6 +3102,177 @@ async fn test_list_checkpoints_pruned_serving_floor() {
         );
         assert_below_earliest_available(&status, floor);
         assert!(frames.is_empty(), "ascending {ascending}: {frames:?}");
+    }
+}
+
+/// Crossing `after` and `before` cursors that both lie below the pruned serving floor leave
+/// nothing to scan: the page is empty and ends with `CURSOR_BOUND` at `before`, with no error.
+/// Its cursor is the Boundary at `before`'s position, carrying `before`'s public position. Its
+/// `cursor_position` is where `after` resumes, placed without a read: by the public position the
+/// `after` cursor carries, or by start fields that name that point. A cursor without a public
+/// position (minted before cursors carried one; both such cursors here are built by hand) and no
+/// start fields leave it unset; the page still ends the same way.
+#[sim_test]
+async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    let mut last = None;
+    for _ in 0..4 {
+        last = Some(transfer_self(&cluster, sender).await);
+    }
+    let floor = tx_checkpoint(&last.expect("transactions ran"));
+    let mut client = new_ledger_client(&cluster).await;
+
+    // Every transaction's key and item cursor, in ledger order.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths([
+        "digest",
+        "checkpoint",
+        "transaction_index",
+    ]));
+    // Bounded at the floor checkpoint, so one page holds the whole listing.
+    req.end_checkpoint = Some(floor + 1);
+    req.options = Some(query_options(1_000));
+    let listed = list_transactions_result(&mut client, req).await;
+    assert_eq!(
+        listed.end_reason,
+        Some(QueryEndReason::CheckpointBound),
+        "one page lists every transaction up to the floor checkpoint"
+    );
+    let items: Vec<((u64, u64), Bytes)> = listed
+        .transactions
+        .iter()
+        .map(|frame| {
+            let transaction = frame.transaction.as_ref().unwrap();
+            (
+                (
+                    transaction.checkpoint.unwrap(),
+                    transaction.transaction_index.unwrap(),
+                ),
+                frame.watermark.as_ref().unwrap().cursor.clone().unwrap(),
+            )
+        })
+        .collect();
+    let below_floor = items
+        .iter()
+        .take_while(|((checkpoint, _), _)| *checkpoint < floor)
+        .count();
+    assert!(
+        below_floor >= 2 && below_floor < items.len(),
+        "two transactions below the floor {floor}, and one at it: {items:?}"
+    );
+    // `after` is the last transaction below the floor, `before` the first: they cross.
+    let (after_key, after) = items[below_floor - 1].clone();
+    let (_, before) = items[0].clone();
+    let after_is_last_of_its_checkpoint = items[below_floor].0.0 != after_key.0;
+    // The boundary right after the `after` item: the item key its cursor carries, with the
+    // transaction index incremented.
+    let after_resumes_at = (after_key.0, after_key.1 + 1, 0);
+    // The same boundary as the request's start fields name it, clamped past the checkpoint's
+    // end as the server clamps its window.
+    let start_resumes_at = if after_is_last_of_its_checkpoint {
+        (after_key.0 + 1, 0, 0)
+    } else {
+        after_resumes_at
+    };
+    let before_token = CursorToken::decode(&before).unwrap();
+    let closing_cursor = CursorToken::boundary(before_token.position)
+        .with_public_position(before_token.public_position)
+        .encode();
+    // The `after` cursor as a server minted it before cursors carried a public position.
+    let unlabelled_after = CursorToken::decode(&after)
+        .unwrap()
+        .with_public_position(None)
+        .encode();
+
+    cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let checkpoint_store = state.get_checkpoint_store();
+        let checkpoint = checkpoint_store
+            .get_checkpoint_by_sequence_number(floor - 1)
+            .unwrap()
+            .expect("checkpoint below the floor should exist");
+        checkpoint_store
+            .update_highest_pruned_checkpoint(&checkpoint)
+            .unwrap();
+    });
+
+    // A past-tip `after` cursor without a public position, in a window that ends below the tip.
+    let past_tip_tx_seq = match CursorToken::decode(&items.last().unwrap().1)
+        .unwrap()
+        .position
+    {
+        Position::Transactions { tx_seq, .. } => tx_seq + 1_000_000,
+        position => panic!("transaction cursor: {position:?}"),
+    };
+    let past_tip_after = CursorToken::boundary(Position::Transactions {
+        checkpoint: floor + 1_000,
+        tx_seq: past_tip_tx_seq,
+    })
+    .encode();
+
+    for (case, after, start, end_checkpoint, expected_position) in [
+        (
+            "no start fields",
+            after.clone(),
+            None,
+            None,
+            Some(after_resumes_at),
+        ),
+        (
+            "start fields at `after`",
+            after.clone(),
+            Some(start_resumes_at),
+            None,
+            Some(start_resumes_at),
+        ),
+        (
+            "`after` without its public position",
+            unlabelled_after.clone(),
+            None,
+            None,
+            None,
+        ),
+        (
+            "`after` without its public position, start fields at it",
+            unlabelled_after,
+            Some(start_resumes_at),
+            None,
+            Some(start_resumes_at),
+        ),
+        (
+            "`after` past the tip",
+            past_tip_after,
+            None,
+            Some(floor),
+            None,
+        ),
+    ] {
+        let mut req = ListTransactionsRequest::default();
+        req.read_mask = Some(FieldMask::from_paths(["digest"]));
+        if let Some((checkpoint, transaction_index, _)) = start {
+            req.start_checkpoint = Some(checkpoint);
+            req.start_transaction_index = (transaction_index != 0).then_some(transaction_index);
+        }
+        req.end_checkpoint = end_checkpoint;
+        req.options = Some(query_options_between(10, after, before.clone()));
+        let response = list_transactions_result(&mut client, req).await;
+        assert!(response.transactions.is_empty(), "{case}");
+        assert_eq!(
+            response.end_reason,
+            Some(QueryEndReason::CursorBound),
+            "{case}"
+        );
+        let [terminal] = response.frames.as_slice() else {
+            panic!("one terminal frame: {case}: {:?}", response.frames);
+        };
+        let watermark = terminal.watermark.as_ref().expect("terminal watermark");
+        assert_eq!(
+            watermark.cursor.as_ref(),
+            Some(&closing_cursor),
+            "{case}: the cursor names `before`"
+        );
+        assert_eq!(cursor_position_of(watermark), expected_position, "{case}");
     }
 }
 
@@ -5622,5 +5778,725 @@ async fn test_list_events_checkpoint_positions() {
         let mut request = ListEventsRequest::default();
         set_fields(&mut request);
         expect_invalid_list_events(&mut client, request).await;
+    }
+}
+
+// --- Resume points in ledger coordinates (`Watermark.cursor_position`) ---
+
+/// `(checkpoint, transaction_index, event_index)`: an item's key, or a position (the boundary
+/// right before the item with that key), with the indexes a lane does not use left at 0. Ordered
+/// lexicographically, as ledger positions are.
+type LedgerPoint = (u64, u64, u32);
+
+/// A List query whose frames' `cursor_position`s are checked.
+#[derive(Clone, Debug)]
+enum PositionQuery {
+    Checkpoints(Option<TransactionFilter>),
+    Transactions(Option<TransactionFilter>),
+    Events(Option<EventFilter>),
+}
+
+impl PositionQuery {
+    /// The boundary right after the item keyed `key`: its finest index incremented.
+    fn above(&self, key: LedgerPoint) -> LedgerPoint {
+        let (checkpoint, transaction, event) = key;
+        match self {
+            PositionQuery::Checkpoints(_) => (checkpoint + 1, 0, 0),
+            PositionQuery::Transactions(_) => (checkpoint, transaction + 1, 0),
+            PositionQuery::Events(_) => (checkpoint, transaction, event + 1),
+        }
+    }
+}
+
+/// The bounds of one List request: start and end positions, sent as the request's checkpoint and
+/// index fields, and `after` / `before` cursors.
+#[derive(Clone, Debug, Default)]
+struct PositionBounds {
+    start: Option<LedgerPoint>,
+    end: Option<LedgerPoint>,
+    after: Option<Bytes>,
+    before: Option<Bytes>,
+}
+
+impl PositionBounds {
+    /// The checkpoint window `window`, with no cursor.
+    fn window(window: (u64, u64)) -> Self {
+        Self {
+            start: Some((window.0, 0, 0)),
+            end: Some((window.1, 0, 0)),
+            ..Self::default()
+        }
+    }
+}
+
+/// The request fields `(checkpoint, transaction_index, event_index)` that start a scan at
+/// `start`. Checkpoint positions carry no index, so they set only the checkpoint.
+fn start_fields(start: LedgerPoint) -> (u64, Option<u64>, Option<u32>) {
+    let (checkpoint, transaction, event) = start;
+    (
+        checkpoint,
+        (transaction != 0 || event != 0).then_some(transaction),
+        (event != 0).then_some(event),
+    )
+}
+
+/// The request fields `(checkpoint, transaction_index, event_index)` that end a scan at `end`.
+/// A position at the start of a checkpoint is that checkpoint as the exclusive end; any other
+/// position is an index into the checkpoint before the exclusive end.
+fn end_fields(end: LedgerPoint) -> (u64, Option<u64>, Option<u32>) {
+    match end {
+        (checkpoint, 0, 0) => (checkpoint, None, None),
+        (checkpoint, transaction, event) => (
+            checkpoint + 1,
+            Some(transaction),
+            (event != 0).then_some(event),
+        ),
+    }
+}
+
+/// A watermark's `cursor_position`, unset fields read as 0.
+fn cursor_position_of(watermark: &Watermark) -> Option<LedgerPoint> {
+    watermark.cursor_position.as_ref().map(|position| {
+        (
+            position.checkpoint.unwrap_or(0),
+            position.transaction_index.unwrap_or(0),
+            position.event_index.unwrap_or(0),
+        )
+    })
+}
+
+/// One List frame, reduced to what its resume point is checked against.
+#[derive(Clone, Debug)]
+struct PositionFrame {
+    /// The key of the item the frame carries.
+    item: Option<LedgerPoint>,
+    cursor: Bytes,
+    /// `Watermark.checkpoint`.
+    checkpoint: Option<u64>,
+    /// `Watermark.cursor_position`.
+    position: Option<LedgerPoint>,
+    end_reason: Option<QueryEndReason>,
+}
+
+fn position_items(frames: &[PositionFrame]) -> Vec<LedgerPoint> {
+    frames.iter().filter_map(|frame| frame.item).collect()
+}
+
+/// Every frame of one `query` request within `bounds`, requesting the item key fields.
+async fn position_page(
+    client: &mut LedgerServiceClient<Channel>,
+    query: &PositionQuery,
+    bounds: &PositionBounds,
+    ascending: bool,
+    limit: u32,
+) -> Vec<PositionFrame> {
+    let mut options = ordered_options(limit, ascending);
+    options.after = bounds.after.clone();
+    options.before = bounds.before.clone();
+    let start = bounds.start.map(start_fields);
+    let end = bounds.end.map(end_fields);
+    let frames: Vec<(
+        Option<LedgerPoint>,
+        Option<Watermark>,
+        Option<QueryEndReason>,
+    )> = match query {
+        PositionQuery::Checkpoints(filter) => {
+            let mut request = ListCheckpointsRequest::default();
+            request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+            request.start_checkpoint = start.map(|(checkpoint, _, _)| checkpoint);
+            request.end_checkpoint = end.map(|(checkpoint, _, _)| checkpoint);
+            request.filter = filter.clone();
+            request.options = Some(options);
+            let mut stream = client.list_checkpoints(request).await.unwrap().into_inner();
+            let mut frames = Vec::new();
+            while let Some(frame) = stream.message().await.unwrap() {
+                let item = frame
+                    .checkpoint
+                    .is_some()
+                    .then(|| (checkpoint_sequence(&frame), 0, 0));
+                frames.push((item, frame.watermark, frame.end.map(|end| end.reason())));
+            }
+            frames
+        }
+        PositionQuery::Transactions(filter) => {
+            let mut request = ListTransactionsRequest::default();
+            request.read_mask = Some(FieldMask::from_paths([
+                "digest",
+                "checkpoint",
+                "transaction_index",
+            ]));
+            request.start_checkpoint = start.map(|(checkpoint, _, _)| checkpoint);
+            request.start_transaction_index = start.and_then(|(_, transaction, _)| transaction);
+            request.end_checkpoint = end.map(|(checkpoint, _, _)| checkpoint);
+            request.end_transaction_index = end.and_then(|(_, transaction, _)| transaction);
+            request.filter = filter.clone();
+            request.options = Some(options);
+            let result = list_transactions_result(client, request).await;
+            result
+                .frames
+                .into_iter()
+                .map(|frame| {
+                    let item = frame
+                        .transaction
+                        .is_some()
+                        .then(|| transaction_key(&frame))
+                        .map(|(checkpoint, transaction)| (checkpoint, transaction, 0));
+                    (item, frame.watermark, frame.end.map(|end| end.reason()))
+                })
+                .collect()
+        }
+        PositionQuery::Events(filter) => {
+            let mut request = ListEventsRequest::default();
+            request.read_mask = Some(FieldMask::from_paths([
+                "checkpoint",
+                "transaction_index",
+                "event_index",
+            ]));
+            request.start_checkpoint = start.map(|(checkpoint, _, _)| checkpoint);
+            request.start_transaction_index = start.and_then(|(_, transaction, _)| transaction);
+            request.start_event_index = start.and_then(|(_, _, event)| event);
+            request.end_checkpoint = end.map(|(checkpoint, _, _)| checkpoint);
+            request.end_transaction_index = end.and_then(|(_, transaction, _)| transaction);
+            request.end_event_index = end.and_then(|(_, _, event)| event);
+            request.filter = filter.clone();
+            request.options = Some(options);
+            let result = list_events_result(client, request).await;
+            result
+                .frames
+                .into_iter()
+                .map(|frame| {
+                    let item = frame.event.is_some().then(|| event_key(&frame));
+                    (item, frame.watermark, frame.end.map(|end| end.reason()))
+                })
+                .collect()
+        }
+    };
+    frames
+        .into_iter()
+        .map(|(item, watermark, end_reason)| {
+            let watermark = watermark.expect("every frame carries a watermark");
+            PositionFrame {
+                item,
+                cursor: watermark
+                    .cursor
+                    .clone()
+                    .expect("every watermark carries a cursor"),
+                checkpoint: watermark.checkpoint,
+                position: cursor_position_of(&watermark),
+                end_reason,
+            }
+        })
+        .collect()
+}
+
+/// Checks the resume points of one page of `query` within `bounds`: every frame carries one; an
+/// item frame's is the boundary right after its item ascending, the item's key descending; an
+/// item-free frame carries a Boundary-kind cursor; positions never regress, never pass the
+/// request's start (ascending) or end (descending), and every item delivered so far lies on the
+/// delivered side of each later frame's position.
+fn assert_page_positions(
+    query: &PositionQuery,
+    frames: &[PositionFrame],
+    bounds: &PositionBounds,
+    ascending: bool,
+) {
+    let context = format!("{query:?}, ascending={ascending}, {bounds:?}: {frames:#?}");
+    let (last, earlier) = frames.split_last().expect("a page has a frame");
+    assert!(
+        last.end_reason.is_some(),
+        "a page ends on its last frame: {context}"
+    );
+    assert!(
+        earlier.iter().all(|frame| frame.end_reason.is_none()),
+        "only the last frame ends the page: {context}"
+    );
+    let mut last_position: Option<LedgerPoint> = None;
+    let mut last_item: Option<LedgerPoint> = None;
+    for frame in frames {
+        let position = frame
+            .position
+            .unwrap_or_else(|| panic!("frame without a cursor_position {frame:?}: {context}"));
+        match query {
+            PositionQuery::Checkpoints(_) => assert_eq!(
+                (position.1, position.2),
+                (0, 0),
+                "checkpoint positions carry no index: {context}"
+            ),
+            PositionQuery::Transactions(_) => assert_eq!(
+                position.2, 0,
+                "transaction positions carry no event index: {context}"
+            ),
+            PositionQuery::Events(_) => {}
+        }
+        match frame.item {
+            Some(key) => {
+                let expected = if ascending { query.above(key) } else { key };
+                assert_eq!(position, expected, "item {key:?} frame position: {context}");
+                if let Some(last_item) = last_item {
+                    let in_scan_order = if ascending {
+                        key > last_item
+                    } else {
+                        key < last_item
+                    };
+                    assert!(
+                        in_scan_order,
+                        "items arrive in scan order, {last_item:?} then {key:?}: {context}"
+                    );
+                }
+                last_item = Some(key);
+            }
+            None => assert_eq!(
+                cursor_key(&frame.cursor).0,
+                CursorKind::Boundary,
+                "item-free frame {frame:?} carries a Boundary cursor: {context}"
+            ),
+        }
+        if let Some(last_position) = last_position {
+            let advances = if ascending {
+                position >= last_position
+            } else {
+                position <= last_position
+            };
+            assert!(
+                advances,
+                "position regressed from {last_position:?} to {position:?}: {context}"
+            );
+        }
+        if let Some(item) = last_item {
+            let delivered_side = if ascending {
+                item < position
+            } else {
+                item >= position
+            };
+            assert!(
+                delivered_side,
+                "delivered item {item:?} lies beyond position {position:?}: {context}"
+            );
+        }
+        // Never before the request's start ascending, or past its end descending.
+        let within_request = if ascending {
+            bounds.start.is_none_or(|start| position >= start)
+        } else {
+            bounds.end.is_none_or(|end| position <= end)
+        };
+        assert!(
+            within_request,
+            "position {position:?} outside the request: {context}"
+        );
+        last_position = Some(position);
+    }
+}
+
+/// Pages `query` over the checkpoint `window`, `limit` items a page, checking each page with
+/// [`assert_page_positions`]. Each page continues from the last frame of the one before by its
+/// `cursor_position` and cursor: ascending, start fields at the position and the cursor as
+/// `after`; descending, end fields at the position and the cursor as `before`. Returns each
+/// page's frames.
+async fn page_by_positions(
+    client: &mut LedgerServiceClient<Channel>,
+    query: &PositionQuery,
+    window: (u64, u64),
+    ascending: bool,
+    limit: u32,
+) -> Vec<Vec<PositionFrame>> {
+    let mut bounds = PositionBounds::window(window);
+    let mut pages = Vec::new();
+    for _ in 0..1_000 {
+        let frames = position_page(client, query, &bounds, ascending, limit).await;
+        assert_page_positions(query, &frames, &bounds, ascending);
+        let last = frames.last().expect("a page has a frame").clone();
+        pages.push(frames);
+        if !matches!(
+            last.end_reason,
+            Some(QueryEndReason::ItemLimit | QueryEndReason::ScanLimit)
+        ) {
+            return pages;
+        }
+        let position = last.position.expect("a continued page has a position");
+        if ascending {
+            bounds.start = Some(position);
+            bounds.after = Some(last.cursor);
+        } else {
+            bounds.end = Some(position);
+            bounds.before = Some(last.cursor);
+        }
+    }
+    panic!("paging did not reach the end: {query:?}, ascending={ascending}");
+}
+
+/// The reason each page ended.
+fn page_end_reasons(pages: &[Vec<PositionFrame>]) -> Vec<QueryEndReason> {
+    pages
+        .iter()
+        .map(|page| {
+            page.last()
+                .and_then(|frame| frame.end_reason)
+                .expect("a page ends with a reason")
+        })
+        .collect()
+}
+
+/// Whether the positions `a` and `b` name the same boundary of `ledger` (every key of one lane):
+/// no key lies between them. Different positions can name one boundary, since an index past the
+/// last transaction of a checkpoint (or event of a transaction) names the start of the next one.
+fn names_same_boundary(a: LedgerPoint, b: LedgerPoint, ledger: &[LedgerPoint]) -> bool {
+    ledger.iter().all(|key| (*key < a) == (*key < b))
+}
+
+/// The keys of every event of the transactions of `window` matching `filter`, ascending, read
+/// from a transaction listing.
+async fn event_keys_of_transactions(
+    client: &mut LedgerServiceClient<Channel>,
+    window: (u64, u64),
+    filter: Option<TransactionFilter>,
+) -> Vec<LedgerPoint> {
+    let mut request =
+        positioned_transactions_request(window, None, None, &filter, ordered_options(500, true));
+    request.read_mask = Some(FieldMask::from_paths([
+        "checkpoint",
+        "transaction_index",
+        "events.events.event_type",
+    ]));
+    let result = list_transactions_result(client, request).await;
+    assert_eq!(result.end_reason, Some(QueryEndReason::CheckpointBound));
+    result
+        .transactions
+        .iter()
+        .flat_map(|item| {
+            let (checkpoint, transaction) = transaction_key(item);
+            let event_count = item
+                .transaction
+                .as_ref()
+                .and_then(|transaction| transaction.events.as_ref())
+                .map_or(0, |events| events.events.len() as u32);
+            (0..event_count).map(move |event| (checkpoint, transaction, event))
+        })
+        .collect()
+}
+
+/// A scan of `window` whose far bound is the cursor of a `query` item past the start of its
+/// checkpoint (an event past the start of its transaction), ascending as `before` and descending
+/// as `after`, delivers the items short of that item and ends with a CURSOR_BOUND frame at the
+/// item's boundary: ascending its key, descending the boundary right after it. `ledger` is every
+/// key of `window` in the query's lane, unfiltered.
+async fn assert_far_cursor_bound_positions(
+    client: &mut LedgerServiceClient<Channel>,
+    query: &PositionQuery,
+    window: (u64, u64),
+    ledger: &[LedgerPoint],
+) {
+    let scan = position_page(client, query, &PositionBounds::window(window), true, 1_000).await;
+    let listed: Vec<(LedgerPoint, Bytes)> = scan
+        .iter()
+        .filter_map(|frame| Some((frame.item?, frame.cursor.clone())))
+        .collect();
+    let (key, cursor) = listed
+        .iter()
+        .skip(listed.len() / 2)
+        .find(|(key, _)| match query {
+            PositionQuery::Events(_) => key.2 > 0,
+            _ => key.1 > 0,
+        })
+        .cloned()
+        .unwrap_or_else(|| panic!("no item inside a checkpoint: {query:?}"));
+    let keys: Vec<LedgerPoint> = listed.iter().map(|(item, _)| *item).collect();
+    for ascending in [true, false] {
+        let mut bounds = PositionBounds::window(window);
+        let (expected, boundary): (Vec<_>, _) = if ascending {
+            bounds.before = Some(cursor.clone());
+            let short = keys.iter().copied().filter(|item| *item < key);
+            (short.collect(), key)
+        } else {
+            bounds.after = Some(cursor.clone());
+            let short = keys.iter().rev().copied().filter(|item| *item > key);
+            (short.collect(), query.above(key))
+        };
+        let frames = position_page(client, query, &bounds, ascending, 1_000).await;
+        assert_page_positions(query, &frames, &bounds, ascending);
+        let context = format!("{query:?} bounded at {key:?}, ascending={ascending}: {frames:#?}");
+        assert_eq!(position_items(&frames), expected, "{context}");
+        let last = frames.last().expect("a page has a frame");
+        assert_eq!(
+            last.end_reason,
+            Some(QueryEndReason::CursorBound),
+            "{context}"
+        );
+        assert_eq!(last.item, None, "{context}");
+        let position = last.position.expect("CURSOR_BOUND position");
+        assert!(
+            names_same_boundary(position, boundary, ledger),
+            "CURSOR_BOUND position {position:?} names the boundary {boundary:?}: {context}"
+        );
+    }
+}
+
+/// An ascending request whose start fields lie past the indexed tip gets a single LEDGER_TIP
+/// frame echoing them as its `cursor_position`, with no `Watermark.checkpoint`. One whose only
+/// bound past the tip is an `after` cursor gets a LEDGER_TIP frame echoing that cursor byte for
+/// byte, at the public position it carries: a checkpoint cursor is its own position, and a
+/// transaction or event cursor without a public position leaves the frame without one.
+async fn assert_past_tip_positions(
+    client: &mut LedgerServiceClient<Channel>,
+    cluster: &TestCluster,
+    window: (u64, u64),
+    sender: SuiAddress,
+) {
+    let beyond_tip = latest_checkpoint_sequence(cluster).await + DEFAULT_CHECKPOINT_RANGE_END;
+    let echoed_starts = [
+        (PositionQuery::Checkpoints(None), (beyond_tip, 0, 0)),
+        (
+            PositionQuery::Checkpoints(Some(tx_sender(sender))),
+            (beyond_tip, 0, 0),
+        ),
+        (PositionQuery::Transactions(None), (beyond_tip, 0, 0)),
+        (
+            PositionQuery::Transactions(Some(tx_sender(sender))),
+            (beyond_tip, 3, 0),
+        ),
+        (PositionQuery::Events(None), (beyond_tip, 2, 1)),
+        (
+            PositionQuery::Events(Some(ev_sender(sender))),
+            (beyond_tip, 0, 4),
+        ),
+    ];
+    for (query, start) in echoed_starts {
+        let bounds = PositionBounds {
+            start: Some(start),
+            ..PositionBounds::default()
+        };
+        let frames = position_page(client, &query, &bounds, true, 10).await;
+        assert_page_positions(&query, &frames, &bounds, true);
+        let context = format!("{query:?} from {start:?}: {frames:#?}");
+        assert_eq!(frames.len(), 1, "{context}");
+        let frame = &frames[0];
+        assert_eq!(frame.item, None, "{context}");
+        assert_eq!(
+            frame.end_reason,
+            Some(QueryEndReason::LedgerTip),
+            "{context}"
+        );
+        assert_eq!(frame.position, Some(start), "{context}");
+        assert_eq!(frame.checkpoint, None, "{context}");
+    }
+
+    let past_tip_point = (beyond_tip, 0, 0);
+    let public_position = Some(sui_rpc_cursor::PublicPosition {
+        checkpoint: beyond_tip,
+        transaction_index: 0,
+        event_index: 0,
+    });
+    let transaction = Position::Transactions {
+        checkpoint: beyond_tip,
+        tx_seq: beyond_tip,
+    };
+    let event = Position::Events {
+        checkpoint: beyond_tip,
+        tx_seq: beyond_tip,
+        event_index: 0,
+    };
+    let past_tip_cursors = [
+        (
+            PositionQuery::Checkpoints(None),
+            CursorToken::boundary(Position::Checkpoints {
+                checkpoint: beyond_tip,
+            }),
+            Some(past_tip_point),
+        ),
+        (
+            PositionQuery::Transactions(None),
+            CursorToken::boundary(transaction),
+            None,
+        ),
+        (
+            PositionQuery::Transactions(None),
+            CursorToken::boundary(transaction).with_public_position(public_position),
+            Some(past_tip_point),
+        ),
+        (
+            PositionQuery::Events(None),
+            CursorToken::boundary(event),
+            None,
+        ),
+        (
+            PositionQuery::Events(None),
+            CursorToken::boundary(event).with_public_position(public_position),
+            Some(past_tip_point),
+        ),
+    ];
+    for (query, cursor, expected_position) in past_tip_cursors {
+        // With no start fields, or start fields behind the cursor.
+        for start in [None, Some((window.0, 0, 0))] {
+            let bounds = PositionBounds {
+                start,
+                after: Some(cursor.encode()),
+                ..PositionBounds::default()
+            };
+            let frames = position_page(client, &query, &bounds, true, 10).await;
+            let context = format!("{query:?} after {cursor:?} from {start:?}: {frames:#?}");
+            assert_eq!(frames.len(), 1, "{context}");
+            let frame = &frames[0];
+            assert_eq!(frame.item, None, "{context}");
+            assert_eq!(
+                frame.end_reason,
+                Some(QueryEndReason::LedgerTip),
+                "{context}"
+            );
+            assert_eq!(frame.cursor, cursor.encode(), "{context}");
+            assert_eq!(frame.position, expected_position, "{context}");
+            assert_eq!(frame.checkpoint, None, "{context}");
+        }
+    }
+}
+
+/// Every List frame carries a `cursor_position`, in each API and ordering, with and without a
+/// filter (see [`assert_page_positions`]). Paging two items at a time, each page continuing at
+/// the last frame's position and cursor, collects exactly the items of one unbounded scan. A far
+/// cursor bound inside a checkpoint ends the scan at its item's boundary, and an ascending start
+/// past the tip is echoed (see [`assert_far_cursor_bound_positions`] and
+/// [`assert_past_tip_positions`]).
+#[sim_test]
+async fn test_list_cursor_positions() {
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .with_rpc_config(sui_config::RpcConfig {
+            enable_indexing: Some(true),
+            ledger_history: Some(sui_config::rpc_config::LedgerHistoryConfig {
+                // One page holds every checkpoint of the window.
+                list_checkpoints: Some(sui_config::rpc_config::LedgerHistoryMethodConfig {
+                    max_limit_items: Some(1_000),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .build()
+        .await;
+    let sender = cluster.get_address_0();
+    let other_sender = cluster.get_address_1();
+    let (pkg, _) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let mut txs = Vec::new();
+    for _ in 0..3 {
+        txs.push(call_emit_many(&cluster, sender, pkg, 3).await);
+        txs.push(transfer_self(&cluster, sender).await);
+        txs.push(call_emit_many(&cluster, other_sender, pkg, 2).await);
+    }
+    let window = checkpoint_range(&txs.iter().collect::<Vec<_>>());
+    let mut client = new_ledger_client(&cluster).await;
+
+    let queries = [
+        PositionQuery::Checkpoints(None),
+        PositionQuery::Checkpoints(Some(tx_sender(sender))),
+        PositionQuery::Transactions(None),
+        PositionQuery::Transactions(Some(tx_sender(sender))),
+        PositionQuery::Events(None),
+        PositionQuery::Events(Some(ev_sender(sender))),
+    ];
+    for query in &queries {
+        for ascending in [true, false] {
+            let bounds = PositionBounds::window(window);
+            let scan = position_page(&mut client, query, &bounds, ascending, 1_000).await;
+            assert_page_positions(query, &scan, &bounds, ascending);
+            let context = format!("{query:?}, ascending={ascending}");
+            assert_eq!(
+                scan.last().and_then(|frame| frame.end_reason),
+                Some(QueryEndReason::CheckpointBound),
+                "{context}"
+            );
+            let expected = position_items(&scan);
+            assert!(expected.len() > 2, "too few items to page: {context}");
+
+            let pages = page_by_positions(&mut client, query, window, ascending, 2).await;
+            let end_reasons = page_end_reasons(&pages);
+            let item_limited = end_reasons.contains(&QueryEndReason::ItemLimit);
+            assert!(item_limited, "{context}: {end_reasons:?}");
+            let paged = position_items(&pages.concat());
+            assert_eq!(paged, expected, "paging by position: {context}");
+        }
+    }
+
+    let bounds = PositionBounds::window(window);
+    let ledger_transactions = position_items(
+        &position_page(
+            &mut client,
+            &PositionQuery::Transactions(None),
+            &bounds,
+            true,
+            1_000,
+        )
+        .await,
+    );
+    let ledger_events = position_items(
+        &position_page(
+            &mut client,
+            &PositionQuery::Events(None),
+            &bounds,
+            true,
+            1_000,
+        )
+        .await,
+    );
+    for query in &queries {
+        let ledger = match query {
+            PositionQuery::Checkpoints(_) => continue,
+            PositionQuery::Transactions(_) => &ledger_transactions,
+            PositionQuery::Events(_) => &ledger_events,
+        };
+        assert_far_cursor_bound_positions(&mut client, query, window, ledger).await;
+    }
+
+    assert_past_tip_positions(&mut client, &cluster, window, sender).await;
+}
+
+/// Paging an event scan that stops on SCAN_LIMIT frames between transactions, inside
+/// checkpoints, by each page's last `cursor_position` and cursor collects every event of the
+/// window exactly once, in either ordering, with and without a filter; every page's positions
+/// pass [`assert_page_positions`].
+#[sim_test]
+async fn test_list_events_scan_limited_cursor_positions() {
+    let cluster = transaction_capped_event_cluster().await;
+    let sender = cluster.get_address_0();
+    let other_sender = cluster.get_address_1();
+    let (pkg, _) = publish_package(&cluster, sender, emit_test_event_pkg_path()).await;
+    let mut txs = Vec::new();
+    for _ in 0..3 {
+        txs.push(call_emit_many(&cluster, sender, pkg, 3).await);
+        txs.push(transfer_self(&cluster, sender).await);
+        txs.push(call_emit_many(&cluster, other_sender, pkg, 1).await);
+    }
+    let window = checkpoint_range(&txs.iter().collect::<Vec<_>>());
+    let mut client = new_ledger_client(&cluster).await;
+
+    // An event's sender is its transaction's sender.
+    let queries = [
+        (PositionQuery::Events(None), None),
+        (
+            PositionQuery::Events(Some(ev_sender(sender))),
+            Some(tx_sender(sender)),
+        ),
+    ];
+    for (query, transaction_filter) in queries {
+        let ascending_keys =
+            event_keys_of_transactions(&mut client, window, transaction_filter).await;
+        assert!(
+            ascending_keys.len() > 2,
+            "too few events to page: {query:?}"
+        );
+        for ascending in [true, false] {
+            let pages = page_by_positions(&mut client, &query, window, ascending, 2).await;
+            let context = format!("{query:?}, ascending={ascending}");
+            if matches!(query, PositionQuery::Events(None)) {
+                let end_reasons = page_end_reasons(&pages);
+                let scan_limited = end_reasons.contains(&QueryEndReason::ScanLimit);
+                assert!(scan_limited, "{context}: {end_reasons:?}");
+            }
+            let mut expected = ascending_keys.clone();
+            if !ascending {
+                expected.reverse();
+            }
+            let paged = position_items(&pages.concat());
+            assert_eq!(paged, expected, "paging by position: {context}");
+        }
     }
 }

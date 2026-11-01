@@ -9,6 +9,8 @@ use sui_types::storage::LedgerTxSeqDigest;
 
 use crate::RpcError;
 use crate::RpcService;
+use crate::ledger_history::ledger_point::LedgerPoint;
+use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::below_serving_floor;
 
 pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
@@ -206,7 +208,7 @@ pub(super) fn clamp_to_serving_floor(
     }
     Ok(Some(ServingFloor {
         tx_seq: clamped,
-        checkpoint: tx_checkpoint(service, clamped)?,
+        checkpoint: floor.checkpoint,
     }))
 }
 
@@ -311,34 +313,41 @@ pub(super) fn get_tx_seq_digest_rows(
     Ok(rows)
 }
 
-/// Resolve a transaction sequence number to its containing checkpoint.
-pub(super) fn tx_checkpoint(service: &RpcService, tx_seq: u64) -> Result<u64, RpcError> {
-    let checkpoint = get_tx_seq_digest_multi(service, &[tx_seq])?
+/// The `tx_seq_digest` row of one transaction.
+fn get_tx_seq_digest(service: &RpcService, tx_seq: u64) -> Result<LedgerTxSeqDigest, RpcError> {
+    Ok(get_tx_seq_digest_multi(service, &[tx_seq])?
         .into_iter()
         .next()
-        .expect("multi-get of one tx_seq returns one row")
-        .checkpoint_number;
-    Ok(checkpoint)
+        .expect("multi-get of one tx_seq returns one row"))
 }
 
-/// Resolve a u64 scan frontier to the checkpoint that bounds the covered range.
-/// The watermark proves coverage up to `frontier - 1` ascending or `frontier`
-/// descending. Returns `None` only when the ascending frontier is at genesis,
-/// where nothing is yet covered.
-pub(super) fn sequence_frontier_checkpoint(
+/// A transaction- or event-lane scan frontier, placed by the index row its [`RowPlacement`]
+/// names.
+pub(super) struct PlacedFrontier {
+    /// The checkpoint of the placing transaction, which bounds the covered range. `None` only at
+    /// the ascending genesis frontier, where nothing is yet covered.
+    pub(super) checkpoint: Option<u64>,
+    /// The frontier in ledger coordinates.
+    pub(super) point: LedgerPoint,
+}
+
+/// Place a scan frontier by the one index row `placement` names, or at genesis for `None` (see
+/// [`RowPlacement::transaction_boundary`] and [`RowPlacement::event_boundary`]).
+pub(super) fn place_frontier(
     service: &RpcService,
-    frontier: u64,
-    ascending: bool,
-) -> Result<Option<u64>, RpcError> {
-    let lookup_position = if ascending {
-        match frontier.checked_sub(1) {
-            Some(position) => position,
-            None => return Ok(None),
-        }
-    } else {
-        frontier
+    placement: Option<RowPlacement>,
+) -> Result<PlacedFrontier, RpcError> {
+    let Some(placement) = placement else {
+        return Ok(PlacedFrontier {
+            checkpoint: None,
+            point: LedgerPoint::GENESIS,
+        });
     };
-    tx_checkpoint(service, lookup_position).map(Some)
+    let row = get_tx_seq_digest(service, placement.tx_seq)?;
+    Ok(PlacedFrontier {
+        checkpoint: Some(row.checkpoint_number),
+        point: placement.point(row.checkpoint_number, row.tx_offset as u64),
+    })
 }
 
 /// Classify a missing `tx_seq_digest` row encountered during a scan. The serving

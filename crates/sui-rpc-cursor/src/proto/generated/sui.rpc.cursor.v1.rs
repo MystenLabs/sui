@@ -7,6 +7,17 @@ pub struct CursorToken {
     /// item or a scan boundary, with different resume inclusivity.
     #[prost(enumeration = "CursorKind", tag = "5")]
     pub kind: i32,
+    /// The boundary immediately before the item at this cursor's coordinate
+    /// (`tx_seq` and `event_index`), in public ledger coordinates; independent
+    /// of `kind`. An item cursor carries its item's key; a boundary cursor the
+    /// boundary it names. Set on transaction and event cursors whose issuer
+    /// knew it; a checkpoint cursor's `checkpoint` is already its public
+    /// position. Servers use it only to report positions (`cursor_position`):
+    /// scans stay bounded by `tx_seq` and `event_index`, so a forged value only
+    /// misleads the client that sent it. Readers must accept a cursor without
+    /// it.
+    #[prost(message, optional, tag = "9")]
+    pub public_position: ::core::option::Option<PublicPosition>,
     /// Coordinate schema / endpoint scope. This does not imply Item vs Boundary.
     #[prost(oneof = "cursor_token::Position", tags = "6, 7, 8")]
     pub position: ::core::option::Option<cursor_token::Position>,
@@ -58,6 +69,22 @@ pub struct EventsPosition {
     /// Index of the event within its transaction.
     #[prost(uint32, optional, tag = "3")]
     pub event_index: ::core::option::Option<u32>,
+}
+/// A position in public ledger coordinates, as `sui.rpc.v2.LedgerPosition`
+/// names it: the boundary just before the item keyed
+/// `(checkpoint, transaction_index, event_index)`. Transaction cursors leave
+/// `event_index` unset (0).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PublicPosition {
+    /// Checkpoint sequence number.
+    #[prost(uint64, tag = "1")]
+    pub checkpoint: u64,
+    /// Zero-based position of a transaction within `checkpoint`.
+    #[prost(uint64, tag = "2")]
+    pub transaction_index: u64,
+    /// Zero-based index of an event within its transaction.
+    #[prost(uint32, tag = "3")]
+    pub event_index: u32,
 }
 /// Whether `position` is a matched row returned to the client or a scan frontier the server reached.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

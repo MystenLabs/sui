@@ -526,7 +526,11 @@ async fn test_resolve_tx_digests() -> Result<()> {
     assert_eq!(result[0], Some(tx_seq_digest_data(1, d1, 0)));
     assert_eq!(result[1], Some(tx_seq_digest_data(4, d4, 1)));
 
-    let mut checkpoints = client.resolve_tx_checkpoints(&[4, 0, 99]).await?;
+    let mut checkpoints: Vec<(u64, CheckpointSequenceNumber)> = client
+        .resolve_tx_checkpoints_stream(vec![4, 0, 99])
+        .await?
+        .try_collect()
+        .await?;
     checkpoints.sort_by_key(|(tx_seq, _)| *tx_seq);
     assert_eq!(checkpoints, vec![(0, 0), (4, 1)]);
 

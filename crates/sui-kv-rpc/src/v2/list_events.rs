@@ -31,13 +31,14 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
+use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
+use sui_rpc_api::ledger_history::watermark::RangeEnd;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
@@ -56,6 +57,7 @@ use crate::config::PipelineStage;
 use crate::config::ResolvedStageConfig;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::PlacedFrontier;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
@@ -111,14 +113,12 @@ pub(crate) async fn list_events(
     let wants_json = read_mask.contains(ProtoEvent::JSON_FIELD.name);
     let resolution = event_resolution(wants_json);
 
-    let event_range = resolve_event_range(&client, checkpoint_range, &positions, &options)
-        .instrument(debug_span!("resolve_event_range"))
-        .await?;
+    let (event_range, range_end) =
+        resolve_event_range(&client, checkpoint_range, &positions, &options)
+            .instrument(debug_span!("resolve_event_range"))
+            .await?;
     let exhaustion = event_range.exhaustion;
     let entry_checkpoint = event_range.entry_checkpoint;
-    let range_end_checkpoint = event_range.end_checkpoint;
-    let range_end_position = event_range.end_position;
-    let natural_end_claim = event_range.natural_end_claim(&options);
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -134,13 +134,7 @@ pub(crate) async fn list_events(
         // An empty scan still surfaces its terminal cursor. Its natural end claims the window's
         // edge, which the cursor that left nothing to scan vouches for, unless the window itself
         // is empty.
-        let terminal_position = Position::Events {
-            checkpoint: range_end_checkpoint,
-            tx_seq: range_end_position.tx_seq,
-            event_index: range_end_position.index,
-        };
-        let response =
-            range_end_response(exhaustion, terminal_position, None, natural_end_claim)?.0;
+        let response = range_end_response(range_end, None)?.0;
         return Ok(async_stream::try_stream! {
             ctx.inc_stream_watermark_frames();
             ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -278,17 +272,7 @@ pub(crate) async fn list_events(
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
-                let terminal_position = Position::Events {
-                    checkpoint: range_end_checkpoint,
-                    tx_seq: range_end_position.tx_seq,
-                    event_index: range_end_position.index,
-                };
-                let (response, reason) = range_end_response(
-                    exhaustion,
-                    terminal_position,
-                    covered_checkpoint_bound,
-                    natural_end_claim,
-                )?;
+                let (response, reason) = range_end_response(range_end, covered_checkpoint_bound)?;
                 ctx.inc_stream_watermark_frames();
                 if !first_frame_emitted {
                     ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -313,6 +297,12 @@ pub(crate) async fn list_events(
                             tx_seq: rendered.position.tx_seq,
                             event_index: rendered.position.index,
                         },
+                        LedgerPoint::event(
+                            item_checkpoint,
+                            rendered.tx_offset as u64,
+                            rendered.position.index,
+                        ),
+                        direction,
                         covered_checkpoint_bound,
                     );
                     emitted += 1;
@@ -336,17 +326,14 @@ pub(crate) async fn list_events(
                         break QueryEndReason::ItemLimit;
                     }
                 }
-                Ok(ResolvedWatermarked::Watermark {
-                    position,
-                    cp: checkpoint_at_frontier,
-                }) => {
+                Ok(ResolvedWatermarked::Watermark { position, frontier }) => {
                     let watermark = event_frontier_watermark(
                         &options,
                         direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
-                        Some(checkpoint_at_frontier),
+                        Some(frontier),
                     )?;
                     let response = watermark_response(watermark);
                     ctx.inc_stream_watermark_frames();
@@ -562,11 +549,14 @@ impl CacheFetcher<TransactionDigest, Arc<TransactionData>> for EventTransactionF
     }
 }
 
-/// Carries the rendered `Event` plus the checkpoint and event position the main
-/// loop needs to update the watermark.
+/// Carries the rendered `Event` plus the checkpoint, position in its
+/// checkpoint, and event position the main loop needs to update the
+/// watermark.
 struct RenderedEvent {
     event: ProtoEvent,
     checkpoint_number: u64,
+    /// The index of the event's transaction in its checkpoint.
+    tx_offset: u32,
     position: IntraTxCoordinate,
 }
 
@@ -577,6 +567,19 @@ async fn render_event(
     resolver: &PackageResolver,
     wants_json: bool,
 ) -> Result<RenderedEvent, RpcError> {
+    // Stage C requires every ref's `tx_seq_digest` row (see `transaction_digest`).
+    let tx_offset = event_ref
+        .tx_seq_digest
+        .map(|row| row.tx_offset)
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!(
+                    "list_events: selected event {}/{} is missing its transaction index",
+                    event_ref.position.tx_seq, event_ref.position.index
+                ),
+            )
+        })?;
     let tx_events = tx.events.as_ref().ok_or_else(|| {
         RpcError::new(
             tonic::Code::Internal,
@@ -617,7 +620,7 @@ async fn render_event(
         proto_event.transaction_digest = Some(tx.digest.to_string());
     }
     if read_mask.contains(ProtoEvent::TRANSACTION_INDEX_FIELD.name) {
-        proto_event.transaction_index = event_ref.tx_seq_digest.map(|row| row.tx_offset as u64);
+        proto_event.transaction_index = Some(tx_offset as u64);
     }
     if read_mask.contains(ProtoEvent::EVENT_INDEX_FIELD.name) {
         proto_event.event_index = Some(event_ref.position.index);
@@ -626,6 +629,7 @@ async fn render_event(
     Ok(RenderedEvent {
         event: proto_event,
         checkpoint_number: tx.checkpoint_number,
+        tx_offset,
         position: event_ref.position,
     })
 }
@@ -640,18 +644,16 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsRespo
     response
 }
 
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree. Natural completion claims
-/// `natural_end_claim`, which is `None` when the window has no checkpoint.
-/// Fails only for a terminal that ends with no `QueryEnd` (a serving floor),
-/// which this backend never resolves.
+/// Trailing terminal frame for range exhaustion at `range_end`. Reason and
+/// watermark derive from one `ScanTerminal`, so they cannot disagree. Natural
+/// completion claims the range end's natural end claim, which is `None` when
+/// the window has no checkpoint. Fails only for a terminal that ends with no
+/// `QueryEnd` (a serving floor), which this backend never resolves.
 fn range_end_response(
-    exhaustion: RangeExhaustion,
-    position: Position,
+    range_end: RangeEnd,
     covered_checkpoint_bound: Option<u64>,
-    natural_end_claim: Option<u64>,
 ) -> Result<(ListEventsResponse, QueryEndReason), RpcError> {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, natural_end_claim);
+    let terminal = range_end.terminal();
     let reason = terminal.reason()?;
     Ok((
         end_response(terminal.into_watermark(covered_checkpoint_bound), reason),
@@ -659,14 +661,17 @@ fn range_end_response(
     ))
 }
 
+/// The Boundary watermark of an event scan frontier at `position`, placed as
+/// `frontier` (see [`ResolvedScanStop`]).
 fn event_frontier_watermark(
     options: &QueryOptions,
     direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: IntraTxCoordinate,
-    checkpoint_at_frontier: Option<u64>,
+    frontier: Option<PlacedFrontier>,
 ) -> Result<Watermark, RpcError> {
+    let checkpoint_at_frontier = frontier.map(|frontier| frontier.checkpoint);
     if let Some(checkpoint) = checkpoint_at_frontier {
         *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
             *covered_checkpoint_bound,
@@ -693,6 +698,11 @@ fn event_frontier_watermark(
             tx_seq: position.tx_seq,
             event_index: position.index,
         },
+        // Unplaced only at the genesis or numeric-edge frontier, which starts its checkpoint.
+        frontier.map_or(
+            LedgerPoint::checkpoint_start(cursor_checkpoint),
+            |frontier| frontier.point,
+        ),
         *covered_checkpoint_bound,
     ))
 }
@@ -704,7 +714,7 @@ fn terminal_response_from_scan_stop(
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListEventsResponse, RpcError> {
-    let (position, checkpoint) = stop.into_scan_limit()?;
+    let (position, frontier) = stop.into_scan_limit()?;
     let terminal = ScanTerminal::ScanLimit {
         watermark: event_frontier_watermark(
             options,
@@ -712,7 +722,7 @@ fn terminal_response_from_scan_stop(
             entry_checkpoint,
             covered_checkpoint_bound,
             position,
-            checkpoint,
+            frontier,
         )?,
     };
     let reason = terminal.reason()?;
@@ -842,7 +852,8 @@ fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTre
 }
 
 /// Resolve the explicit event-coordinate scan window from the logical checkpoint
-/// bounds, narrowed to the request's `positions`. Filtered scans are additionally
+/// bounds, narrowed to the request's `positions`, along with where the scan
+/// ends (see [`ResolvedScan::range_end`]). Filtered scans are additionally
 /// bounded at runtime by the per-request bitmap bucket budget; that limit
 /// surfaces as SCAN_LIMIT, not as an up-front cp-range clamp.
 async fn resolve_event_range(
@@ -850,12 +861,18 @@ async fn resolve_event_range(
     cp_range: ResolvedCheckpointRange,
     positions: &CheckpointPositions,
     options: &QueryOptions,
-) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
+) -> Result<(ResolvedScan<IntraTxCoordinate>, RangeEnd), RpcError> {
     let boundary = client
         .checkpoint_tx_boundaries(positions.boundary_checkpoints(&cp_range.range))
         .await?;
     let window = positions.event_window(&cp_range.range, boundary)?;
-    ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, window, options)
+    let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, window.clone(), options)?;
+    let range_end = resolved.range_end(&window, options, |checkpoint, position| Position::Events {
+        checkpoint,
+        tx_seq: position.tx_seq,
+        event_index: position.index,
+    });
+    Ok((resolved, range_end))
 }
 
 #[cfg(test)]
@@ -1167,6 +1184,7 @@ mod tests {
             tx_seq: 0,
             event_index: 0,
         })
+        .with_public_position(Some(sui_rpc_cursor::PublicPosition::default()))
         .encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);

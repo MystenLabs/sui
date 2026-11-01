@@ -42,6 +42,17 @@
 //! The clock is real: a paused clock jumps to the next timer whenever the
 //! runtime waits on the mock's socket, which bunches rows together and hides
 //! the gaps between them.
+//!
+//! Every frame's `Watermark.cursor_position` is checked against the ledger as
+//! well: an item frame's is the boundary right after its item ascending and
+//! the item's own key descending; every item-free frame carries a Boundary
+//! cursor and a position naming the boundary that cursor names. Positions
+//! never move backwards within a response, and each frame's position splits
+//! its paging's items into those delivered by that frame and those delivered
+//! after it. Every cut also resumes as a position-aware client does: with the
+//! frame's position as the request's start fields (ascending) or end fields
+//! (descending), sent along with its cursor, under the same requirement of
+//! nothing missing and nothing duplicated.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -68,6 +79,8 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
+use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::balance_change::derive_balance_changes_2;
@@ -100,6 +113,10 @@ const SPARSE_MATCHES: &[u64] = &[
     12, 13, 4_095, 4_096, 9_999, 10_000, 25_000, 65_535, 65_536, 70_000, 131_071, 131_072, 140_000,
     200_000, 262_143, 262_144, 270_000, 299_999,
 ];
+
+/// A far cursor bound of the sparse ledger inside checkpoint 19, between the
+/// matches at 140,000 and 200,000.
+const MID_CHECKPOINT_BOUND_TX: u64 = 195_000;
 
 const DENSE_CHECKPOINTS: u64 = 8;
 /// Transactions per checkpoint of the dense ledger.
@@ -191,6 +208,9 @@ async fn sparse_ledger(mock: &MockBigtableServer) {
     for &tx in SPARSE_MATCHES {
         lookup_positions.extend([tx.saturating_sub(1), tx + 1]);
     }
+    // A scan watermark clamped to the far cursor bound inside a checkpoint is
+    // placed by the transaction on its covered side, on either side of the bound.
+    lookup_positions.extend([MID_CHECKPOINT_BOUND_TX - 1, MID_CHECKPOINT_BOUND_TX]);
     let placeholder = TransactionDigest::new([0xEE; 32]);
     for tx in lookup_positions {
         if tx >= total_txs || SPARSE_MATCHES.contains(&tx) {
@@ -465,32 +485,125 @@ struct Request {
 }
 
 /// One response frame: the scan position of its item (if it carries one),
-/// its cursor, its checkpoint coverage claim, and its terminal reason (if it
-/// ends the stream).
+/// its cursor, its `cursor_position`, its checkpoint coverage claim, and its
+/// terminal reason (if it ends the stream).
 #[derive(Clone, Debug)]
 struct Frame {
     item: Option<(u64, u32)>,
     cursor: Bytes,
+    /// `Watermark.cursor_position`, an unset index counting as 0.
+    position: Option<LedgerPoint>,
     covered: Option<u64>,
     end: Option<QueryEndReason>,
 }
 
-fn options(request: &Request, resume: Option<Bytes>) -> proto::QueryOptions {
+/// How a client continues after a frame: with its cursor alone, or as a
+/// position-aware client does, with its `cursor_position` as the request's
+/// start fields (ascending) or end fields (descending) along with its cursor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResumeMode {
+    Cursor,
+    Position,
+}
+
+/// Where a request continues from: a cursor, sent as `after` ascending and
+/// `before` descending, and a position for its start fields (ascending) or
+/// end fields (descending).
+#[derive(Clone, Debug, Default)]
+struct Resume {
+    cursor: Option<Bytes>,
+    position: Option<LedgerPoint>,
+}
+
+impl Resume {
+    fn from_cursor(cursor: Bytes) -> Self {
+        Self {
+            cursor: Some(cursor),
+            position: None,
+        }
+    }
+
+    /// Continue after `frame` in `mode`.
+    fn after(frame: &Frame, mode: ResumeMode) -> Self {
+        let position = match mode {
+            ResumeMode::Cursor => None,
+            ResumeMode::Position => Some(
+                frame
+                    .position
+                    .expect("a frame to resume from carries a cursor_position"),
+            ),
+        };
+        Self {
+            cursor: Some(frame.cursor.clone()),
+            position,
+        }
+    }
+}
+
+/// The checkpoint and index fields of a request.
+#[derive(Clone, Copy, Debug, Default)]
+struct RequestFields {
+    start_checkpoint: Option<u64>,
+    start_transaction_index: Option<u64>,
+    start_event_index: Option<u32>,
+    end_checkpoint: Option<u64>,
+    end_transaction_index: Option<u64>,
+    end_event_index: Option<u32>,
+}
+
+/// The fields of `request` continued at `position`, mapped to request fields
+/// as the ledger position contract says: ascending, `position` is the start;
+/// descending, the end, a whole checkpoint's end as `end_checkpoint` alone and
+/// any other as indexes into the checkpoint before `end_checkpoint`.
+fn request_fields(request: &Request, position: Option<LedgerPoint>) -> RequestFields {
+    let mut fields = RequestFields {
+        start_checkpoint: request.start_checkpoint,
+        end_checkpoint: request.end_checkpoint,
+        ..RequestFields::default()
+    };
+    let Some(LedgerPoint {
+        checkpoint,
+        transaction_index,
+        event_index,
+    }) = position
+    else {
+        return fields;
+    };
+    let checkpoint_start = transaction_index == 0 && event_index == 0;
+    if request.ascending {
+        fields.start_checkpoint = Some(checkpoint);
+        if !checkpoint_start {
+            fields.start_transaction_index = Some(transaction_index);
+            fields.start_event_index = (event_index != 0).then_some(event_index);
+        }
+    } else if checkpoint_start {
+        fields.end_checkpoint = Some(checkpoint);
+    } else {
+        fields.end_checkpoint = Some(checkpoint + 1);
+        fields.end_transaction_index = Some(transaction_index);
+        fields.end_event_index = (event_index != 0).then_some(event_index);
+    }
+    fields
+}
+
+fn options(request: &Request, resume: Option<&Resume>) -> proto::QueryOptions {
+    let cursor = resume.and_then(|resume| resume.cursor.clone());
     let mut options = proto::QueryOptions::default();
     options.limit = Some(request.limit);
     if request.ascending {
         options.ordering = Some(proto::Ordering::Ascending as i32);
-        options.after = resume;
+        options.after = cursor;
         options.before = request.far_bound.clone();
     } else {
         options.ordering = Some(proto::Ordering::Descending as i32);
-        options.before = resume;
+        options.before = cursor;
         options.after = request.far_bound.clone();
     }
     options
 }
 
 fn frame(
+    endpoint: Endpoint,
     item: Option<Position>,
     watermark: Option<proto::Watermark>,
     end: Option<proto::QueryEnd>,
@@ -498,6 +611,10 @@ fn frame(
     let covered = watermark
         .as_ref()
         .and_then(|watermark| watermark.checkpoint);
+    let position = watermark
+        .as_ref()
+        .and_then(|watermark| watermark.cursor_position.as_ref())
+        .map(|position| ledger_point(endpoint, position));
     let cursor = watermark
         .and_then(|watermark| watermark.cursor)
         .expect("every frame carries a resume cursor");
@@ -505,9 +622,34 @@ fn frame(
     Frame {
         item,
         cursor,
+        position,
         covered,
         end: end.map(|end| end.reason()),
     }
+}
+
+/// A `cursor_position` in ledger coordinates, an unset index counting as 0.
+/// It sets exactly the fields of the keys `endpoint` lists.
+fn ledger_point(endpoint: Endpoint, position: &proto::LedgerPosition) -> LedgerPoint {
+    let key_fields = match endpoint {
+        Endpoint::Checkpoints => (true, false, false),
+        Endpoint::Transactions => (true, true, false),
+        Endpoint::Events => (true, true, true),
+    };
+    assert_eq!(
+        (
+            position.checkpoint.is_some(),
+            position.transaction_index.is_some(),
+            position.event_index.is_some()
+        ),
+        key_fields,
+        "fields of {endpoint:?} position {position:?}"
+    );
+    LedgerPoint::event(
+        position.checkpoint.unwrap_or(0),
+        position.transaction_index.unwrap_or(0),
+        position.event_index.unwrap_or(0),
+    )
 }
 
 /// The scan-order key of a position: `(transaction, event index)` for
@@ -602,16 +744,22 @@ fn event_filter(filter: Filter) -> Option<proto::EventFilter> {
     })
 }
 
-/// Run one request to the end of its stream, checking every item frame's
-/// checkpoints against the ledger.
-async fn run(ctx: &QueryContext, request: &Request, resume: Option<Bytes>) -> Vec<Frame> {
+/// Run one request to the end of its stream, continuing from `resume`, and
+/// check every item frame's checkpoints against the ledger.
+async fn fetch(ctx: &QueryContext, request: &Request, resume: Option<&Resume>) -> Vec<Frame> {
     let options = Some(options(request, resume));
+    let fields = request_fields(request, resume.and_then(|resume| resume.position));
     let ledger = ledger_checkpoints(request);
-    match request.endpoint {
+    let endpoint = request.endpoint;
+    match endpoint {
         Endpoint::Events => {
             let mut proto_request = proto::ListEventsRequest::default();
-            proto_request.start_checkpoint = request.start_checkpoint;
-            proto_request.end_checkpoint = request.end_checkpoint;
+            proto_request.start_checkpoint = fields.start_checkpoint;
+            proto_request.start_transaction_index = fields.start_transaction_index;
+            proto_request.start_event_index = fields.start_event_index;
+            proto_request.end_checkpoint = fields.end_checkpoint;
+            proto_request.end_transaction_index = fields.end_transaction_index;
+            proto_request.end_event_index = fields.end_event_index;
             proto_request.options = options;
             proto_request.read_mask = Some(FieldMask::from_paths([
                 "checkpoint",
@@ -637,14 +785,16 @@ async fn run(ctx: &QueryContext, request: &Request, resume: Option<Bytes>) -> Ve
                         assert_eq!(event.event_index, Some(event_index));
                         position
                     });
-                    frame(item, response.watermark, response.end)
+                    frame(endpoint, item, response.watermark, response.end)
                 })
                 .collect()
         }
         Endpoint::Transactions => {
             let mut proto_request = proto::ListTransactionsRequest::default();
-            proto_request.start_checkpoint = request.start_checkpoint;
-            proto_request.end_checkpoint = request.end_checkpoint;
+            proto_request.start_checkpoint = fields.start_checkpoint;
+            proto_request.start_transaction_index = fields.start_transaction_index;
+            proto_request.end_checkpoint = fields.end_checkpoint;
+            proto_request.end_transaction_index = fields.end_transaction_index;
             proto_request.options = options;
             proto_request.read_mask = Some(FieldMask::from_paths(["digest", "checkpoint"]));
             proto_request.filter = transaction_filter(request.filter);
@@ -667,14 +817,14 @@ async fn run(ctx: &QueryContext, request: &Request, resume: Option<Bytes>) -> Ve
                         );
                         position
                     });
-                    frame(item, response.watermark, response.end)
+                    frame(endpoint, item, response.watermark, response.end)
                 })
                 .collect()
         }
         Endpoint::Checkpoints => {
             let mut proto_request = proto::ListCheckpointsRequest::default();
-            proto_request.start_checkpoint = request.start_checkpoint;
-            proto_request.end_checkpoint = request.end_checkpoint;
+            proto_request.start_checkpoint = fields.start_checkpoint;
+            proto_request.end_checkpoint = fields.end_checkpoint;
             proto_request.options = options;
             proto_request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
             proto_request.filter = transaction_filter(request.filter);
@@ -697,27 +847,41 @@ async fn run(ctx: &QueryContext, request: &Request, resume: Option<Bytes>) -> Ve
                         );
                         position
                     });
-                    frame(item, response.watermark, response.end)
+                    frame(endpoint, item, response.watermark, response.end)
                 })
                 .collect()
         }
     }
 }
 
+/// [`fetch`] one response, and check the `cursor_position` of each of its
+/// frames (see [`assert_response_positions`]).
+async fn run(ctx: &QueryContext, request: &Request, resume: Option<&Resume>) -> Vec<Frame> {
+    let frames = fetch(ctx, request, resume).await;
+    assert_response_positions(request, &frames);
+    frames
+}
+
 fn items(frames: &[Frame]) -> Vec<(u64, u32)> {
     frames.iter().filter_map(|frame| frame.item).collect()
 }
 
-/// Checkpoint of dense-ledger transaction `tx`.
-fn dense_checkpoint(tx: u64) -> u64 {
+/// Checkpoint of dense-ledger transaction `tx`, and its index in that
+/// checkpoint.
+fn dense_place(tx: u64) -> (u64, u64) {
     let mut first_tx = 0;
     for (checkpoint, tx_count) in DENSE_CHECKPOINT_TXS.iter().enumerate() {
         if tx < first_tx + tx_count {
-            return checkpoint as u64;
+            return (checkpoint as u64, tx - first_tx);
         }
         first_tx += tx_count;
     }
     panic!("transaction {tx} is past the dense ledger");
+}
+
+/// Checkpoint of dense-ledger transaction `tx`.
+fn dense_checkpoint(tx: u64) -> u64 {
+    dense_place(tx).0
 }
 
 /// Every item a request with `filter` can return, known from how the ledgers
@@ -811,6 +975,225 @@ fn sparse_boundary_checkpoint(position: Position, ascending: bool) -> Option<u64
     })
 }
 
+/// The number of checkpoints of the ledger a request with `filter` runs over.
+fn ledger_checkpoint_count(filter: Filter) -> u64 {
+    if filter == Filter::None {
+        DENSE_CHECKPOINTS
+    } else {
+        SPARSE_CHECKPOINTS
+    }
+}
+
+/// The number of transactions of `checkpoint` in the ledger a request with
+/// `filter` runs over.
+fn checkpoint_transaction_count(filter: Filter, checkpoint: u64) -> u64 {
+    if filter == Filter::None {
+        DENSE_CHECKPOINT_TXS[checkpoint as usize]
+    } else {
+        SPARSE_TXS_PER_CHECKPOINT
+    }
+}
+
+/// The number of transactions of the ledger a request with `filter` runs over.
+fn ledger_transaction_count(filter: Filter) -> u64 {
+    (0..ledger_checkpoint_count(filter))
+        .map(|checkpoint| checkpoint_transaction_count(filter, checkpoint))
+        .sum()
+}
+
+/// The checkpoint of transaction `tx`, and its index in that checkpoint, in
+/// the ledger a request with `filter` runs over.
+fn transaction_place(filter: Filter, tx: u64) -> (u64, u64) {
+    if filter == Filter::None {
+        dense_place(tx)
+    } else {
+        (
+            tx / SPARSE_TXS_PER_CHECKPOINT,
+            tx % SPARSE_TXS_PER_CHECKPOINT,
+        )
+    }
+}
+
+/// The key in ledger coordinates of an item of `request`, given by its
+/// `scan_key`.
+fn item_key(request: &Request, item: (u64, u32)) -> LedgerPoint {
+    match request.endpoint {
+        Endpoint::Checkpoints => LedgerPoint::checkpoint_start(item.0),
+        Endpoint::Transactions | Endpoint::Events => {
+            let (checkpoint, transaction_index) = transaction_place(request.filter, item.0);
+            LedgerPoint::event(checkpoint, transaction_index, item.1)
+        }
+    }
+}
+
+/// The boundary right after the item keyed `key`: the key with its finest
+/// index incremented.
+fn above(endpoint: Endpoint, key: LedgerPoint) -> LedgerPoint {
+    match endpoint {
+        Endpoint::Checkpoints => LedgerPoint::checkpoint_start(key.checkpoint + 1),
+        Endpoint::Transactions => {
+            LedgerPoint::transaction(key.checkpoint, key.transaction_index + 1)
+        }
+        Endpoint::Events => {
+            LedgerPoint::event(key.checkpoint, key.transaction_index, key.event_index + 1)
+        }
+    }
+}
+
+/// The boundary a Boundary cursor at `position` names, in ledger coordinates:
+/// right before the checkpoint, transaction, or event at `position`, or the
+/// end of the ledger past its last transaction.
+fn cursor_boundary(request: &Request, position: Position) -> LedgerPoint {
+    let (tx_seq, event_index) = match position {
+        Position::Checkpoints { checkpoint } => return LedgerPoint::checkpoint_start(checkpoint),
+        Position::Transactions { tx_seq, .. } => (tx_seq, 0),
+        Position::Events {
+            tx_seq,
+            event_index,
+            ..
+        } => (tx_seq, event_index),
+    };
+    if tx_seq >= ledger_transaction_count(request.filter) {
+        return LedgerPoint::checkpoint_start(ledger_checkpoint_count(request.filter));
+    }
+    let (checkpoint, transaction_index) = transaction_place(request.filter, tx_seq);
+    LedgerPoint::event(checkpoint, transaction_index, event_index)
+}
+
+/// The first key at or after `point` among all items of the request's kind in
+/// its ledger, matching its filter or not; `None` past the last. Two points
+/// name the same boundary exactly when this is the same for both, whichever
+/// of them carries an index past the end of a transaction or checkpoint.
+fn first_key_at_or_after(request: &Request, point: LedgerPoint) -> Option<LedgerPoint> {
+    let checkpoints = ledger_checkpoint_count(request.filter);
+    match request.endpoint {
+        Endpoint::Checkpoints => {
+            // A point inside a checkpoint lies past that checkpoint's key.
+            let inside = point.transaction_index != 0 || point.event_index != 0;
+            let checkpoint = point.checkpoint + u64::from(inside);
+            (checkpoint < checkpoints).then(|| LedgerPoint::checkpoint_start(checkpoint))
+        }
+        Endpoint::Transactions => {
+            // A point inside a transaction lies past that transaction's key.
+            let mut checkpoint = point.checkpoint;
+            let mut transaction_index = point.transaction_index + u64::from(point.event_index != 0);
+            while checkpoint < checkpoints {
+                if transaction_index < checkpoint_transaction_count(request.filter, checkpoint) {
+                    return Some(LedgerPoint::transaction(checkpoint, transaction_index));
+                }
+                checkpoint += 1;
+                transaction_index = 0;
+            }
+            None
+        }
+        Endpoint::Events => ledger_items(Endpoint::Events, request.filter)
+            .into_iter()
+            .map(|(item, _)| item_key(request, item))
+            .find(|key| *key >= point),
+    }
+}
+
+fn names_same_boundary(request: &Request, a: LedgerPoint, b: LedgerPoint) -> bool {
+    first_key_at_or_after(request, a) == first_key_at_or_after(request, b)
+}
+
+/// The `cursor_position` of a response's terminal frame.
+fn terminal_position(response: &[Frame]) -> Option<LedgerPoint> {
+    response.last().and_then(|frame| frame.position)
+}
+
+/// Check the `cursor_position` of every frame of one response against the
+/// ledger. An item frame carries an Item cursor and, ascending, the boundary
+/// right after its item, descending, the item's key. An item-free frame
+/// carries a Boundary cursor and a position naming the boundary that cursor
+/// names. Positions never move backwards, and split the response's items as
+/// [`assert_scan_positions`] says.
+fn assert_response_positions(request: &Request, response: &[Frame]) {
+    let mut previous: Option<LedgerPoint> = None;
+    for (index, frame) in response.iter().enumerate() {
+        let token = CursorToken::decode(&frame.cursor).expect("cursor decodes");
+        let position = frame.position.unwrap_or_else(|| {
+            panic!("frame {index} carries no cursor_position: {response:#?} {request:?}")
+        });
+        match frame.item {
+            Some(item) => {
+                assert_eq!(token.kind, CursorKind::Item, "frame {index}: {request:?}");
+                let key = item_key(request, item);
+                let expected = if request.ascending {
+                    above(request.endpoint, key)
+                } else {
+                    key
+                };
+                assert_eq!(
+                    position, expected,
+                    "position of item {item:?} in frame {index}: {request:?}"
+                );
+            }
+            None => {
+                assert_eq!(
+                    token.kind,
+                    CursorKind::Boundary,
+                    "item-free frame {index}: {response:#?} {request:?}"
+                );
+                let named = cursor_boundary(request, token.position);
+                assert!(
+                    names_same_boundary(request, position, named),
+                    "position {position:?} of frame {index} names the boundary of its cursor \
+                     {:?} ({named:?}): {response:#?} {request:?}",
+                    token.position
+                );
+            }
+        }
+        if let Some(previous) = previous {
+            let regresses = if request.ascending {
+                position < previous
+            } else {
+                position > previous
+            };
+            assert!(
+                !regresses,
+                "position {position:?} of frame {index} moves back from {previous:?}: \
+                 {response:#?} {request:?}"
+            );
+        }
+        previous = Some(position);
+    }
+    assert_scan_positions(request, response);
+}
+
+/// Check every placed frame of `scan`, one paging's frames in order, against
+/// the items of the paging: ascending, every item delivered up to and
+/// including the frame lies before its position, and every later one at or
+/// after it; descending, every item delivered up to and including the frame
+/// lies at or after its position, and every later one before it.
+fn assert_scan_positions(request: &Request, scan: &[Frame]) {
+    let keys: Vec<Option<LedgerPoint>> = scan
+        .iter()
+        .map(|frame| frame.item.map(|item| item_key(request, item)))
+        .collect();
+    for (index, frame) in scan.iter().enumerate() {
+        let Some(position) = frame.position else {
+            continue;
+        };
+        for (other, key) in keys.iter().enumerate() {
+            let Some(key) = key else {
+                continue;
+            };
+            let delivered_side = if request.ascending {
+                *key < position
+            } else {
+                *key >= position
+            };
+            assert_eq!(
+                delivered_side,
+                other <= index,
+                "item {key:?} of frame {other} against position {position:?} of frame \
+                 {index}: {request:?}"
+            );
+        }
+    }
+}
+
 fn is_natural_end(reason: QueryEndReason) -> bool {
     matches!(
         reason,
@@ -894,33 +1277,40 @@ fn advancing_beacons(response: &[Frame], ascending: bool) -> usize {
     advancing
 }
 
-/// How paging a request to its end went: the reason the last page ended, and every frame's
-/// cursor, in order.
+/// How paging a request to its end went: the reason the last page ended, and
+/// every frame of the paging, in order.
 struct PagedToEnd {
     reason: QueryEndReason,
-    cursors: Vec<Bytes>,
+    frames: Vec<Frame>,
 }
 
-/// Page from `resume` until the range is exhausted, following each page's
-/// last cursor. Appends the items to `received`, and checks each response's
-/// coverage claims against `expected` and the items received before it.
+/// Page from `resume` until the range is exhausted, continuing after each
+/// page's last frame in `mode`. Appends the items to `received`, checks each
+/// response's coverage claims against `expected` and the items received
+/// before it, and checks the positions of the frames of `prior` (the frames
+/// that delivered `received`) and of the paging together (see
+/// [`assert_scan_positions`]).
 async fn page_to_end(
     ctx: &QueryContext,
     request: &Request,
     expected: &[(u64, u32)],
     received: &mut Vec<(u64, u32)>,
-    mut resume: Option<Bytes>,
+    prior: &[Frame],
+    mut resume: Option<Resume>,
+    mode: ResumeMode,
 ) -> PagedToEnd {
-    let mut cursors = Vec::new();
+    let mut scan = prior.to_vec();
     for _ in 0..1_000 {
-        let frames = run(ctx, request, resume).await;
+        let frames = run(ctx, request, resume.as_ref()).await;
         assert_claims_sound(request, expected, received, &frames);
         received.extend(items(&frames));
-        cursors.extend(frames.iter().map(|frame| frame.cursor.clone()));
+        scan.extend(frames.iter().cloned());
         let last = frames.last().expect("every response has a frame");
         let reason = last.end.expect("every response ends with a terminal frame");
         if is_natural_end(reason) {
-            return PagedToEnd { reason, cursors };
+            assert_scan_positions(request, &scan);
+            let frames = scan.split_off(prior.len());
+            return PagedToEnd { reason, frames };
         }
         assert!(
             matches!(
@@ -929,7 +1319,7 @@ async fn page_to_end(
             ),
             "unexpected terminal reason {reason:?}"
         );
-        resume = Some(last.cursor.clone());
+        resume = Some(Resume::after(last, mode));
     }
     panic!("paging did not reach the end of the range: {request:?}");
 }
@@ -942,11 +1332,12 @@ struct CutPages {
 }
 
 /// Cut the first response of `request` after each of its frames (and the
-/// second response too, when the first ends on a limit), resume from the
-/// last cursor received, and require exactly `expected` every time, as well
-/// as from uncut paging. Every response's coverage claims are checked
-/// against the ledger. On the sparse ledger, also check the checkpoint of
-/// every beacon and scan-limit cursor in the cut responses.
+/// second response too, when the first ends on a limit), resume after the
+/// last frame received in each [`ResumeMode`], and require exactly `expected`
+/// every time, as well as from uncut paging. Every response's coverage claims
+/// and positions are checked against the ledger. On the sparse ledger, also
+/// check the checkpoint of every beacon and scan-limit cursor in the cut
+/// responses.
 async fn assert_resume_property(
     ctx: &QueryContext,
     request: &Request,
@@ -958,30 +1349,38 @@ async fn assert_resume_property(
     let terminal = first.last().and_then(|frame| frame.end);
     assert_eq!(terminal, Some(expected_terminal), "{request:?}");
 
-    // Each cut page with the items received before it.
+    // Each cut page with the frames of the pages before it.
     let mut pages = vec![(Vec::new(), first.clone())];
-    let mut uncut = items(&first);
+    let mut uncut = first.clone();
     if !is_natural_end(expected_terminal) {
-        let second = run(ctx, request, Some(first.last().unwrap().cursor.clone())).await;
+        let resume = Resume::after(first.last().unwrap(), ResumeMode::Cursor);
+        let second = run(ctx, request, Some(&resume)).await;
         pages.push((uncut.clone(), second.clone()));
-        uncut.extend(items(&second));
+        uncut.extend(second.iter().cloned());
         let last = second.last().expect("every response has a frame");
         if !last.end.is_some_and(is_natural_end) {
-            page_to_end(
+            let mut received = items(&uncut);
+            let resume = Some(Resume::after(last, ResumeMode::Cursor));
+            let paged = page_to_end(
                 ctx,
                 request,
                 expected,
-                &mut uncut,
-                Some(last.cursor.clone()),
+                &mut received,
+                &uncut,
+                resume,
+                ResumeMode::Cursor,
             )
             .await;
+            uncut.extend(paged.frames);
         }
     }
-    assert_eq!(uncut, expected, "uncut paging: {request:?}");
+    assert_eq!(items(&uncut), expected, "uncut paging: {request:?}");
+    assert_scan_positions(request, &uncut);
 
     let mut most_advancing_beacons = 0;
-    for (received_before, page) in &pages {
-        assert_claims_sound(request, expected, received_before, page);
+    for (prior, page) in &pages {
+        let received_before = items(prior);
+        assert_claims_sound(request, expected, &received_before, page);
         most_advancing_beacons =
             most_advancing_beacons.max(advancing_beacons(page, request.ascending));
         for (cut, frame) in page.iter().enumerate() {
@@ -999,18 +1398,27 @@ async fn assert_resume_property(
                     );
                 }
             }
-            let mut received = received_before.clone();
-            received.extend(items(&page[..=cut]));
-            if !frame.end.is_some_and(is_natural_end) {
-                let resume = Some(frame.cursor.clone());
-                page_to_end(ctx, request, expected, &mut received, resume).await;
+            let mut scan = prior.clone();
+            scan.extend(page[..=cut].iter().cloned());
+            let modes = if frame.end.is_some_and(is_natural_end) {
+                // Nothing follows a natural end, so there is nothing to resume.
+                vec![None]
+            } else {
+                vec![Some(ResumeMode::Cursor), Some(ResumeMode::Position)]
+            };
+            for mode in modes {
+                let mut received = items(&scan);
+                if let Some(mode) = mode {
+                    let resume = Some(Resume::after(frame, mode));
+                    page_to_end(ctx, request, expected, &mut received, &scan, resume, mode).await;
+                }
+                assert_eq!(
+                    received,
+                    expected,
+                    "cut after frame {cut} of {}, resumed by {mode:?}: {request:?}",
+                    page.len()
+                );
             }
-            assert_eq!(
-                received,
-                expected,
-                "cut after frame {cut} of {}: {request:?}",
-                page.len()
-            );
         }
     }
     CutPages {
@@ -1024,7 +1432,7 @@ async fn item_cursor(ctx: &QueryContext, request: &Request, index: usize) -> Byt
     let mut seen = 0;
     let mut resume = None;
     loop {
-        let frames = run(ctx, request, resume).await;
+        let frames = run(ctx, request, resume.as_ref()).await;
         for frame in &frames {
             if frame.item.is_some() {
                 if seen == index {
@@ -1039,7 +1447,7 @@ async fn item_cursor(ctx: &QueryContext, request: &Request, index: usize) -> Byt
             "fewer than {} items in {request:?}",
             index + 1
         );
-        resume = Some(last.cursor.clone());
+        resume = Some(Resume::after(last, ResumeMode::Cursor));
     }
 }
 
@@ -1094,6 +1502,17 @@ async fn assert_endpoint_resumes(
     };
     let pages = assert_resume_property(&ctx, &base, natural, &all).await;
     most_advancing_beacons = most_advancing_beacons.max(pages.most_advancing_beacons);
+    // The natural end is a checkpoint boundary: the tip ascending, genesis descending.
+    let natural_end = if ascending {
+        LedgerPoint::checkpoint_start(checkpoint_hi_exclusive)
+    } else {
+        LedgerPoint::GENESIS
+    };
+    assert_eq!(
+        terminal_position(&pages.first),
+        Some(natural_end),
+        "{base:?}"
+    );
 
     // Explicit checkpoint bounds inside the ledger.
     let request = Request {
@@ -1105,6 +1524,16 @@ async fn assert_endpoint_resumes(
     let pages =
         assert_resume_property(&ctx, &request, QueryEndReason::CheckpointBound, &expected).await;
     most_advancing_beacons = most_advancing_beacons.max(pages.most_advancing_beacons);
+    let bound = if ascending {
+        checkpoint_hi_exclusive - 1
+    } else {
+        1
+    };
+    assert_eq!(
+        terminal_position(&pages.first),
+        Some(LedgerPoint::checkpoint_start(bound)),
+        "{request:?}"
+    );
 
     // A cursor bound on the far side of the scan: the cursor of the fourth
     // item, so exactly the first three are returned.
@@ -1137,7 +1566,14 @@ async fn assert_endpoint_resumes(
         most_advancing_beacons = most_advancing_beacons.max(pages.most_advancing_beacons);
         server.abort();
         if !matches!(endpoint, Endpoint::Checkpoints) {
+            // The budget runs out at a bucket edge, inside a checkpoint.
+            let position = terminal_position(&pages.first).expect("SCAN_LIMIT is placed");
+            assert!(
+                (1..SPARSE_TXS_PER_CHECKPOINT).contains(&position.transaction_index),
+                "SCAN_LIMIT position {position:?}: {base:?}"
+            );
             assert_cursor_bound_claim(&base, &all, mock, checkpoint_hi_exclusive).await;
+            assert_mid_checkpoint_cursor_bound(&base, &all, mock, checkpoint_hi_exclusive).await;
         }
     } else if matches!(endpoint, Endpoint::Events) {
         let (ctx, server) = context(
@@ -1198,8 +1634,14 @@ async fn assert_cursor_bound_claim(
         },
         Endpoint::Checkpoints => unreachable!("checkpoint positions are not modeled"),
     };
+    // The cursor carries its public position, as every cursor this server mints does.
+    let point = LedgerPoint::transaction(checkpoint, BOUND_TX % SPARSE_TXS_PER_CHECKPOINT);
     let request = Request {
-        far_bound: Some(CursorToken::boundary(position).encode()),
+        far_bound: Some(
+            CursorToken::boundary(position)
+                .with_public_position(point.public_position(&position))
+                .encode(),
+        ),
         ..base.clone()
     };
     let expected: Vec<_> = all
@@ -1252,7 +1694,74 @@ async fn assert_cursor_bound_claim(
     server.abort();
 }
 
-async fn assert_all_modes(endpoint: Endpoint) {
+/// A far cursor bound inside a checkpoint, a Boundary cursor at
+/// [`MID_CHECKPOINT_BOUND_TX`], ends the scan with a `CURSOR_BOUND` frame
+/// placed exactly at that boundary by the public position the cursor carries,
+/// and every frame of the scan resumes by cursor and by position.
+async fn assert_mid_checkpoint_cursor_bound(
+    base: &Request,
+    all: &[(u64, u32)],
+    mock: &MockBigtableServer,
+    checkpoint_hi_exclusive: u64,
+) {
+    let (ctx, server) = context(
+        mock,
+        checkpoint_hi_exclusive,
+        base.endpoint.method(),
+        Limits {
+            bucket_budget: 10_000,
+            max_limit_items: 100,
+            beacon_buckets: NonZeroU64::MIN,
+        },
+    )
+    .await;
+    let checkpoint = MID_CHECKPOINT_BOUND_TX / SPARSE_TXS_PER_CHECKPOINT;
+    let position = match base.endpoint {
+        Endpoint::Events => Position::Events {
+            checkpoint,
+            tx_seq: MID_CHECKPOINT_BOUND_TX,
+            event_index: 0,
+        },
+        Endpoint::Transactions => Position::Transactions {
+            checkpoint,
+            tx_seq: MID_CHECKPOINT_BOUND_TX,
+        },
+        Endpoint::Checkpoints => unreachable!("checkpoint positions are not modeled"),
+    };
+    let boundary = LedgerPoint::transaction(
+        checkpoint,
+        MID_CHECKPOINT_BOUND_TX % SPARSE_TXS_PER_CHECKPOINT,
+    );
+    let request = Request {
+        far_bound: Some(
+            CursorToken::boundary(position)
+                .with_public_position(boundary.public_position(&position))
+                .encode(),
+        ),
+        ..base.clone()
+    };
+    // Ascending, `before` keeps the items before the boundary; descending, `after` keeps those
+    // at or after it.
+    let expected: Vec<_> = all
+        .iter()
+        .copied()
+        .filter(|&(tx, _)| (tx < MID_CHECKPOINT_BOUND_TX) == base.ascending)
+        .collect();
+    let pages =
+        assert_resume_property(&ctx, &request, QueryEndReason::CursorBound, &expected).await;
+    assert_eq!(
+        terminal_position(&pages.first),
+        Some(boundary),
+        "{request:?}"
+    );
+    server.abort();
+}
+
+/// Runs every resume scenario of `endpoint` in each of `directions` (`true` is ascending).
+/// Resuming events after every frame, by cursor and by position, takes about two minutes per
+/// direction against the mock's read latency, so each events direction is its own test to stay
+/// under CI's five-minute limit.
+async fn assert_all_modes(endpoint: Endpoint, directions: &[bool]) {
     let sparse = MockBigtableServer::new();
     sparse_ledger(&sparse).await;
     let dense = MockBigtableServer::new();
@@ -1261,7 +1770,7 @@ async fn assert_all_modes(endpoint: Endpoint) {
         mock.set_read_rows_latency(READ_LATENCY).await;
     }
     let mut most_advancing_beacons = 0;
-    for ascending in [true, false] {
+    for &ascending in directions {
         for filter in [Filter::Sender, Filter::AndSenders] {
             let advancing =
                 assert_endpoint_resumes(endpoint, filter, ascending, &sparse, SPARSE_CHECKPOINTS)
@@ -1284,18 +1793,23 @@ async fn assert_all_modes(endpoint: Endpoint) {
 }
 
 #[tokio::test]
-async fn list_events_resumes_after_any_frame() {
-    assert_all_modes(Endpoint::Events).await;
+async fn list_events_resumes_after_any_frame_ascending() {
+    assert_all_modes(Endpoint::Events, &[true]).await;
+}
+
+#[tokio::test]
+async fn list_events_resumes_after_any_frame_descending() {
+    assert_all_modes(Endpoint::Events, &[false]).await;
 }
 
 #[tokio::test]
 async fn list_transactions_resumes_after_any_frame() {
-    assert_all_modes(Endpoint::Transactions).await;
+    assert_all_modes(Endpoint::Transactions, &[true, false]).await;
 }
 
 #[tokio::test]
 async fn list_checkpoints_resumes_after_any_frame() {
-    assert_all_modes(Endpoint::Checkpoints).await;
+    assert_all_modes(Endpoint::Checkpoints, &[true, false]).await;
 }
 
 /// Every cursor a response carries, sent back in the opposite ordering, returns exactly the
@@ -1391,10 +1905,19 @@ async fn assert_opposite_direction_resumes(endpoint: Endpoint) {
                     .filter(|&item| request.far_bound.is_none() || within_far_bound(item))
                     .collect();
                 let mut received = Vec::new();
-                let paged = page_to_end(&minting, request, &in_bounds, &mut received, None).await;
+                let paged = page_to_end(
+                    &minting,
+                    request,
+                    &in_bounds,
+                    &mut received,
+                    &[],
+                    None,
+                    ResumeMode::Cursor,
+                )
+                .await;
                 assert_eq!(received, in_bounds, "{request:?}");
-                closing = paged.cursors.last().cloned();
-                cursors.extend(paged.cursors);
+                cursors.extend(paged.frames.into_iter().map(|frame| frame.cursor));
+                closing = cursors.last().cloned();
             }
 
             // The bounded paging's closing cursor, sent back in the same ordering without the
@@ -1418,7 +1941,16 @@ async fn assert_opposite_direction_resumes(endpoint: Endpoint) {
                 ..base.clone()
             };
             let mut received = Vec::new();
-            page_to_end(&paging, &unbounded, &excluded, &mut received, closing).await;
+            page_to_end(
+                &paging,
+                &unbounded,
+                &excluded,
+                &mut received,
+                &[],
+                closing.map(Resume::from_cursor),
+                ResumeMode::Cursor,
+            )
+            .await;
             assert_eq!(received, excluded, "closing cursor of {bounded:?}");
 
             let opposite = Request {
@@ -1445,10 +1977,17 @@ async fn assert_opposite_direction_resumes(endpoint: Endpoint) {
                         .collect()
                 };
                 let mut received = Vec::new();
-                let reason =
-                    page_to_end(&paging, &opposite, &expected, &mut received, Some(cursor))
-                        .await
-                        .reason;
+                let reason = page_to_end(
+                    &paging,
+                    &opposite,
+                    &expected,
+                    &mut received,
+                    &[],
+                    Some(Resume::from_cursor(cursor)),
+                    ResumeMode::Cursor,
+                )
+                .await
+                .reason;
                 assert_eq!(received, expected, "{token:?} sent back: {opposite:?}");
                 if !expected.is_empty() {
                     let natural_end = if opposite.ascending {
@@ -1478,4 +2017,174 @@ async fn list_transactions_resumes_in_the_opposite_direction() {
 #[tokio::test]
 async fn list_checkpoints_resumes_in_the_opposite_direction() {
     assert_opposite_direction_resumes(Endpoint::Checkpoints).await;
+}
+
+/// An ascending request whose start fields lie past the indexed tip gets one `LEDGER_TIP` frame
+/// echoing them as its `cursor_position`, with no `Watermark.checkpoint`, and the Boundary cursor
+/// at the tip that a request starting anywhere past the tip gets. One whose only bound past the
+/// tip is an `after` cursor, with no start fields or start fields behind the cursor, gets a
+/// `LEDGER_TIP` frame echoing that cursor byte for byte, placed at the public position the cursor
+/// carries. A transaction or event cursor that carries none (minted before cursors carried one)
+/// leaves the frame without a `cursor_position`; a checkpoint cursor is its own position.
+#[tokio::test]
+async fn ascending_past_tip_frames_echo_the_start_fields() {
+    let dense = MockBigtableServer::new();
+    dense_ledger(&dense).await;
+    let total_txs: u64 = DENSE_CHECKPOINT_TXS.iter().sum();
+    let beyond_tip = DENSE_CHECKPOINTS + 3;
+    for endpoint in [
+        Endpoint::Checkpoints,
+        Endpoint::Transactions,
+        Endpoint::Events,
+    ] {
+        let (ctx, server) = context(
+            &dense,
+            DENSE_CHECKPOINTS,
+            endpoint.method(),
+            Limits {
+                bucket_budget: 10_000,
+                max_limit_items: 100,
+                beacon_buckets: NonZeroU64::MIN,
+            },
+        )
+        .await;
+        let base = Request {
+            endpoint,
+            filter: Filter::None,
+            ascending: true,
+            start_checkpoint: None,
+            end_checkpoint: None,
+            limit: 10,
+            far_bound: None,
+        };
+        // The echoed start, the tip, a position past the tip, and that position's point.
+        let (start, tip, past_tip, past_tip_point) = match endpoint {
+            Endpoint::Checkpoints => (
+                LedgerPoint::checkpoint_start(beyond_tip),
+                Position::Checkpoints {
+                    checkpoint: DENSE_CHECKPOINTS,
+                },
+                Position::Checkpoints {
+                    checkpoint: beyond_tip,
+                },
+                LedgerPoint::checkpoint_start(beyond_tip),
+            ),
+            Endpoint::Transactions => (
+                LedgerPoint::transaction(beyond_tip, 2),
+                Position::Transactions {
+                    checkpoint: DENSE_CHECKPOINTS,
+                    tx_seq: total_txs,
+                },
+                Position::Transactions {
+                    checkpoint: beyond_tip,
+                    tx_seq: total_txs + 3,
+                },
+                LedgerPoint::transaction(beyond_tip, 1),
+            ),
+            Endpoint::Events => (
+                LedgerPoint::event(beyond_tip, 1, 1),
+                Position::Events {
+                    checkpoint: DENSE_CHECKPOINTS,
+                    tx_seq: total_txs,
+                    event_index: 0,
+                },
+                Position::Events {
+                    checkpoint: beyond_tip,
+                    tx_seq: total_txs + 3,
+                    event_index: 0,
+                },
+                LedgerPoint::event(beyond_tip, 1, 0),
+            ),
+        };
+
+        let from_start = Resume {
+            cursor: None,
+            position: Some(start),
+        };
+        let frames = run(&ctx, &base, Some(&from_start)).await;
+        let case = format!("{endpoint:?} from {start:?}: {frames:#?}");
+        let [frame] = frames.as_slice() else {
+            panic!("one frame: {case}");
+        };
+        assert_eq!(frame.item, None, "{case}");
+        assert_eq!(frame.end, Some(QueryEndReason::LedgerTip), "{case}");
+        assert_eq!(frame.position, Some(start), "{case}");
+        assert_eq!(frame.covered, None, "{case}");
+        let tip_cursor = CursorToken::boundary(tip).with_public_position(
+            LedgerPoint::checkpoint_start(DENSE_CHECKPOINTS).public_position(&tip),
+        );
+        assert_eq!(frame.cursor, tip_cursor.encode(), "{case}");
+
+        let unlabelled = CursorToken::boundary(past_tip);
+        let labelled = unlabelled
+            .clone()
+            .with_public_position(past_tip_point.public_position(&past_tip));
+        let unlabelled_position =
+            matches!(endpoint, Endpoint::Checkpoints).then_some(past_tip_point);
+        for (after, expected_position) in [
+            (labelled, Some(past_tip_point)),
+            (unlabelled, unlabelled_position),
+        ] {
+            let after = after.encode();
+            for start_checkpoint in [None, Some(1)] {
+                let request = Request {
+                    start_checkpoint,
+                    ..base.clone()
+                };
+                let frames = fetch(&ctx, &request, Some(&Resume::from_cursor(after.clone()))).await;
+                let case = format!("{request:?} after {after:?}: {frames:#?}");
+                let [frame] = frames.as_slice() else {
+                    panic!("one frame: {case}");
+                };
+                assert_eq!(frame.item, None, "{case}");
+                assert_eq!(frame.end, Some(QueryEndReason::LedgerTip), "{case}");
+                assert_eq!(frame.position, expected_position, "{case}");
+                assert_eq!(frame.covered, None, "{case}");
+                assert_eq!(frame.cursor, after, "{case}");
+            }
+        }
+        server.abort();
+    }
+}
+
+/// When the unfiltered descending event scan's per-request transaction cap ends a page right
+/// after an item, its `SCAN_LIMIT` frame carries a Boundary cursor whose position is exactly the
+/// item frame's: the item itself.
+#[tokio::test]
+async fn list_events_descending_scan_limit_after_an_item_names_it() {
+    let dense = MockBigtableServer::new();
+    dense_ledger(&dense).await;
+    let (ctx, server) = context(
+        &dense,
+        DENSE_CHECKPOINTS,
+        Endpoint::Events.method(),
+        Limits {
+            bucket_budget: 10_000,
+            max_limit_items: 3,
+            beacon_buckets: NonZeroU64::MIN,
+        },
+    )
+    .await;
+    let request = Request {
+        endpoint: Endpoint::Events,
+        filter: Filter::None,
+        ascending: false,
+        start_checkpoint: None,
+        end_checkpoint: None,
+        limit: 3,
+        far_bound: None,
+    };
+    let frames = run(&ctx, &request, None).await;
+    let case = format!("{request:?}: {frames:#?}");
+    let [.., item, terminal] = frames.as_slice() else {
+        panic!("an item and a terminal frame: {case}");
+    };
+    assert!(item.item.is_some(), "{case}");
+    assert_eq!(terminal.end, Some(QueryEndReason::ScanLimit), "{case}");
+    assert_eq!(
+        terminal.position.expect("SCAN_LIMIT is placed"),
+        item.position.expect("item frames are placed"),
+        "{case}"
+    );
+    server.abort();
 }
