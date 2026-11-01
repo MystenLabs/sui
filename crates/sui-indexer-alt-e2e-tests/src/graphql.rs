@@ -24,7 +24,6 @@ const FORMAT_MARKER: u8 = 0x00;
 const TRANSACTION: u8 = 0;
 const EVENT: u8 = 1;
 const OWNED_POINT: u8 = 0;
-const OWNED_LEDGER: u8 = 1;
 const POINT_AT: u8 = 0;
 
 /// Relay `PageInfo`.
@@ -100,17 +99,6 @@ pub fn place_event_cursor(checkpoint: u64, transaction_index: u64, event_index: 
         transaction_index,
         event_index,
     ))
-}
-
-/// A GraphQL transactions cursor carrying `ledger`, the ledger service's own cursor bytes, that
-/// GraphQL could not place (as for a page boundary nothing GraphQL saw bounds).
-pub fn unplaced_tx_cursor(ledger: &[u8]) -> String {
-    graphql_cursor((TRANSACTION, OWNED_LEDGER, ledger, None::<()>))
-}
-
-/// The event counterpart of [`unplaced_tx_cursor`].
-pub fn unplaced_event_cursor(ledger: &[u8]) -> String {
-    graphql_cursor((EVENT, OWNED_LEDGER, ledger, None::<()>))
 }
 
 /// [`FORMAT_MARKER`], then the BCS encoding of `envelope`, in Base64.

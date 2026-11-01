@@ -283,8 +283,8 @@ pub struct SubscriptionConfig {
     /// is rejected instead. Raising this admits starts further past the tip, at the cost of
     /// connections parked waiting longer.
     ///
-    /// `afterCheckpoint` and cursors that name a checkpoint are checked when the subscription
-    /// starts. A cursor that names none (a ledger cursor GraphQL could not place) is not checked.
+    /// `afterCheckpoint` and the `after` cursor's checkpoint are checked when the subscription
+    /// starts.
     pub max_start_checkpoints_ahead_of_tip: u64,
 
     /// For a subscription that opted into progress (the `progress` argument), the number of

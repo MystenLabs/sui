@@ -71,20 +71,33 @@ pub struct LedgerGrpcReader {
     max_batch_get_objects: usize,
 }
 
-/// A single item from a list stream and the resume cursor the server emitted alongside it.
+/// A single item from a list stream, with the resume cursor the server emitted alongside it and the
+/// ledger position that cursor names.
 #[derive(Debug, Clone)]
 pub struct PageItem<T> {
     pub payload: T,
     pub cursor: Bytes,
+    pub position: grpc::LedgerPosition,
 }
+
+/// The resume point of a frame without an item: its opaque cursor and the ledger position it names.
+#[derive(Debug, Clone)]
+pub struct PageBoundary {
+    pub cursor: Bytes,
+    pub position: grpc::LedgerPosition,
+}
+
+/// Why a list frame without `Watermark.cursor_position` is rejected.
+const MISSING_CURSOR_POSITION: &str = "Frame missing watermark.cursor_position: the ledger service \
+     predates sui 1.83, which GraphQL requires";
 
 /// A page drained from a single gRPC list stream.
 #[derive(Debug, Clone)]
 pub struct StreamPage<T> {
     /// Items that matched the filters, in stream order.
     pub items: Vec<PageItem<T>>,
-    first_wm_cursor: Option<Bytes>,
-    last_wm_cursor: Option<Bytes>,
+    first_watermark: Option<PageBoundary>,
+    last_watermark: Option<PageBoundary>,
     /// The latest `Watermark.checkpoint` received on this page (see [`Self::covered_checkpoint`]).
     covered_checkpoint: Option<u64>,
     pub end_reason: Option<grpc::QueryEndReason>,
@@ -95,6 +108,7 @@ enum FrameKind<T> {
     Frame {
         payload: Option<T>,
         cursor: Option<Bytes>,
+        position: Option<grpc::LedgerPosition>,
         covered_checkpoint: Option<u64>,
         end_reason: Option<grpc::QueryEndReason>,
     },
@@ -348,6 +362,11 @@ impl LedgerGrpcReader {
         &self,
         request: grpc::ListTransactionsRequest,
     ) -> anyhow::Result<StreamPage<grpc::ExecutedTransaction>> {
+        let mut start = grpc::LedgerPosition::default();
+        start.checkpoint = request.start_checkpoint;
+        start.transaction_index = request.start_transaction_index;
+        let past_tip_start = past_tip_start(request.options.as_ref(), start);
+
         let stream = self
             .client
             .clone()
@@ -357,13 +376,19 @@ impl LedgerGrpcReader {
             .context("ListTransactions stream open failed")?
             .into_inner();
 
-        drain_list_stream("ListTransactions", stream).await
+        drain_list_stream("ListTransactions", stream, past_tip_start).await
     }
 
     pub async fn list_events(
         &self,
         request: grpc::ListEventsRequest,
     ) -> anyhow::Result<StreamPage<grpc::Event>> {
+        let mut start = grpc::LedgerPosition::default();
+        start.checkpoint = request.start_checkpoint;
+        start.transaction_index = request.start_transaction_index;
+        start.event_index = request.start_event_index;
+        let past_tip_start = past_tip_start(request.options.as_ref(), start);
+
         let stream = self
             .client
             .clone()
@@ -373,13 +398,17 @@ impl LedgerGrpcReader {
             .context("ListEvents stream open failed")?
             .into_inner();
 
-        drain_list_stream("ListEvents", stream).await
+        drain_list_stream("ListEvents", stream, past_tip_start).await
     }
 
     pub async fn list_checkpoints(
         &self,
         request: grpc::ListCheckpointsRequest,
     ) -> anyhow::Result<StreamPage<grpc::Checkpoint>> {
+        let mut start = grpc::LedgerPosition::default();
+        start.checkpoint = request.start_checkpoint;
+        let past_tip_start = past_tip_start(request.options.as_ref(), start);
+
         let stream = self
             .client
             .clone()
@@ -389,7 +418,7 @@ impl LedgerGrpcReader {
             .context("ListCheckpoints stream open failed")?
             .into_inner();
 
-        drain_list_stream("ListCheckpoints", stream).await
+        drain_list_stream("ListCheckpoints", stream, past_tip_start).await
     }
 
     /// Create a gRPC request, optionally with the grpc-timeout header if configured.
@@ -462,19 +491,20 @@ impl<T> StreamPage<T> {
     /// The page's resume cursor: a standalone-watermark cursor emitted after the last item if one
     /// exists, otherwise the last item's own cursor.
     pub fn last_cursor(&self) -> Option<&Bytes> {
-        self.last_wm_cursor
+        self.last_watermark
             .as_ref()
+            .map(|boundary| &boundary.cursor)
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
-    /// The cursor of a standalone watermark that came before every item, if one did.
-    pub fn first_watermark_cursor(&self) -> Option<&Bytes> {
-        self.first_wm_cursor.as_ref()
+    /// The standalone watermark that came before every item, if one did.
+    pub fn first_watermark(&self) -> Option<&PageBoundary> {
+        self.first_watermark.as_ref()
     }
 
-    /// The cursor of a standalone watermark that came after the last item, if one did.
-    pub fn last_watermark_cursor(&self) -> Option<&Bytes> {
-        self.last_wm_cursor.as_ref()
+    /// The standalone watermark that came after the last item, if one did.
+    pub fn last_watermark(&self) -> Option<&PageBoundary> {
+        self.last_watermark.as_ref()
     }
 
     /// The server's latest checkpoint coverage claim on this page (`Watermark.checkpoint`), or
@@ -492,52 +522,73 @@ impl<T> StreamPage<T> {
     #[cfg(feature = "testing")]
     pub fn for_test(
         items: Vec<PageItem<T>>,
-        first_wm_cursor: Option<Bytes>,
-        last_wm_cursor: Option<Bytes>,
+        first_watermark: Option<PageBoundary>,
+        last_watermark: Option<PageBoundary>,
         end_reason: Option<grpc::QueryEndReason>,
     ) -> Self {
         Self {
             items,
-            first_wm_cursor,
-            last_wm_cursor,
+            first_watermark,
+            last_watermark,
             covered_checkpoint: None,
             end_reason,
         }
     }
 
-    /// Set the page's coverage claim, for cross-crate tests built with [`Self::for_test`].
-    #[cfg(feature = "testing")]
-    pub fn with_covered_checkpoint(mut self, checkpoint: u64) -> Self {
-        self.covered_checkpoint = Some(checkpoint);
-        self
-    }
-
     /// Fold one frame into the page.
     ///
+    /// Every frame with a cursor must carry `Watermark.cursor_position`, with one exception: past
+    /// its indexed tip, a ledger service answers an ascending request whose `after` cursor it
+    /// cannot place with one `LEDGER_TIP` frame echoing that cursor, without a position or a
+    /// coverage claim. Nothing past the tip is indexed, so that frame resumes at
+    /// `past_tip_start`, the position the request's start fields name, when the request has such
+    /// a cursor.
+    ///
     /// Returns `true` when the frame is `QueryEnd`.
-    fn apply(&mut self, frame: FrameKind<T>) -> bool {
+    fn apply(
+        &mut self,
+        frame: FrameKind<T>,
+        past_tip_start: Option<&grpc::LedgerPosition>,
+    ) -> anyhow::Result<bool> {
         let FrameKind::Frame {
             payload,
             cursor,
+            position,
             covered_checkpoint,
             end_reason,
         } = frame
         else {
             warn!("ignoring unrecognized frame");
-            return false;
+            return Ok(false);
         };
         match payload {
             Some(payload) => {
                 let cursor = cursor.expect("TryFrom validated item cursor");
-                self.last_wm_cursor = None;
-                self.items.push(PageItem { payload, cursor });
+                let position = position.context(MISSING_CURSOR_POSITION)?;
+                self.last_watermark = None;
+                self.items.push(PageItem {
+                    payload,
+                    cursor,
+                    position,
+                });
             }
             None => {
                 if let Some(cursor) = cursor {
-                    self.last_wm_cursor = Some(cursor.clone());
-                    if self.items.is_empty() && self.first_wm_cursor.is_none() {
-                        self.first_wm_cursor = Some(cursor);
+                    let past_tip_echo = end_reason == Some(grpc::QueryEndReason::LedgerTip)
+                        && covered_checkpoint.is_none()
+                        && self.items.is_empty();
+                    let position = match position {
+                        Some(position) => position,
+                        None if past_tip_echo => {
+                            *past_tip_start.context(MISSING_CURSOR_POSITION)?
+                        }
+                        None => bail!(MISSING_CURSOR_POSITION),
+                    };
+                    let boundary = PageBoundary { cursor, position };
+                    if self.items.is_empty() && self.first_watermark.is_none() {
+                        self.first_watermark = Some(boundary.clone());
                     }
+                    self.last_watermark = Some(boundary);
                 }
             }
         }
@@ -549,9 +600,9 @@ impl<T> StreamPage<T> {
             // `Unknown`, so `None` here remains unambiguous shorthand for
             // "no End frame received" (i.e. the deadline cut the stream short).
             self.end_reason = Some(reason);
-            return true;
+            return Ok(true);
         }
-        false
+        Ok(false)
     }
 }
 
@@ -559,8 +610,8 @@ impl<T> Default for StreamPage<T> {
     fn default() -> Self {
         Self {
             items: Vec::new(),
-            first_wm_cursor: None,
-            last_wm_cursor: None,
+            first_watermark: None,
+            last_watermark: None,
             covered_checkpoint: None,
             end_reason: None,
         }
@@ -598,7 +649,9 @@ fn classify_frame<T>(
     watermark: Option<grpc::Watermark>,
     end: Option<grpc::QueryEnd>,
 ) -> anyhow::Result<FrameKind<T>> {
-    let (cursor, covered_checkpoint) = watermark.map_or((None, None), |w| (w.cursor, w.checkpoint));
+    let (cursor, position, covered_checkpoint) = watermark.map_or((None, None, None), |w| {
+        (w.cursor, w.cursor_position, w.checkpoint)
+    });
     let end_reason = end.map(|e| e.reason());
 
     if payload.is_none() && cursor.is_none() && end_reason.is_none() {
@@ -611,14 +664,27 @@ fn classify_frame<T>(
     Ok(FrameKind::Frame {
         payload,
         cursor,
+        position,
         covered_checkpoint,
         end_reason,
     })
 }
 
+/// The position an ascending request's start fields name, when the request also carries an `after`
+/// cursor, which is the one kind of request a ledger service can answer with a frame it does not
+/// place (see [`StreamPage::apply`]).
+fn past_tip_start(
+    options: Option<&grpc::QueryOptions>,
+    start: grpc::LedgerPosition,
+) -> Option<grpc::LedgerPosition> {
+    let options = options?;
+    (options.after.is_some() && options.ordering() != grpc::Ordering::Descending).then_some(start)
+}
+
 async fn drain_list_stream<R, T, S>(
     rpc_name: &'static str,
     stream: S,
+    past_tip_start: Option<grpc::LedgerPosition>,
 ) -> anyhow::Result<StreamPage<T>>
 where
     R: TryInto<FrameKind<T>, Error = anyhow::Error>,
@@ -633,7 +699,10 @@ where
                     .try_into()
                     .with_context(|| format!("{rpc_name}: malformed frame"))?;
                 // Process and break on receiving `QueryEnd`.
-                if page.apply(frame) {
+                if page
+                    .apply(frame, past_tip_start.as_ref())
+                    .with_context(|| format!("{rpc_name}: unusable frame"))?
+                {
                     break;
                 }
             }
@@ -802,21 +871,30 @@ pub(crate) mod test_support {
 mod list_stream_tests {
     use super::*;
 
-    /// Well-formed frame with both `transaction` payload and a cursor-bearing watermark.
-    fn item_response(cursor: &[u8]) -> grpc::ListTransactionsResponse {
+    /// The position every cursor-bearing fixture frame carries, unless a test strips it.
+    fn position(checkpoint: u64) -> grpc::LedgerPosition {
+        grpc::LedgerPosition::default().with_checkpoint(checkpoint)
+    }
+
+    /// A watermark at `cursor`, placed at checkpoint 1.
+    fn watermark(cursor: &[u8]) -> grpc::Watermark {
         let mut watermark = grpc::Watermark::default();
         watermark.cursor = Some(Bytes::copy_from_slice(cursor));
+        watermark.cursor_position = Some(position(1));
+        watermark
+    }
+
+    /// Well-formed frame with both `transaction` payload and a cursor-bearing watermark.
+    fn item_response(cursor: &[u8]) -> grpc::ListTransactionsResponse {
         let mut response = grpc::ListTransactionsResponse::default();
         response.transaction = Some(grpc::ExecutedTransaction::default());
-        response.watermark = Some(watermark);
+        response.watermark = Some(watermark(cursor));
         response
     }
 
     fn watermark_response(cursor: &[u8]) -> grpc::ListTransactionsResponse {
-        let mut watermark = grpc::Watermark::default();
-        watermark.cursor = Some(Bytes::copy_from_slice(cursor));
         let mut response = grpc::ListTransactionsResponse::default();
-        response.watermark = Some(watermark);
+        response.watermark = Some(watermark(cursor));
         response
     }
 
@@ -833,9 +911,7 @@ mod list_stream_tests {
         reason: grpc::QueryEndReason,
     ) -> grpc::ListTransactionsResponse {
         let mut response = end_response(reason);
-        let mut watermark = grpc::Watermark::default();
-        watermark.cursor = Some(Bytes::copy_from_slice(cursor));
-        response.watermark = Some(watermark);
+        response.watermark = Some(watermark(cursor));
         response
     }
 
@@ -851,8 +927,24 @@ mod list_stream_tests {
         response
     }
 
+    /// `response` with its watermark's `cursor_position` removed.
+    fn unplaced(mut response: grpc::ListTransactionsResponse) -> grpc::ListTransactionsResponse {
+        if let Some(watermark) = response.watermark.as_mut() {
+            watermark.cursor_position = None;
+        }
+        response
+    }
+
     fn frame(r: grpc::ListTransactionsResponse) -> FrameKind<grpc::ExecutedTransaction> {
         r.try_into().expect("test fixture should be well-formed")
+    }
+
+    /// Fold `response` into `page`, for a request that cannot be echoed past the tip.
+    fn apply(
+        page: &mut StreamPage<grpc::ExecutedTransaction>,
+        response: grpc::ListTransactionsResponse,
+    ) -> bool {
+        page.apply(frame(response), None).expect("frame applies")
     }
 
     async fn drain_iter(
@@ -861,6 +953,7 @@ mod list_stream_tests {
         drain_list_stream::<_, grpc::ExecutedTransaction, _>(
             "ListTransactions",
             futures::stream::iter(responses),
+            None,
         )
         .await
     }
@@ -868,11 +961,11 @@ mod list_stream_tests {
     #[test]
     fn drains_items_tracking_latest_cursor_and_end_reason() {
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(item_response(b"c1")));
-        page.apply(frame(watermark_response(b"w2")));
+        apply(&mut page, item_response(b"c1"));
+        apply(&mut page, watermark_response(b"w2"));
         let mut last = item_response(b"c3");
         last.end = end_response(grpc::QueryEndReason::ItemLimit).end;
-        page.apply(frame(last));
+        apply(&mut page, last);
         assert_eq!(page.items.len(), 2);
         // Per-item cursors are preserved on `PageItem` — that's the whole point of the
         // payload/cursor split. The standalone watermark at `w2` does not produce a `PageItem`.
@@ -885,15 +978,15 @@ mod list_stream_tests {
     #[test]
     fn standalone_watermark_advances_cursor_without_items() {
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(watermark_response(b"w1")));
-        page.apply(frame(end_response_with_cursor(
-            b"w2",
-            grpc::QueryEndReason::LedgerTip,
-        )));
+        apply(&mut page, watermark_response(b"w1"));
+        apply(
+            &mut page,
+            end_response_with_cursor(b"w2", grpc::QueryEndReason::LedgerTip),
+        );
 
         assert!(page.items.is_empty());
         assert_eq!(
-            page.first_watermark_cursor().map(|c| c.as_ref()),
+            page.first_watermark().map(|b| b.cursor.as_ref()),
             Some(b"w1".as_ref())
         );
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"w2".as_ref()));
@@ -905,54 +998,165 @@ mod list_stream_tests {
         // The bool returned by `apply` is the drain loop's stop signal: `true` means "stop
         // draining," `false` means "keep going." Only frames carrying `end` should signal stop.
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        assert!(!page.apply(frame(item_response(b"c1"))));
-        assert!(!page.apply(frame(watermark_response(b"w1"))));
+        assert!(!apply(&mut page, item_response(b"c1")));
+        assert!(!apply(&mut page, watermark_response(b"w1")));
         // Outer message with none of the known fields set → `FrameKind::Unknown` → continue.
-        assert!(!page.apply(frame(grpc::ListTransactionsResponse::default())));
-        assert!(page.apply(frame(end_response(grpc::QueryEndReason::LedgerTip))));
+        assert!(!apply(&mut page, grpc::ListTransactionsResponse::default()));
+        assert!(apply(
+            &mut page,
+            end_response(grpc::QueryEndReason::LedgerTip)
+        ));
 
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
         let mut item_end = item_response(b"c2");
         item_end.end = end_response(grpc::QueryEndReason::ItemLimit).end;
-        assert!(page.apply(frame(item_end)));
+        assert!(apply(&mut page, item_end));
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.items[0].cursor.as_ref(), b"c2".as_ref());
         assert_eq!(page.end_reason, Some(grpc::QueryEndReason::ItemLimit));
     }
 
     #[test]
-    fn first_wm_cursor_set_to_first_pre_item_watermark() {
-        // `first_wm_cursor` is set when watermark frame observed before items.
+    fn first_watermark_set_to_first_pre_item_watermark() {
+        // `first_watermark` is set when a watermark frame is observed before items.
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(watermark_response(b"w1")));
-        page.apply(frame(item_response(b"c2")));
-        page.apply(frame(watermark_response(b"w3")));
-        page.apply(frame(item_response(b"c4")));
+        apply(&mut page, watermark_response(b"w1"));
+        apply(&mut page, item_response(b"c2"));
+        apply(&mut page, watermark_response(b"w3"));
+        apply(&mut page, item_response(b"c4"));
 
         assert_eq!(
-            page.first_watermark_cursor().map(|c| c.as_ref()),
+            page.first_watermark().map(|b| b.cursor.as_ref()),
             Some(b"w1".as_ref())
         );
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c4".as_ref()));
     }
 
     #[test]
-    fn first_wm_cursor_not_set_after_items() {
-        // `first_wm_cursor` is never set once at least one item exists on the page.
+    fn first_watermark_not_set_after_items() {
+        // `first_watermark` is never set once at least one item exists on the page.
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(item_response(b"c2")));
-        page.apply(frame(watermark_response(b"w3")));
-        page.apply(frame(item_response(b"c4")));
-        page.apply(frame(watermark_response(b"w1")));
+        apply(&mut page, item_response(b"c2"));
+        apply(&mut page, watermark_response(b"w3"));
+        apply(&mut page, item_response(b"c4"));
+        apply(&mut page, watermark_response(b"w1"));
 
-        assert!(page.first_wm_cursor.is_none());
+        assert!(page.first_watermark.is_none());
+    }
+
+    /// Items and page boundaries carry the `cursor_position` of their frames.
+    #[test]
+    fn frames_carry_their_cursor_position() {
+        let placed = |mut response: grpc::ListTransactionsResponse, checkpoint| {
+            response
+                .watermark
+                .as_mut()
+                .unwrap()
+                .set_cursor_position(position(checkpoint));
+            response
+        };
+
+        let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+        apply(&mut page, placed(watermark_response(b"w1"), 5));
+        apply(&mut page, placed(item_response(b"c2"), 6));
+        apply(&mut page, placed(watermark_response(b"w3"), 7));
+        assert_eq!(page.first_watermark().unwrap().position, position(5));
+        assert_eq!(page.items[0].position, position(6));
+        assert_eq!(page.last_watermark().unwrap().position, position(7));
+    }
+
+    /// A frame with a cursor but no `cursor_position`, item or not, comes from a ledger service
+    /// that predates it, which is an error.
+    #[test]
+    fn frames_without_a_cursor_position_are_rejected() {
+        let frames = [
+            unplaced(item_response(b"c1")),
+            unplaced(watermark_response(b"w1")),
+            unplaced(end_response_with_cursor(
+                b"w1",
+                grpc::QueryEndReason::ScanLimit,
+            )),
+            unplaced(end_response_with_cursor(
+                b"w1",
+                grpc::QueryEndReason::LedgerTip,
+            )),
+        ];
+        for response in frames {
+            let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+            let error = page.apply(frame(response), None).expect_err("rejected");
+            assert!(
+                error.to_string().contains("predates sui 1.83"),
+                "unexpected error: {error:#}"
+            );
+        }
+
+        // A bare end frame carries no cursor, so it needs no position.
+        let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+        assert!(apply(
+            &mut page,
+            end_response(grpc::QueryEndReason::LedgerTip)
+        ));
+    }
+
+    /// Past its tip, a ledger service answers an ascending request with an `after` cursor it
+    /// cannot place with one `LEDGER_TIP` frame without a position or a coverage claim. That frame
+    /// resumes at the request's start; any other frame without a position is still rejected.
+    #[test]
+    fn past_tip_echo_resumes_at_the_request_start() {
+        let start = position(9);
+        let echo = || {
+            unplaced(end_response_with_cursor(
+                b"a",
+                grpc::QueryEndReason::LedgerTip,
+            ))
+        };
+
+        let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+        assert!(page.apply(frame(echo()), Some(&start)).unwrap());
+        let boundary = page.last_watermark().unwrap();
+        assert_eq!(boundary.cursor.as_ref(), b"a".as_ref());
+        assert_eq!(boundary.position, start);
+
+        let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+        assert!(page.apply(frame(echo()), None).is_err());
+
+        let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+        let claimed = with_covered_checkpoint(echo(), 8);
+        assert!(page.apply(frame(claimed), Some(&start)).is_err());
+
+        let scan_limit = unplaced(end_response_with_cursor(
+            b"a",
+            grpc::QueryEndReason::ScanLimit,
+        ));
+        let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
+        assert!(page.apply(frame(scan_limit), Some(&start)).is_err());
+    }
+
+    /// Only an ascending request with an `after` cursor can be echoed past the tip.
+    #[test]
+    fn past_tip_start_needs_an_ascending_after_cursor() {
+        let start = position(9);
+        let options = |after: Option<&'static [u8]>, ordering: grpc::Ordering| {
+            let mut options = grpc::QueryOptions::default();
+            options.after = after.map(Bytes::from_static);
+            options.ordering = Some(ordering as i32);
+            options
+        };
+
+        let ascending_after = options(Some(b"a"), grpc::Ordering::Ascending);
+        assert_eq!(past_tip_start(Some(&ascending_after), start), Some(start));
+        let ascending = options(None, grpc::Ordering::Ascending);
+        assert_eq!(past_tip_start(Some(&ascending), start), None);
+        let descending_after = options(Some(b"a"), grpc::Ordering::Descending);
+        assert_eq!(past_tip_start(Some(&descending_after), start), None);
+        assert_eq!(past_tip_start(None, start), None);
     }
 
     #[test]
     fn trailing_watermark_advances_past_last_item() {
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(item_response(b"c1")));
-        page.apply(frame(watermark_response(b"w2")));
+        apply(&mut page, item_response(b"c1"));
+        apply(&mut page, watermark_response(b"w2"));
 
         // The trailing watermark's cursor wins over the item's — it represents
         // server progress past the last delivered item.
@@ -962,20 +1166,23 @@ mod list_stream_tests {
     #[test]
     fn covered_checkpoint_keeps_the_latest_claim() {
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(item_response(b"c1")));
+        apply(&mut page, item_response(b"c1"));
         assert_eq!(page.covered_checkpoint(), None);
 
-        page.apply(frame(with_covered_checkpoint(watermark_response(b"w2"), 4)));
+        apply(
+            &mut page,
+            with_covered_checkpoint(watermark_response(b"w2"), 4),
+        );
         assert_eq!(page.covered_checkpoint(), Some(4));
-        page.apply(frame(with_covered_checkpoint(item_response(b"c3"), 6)));
+        apply(&mut page, with_covered_checkpoint(item_response(b"c3"), 6));
         assert_eq!(page.covered_checkpoint(), Some(6));
 
         // Frames without a claim leave the latest one in place.
-        page.apply(frame(item_response(b"c4")));
-        page.apply(frame(end_response_with_cursor(
-            b"w5",
-            grpc::QueryEndReason::ScanLimit,
-        )));
+        apply(&mut page, item_response(b"c4"));
+        apply(
+            &mut page,
+            end_response_with_cursor(b"w5", grpc::QueryEndReason::ScanLimit),
+        );
         assert_eq!(page.covered_checkpoint(), Some(6));
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"w5".as_ref()));
     }
@@ -988,7 +1195,7 @@ mod list_stream_tests {
             grpc::QueryEndReason::ScanLimit,
         ] {
             let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-            page.apply(frame(end_response(reason)));
+            apply(&mut page, end_response(reason));
             assert!(page.has_more(), "expected has_more for {reason:?}");
         }
 
@@ -1010,7 +1217,7 @@ mod list_stream_tests {
             grpc::QueryEndReason::CursorBound,
         ] {
             let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-            page.apply(frame(end_response(reason)));
+            apply(&mut page, end_response(reason));
             assert!(!page.has_more(), "expected !has_more for {reason:?}");
         }
     }
@@ -1020,7 +1227,7 @@ mod list_stream_tests {
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
         let mut response = item_response(b"c1");
         response.end = end_response(grpc::QueryEndReason::CursorBound).end;
-        page.apply(frame(response));
+        apply(&mut page, response);
 
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c1".as_ref()));
         assert!(
@@ -1037,7 +1244,7 @@ mod list_stream_tests {
         response.end = Some(end);
 
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(response));
+        apply(&mut page, response);
         assert_eq!(page.end_reason, Some(grpc::QueryEndReason::Unknown));
     }
 
@@ -1048,9 +1255,9 @@ mod list_stream_tests {
         let response = grpc::ListTransactionsResponse::default();
 
         let mut page: StreamPage<grpc::ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(response));
+        apply(&mut page, response);
         assert!(page.items.is_empty());
-        assert_eq!(page.first_watermark_cursor(), None);
+        assert!(page.first_watermark().is_none());
         assert_eq!(page.last_cursor(), None);
         assert_eq!(page.end_reason, None);
     }
@@ -1126,6 +1333,21 @@ mod list_stream_tests {
         drain_iter(vec![Ok(item_response(b"c0")), Ok(malformed)])
             .await
             .expect_err("malformed Item frame should error the drain");
+    }
+
+    /// A stream from a ledger service that predates `cursor_position` fails the drain.
+    #[tokio::test]
+    async fn drain_errors_on_frame_without_cursor_position() {
+        let error = drain_iter(vec![
+            Ok(item_response(b"c0")),
+            Ok(unplaced(item_response(b"c1"))),
+        ])
+        .await
+        .expect_err("frame without a position should error the drain");
+        assert!(
+            format!("{error:#}").contains("predates sui 1.83"),
+            "unexpected error: {error:#}"
+        );
     }
 
     #[tokio::test]

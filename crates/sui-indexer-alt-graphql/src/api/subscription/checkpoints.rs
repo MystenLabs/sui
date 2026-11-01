@@ -11,7 +11,6 @@ use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
@@ -35,6 +34,8 @@ use super::scan_then_live::Subscribable;
 impl Subscribable for Checkpoint {
     type Item = Self;
     type Cursor = CCheckpoint;
+    /// The first checkpoint not yet delivered.
+    type Position = u64;
     /// Checkpoints are delivered unfiltered.
     type Filter = ();
     type ScanItem = v2::Checkpoint;
@@ -68,8 +69,12 @@ impl Subscribable for Checkpoint {
         Some(cursor.sequence_number())
     }
 
-    fn made_progress(end: &CCheckpoint, after: &CCheckpoint, _reached_tip: bool) -> bool {
-        end.sequence_number() > after.sequence_number()
+    fn resume_position(cursor: &CCheckpoint) -> u64 {
+        cursor.sequence_number().saturating_add(1)
+    }
+
+    fn checkpoint_start(checkpoint: u64) -> u64 {
+        checkpoint
     }
 
     /// Fully process the scanned checkpoint and carry it on the node, resolving against it in memory.
@@ -95,25 +100,25 @@ impl Subscribable for Checkpoint {
     }
 
     /// A live checkpoint is delivered whole, as a single edge carrying its processed data.
-    fn matching_edges(
+    fn matching_items(
         checkpoint: &Arc<ProcessedCheckpoint>,
         caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
         _filter: &(),
-    ) -> Result<Vec<Edge<String, Self, EmptyFields>>, RpcError> {
+    ) -> Result<Vec<(CCheckpoint, Self)>, RpcError> {
         let scope = Scope::for_streamed_checkpoint(
             caches.clone(),
             resolver_limits.clone(),
             checkpoint.clone(),
         );
         let sequence_number = checkpoint.summary.sequence_number;
-        let cursor = CheckpointToken::cursor(sequence_number).encode_cursor();
+        let cursor = CheckpointToken::cursor(sequence_number);
         let node = Checkpoint {
             sequence_number,
             scope,
             streamed_data: Some(checkpoint.clone()),
         };
-        Ok(vec![Edge::new(cursor, node)])
+        Ok(vec![(cursor, node)])
     }
 }
 

@@ -70,14 +70,14 @@ Response: {
   "data": {
     "transactions": {
       "pageInfo": {
-        "startCursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
-        "endCursor": "AAABCCgBOgQIBRAJAQAFAAAAAAAAAAEAAAAAAAAA",
+        "startCursor": "AAABCigBOgQIABAASgABAAAAAAAAAAAAAAAAAAAAAAA=",
+        "endCursor": "AAABDigBOgQIBRAJSgQIBRABAQAFAAAAAAAAAAEAAAAAAAAA",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "AAABCCgBOgQIABAAAQAAAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABCigBOgQIABAASgABAAAAAAAAAAAAAAAAAAAAAAA=",
           "node": {
             "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
             "effects": {
@@ -89,7 +89,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIARABAQABAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABDCgBOgQIARABSgIIAQEAAQAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "Behwp65YPJaMaHg9qgpz5aReNug7U3YEhkLW4ukcZjfc",
             "effects": {
@@ -101,7 +101,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIARACAQABAAAAAAAAAAEAAAAAAAAA",
+          "cursor": "AAABDigBOgQIARACSgQIARABAQABAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "H9Up8TXVvbtdLpCB5QzUGwbQG6kMk3z3n1HZsc4ZMa5o",
             "effects": {
@@ -113,7 +113,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIARADAQABAAAAAAAAAAIAAAAAAAAA",
+          "cursor": "AAABDigBOgQIARADSgQIARACAQABAAAAAAAAAAIAAAAAAAAA",
           "node": {
             "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
             "effects": {
@@ -125,7 +125,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIAhAEAQACAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABDCgBOgQIAhAESgIIAgEAAgAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "4SyyecAZacr3hX5fB5eeTZrUsPjbgf4cFi1E2azPMoQN",
             "effects": {
@@ -137,7 +137,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIAxAFAQADAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABDCgBOgQIAxAFSgIIAwEAAwAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "DJZzBdgo7HSUrtdE8k41y43WPHTw3gDDXUc2V4EdNi1m",
             "effects": {
@@ -149,7 +149,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIAxAGAQADAAAAAAAAAAEAAAAAAAAA",
+          "cursor": "AAABDigBOgQIAxAGSgQIAxABAQADAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "DKkZzc9QZeYigRNaEofwDKTuuZ5KeSkyWq6gWjyojZSV",
             "effects": {
@@ -161,7 +161,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIBBAHAQAEAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABDCgBOgQIBBAHSgIIBAEABAAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "BLWiR4XPz5tRWXHQRUba5FK15DgseQkPM8ZnvSBZEN3s",
             "effects": {
@@ -173,7 +173,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIBRAIAQAFAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABDCgBOgQIBRAISgIIBQEABQAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "9KqKTy3nFQLpzfJyTks7MrrKi5xXZ3ejctEmjvnisaF9",
             "effects": {
@@ -185,7 +185,7 @@ Response: {
           }
         },
         {
-          "cursor": "AAABCCgBOgQIBRAJAQAFAAAAAAAAAAEAAAAAAAAA",
+          "cursor": "AAABDigBOgQIBRAJSgQIBRABAQAFAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "DyvEoKxh9cgtdtNTBRPEUbq8XzDBnEr5PePbZMeVHgun",
             "effects": {

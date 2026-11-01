@@ -36,13 +36,13 @@ Response: {
     "sentByA": {
       "edges": [
         {
-          "cursor": "AAABCCgBOgQIARABAQABAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABDCgBOgQIARABSgIIAQEAAQAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
         },
         {
-          "cursor": "AAABCCgBOgQIARACAQABAAAAAAAAAAEAAAAAAAAA",
+          "cursor": "AAABDigBOgQIARACSgQIARABAQABAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }
@@ -52,7 +52,7 @@ Response: {
     "affectedB": {
       "edges": [
         {
-          "cursor": "AAABCCgBOgQIARABAQABAAAAAAAAAAAAAAAAAAAA",
+          "cursor": "AAABDCgBOgQIARABSgIIAQEAAQAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
@@ -62,7 +62,7 @@ Response: {
     "affectedC": {
       "edges": [
         {
-          "cursor": "AAABCCgBOgQIARACAQABAAAAAAAAAAEAAAAAAAAA",
+          "cursor": "AAABDigBOgQIARACSgQIARABAQABAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }
