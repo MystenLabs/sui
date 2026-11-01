@@ -3383,20 +3383,34 @@ fn format_balance(
     };
 
     let mut coin_decimals = coin_decimals as u32;
-    let billions = 10u128.pow(coin_decimals + 9);
-    let millions = 10u128.pow(coin_decimals + 6);
-    let thousands = 10u128.pow(coin_decimals + 3);
-    let units = 10u128.pow(coin_decimals);
+    // 10^39 does not fit in u128. Coin decimals are an unbounded u8, so skip a tier
+    // whose scale overflows instead of panicking, and fall back when even 10^decimals does not fit.
+    let scale = |exp: u32| 10u128.checked_pow(exp);
+    let Some(units) = scale(coin_decimals) else {
+        return match symbol {
+            Some(symbol) => format!("{value} {symbol}"),
+            None => value.to_string(),
+        };
+    };
+    let thousands = scale(coin_decimals + 3);
+    let millions = scale(coin_decimals + 6);
+    let billions = scale(coin_decimals + 9);
 
-    let (whole, fractional) = if value > billions {
+    let (whole, fractional) = if let Some(billions) = billions
+        && value > billions
+    {
         coin_decimals += 9;
         suffix = format!("B{suffix}");
         divide(value, billions)
-    } else if value > millions {
+    } else if let Some(millions) = millions
+        && value > millions
+    {
         coin_decimals += 6;
         suffix = format!("M{suffix}");
         divide(value, millions)
-    } else if value > thousands {
+    } else if let Some(thousands) = thousands
+        && value > thousands
+    {
         coin_decimals += 3;
         suffix = format!("K{suffix}");
         divide(value, thousands)
@@ -4693,5 +4707,14 @@ mod tests {
 
         let table = gas_result(0, 42).to_string();
         assert!(table.contains("address balance"), "{table}");
+    }
+
+    /// Coin metadata decimals are a u8 with no upper bound. 10^(decimals + 9) does not fit in
+    /// u128 once decimals >= 30, and 10^decimals itself does not fit once decimals >= 39.
+    #[test]
+    fn format_balance_does_not_panic_for_high_decimals() {
+        assert_eq!(format_balance(0, 30, 2, Some("ODD")), "0.00 ODD");
+        assert_eq!(format_balance(0, 39, 2, Some("ODD")), "0 ODD");
+        assert_eq!(format_balance(5, 39, 2, None), "5");
     }
 }
