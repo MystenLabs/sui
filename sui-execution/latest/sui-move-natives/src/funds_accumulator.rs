@@ -177,7 +177,7 @@ pub fn reserve_object_funds_for_withdrawal(
             .check_object_funds_withdraw_in_execution()
         {
             // Before check_object_funds_withdraw_in_execution is enabled, object funds withdrawals are not
-            // checked in execution. They are checked post-execution, and potentially retried if insufficient.
+            // checked. Certified effects carry any insufficient-funds outcome for those protocol versions.
             return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
         }
 

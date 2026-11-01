@@ -7,9 +7,9 @@ withdrawing transaction is allowed to execute.
 
 For the on-chain data layout, see [`data_model.md`](./data_model.md). For how a withdraw is
 declared and how settlement transactions are constructed, see
-[`write_path.md`](./write_path.md). For the post-execution sufficiency check used for
+[`write_path.md`](./write_path.md). For the in-execution sufficiency check used for
 **object-owned** accumulator accounts, see
-[`object_funds_checking.md`](./object_funds_checking.md).
+[`object_funds_in_execution.md`](./object_funds_in_execution.md).
 
 ## 1. Inputs and outputs
 
@@ -24,7 +24,7 @@ enough to cover the declared maximum, the transaction is guaranteed to fail, so 
 execution entirely and return an early error.
 
 Object-funds withdrawals (where the amount is known only after the transaction is executed) are out of
-scope here — see [`object_funds_checking.md`](./object_funds_checking.md).
+scope here — see [`object_funds_in_execution.md`](./object_funds_in_execution.md).
 
 ### Core data structures
 
@@ -233,7 +233,7 @@ which path delivered the settlement.
 ### 3.1.1 Why a root-consistent read is sufficient here
 
 This is a place where the address-funds scheduler is intentionally asking a weaker question than
-the object-funds checker asks later in the pipeline.
+the object funds check asks during execution.
 
 For an untracked account, `get_consistent_latest_account_amount_and_version` returns a balance and
 the root accumulator version that balance is consistent with. The balance may be older than the
@@ -677,6 +677,3 @@ This clean break means no in-flight in-memory state carries over across epochs. 
 withdrawals from the old epoch are effectively abandoned — they'll be handled by the
 checkpoint executor during epoch transition, and the new epoch starts from the on-chain state
 at the boundary.
-
-The object-funds checker is replaced through the same mechanism — see
-[`object_funds_checking.md`](./object_funds_checking.md) §5.

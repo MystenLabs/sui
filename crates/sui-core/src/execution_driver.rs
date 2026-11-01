@@ -152,7 +152,7 @@ pub async fn execution_process(
         let _scope = monitored_scope("ExecutionDriver::loop");
 
         // Get the next admissible transaction, buffering arrivals meanwhile.
-        let (pending_cert, mut slot) = loop {
+        let (pending_cert, slot) = loop {
             tokio::select! {
                 received = rx_ready_certificates.recv() => {
                     let Some(pending_cert) = received else {
@@ -260,6 +260,9 @@ pub async fn execution_process(
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
             let result = tokio::task::spawn_blocking(move || {
+                // Dropped when execution finishes, which releases the concurrency slot and
+                // retires the causal index.
+                let _slot = slot;
                 let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
                 match authority.try_execute_immediately(
@@ -278,18 +281,6 @@ pub async fn execution_process(
                     }
                     ExecutionOutput::Fatal(e) => {
                         fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
-                    }
-                    ExecutionOutput::RetryLater => {
-                        // Transaction will be retried later and auto-rescheduled under its
-                        // original causal index (carried in the retry's env clone), so keep
-                        // the index alive when the slot is released.
-                        if let Some(slot) = &mut slot {
-                            slot.skip_retire();
-                        }
-                        authority
-                            .metrics
-                            .execution_driver_paused_transactions
-                            .inc();
                     }
                 }
             })
