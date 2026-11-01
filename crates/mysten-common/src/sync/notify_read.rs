@@ -69,8 +69,10 @@ const MAX_SAMPLED_KEYS: usize = 32;
 pub const CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME: &str =
     "CheckpointBuilder::notify_read_executed_effects";
 
+const NUM_SHARDS: usize = 255;
+
 pub struct NotifyRead<K, V> {
-    pending: Vec<Mutex<HashMap<K, Registrations<V>>>>,
+    pending: [Mutex<HashMap<K, Registrations<V>>>; NUM_SHARDS],
     count_pending: AtomicUsize,
     // Last stall report per task name.
     last_stall_log: Mutex<HashMap<&'static str, Instant>>,
@@ -78,7 +80,7 @@ pub struct NotifyRead<K, V> {
 
 impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     pub fn new() -> Self {
-        let pending = (0..255).map(|_| Default::default()).collect();
+        let pending = std::array::from_fn(|_| Default::default());
         let count_pending = Default::default();
         Self {
             pending,
