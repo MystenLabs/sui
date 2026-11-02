@@ -168,9 +168,7 @@ pub enum KeyToolCommand {
     /// result can be used as signature field for `sui client execute-signed-tx`. The sum
     /// of weights of all signatures must be >= the threshold.
     ///
-    /// The order of `sigs` must be the same as the order of `pks`.
-    /// e.g. for [pk1, pk2, pk3, pk4, pk5], [sig1, sig2, sig5] is valid, but
-    /// [sig2, sig1, sig5] is invalid.
+    /// The `sigs` may be given in any order.
     MultiSigCombinePartialSig {
         #[clap(long, num_args(1..))]
         sigs: Vec<GenericSignature>,
