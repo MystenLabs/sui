@@ -358,14 +358,17 @@ pub struct LedgerHistoryConfig {
     pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
 
     /// Per-request evaluated-bucket budget for filtered tx-bitmap scans, shared
-    /// across all DNF dimensions of one query. Caps how many fetched buckets the
-    /// eval evaluates, NOT how many bucket reads BigTable receives — at
-    /// exhaustion each leaf stream may have fetched one additional bucket that is
-    /// discarded rather than evaluated, so observed reads can exceed this by up
-    /// to the query's unique leaf count (at most twice
-    /// `max_bitmap_filter_literals`, plus one synthetic universe key). A query
-    /// with more leaves than this budget is granted one bucket per leaf.
-    /// Exhausting it ends the query with `SCAN_LIMIT` and a resume cursor.
+    /// across all DNF dimensions of one query. A query with more unique leaves
+    /// than this budget is granted one bucket per leaf, so the effective budget
+    /// is the larger of this value and the query's unique leaf count. It caps
+    /// how many fetched buckets the eval evaluates, NOT how many bucket reads
+    /// BigTable receives — at exhaustion each Bigtable-backed leaf stream may
+    /// have fetched one additional bucket that is discarded rather than
+    /// evaluated, so observed reads can exceed the effective budget by up to the
+    /// number of Bigtable-backed leaves (at most twice
+    /// `max_bitmap_filter_literals`; the synthetic tx universe key is generated
+    /// in memory). Exhausting it ends the query with `SCAN_LIMIT` and a resume
+    /// cursor.
     ///
     /// Defaults to `4000` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]

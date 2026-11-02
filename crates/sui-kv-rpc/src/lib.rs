@@ -169,7 +169,7 @@ impl KvRpcMetrics {
             .unwrap(),
             bitmap_buckets_evaluated: register_histogram_vec_with_registry!(
                 "kv_rpc_bitmap_buckets_evaluated",
-                "Buckets evaluated against the per-request bitmap scan budget. Caps at the configured budget; actual backend bucket reads may exceed it by up to max_bitmap_filter_literals (one extra fetched-and-discarded bucket per leaf stream at exhaustion). Tail near the per-request cap means clients are hitting SCAN_LIMIT and paging.",
+                "Buckets evaluated against the per-request bitmap scan budget. Caps at the effective budget (the configured budget, raised to the query's unique leaf count when that is larger); actual backend bucket reads may exceed it by up to the number of Bigtable-backed leaves (one extra fetched-and-discarded bucket per leaf stream at exhaustion; at most twice max_bitmap_filter_literals). Tail near the per-request cap means clients are hitting SCAN_LIMIT and paging.",
                 &["method"],
                 // Exponential 1..2048: many requests evaluate few buckets
                 // (small or empty scans), a tail saturates at the default 1k cap.

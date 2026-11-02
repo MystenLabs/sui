@@ -35,7 +35,8 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 
-/// Upper bound on the number of DNF terms a `TransactionFilter` may expand to.
+/// Upper bound on the number of DNF terms produced by expanding the terms of a
+/// `TransactionFilter` that contain a non-negated `AffectedAddress` literal.
 ///
 /// The `AffectedAddress` index dimension does not record a transaction's
 /// sender, so an `AffectedAddress(X)` literal is evaluated as
@@ -147,7 +148,9 @@ fn validate_literal_fanout(
 }
 
 /// Reject filters whose `AffectedAddress` expansion would exceed
-/// [`MAX_EXPANDED_TRANSACTION_TERMS`].
+/// [`MAX_EXPANDED_TRANSACTION_TERMS`]. Only terms that contain a non-negated
+/// `AffectedAddress` literal are counted, so filters without one are never
+/// rejected here.
 fn validate_expanded_term_count(terms: &[TransactionTerm]) -> Result<(), RpcError> {
     let mut total = 0usize;
     for term in terms {
@@ -156,6 +159,9 @@ fn validate_expanded_term_count(terms: &[TransactionTerm]) -> Result<(), RpcErro
             .iter()
             .filter(|literal| is_positive_affected_address(literal))
             .count();
+        if splits == 0 {
+            continue;
+        }
         let expanded = u32::try_from(splits)
             .ok()
             .and_then(|splits| 1usize.checked_shl(splits))
@@ -164,9 +170,10 @@ fn validate_expanded_term_count(terms: &[TransactionTerm]) -> Result<(), RpcErro
         if total > MAX_EXPANDED_TRANSACTION_TERMS {
             return Err(FieldViolation::new("filter.terms")
                 .with_description(format!(
-                    "filter expands to more than {MAX_EXPANDED_TRANSACTION_TERMS} terms; each \
-                     non-negated affected_address literal doubles its term because it also \
-                     matches the transaction sender"
+                    "affected_address literals expand this filter to more than \
+                     {MAX_EXPANDED_TRANSACTION_TERMS} terms (each non-negated \
+                     affected_address literal doubles its term because it also matches \
+                     the transaction sender)"
                 ))
                 .with_reason(ErrorReason::FieldInvalid)
                 .into());
@@ -758,6 +765,17 @@ mod tests {
                 .into_status_proto();
             assert_eq!(error.code, tonic::Code::InvalidArgument as i32);
         }
+
+        // Terms without a positive `AffectedAddress` literal do not count
+        // toward the cap.
+        let plain_terms = MAX_EXPANDED_TRANSACTION_TERMS + 1;
+        let filter = tx_filter_with_terms(
+            (0..plain_terms)
+                .map(|i| tx_term(vec![sender_literal(i as u8)]))
+                .collect(),
+        );
+        let query = transaction_filter_to_query(&filter, plain_terms).unwrap();
+        assert_eq!(query.terms().len(), plain_terms);
     }
 
     #[test]
