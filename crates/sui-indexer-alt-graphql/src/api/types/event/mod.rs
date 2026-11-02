@@ -335,9 +335,17 @@ impl ByteCursor for EventToken {
     }
 }
 
+/// A JSON event cursor is handed to the ledger service as the `CursorToken` at the same place.
 impl ByteCursor for LegacyEventToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let token = LegacyToken::decode(bytes)?;
+        let (token, bytes) = match LegacyToken::decode(bytes) {
+            Ok(token) => (token, Bytes::copy_from_slice(bytes)),
+            Err(e) => {
+                let token = LegacyToken::decode_json(bytes).map_err(|_| e)?;
+                (token, token.encode())
+            }
+        };
+
         let LegacyPosition::Events {
             checkpoint,
             tx_seq,
@@ -348,7 +356,7 @@ impl ByteCursor for LegacyEventToken {
         };
 
         Ok(Self {
-            bytes: Bytes::copy_from_slice(bytes),
+            bytes,
             kind: token.kind,
             checkpoint,
             tx_seq,
@@ -614,6 +622,18 @@ mod tests {
             assert_eq!(request.start_checkpoint, 0);
             assert_eq!(request.end_checkpoint, 101);
         }
+    }
+
+    /// A JSON event cursor, as releases before 1.83 issued it, is sent to the ledger service as the
+    /// unlabelled `CursorToken` at the same event.
+    #[test]
+    fn json_cursors_are_forwarded_as_legacy_tokens() {
+        // {"t":3384999629,"e":0}
+        let json = CEvent::decode_cursor("eyJ0IjozMzg0OTk5NjI5LCJlIjowfQ==").expect("JSON cursor");
+        assert_eq!(json, legacy_cursor(0, 3384999629, 0));
+
+        let request = scan_request(&page(Some(10), Some(json), None, None));
+        assert_eq!(request.options.after, Some(legacy_bytes(0, 3384999629, 0)));
     }
 
     /// A labelled legacy `before` cursor, and a `before` cursor carrying ledger bytes in GraphQL's

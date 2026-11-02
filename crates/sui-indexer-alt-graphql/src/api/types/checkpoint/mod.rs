@@ -441,7 +441,8 @@ impl ByteCursor for CheckpointToken {
             return Ok(Self(checkpoint));
         }
 
-        let token = LegacyToken::decode(bytes)?;
+        let token = LegacyToken::decode(bytes)
+            .or_else(|e| LegacyToken::decode_json(bytes).map_err(|_| e))?;
         let LegacyPosition::Checkpoints { checkpoint } = token.position else {
             anyhow::bail!("Not a checkpoint cursor");
         };
@@ -495,6 +496,14 @@ mod tests {
         assert!(
             CCheckpoint::decode_cursor(&legacy_token_cursor(LegacyKind::Boundary, 42)).is_err()
         );
+    }
+
+    /// A JSON checkpoint cursor, as releases before 1.83 issued it, decodes to GraphQL's own cursor
+    /// at the same sequence number.
+    #[test]
+    fn json_cursors_match_primary() {
+        let decoded = CCheckpoint::decode_cursor(&B64::encode(b"42")).expect("JSON cursor");
+        assert_eq!(decoded, CheckpointToken::cursor(42));
     }
 
     /// A cursor for another type must not decode as a checkpoint cursor, in either format.

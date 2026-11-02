@@ -9,6 +9,9 @@
 //! pagination issued (labelled checkpoint 0), which clients may still hold. The ledger service is
 //! handed them unchanged, except as a page's `before` cursor ([`LegacyToken::before_bytes`]).
 //!
+//! Releases before 1.83 also issued event and checkpoint cursors as JSON, which
+//! [`LegacyToken::decode_json`] reads into the same coordinates.
+//!
 //! This copy never follows changes to the ledger service's format, and rejects anything it does not
 //! recognize rather than guessing at a position.
 
@@ -94,10 +97,40 @@ struct WireEvents {
     event_index: Option<u32>,
 }
 
+/// A JSON cursor as releases before 1.83 issued it: a checkpoint's sequence number, or an event's
+/// transaction sequence number (`t`) and index within that transaction (`e`).
+#[derive(serde::Deserialize)]
+#[serde(untagged, deny_unknown_fields)]
+enum JsonCursor {
+    Checkpoint(u64),
+    Event { t: u64, e: u32 },
+}
+
 impl LegacyToken {
     /// Decode a `CursorToken` message.
     pub fn decode(bytes: &[u8]) -> anyhow::Result<Self> {
         Self::try_from(WireToken::decode(bytes)?)
+    }
+
+    /// Decode a JSON cursor. It carries no kind or checkpoint label, so it decodes as an item
+    /// labelled checkpoint 0, like the protobuf cursors Postgres-backed pagination issued.
+    ///
+    /// Accepted through 1.83 only, giving clients that still hold these cursors one release to
+    /// switch to cursors GraphQL issues.
+    pub fn decode_json(bytes: &[u8]) -> anyhow::Result<Self> {
+        let position = match serde_json::from_slice(bytes).context("not a JSON cursor")? {
+            JsonCursor::Checkpoint(checkpoint) => LegacyPosition::Checkpoints { checkpoint },
+            JsonCursor::Event { t, e } => LegacyPosition::Events {
+                checkpoint: 0,
+                tx_seq: t,
+                event_index: e,
+            },
+        };
+
+        Ok(Self {
+            kind: LegacyKind::Item,
+            position,
+        })
     }
 
     /// Encode as a `WireToken`, the schema GraphQL last minted.
@@ -341,6 +374,53 @@ mod tests {
         }
 
         assert!(LegacyToken::decode(&[]).is_err());
+    }
+
+    /// JSON cursors as releases before 1.83 issued them decode as items labelled checkpoint 0.
+    /// Neither JSON form decodes as a `CursorToken`, so the two formats cannot be confused.
+    #[test]
+    fn decodes_json_cursors() {
+        let cases: [(&[u8], LegacyPosition); 2] = [
+            (b"42", LegacyPosition::Checkpoints { checkpoint: 42 }),
+            (
+                br#"{"t":3384999629,"e":2}"#,
+                LegacyPosition::Events {
+                    checkpoint: 0,
+                    tx_seq: 3384999629,
+                    event_index: 2,
+                },
+            ),
+        ];
+
+        for (bytes, position) in cases {
+            assert!(LegacyToken::decode(bytes).is_err());
+            assert_eq!(
+                LegacyToken::decode_json(bytes).unwrap(),
+                LegacyToken {
+                    kind: LegacyKind::Item,
+                    position,
+                },
+            );
+        }
+    }
+
+    /// JSON that is not exactly one of the cursors earlier releases issued fails to decode.
+    #[test]
+    fn rejects_other_json() {
+        for bytes in [
+            &br#"{"t":1}"#[..],
+            br#"{"t":1,"e":2,"x":3}"#,
+            br#"{"t":1,"e":4294967296}"#,
+            b"-1",
+            b"\"42\"",
+            b"[1,2]",
+        ] {
+            assert!(
+                LegacyToken::decode_json(bytes).is_err(),
+                "{}",
+                String::from_utf8_lossy(bytes)
+            );
+        }
     }
 
     /// As a `before` cursor, a transaction or event cursor labelled checkpoint 0 is sent labelled
