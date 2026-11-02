@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::transaction_literal::Predicate;
 use sui_types::balance::Balance;
 use sui_types::effects::AccumulatorValue;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -208,13 +209,20 @@ impl TransactionFilter {
         }
 
         // An address is affected if it sent or sponsored the transaction, owns one of its
-        // changed objects, or had its address balance changed by it.
+        // changed objects (directly or as a consensus address owner), or had its address
+        // balance changed by it.
         if let Some(affected_address) = &self.affected_address {
-            let in_changed_objects = effects.all_changed_objects().iter().any(|(_, owner, _)| {
-                owner
-                    .get_address_owner_address()
-                    .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
-            });
+            let in_changed_objects =
+                effects
+                    .all_changed_objects()
+                    .iter()
+                    .any(|(_, owner, _)| match owner {
+                        Owner::AddressOwner(addr)
+                        | Owner::ConsensusAddressOwner { owner: addr, .. } => {
+                            SuiAddress::from(*addr) == *affected_address
+                        }
+                        _ => false,
+                    });
             let in_balance_changes = effects.accumulator_events().iter().any(|event| {
                 Balance::is_balance_type(&event.write.address.ty)
                     && matches!(&event.write.value, AccumulatorValue::Integer(_))
@@ -313,7 +321,10 @@ fn move_call_predicate(function: &FqNameFilter) -> Predicate {
 mod tests {
     use sui_indexer_alt_reader::kv_loader::ExecutedTransactionData;
     use sui_types::accumulator_event::AccumulatorEvent;
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
     use sui_types::base_types::SuiAddress as NativeSuiAddress;
+    use sui_types::effects::AccumulatorValue as EffectsAccumulatorValue;
     use sui_types::effects::TestEffectsBuilder;
     use sui_types::gas_coin::GAS;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -534,25 +545,19 @@ mod tests {
         assert_sender_literal(&literals[1], false, &SuiAddress::ZERO.to_string());
     }
 
-    #[test]
-    fn affected_address_matches_address_balance_change() {
-        let recipient = TestCheckpointBuilder::derive_address(2);
+    /// Build live-subscription transaction contents from a builder transaction whose
+    /// effects are customized by `customize`.
+    fn contents_with_effects(
+        customize: impl FnOnce(TestEffectsBuilder) -> TestEffectsBuilder,
+    ) -> TransactionContents {
         let checkpoint = TestCheckpointBuilder::new(0)
             .start_transaction(1)
             .finish_transaction()
             .build_checkpoint();
         let tx = &checkpoint.transactions[0];
         let signed = SenderSignedData::new(tx.transaction.clone(), tx.signatures.clone());
-        let balance_change = AccumulatorEvent::from_balance_change(
-            recipient,
-            Balance::type_tag(GAS::type_tag()),
-            100,
-        )
-        .unwrap();
-        let effects = TestEffectsBuilder::new(&signed)
-            .with_accumulator_events([balance_change])
-            .build();
-        let contents = TransactionContents::ExecutedTransaction(ExecutedTransactionData {
+        let effects = customize(TestEffectsBuilder::new(&signed)).build();
+        TransactionContents::ExecutedTransaction(ExecutedTransactionData {
             effects: Box::new(effects),
             events: vec![],
             transaction_data: Box::new(tx.transaction.clone()),
@@ -562,18 +567,68 @@ mod tests {
             proto_transaction: None,
             timestamp_ms: None,
             cp_sequence_number: None,
+        })
+    }
+
+    fn affects(contents: &TransactionContents, address: NativeSuiAddress) -> bool {
+        TransactionFilter {
+            affected_address: Some(address.into()),
+            ..Default::default()
+        }
+        .matches(contents)
+    }
+
+    #[test]
+    fn affected_address_matches_address_balance_change() {
+        let recipient = TestCheckpointBuilder::derive_address(2);
+        let non_integer = TestCheckpointBuilder::derive_address(4);
+        let non_balance = TestCheckpointBuilder::derive_address(5);
+
+        let balance_change = |address| {
+            AccumulatorEvent::from_balance_change(address, Balance::type_tag(GAS::type_tag()), 100)
+                .unwrap()
+        };
+        let mut non_integer_write = balance_change(non_integer);
+        non_integer_write.write.value = EffectsAccumulatorValue::IntegerTuple(100, 0);
+        let mut non_balance_write = balance_change(non_balance);
+        non_balance_write.write.address.ty = GAS::type_tag();
+
+        let contents = contents_with_effects(|effects| {
+            effects.with_accumulator_events([
+                balance_change(recipient),
+                non_integer_write,
+                non_balance_write,
+            ])
         });
 
-        let affects = |address: NativeSuiAddress| {
-            TransactionFilter {
-                affected_address: Some(address.into()),
-                ..Default::default()
-            }
-            .matches(&contents)
-        };
-
         // The recipient owns no changed object; only its address balance changes.
-        assert!(affects(recipient));
-        assert!(!affects(TestCheckpointBuilder::derive_address(3)));
+        assert!(affects(&contents, recipient));
+        // Only integer writes to `Balance<T>` accumulators count as balance changes.
+        assert!(!affects(&contents, non_integer));
+        assert!(!affects(&contents, non_balance));
+        assert!(!affects(
+            &contents,
+            TestCheckpointBuilder::derive_address(3)
+        ));
+    }
+
+    #[test]
+    fn affected_address_matches_consensus_address_owner() {
+        let owner = TestCheckpointBuilder::derive_address(2);
+        let contents = contents_with_effects(|effects| {
+            effects.with_created_objects([(
+                ObjectID::random(),
+                Owner::ConsensusAddressOwner {
+                    start_version: SequenceNumber::from_u64(1),
+                    owner,
+                },
+            )])
+        });
+
+        assert!(affects(&contents, owner));
+        assert!(!affects(
+            &contents,
+            TestCheckpointBuilder::derive_address(3)
+        ));
     }
 }
