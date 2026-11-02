@@ -3004,7 +3004,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         num_dropped_user_transactions[author] += 1;
                         self.epoch_store.set_rejection_vote_reason(
                             position,
-                            &SuiErrorKind::TransactionExpired.into(),
+                            &sui_types::error::SuiErrorKind::TransactionExpired.into(),
                         );
                         continue;
                     }
@@ -3909,7 +3909,8 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         transaction::{
-            CertifiedTransaction, TransactionData, TransactionDataAPI, VerifiedCertificate,
+            CertifiedTransaction, TransactionData, TransactionDataAPI, TransactionExpiration,
+            VerifiedCertificate,
         },
     };
 
@@ -3925,7 +3926,9 @@ mod tests {
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::test_user_transaction,
+        consensus_adapter::consensus_tests::{
+            test_user_transaction, test_user_transaction_with_expiration,
+        },
         consensus_test_utils::{TestConsensusCommit, setup_consensus_handler_for_testing},
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
@@ -4517,6 +4520,181 @@ mod tests {
         )
         .await
         .expect("processed notification for dropped transaction should resolve");
+    }
+
+    #[sim_test]
+    async fn test_timestamp_expired_transaction_is_dropped_before_locking() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_objects: Vec<Object> = (0..3)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let owned_objects: Vec<Object> = (0..3)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let mut all_objects = gas_objects.clone();
+        all_objects.extend(owned_objects.clone());
+
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&all_objects)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        assert!(
+            epoch_store
+                .protocol_config()
+                .enable_timestamp_transaction_expiration()
+        );
+        let epoch = epoch_store.epoch();
+        let chain = epoch_store.get_chain_identifier();
+        let start = epoch_store.epoch_start_config().epoch_start_timestamp_ms();
+        let expiration = |min_timestamp, max_timestamp| TransactionExpiration::ValidDuring {
+            min_epoch: Some(epoch),
+            max_epoch: Some(epoch),
+            min_timestamp,
+            max_timestamp,
+            chain,
+            nonce: 0,
+        };
+        let owned_refs: Vec<ObjectRef> = owned_objects
+            .iter()
+            .map(|o| {
+                state
+                    .get_object(&o.id())
+                    .unwrap()
+                    .compute_object_reference()
+            })
+            .collect();
+
+        let make_tx = async |i: usize, exp| {
+            let tx = test_user_transaction_with_expiration(
+                &state,
+                sender,
+                &keypair,
+                gas_objects[i].clone(),
+                vec![owned_objects[i].clone()],
+                exp,
+            )
+            .await;
+            let digest = *tx.tx().digest();
+            let consensus_tx =
+                ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
+            (digest, consensus_tx)
+        };
+        // The first commit has timestamp `start + 1000`.
+        let (_, expired_tx) = make_tx(0, expiration(None, Some(start + 999))).await;
+        let (valid_digest, valid_tx) =
+            make_tx(1, expiration(Some(start + 1000), Some(start + 1000))).await;
+        let (early_digest, early_tx) = make_tx(2, expiration(Some(start + 2000), None)).await;
+        let expired_key = SequencedConsensusTransactionKey::External(expired_tx.key());
+        let valid_key = SequencedConsensusTransactionKey::External(valid_tx.key());
+        let early_key = SequencedConsensusTransactionKey::External(early_tx.key());
+
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        let round = 100;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                vec![expired_tx, valid_tx, early_tx.clone()],
+                round,
+                start + 1000,
+                10,
+            ))
+            .await;
+
+        let status_at = |round: u64, index: TransactionIndex| {
+            epoch_store
+                .consensus_tx_status_cache
+                .notify_read_transaction_status(ConsensusPosition {
+                    epoch,
+                    block: BlockRef {
+                        author: consensus_config::AuthorityIndex::ZERO,
+                        round: round as u32,
+                        digest: Default::default(),
+                    },
+                    index,
+                })
+        };
+        assert!(matches!(
+            status_at(round, 0).await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
+        ));
+        assert!(matches!(
+            status_at(round, 1).await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
+        ));
+        assert!(matches!(
+            status_at(round, 2).await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
+        ));
+        assert_eq!(
+            setup
+                .consensus_handler
+                .metrics
+                .consensus_handler_dropped_transactions
+                .with_label_values(&["expired"])
+                .get(),
+            2
+        );
+
+        // Dropped transactions take no locks and are not marked processed.
+        let locks = epoch_store.get_owned_object_locks_map(&owned_refs);
+        assert_eq!(locks.get(&owned_refs[0]), None);
+        assert_eq!(locks.get(&owned_refs[1]), Some(&valid_digest));
+        assert_eq!(locks.get(&owned_refs[2]), None);
+        assert!(
+            !epoch_store
+                .is_consensus_message_processed(&expired_key)
+                .unwrap()
+        );
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&valid_key)
+                .unwrap()
+        );
+        assert!(
+            !epoch_store
+                .is_consensus_message_processed(&early_key)
+                .unwrap()
+        );
+        assert!(matches!(
+            epoch_store
+                .get_rejection_vote_reason(ConsensusPosition {
+                    epoch,
+                    block: BlockRef {
+                        author: consensus_config::AuthorityIndex::ZERO,
+                        round: round as u32,
+                        digest: Default::default(),
+                    },
+                    index: 0,
+                })
+                .map(|e| e.into_inner()),
+            Some(sui_types::error::SuiErrorKind::TransactionExpired)
+        ));
+
+        // A transaction sequenced before its window opens is accepted once resequenced inside it.
+        let round = round + 1;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                vec![early_tx],
+                round,
+                start + 2000,
+                11,
+            ))
+            .await;
+        assert!(matches!(
+            status_at(round, 0).await,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
+        ));
+        let locks = epoch_store.get_owned_object_locks_map(&owned_refs);
+        assert_eq!(locks.get(&owned_refs[2]), Some(&early_digest));
+        assert!(
+            epoch_store
+                .is_consensus_message_processed(&early_key)
+                .unwrap()
+        );
     }
 
     #[sim_test]
