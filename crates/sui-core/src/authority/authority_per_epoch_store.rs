@@ -3549,11 +3549,21 @@ impl AuthorityPerEpochStore {
     }
 
     /// Returns the role of this node for the current epoch.
+    ///
+    /// The role is derived when the epoch store is created, from this epoch's committee and the
+    /// configured `fullnode_sync_mode`. It can differ from `NodeConfig::intended_node_role()`,
+    /// which is computed from the static config only. A node changes role at an epoch boundary
+    /// when it joins or leaves the committee, without a restart.
     pub fn node_role(&self) -> NodeRole {
         self.node_role
     }
 
-    /// Whether this node is a validator in this epoch.
+    /// Whether this node is in the committee of this epoch.
+    ///
+    /// This answers a narrower question than `node_role()`. A `FullNode(ConsensusObserver)` role
+    /// also runs consensus (`NodeRole::runs_consensus()`), but only a validator proposes blocks,
+    /// signs checkpoints, and accepts transactions for submission. Gate those duties on this
+    /// method, and gate work that every consensus participant does on `runs_consensus()`.
     pub fn is_validator(&self) -> bool {
         self.node_role().is_validator()
     }
