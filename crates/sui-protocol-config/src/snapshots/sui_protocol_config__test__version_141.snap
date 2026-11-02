@@ -86,6 +86,7 @@ feature_flags:
   enable_coin_deny_list_v2: true
   passkey_auth: true
   mldsa65_auth: true
+  secp256r1_ecrecover_checks_x_below_p: true
   authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true

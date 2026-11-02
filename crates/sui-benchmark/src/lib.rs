@@ -139,6 +139,22 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn unwrapped(&self) -> Vec<(ObjectRef, Owner)> {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().unwrapped()
+            }
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.unwrapped(),
+        }
+    }
+
+    pub fn wrapped(&self) -> Vec<ObjectRef> {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().wrapped(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.wrapped(),
+        }
+    }
+
     pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
@@ -224,6 +240,35 @@ impl ExecutionEffects {
                 _ => false,
             },
         }
+    }
+
+    /// True if the tx executed against a deleted shared object or an ended consensus stream.
+    pub fn is_input_object_deleted(&self) -> bool {
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InputObjectDeleted,
+                ..
+            })
+        )
+    }
+
+    pub fn is_address_denied(&self) -> bool {
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::AddressDeniedForCoin { .. },
+                ..
+            })
+        )
     }
 
     pub fn is_insufficient_funds(&self) -> bool {

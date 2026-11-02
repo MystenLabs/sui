@@ -34,6 +34,17 @@ fun test_ecrecover_pubkey_invalid_sig() {
     ecdsa_r1::secp256r1_ecrecover(&sig, &msg, 1);
 }
 
+// The Sha256 signature above with r shifted up by 2^256 - n and marked x-reduced, so r + n
+// overflows. Before protocol version 141 the sum wrapped and recovery returned a key.
+#[test]
+#[expected_failure(abort_code = ecdsa_r1::EFailToRecoverPubKey)]
+fun test_ecrecover_rejects_overflowing_x() {
+    let msg = b"Hello, world!";
+    let sig =
+        x"26d84721652d8bc3ddd1986434a10b3bbe82f635b3002820a4c4a259be063fde4384a342487642df5e44592d304bea0ceb0fae2e347fa3cec5ce1a8144cfbbb202";
+    ecdsa_r1::secp256r1_ecrecover(&sig, &msg, 1);
+}
+
 #[test]
 fun test_secp256r1_verify_fails_with_recoverable_sig() {
     let msg = b"Hello, world!";

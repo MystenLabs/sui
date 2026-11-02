@@ -9,7 +9,6 @@ use crate::{
     shared::stdlib_definitions,
 };
 
-pub mod id_leak;
 pub mod info;
 pub mod linters;
 pub mod typing;
@@ -18,7 +17,6 @@ pub mod typing;
 
 pub const STD_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0x1);
 pub const SUI_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0x2);
-pub const SUI_SYSTEM_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0x3);
 pub const BRIDGE_ADDR_VALUE: AccountAddress = AccountAddress::from_suffix(0xb);
 
 pub const INIT_FUNCTION_NAME: Symbol = symbol!("init");
@@ -36,13 +34,7 @@ pub const INTERNAL_PERMIT_FUNCTION_NAME: Symbol = symbol!("permit");
 
 pub const SUI_ADDR_NAME: Symbol = symbol!("sui");
 pub const OBJECT_MODULE_NAME: Symbol = symbol!("object");
-pub const OBJECT_NEW: Symbol = symbol!("new");
-pub const OBJECT_NEW_UID_FROM_HASH: Symbol = symbol!("new_uid_from_hash");
-pub const DERIVED_OBJECT_MODULE_NAME: Symbol = symbol!("derived_object");
-pub const DERIVED_OBJECT_CLAIM: Symbol = symbol!("claim");
 
-pub const TEST_SCENARIO_MODULE_NAME: Symbol = symbol!("test_scenario");
-pub const TS_NEW_OBJECT: Symbol = symbol!("new_object");
 pub const UID_TYPE_NAME: Symbol = symbol!("UID");
 pub const ID_TYPE_NAME: Symbol = symbol!("ID");
 pub const TX_CONTEXT_MODULE_NAME: Symbol = symbol!("tx_context");
@@ -52,24 +44,15 @@ pub const SUI_OTW_NAME: Symbol = symbol!("SUI");
 
 pub const SUI_SYSTEM_ADDR_NAME: Symbol = symbol!("sui_system");
 pub const SUI_SYSTEM_MODULE_NAME: Symbol = symbol!("sui_system");
-pub const SUI_SYSTEM_CREATE: Symbol = symbol!("create");
 pub const CLOCK_MODULE_NAME: Symbol = symbol!("clock");
 pub const CLOCK_TYPE_NAME: Symbol = symbol!("Clock");
-pub const SUI_CLOCK_CREATE: Symbol = symbol!("create");
 pub const AUTHENTICATOR_STATE_MODULE_NAME: Symbol = symbol!("authenticator_state");
 pub const AUTHENTICATOR_STATE_TYPE_NAME: Symbol = symbol!("AuthenticatorState");
-pub const AUTHENTICATOR_STATE_CREATE: Symbol = symbol!("create");
 pub const RANDOMNESS_MODULE_NAME: Symbol = symbol!("random");
 pub const RANDOMNESS_STATE_TYPE_NAME: Symbol = symbol!("Random");
-pub const RANDOMNESS_STATE_CREATE: Symbol = symbol!("create");
-pub const DENY_LIST_MODULE_NAME: Symbol = symbol!("deny_list");
-pub const DENY_LIST_CREATE: Symbol = symbol!("create");
 pub const BRIDGE_ADDR_NAME: Symbol = symbol!("bridge");
 pub const BRIDGE_MODULE_NAME: Symbol = symbol!("bridge");
 pub const BRIDGE_TYPE_NAME: Symbol = symbol!("Bridge");
-pub const BRIDGE_CREATE: Symbol = symbol!("create");
-pub const ACCUMULATOR_MODULE_NAME: Symbol = symbol!("accumulator");
-pub const ACCUMULATOR_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");
@@ -77,15 +60,8 @@ pub const EVENT_AUTHENTICATED_FUNCTION_NAME: Symbol = symbol!("emit_authenticate
 
 pub const COIN_REGISTRY_MODULE_NAME: Symbol = symbol!("coin_registry");
 pub const DYNAMIC_COIN_CREATION_FUNCTION_NAME: Symbol = symbol!("new_currency");
-pub const REGISTRY_CREATE_FUNCTION_NAME: Symbol = symbol!("create");
 
 pub const DISPLAY_REGISTRY_MODULE_NAME: Symbol = symbol!("display_registry");
-
-pub const ADDRESS_ALIAS_MODULE_NAME: Symbol = symbol!("address_alias");
-pub const ADDRESS_ALIAS_CREATE: Symbol = symbol!("create");
-
-pub const FORWARDING_ADDRESS_MODULE_NAME: Symbol = symbol!("forwarding_address");
-pub const FORWARDING_ADDRESS_CREATE: Symbol = symbol!("create");
 
 pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
 pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");
@@ -110,16 +86,7 @@ pub const PRIVATE_TRANSFER_FUNCTIONS: &[Symbol] = &[
 pub const SUI_DIAG_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::SuiCompiler;
 
 // Categories
-pub const ID_LEAK_CATEGORY: u8 = 1;
 pub const TYPING: u8 = 2;
-
-pub const ID_LEAK_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_ORIGIN,
-    Severity::NonblockingError,
-    /* category */ ID_LEAK_CATEGORY,
-    /* code */ 1,
-    "invalid object construction",
-);
 
 pub const INIT_FUN_DIAG: DiagnosticInfo = custom(
     SUI_DIAG_ORIGIN,

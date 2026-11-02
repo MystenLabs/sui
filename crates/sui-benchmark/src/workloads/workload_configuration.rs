@@ -9,7 +9,6 @@ use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWor
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::gas_double_spend::{GasDoubleSpendSubmission, GasDoubleSpendWorkloadBuilder};
-use crate::workloads::party::PartyWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::slow::SlowWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
@@ -44,7 +43,6 @@ pub struct WorkloadWeights {
     pub randomness: u32,
     pub randomized_transaction: u32,
     pub slow: u32,
-    pub party: u32,
     pub conflicting_transfer: u32,
     pub composite: u32,
     pub gas_double_spend: u32,
@@ -101,7 +99,6 @@ impl WorkloadConfiguration {
                 randomness,
                 randomized_transaction,
                 slow,
-                party,
                 conflicting_transfer,
                 composite,
                 gas_double_spend,
@@ -175,7 +172,6 @@ impl WorkloadConfiguration {
                             randomness: randomness[i],
                             randomized_transaction: randomized_transaction[i],
                             slow: slow[i],
-                            party: party[i],
                             conflicting_transfer: conflicting_transfer[i],
                             composite: composite[i],
                             gas_double_spend: gas_double_spend[i],
@@ -359,7 +355,6 @@ impl WorkloadConfiguration {
             + weights.expected_failure
             + weights.randomized_transaction
             + weights.slow
-            + weights.party
             + weights.conflicting_transfer
             + weights.composite
             + weights.gas_double_spend;
@@ -492,15 +487,6 @@ impl WorkloadConfiguration {
             group,
         );
         workload_builders.push(slow_workload);
-        let party_workload = PartyWorkloadBuilder::from(
-            weights.party as f32 / total_weight as f32,
-            target_qps,
-            num_workers,
-            in_flight_ratio,
-            duration,
-            group,
-        );
-        workload_builders.push(party_workload);
         if let Some(config) = composite_config {
             let composite_workload = CompositeWorkloadBuilder::from(
                 weights.composite as f32 / total_weight as f32,

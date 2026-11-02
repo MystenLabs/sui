@@ -26,7 +26,6 @@
 (function_definition name: (function_identifier)  @function)
 (macro_function_definition name: (function_identifier)  @macro)
 (native_function_definition name: (function_identifier)  @function)
-(usual_spec_function name: (function_identifier)  @function)
 (function_parameter name: (variable_identifier)  @variable.parameter)
 
 ;; Module definitions
@@ -103,21 +102,7 @@
 "@" @operator
 "->" @operator
 
-;; Specs
-(spec_block target: (identifier)  @function.spec.target)
-(spec_pragma) @preproc.annotation.spec
-(spec_condition kind: (condition_kind) @condition.spec)
-(condition_properties) @preproc.spec.condition.properties
-
 ; (match_expression "match") @keyword
-
-;; Spec keywords
-; "opaque" @keyword
-; "aborts_if" @keyword
-; "abstract" @keyword
-[
- "pragma"
-] @keyword
 
 ;; Source Language Keywords
 [

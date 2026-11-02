@@ -59,6 +59,46 @@ pub const PARTY_OLD_STREAM: &str = "party_old_stream";
 pub const PARTY_OWNED_MUTATE: &str = "party_owned_mutate";
 pub const PARTY_RACING_MUTATE: &str = "party_racing_mutate";
 pub const PARTY_RESTART_STREAM: &str = "party_restart_stream";
+pub const PARTY_RETRANSFER: &str = "party_retransfer";
+pub const PARTY_HAND_OFF: &str = "party_hand_off";
+pub const PARTY_WRAP: &str = "party_wrap";
+pub const PARTY_UNWRAP: &str = "party_unwrap";
+pub const PARTY_HOLDER_READ: &str = "party_holder_read";
+
+pub const SHARED_DELETE_CREATE: &str = "shared_delete_create";
+pub const SHARED_DELETE_INCREMENT: &str = "shared_delete_increment";
+pub const SHARED_DELETE: &str = "shared_delete";
+pub const SHARED_DELETE_RACING: &str = "shared_delete_racing";
+pub const SHARED_DELETE_STALE: &str = "shared_delete_stale";
+
+pub const RECEIVE_CREATE_PARENT: &str = "receive_create_parent";
+pub const RECEIVE_CREATE_CHILD: &str = "receive_create_child";
+pub const RECEIVE_SEND_CHILD: &str = "receive_send_child";
+pub const RECEIVE_CHILD: &str = "receive_child";
+pub const RECEIVE_TOUCH_PARENT: &str = "receive_touch_parent";
+
+pub const PACKAGE_UPGRADE: &str = "package_upgrade";
+
+pub const OWNED_CREATE: &str = "owned_create";
+pub const OWNED_MUTATE: &str = "owned_mutate";
+pub const OWNED_FREEZE: &str = "owned_freeze";
+pub const OWNED_DELETE: &str = "owned_delete";
+pub const OWNED_CONFLICTING_MUTATE: &str = "owned_conflicting_mutate";
+pub const OWNED_FROZEN_READ: &str = "owned_frozen_read";
+pub const OWNED_STALE_MUTATE: &str = "owned_stale_mutate";
+
+pub const COIN_MINT: &str = "coin_mint";
+pub const COIN_MERGE: &str = "coin_merge";
+pub const COIN_STALE_MERGE: &str = "coin_stale_merge";
+
+pub const GASLESS_TRANSFER: &str = "gasless_transfer";
+
+pub const SPONSORED_TX: &str = "sponsored_tx";
+
+pub const TEST_COIN_DENY: &str = "test_coin_deny";
+pub const TEST_COIN_UNDENY: &str = "test_coin_undeny";
+
+pub const MULTISIG_TX: &str = "multisig_tx";
 
 pub struct OperationDescriptor {
     pub name: &'static str,
