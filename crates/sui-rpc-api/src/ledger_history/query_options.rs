@@ -1097,9 +1097,14 @@ where
             sui_rpc_cursor::CursorKind::Boundary => position > tip,
         };
         if past_tip {
+            // The public position names the cursor's checkpoint exactly. Checkpoint cursors, and
+            // cursors minted without a public position, carry only their checkpoint field.
+            let requested_checkpoint = cursor
+                .public_position
+                .map_or(cursor.position.checkpoint(), |position| position.checkpoint);
             return Err(above_latest_available(
                 "cursor",
-                cursor.position.checkpoint(),
+                requested_checkpoint,
                 checkpoint_hi_exclusive,
             ));
         }
@@ -2124,6 +2129,33 @@ mod tests {
             ResolvedCheckpointRange::from_request(Some(20), Some(20), 20, &options).unwrap(),
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::CheckpointBound, false)
         );
+    }
+
+    /// A descending cursor past the tip reports the checkpoint of its public position as
+    /// `requestedCheckpoint`. A cursor without one, as checkpoint cursors are, reports its
+    /// checkpoint field.
+    #[test]
+    fn descending_cursor_past_tip_reports_its_public_checkpoint() {
+        let descending = |before| options_with(Ordering::Descending, None, Some(before));
+        // A descending scan's boundary cursor carries the checkpoint after the one holding the
+        // position below it (see `boundary_cursor_cp`): here `TIP + 2` for position `(TIP + 1, 1)`.
+        let unplaced = tx_boundary(TIP + 2, first_tx(TIP + 1) + 1);
+        let placed = unplaced
+            .clone()
+            .with_public_position(Some(sui_rpc_cursor::PublicPosition {
+                checkpoint: TIP + 1,
+                transaction_index: 1,
+                event_index: 0,
+            }));
+        for (cursor, requested) in [(placed, TIP + 1), (unplaced, TIP + 2)] {
+            let error = resolve_tx_request((None, None), &descending(cursor))
+                .expect_err("descending transaction cursor past the tip");
+            assert_above_latest_available_error(error, "cursor", requested, TIP);
+        }
+
+        let error = resolve_checkpoint_request((None, None), &descending(cp_item(TIP)))
+            .expect_err("descending checkpoint cursor past the tip");
+        assert_above_latest_available_error(error, "cursor", TIP, TIP);
     }
 
     /// When the resolved checkpoint range is below checkpoint_hi_exclusive and empties, the
