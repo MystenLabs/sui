@@ -436,6 +436,7 @@ const MAINNET_USDB: &str =
 //              Configure explicit Move binary format encoding limits.
 //              Enable defer_owned_object_double_spend on all networks.
 // Version 143: Add and enable a new execution version.
+//              Enable ML-DSA-65 account signatures on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5001,6 +5002,9 @@ impl ProtocolConfig {
                 }
                 143 => {
                     cfg.execution_version = Some(5);
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.mldsa65_auth = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
