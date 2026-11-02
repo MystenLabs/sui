@@ -73,7 +73,7 @@ use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability, Transaction,
-    TransactionData, TransactionDataAPI,
+    TransactionData, TransactionDataAPI, TransactionExpiration,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use sui_types::{
@@ -153,6 +153,31 @@ fn allowed_proposers_disabled(protocol_config: Option<&ProtocolConfig>) -> bool 
     protocol_config
         .map(|cfg| !cfg.allowed_proposers())
         .unwrap_or(false)
+}
+
+fn timestamp_expiration_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.enable_timestamp_transaction_expiration())
+        .unwrap_or(false)
+}
+
+/// Picks a `(min_timestamp, max_timestamp)` window. Some windows have already closed, so
+/// validators reject the tx at submission. The rest close within a few seconds, so a tx can
+/// expire before it is sequenced, or while it is deferred.
+fn sample_timestamp_window(rng: &mut impl Rng) -> (Option<u64>, u64) {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let max = if rng.gen_bool(0.25) {
+        now_ms - rng.gen_range(1..5_000)
+    } else {
+        now_ms + rng.gen_range(0..2_000)
+    };
+    let min = rng
+        .gen_bool(0.5)
+        .then(|| max - rng.gen_range(1_000..10_000));
+    (min, max)
 }
 
 fn allowances_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
@@ -415,6 +440,9 @@ pub struct CompositeWorkloadConfig {
     pub multisig_probability: f32,
     /// Per-tx probability that a composite or gasless tx restricts its allowed proposers.
     pub allowed_proposers_probability: f32,
+    /// Per-tx probability that a tx outside any lifecycle pays gas from its address balance and
+    /// gets a `max_timestamp` near the current time. Zero disables it.
+    pub timestamp_expiration_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -452,6 +480,7 @@ impl CompositeWorkloadConfig {
             deny_probability: 0.05,
             multisig_probability: 0.1,
             allowed_proposers_probability: 0.2,
+            timestamp_expiration_probability: 0.1,
             ..Default::default()
         }
     }
@@ -544,6 +573,7 @@ impl Default for CompositeWorkloadConfig {
             deny_probability: 0.0,
             multisig_probability: 0.0,
             allowed_proposers_probability: 0.0,
+            timestamp_expiration_probability: 0.0,
             metrics: None,
         }
     }
@@ -904,6 +934,7 @@ impl CompositePayload {
         current_epoch: u64,
         lifecycle_call: Option<&LifecycleCall>,
         sponsor: Option<TxSponsor>,
+        timestamp_window: Option<(Option<u64>, u64)>,
     ) -> (Transaction, OperationSet) {
         let ops = match lifecycle_call {
             Some(call) if call.bare => vec![],
@@ -957,6 +988,18 @@ impl CompositePayload {
         }
 
         let mut data = tx_builder.ensure_unique().build();
+        if let Some((min, max)) = timestamp_window {
+            let TransactionExpiration::ValidDuring {
+                min_timestamp,
+                max_timestamp,
+                ..
+            } = data.expiration_mut()
+            else {
+                panic!("timestamp windows require a ValidDuring expiration");
+            };
+            *min_timestamp = min;
+            *max_timestamp = Some(max);
+        }
         if restrict {
             self.restrict_proposers(&mut data, current_epoch);
         }
@@ -1419,6 +1462,8 @@ impl Payload for CompositePayload {
         let current_epoch = system_state.epoch;
         let address_balance_gas_disabled =
             address_balance_disabled(system_state.protocol_config.as_ref());
+        let timestamp_expiration_disabled =
+            timestamp_expiration_disabled(system_state.protocol_config.as_ref());
 
         let (current_batch_gas, sender, keypair) = {
             let gas = self.gas.lock().unwrap();
@@ -1457,6 +1502,11 @@ impl Payload for CompositePayload {
             };
             let mut sponsor = None;
             let mut sponsor_coin = None;
+            let timestamp_window = (lifecycle_call.is_none()
+                && !address_balance_gas_disabled
+                && !timestamp_expiration_disabled
+                && rng.gen_bool(self.config.timestamp_expiration_probability as f64))
+            .then(|| sample_timestamp_window(&mut rng));
             let builder = if lifecycle_call.is_some_and(|call| call.bare)
                 && !address_balance_gas_disabled
                 && let Some((address, keypair)) = &self.lifecycle_gas
@@ -1477,6 +1527,7 @@ impl Payload for CompositePayload {
                     nonce,
                 )
             } else if lifecycle_call.is_none()
+                && timestamp_window.is_none()
                 && !sponsor_coin_claimed
                 && let Some(s) = &self.sponsor
                 && rng.gen_bool(self.config.sponsored_probability as f64)
@@ -1495,8 +1546,9 @@ impl Payload for CompositePayload {
                 let coin = s.gas.lock().unwrap().0[idx];
                 sponsor_coin = Some((idx, coin.0));
                 TestTransactionBuilder::new(sender, coin, rgp)
-            } else if !address_balance_gas_disabled
-                && rng.gen_bool(self.config.address_balance_gas_probability as f64)
+            } else if timestamp_window.is_some()
+                || (!address_balance_gas_disabled
+                    && rng.gen_bool(self.config.address_balance_gas_probability as f64))
             {
                 let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
                 TestTransactionBuilder::new_with_address_balance_gas(
@@ -1552,6 +1604,7 @@ impl Payload for CompositePayload {
                 current_epoch,
                 lifecycle_call,
                 sponsor,
+                timestamp_window,
             );
             self.current_batch_txs.push(BatchTxInfo {
                 gas_idx: i,
@@ -1581,6 +1634,7 @@ impl Payload for CompositePayload {
                     &account_state,
                     &keypair,
                     current_epoch,
+                    None,
                     None,
                     None,
                 );

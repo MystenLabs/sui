@@ -1395,10 +1395,10 @@ impl AuthorityPerEpochStore {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system time is before the Unix epoch")
             .as_millis() as u64;
-        fp_ensure!(
-            tx.expiration().is_valid_at_timestamp(now_ms),
-            SuiErrorKind::TransactionExpired.into()
-        );
+        if !tx.expiration().is_valid_at_timestamp(now_ms) {
+            assert_reachable!("timestamp-expired transaction rejected at submission");
+            return Err(SuiErrorKind::TransactionExpired.into());
+        }
         Ok(())
     }
 

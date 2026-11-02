@@ -2224,6 +2224,7 @@ mod test {
             deny_probability: 0.2,
             multisig_probability: 0.2,
             allowed_proposers_probability: 0.2,
+            timestamp_expiration_probability: 0.3,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }

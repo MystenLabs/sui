@@ -123,6 +123,7 @@ pub(crate) mod checked {
             return execution_params;
         };
         if !expiration.is_valid_at_timestamp(timestamp_ms) {
+            assert_reachable!("deferred transaction aborted for timestamp expiration");
             execution_params.fail_if_ok(ExecutionErrorKind::TransactionExpired);
         }
         execution_params
