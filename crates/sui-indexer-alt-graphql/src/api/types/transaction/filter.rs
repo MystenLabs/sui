@@ -15,6 +15,9 @@ use sui_rpc::proto::sui::rpc::v2::TransactionFilter as GrpcTransactionFilter;
 use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
 use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal::Predicate;
+use sui_types::balance::Balance;
+use sui_types::effects::AccumulatorValue;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -204,19 +207,22 @@ impl TransactionFilter {
             return false;
         }
 
-        // TODO: Verify consistency with the indexed path (tx_affected_addresses).
-        // The indexed path includes sender, gas payer, and recipients from
-        // all_changed_objects(). Confirm this matches for sponsored transactions
-        // and edge cases (deleted/wrapped object owners).
+        // An address is affected if it sent or sponsored the transaction, owns one of its
+        // changed objects, or had its address balance changed by it.
         if let Some(affected_address) = &self.affected_address {
             let in_changed_objects = effects.all_changed_objects().iter().any(|(_, owner, _)| {
                 owner
                     .get_address_owner_address()
                     .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
             });
+            let in_balance_changes = effects.accumulator_events().iter().any(|event| {
+                Balance::is_balance_type(&event.write.address.ty)
+                    && matches!(&event.write.value, AccumulatorValue::Integer(_))
+                    && SuiAddress::from(event.write.address.address) == *affected_address
+            });
             let is_sender = SuiAddress::from(data.sender()) == *affected_address;
             let is_payer = SuiAddress::from(data.gas_data().owner) == *affected_address;
-            if !in_changed_objects && !is_sender && !is_payer {
+            if !in_changed_objects && !in_balance_changes && !is_sender && !is_payer {
                 return false;
             }
         }
@@ -305,6 +311,14 @@ fn move_call_predicate(function: &FqNameFilter) -> Predicate {
 
 #[cfg(test)]
 mod tests {
+    use sui_indexer_alt_reader::kv_loader::ExecutedTransactionData;
+    use sui_types::accumulator_event::AccumulatorEvent;
+    use sui_types::base_types::SuiAddress as NativeSuiAddress;
+    use sui_types::effects::TestEffectsBuilder;
+    use sui_types::gas_coin::GAS;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use sui_types::transaction::SenderSignedData;
+
     use super::*;
 
     fn addr(s: &str) -> SuiAddress {
@@ -518,5 +532,48 @@ mod tests {
         assert_eq!(literals.len(), 2);
         assert_sender_literal(&literals[0], true, &sender.to_string());
         assert_sender_literal(&literals[1], false, &SuiAddress::ZERO.to_string());
+    }
+
+    #[test]
+    fn affected_address_matches_address_balance_change() {
+        let recipient = TestCheckpointBuilder::derive_address(2);
+        let checkpoint = TestCheckpointBuilder::new(0)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint();
+        let tx = &checkpoint.transactions[0];
+        let signed = SenderSignedData::new(tx.transaction.clone(), tx.signatures.clone());
+        let balance_change = AccumulatorEvent::from_balance_change(
+            recipient,
+            Balance::type_tag(GAS::type_tag()),
+            100,
+        )
+        .unwrap();
+        let effects = TestEffectsBuilder::new(&signed)
+            .with_accumulator_events([balance_change])
+            .build();
+        let contents = TransactionContents::ExecutedTransaction(ExecutedTransactionData {
+            effects: Box::new(effects),
+            events: vec![],
+            transaction_data: Box::new(tx.transaction.clone()),
+            signatures: vec![],
+            balance_changes: vec![],
+            proto_effects: None,
+            proto_transaction: None,
+            timestamp_ms: None,
+            cp_sequence_number: None,
+        });
+
+        let affects = |address: NativeSuiAddress| {
+            TransactionFilter {
+                affected_address: Some(address.into()),
+                ..Default::default()
+            }
+            .matches(&contents)
+        };
+
+        // The recipient owns no changed object; only its address balance changes.
+        assert!(affects(recipient));
+        assert!(!affects(TestCheckpointBuilder::derive_address(3)));
     }
 }
