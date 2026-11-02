@@ -61,6 +61,7 @@ use crate::PackageData;
 use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
+use crate::TxCheckpointPosition;
 use crate::TxSeqDigestData;
 use crate::WatermarkV0;
 use crate::WatermarkV1;
@@ -1451,6 +1452,35 @@ impl BigTableClient {
             .iter()
             .map(|s| by_seq.get(s).copied())
             .collect())
+    }
+
+    /// Resolve one tx_sequence_number to its checkpoint and offset within
+    /// that checkpoint, reading only the `tx_offset` and checkpoint-number
+    /// columns of `tx_seq_digest`. `None` when the transaction has no row
+    /// (e.g. not yet indexed).
+    pub async fn resolve_tx_checkpoint_position(
+        &mut self,
+        tx_sequence_number: u64,
+    ) -> Result<Option<TxCheckpointPosition>> {
+        let filter = Some(Self::column_filter(&[
+            tx_seq_digest::col::TX_OFFSET,
+            tx_seq_digest::col::CHECKPOINT_NUMBER,
+        ]));
+        let rows = self
+            .multi_get(
+                tx_seq_digest::NAME,
+                vec![tx_seq_digest::encode_key(tx_sequence_number)],
+                filter,
+            )
+            .await?;
+        let Some((_, cells)) = rows.first() else {
+            return Ok(None);
+        };
+        let (tx_offset, checkpoint_number) = tx_seq_digest::decode_checkpoint_position(cells)?;
+        Ok(Some(TxCheckpointPosition {
+            checkpoint_number,
+            tx_offset,
+        }))
     }
 
     /// Streaming variant of `resolve_tx_digests`. Emits each resolved row as

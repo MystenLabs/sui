@@ -53,6 +53,7 @@ use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
+use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::ledger_point::RowPlacement;
@@ -339,17 +340,19 @@ impl BigTableClient {
         })
     }
 
-    /// Read the `tx_seq_digest` row of one transaction under a `tx_cp_resolve`
-    /// permit, `None` when it has none.
-    pub(crate) async fn tx_seq_digest_row(
+    /// Read one transaction's checkpoint and offset within it from
+    /// `tx_seq_digest` (only those two columns) under a `tx_cp_resolve`
+    /// permit, `None` when it has no row.
+    pub(crate) async fn tx_checkpoint_position(
         &self,
         tx_seq: u64,
-    ) -> Result<Option<TxSeqDigestData>, RpcError> {
+    ) -> Result<Option<TxCheckpointPosition>, RpcError> {
         let mut inner = self.inner.clone();
-        let rows = self
-            .call_gated(stage::TX_CP_RESOLVE, inner.resolve_tx_digests(&[tx_seq]))
-            .await?;
-        Ok(rows.into_iter().flatten().next())
+        self.call_gated(
+            stage::TX_CP_RESOLVE,
+            inner.resolve_tx_checkpoint_position(tx_seq),
+        )
+        .await
     }
 
     /// Stream the checkpoint of each of `tx_sequence_numbers`, reading only the
@@ -457,8 +460,8 @@ impl BigTableClient {
         let Some(placement) = placement else {
             return Ok(None);
         };
-        let row = self
-            .tx_seq_digest_row(placement.tx_seq)
+        let position = self
+            .tx_checkpoint_position(placement.tx_seq)
             .await?
             .ok_or_else(|| {
                 RpcError::new(
@@ -470,8 +473,8 @@ impl BigTableClient {
                 )
             })?;
         Ok(Some(PlacedFrontier {
-            checkpoint: row.checkpoint_number,
-            point: placement.point(row.checkpoint_number, row.tx_offset as u64),
+            checkpoint: position.checkpoint_number,
+            point: placement.point(position.checkpoint_number, position.tx_offset as u64),
         }))
     }
 
@@ -653,6 +656,7 @@ mod tests {
     use prometheus::proto::MetricFamily;
 
     use super::*;
+    use sui_kvstore::tables::tx_seq_digest;
     use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 
     /// A `tx_cp_resolve` permit, plus the registry its metrics are recorded in.
@@ -782,19 +786,19 @@ mod tests {
         sui_kvstore::testing::insert_checkpoint_rows(&mock, &checkpoint).await;
         let client = ctx.client();
 
-        let row = client
-            .tx_seq_digest_row(0)
+        let position = client
+            .tx_checkpoint_position(0)
             .await
             .unwrap()
             .expect("transaction 0 has a row");
-        assert_eq!((row.checkpoint_number, row.tx_offset), (0, 0));
+        assert_eq!((position.checkpoint_number, position.tx_offset), (0, 0));
         assert_eq!(reads_finished(&registry, "completed"), 1);
 
         // The mock holds its response far longer than the timeout, so the
         // read is still in flight when the timeout drops it.
         mock.set_read_rows_latency(Duration::from_secs(60)).await;
         let in_flight =
-            tokio::time::timeout(Duration::from_millis(50), client.tx_seq_digest_row(0)).await;
+            tokio::time::timeout(Duration::from_millis(50), client.tx_checkpoint_position(0)).await;
         assert!(in_flight.is_err(), "the read should still be in flight");
         assert_eq!(reads_finished(&registry, "cancelled"), 1);
 
@@ -811,6 +815,8 @@ mod tests {
     /// Frontiers are placed by the one `tx_seq_digest` row their
     /// [`RowPlacement`] names: ascending by the transaction before the boundary,
     /// descending by the one after it. A frontier's row is always indexed.
+    /// Each read restricts the row to its `tx_offset` and checkpoint-number
+    /// columns.
     #[tokio::test]
     async fn places_frontiers_by_one_row() {
         let (ctx, _registry, mock, server) =
@@ -830,6 +836,7 @@ mod tests {
             sui_kvstore::testing::insert_checkpoint_rows(&mock, checkpoint).await;
         }
         let client = ctx.client();
+        mock.clear_read_rows_calls().await;
         let ascending = ScanDirection::Ascending;
         let descending = ScanDirection::Descending;
         let placed = |checkpoint, point| Some(PlacedFrontier { checkpoint, point });
@@ -870,6 +877,24 @@ mod tests {
             missing.into_status_proto().code,
             tonic::Code::Internal as i32
         );
+        let frontier_reads: Vec<_> = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == tx_seq_digest::NAME)
+            .collect();
+        // One read per non-genesis placement, the missing row included.
+        assert_eq!(frontier_reads.len(), 4, "{frontier_reads:?}");
+        for call in frontier_reads {
+            assert_eq!(
+                call.column_qualifiers
+                    .expect("frontier reads filter tx_seq_digest columns"),
+                [
+                    tx_seq_digest::col::CHECKPOINT_NUMBER.as_bytes(),
+                    tx_seq_digest::col::TX_OFFSET.as_bytes(),
+                ],
+            );
+        }
         server.abort();
     }
 

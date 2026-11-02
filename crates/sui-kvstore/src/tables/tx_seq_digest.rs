@@ -216,6 +216,27 @@ pub fn decode_checkpoint_number(cells: &[(Bytes, Bytes)]) -> Result<CheckpointSe
     bail!("tx_seq_digest missing checkpoint_number column")
 }
 
+/// Decode a transaction's position in the ledger, `(tx_offset,
+/// checkpoint_number)`, from a row read with only the `tx_offset` and
+/// `checkpoint_number` columns. Other columns are ignored if present.
+pub fn decode_checkpoint_position(
+    cells: &[(Bytes, Bytes)],
+) -> Result<(u32, CheckpointSequenceNumber)> {
+    let mut tx_offset = None;
+    let mut checkpoint_number = None;
+    for (column, value) in cells {
+        if column.as_ref() == col::TX_OFFSET.as_bytes() {
+            tx_offset = Some(decode_canonical_varint::<u32>(value, "tx_offset")?);
+        } else if column.as_ref() == col::CHECKPOINT_NUMBER.as_bytes() {
+            checkpoint_number = Some(decode_checkpoint_number_value(value)?);
+        }
+    }
+    Ok((
+        tx_offset.context("tx_seq_digest missing tx_offset column")?,
+        checkpoint_number.context("tx_seq_digest missing checkpoint_number column")?,
+    ))
+}
+
 fn decode_checkpoint_number_value(value: &Bytes) -> Result<CheckpointSequenceNumber> {
     decode_canonical_varint::<u64>(value, "checkpoint_number")
 }
@@ -357,6 +378,54 @@ mod tests {
             ),
         ];
         assert!(decode(&cells).is_err());
+    }
+
+    fn row_cells(cells: impl IntoIterator<Item = (&'static str, Bytes)>) -> Vec<(Bytes, Bytes)> {
+        cells
+            .into_iter()
+            .map(|(column, value)| (Bytes::from_static(column.as_bytes()), value))
+            .collect()
+    }
+
+    #[test]
+    fn decode_checkpoint_position_matches_full_row_decode() {
+        let digest = TransactionDigest::new([9; 32]);
+        let cells = row_cells(encode(&digest, 4, 17, 300_000_000));
+        let (_, _, tx_offset, checkpoint_number) = decode(&cells).unwrap();
+        assert_eq!(
+            decode_checkpoint_position(&cells).unwrap(),
+            (tx_offset, checkpoint_number)
+        );
+        assert_eq!((tx_offset, checkpoint_number), (17, 300_000_000));
+    }
+
+    #[test]
+    fn decode_checkpoint_position_reads_offset_and_checkpoint_columns_only() {
+        let cells = row_cells([
+            (col::CHECKPOINT_NUMBER, Bytes::from(7u64.encode_var_vec())),
+            (col::TX_OFFSET, Bytes::from(2u32.encode_var_vec())),
+        ]);
+        assert_eq!(decode_checkpoint_position(&cells).unwrap(), (2, 7));
+    }
+
+    #[test]
+    fn decode_checkpoint_position_rejects_missing_columns() {
+        let missing_offset =
+            row_cells([(col::CHECKPOINT_NUMBER, Bytes::from(7u64.encode_var_vec()))]);
+        let error = decode_checkpoint_position(&missing_offset).unwrap_err();
+        assert!(
+            error.to_string().contains("missing tx_offset column"),
+            "{error}"
+        );
+
+        let missing_checkpoint = row_cells([(col::TX_OFFSET, Bytes::from(2u32.encode_var_vec()))]);
+        let error = decode_checkpoint_position(&missing_checkpoint).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("missing checkpoint_number column"),
+            "{error}"
+        );
     }
 
     #[test]
