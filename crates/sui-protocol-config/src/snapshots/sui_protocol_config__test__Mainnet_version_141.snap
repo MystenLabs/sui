@@ -224,6 +224,7 @@ binary_enum_defs: 200
 binary_enum_def_instantiations: 100
 binary_variant_handles: 1024
 binary_variant_instantiation_handles: 1024
+binary_format_limits_profile: V1
 max_move_object_size: 256000
 max_move_package_size: 102400
 max_publish_or_upgrade_per_ptb: 5

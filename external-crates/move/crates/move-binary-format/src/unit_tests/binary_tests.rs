@@ -2,7 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{file_format::Bytecode, file_format_common::*};
+use crate::{
+    binary_config::BinaryFormatLimitsProfile, file_format::Bytecode, file_format_common::*,
+};
 use proptest::prelude::*;
 
 #[test]
@@ -15,7 +17,7 @@ fn size_canary() {
 
 #[test]
 fn binary_len() {
-    let mut binary_data = BinaryData::new();
+    let mut binary_data = BinaryData::new_for_test();
     for _ in 0..100 {
         binary_data.push(1).unwrap();
     }
@@ -37,7 +39,7 @@ fn test_max_number_of_bytecode() {
 proptest! {
     #[test]
     fn vec_to_binary(vec in any::<Vec<u8>>()) {
-        let binary_data = BinaryData::from(vec.clone());
+        let binary_data = BinaryData::from_for_test(vec.clone(), BinaryFormatLimitsProfile::V1.limits());
         let vec2 = binary_data.into_inner();
         assert_eq!(vec.len(), vec2.len());
     }
@@ -46,7 +48,7 @@ proptest! {
 proptest! {
     #[test]
     fn binary_push(item in any::<u8>()) {
-        let mut binary_data = BinaryData::new();
+        let mut binary_data = BinaryData::new_for_test();
         binary_data.push(item).unwrap();
         assert_eq!(binary_data.into_inner()[0], item);
     }
@@ -55,7 +57,7 @@ proptest! {
 proptest! {
     #[test]
     fn binary_extend(vec in any::<Vec<u8>>()) {
-        let mut binary_data = BinaryData::new();
+        let mut binary_data = BinaryData::new_for_test();
         binary_data.extend(&vec).unwrap();
         assert_eq!(binary_data.len(), vec.len());
         for (index, item) in vec.iter().enumerate() {

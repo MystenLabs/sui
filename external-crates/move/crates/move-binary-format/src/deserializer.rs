@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    binary_config::{BinaryConfig, TableConfig},
+    binary_config::{BinaryConfig, BinaryFormatLimits, TableConfig},
     check_bounds::BoundsChecker,
     errors::*,
     file_format::*,
@@ -142,21 +142,21 @@ where
 fn load_signature_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<SignatureIndex> {
     Ok(SignatureIndex(read_uleb_internal(
         cursor,
-        SIGNATURE_INDEX_MAX,
+        cursor.binary_format_limits.signature_index_max(),
     )?))
 }
 
 fn load_module_handle_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<ModuleHandleIndex> {
     Ok(ModuleHandleIndex(read_uleb_internal(
         cursor,
-        MODULE_HANDLE_INDEX_MAX,
+        cursor.binary_format_limits.module_handle_index_max(),
     )?))
 }
 
 fn load_identifier_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<IdentifierIndex> {
     Ok(IdentifierIndex(read_uleb_internal(
         cursor,
-        IDENTIFIER_INDEX_MAX,
+        cursor.binary_format_limits.identifier_index_max(),
     )?))
 }
 
@@ -165,7 +165,7 @@ fn load_datatype_handle_index(
 ) -> BinaryLoaderResult<DatatypeHandleIndex> {
     Ok(DatatypeHandleIndex(read_uleb_internal(
         cursor,
-        DATATYPE_HANDLE_INDEX_MAX,
+        cursor.binary_format_limits.datatype_handle_index_max(),
     )?))
 }
 
@@ -174,7 +174,7 @@ fn load_address_identifier_index(
 ) -> BinaryLoaderResult<AddressIdentifierIndex> {
     Ok(AddressIdentifierIndex(read_uleb_internal(
         cursor,
-        ADDRESS_INDEX_MAX,
+        cursor.binary_format_limits.address_index_max(),
     )?))
 }
 
@@ -183,14 +183,14 @@ fn load_struct_def_index(
 ) -> BinaryLoaderResult<StructDefinitionIndex> {
     Ok(StructDefinitionIndex(read_uleb_internal(
         cursor,
-        STRUCT_DEF_INDEX_MAX,
+        cursor.binary_format_limits.struct_def_index_max(),
     )?))
 }
 
 fn load_enum_def_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<EnumDefinitionIndex> {
     Ok(EnumDefinitionIndex(read_uleb_internal(
         cursor,
-        ENUM_DEF_INDEX_MAX,
+        cursor.binary_format_limits.enum_def_index_max(),
     )?))
 }
 
@@ -199,7 +199,7 @@ fn load_variant_handle_index(
 ) -> BinaryLoaderResult<VariantHandleIndex> {
     Ok(VariantHandleIndex(read_uleb_internal(
         cursor,
-        VARIANT_HANDLE_INDEX_MAX,
+        cursor.binary_format_limits.variant_handle_index_max(),
     )?))
 }
 
@@ -208,7 +208,9 @@ fn load_variant_instantiation_handle_index(
 ) -> BinaryLoaderResult<VariantInstantiationHandleIndex> {
     Ok(VariantInstantiationHandleIndex(read_uleb_internal(
         cursor,
-        VARIANT_INSTANTIATION_HANDLE_INDEX_MAX,
+        cursor
+            .binary_format_limits
+            .variant_instantiation_handle_index_max(),
     )?))
 }
 
@@ -217,14 +219,14 @@ fn load_function_handle_index(
 ) -> BinaryLoaderResult<FunctionHandleIndex> {
     Ok(FunctionHandleIndex(read_uleb_internal(
         cursor,
-        FUNCTION_HANDLE_INDEX_MAX,
+        cursor.binary_format_limits.function_handle_index_max(),
     )?))
 }
 
 fn load_field_handle_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<FieldHandleIndex> {
     Ok(FieldHandleIndex(read_uleb_internal(
         cursor,
-        FIELD_HANDLE_INDEX_MAX,
+        cursor.binary_format_limits.field_handle_index_max(),
     )?))
 }
 
@@ -233,7 +235,7 @@ fn load_field_inst_index(
 ) -> BinaryLoaderResult<FieldInstantiationIndex> {
     Ok(FieldInstantiationIndex(read_uleb_internal(
         cursor,
-        FIELD_INST_INDEX_MAX,
+        cursor.binary_format_limits.field_inst_index_max(),
     )?))
 }
 
@@ -242,7 +244,7 @@ fn load_function_inst_index(
 ) -> BinaryLoaderResult<FunctionInstantiationIndex> {
     Ok(FunctionInstantiationIndex(read_uleb_internal(
         cursor,
-        FUNCTION_INST_INDEX_MAX,
+        cursor.binary_format_limits.function_inst_index_max(),
     )?))
 }
 
@@ -251,7 +253,7 @@ fn load_struct_def_inst_index(
 ) -> BinaryLoaderResult<StructDefInstantiationIndex> {
     Ok(StructDefInstantiationIndex(read_uleb_internal(
         cursor,
-        STRUCT_DEF_INST_INDEX_MAX,
+        cursor.binary_format_limits.struct_def_inst_index_max(),
     )?))
 }
 
@@ -260,99 +262,108 @@ fn load_enum_def_inst_index(
 ) -> BinaryLoaderResult<EnumDefInstantiationIndex> {
     Ok(EnumDefInstantiationIndex(read_uleb_internal(
         cursor,
-        ENUM_DEF_INST_INDEX_MAX,
+        cursor.binary_format_limits.enum_def_inst_index_max(),
     )?))
 }
 
 fn load_constant_pool_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<ConstantPoolIndex> {
     Ok(ConstantPoolIndex(read_uleb_internal(
         cursor,
-        CONSTANT_INDEX_MAX,
+        cursor.binary_format_limits.constant_index_max(),
     )?))
 }
 
 fn load_bytecode_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<usize> {
-    read_uleb_internal(cursor, BYTECODE_COUNT_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.bytecode_count_max())
 }
 
 fn load_bytecode_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, BYTECODE_INDEX_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.bytecode_index_max())
 }
 
 fn load_acquires_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
-    read_uleb_internal(cursor, ACQUIRES_COUNT_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.acquires_count_max())
 }
 
 fn load_field_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
-    read_uleb_internal(cursor, FIELD_COUNT_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.field_count_max())
 }
 
 fn load_variant_tag(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, VARIANT_TAG_MAX_VALUE)
+    read_uleb_internal(cursor, cursor.binary_format_limits.variant_tag_max_value())
 }
 
 fn load_variant_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
-    read_uleb_internal(cursor, VARIANT_COUNT_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.variant_count_max())
 }
 
 fn load_jump_table_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, JUMP_TABLE_INDEX_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.jump_table_index_max())
 }
 
 fn load_jump_table_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, JUMP_TABLE_INDEX_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.jump_table_index_max())
 }
 
 fn load_jump_table_branch_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, VARIANT_COUNT_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.variant_count_max())
 }
 
 fn load_type_parameter_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<usize> {
-    read_uleb_internal(cursor, TYPE_PARAMETER_COUNT_MAX)
+    read_uleb_internal(
+        cursor,
+        cursor.binary_format_limits.type_parameter_count_max(),
+    )
 }
 
 fn load_signature_size(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
-    read_uleb_internal(cursor, SIGNATURE_SIZE_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.signature_size_max())
 }
 
 fn load_constant_size(cursor: &mut VersionedCursor) -> BinaryLoaderResult<usize> {
-    read_uleb_internal(cursor, CONSTANT_SIZE_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.constant_size_max())
 }
 
 fn load_metadata_key_size(cursor: &mut VersionedCursor) -> BinaryLoaderResult<usize> {
-    read_uleb_internal(cursor, METADATA_KEY_SIZE_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.metadata_key_size_max())
 }
 
 fn load_metadata_value_size(cursor: &mut VersionedCursor) -> BinaryLoaderResult<usize> {
-    read_uleb_internal(cursor, METADATA_VALUE_SIZE_MAX)
+    read_uleb_internal(
+        cursor,
+        cursor.binary_format_limits.metadata_value_size_max(),
+    )
 }
 
 fn load_identifier_size(cursor: &mut VersionedCursor) -> BinaryLoaderResult<usize> {
-    read_uleb_internal(cursor, IDENTIFIER_SIZE_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.identifier_size_max())
 }
 
 fn load_type_parameter_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, TYPE_PARAMETER_INDEX_MAX)
+    read_uleb_internal(
+        cursor,
+        cursor.binary_format_limits.type_parameter_index_max(),
+    )
 }
 
 fn load_field_offset(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, FIELD_OFFSET_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.field_offset_max())
 }
 
 fn load_table_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u8> {
-    read_uleb_internal(cursor, TABLE_COUNT_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.table_count_max())
 }
 
 fn load_table_offset(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u32> {
-    read_uleb_internal(cursor, TABLE_OFFSET_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.table_offset_max())
 }
 
 fn load_table_size(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u32> {
-    read_uleb_internal(cursor, TABLE_SIZE_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.table_size_max())
 }
 
 fn load_local_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u8> {
-    read_uleb_internal(cursor, LOCAL_INDEX_MAX)
+    read_uleb_internal(cursor, cursor.binary_format_limits.local_index_max())
 }
 
 /// Module internal function that manages deserialization of modules.
@@ -1021,7 +1032,12 @@ fn load_signature_tokens(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Vec
 pub fn load_signature_token_test_entry(
     cursor: std::io::Cursor<&[u8]>,
 ) -> BinaryLoaderResult<SignatureToken> {
-    load_signature_token(&mut VersionedCursor::new_for_test(VERSION_MAX, cursor))
+    let binary_config = BinaryConfig::legacy_with_flags(true, true);
+    load_signature_token(&mut VersionedCursor::new_for_test(
+        VERSION_MAX,
+        cursor,
+        &binary_config,
+    ))
 }
 
 /// Deserializes a `SignatureToken`.
@@ -2135,6 +2151,7 @@ struct VersionedBinary<'a, 'b> {
 struct VersionedCursor<'a> {
     version: u32,
     deprecate_global_storage_ops: bool,
+    binary_format_limits: &'static BinaryFormatLimits,
     cursor: Cursor<&'a [u8]>,
 }
 
@@ -2198,6 +2215,7 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         let mut versioned_cursor = VersionedCursor {
             version,
             deprecate_global_storage_ops: binary_config.deprecate_global_storage_ops,
+            binary_format_limits: binary_config.binary_format_limits,
             cursor,
         };
         // load table info
@@ -2250,6 +2268,7 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         VersionedCursor {
             version: self.version(),
             deprecate_global_storage_ops: self.binary_config.deprecate_global_storage_ops,
+            binary_format_limits: self.binary_config.binary_format_limits,
             cursor: Cursor::new(&self.binary[start + self.data_offset..end + self.data_offset]),
         }
     }
@@ -2263,7 +2282,6 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
     }
 }
 
-#[allow(clippy::needless_lifetimes)]
 impl<'a> VersionedCursor<'a> {
     fn version(&self) -> u32 {
         self.version
@@ -2291,10 +2309,11 @@ impl<'a> VersionedCursor<'a> {
     }
 
     #[cfg(test)]
-    fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>) -> Self {
+    fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>, binary_config: &BinaryConfig) -> Self {
         Self {
             version,
-            deprecate_global_storage_ops: false,
+            deprecate_global_storage_ops: binary_config.deprecate_global_storage_ops,
+            binary_format_limits: binary_config.binary_format_limits,
             cursor,
         }
     }
