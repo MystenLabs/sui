@@ -681,6 +681,8 @@ ExecutionErrorKind:
         STRUCT:
           - id:
               TYPENAME: ObjectID
+    42:
+      TransactionExpired: UNIT
 ExecutionFailure:
   STRUCT:
     - error:

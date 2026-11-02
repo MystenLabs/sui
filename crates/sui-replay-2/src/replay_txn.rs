@@ -745,6 +745,7 @@ fn is_early_execution_error(status: &ExecutionStatus) -> bool {
                 | ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. }
                 | ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable
                 | ExecutionErrorKind::InsufficientFundsForWithdraw
+                | ExecutionErrorKind::TransactionExpired
         ),
         ExecutionStatus::Success => false,
     }
