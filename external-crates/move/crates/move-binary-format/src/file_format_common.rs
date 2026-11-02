@@ -11,13 +11,16 @@
 //! We use LEB128 for integer compression. LEB128 is a representation from the DWARF3 spec,
 //! http://dwarfstd.org/Dwarf3Std.php or https://en.wikipedia.org/wiki/LEB128.
 //! It's used to compress mostly indexes into the main binary tables.
-use crate::file_format::Bytecode;
+use crate::{binary_config::BinaryFormatLimits, file_format::Bytecode};
 use anyhow::{Result, bail};
 use move_core_types as MVT;
 use std::{
     io::{Cursor, Read},
     mem::size_of,
 };
+
+#[cfg(test)]
+use crate::binary_config::BinaryFormatLimitsProfile;
 
 // Static assertions about the encoding of the flavor into the version of the binary format.
 const _: () = {
@@ -117,13 +120,13 @@ pub enum MagicError {
     BadNumber,
 }
 
-pub const TABLE_COUNT_MAX: u64 = 255;
+pub const TABLE_COUNT_MAX: u64 = u8::MAX as u64;
 
-pub const TABLE_OFFSET_MAX: u64 = 0xffff_ffff;
-pub const TABLE_SIZE_MAX: u64 = 0xffff_ffff;
-pub const TABLE_CONTENT_SIZE_MAX: u64 = 0xffff_ffff;
+pub const TABLE_OFFSET_MAX: u64 = u32::MAX as u64;
+pub const TABLE_SIZE_MAX: u64 = u32::MAX as u64;
+pub const TABLE_CONTENT_SIZE_MAX: u64 = u32::MAX as u64;
 
-pub const TABLE_INDEX_MAX: u64 = 65535;
+pub const TABLE_INDEX_MAX: u64 = u16::MAX as u64;
 pub const SIGNATURE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const ADDRESS_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const IDENTIFIER_INDEX_MAX: u64 = TABLE_INDEX_MAX;
@@ -139,24 +142,24 @@ pub const STRUCT_DEF_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const ENUM_DEF_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const CONSTANT_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 
-pub const BYTECODE_COUNT_MAX: u64 = 65535;
-pub const BYTECODE_INDEX_MAX: u64 = 65535;
+pub const BYTECODE_COUNT_MAX: u64 = u16::MAX as u64;
+pub const BYTECODE_INDEX_MAX: u64 = u16::MAX as u64;
 
-pub const LOCAL_INDEX_MAX: u64 = 255;
+pub const LOCAL_INDEX_MAX: u64 = u8::MAX as u64;
 
-pub const IDENTIFIER_SIZE_MAX: u64 = 65535;
+pub const IDENTIFIER_SIZE_MAX: u64 = u16::MAX as u64;
 
-pub const CONSTANT_SIZE_MAX: u64 = 65535;
+pub const CONSTANT_SIZE_MAX: u64 = u16::MAX as u64;
 
 pub const METADATA_KEY_SIZE_MAX: u64 = 1023;
-pub const METADATA_VALUE_SIZE_MAX: u64 = 65535;
+pub const METADATA_VALUE_SIZE_MAX: u64 = u16::MAX as u64;
 
-pub const SIGNATURE_SIZE_MAX: u64 = 255;
+pub const SIGNATURE_SIZE_MAX: u64 = u8::MAX as u64;
 
-pub const ACQUIRES_COUNT_MAX: u64 = 255;
+pub const ACQUIRES_COUNT_MAX: u64 = u8::MAX as u64;
 
-pub const FIELD_COUNT_MAX: u64 = 255;
-pub const FIELD_OFFSET_MAX: u64 = 255;
+pub const FIELD_COUNT_MAX: u64 = u8::MAX as u64;
+pub const FIELD_OFFSET_MAX: u64 = u8::MAX as u64;
 
 #[allow(clippy::assertions_on_constants)]
 pub const VARIANT_COUNT_MAX: u64 = {
@@ -185,8 +188,9 @@ pub const JUMP_TABLE_INDEX_MAX: u64 = {
 pub const VARIANT_INSTANTIATION_HANDLE_INDEX_MAX: u64 = 1024;
 pub const VARIANT_HANDLE_INDEX_MAX: u64 = 1024;
 
-pub const TYPE_PARAMETER_COUNT_MAX: u64 = 255;
-pub const TYPE_PARAMETER_INDEX_MAX: u64 = 65536;
+pub const TYPE_PARAMETER_COUNT_MAX: u64 = u8::MAX as u64;
+pub const LEGACY_TYPE_PARAMETER_INDEX_MAX: u64 = 65536;
+pub const TYPE_PARAMETER_INDEX_MAX: u64 = u16::MAX as u64;
 
 pub const SIGNATURE_TOKEN_DEPTH_MAX: usize = 256;
 
@@ -371,30 +375,56 @@ pub enum Opcodes {
 pub const BINARY_SIZE_LIMIT: usize = usize::MAX;
 
 /// A wrapper for the binary vector
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct BinaryData {
-    _binary: Vec<u8>,
+    pub(crate) binary_format_limits: &'static BinaryFormatLimits,
+    binary: Vec<u8>,
 }
 
 /// The wrapper mirrors Vector operations but provides additional checks against overflow
+#[cfg(test)]
 impl BinaryData {
-    pub fn new() -> Self {
+    pub fn new_for_test() -> Self {
+        Self::new_with_limits(BinaryFormatLimitsProfile::V1.limits())
+    }
+
+    pub fn from_for_test(binary: Vec<u8>, limits: &'static BinaryFormatLimits) -> Self {
+        Self {
+            binary,
+            binary_format_limits: limits,
+        }
+    }
+}
+
+impl BinaryData {
+    pub fn new_with_limits(binary_format_limits: &'static BinaryFormatLimits) -> Self {
         BinaryData {
-            _binary: Vec::new(),
+            binary_format_limits,
+            binary: Vec::new(),
+        }
+    }
+
+    pub fn from_with_limits(
+        binary: Vec<u8>,
+        binary_format_limits: &'static BinaryFormatLimits,
+    ) -> Self {
+        BinaryData {
+            binary_format_limits,
+            binary,
         }
     }
 
     pub fn as_inner(&self) -> &[u8] {
-        &self._binary
+        &self.binary
     }
 
     pub fn into_inner(self) -> Vec<u8> {
-        self._binary
+        self.binary
     }
 
     pub fn push(&mut self, item: u8) -> Result<()> {
         if self.len().checked_add(1).is_some() {
-            self._binary.push(item);
+            self.binary.push(item);
         } else {
             bail!(
                 "binary size ({}) + 1 is greater than limit ({})",
@@ -408,7 +438,7 @@ impl BinaryData {
     pub fn extend(&mut self, vec: &[u8]) -> Result<()> {
         let vec_len: usize = vec.len();
         if self.len().checked_add(vec_len).is_some() {
-            self._binary.extend(vec);
+            self.binary.extend(vec);
         } else {
             bail!(
                 "binary size ({}) + {} is greater than limit ({})",
@@ -421,23 +451,17 @@ impl BinaryData {
     }
 
     pub fn len(&self) -> usize {
-        self._binary.len()
+        self.binary.len()
     }
 
     #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
-        self._binary.is_empty()
+        self.binary.is_empty()
     }
 
     #[allow(dead_code)]
     pub fn clear(&mut self) {
-        self._binary.clear();
-    }
-}
-
-impl From<Vec<u8>> for BinaryData {
-    fn from(vec: Vec<u8>) -> Self {
-        BinaryData { _binary: vec }
+        self.binary.clear();
     }
 }
 

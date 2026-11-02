@@ -14,8 +14,8 @@ use std::sync::Mutex;
 use clap::*;
 use fastcrypto::encoding::{Base58, Encoding, Hex};
 use move_binary_format::{
-    binary_config::{BinaryConfig, TableConfig},
-    file_format_common::VERSION_1,
+    binary_config::{BinaryConfig, BinaryFormatLimitsProfile, TableConfig},
+    file_format_common::*,
 };
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::verifier::VerifierConfig;
@@ -431,6 +431,7 @@ const MAINNET_USDB: &str =
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 //              Add the `object::is_shared_input_impl` native and its cost.
 //              Reject an overflowing x-coordinate in `secp256r1_ecrecover`.
+//              Configure explicit Move binary format encoding limits.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1598,6 +1599,10 @@ pub struct ProtocolConfig {
     binary_variant_handles: Option<u16>,
     binary_variant_instantiation_handles: Option<u16>,
 
+    /// Move binary format limits profile.
+    #[skip_accessor]
+    binary_format_limits_profile: Option<BinaryFormatLimitsProfile>,
+
     /// Maximum size of the `contents` part of an object, in bytes. Enforced by the Sui adapter when effects are produced.
     max_move_object_size: Option<u64>,
 
@@ -2754,6 +2759,7 @@ impl ProtocolConfig {
             binary_enum_def_instantiations: None,
             binary_variant_handles: None,
             binary_variant_instantiation_handles: None,
+            binary_format_limits_profile: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
             max_publish_or_upgrade_per_ptb: None,
@@ -4972,6 +4978,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.object_is_shared_input_cost_base = Some(52);
                     cfg.feature_flags.secp256r1_ecrecover_checks_x_below_p = true;
+                    cfg.binary_format_limits_profile = Some(BinaryFormatLimitsProfile::V1);
                 }
                 // Use this template when making changes:
                 //
@@ -5136,7 +5143,16 @@ impl ProtocolConfig {
                     .binary_variant_instantiation_handles_as_option()
                     .unwrap_or(u16::MAX),
             },
+            self.binary_format_limits(),
         )
+    }
+
+    pub fn binary_format_limits(
+        &self,
+    ) -> &'static move_binary_format::binary_config::BinaryFormatLimits {
+        self.binary_format_limits_profile
+            .unwrap_or(BinaryFormatLimitsProfile::LEGACY)
+            .limits()
     }
 
     /// Override one or more settings in the config, for testing.
@@ -5423,6 +5439,21 @@ mod test {
                 );
             }
         }
+    }
+
+    #[test]
+    fn binary_format_limits_profile_matches_protocol_version() {
+        let v140 = ProtocolConfig::get_for_version(ProtocolVersion::new(140), Chain::Unknown);
+        assert_eq!(
+            v140.binary_format_limits(),
+            BinaryFormatLimitsProfile::LEGACY.limits()
+        );
+
+        let v141 = ProtocolConfig::get_for_version(ProtocolVersion::new(141), Chain::Unknown);
+        assert_eq!(
+            v141.binary_format_limits(),
+            BinaryFormatLimitsProfile::V1.limits()
+        );
     }
 
     #[test]

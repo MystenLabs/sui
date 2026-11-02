@@ -15,7 +15,7 @@
 //! not all of the newer language constructs might be supported for older versions, leading to
 //! serialization errors.
 
-use crate::{file_format::*, file_format_common::*};
+use crate::{binary_config::BinaryConfig, file_format::*, file_format_common::*};
 use anyhow::{Result, anyhow, bail};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,
@@ -35,175 +35,313 @@ where
 }
 
 fn serialize_signature_index(binary: &mut BinaryData, idx: &SignatureIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, SIGNATURE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.signature_index_max(),
+    )
 }
 
 fn serialize_module_handle_index(binary: &mut BinaryData, idx: &ModuleHandleIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, MODULE_HANDLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.module_handle_index_max(),
+    )
 }
 
 fn serialize_identifier_index(binary: &mut BinaryData, idx: &IdentifierIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, IDENTIFIER_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.identifier_index_max(),
+    )
 }
 
 fn serialize_datatype_handle_index(
     binary: &mut BinaryData,
     idx: &DatatypeHandleIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, DATATYPE_HANDLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.datatype_handle_index_max(),
+    )
 }
 
 fn serialize_address_identifier_index(
     binary: &mut BinaryData,
     idx: &AddressIdentifierIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, ADDRESS_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.address_index_max(),
+    )
 }
 
 fn serialize_struct_def_index(binary: &mut BinaryData, idx: &StructDefinitionIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, STRUCT_DEF_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.struct_def_index_max(),
+    )
 }
 
 fn serialize_enum_def_index(binary: &mut BinaryData, idx: &EnumDefinitionIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, ENUM_DEF_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.enum_def_index_max(),
+    )
 }
 
 fn serialize_function_handle_index(
     binary: &mut BinaryData,
     idx: &FunctionHandleIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, FUNCTION_HANDLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.function_handle_index_max(),
+    )
 }
 
 fn serialize_field_handle_index(binary: &mut BinaryData, idx: &FieldHandleIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, FIELD_HANDLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.field_handle_index_max(),
+    )
 }
 
 fn serialize_field_inst_index(
     binary: &mut BinaryData,
     idx: &FieldInstantiationIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, FIELD_INST_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.field_inst_index_max(),
+    )
 }
 
 fn serialize_function_inst_index(
     binary: &mut BinaryData,
     idx: &FunctionInstantiationIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, FUNCTION_INST_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.function_inst_index_max(),
+    )
 }
 
 fn serialize_struct_def_inst_index(
     binary: &mut BinaryData,
     idx: &StructDefInstantiationIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, STRUCT_DEF_INST_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.struct_def_inst_index_max(),
+    )
 }
 
 fn serialize_enum_def_inst_index(
     binary: &mut BinaryData,
     idx: &EnumDefInstantiationIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, ENUM_DEF_INST_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.enum_def_inst_index_max(),
+    )
 }
 
 fn seiralize_table_offset(binary: &mut BinaryData, offset: u32) -> Result<()> {
-    write_as_uleb128(binary, offset, TABLE_OFFSET_MAX)
+    write_as_uleb128(
+        binary,
+        offset,
+        binary.binary_format_limits.table_offset_max(),
+    )
 }
 
 fn serialize_table_size(binary: &mut BinaryData, size: u32) -> Result<()> {
-    write_as_uleb128(binary, size, TABLE_SIZE_MAX)
+    write_as_uleb128(binary, size, binary.binary_format_limits.table_size_max())
 }
 
 fn serialize_constant_pool_index(binary: &mut BinaryData, idx: &ConstantPoolIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, CONSTANT_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.constant_index_max(),
+    )
 }
 
 fn serialize_bytecode_count(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, BYTECODE_COUNT_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.bytecode_count_max(),
+    )
 }
 
 fn serialize_identifier_size(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, IDENTIFIER_SIZE_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.identifier_size_max(),
+    )
 }
 
 fn serialize_constant_size(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, CONSTANT_SIZE_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.constant_size_max(),
+    )
 }
 
 fn serialize_metadata_key_size(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, METADATA_KEY_SIZE_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.metadata_key_size_max(),
+    )
 }
 
 fn serialize_metadata_value_size(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, METADATA_VALUE_SIZE_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.metadata_value_size_max(),
+    )
 }
 
 fn serialize_field_count(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, FIELD_COUNT_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.field_count_max(),
+    )
 }
 
 fn serialize_variant_count(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, VARIANT_COUNT_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.variant_count_max(),
+    )
 }
 
 fn serialize_variant_tag(binary: &mut BinaryData, tag: u16) -> Result<()> {
-    write_as_uleb128(binary, tag as u64, VARIANT_TAG_MAX_VALUE)
+    write_as_uleb128(
+        binary,
+        tag as u64,
+        binary.binary_format_limits.variant_tag_max_value(),
+    )
 }
 
 fn serialize_field_offset(binary: &mut BinaryData, offset: u16) -> Result<()> {
-    write_as_uleb128(binary, offset, FIELD_OFFSET_MAX)
+    write_as_uleb128(
+        binary,
+        offset,
+        binary.binary_format_limits.field_offset_max(),
+    )
 }
 
 fn serialize_acquires_count(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, ACQUIRES_COUNT_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.acquires_count_max(),
+    )
 }
 
 fn serialize_signature_size(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, SIGNATURE_SIZE_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.signature_size_max(),
+    )
 }
 
 fn serialize_type_parameter_index(binary: &mut BinaryData, idx: u16) -> Result<()> {
-    write_as_uleb128(binary, idx, TYPE_PARAMETER_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx,
+        binary.binary_format_limits.type_parameter_index_max(),
+    )
 }
 
 fn serialize_type_parameter_count(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, TYPE_PARAMETER_COUNT_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.type_parameter_count_max(),
+    )
 }
 
 fn serialize_bytecode_offset(binary: &mut BinaryData, offset: u16) -> Result<()> {
-    write_as_uleb128(binary, offset, BYTECODE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        offset,
+        binary.binary_format_limits.bytecode_index_max(),
+    )
 }
 
 fn serialize_variant_instantiation_handle_index(
     binary: &mut BinaryData,
     idx: &VariantInstantiationHandleIndex,
 ) -> Result<()> {
-    write_as_uleb128(binary, idx.0, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary
+            .binary_format_limits
+            .variant_instantiation_handle_index_max(),
+    )
 }
 
 fn serialize_variant_handle_index(binary: &mut BinaryData, idx: &VariantHandleIndex) -> Result<()> {
-    write_as_uleb128(binary, idx.0, VARIANT_HANDLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        idx.0,
+        binary.binary_format_limits.variant_handle_index_max(),
+    )
 }
 
 fn serialize_jump_table_index(binary: &mut BinaryData, index: u16) -> Result<()> {
-    write_as_uleb128(binary, index, JUMP_TABLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        index,
+        binary.binary_format_limits.jump_table_index_max(),
+    )
 }
 
 fn serialize_jump_table_count(binary: &mut BinaryData, len: u8) -> Result<()> {
-    write_as_uleb128(binary, len, JUMP_TABLE_INDEX_MAX)
+    write_as_uleb128(
+        binary,
+        len,
+        binary.binary_format_limits.jump_table_index_max(),
+    )
 }
 
 fn serialize_jump_table_branch_count(binary: &mut BinaryData, len: usize) -> Result<()> {
-    write_as_uleb128(binary, len as u64, VARIANT_COUNT_MAX)
+    write_as_uleb128(
+        binary,
+        len as u64,
+        binary.binary_format_limits.variant_count_max(),
+    )
 }
 
 fn serialize_table_count(binary: &mut BinaryData, len: u8) -> Result<()> {
-    write_as_uleb128(binary, len, TABLE_COUNT_MAX)
+    write_as_uleb128(binary, len, binary.binary_format_limits.table_count_max())
 }
 
 fn serialize_local_index(binary: &mut BinaryData, idx: u8) -> Result<()> {
-    write_as_uleb128(binary, idx, LOCAL_INDEX_MAX)
+    write_as_uleb128(binary, idx, binary.binary_format_limits.local_index_max())
 }
 
 fn validate_version(version: u32) -> Result<()> {
@@ -223,14 +361,24 @@ impl CompiledModule {
     /// Serializes a `CompiledModule` into a binary at `version`. The mutable `Vec<u8>` will
     /// contain the binary blob on return.
     pub fn serialize_with_version(&self, version: u32, binary: &mut Vec<u8>) -> Result<()> {
+        self.serialize_with_config(version, &BinaryConfig::standard(), binary)
+    }
+
+    pub fn serialize_with_config(
+        &self,
+        version: u32,
+        binary_config: &BinaryConfig,
+        binary: &mut Vec<u8>,
+    ) -> Result<()> {
         validate_version(version)?;
-        let mut binary_data = BinaryData::from(binary.clone());
+        let mut binary_data =
+            BinaryData::from_with_limits(binary.clone(), binary_config.binary_format_limits);
         let mut ser = if self.publishable {
             ModuleSerializer::new(version)
         } else {
             ModuleSerializer::new_unpublishable(version)
         };
-        let mut temp = BinaryData::new();
+        let mut temp = BinaryData::new_with_limits(binary_config.binary_format_limits);
         ser.serialize_tables(&mut temp, self)?;
         if temp.len() > u32::MAX as usize {
             bail!(
