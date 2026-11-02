@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sui_protocol_config::ProtocolConfig;
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
+pub const ACCUMULATOR_ROOT_STRUCT: &IdentStr = ident_str!("AccumulatorRoot");
 pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metadata");
 pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");
 pub const ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD: &IdentStr = ident_str!("EventStreamHead");
@@ -409,6 +410,17 @@ impl Default for EventStreamHead {
     }
 }
 
+impl MoveTypeTagTrait for EventStreamHead {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: ACCUMULATOR_SETTLEMENT_MODULE.to_owned(),
+            name: ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD.to_owned(),
+            type_params: vec![],
+        }))
+    }
+}
+
 impl EventStreamHead {
     pub fn new() -> Self {
         Self {
@@ -433,15 +445,7 @@ impl EventStreamHead {
 
 pub fn derive_event_stream_head_object_id(stream_id: SuiAddress) -> SuiResult<ObjectID> {
     let key = AccumulatorKey { owner: stream_id };
-
-    let value_type_tag = TypeTag::Struct(Box::new(StructTag {
-        address: SUI_FRAMEWORK_ADDRESS,
-        module: ACCUMULATOR_SETTLEMENT_MODULE.to_owned(),
-        name: ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD.to_owned(),
-        type_params: vec![],
-    }));
-
-    let key_type_tag = AccumulatorKey::get_type_tag(&[value_type_tag]);
+    let key_type_tag = AccumulatorKey::get_type_tag(&[EventStreamHead::get_type_tag()]);
 
     DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
         .into_unbounded_id()

@@ -6,7 +6,7 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 pub(crate) mod checked {
 
-    use crate::accumulator_settlement::{ExecutionBatch, execution_batches};
+    use crate::accumulator_settlement;
     use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
     use crate::gas_charger::{PaymentKind, PaymentMethod};
@@ -1692,31 +1692,13 @@ pub(crate) mod checked {
                 trace_builder_opt,
             ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
-                for ExecutionBatch {
-                    transaction: pt,
-                    command_indices,
-                } in execution_batches(pt)
-                {
-                    SPT::execute::<execution_mode::System<Mode::Error>>(
-                        protocol_config,
-                        metrics.clone(),
-                        move_vm,
-                        temporary_store,
-                        store,
-                        tx_ctx.clone(),
-                        gas_charger,
-                        None,
-                        pt,
-                        trace_builder_opt,
-                    )
-                    .map_err(|(e, _)| {
-                        let e = match e.command().and_then(|i| command_indices.get(i)) {
-                            Some(index) => e.with_command_index(*index),
-                            None => e,
-                        };
-                        (e, vec![])
-                    })?;
-                }
+                accumulator_settlement::execute::<Mode::Error>(
+                    protocol_config,
+                    temporary_store,
+                    &tx_ctx.borrow(),
+                    pt,
+                )
+                .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
