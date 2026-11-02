@@ -364,9 +364,14 @@ impl BigTableClient {
     }
 
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
-    /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
-    /// during filter validation. `pacing` decides which scan watermarks reach
-    /// the stream (see [`crate::operation::QueryContext::watermark_pacing`]).
+    /// semaphore; each unique stored dimension key in the query is one
+    /// concurrent Bigtable scan. Filter validation caps a request at
+    /// `max_bitmap_filter_literals` literals, and a transaction filter's
+    /// `AffectedAddress` literal also scans the `Sender` dimension, so one
+    /// request runs at most twice `max_bitmap_filter_literals` concurrent
+    /// Bigtable scans. The synthetic tx universe key is generated in memory
+    /// and never read from Bigtable. `pacing` decides which scan watermarks
+    /// reach the stream (see [`crate::operation::QueryContext::watermark_pacing`]).
     ///
     /// `budget` is raised to the query's unique leaf count when it is lower,
     /// so every leaf stream can report its first bucket before `SCAN_LIMIT`.

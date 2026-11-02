@@ -39,14 +39,24 @@ use crate::proto::google::rpc::bad_request::FieldViolation;
 ///
 /// The `AffectedAddress` index dimension does not record a transaction's
 /// sender, so an `AffectedAddress(X)` literal is evaluated as
-/// `Sender(X) OR AffectedAddress(X)`. A positive `AffectedAddress` literal
-/// therefore splits its term in two, and a term with `k` of them expands to
-/// `2^k` terms. Identical dimension keys are scanned once regardless of how
-/// many terms reference them, so the expansion adds at most one scanned leaf
-/// per `AffectedAddress` literal; this cap bounds the in-memory term
-/// combination work (bitmap evaluation and per-subscriber live matching).
-/// 64 admits up to six positive `AffectedAddress` literals ANDed in a single
-/// term, far beyond any practical filter.
+/// `Sender(X) OR AffectedAddress(X)`. A term ANDs its literals, so a term with
+/// `k` positive `AffectedAddress` literals is an AND of `k` two-way ORs.
+/// Rewriting it as an OR of ANDs takes one term per combination of choices,
+/// `2^k` terms. For example, with `k = 2` (`S` = `Sender`, `A` =
+/// `AffectedAddress`):
+///
+/// ```text
+/// (S(X) OR A(X)) AND (S(Y) OR A(Y))
+///   = (S(X) AND S(Y)) OR (S(X) AND A(Y)) OR (A(X) AND S(Y)) OR (A(X) AND A(Y))
+/// ```
+///
+/// The terms grow as `2^k`, but the distinct dimension keys grow as `2k`
+/// (`S(X)`, `A(X)`, `S(Y)`, `A(Y)` above), and identical keys are scanned once
+/// regardless of how many terms reference them. So storage reads grow by one
+/// scanned leaf per `AffectedAddress` literal, and this cap bounds only the
+/// in-memory term combination work (bitmap evaluation and per-subscriber live
+/// matching). 64 admits up to six positive `AffectedAddress` literals ANDed in
+/// a single term, far beyond any practical filter.
 const MAX_EXPANDED_TRANSACTION_TERMS: usize = 64;
 
 /// Convert a proto `TransactionFilter` DNF filter into a `BitmapQuery`.
