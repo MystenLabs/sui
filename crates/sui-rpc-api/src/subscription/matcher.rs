@@ -668,6 +668,16 @@ mod tests {
         literal
     }
 
+    fn affected_address_literal(address: SuiAddress) -> proto::TransactionLiteral {
+        let mut filter = proto::AffectedAddressFilter::default();
+        filter.address = Some(address.to_string());
+        let mut literal = proto::TransactionLiteral::default();
+        literal.predicate = Some(proto::transaction_literal::Predicate::AffectedAddress(
+            filter,
+        ));
+        literal
+    }
+
     fn tx_query(literals: Vec<proto::TransactionLiteral>) -> BitmapQuery {
         let mut term = proto::TransactionTerm::default();
         term.literals = literals;
@@ -809,6 +819,36 @@ mod tests {
         // A checkpoint with only sender 1 produces no frame.
         dispatch(&mut matcher, &checkpoint(2, &[1, 1]), NO_TICK);
         assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn affected_address_filter_matches_sender_outside_affected_addresses() {
+        let mut matcher = SubscriptionMatcher::default();
+        let metrics = metrics();
+        let query = tx_query(vec![affected_address_literal(addr(0))]);
+        let mut receiver = subscribe(
+            &mut matcher,
+            SubscriptionKind::Transactions,
+            Some(query),
+            &metrics,
+        );
+
+        // Model a sponsored transaction that only touches shared objects: the
+        // sender signs, but owns nothing the transaction reads or writes, so
+        // its `AffectedAddress` key is absent.
+        let cp1 = checkpoint(1, &[0, 1]);
+        let mut keys = extract_checkpoint_keys(&cp1, true, false);
+        let affected_key = PrehashedKey::new(encode_dimension_key(
+            IndexDimension::AffectedAddress,
+            addr(0).as_ref(),
+        ));
+        let tx_keys = keys.tx.as_mut().unwrap();
+        assert!(tx_keys[0].remove(&affected_key));
+        assert!(!tx_keys[1].contains(&affected_key));
+
+        matcher.dispatch_with_keys(&cp1, &keys, NO_TICK);
+        recv_start_tick(&mut receiver, &cp1);
+        assert_eq!(transaction_indices(recv_matches(&mut receiver)), vec![0]);
     }
 
     #[test]

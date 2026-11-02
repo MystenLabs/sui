@@ -35,11 +35,38 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 
+/// Upper bound on the number of DNF terms produced by expanding the terms of a
+/// `TransactionFilter` that contain a non-negated `AffectedAddress` literal.
+///
+/// The `AffectedAddress` index dimension does not record a transaction's
+/// sender, so an `AffectedAddress(X)` literal is evaluated as
+/// `Sender(X) OR AffectedAddress(X)`. A term ANDs its literals, so a term with
+/// `k` positive `AffectedAddress` literals is an AND of `k` two-way ORs.
+/// Rewriting it as an OR of ANDs takes one term per combination of choices,
+/// `2^k` terms. For example, with `k = 2` (`S` = `Sender`, `A` =
+/// `AffectedAddress`):
+///
+/// ```text
+/// (S(X) OR A(X)) AND (S(Y) OR A(Y))
+///   = (S(X) AND S(Y)) OR (S(X) AND A(Y)) OR (A(X) AND S(Y)) OR (A(X) AND A(Y))
+/// ```
+///
+/// The terms grow as `2^k`, but the distinct dimension keys grow as `2k`
+/// (`S(X)`, `A(X)`, `S(Y)`, `A(Y)` above), and identical keys are scanned once
+/// regardless of how many terms reference them. So storage reads grow by one
+/// scanned leaf per `AffectedAddress` literal, and this cap bounds only the
+/// in-memory term combination work (bitmap evaluation and per-subscriber live
+/// matching). 64 admits up to six positive `AffectedAddress` literals ANDed in
+/// a single term, far beyond any practical filter.
+const MAX_EXPANDED_TRANSACTION_TERMS: usize = 64;
+
 /// Convert a proto `TransactionFilter` DNF filter into a `BitmapQuery`.
 ///
-/// `max_literals` caps the total number of literals across all terms. Each
-/// literal can become one bitmap dimension stream, so this prevents one
-/// filter from monopolizing bitmap scan fanout.
+/// `max_literals` caps the total number of literals across all terms of the
+/// request. Each literal becomes one bitmap dimension stream, except
+/// `AffectedAddress`, which also scans the `Sender` dimension (see
+/// `MAX_EXPANDED_TRANSACTION_TERMS`), so this prevents one filter from
+/// monopolizing bitmap scan fanout.
 pub fn transaction_filter_to_query(
     filter: &TransactionFilter,
     max_literals: usize,
@@ -54,12 +81,12 @@ pub fn transaction_filter_to_query(
         filter.terms.iter().map(|term| term.literals.len()),
         max_literals,
     )?;
+    validate_expanded_term_count(&filter.terms)?;
 
-    let terms = filter
-        .terms
-        .iter()
-        .map(transaction_term_to_query)
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut terms = Vec::with_capacity(filter.terms.len());
+    for term in &filter.terms {
+        transaction_term_to_query(term, &mut terms)?;
+    }
     BitmapQuery::new(terms).map_err(|e| {
         FieldViolation::new("filter")
             .with_description(e.to_string())
@@ -120,10 +147,68 @@ fn validate_literal_fanout(
     Ok(())
 }
 
-fn transaction_term_to_query(term: &TransactionTerm) -> Result<BitmapTerm, RpcError> {
+/// Reject filters whose `AffectedAddress` expansion would exceed
+/// [`MAX_EXPANDED_TRANSACTION_TERMS`]. Only terms that contain a non-negated
+/// `AffectedAddress` literal are counted, so filters without one are never
+/// rejected here.
+fn validate_expanded_term_count(terms: &[TransactionTerm]) -> Result<(), RpcError> {
+    let mut total = 0usize;
+    for term in terms {
+        let splits = term
+            .literals
+            .iter()
+            .filter(|literal| is_positive_affected_address(literal))
+            .count();
+        if splits == 0 {
+            continue;
+        }
+        let expanded = u32::try_from(splits)
+            .ok()
+            .and_then(|splits| 1usize.checked_shl(splits))
+            .unwrap_or(usize::MAX);
+        total = total.saturating_add(expanded);
+        if total > MAX_EXPANDED_TRANSACTION_TERMS {
+            return Err(FieldViolation::new("filter.terms")
+                .with_description(format!(
+                    "affected_address literals expand this filter to more than \
+                     {MAX_EXPANDED_TRANSACTION_TERMS} terms (each non-negated \
+                     affected_address literal doubles its term because it also matches \
+                     the transaction sender)"
+                ))
+                .with_reason(ErrorReason::FieldInvalid)
+                .into());
+        }
+    }
+    Ok(())
+}
+
+fn is_positive_affected_address(literal: &TransactionLiteral) -> bool {
+    !literal.negated
+        && matches!(
+            literal.predicate,
+            Some(transaction_literal::Predicate::AffectedAddress(_))
+        )
+}
+
+/// Convert one proto term into the bitmap terms it expands to, appending them
+/// to `out`.
+///
+/// `AffectedAddress(X)` is evaluated as `Sender(X) OR AffectedAddress(X)`
+/// because the `AffectedAddress` index dimension does not record the sender.
+/// A positive literal splits every term built so far into one carrying the
+/// `Sender(X)` include and one carrying the `AffectedAddress(X)` include. A
+/// negated literal becomes `NOT Sender(X) AND NOT AffectedAddress(X)` in place.
+fn transaction_term_to_query(
+    term: &TransactionTerm,
+    out: &mut Vec<BitmapTerm>,
+) -> Result<(), RpcError> {
+    const FIELD: &str = "filter.terms.literals";
+
+    // Every expanded term keeps one include per positive literal, so whether
+    // a term needs the universe anchor depends only on the original literals.
     let has_include = term.literals.iter().any(|literal| !literal.negated);
 
-    let mut literals = Vec::with_capacity(term.literals.len() + usize::from(!has_include));
+    let mut prefix = Vec::with_capacity(term.literals.len() + usize::from(!has_include));
     // Unanchored negation: a term with only excludes resolves as
     // `range \ union(excludes)`. The tx-seq namespace is dense, so the
     // universe needs no stored marker — backends synthesize full buckets for
@@ -131,7 +216,7 @@ fn transaction_term_to_query(term: &TransactionTerm) -> Result<BitmapTerm, RpcEr
     // term so the merge-join driver's floor advances through every bucket in
     // range. `expect` is sound for the same reason as the event-side synthesis.
     if !has_include {
-        literals.push(
+        prefix.push(
             BitmapLiteral::include(encode_dimension_key(
                 IndexDimension::TxUniverse,
                 TX_UNIVERSE_VALUE,
@@ -139,16 +224,55 @@ fn transaction_term_to_query(term: &TransactionTerm) -> Result<BitmapTerm, RpcEr
             .expect("TxUniverse key is statically valid"),
         );
     }
-    for p in &term.literals {
-        literals.push(convert_transaction_literal(p, "filter.terms.literals")?);
+
+    let mut expanded = vec![prefix];
+    for literal in &term.literals {
+        let converted = convert_transaction_literal(literal, FIELD)?;
+        let Some(transaction_literal::Predicate::AffectedAddress(f)) = &literal.predicate else {
+            push_to_each(&mut expanded, &[converted]);
+            continue;
+        };
+
+        let field = format!("{FIELD}.affected_address.address");
+        let sender_key =
+            encode_dimension_key(IndexDimension::Sender, &affected_address_bytes(f, &field)?);
+        let sender = if literal.negated {
+            BitmapLiteral::exclude(sender_key)
+        } else {
+            BitmapLiteral::include(sender_key)
+        }
+        .expect("Sender key over a 32-byte address is valid");
+
+        if literal.negated {
+            push_to_each(&mut expanded, &[sender, converted]);
+        } else {
+            expanded = expanded
+                .into_iter()
+                .flat_map(|literals| {
+                    let mut with_sender = literals.clone();
+                    with_sender.push(sender.clone());
+                    let mut with_affected = literals;
+                    with_affected.push(converted.clone());
+                    [with_sender, with_affected]
+                })
+                .collect();
+        }
     }
 
-    BitmapTerm::new(literals).map_err(|e| {
-        FieldViolation::new("filter.terms")
-            .with_description(e.to_string())
-            .with_reason(ErrorReason::FieldInvalid)
-            .into()
-    })
+    for literals in expanded {
+        out.push(BitmapTerm::new(literals).map_err(|e| {
+            FieldViolation::new("filter.terms")
+                .with_description(e.to_string())
+                .with_reason(ErrorReason::FieldInvalid)
+        })?);
+    }
+    Ok(())
+}
+
+fn push_to_each(terms: &mut [Vec<BitmapLiteral>], literals: &[BitmapLiteral]) {
+    for term in terms {
+        term.extend_from_slice(literals);
+    }
 }
 
 fn event_term_to_query(term: &EventTerm) -> Result<BitmapTerm, RpcError> {
@@ -311,16 +435,19 @@ fn convert_sender(f: &SenderFilter, field: &str) -> Result<Vec<u8>, RpcError> {
 }
 
 fn convert_affected_address(f: &AffectedAddressFilter, field: &str) -> Result<Vec<u8>, RpcError> {
+    Ok(encode_dimension_key(
+        IndexDimension::AffectedAddress,
+        &affected_address_bytes(f, field)?,
+    ))
+}
+
+fn affected_address_bytes(f: &AffectedAddressFilter, field: &str) -> Result<[u8; 32], RpcError> {
     let addr = f.address.as_deref().ok_or_else(|| {
         FieldViolation::new(field)
             .with_description("address is required")
             .with_reason(ErrorReason::FieldMissing)
     })?;
-    let bytes = parse_address(addr, field)?;
-    Ok(encode_dimension_key(
-        IndexDimension::AffectedAddress,
-        &bytes,
-    ))
+    parse_address(addr, field)
 }
 
 fn convert_affected_object(f: &AffectedObjectFilter, field: &str) -> Result<Vec<u8>, RpcError> {
@@ -487,6 +614,168 @@ mod tests {
 
     fn tx_universe_key() -> Vec<u8> {
         encode_dimension_key(IndexDimension::TxUniverse, TX_UNIVERSE_VALUE)
+    }
+
+    fn tx_affected_address_literal(byte: u8, exclude: bool) -> TransactionLiteral {
+        let address = SuiAddress::from_bytes([byte; 32])
+            .expect("valid address bytes")
+            .to_string();
+        let mut affected = AffectedAddressFilter::default();
+        affected.address = Some(address);
+
+        let mut literal = TransactionLiteral::default();
+        literal.predicate = Some(transaction_literal::Predicate::AffectedAddress(affected));
+        literal.negated = exclude;
+        literal
+    }
+
+    fn sender_key(byte: u8) -> Vec<u8> {
+        encode_dimension_key(IndexDimension::Sender, &[byte; 32])
+    }
+
+    fn affected_address_key(byte: u8) -> Vec<u8> {
+        encode_dimension_key(IndexDimension::AffectedAddress, &[byte; 32])
+    }
+
+    /// Each term as `(is_include, key)` pairs, in literal order.
+    fn term_literals(query: &BitmapQuery) -> Vec<Vec<(bool, Vec<u8>)>> {
+        query
+            .terms()
+            .iter()
+            .map(|term| {
+                term.literals()
+                    .iter()
+                    .map(|literal| {
+                        (
+                            matches!(literal, BitmapLiteral::Include(_)),
+                            literal.key_bytes().to_vec(),
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn affected_address_matches_sender_or_affected_address() {
+        let filter =
+            tx_filter_with_terms(vec![tx_term(vec![tx_affected_address_literal(1, false)])]);
+        let query = transaction_filter_to_query(&filter, TEST_MAX_LITERALS).unwrap();
+
+        assert_eq!(
+            term_literals(&query),
+            vec![
+                vec![(true, sender_key(1))],
+                vec![(true, affected_address_key(1))],
+            ]
+        );
+    }
+
+    #[test]
+    fn affected_address_expansion_keeps_other_literals_in_every_term() {
+        let filter = tx_filter_with_terms(vec![tx_term(vec![
+            sender_literal(2),
+            tx_affected_address_literal(1, false),
+            tx_sender_literal(3, true),
+        ])]);
+        let query = transaction_filter_to_query(&filter, TEST_MAX_LITERALS).unwrap();
+
+        assert_eq!(
+            term_literals(&query),
+            vec![
+                vec![
+                    (true, sender_key(2)),
+                    (true, sender_key(1)),
+                    (false, sender_key(3)),
+                ],
+                vec![
+                    (true, sender_key(2)),
+                    (true, affected_address_key(1)),
+                    (false, sender_key(3)),
+                ],
+            ]
+        );
+    }
+
+    #[test]
+    fn negated_affected_address_excludes_sender_and_affected_address() {
+        let filter =
+            tx_filter_with_terms(vec![tx_term(vec![tx_affected_address_literal(1, true)])]);
+        let query = transaction_filter_to_query(&filter, TEST_MAX_LITERALS).unwrap();
+
+        assert_eq!(
+            term_literals(&query),
+            vec![vec![
+                (true, tx_universe_key()),
+                (false, sender_key(1)),
+                (false, affected_address_key(1)),
+            ]]
+        );
+    }
+
+    #[test]
+    fn multiple_affected_addresses_in_one_term_expand_to_cross_product() {
+        let filter = tx_filter_with_terms(vec![tx_term(vec![
+            tx_affected_address_literal(1, false),
+            tx_affected_address_literal(2, false),
+        ])]);
+        let query = transaction_filter_to_query(&filter, TEST_MAX_LITERALS).unwrap();
+
+        assert_eq!(
+            term_literals(&query),
+            vec![
+                vec![(true, sender_key(1)), (true, sender_key(2))],
+                vec![(true, sender_key(1)), (true, affected_address_key(2))],
+                vec![(true, affected_address_key(1)), (true, sender_key(2))],
+                vec![
+                    (true, affected_address_key(1)),
+                    (true, affected_address_key(2))
+                ],
+            ]
+        );
+        // Four terms, but only one extra scanned leaf per address.
+        assert_eq!(query.unique_leaf_count(), 4);
+    }
+
+    #[test]
+    fn affected_address_expansion_is_capped() {
+        let affected_term = |n: u32| {
+            tx_term(
+                (0..n)
+                    .map(|i| tx_affected_address_literal(i as u8, false))
+                    .collect(),
+            )
+        };
+        // Most positive `AffectedAddress` literals one term can hold. The
+        // literal limit is raised so only the expansion cap can reject.
+        let splits = MAX_EXPANDED_TRANSACTION_TERMS.ilog2();
+        let max_literals = 2 * splits as usize + 2;
+
+        let filter = tx_filter_with_terms(vec![affected_term(splits)]);
+        let query = transaction_filter_to_query(&filter, max_literals).unwrap();
+        assert_eq!(query.terms().len(), 1 << splits);
+
+        // Over the cap within one term, or summed across terms.
+        for filter in [
+            tx_filter_with_terms(vec![affected_term(splits + 1)]),
+            tx_filter_with_terms(vec![affected_term(splits), affected_term(1)]),
+        ] {
+            let error = transaction_filter_to_query(&filter, max_literals)
+                .expect_err("expansion beyond the cap should be rejected")
+                .into_status_proto();
+            assert_eq!(error.code, tonic::Code::InvalidArgument as i32);
+        }
+
+        // Terms without a positive `AffectedAddress` literal do not count
+        // toward the cap.
+        let plain_terms = MAX_EXPANDED_TRANSACTION_TERMS + 1;
+        let filter = tx_filter_with_terms(
+            (0..plain_terms)
+                .map(|i| tx_term(vec![sender_literal(i as u8)]))
+                .collect(),
+        );
+        let query = transaction_filter_to_query(&filter, plain_terms).unwrap();
+        assert_eq!(query.terms().len(), plain_terms);
     }
 
     #[test]

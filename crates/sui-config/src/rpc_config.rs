@@ -508,8 +508,9 @@ pub struct LedgerHistoryConfig {
     pub chunk_bucket_scan_budget: Option<usize>,
 
     /// Maximum total filter literals (bitmap dimensions) accepted in one filtered
-    /// request, across all DNF terms. Each literal becomes one bitmap leaf, so
-    /// this bounds a single filter's scan fanout. Must not exceed
+    /// request, across all DNF terms. Each literal becomes one bitmap leaf (an
+    /// `AffectedAddress` literal also scans the `Sender` dimension, so it becomes
+    /// two), so this bounds a single filter's scan fanout. Must not exceed
     /// `bitmap_bucket_scan_budget` (see [`LedgerHistoryConfig::validate`]).
     ///
     /// Defaults to `10` if not specified.
@@ -552,18 +553,20 @@ impl LedgerHistoryConfig {
             .unwrap_or(DEFAULT_MAX_BITMAP_FILTER_LITERALS)
     }
 
-    /// Reject configurations that cannot make forward progress. Each filter
-    /// literal becomes one bitmap leaf that must fetch at least one bucket to
-    /// emit its first watermark; if the per-request budget is below the literal
-    /// cap a `SCAN_LIMIT` can fire before any merged watermark reaches the wire,
-    /// leaving the client a cursorless `QueryEnd` it cannot resume from. Mirrors
-    /// the archival/BigTable side's `LedgerHistoryConfig::validate`.
+    /// Reject configurations that cannot make forward progress. Every filter
+    /// leaf must fetch at least one bucket to emit its first watermark. The
+    /// fullnode evaluator reserves each leaf's first bucket regardless of the
+    /// budget, so a query with more leaves than literals (an `AffectedAddress`
+    /// literal also scans the `Sender` dimension) still progresses; this check
+    /// keeps the per-request budget at or above the literal cap so ordinary
+    /// filters have room to page past their first buckets before `SCAN_LIMIT`.
+    /// Mirrors the archival/BigTable side's `LedgerHistoryConfig::validate`.
     pub fn validate(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             self.bitmap_bucket_scan_budget() >= self.max_bitmap_filter_literals(),
             "ledger_history.bitmap_bucket_scan_budget ({}) must be >= \
-             max_bitmap_filter_literals ({}) so every filter leaf gets at least one \
-             bucket before SCAN_LIMIT",
+             max_bitmap_filter_literals ({}) so filtered scans can progress past \
+             each leaf's first bucket before SCAN_LIMIT",
             self.bitmap_bucket_scan_budget(),
             self.max_bitmap_filter_literals(),
         );
