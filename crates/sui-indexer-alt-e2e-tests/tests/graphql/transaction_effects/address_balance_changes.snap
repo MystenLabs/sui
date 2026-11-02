@@ -75,7 +75,7 @@ task 10, line 37:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 992012000
 
-task 11, lines 39-56:
+task 11, lines 39-58:
 //# run-graphql
 Response: {
   "data": {
@@ -119,7 +119,7 @@ Response: {
   }
 }
 
-task 12, lines 58-75:
+task 12, lines 60-79:
 //# run-graphql
 Response: {
   "data": {
@@ -154,7 +154,7 @@ Response: {
   }
 }
 
-task 13, lines 77-94:
+task 13, lines 81-100:
 //# run-graphql
 Response: {
   "data": {

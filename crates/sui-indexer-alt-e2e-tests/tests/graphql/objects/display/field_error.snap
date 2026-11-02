@@ -31,7 +31,7 @@ task 3, line 87:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 89-101:
+task 4, lines 89-103:
 //# run-graphql
 Response: {
   "data": {

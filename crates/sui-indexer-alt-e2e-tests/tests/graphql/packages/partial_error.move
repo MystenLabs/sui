@@ -12,6 +12,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Query module with valid fields and an error field (invalid pagination).
   package(address: "@{P}") {
     module(name: "M") {
@@ -26,8 +27,10 @@ module P::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test partial error at module level
   # One field succeeds, another has partial error
@@ -48,3 +51,4 @@ module P::M {
     }
   }
 }
+*/

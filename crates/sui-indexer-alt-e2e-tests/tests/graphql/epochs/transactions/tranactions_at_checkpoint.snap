@@ -48,7 +48,7 @@ task 7, lines 24-26:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8, lines 28-66:
+task 8, lines 28-68:
 //# run-graphql
 Response: {
   "data": {

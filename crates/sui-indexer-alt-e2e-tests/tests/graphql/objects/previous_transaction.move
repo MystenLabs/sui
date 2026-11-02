@@ -10,6 +10,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_1_0}", version: 2) {
     previousTransaction { digest }
@@ -19,3 +20,4 @@
     digest
   }
 }
+*/

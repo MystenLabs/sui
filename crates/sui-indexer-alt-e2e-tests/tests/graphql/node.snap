@@ -33,7 +33,7 @@ task 4, line 17:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 19-35:
+task 5, lines 19-37:
 //# run-graphql --cursors bcs(0u8,@{A})
 Response: {
   "data": {
@@ -81,7 +81,7 @@ Response: {
   }
 }
 
-task 6, lines 37-46:
+task 6, lines 39-50:
 //# run-graphql --cursors bcs(1u8,0)
 Response: {
   "data": {
@@ -93,7 +93,7 @@ Response: {
   }
 }
 
-task 7, lines 48-62:
+task 7, lines 52-68:
 //# run-graphql --cursors bcs(2u8,@{obj_3_0})
 Response: {
   "data": {
@@ -115,7 +115,7 @@ Response: {
   }
 }
 
-task 8, lines 64-73:
+task 8, lines 70-81:
 //# run-graphql --cursors bcs(4u8,0)
 Response: {
   "data": {
@@ -127,7 +127,7 @@ Response: {
   }
 }
 
-task 9, lines 75-86:
+task 9, lines 83-96:
 //# run-graphql --cursors bcs(5u8,@{obj_0_0})
 Response: {
   "data": {
@@ -146,7 +146,7 @@ Response: {
   }
 }
 
-task 10, lines 88-113:
+task 10, lines 98-125:
 //# run-graphql --cursors bcs(7u8,0x2) bcs(8u8,0x2)
 Response: {
   "data": {
@@ -187,7 +187,7 @@ Response: {
   }
 }
 
-task 11, lines 115-128:
+task 11, lines 127-142:
 //# run-graphql --cursors bcs(8u8,@{obj_0_0})
 Response: {
   "data": {
@@ -208,7 +208,7 @@ Response: {
   }
 }
 
-task 12, lines 130-141:
+task 12, lines 144-157:
 //# run-graphql --cursors bcs(10u8,digest(@{digest_1}))
 Response: {
   "data": {

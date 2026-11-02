@@ -26,6 +26,7 @@ module P2::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package(address: "@{P2}") {
     version
@@ -36,3 +37,4 @@ module P2::M1 {
     }
   }
 }
+*/

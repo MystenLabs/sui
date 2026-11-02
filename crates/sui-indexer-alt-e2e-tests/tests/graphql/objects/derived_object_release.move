@@ -53,6 +53,7 @@ module test::derived {
 //# create-checkpoint
 
 //# run-graphql
+/* ```graphql
 { # A owns the object after checkpoint 1.
   address(address: "@{A}") {
     objects(filter: { type: "@{test}::derived::Child" }) {
@@ -60,6 +61,7 @@ module test::derived {
     }
   }
 }
+``` */
 
 //# programmable --sender A --inputs object(2,0) object(3,1)
 //> 0: test::derived::release(Input(0), Input(1));
@@ -67,6 +69,7 @@ module test::derived {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # The released object is gone from A's objects after checkpoint 2.
   address(address: "@{A}") {
     objects(filter: { type: "@{test}::derived::Child" }) {
@@ -74,6 +77,7 @@ module test::derived {
     }
   }
 }
+*/
 
 //# programmable --sender A --inputs object(2,0) 2u64 @A
 //> 0: test::derived::claim(Input(0), Input(1));
@@ -82,6 +86,7 @@ module test::derived {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # A owns the re-created object after checkpoint 3.
   address(address: "@{A}") {
     objects(filter: { type: "@{test}::derived::Child" }) {
@@ -89,6 +94,7 @@ module test::derived {
     }
   }
 }
+*/
 
 // Released and re-created as a different type in separate transactions of one checkpoint.
 //# programmable --sender A --inputs object(2,0) object(3,1)
@@ -101,6 +107,7 @@ module test::derived {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   objectVersions(address: "@{obj_3_1}") {
     nodes { ...Obj }
@@ -111,8 +118,10 @@ fragment Obj on Object {
   version
   asMoveObject { contents { type { repr } json } }
 }
+*/
 
 //# run-graphql
+/*
 {
   cp1: object(address: "@{obj_3_1}", atCheckpoint: 1) { ...Obj }
   cp2: object(address: "@{obj_3_1}", atCheckpoint: 2) { ...Obj }
@@ -129,8 +138,10 @@ fragment Obj on Object {
   version
   asMoveObject { contents { type { repr } json } }
 }
+*/
 
 //# run-graphql
+/*
 {
   address(address: "@{obj_2_0}") {
     cp1: derivedObject(name: { literal: "0u64" }, atCheckpoint: 1) { ...Obj }
@@ -147,8 +158,10 @@ fragment Obj on MoveObject {
   version
   contents { type { repr } json }
 }
+*/
 
 //# run-graphql
+/*
 {
   claimed: address(address: "@{obj_3_1}") {
     asTransactionObject(transactionDigest: "@{digest_3}") { ...Change }
@@ -173,8 +186,10 @@ fragment Change on ObjectChange {
   inputState { version }
   outputState { version }
 }
+*/
 
 //# run-graphql
+/*
 {
   address(address: "@{A}") {
     children: objects(filter: { type: "@{test}::derived::Child" }) {
@@ -185,3 +200,4 @@ fragment Change on ObjectChange {
     }
   }
 }
+*/

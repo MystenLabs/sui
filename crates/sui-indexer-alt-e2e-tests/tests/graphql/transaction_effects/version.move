@@ -10,8 +10,10 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test version field exposes the effects schema discriminator (V1 -> 1, V2 -> 2)
   transaction: transactionEffects(digest: "@{digest_1}") {
     version
   }
 }
+*/

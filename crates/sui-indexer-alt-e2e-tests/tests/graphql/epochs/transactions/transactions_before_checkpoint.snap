@@ -6,7 +6,7 @@ processed 14 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-14:
+task 1, lines 6-16:
 //# run-graphql
 Response: {
   "data": {
@@ -19,7 +19,7 @@ Response: {
   }
 }
 
-task 2, lines 16-18:
+task 2, lines 18-20:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -27,11 +27,11 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 20:
+task 3, line 22:
 //# advance-epoch
 Epoch advanced: 1
 
-task 4, lines 22-24:
+task 4, lines 24-26:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -39,7 +39,7 @@ created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 26-28:
+task 5, lines 28-30:
 //# programmable --sender A --inputs 43 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -47,11 +47,11 @@ created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 30:
+task 6, line 32:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 7, lines 32-40:
+task 7, lines 34-44:
 //# run-graphql
 Response: {
   "data": {
@@ -79,29 +79,29 @@ Response: {
   }
 }
 
-task 8, line 42:
+task 8, line 46:
 //# advance-epoch
 Epoch advanced: 2
 
-task 9, lines 44-46:
+task 9, lines 48-50:
 //# programmable --sender A --inputs 1
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10, line 48:
+task 10, line 52:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 11, lines 50-52:
+task 11, lines 54-56:
 //# programmable --sender A --inputs 2
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12, lines 54-62:
+task 12, lines 58-68:
 //# run-graphql
 Response: {
   "data": {
@@ -157,7 +157,7 @@ Response: {
   }
 }
 
-task 13, lines 64-72:
+task 13, lines 70-80:
 //# run-graphql
 Response: {
   "data": {

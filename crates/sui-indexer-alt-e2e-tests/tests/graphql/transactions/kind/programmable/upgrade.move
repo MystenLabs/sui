@@ -20,6 +20,7 @@ module test::simple_module {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test UpgradeCommand
   upgradeTest: transaction(digest: "@{digest_2}") {
@@ -45,3 +46,4 @@ module test::simple_module {
     }
   }
 } 
+*/

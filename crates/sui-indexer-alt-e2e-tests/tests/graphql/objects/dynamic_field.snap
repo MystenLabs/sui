@@ -88,7 +88,7 @@ task 12, line 42:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 13, lines 44-68:
+task 13, lines 44-70:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
@@ -156,7 +156,7 @@ Response: {
   }
 }
 
-task 14, lines 70-94:
+task 14, lines 72-98:
 //# run-graphql --cursors bcs(43u64)
 Response: {
   "data": {
@@ -236,7 +236,7 @@ Response: {
   }
 }
 
-task 15, lines 96-125:
+task 15, lines 100-131:
 //# run-graphql --cursors bcs(44u64)
 Response: {
   "data": {
@@ -332,7 +332,7 @@ Response: {
   }
 }
 
-task 16, lines 127-149:
+task 16, lines 133-157:
 //# run-graphql
 Response: {
   "data": {
@@ -340,7 +340,7 @@ Response: {
   }
 }
 
-task 17, lines 151-162:
+task 17, lines 159-172:
 //# run-graphql
 Response: {
   "data": {
@@ -351,7 +351,7 @@ Response: {
   }
 }
 
-task 18, lines 164-170:
+task 18, lines 174-182:
 //# run-graphql
 Response: {
   "data": {
@@ -359,7 +359,7 @@ Response: {
   }
 }
 
-task 19, lines 172-184:
+task 19, lines 184-198:
 //# run-graphql
 Response: {
   "data": {
@@ -381,7 +381,7 @@ Response: {
   }
 }
 
-task 20, lines 186-202:
+task 20, lines 200-218:
 //# run-graphql
 Response: {
   "data": {
@@ -440,7 +440,7 @@ Response: {
   }
 }
 
-task 21, lines 204-234:
+task 21, lines 220-252:
 //# run-graphql --cursors bcs(42u64) bcs(43u64) bcs(45u64)
 Response: {
   "data": {
@@ -723,7 +723,7 @@ Response: {
   }
 }
 
-task 22, lines 236-260:
+task 22, lines 254-280:
 //# run-graphql --cursors bcs(42u64) bcs(43u64) bcs(45u64)
 Response: {
   "data": {
@@ -865,18 +865,18 @@ Response: {
   }
 }
 
-task 23, lines 262-264:
+task 23, lines 282-284:
 //# programmable --sender A --inputs object(1,0) 42u64 1000u64
 //> 0: sui::bag::remove<u64, u64>(Input(0), Input(1));
 //> 1: sui::bag::add<u64, u64>(Input(0), Input(1), Input(2));
 mutated: object(0,0), object(1,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 3754400,  storage_rebate: 3716856, non_refundable_storage_fee: 37544
 
-task 24, line 266:
+task 24, line 286:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 25, lines 268-286:
+task 25, lines 288-308:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
@@ -946,7 +946,7 @@ Response: {
   }
 }
 
-task 26, lines 288-292:
+task 26, lines 310-314:
 //# programmable --sender A --inputs object(2,0) 44u64 50u64
 //> 0: sui::object_bag::remove<u64, sui::coin::Coin<sui::sui::SUI>>(Input(0), Input(1));
 //> 1: SplitCoins(Gas, [Input(2)]);
@@ -955,11 +955,11 @@ task 26, lines 288-292:
 mutated: object(0,0), object(2,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 3374400,  storage_rebate: 3340656, non_refundable_storage_fee: 33744
 
-task 27, line 294:
+task 27, line 316:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 28, lines 296-318:
+task 28, lines 318-342:
 //# run-graphql --cursors bcs(44u64)
 Response: {
   "data": {

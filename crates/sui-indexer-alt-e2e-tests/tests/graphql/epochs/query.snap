@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-65:
+task 6, lines 16-67:
 //# run-graphql
 Response: {
   "data": {
@@ -337,7 +337,7 @@ Response: {
   }
 }
 
-task 7, lines 67-117:
+task 7, lines 69-121:
 //# run-graphql
 Response: {
   "data": {

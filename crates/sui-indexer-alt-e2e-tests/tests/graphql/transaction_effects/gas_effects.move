@@ -24,6 +24,7 @@ module test::gas_test {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test gas_effects field with gasObject and gasSummary
   transferTransaction: transactionEffects(digest: "@{digest_1}") {
     gasEffects {
@@ -41,8 +42,10 @@ module test::gas_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test gas_effects on function call transaction
   functionCallTransaction: transactionEffects(digest: "@{digest_3}") {
     gasEffects {
@@ -60,8 +63,10 @@ module test::gas_test {
     }
   }
 } 
+*/
 
 //# run-graphql
+/*
 { # Test gas_effects on system transaction
   functionCallTransaction: transactionEffects(digest: "@{digest_5}") {
     gasEffects {
@@ -79,3 +84,4 @@ module test::gas_test {
     }
   }
 } 
+*/

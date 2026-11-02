@@ -34,6 +34,7 @@ module test::simple {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test basic ProgrammableTransaction structure
   programmableTransaction: transaction(digest: "@{digest_2}") {
@@ -75,8 +76,10 @@ module test::simple {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test pagination on the same transaction - limiting results to show pagination working
   paginationTest: transaction(digest: "@{digest_2}") {
@@ -118,3 +121,4 @@ module test::simple {
     }
   }
 }
+*/

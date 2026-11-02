@@ -47,6 +47,7 @@ module test::events_test {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test events field on transaction with single event
   singleEventTransaction: transactionEffects(digest: "@{digest_2}") {
     events {
@@ -76,8 +77,10 @@ module test::events_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test events field on transaction with multiple events
   multipleEventsTransaction: transactionEffects(digest: "@{digest_3}") {
     events {
@@ -107,8 +110,10 @@ module test::events_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test pagination functionality with multiple events
   paginationTest: transactionEffects(digest: "@{digest_3}") {
     events(first: 1) {
@@ -138,8 +143,10 @@ module test::events_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test backward pagination functionality with with multiple events
   backwardPaginationTest: transactionEffects(digest: "@{digest_3}") {
     events(last: 1) {
@@ -169,8 +176,10 @@ module test::events_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Test events field on transaction with no events
   noEventsTransaction: transactionEffects(digest: "@{digest_4}") {
     events {
@@ -200,8 +209,10 @@ module test::events_test {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 1000 2000
+/*
 { # Test cursors being out of bounds
   outOfBounds: transactionEffects(digest: "@{digest_3}") {
     events(after: "@{cursor_0}", before: "@{cursor_1}") {
@@ -215,3 +226,4 @@ module test::events_test {
     }
   }
 }
+*/

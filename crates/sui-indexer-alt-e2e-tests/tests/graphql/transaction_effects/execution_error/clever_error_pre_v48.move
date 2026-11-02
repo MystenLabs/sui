@@ -35,6 +35,7 @@ module test::clever_error_pre_v48 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Display package address to verify the upgraded package is being used in executionError
   originalPackage: object(address: "@{obj_1_0}") {
@@ -64,3 +65,4 @@ module test::clever_error_pre_v48 {
     }
   }
 }
+*/

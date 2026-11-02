@@ -6,7 +6,7 @@ processed 6 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-39:
+task 1, lines 6-41:
 //# run-graphql
 Response: {
   "data": {
@@ -47,15 +47,15 @@ Response: {
   }
 }
 
-task 2, line 41:
+task 2, line 43:
 //# advance-epoch
 Epoch advanced: 1
 
-task 3, line 43:
+task 3, line 45:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 4, lines 45-78:
+task 4, lines 47-82:
 //# run-graphql
 Response: {
   "data": {
@@ -139,7 +139,7 @@ Response: {
   }
 }
 
-task 5, lines 80-103:
+task 5, lines 84-109:
 //# run-graphql
 Response: {
   "data": {

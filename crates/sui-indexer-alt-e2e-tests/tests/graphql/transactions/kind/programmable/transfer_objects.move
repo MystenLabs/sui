@@ -39,6 +39,7 @@ module test::transfer_test {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Send a single Result object 
   sendSingleResultObject: transaction(digest: "@{digest_2}") {
@@ -67,8 +68,10 @@ module test::transfer_test {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Send multiple Result object 
   sendMultipleResultObjects: transaction(digest: "@{digest_4}") {
@@ -97,4 +100,5 @@ module test::transfer_test {
     }
   }
 }
+*/
  
