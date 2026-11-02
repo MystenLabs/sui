@@ -115,8 +115,8 @@ impl LegacyToken {
     /// Decode a JSON cursor. It carries no kind or checkpoint label, so it decodes as an item
     /// labelled checkpoint 0, like the protobuf cursors Postgres-backed pagination issued.
     ///
-    /// Accepted through 1.83 only: every page GraphQL returns carries cursors in its own format, so
-    /// a client paginating from one of these moves off it with its next request.
+    /// Accepted through 1.83 only, giving clients that still hold these cursors one release to
+    /// switch to cursors GraphQL issues.
     pub fn decode_json(bytes: &[u8]) -> anyhow::Result<Self> {
         let position = match serde_json::from_slice(bytes).context("not a JSON cursor")? {
             JsonCursor::Checkpoint(checkpoint) => LegacyPosition::Checkpoints { checkpoint },
