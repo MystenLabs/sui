@@ -329,10 +329,9 @@ fn transaction_item_watermark(
 ) -> Watermark {
     item_watermark(
         Position::Transactions {
-            checkpoint: cp,
             tx_seq: tx_lo + transaction_index,
+            public_position: LedgerPoint::transaction(cp, transaction_index).into(),
         },
-        LedgerPoint::transaction(cp, transaction_index),
         ScanDirection::Ascending,
         boundary,
     )
@@ -349,11 +348,10 @@ fn event_item_watermark(
 ) -> Watermark {
     item_watermark(
         Position::Events {
-            checkpoint: cp,
             tx_seq: tx_lo + transaction_index,
             event_index,
+            public_position: LedgerPoint::event(cp, transaction_index, event_index).into(),
         },
-        LedgerPoint::event(cp, transaction_index, event_index),
         ScanDirection::Ascending,
         boundary,
     )
@@ -364,10 +362,9 @@ fn event_item_watermark(
 fn transaction_tick_watermark(cp: u64, tx_hi: u64, boundary: Option<u64>) -> Watermark {
     boundary_watermark(
         Position::Transactions {
-            checkpoint: cp + 1,
             tx_seq: tx_hi,
+            public_position: LedgerPoint::checkpoint_start(cp + 1).into(),
         },
-        LedgerPoint::checkpoint_start(cp + 1),
         boundary,
     )
 }
@@ -376,11 +373,10 @@ fn transaction_tick_watermark(cp: u64, tx_hi: u64, boundary: Option<u64>) -> Wat
 fn event_tick_watermark(cp: u64, tx_hi: u64, boundary: Option<u64>) -> Watermark {
     boundary_watermark(
         Position::Events {
-            checkpoint: cp + 1,
             tx_seq: tx_hi,
             event_index: 0,
+            public_position: LedgerPoint::checkpoint_start(cp + 1).into(),
         },
-        LedgerPoint::checkpoint_start(cp + 1),
         boundary,
     )
 }
@@ -587,18 +583,14 @@ mod tests {
 
         assert_eq!(entry_checkpoint, Some(42));
         assert_eq!(watermark.checkpoint, Some(41));
-        let cursor = Position::Transactions {
-            checkpoint: 42,
-            tx_seq: 100,
-        };
         let point = LedgerPoint::checkpoint_start(42);
+        let cursor = Position::Transactions {
+            tx_seq: 100,
+            public_position: point.into(),
+        };
         assert_eq!(
             watermark.cursor,
-            Some(
-                sui_rpc_cursor::CursorToken::boundary(cursor)
-                    .with_public_position(point.public_position(&cursor))
-                    .encode()
-            )
+            Some(sui_rpc_cursor::CursorToken::boundary(cursor).encode())
         );
         assert_eq!(watermark.cursor_position, Some(point.to_proto(&cursor)));
     }
@@ -649,40 +641,25 @@ mod tests {
         assert_eq!(
             cursor(&transaction_frames[0]),
             sui_rpc_cursor::CursorToken::item(Position::Transactions {
-                checkpoint: 7,
                 tx_seq: 30,
+                public_position: LedgerPoint::transaction(7, 0).into(),
             })
-            .with_public_position(Some(sui_rpc_cursor::PublicPosition {
-                checkpoint: 7,
-                transaction_index: 0,
-                event_index: 0,
-            }))
         );
         assert_eq!(
             cursor(&event_frames[1]),
             sui_rpc_cursor::CursorToken::item(Position::Events {
-                checkpoint: 7,
                 tx_seq: 31,
                 event_index: 1,
+                public_position: LedgerPoint::event(7, 1, 1).into(),
             })
-            .with_public_position(Some(sui_rpc_cursor::PublicPosition {
-                checkpoint: 7,
-                transaction_index: 1,
-                event_index: 1,
-            }))
         );
         assert_eq!(
             cursor(&event_frames[2]),
             sui_rpc_cursor::CursorToken::boundary(Position::Events {
-                checkpoint: 8,
                 tx_seq: 33,
                 event_index: 0,
+                public_position: LedgerPoint::checkpoint_start(8).into(),
             })
-            .with_public_position(Some(sui_rpc_cursor::PublicPosition {
-                checkpoint: 8,
-                transaction_index: 0,
-                event_index: 0,
-            }))
         );
     }
 

@@ -27,7 +27,6 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
-use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::LedgerWindow;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
@@ -365,7 +364,6 @@ fn drive_rendered_checkpoints(
                         Position::Checkpoints {
                             checkpoint: item_checkpoint,
                         },
-                        LedgerPoint::checkpoint_start(item_checkpoint),
                         direction,
                         covered_checkpoint_bound,
                     );
@@ -473,7 +471,6 @@ fn checkpoint_frontier_watermark(
         Position::Checkpoints {
             checkpoint: resume_checkpoint,
         },
-        LedgerPoint::checkpoint_start(resume_checkpoint),
         *covered_checkpoint_bound,
     )
 }
@@ -485,22 +482,9 @@ fn terminal_response_from_scan_stop(
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
-    let (position, frontier) = stop.into_scan_limit()?;
-    let checkpoint_at_frontier = frontier
-        .map(|frontier| frontier.checkpoint)
-        .or_else(|| {
-            ((direction.is_ascending() && position == 0)
-                || (!direction.is_ascending() && position == u64::MAX))
-                .then_some(position)
-        })
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "checkpoint scan frontier transaction {position} has no checkpoint mapping"
-                ),
-            )
-        })?;
+    let (_, frontier) = stop.into_scan_limit()?;
+    // Unplaced only at the ascending genesis frontier, in checkpoint 0.
+    let checkpoint_at_frontier = frontier.map_or(0, |frontier| frontier.checkpoint);
     let terminal = ScanTerminal::ScanLimit {
         watermark: checkpoint_frontier_watermark(
             checkpoint_at_frontier,
@@ -671,7 +655,7 @@ fn resolve_cp_range(
     let ledger = LedgerWindow::checkpoints(&range, start_checkpoint, end_checkpoint);
     let window = ScanWindow::whole_checkpoints(range, ledger);
     let resolved = ResolvedScan::<u64>::resolve(cp_range, window.clone(), options)?;
-    let range_end = resolved.range_end(&window, options, |_, checkpoint| Position::Checkpoints {
+    let range_end = resolved.range_end(&window, options, |checkpoint, _| Position::Checkpoints {
         checkpoint,
     });
     Ok((resolved, range_end))
@@ -715,7 +699,7 @@ fn clamp_cp_frontier_past_last(
 mod tests {
     use super::*;
     use mysten_common::ZipDebugEqIteratorExt;
-    use sui_rpc_api::ledger_history::ledger_point::TerminalLedgerPosition;
+    use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
     use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
     use sui_rpc_cursor::CursorToken;
 
@@ -799,7 +783,7 @@ mod tests {
             RangeEnd {
                 exhaustion: RangeExhaustion::CheckpointBound,
                 position: Position::Checkpoints { checkpoint: 10 },
-                ledger: TerminalLedgerPosition::known(LedgerPoint::checkpoint_start(10)),
+                cursor_position: LedgerPoint::checkpoint_start(10),
                 natural_end_claim: Some(9),
             },
             7,
@@ -993,15 +977,6 @@ mod tests {
             expected_proof,
         ) in [
             (ScanDirection::Ascending, 0, 0, None, None, 0, None),
-            (
-                ScanDirection::Descending,
-                u64::MAX,
-                u64::MAX,
-                None,
-                None,
-                u64::MAX,
-                None,
-            ),
             (ScanDirection::Ascending, 10, 50, Some(10), None, 10, None),
             (ScanDirection::Descending, 10, 50, Some(10), None, 11, None),
             (
@@ -1089,41 +1064,6 @@ mod tests {
                 covered, expected_proof,
                 "accumulated checkpoint proof must match the emitted watermark"
             );
-        }
-    }
-
-    #[test]
-    fn scan_limit_terminal_rejects_missing_non_edge_checkpoint_mapping() {
-        for (direction, position) in [
-            (ScanDirection::Ascending, 1),
-            (ScanDirection::Descending, u64::MAX - 1),
-        ] {
-            let mut proto_options = ascending_options();
-            if !direction.is_ascending() {
-                proto_options.ordering =
-                    Some(sui_rpc::proto::sui::rpc::v2::Ordering::Descending as i32);
-            }
-            let options =
-                QueryOptions::checkpoints_from_proto(Some(&proto_options), 10, 100).unwrap();
-            let mut covered = None;
-            let entry_checkpoint = if direction.is_ascending() {
-                0
-            } else {
-                u64::MAX
-            };
-            let error = terminal_response_from_scan_stop(
-                ResolvedScanStop::ScanLimit {
-                    position,
-                    frontier: None,
-                },
-                &options,
-                direction,
-                entry_checkpoint,
-                &mut covered,
-            )
-            .expect_err("only numeric-edge frontiers may omit a checkpoint mapping");
-
-            assert_eq!(error.into_status_proto().code, tonic::Code::Internal as i32);
         }
     }
 

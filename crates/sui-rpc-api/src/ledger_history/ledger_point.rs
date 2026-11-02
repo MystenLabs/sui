@@ -8,10 +8,10 @@
 //! transaction_index, event_index)`; it orders lexicographically, an unset index counting as 0
 //! (see `LedgerPosition` in `query_options.proto`). Cursors name the same boundaries by
 //! `tx_seq`, which stays private, and carry the public position of their coordinate
-//! ([`CursorToken::public_position`]), so a server places any cursor it minted without a read.
-//! A scan frontier is placed by the index row (checkpoint and position in it) of one
-//! transaction the scan already reads: [`RowPlacement`] says which one, and how its row places
-//! the boundary. Checkpoint boundaries, the request's own fields, and items need no read.
+//! ([`Position::public_position`]), so a server places any cursor without a read. A scan
+//! frontier is placed by the index row (checkpoint and position in it) of one transaction the
+//! scan already reads: [`RowPlacement`] says which one, and how its row places the boundary.
+//! Checkpoint boundaries, the request's own fields, and items need no read.
 
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::LedgerPosition;
@@ -67,26 +67,28 @@ impl LedgerPoint {
         }
     }
 
-    /// The resume point of a frame carrying the item keyed `self`, in the lane of its cursor
-    /// `position`: ascending, the boundary right after the item (the key with its finest index
-    /// incremented, never carried into the next transaction or checkpoint); descending, the key.
-    pub fn item_resume(self, position: &Position, direction: ScanDirection) -> Self {
+    /// The resume point of a frame carrying the item at cursor `position`, whose public position
+    /// is the item's key: ascending, the boundary right after the item (the key with its lane's
+    /// finest index incremented, never carried into the next transaction or checkpoint);
+    /// descending, the key.
+    pub fn item_resume(position: &Position, direction: ScanDirection) -> Self {
+        let key = Self::from(position.public_position());
         if !direction.is_ascending() {
-            return self;
+            return key;
         }
         // The finest index of a real item never reaches its numeric maximum; saturating keeps
-        // the impossible edge from wrapping.
+        // the impossible edge, which a client's cursor can still name, from wrapping.
         match position {
             Position::Checkpoints { .. } => {
-                Self::checkpoint_start(self.checkpoint.saturating_add(1))
+                Self::checkpoint_start(key.checkpoint.saturating_add(1))
             }
             Position::Transactions { .. } => {
-                Self::transaction(self.checkpoint, self.transaction_index.saturating_add(1))
+                Self::transaction(key.checkpoint, key.transaction_index.saturating_add(1))
             }
             Position::Events { .. } => Self::event(
-                self.checkpoint,
-                self.transaction_index,
-                self.event_index.saturating_add(1),
+                key.checkpoint,
+                key.transaction_index,
+                key.event_index.saturating_add(1),
             ),
         }
     }
@@ -104,35 +106,29 @@ impl LedgerPoint {
         }
     }
 
-    /// The public position of `cursor`'s coordinate: a checkpoint cursor's checkpoint start, or
-    /// the public position a transaction or event cursor carries, `None` for one minted without
-    /// it.
-    pub fn of_cursor(cursor: &CursorToken) -> Option<Self> {
-        match cursor.position {
-            Position::Checkpoints { checkpoint } => Some(Self::checkpoint_start(checkpoint)),
-            Position::Transactions { .. } | Position::Events { .. } => {
-                cursor.public_position.map(|position| Self {
-                    checkpoint: position.checkpoint,
-                    transaction_index: position.transaction_index,
-                    event_index: position.event_index,
-                })
-            }
+    /// The public position of `cursor`'s coordinate (see [`Position::public_position`]).
+    pub fn of_cursor(cursor: &CursorToken) -> Self {
+        cursor.position.public_position().into()
+    }
+}
+
+impl From<PublicPosition> for LedgerPoint {
+    fn from(position: PublicPosition) -> Self {
+        Self {
+            checkpoint: position.checkpoint,
+            transaction_index: position.transaction_index,
+            event_index: position.event_index,
         }
     }
+}
 
-    /// This point as the public position of a cursor at `position`: `None` for a checkpoint
-    /// cursor, whose checkpoint is already exact; a transaction cursor's carries no event index.
-    pub fn public_position(self, position: &Position) -> Option<PublicPosition> {
-        let event_index = match position {
-            Position::Checkpoints { .. } => return None,
-            Position::Transactions { .. } => 0,
-            Position::Events { .. } => self.event_index,
-        };
-        Some(PublicPosition {
-            checkpoint: self.checkpoint,
-            transaction_index: self.transaction_index,
-            event_index,
-        })
+impl From<LedgerPoint> for PublicPosition {
+    fn from(point: LedgerPoint) -> Self {
+        Self {
+            checkpoint: point.checkpoint,
+            transaction_index: point.transaction_index,
+            event_index: point.event_index,
+        }
     }
 }
 
@@ -189,63 +185,63 @@ impl RowPlacement {
     }
 }
 
-/// Where a list scan's terminal frame resumes in ledger coordinates, and the public position of
-/// its cursor (see [`ResolvedScan::end_ledger_position`]). Both are known without a read: from a
-/// window edge, the serving floor, the request's own start or end fields, or the public position
-/// a request cursor carries.
-///
-/// Either is unset only for a request cursor minted without a public position.
-///
-/// Item and frontier frames carry one too: an item frame resumes past its item, whose key its
-/// cursor carries, and a frontier frame and its cursor share one point.
-///
-/// [`ResolvedScan::end_ledger_position`]: crate::ledger_history::query_options::ResolvedScan::end_ledger_position
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct TerminalLedgerPosition {
-    /// The frame's `cursor_position`.
-    pub cursor_position: Option<LedgerPoint>,
-    /// The public position of the frame's cursor, the point of the scan's end position. It differs
-    /// from `cursor_position` where the frame's resume point is clamped to the request's start
-    /// (ascending) or end (descending) past the cursor's position. A request cursor that names the
-    /// end position keeps its own, or none, so the cursor it is echoed as keeps its bytes.
-    pub cursor_point: Option<LedgerPoint>,
-}
-
-impl TerminalLedgerPosition {
-    /// A frame and cursor that both resume at `point`.
-    pub fn known(point: LedgerPoint) -> Self {
-        Self {
-            cursor_position: Some(point),
-            cursor_point: Some(point),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const TX: Position = Position::Transactions {
-        checkpoint: 0,
         tx_seq: 0,
+        public_position: PublicPosition {
+            checkpoint: 0,
+            transaction_index: 0,
+            event_index: 0,
+        },
     };
     const EVENT: Position = Position::Events {
-        checkpoint: 0,
         tx_seq: 0,
         event_index: 0,
+        public_position: PublicPosition {
+            checkpoint: 0,
+            transaction_index: 0,
+            event_index: 0,
+        },
     };
     const CHECKPOINT: Position = Position::Checkpoints { checkpoint: 0 };
 
     #[test]
     fn item_resume_is_above_the_key_ascending_and_the_key_descending() {
-        let key = LedgerPoint::event(4, 2, 1);
-        for (lane, above) in [
-            (CHECKPOINT, LedgerPoint::checkpoint_start(5)),
-            (TX, LedgerPoint::transaction(4, 3)),
-            (EVENT, LedgerPoint::event(4, 2, 2)),
+        for (item, key, above) in [
+            (
+                Position::Checkpoints { checkpoint: 4 },
+                LedgerPoint::checkpoint_start(4),
+                LedgerPoint::checkpoint_start(5),
+            ),
+            (
+                Position::Transactions {
+                    tx_seq: 9,
+                    public_position: LedgerPoint::transaction(4, 2).into(),
+                },
+                LedgerPoint::transaction(4, 2),
+                LedgerPoint::transaction(4, 3),
+            ),
+            (
+                Position::Events {
+                    tx_seq: 9,
+                    event_index: 1,
+                    public_position: LedgerPoint::event(4, 2, 1).into(),
+                },
+                LedgerPoint::event(4, 2, 1),
+                LedgerPoint::event(4, 2, 2),
+            ),
         ] {
-            assert_eq!(key.item_resume(&lane, ScanDirection::Ascending), above);
-            assert_eq!(key.item_resume(&lane, ScanDirection::Descending), key);
+            assert_eq!(
+                LedgerPoint::item_resume(&item, ScanDirection::Ascending),
+                above
+            );
+            assert_eq!(
+                LedgerPoint::item_resume(&item, ScanDirection::Descending),
+                key
+            );
         }
     }
 
@@ -275,26 +271,6 @@ mod tests {
             (event.checkpoint, event.transaction_index, event.event_index),
             (Some(4), Some(2), Some(1))
         );
-    }
-
-    #[test]
-    fn cursors_carry_the_public_position_of_their_coordinate() {
-        let point = LedgerPoint::event(4, 2, 1);
-        // A checkpoint cursor carries none: its checkpoint is its point.
-        assert_eq!(point.public_position(&CHECKPOINT), None);
-        let checkpoint = CursorToken::item(Position::Checkpoints { checkpoint: 7 });
-        assert_eq!(
-            LedgerPoint::of_cursor(&checkpoint),
-            Some(LedgerPoint::checkpoint_start(7))
-        );
-
-        // A transaction cursor drops the event index; an event cursor keeps it.
-        for (lane, carried) in [(TX, LedgerPoint::transaction(4, 2)), (EVENT, point)] {
-            let cursor = CursorToken::boundary(lane);
-            assert_eq!(LedgerPoint::of_cursor(&cursor), None, "minted without it");
-            let cursor = cursor.with_public_position(point.public_position(&lane));
-            assert_eq!(LedgerPoint::of_cursor(&cursor), Some(carried));
-        }
     }
 
     #[test]

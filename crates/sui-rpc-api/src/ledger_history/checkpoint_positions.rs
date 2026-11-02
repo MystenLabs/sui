@@ -303,7 +303,6 @@ mod tests {
     use sui_rpc_cursor::CursorToken;
     use sui_rpc_cursor::Position;
 
-    use crate::ledger_history::ledger_point::TerminalLedgerPosition;
     use crate::ledger_history::query_options::Ordering;
     use crate::ledger_history::query_options::QueryOptions;
     use crate::ledger_history::query_options::RangeExhaustion;
@@ -356,34 +355,33 @@ mod tests {
         request
     }
 
+    /// Boundary cursors at `after` and `before`.
     fn options(
         ordering: Ordering,
         after: Option<Position>,
         before: Option<Position>,
     ) -> QueryOptions {
-        cursor_options(
-            ordering,
-            after.map(CursorToken::boundary),
-            before.map(CursorToken::boundary),
-        )
-    }
-
-    fn cursor_options(
-        ordering: Ordering,
-        after: Option<CursorToken>,
-        before: Option<CursorToken>,
-    ) -> QueryOptions {
         let mut proto = ProtoQueryOptions::default();
         if ordering == Ordering::Descending {
             proto.ordering = Some(ProtoOrdering::Descending as i32);
         }
-        proto.after = after.map(|cursor| cursor.encode());
-        proto.before = before.map(|cursor| cursor.encode());
+        proto.after = after.map(|position| CursorToken::boundary(position).encode());
+        proto.before = before.map(|position| CursorToken::boundary(position).encode());
         QueryOptions::transactions_from_proto(Some(&proto), 100, 100).unwrap()
     }
 
-    fn tx_position(checkpoint: u64, tx_seq: u64) -> Position {
-        Position::Transactions { checkpoint, tx_seq }
+    /// A cursor position at transaction `tx_seq` of the model ledger, carrying its public
+    /// position.
+    fn tx_position(tx_seq: u64) -> Position {
+        let checkpoint = BOUNDARIES[1..]
+            .iter()
+            .position(|end| tx_seq < *end)
+            .unwrap();
+        let transaction_index = tx_seq - BOUNDARIES[checkpoint];
+        Position::Transactions {
+            tx_seq,
+            public_position: LedgerPoint::transaction(checkpoint as u64, transaction_index).into(),
+        }
     }
 
     fn resolve_transactions(
@@ -414,11 +412,12 @@ mod tests {
         IntraTxCoordinate { tx_seq, index }
     }
 
-    /// Where a transactions request's terminal resumes in ledger coordinates.
+    /// Where a transactions request's terminal frame resumes in ledger coordinates, and the
+    /// public position of its cursor.
     fn transactions_terminal(
         request: &ListTransactionsRequest,
         options: &QueryOptions,
-    ) -> TerminalLedgerPosition {
+    ) -> (LedgerPoint, LedgerPoint) {
         let positions = CheckpointPositions::from_transactions_request(request).unwrap();
         let cp_range = ResolvedCheckpointRange::from_request(
             request.start_checkpoint,
@@ -430,9 +429,11 @@ mod tests {
         let window = positions
             .transaction_window(&cp_range.range, boundary)
             .unwrap();
-        ResolvedScan::resolve(cp_range, window.clone(), options)
-            .unwrap()
-            .end_ledger_position(&window, options)
+        let resolved = ResolvedScan::resolve(cp_range, window.clone(), options).unwrap();
+        (
+            resolved.end_ledger_position(&window, options),
+            resolved.end_cursor_point(options),
+        )
     }
 
     /// A window's edges in ledger coordinates are the request's own positions, clamped past a
@@ -486,73 +487,61 @@ mod tests {
     }
 
     /// A terminal at the request's own position, or at a request cursor's, needs no read: a
-    /// cursor places it by the public position it carries, and one without leaves it unset.
+    /// cursor places it by the public position it carries.
     #[test]
     fn terminal_at_a_request_position_needs_no_read() {
         // Scans transactions 4..8; transaction 5 is at index 2 of checkpoint 2.
         let request = transactions_request(Some(2), Some(4), Some(1), Some(1));
+        let point = LedgerPoint::transaction(3, 1);
         assert_eq!(
             transactions_terminal(&request, &options(Ordering::Ascending, None, None)),
-            TerminalLedgerPosition::known(LedgerPoint::transaction(3, 1))
+            (point, point)
         );
+        let point = LedgerPoint::transaction(2, 1);
         assert_eq!(
             transactions_terminal(&request, &options(Ordering::Descending, None, None)),
-            TerminalLedgerPosition::known(LedgerPoint::transaction(2, 1))
-        );
-        assert_eq!(
-            transactions_terminal(
-                &request,
-                &options(Ordering::Ascending, None, Some(tx_position(2, 5)))
-            ),
-            TerminalLedgerPosition::default()
-        );
-        assert_eq!(
-            transactions_terminal(
-                &request,
-                &options(Ordering::Descending, Some(tx_position(2, 5)), None)
-            ),
-            TerminalLedgerPosition::default()
+            (point, point)
         );
         let point = LedgerPoint::transaction(2, 2);
-        let placed = CursorToken::boundary(tx_position(2, 5))
-            .with_public_position(point.public_position(&tx_position(2, 5)));
         assert_eq!(
             transactions_terminal(
                 &request,
-                &cursor_options(Ordering::Ascending, None, Some(placed.clone()))
+                &options(Ordering::Ascending, None, Some(tx_position(5)))
             ),
-            TerminalLedgerPosition::known(point)
+            (point, point)
         );
         assert_eq!(
             transactions_terminal(
                 &request,
-                &cursor_options(Ordering::Descending, Some(placed), None)
+                &options(Ordering::Descending, Some(tx_position(5)), None)
             ),
-            TerminalLedgerPosition::known(point)
+            (point, point)
         );
         // A window of only the empty checkpoint 1 is one scan position; its terminal names the
         // edge in scan direction, the one its checkpoint claim reaches.
         let empty_checkpoint = transactions_request(Some(1), Some(2), None, None);
+        let point = LedgerPoint::checkpoint_start(2);
         assert_eq!(
             transactions_terminal(&empty_checkpoint, &options(Ordering::Ascending, None, None)),
-            TerminalLedgerPosition::known(LedgerPoint::checkpoint_start(2))
+            (point, point)
         );
+        let point = LedgerPoint::checkpoint_start(1);
         assert_eq!(
             transactions_terminal(
                 &empty_checkpoint,
                 &options(Ordering::Descending, None, None)
             ),
-            TerminalLedgerPosition::known(LedgerPoint::checkpoint_start(1))
+            (point, point)
         );
         // Ascending past the tip, the terminal echoes the request's start fields, behind a
         // cursor at the tip.
         let past_tip = transactions_request(Some(TIP + 2), None, Some(3), None);
         assert_eq!(
             transactions_terminal(&past_tip, &options(Ordering::Ascending, None, None)),
-            TerminalLedgerPosition {
-                cursor_position: Some(LedgerPoint::transaction(TIP + 2, 3)),
-                cursor_point: Some(LedgerPoint::checkpoint_start(TIP)),
-            }
+            (
+                LedgerPoint::transaction(TIP + 2, 3),
+                LedgerPoint::checkpoint_start(TIP)
+            )
         );
     }
 
@@ -560,15 +549,15 @@ mod tests {
         error.into_status_proto().code == tonic::Code::InvalidArgument as i32
     }
 
-    /// What a resolved scan ends with: `(range, terminal cursor's checkpoint field, terminal
+    /// What a resolved scan ends with: `(range, terminal cursor's public position, terminal
     /// position, end reason, natural end claim)`.
     fn terminal(
         resolved: &ResolvedScan<u64>,
         options: &QueryOptions,
-    ) -> (Range<u64>, u64, u64, RangeExhaustion, Option<u64>) {
+    ) -> (Range<u64>, LedgerPoint, u64, RangeExhaustion, Option<u64>) {
         (
             resolved.range(),
-            resolved.end_checkpoint,
+            resolved.end_cursor_point(options),
             resolved.end_position,
             resolved.exhaustion,
             resolved.natural_end_claim(options),
@@ -587,8 +576,20 @@ mod tests {
             let unset = transactions_request(Some(2), Some(4), None, None);
             let zero = transactions_request(Some(2), Some(4), Some(0), None);
             let expected = match ordering {
-                Ordering::Ascending => (3..9, 4, 9, CHECKPOINT_BOUND, Some(3)),
-                Ordering::Descending => (3..9, 2, 3, CHECKPOINT_BOUND, Some(2)),
+                Ordering::Ascending => (
+                    3..9,
+                    LedgerPoint::checkpoint_start(4),
+                    9,
+                    CHECKPOINT_BOUND,
+                    Some(3),
+                ),
+                Ordering::Descending => (
+                    3..9,
+                    LedgerPoint::checkpoint_start(2),
+                    3,
+                    CHECKPOINT_BOUND,
+                    Some(2),
+                ),
             };
             assert_eq!(
                 terminal(&resolve_transactions(&unset, &options), &options),
@@ -610,17 +611,30 @@ mod tests {
         let ascending = options(Ordering::Ascending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (4..9, 4, 9, CHECKPOINT_BOUND, Some(3))
+            (
+                4..9,
+                LedgerPoint::checkpoint_start(4),
+                9,
+                CHECKPOINT_BOUND,
+                Some(3)
+            )
         );
         let descending = options(Ordering::Descending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &descending), &descending),
-            (4..9, 3, 4, CHECKPOINT_BOUND, Some(3))
+            (
+                4..9,
+                LedgerPoint::transaction(2, 1),
+                4,
+                CHECKPOINT_BOUND,
+                Some(3)
+            )
         );
     }
 
     /// The end position lies in `end_checkpoint - 1`, and an ascending scan that stops inside it
-    /// does not claim it. Index 0 excludes that whole checkpoint.
+    /// does not claim it, so one that stops inside checkpoint 0 claims none. Index 0 excludes that
+    /// whole checkpoint.
     #[test]
     fn end_position_inside_last_checkpoint() {
         let ascending = options(Ordering::Ascending, None, None);
@@ -628,17 +642,47 @@ mod tests {
         let request = transactions_request(Some(2), Some(4), None, Some(1));
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (3..8, 3, 8, CHECKPOINT_BOUND, Some(2))
+            (
+                3..8,
+                LedgerPoint::transaction(3, 1),
+                8,
+                CHECKPOINT_BOUND,
+                Some(2)
+            )
         );
         assert_eq!(
             terminal(&resolve_transactions(&request, &descending), &descending),
-            (3..8, 2, 3, CHECKPOINT_BOUND, Some(2))
+            (
+                3..8,
+                LedgerPoint::checkpoint_start(2),
+                3,
+                CHECKPOINT_BOUND,
+                Some(2)
+            )
         );
 
         let request = transactions_request(Some(2), Some(4), None, Some(0));
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (3..7, 3, 7, CHECKPOINT_BOUND, Some(2))
+            (
+                3..7,
+                LedgerPoint::transaction(3, 0),
+                7,
+                CHECKPOINT_BOUND,
+                Some(2)
+            )
+        );
+
+        let genesis = transactions_request(Some(0), Some(1), None, Some(1));
+        assert_eq!(
+            terminal(&resolve_transactions(&genesis, &ascending), &ascending),
+            (
+                0..1,
+                LedgerPoint::transaction(0, 1),
+                1,
+                CHECKPOINT_BOUND,
+                None
+            )
         );
     }
 
@@ -652,12 +696,24 @@ mod tests {
             let ascending = options(Ordering::Ascending, None, None);
             assert_eq!(
                 terminal(&resolve_transactions(&request, &ascending), &ascending),
-                (7..9, 4, 9, CHECKPOINT_BOUND, Some(3))
+                (
+                    7..9,
+                    LedgerPoint::checkpoint_start(4),
+                    9,
+                    CHECKPOINT_BOUND,
+                    Some(3)
+                )
             );
             let descending = options(Ordering::Descending, None, None);
             assert_eq!(
                 terminal(&resolve_transactions(&request, &descending), &descending),
-                (7..9, 3, 7, CHECKPOINT_BOUND, Some(3))
+                (
+                    7..9,
+                    LedgerPoint::checkpoint_start(3),
+                    7,
+                    CHECKPOINT_BOUND,
+                    Some(3)
+                )
             );
         }
     }
@@ -703,12 +759,24 @@ mod tests {
         let ascending = options(Ordering::Ascending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (7..7, 3, 7, CHECKPOINT_BOUND, None)
+            (
+                7..7,
+                LedgerPoint::transaction(3, 0),
+                7,
+                CHECKPOINT_BOUND,
+                None
+            )
         );
         let descending = options(Ordering::Descending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &descending), &descending),
-            (8..8, 4, 8, CHECKPOINT_BOUND, None)
+            (
+                8..8,
+                LedgerPoint::transaction(3, 1),
+                8,
+                CHECKPOINT_BOUND,
+                None
+            )
         );
     }
 
@@ -720,7 +788,13 @@ mod tests {
         let ascending = options(Ordering::Ascending, None, None);
         assert_eq!(
             terminal(&resolve_transactions(&request, &ascending), &ascending),
-            (7..14, 5, 14, RangeExhaustion::LedgerTip, Some(4))
+            (
+                7..14,
+                LedgerPoint::checkpoint_start(TIP),
+                14,
+                RangeExhaustion::LedgerTip,
+                Some(4)
+            )
         );
     }
 
@@ -732,28 +806,28 @@ mod tests {
         let request = transactions_request(Some(2), Some(4), Some(1), Some(1));
         let cases = [
             (
-                options(Ordering::Ascending, Some(tx_position(2, 6)), None),
-                (6..8, 3, 8, CHECKPOINT_BOUND),
+                options(Ordering::Ascending, Some(tx_position(6)), None),
+                (6..8, LedgerPoint::transaction(3, 1), 8, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Ascending, Some(tx_position(0, 2)), None),
-                (4..8, 3, 8, CHECKPOINT_BOUND),
+                options(Ordering::Ascending, Some(tx_position(2)), None),
+                (4..8, LedgerPoint::transaction(3, 1), 8, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Ascending, None, Some(tx_position(2, 5))),
-                (4..5, 2, 5, CURSOR_BOUND),
+                options(Ordering::Ascending, None, Some(tx_position(5))),
+                (4..5, LedgerPoint::transaction(2, 2), 5, CURSOR_BOUND),
             ),
             (
-                options(Ordering::Ascending, None, Some(tx_position(4, 9))),
-                (4..8, 3, 8, CHECKPOINT_BOUND),
+                options(Ordering::Ascending, None, Some(tx_position(9))),
+                (4..8, LedgerPoint::transaction(3, 1), 8, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Descending, None, Some(tx_position(3, 6))),
-                (4..6, 3, 4, CHECKPOINT_BOUND),
+                options(Ordering::Descending, None, Some(tx_position(6))),
+                (4..6, LedgerPoint::transaction(2, 1), 4, CHECKPOINT_BOUND),
             ),
             (
-                options(Ordering::Descending, Some(tx_position(2, 5)), None),
-                (5..8, 2, 5, CURSOR_BOUND),
+                options(Ordering::Descending, Some(tx_position(5)), None),
+                (5..8, LedgerPoint::transaction(2, 2), 5, CURSOR_BOUND),
             ),
         ];
         for (options, expected) in cases {
@@ -761,7 +835,7 @@ mod tests {
             assert_eq!(
                 (
                     resolved.range(),
-                    resolved.end_checkpoint,
+                    resolved.end_cursor_point(&options),
                     resolved.end_position,
                     resolved.exhaustion
                 ),

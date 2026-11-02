@@ -63,10 +63,10 @@ use super::ledger_read::reject_window_below_serving_floor;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::serving_floor_error_or;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
+use crate::ledger_history::watermark::boundary_cursor_cp;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::merge_covered_checkpoint_bound;
-use crate::ledger_history::watermark::scan_frontier_cursor_cp;
 
 const METHOD: &str = "list_checkpoints";
 
@@ -339,7 +339,7 @@ fn next_checkpoint_chunk(
             }
             let range = cp_range.range();
             let range_end = |cp_range: &ResolvedScan<u64>| {
-                cp_range.range_end(&window, &options, |_, checkpoint| Position::Checkpoints {
+                cp_range.range_end(&window, &options, |checkpoint, _| Position::Checkpoints {
                     checkpoint,
                 })
             };
@@ -727,22 +727,20 @@ fn scan_checkpoint_watermark(
         service,
         RowPlacement::transaction_boundary(frontier, options.scan_direction()),
     )?;
-    checkpoint_frontier_watermark(
+    Ok(checkpoint_frontier_watermark(
         options,
-        frontier,
         placed.checkpoint,
         covered_checkpoint_bound,
         entry_checkpoint,
-    )
+    ))
 }
 
 fn checkpoint_frontier_watermark(
     options: &QueryOptions,
-    frontier: u64,
     checkpoint: Option<u64>,
     covered_checkpoint_bound: Option<u64>,
     entry_checkpoint: u64,
-) -> Result<Watermark, RpcError> {
+) -> Watermark {
     // The frontier lands partway through its checkpoint, so that checkpoint is
     // not proven complete. Preserve any stronger proof already established by
     // emitted checkpoints.
@@ -755,26 +753,18 @@ fn checkpoint_frontier_watermark(
         ),
         None => covered_checkpoint_bound,
     };
-    let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier, options.scan_direction())
-        .map(|cursor_cp| {
-            clamp_checkpoint_frontier_past_covered(cursor_cp, covered_checkpoint_bound, options)
-        })
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "checkpoint scan frontier transaction {frontier} has no checkpoint mapping"
-                ),
-            )
-        })?;
-    // A checkpoint cursor's coordinate is its own ledger point.
-    Ok(boundary_watermark(
+    // Unplaced only at the ascending genesis frontier, which resumes at checkpoint 0.
+    let cursor_cp = checkpoint.map_or(0, |cp| boundary_cursor_cp(cp, options.scan_direction()));
+    boundary_watermark(
         Position::Checkpoints {
-            checkpoint: cursor_cp,
+            checkpoint: clamp_checkpoint_frontier_past_covered(
+                cursor_cp,
+                covered_checkpoint_bound,
+                options,
+            ),
         },
-        LedgerPoint::checkpoint_start(cursor_cp),
         boundary,
-    ))
+    )
 }
 
 fn clamp_checkpoint_frontier_past_covered(
@@ -855,7 +845,6 @@ fn render_checkpoint_seq(
         })?;
     let watermark = item_watermark(
         Position::Checkpoints { checkpoint: cp_seq },
-        LedgerPoint::checkpoint_start(cp_seq),
         direction,
         checkpoint_boundary,
     );
@@ -883,7 +872,7 @@ fn apply_serving_floor_to_filtered_window(
     if options.is_ascending() {
         cp_range.entry_checkpoint = cp_range.entry_checkpoint.max(floor_checkpoint);
     } else {
-        cp_range.end_checkpoint = floor_checkpoint;
+        cp_range.end_point = LedgerPoint::checkpoint_start(floor_checkpoint);
         cp_range.end_position = floor_checkpoint;
         cp_range.exhaustion = RangeExhaustion::ServingFloor { floor_checkpoint };
     }
@@ -976,10 +965,19 @@ mod tests {
     /// consumes it and is `OutOfRange` in both directions.
     #[test]
     fn filtered_window_serving_floor_matrix() {
-        // (ascending, floor_tx, floor_cp, expected: tx_range, entry, end_cp, end_pos, exhaustion)
+        // (ascending, floor_tx, floor_cp, expected: tx_range, entry, end_point, end_pos, exhaustion)
         // Window: txs 0..40 spanning checkpoints 0..=8. A floor tx inside
         // the window maps to a checkpoint inside the interval (tx 20 -> cp 4).
-        for (ascending, floor_tx, floor_cp, expected_range, entry, end_cp, end_pos, exhaustion) in [
+        for (
+            ascending,
+            floor_tx,
+            floor_cp,
+            expected_range,
+            entry,
+            end_point,
+            end_pos,
+            exhaustion,
+        ) in [
             // Floor inside: ascending raises the entry claim only.
             (
                 true,
@@ -987,7 +985,7 @@ mod tests {
                 4,
                 20..40,
                 4,
-                8,
+                LedgerPoint::checkpoint_start(8),
                 40,
                 RangeExhaustion::CheckpointBound,
             ),
@@ -998,7 +996,7 @@ mod tests {
                 4,
                 20..40,
                 8,
-                4,
+                LedgerPoint::checkpoint_start(4),
                 4,
                 RangeExhaustion::ServingFloor {
                     floor_checkpoint: 4,
@@ -1019,7 +1017,7 @@ mod tests {
             let context = format!("floor_tx {floor_tx} asc {ascending}");
             assert_eq!(tx_range, expected_range, "{context}");
             assert_eq!(cp_range.entry_checkpoint, entry, "{context}");
-            assert_eq!(cp_range.end_checkpoint, end_cp, "{context}");
+            assert_eq!(cp_range.end_point, end_point, "{context}");
             assert_eq!(cp_range.end_position, end_pos, "{context}");
             assert_eq!(cp_range.exhaustion, exhaustion, "{context}");
         }
@@ -1045,15 +1043,18 @@ mod tests {
 
     /// The checkpoint metadata of a filtered scan over checkpoints 0..=8 (txs 0..40).
     fn filtered_window(ascending: bool) -> ResolvedScan<u64> {
-        let (entry_checkpoint, end_checkpoint, end_position) =
-            if ascending { (0, 8, 40) } else { (8, 0, 0) };
+        let (entry_checkpoint, end_checkpoint, end_position, window_claim) = if ascending {
+            (0, 8, 40, Some(7))
+        } else {
+            (8, 0, 0, Some(0))
+        };
         ResolvedScan {
             bounds: ScanBounds::from_range(0..9),
             entry_checkpoint,
-            end_checkpoint,
+            end_point: LedgerPoint::checkpoint_start(end_checkpoint),
             end_position,
             exhaustion: RangeExhaustion::CheckpointBound,
-            window_terminal_checkpoint: Some(end_checkpoint),
+            window_claim,
         }
     }
 
@@ -1135,12 +1136,10 @@ mod tests {
             let options = options(ascending);
             let terminal_watermark = checkpoint_frontier_watermark(
                 &options,
-                first.scan_limit_frontier.unwrap(),
                 Some(if ascending { 6 } else { 5 }),
                 emitted.last().copied(),
                 if ascending { 4 } else { 7 },
-            )
-            .unwrap();
+            );
             let terminal = end_response(terminal_watermark, QueryEndReason::ScanLimit);
             let frames = emitted
                 .iter()
@@ -1213,11 +1212,10 @@ mod tests {
 
     #[test]
     fn scan_limit_checkpoint_frontiers_are_clamped_past_emitted_coverage() {
-        for (case, ascending, frontier, checkpoint, covered, expected_cursor, expected_proof) in [
+        for (case, ascending, checkpoint, covered, expected_cursor, expected_proof) in [
             (
                 "ascending frontier maps to emitted checkpoint",
                 true,
-                41,
                 Some(10),
                 Some(10),
                 11,
@@ -1226,7 +1224,6 @@ mod tests {
             (
                 "ascending frontier advances to new checkpoint",
                 true,
-                42,
                 Some(12),
                 Some(10),
                 12,
@@ -1235,16 +1232,14 @@ mod tests {
             (
                 "ascending genesis does not fabricate proof",
                 true,
-                0,
                 None,
                 None,
                 0,
                 None,
             ),
             (
-                "ascending numeric edge preserves prior proof",
+                "ascending genesis preserves prior proof",
                 true,
-                0,
                 None,
                 Some(5),
                 6,
@@ -1253,7 +1248,6 @@ mod tests {
             (
                 "ascending terminal proof does not regress",
                 true,
-                43,
                 Some(8),
                 Some(10),
                 11,
@@ -1262,7 +1256,6 @@ mod tests {
             (
                 "descending frontier maps to emitted checkpoint",
                 false,
-                19,
                 Some(10),
                 Some(10),
                 10,
@@ -1271,34 +1264,14 @@ mod tests {
             (
                 "descending frontier advances to new checkpoint",
                 false,
-                18,
                 Some(8),
                 Some(10),
                 9,
                 Some(9),
             ),
             (
-                "descending numeric edge does not fabricate proof",
-                false,
-                u64::MAX,
-                None,
-                None,
-                u64::MAX,
-                None,
-            ),
-            (
-                "descending numeric edge preserves prior proof",
-                false,
-                u64::MAX,
-                None,
-                Some(5),
-                5,
-                Some(5),
-            ),
-            (
                 "descending terminal proof does not regress",
                 false,
-                17,
                 Some(12),
                 Some(10),
                 10,
@@ -1307,14 +1280,8 @@ mod tests {
         ] {
             let options = options(ascending);
             let entry_checkpoint = if ascending { 0 } else { u64::MAX - 1 };
-            let watermark = checkpoint_frontier_watermark(
-                &options,
-                frontier,
-                checkpoint,
-                covered,
-                entry_checkpoint,
-            )
-            .unwrap();
+            let watermark =
+                checkpoint_frontier_watermark(&options, checkpoint, covered, entry_checkpoint);
             let expected_position = Position::Checkpoints {
                 checkpoint: expected_cursor,
             };

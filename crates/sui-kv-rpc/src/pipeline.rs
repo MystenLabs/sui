@@ -3668,9 +3668,8 @@ mod tests {
         assert_eq!(h.lookup_positions(), vec![5, 8]);
     }
 
-    /// A missing checkpoint can be a successful resolution at an absolute
-    /// numeric edge. Preserve `Ok(None)` so the endpoint can either construct
-    /// an edge cursor or reject a non-edge position.
+    /// An unplaced frontier, the ascending genesis frontier, is a successful
+    /// resolution. Preserve `Ok(None)` so the endpoint places it at genesis.
     #[tokio::test]
     async fn scan_limit_preserves_successful_none_resolution() {
         let mut h = ResolverHarness::new();

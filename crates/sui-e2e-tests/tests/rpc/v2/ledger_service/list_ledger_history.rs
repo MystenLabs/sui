@@ -49,6 +49,7 @@ use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
+use sui_rpc_cursor::PublicPosition;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -2977,6 +2978,10 @@ async fn test_list_checkpoints_pruned_serving_floor() {
     // becomes servable once the node catches up, so it keeps the retryable error.
     let beyond_tip = floor + 1_000_000;
     let beyond_tip_tx_seq = 1_000_000_000;
+    let beyond_tip_position = PublicPosition {
+        checkpoint: beyond_tip,
+        ..PublicPosition::default()
+    };
     for start_checkpoint in [0, floor] {
         let mut options = query_options_descending(3);
         options.before = Some(
@@ -2994,8 +2999,8 @@ async fn test_list_checkpoints_pruned_serving_floor() {
         let mut options = query_options_descending(3);
         options.before = Some(
             CursorToken::boundary(Position::Transactions {
-                checkpoint: beyond_tip,
                 tx_seq: beyond_tip_tx_seq,
+                public_position: beyond_tip_position,
             })
             .encode(),
         );
@@ -3008,9 +3013,9 @@ async fn test_list_checkpoints_pruned_serving_floor() {
         let mut options = query_options_descending(3);
         options.before = Some(
             CursorToken::boundary(Position::Events {
-                checkpoint: beyond_tip,
                 tx_seq: beyond_tip_tx_seq,
                 event_index: 0,
+                public_position: beyond_tip_position,
             })
             .encode(),
         );
@@ -3178,9 +3183,8 @@ async fn test_list_checkpoints_pruned_serving_floor() {
 /// nothing to scan: the page is empty and ends with `CURSOR_BOUND` at `before`, with no error.
 /// Its cursor is the Boundary at `before`'s position, carrying `before`'s public position. Its
 /// `cursor_position` is where `after` resumes, placed without a read: by the public position the
-/// `after` cursor carries, or by start fields that name that point. A cursor without a public
-/// position (minted before cursors carried one; both such cursors here are built by hand) and no
-/// start fields leave it unset; the page still ends the same way.
+/// `after` cursor carries, or by start fields that name that point. An `after` cursor without a
+/// public position is an invalid argument.
 #[sim_test]
 async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
     let cluster = new_cluster().await;
@@ -3245,14 +3249,7 @@ async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
         after_resumes_at
     };
     let before_token = CursorToken::decode(&before).unwrap();
-    let closing_cursor = CursorToken::boundary(before_token.position)
-        .with_public_position(before_token.public_position)
-        .encode();
-    // The `after` cursor as a server minted it before cursors carried a public position.
-    let unlabelled_after = CursorToken::decode(&after)
-        .unwrap()
-        .with_public_position(None)
-        .encode();
+    let closing_cursor = CursorToken::boundary(before_token.position).encode();
 
     cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
@@ -3266,7 +3263,7 @@ async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
             .unwrap();
     });
 
-    // A past-tip `after` cursor without a public position, in a window that ends below the tip.
+    // A past-tip `after` cursor, in a window that ends below the tip.
     let past_tip_tx_seq = match CursorToken::decode(&items.last().unwrap().1)
         .unwrap()
         .position
@@ -3274,9 +3271,13 @@ async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
         Position::Transactions { tx_seq, .. } => tx_seq + 1_000_000,
         position => panic!("transaction cursor: {position:?}"),
     };
+    let past_tip_resumes_at = (floor + 1_000, 0, 0);
     let past_tip_after = CursorToken::boundary(Position::Transactions {
-        checkpoint: floor + 1_000,
         tx_seq: past_tip_tx_seq,
+        public_position: PublicPosition {
+            checkpoint: past_tip_resumes_at.0,
+            ..PublicPosition::default()
+        },
     })
     .encode();
 
@@ -3296,25 +3297,11 @@ async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
             Some(start_resumes_at),
         ),
         (
-            "`after` without its public position",
-            unlabelled_after.clone(),
-            None,
-            None,
-            None,
-        ),
-        (
-            "`after` without its public position, start fields at it",
-            unlabelled_after,
-            Some(start_resumes_at),
-            None,
-            Some(start_resumes_at),
-        ),
-        (
             "`after` past the tip",
             past_tip_after,
             None,
             Some(floor),
-            None,
+            Some(past_tip_resumes_at),
         ),
     ] {
         let mut req = ListTransactionsRequest::default();
@@ -3343,6 +3330,39 @@ async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
         );
         assert_eq!(cursor_position_of(watermark), expected_position, "{case}");
     }
+
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.options = Some(query_options_between(
+        10,
+        without_public_position(&after),
+        before,
+    ));
+    expect_invalid_list_transactions(&mut client, req).await;
+}
+
+/// A transaction cursor's `CursorToken` fields other than its `public_position` (tag 9).
+#[derive(Clone, PartialEq, prost::Message)]
+struct PositionlessTransactionCursor {
+    #[prost(int32, tag = "5")]
+    kind: i32,
+    #[prost(message, optional, tag = "7")]
+    transactions: Option<PositionlessTransactionsPosition>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct PositionlessTransactionsPosition {
+    #[prost(uint64, optional, tag = "2")]
+    tx_seq: Option<u64>,
+}
+
+/// Transaction cursor `cursor` without its public position: decoding drops the fields
+/// [`PositionlessTransactionCursor`] does not declare.
+fn without_public_position(cursor: &[u8]) -> Bytes {
+    PositionlessTransactionCursor::decode(cursor)
+        .expect("transaction cursor decodes")
+        .encode_to_vec()
+        .into()
 }
 
 #[sim_test]
@@ -4292,7 +4312,7 @@ struct CursorPage {
     end_reason: QueryEndReason,
 }
 
-/// A cursor's kind, the checkpoint field of its position, and its position's scan-order key.
+/// A cursor's kind, the checkpoint of its public position, and its position's scan-order key.
 fn cursor_key(cursor: &[u8]) -> (CursorKind, u64, (u64, u32)) {
     let token = CursorToken::decode(cursor).expect("cursor decodes");
     let key = match token.position {
@@ -4304,7 +4324,7 @@ fn cursor_key(cursor: &[u8]) -> (CursorKind, u64, (u64, u32)) {
         } => (tx_seq, event_index),
         Position::Checkpoints { checkpoint } => (checkpoint, 0),
     };
-    (token.kind, token.position.checkpoint(), key)
+    (token.kind, token.position.public_position().checkpoint, key)
 }
 
 /// One page from `resume`. A `None` window start leaves it open.
@@ -4426,42 +4446,23 @@ async fn walk(
     panic!("paging did not reach the end: {query:?}");
 }
 
-/// What [`assert_cursors_resume_in_the_opposite_direction`] exercised.
-struct OppositeDirectionCoverage {
-    /// Every page's end reason.
-    end_reasons: Vec<QueryEndReason>,
-    /// Boundary cursors from ascending and from descending pages whose checkpoint field, read as
-    /// written in the opposite direction, would exclude an item their position admits.
-    misread_fields: (usize, usize),
-}
-
 /// Cursors paging `query` with two items a page returns in either ordering, with and without a
 /// far cursor bound, sent back with the opposite ordering, return exactly the items their
 /// position and kind admit: every distinct boundary cursor (scan frontiers and restated bounds)
 /// and a few item cursors. A bounded paging's closing cursor, sent back in its own ordering
-/// without the far bound (an item), resumes with exactly the items the bound excluded.
+/// without the far bound (an item), resumes with exactly the items the bound excluded. Returns
+/// every page's end reason.
 async fn assert_cursors_resume_in_the_opposite_direction(
     client: &mut LedgerServiceClient<Channel>,
     query: &CursorQuery,
     window: (Option<u64>, u64),
-) -> OppositeDirectionCoverage {
+) -> Vec<QueryEndReason> {
     let all = walk(client, query, window, true, 100, None, None).await;
     assert!(all.items.len() >= 4, "too few items to page: {query:?}");
-    let item_checkpoints: HashMap<(u64, u32), u64> = all
-        .item_cursors
-        .iter()
-        .map(|cursor| {
-            let (_, checkpoint, key) = cursor_key(cursor);
-            (key, checkpoint)
-        })
-        .collect();
     // Far bounds at every third item: the bounded pages end on a restatement of the bound.
     let far_bounds: Vec<_> = all.item_cursors.iter().step_by(3).cloned().collect();
 
-    let mut coverage = OppositeDirectionCoverage {
-        end_reasons: Vec::new(),
-        misread_fields: (0, 0),
-    };
+    let mut end_reasons = Vec::new();
     for ascending in [true, false] {
         let mut boundaries = Vec::new();
         let mut items = Vec::new();
@@ -4477,7 +4478,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
                     cursors.push(cursor.clone());
                 }
             }
-            coverage.end_reasons.extend(paged.end_reasons);
+            end_reasons.extend(paged.end_reasons);
             if let Some(far_bound) = far_bound {
                 let closing = paged
                     .cursors
@@ -4491,7 +4492,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
         let item_stride = items.len().div_ceil(4).max(1);
         let sampled_items = items.into_iter().step_by(item_stride);
         for cursor in boundaries.into_iter().chain(sampled_items) {
-            let (kind, field, key) = cursor_key(&cursor);
+            let (kind, _, key) = cursor_key(&cursor);
             let expected: Vec<_> = if ascending {
                 all.items
                     .iter()
@@ -4509,23 +4510,6 @@ async fn assert_cursors_resume_in_the_opposite_direction(
                     })
                     .collect()
             };
-            // As written, a `before` field is an exclusive upper checkpoint bound and an `after`
-            // field an inclusive lower one.
-            let field_excludes_an_item = expected.iter().any(|item| {
-                let checkpoint = item_checkpoints[item];
-                if ascending {
-                    checkpoint >= field
-                } else {
-                    checkpoint < field
-                }
-            });
-            if kind == CursorKind::Boundary && field_excludes_an_item {
-                if ascending {
-                    coverage.misread_fields.0 += 1;
-                } else {
-                    coverage.misread_fields.1 += 1;
-                }
-            }
             let opposite = walk(client, query, window, !ascending, 100, Some(cursor), None).await;
             assert_eq!(
                 opposite.items, expected,
@@ -4558,7 +4542,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
             );
         }
     }
-    coverage
+    end_reasons
 }
 
 /// A cluster whose unfiltered event scan reads two transactions per request, so it stops on
@@ -4603,19 +4587,13 @@ async fn test_list_cursors_resume_in_the_opposite_direction() {
     let (start, end) = checkpoint_range(&txs.iter().collect::<Vec<_>>());
     let mut client = new_ledger_client(&cluster).await;
 
-    let coverage = assert_cursors_resume_in_the_opposite_direction(
+    let end_reasons = assert_cursors_resume_in_the_opposite_direction(
         &mut client,
         &CursorQuery::Events,
         (Some(start), end),
     )
     .await;
-    assert!(coverage.end_reasons.contains(&QueryEndReason::ScanLimit));
-    let (from_ascending, from_descending) = coverage.misread_fields;
-    assert!(
-        from_ascending > 0 && from_descending > 0,
-        "event frontiers must include ones whose field, read as written, excludes an item: \
-         {from_ascending} from ascending pages, {from_descending} from descending pages"
-    );
+    assert!(end_reasons.contains(&QueryEndReason::ScanLimit));
     assert_cursors_resume_in_the_opposite_direction(
         &mut client,
         &CursorQuery::Transactions(Some(tx_sender(sender))),
@@ -4624,10 +4602,9 @@ async fn test_list_cursors_resume_in_the_opposite_direction() {
     .await;
 }
 
-/// A descending event frontier whose transaction lies in the last pruned checkpoint names the
-/// floor checkpoint as its field. Sent back as `after`, it asks for the positions from its pruned
-/// transaction on, so the request is `OutOfRange` in either ordering, though events remain above
-/// the floor.
+/// A descending event frontier whose transaction lies in the last pruned checkpoint, sent back as
+/// `after`, asks for the positions from its pruned transaction on, so the request is `OutOfRange`
+/// in either ordering, though events remain above the floor.
 #[sim_test]
 async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
     let cluster = transaction_capped_event_cluster().await;
@@ -4683,11 +4660,10 @@ async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
         .cursors
         .iter()
         .find_map(|cursor| {
-            let (kind, field, (tx_seq, _)) = cursor_key(cursor);
+            let (kind, _, (tx_seq, _)) = cursor_key(cursor);
             let checkpoint = *tx_checkpoints.get(&tx_seq)?;
             let floor = checkpoint + 1;
             (kind == CursorKind::Boundary
-                && field == floor
                 && checkpoint > start
                 && event_checkpoints.values().any(|&cp| cp >= floor))
             .then(|| (cursor.clone(), floor))
@@ -6302,8 +6278,7 @@ async fn assert_far_cursor_bound_positions(
 /// An ascending request whose start fields lie past the indexed tip gets a single LEDGER_TIP
 /// frame echoing them as its `cursor_position`, with no `Watermark.checkpoint`. One whose only
 /// bound past the tip is an `after` cursor gets a LEDGER_TIP frame echoing that cursor byte for
-/// byte, at the public position it carries: a checkpoint cursor is its own position, and a
-/// transaction or event cursor without a public position leaves the frame without one.
+/// byte, at the public position it carries: a checkpoint cursor is its own position.
 async fn assert_past_tip_positions(
     client: &mut LedgerServiceClient<Channel>,
     cluster: &TestCluster,
@@ -6349,19 +6324,9 @@ async fn assert_past_tip_positions(
     }
 
     let past_tip_point = (beyond_tip, 0, 0);
-    let public_position = Some(sui_rpc_cursor::PublicPosition {
+    let public_position = PublicPosition {
         checkpoint: beyond_tip,
-        transaction_index: 0,
-        event_index: 0,
-    });
-    let transaction = Position::Transactions {
-        checkpoint: beyond_tip,
-        tx_seq: beyond_tip,
-    };
-    let event = Position::Events {
-        checkpoint: beyond_tip,
-        tx_seq: beyond_tip,
-        event_index: 0,
+        ..PublicPosition::default()
     };
     let past_tip_cursors = [
         (
@@ -6369,30 +6334,24 @@ async fn assert_past_tip_positions(
             CursorToken::boundary(Position::Checkpoints {
                 checkpoint: beyond_tip,
             }),
-            Some(past_tip_point),
         ),
         (
             PositionQuery::Transactions(None),
-            CursorToken::boundary(transaction),
-            None,
-        ),
-        (
-            PositionQuery::Transactions(None),
-            CursorToken::boundary(transaction).with_public_position(public_position),
-            Some(past_tip_point),
+            CursorToken::boundary(Position::Transactions {
+                tx_seq: beyond_tip,
+                public_position,
+            }),
         ),
         (
             PositionQuery::Events(None),
-            CursorToken::boundary(event),
-            None,
-        ),
-        (
-            PositionQuery::Events(None),
-            CursorToken::boundary(event).with_public_position(public_position),
-            Some(past_tip_point),
+            CursorToken::boundary(Position::Events {
+                tx_seq: beyond_tip,
+                event_index: 0,
+                public_position,
+            }),
         ),
     ];
-    for (query, cursor, expected_position) in past_tip_cursors {
+    for (query, cursor) in past_tip_cursors {
         // With no start fields, or start fields behind the cursor.
         for start in [None, Some((window.0, 0, 0))] {
             let bounds = PositionBounds {
@@ -6411,7 +6370,7 @@ async fn assert_past_tip_positions(
                 "{context}"
             );
             assert_eq!(frame.cursor, cursor.encode(), "{context}");
-            assert_eq!(frame.position, expected_position, "{context}");
+            assert_eq!(frame.position, Some(past_tip_point), "{context}");
             assert_eq!(frame.checkpoint, None, "{context}");
         }
     }

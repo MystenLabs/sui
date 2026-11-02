@@ -1386,13 +1386,12 @@ impl SubscriptionPositions {
     ) -> LedgerPoint {
         let cursor = watermark.cursor.as_ref().expect("frame cursor");
         let token = CursorToken::decode(cursor).expect("cursor decodes");
-        let carried = token.public_position.map(|position| {
-            (
-                position.checkpoint,
-                position.transaction_index,
-                position.event_index,
-            )
-        });
+        let carried = token.position.public_position();
+        let carried = (
+            carried.checkpoint,
+            carried.transaction_index,
+            carried.event_index,
+        );
         let position = watermark
             .cursor_position
             .as_ref()
@@ -1411,8 +1410,7 @@ impl SubscriptionPositions {
                     "an item frame resumes right after its item {key:?}"
                 );
                 assert_eq!(
-                    carried,
-                    Some(key),
+                    carried, key,
                     "an item cursor carries its item's key: {token:?}"
                 );
                 if let Some(last_item) = self.last_item {
@@ -1435,8 +1433,7 @@ impl SubscriptionPositions {
                     "a progress frame sits at the start of a checkpoint: {position:?}"
                 );
                 assert_eq!(
-                    carried,
-                    Some(position),
+                    carried, position,
                     "a progress cursor carries the boundary it names: {token:?}"
                 );
                 self.progress_frames += 1;

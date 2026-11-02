@@ -60,7 +60,6 @@ use super::ledger_read::serving_floor_error_or;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
-use crate::ledger_history::watermark::scan_frontier_cursor_cp;
 
 pub(crate) type ListEventsStream = BoxStream<'static, Result<ListEventsResponse, RpcError>>;
 
@@ -527,11 +526,10 @@ fn next_event_chunk(
 }
 
 /// Build the scan watermark for a chunk whose scan budget ran out mid-gap.
-/// The frontier cursor is mandatory. The one index row that resolves the
-/// frontier's checkpoint also places it in ledger coordinates; the checkpoint
-/// only determines the optional completed-checkpoint claim: at ascending
-/// genesis `(0, 0)` remains a safe event frontier even though no checkpoint is
-/// yet fully covered.
+/// The frontier cursor is mandatory. The one index row that places the
+/// frontier in ledger coordinates also resolves its checkpoint, which only
+/// determines the optional completed-checkpoint claim: at ascending genesis
+/// the frontier remains safe even though no checkpoint is yet fully covered.
 fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
@@ -542,13 +540,13 @@ fn scan_event_watermark(
         service,
         RowPlacement::event_boundary(frontier, options.scan_direction()),
     )?;
-    event_frontier_watermark(
+    Ok(event_frontier_watermark(
         options,
         frontier,
         entry_checkpoint,
         placed.checkpoint,
         placed.point,
-    )
+    ))
 }
 
 fn event_frontier_watermark(
@@ -557,29 +555,18 @@ fn event_frontier_watermark(
     entry_checkpoint: u64,
     checkpoint: Option<u64>,
     cursor_position: LedgerPoint,
-) -> Result<Watermark, RpcError> {
+) -> Watermark {
     let boundary = checkpoint.and_then(|cp| {
         advance_covered_bound_before_checkpoint(None, cp, entry_checkpoint, options)
     });
-    let cursor_cp = scan_frontier_cursor_cp(checkpoint, frontier.tx_seq, options.scan_direction())
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "event scan frontier {}/{} has no checkpoint mapping",
-                    frontier.tx_seq, frontier.index
-                ),
-            )
-        })?;
-    Ok(boundary_watermark(
+    boundary_watermark(
         Position::Events {
-            checkpoint: cursor_cp,
             tx_seq: frontier.tx_seq,
             event_index: frontier.index,
+            public_position: cursor_position.into(),
         },
-        cursor_position,
         boundary,
-    ))
+    )
 }
 
 fn render_event_chunk(
@@ -675,15 +662,15 @@ fn render_event_chunk(
         );
         let watermark = item_watermark(
             Position::Events {
-                checkpoint: row.checkpoint_number,
                 tx_seq: event_ref.position.tx_seq,
                 event_index: event_ref.position.index,
+                public_position: LedgerPoint::event(
+                    row.checkpoint_number,
+                    row.tx_offset as u64,
+                    event_ref.position.index,
+                )
+                .into(),
             },
-            LedgerPoint::event(
-                row.checkpoint_number,
-                row.tx_offset as u64,
-                event_ref.position.index,
-            ),
             options.scan_direction(),
             checkpoint_boundary,
         );
@@ -754,10 +741,10 @@ fn resolve_event_range(
             )?;
         }
     }
-    let range_end = resolved.range_end(&window, options, |checkpoint, position| Position::Events {
-        checkpoint,
+    let range_end = resolved.range_end(&window, options, |position, point| Position::Events {
         tx_seq: position.tx_seq,
         event_index: position.index,
+        public_position: point.into(),
     });
     Ok((resolved, range_end))
 }
@@ -814,104 +801,35 @@ mod tests {
         }
     }
 
+    /// A scan-limit terminal carries a Boundary cursor at the frontier with its placed public
+    /// position, and claims the checkpoints the frontier has passed since the entry checkpoint.
     #[test]
-    fn scan_limit_terminal_frames_are_directional_event_cursors() {
-        for (
-            ascending,
-            frontier,
-            checkpoint,
-            entry_checkpoint,
-            expected_position,
-            expected_proof,
-        ) in [
-            (
-                true,
-                IntraTxCoordinate::from((0, 0)),
-                None,
-                0,
-                Position::Events {
-                    checkpoint: 0,
-                    tx_seq: 0,
-                    event_index: 0,
-                },
-                None,
-            ),
-            (
-                true,
-                IntraTxCoordinate::from((41, 3)),
-                Some(7),
-                7,
-                Position::Events {
-                    checkpoint: 7,
-                    tx_seq: 41,
-                    event_index: 3,
-                },
-                None,
-            ),
-            (
-                true,
-                IntraTxCoordinate::from((42, 1)),
-                Some(9),
-                7,
-                Position::Events {
-                    checkpoint: 9,
-                    tx_seq: 42,
-                    event_index: 1,
-                },
-                Some(8),
-            ),
-            (
-                false,
-                IntraTxCoordinate::from((u64::MAX, u32::MAX)),
-                None,
-                u64::MAX,
-                Position::Events {
-                    checkpoint: u64::MAX,
-                    tx_seq: u64::MAX,
-                    event_index: u32::MAX,
-                },
-                None,
-            ),
-            (
-                false,
-                IntraTxCoordinate::from((19, 4)),
-                Some(7),
-                7,
-                Position::Events {
-                    checkpoint: 8,
-                    tx_seq: 19,
-                    event_index: 4,
-                },
-                None,
-            ),
-            (
-                false,
-                IntraTxCoordinate::from((18, 2)),
-                Some(5),
-                7,
-                Position::Events {
-                    checkpoint: 6,
-                    tx_seq: 18,
-                    event_index: 2,
-                },
-                Some(6),
-            ),
+    fn scan_limit_terminal_frames_carry_placed_event_cursors() {
+        for (ascending, frontier, checkpoint, entry_checkpoint, expected_proof) in [
+            (true, IntraTxCoordinate::from((0, 0)), None, 0, None),
+            (true, IntraTxCoordinate::from((41, 3)), Some(7), 7, None),
+            (true, IntraTxCoordinate::from((42, 1)), Some(9), 7, Some(8)),
+            (false, IntraTxCoordinate::from((19, 4)), Some(7), 7, None),
+            (false, IntraTxCoordinate::from((18, 2)), Some(5), 7, Some(6)),
         ] {
             let options = options(ascending);
             let cursor_position = LedgerPoint::event(checkpoint.unwrap_or(0), 3, frontier.index);
+            let expected_position = Position::Events {
+                tx_seq: frontier.tx_seq,
+                event_index: frontier.index,
+                public_position: cursor_position.into(),
+            };
             let watermark = event_frontier_watermark(
                 &options,
                 frontier,
                 entry_checkpoint,
                 checkpoint,
                 cursor_position,
-            )
-            .unwrap();
+            );
             assert_eq!(
                 CursorToken::decode(watermark.cursor.as_ref().expect("event frontier cursor"))
                     .unwrap(),
                 CursorToken::boundary(expected_position)
-                    .with_public_position(cursor_position.public_position(&expected_position))
             );
             assert_eq!(watermark.checkpoint, expected_proof);
             assert_eq!(
@@ -947,11 +865,10 @@ mod tests {
             let direction = options.scan_direction();
             let item = item_watermark(
                 Position::Events {
-                    checkpoint,
                     tx_seq,
                     event_index,
+                    public_position: LedgerPoint::event(checkpoint, tx_offset, event_index).into(),
                 },
-                LedgerPoint::event(checkpoint, tx_offset, event_index),
                 direction,
                 None,
             );
@@ -972,8 +889,7 @@ mod tests {
                     if ascending { 0 } else { u64::MAX },
                     Some(checkpoint),
                     placement.point(checkpoint, tx_offset),
-                )
-                .unwrap(),
+                ),
             }
             .into_watermark(None);
             let cursor = CursorToken::decode(terminal.cursor.as_ref().unwrap()).unwrap();
