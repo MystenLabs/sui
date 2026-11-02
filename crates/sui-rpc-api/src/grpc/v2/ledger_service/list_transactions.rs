@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 use sui_sdk_types::Digest;
 use sui_types::storage::LedgerTxSeqDigest;
@@ -27,7 +28,6 @@ use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_transaction::render_executed_transaction;
 use crate::ledger_history::checkpoint_positions::CheckpointPositions;
 use crate::ledger_history::filter::transaction_filter_to_query;
-use crate::ledger_history::ledger_point::LedgerPoint;
 use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::ResolvedCheckpointRange;
@@ -497,7 +497,7 @@ fn transaction_frontier_watermark(
     boundary_watermark(
         Position::Transactions {
             tx_seq: frontier,
-            public_position: cursor_position.into(),
+            public_position: cursor_position,
         },
         boundary,
     )
@@ -550,8 +550,7 @@ fn render_transaction_rows(
                 public_position: LedgerPoint::transaction(
                     row.checkpoint_number,
                     row.tx_offset as u64,
-                )
-                .into(),
+                ),
             },
             options.scan_direction(),
             checkpoint_boundary,
@@ -625,7 +624,7 @@ fn resolve_tx_range(
     }
     let range_end = resolved.range_end(&window, options, |tx_seq, point| Position::Transactions {
         tx_seq,
-        public_position: point.into(),
+        public_position: point,
     });
     Ok((resolved, range_end))
 }
@@ -671,6 +670,7 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
 
+    use crate::ledger_history::ledger_point::ledger_position;
     use crate::ledger_history::query_options::RangeExhaustion;
     use crate::ledger_history::watermark::ScanTerminal;
 
@@ -721,7 +721,7 @@ mod tests {
             let cursor_position = LedgerPoint::transaction(checkpoint.unwrap_or(0), 3);
             let expected_position = Position::Transactions {
                 tx_seq: frontier,
-                public_position: cursor_position.into(),
+                public_position: cursor_position,
             };
             let watermark = transaction_frontier_watermark(
                 &options,
@@ -743,7 +743,7 @@ mod tests {
             assert_eq!(watermark.checkpoint, expected_proof);
             assert_eq!(
                 watermark.cursor_position,
-                Some(cursor_position.to_proto(&expected_position))
+                Some(ledger_position(cursor_position, &expected_position))
             );
             let terminal = ScanTerminal::ScanLimit { watermark };
             let response = end_response(
@@ -776,7 +776,7 @@ mod tests {
             let item = item_watermark(
                 Position::Transactions {
                     tx_seq,
-                    public_position: LedgerPoint::transaction(checkpoint, tx_offset).into(),
+                    public_position: LedgerPoint::transaction(checkpoint, tx_offset),
                 },
                 direction,
                 None,
@@ -823,7 +823,7 @@ mod tests {
                             RangeExhaustion::CheckpointBound,
                             Position::Transactions {
                                 tx_seq: 42,
-                                public_position: LedgerPoint::checkpoint_start(8).into(),
+                                public_position: LedgerPoint::checkpoint_start(8),
                             },
                             LedgerPoint::checkpoint_start(8),
                             Some(7),

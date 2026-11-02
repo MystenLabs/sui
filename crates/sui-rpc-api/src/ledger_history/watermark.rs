@@ -28,10 +28,10 @@
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
-use sui_rpc_cursor::{CursorKind, CursorToken, Position};
+use sui_rpc_cursor::{CursorKind, CursorToken, LedgerPoint, Position};
 
 use crate::RpcError;
-use crate::ledger_history::ledger_point::LedgerPoint;
+use crate::ledger_history::ledger_point::{item_resume, ledger_position};
 use crate::ledger_history::query_options::{QueryOptions, RangeExhaustion, below_serving_floor};
 
 /// Populate the completion-boundary `checkpoint` field of a `Watermark` from
@@ -99,7 +99,7 @@ pub fn advance_covered_bound_before_checkpoint(
 /// plus the current direction-matching checkpoint boundary. `position` is the
 /// item's cursor coordinates (`list_checkpoints` passes its cp_seq), whose
 /// public position is the item's key in ledger coordinates; the frame's
-/// `cursor_position` follows from it (see [`LedgerPoint::item_resume`]).
+/// `cursor_position` follows from it (see [`item_resume`]).
 pub fn item_watermark(
     position: Position,
     direction: ScanDirection,
@@ -108,7 +108,7 @@ pub fn item_watermark(
     cursor_watermark(
         position,
         CursorKind::Item,
-        LedgerPoint::item_resume(&position, direction),
+        item_resume(&position, direction),
         boundary,
     )
 }
@@ -122,7 +122,7 @@ pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermar
     cursor_watermark(
         position,
         CursorKind::Boundary,
-        position.public_position().into(),
+        position.public_position(),
         boundary,
     )
 }
@@ -145,7 +145,7 @@ fn cursor_watermark(
     };
     let mut wm = Watermark::default();
     wm.cursor = Some(cursor.encode());
-    wm.cursor_position = Some(cursor_position.to_proto(&position));
+    wm.cursor_position = Some(ledger_position(cursor_position, &position));
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -469,7 +469,7 @@ mod tests {
         let key = LedgerPoint::transaction(9, 3);
         let pos = Position::Transactions {
             tx_seq: 42,
-            public_position: key.into(),
+            public_position: key,
         };
         let cursor = CursorToken::item(pos).encode();
         let wm = item_watermark(pos, ScanDirection::Ascending, Some(8));
@@ -477,13 +477,13 @@ mod tests {
         assert_eq!(wm.cursor.as_ref(), Some(&cursor));
         assert_eq!(
             wm.cursor_position,
-            Some(LedgerPoint::transaction(9, 4).to_proto(&pos))
+            Some(ledger_position(LedgerPoint::transaction(9, 4), &pos))
         );
 
         let wm = item_watermark(pos, ScanDirection::Descending, None);
         assert_eq!(wm.checkpoint, None);
         assert_eq!(wm.cursor.as_ref(), Some(&cursor));
-        assert_eq!(wm.cursor_position, Some(key.to_proto(&pos)));
+        assert_eq!(wm.cursor_position, Some(ledger_position(key, &pos)));
 
         // A checkpoint cursor's public position is its checkpoint's start.
         let checkpoint = Position::Checkpoints { checkpoint: 9 };
@@ -494,12 +494,18 @@ mod tests {
         );
         assert_eq!(
             wm.cursor_position,
-            Some(LedgerPoint::checkpoint_start(10).to_proto(&checkpoint))
+            Some(ledger_position(
+                LedgerPoint::checkpoint_start(10),
+                &checkpoint
+            ))
         );
         let wm = item_watermark(checkpoint, ScanDirection::Descending, None);
         assert_eq!(
             wm.cursor_position,
-            Some(LedgerPoint::checkpoint_start(9).to_proto(&checkpoint))
+            Some(ledger_position(
+                LedgerPoint::checkpoint_start(9),
+                &checkpoint
+            ))
         );
     }
 
@@ -507,7 +513,7 @@ mod tests {
     fn scan_terminal_converts_every_range_exhaustion() {
         let position = Position::Transactions {
             tx_seq: 4,
-            public_position: LedgerPoint::transaction(9, 1).into(),
+            public_position: LedgerPoint::transaction(9, 1),
         };
         // A frame clamped past its cursor resumes at a point other than the cursor's own.
         let cursor_position = LedgerPoint::transaction(9, 2);
@@ -578,12 +584,12 @@ mod tests {
             let watermark = terminal.into_watermark(Some(3));
             assert_eq!(
                 watermark.cursor_position,
-                Some(cursor_position.to_proto(&position))
+                Some(ledger_position(cursor_position, &position))
             );
             let cursor = CursorToken::decode(&watermark.cursor.unwrap()).unwrap();
             assert_eq!(
                 cursor.position.public_position(),
-                LedgerPoint::transaction(9, 1).into()
+                LedgerPoint::transaction(9, 1)
             );
         }
     }
@@ -596,7 +602,7 @@ mod tests {
         let floor = LedgerPoint::checkpoint_start(7);
         let position = Position::Transactions {
             tx_seq: 35,
-            public_position: floor.into(),
+            public_position: floor,
         };
         let terminal = ScanTerminal::ServingFloor {
             position,
@@ -616,7 +622,10 @@ mod tests {
                 Some(CursorToken::boundary(position).encode())
             );
             assert_eq!(watermark.checkpoint, Some(7));
-            assert_eq!(watermark.cursor_position, Some(floor.to_proto(&position)));
+            assert_eq!(
+                watermark.cursor_position,
+                Some(ledger_position(floor, &position))
+            );
         }
     }
 
@@ -626,14 +635,14 @@ mod tests {
     fn scan_terminal_natural_range_claims_its_claimed_checkpoint() {
         let position = Position::Transactions {
             tx_seq: 4,
-            public_position: LedgerPoint::transaction(9, 0).into(),
+            public_position: LedgerPoint::transaction(9, 0),
         };
 
         for claimed_checkpoint in [8, 9] {
             let checkpoint_bound = ScanTerminal::NaturalRange {
                 end: NaturalRangeEnd::CheckpointBound,
                 position,
-                cursor_position: position.public_position().into(),
+                cursor_position: position.public_position(),
                 claimed_checkpoint: Some(claimed_checkpoint),
             };
             assert_eq!(
@@ -650,7 +659,7 @@ mod tests {
             let ledger_tip = ScanTerminal::NaturalRange {
                 end: NaturalRangeEnd::LedgerTip,
                 position,
-                cursor_position: position.public_position().into(),
+                cursor_position: position.public_position(),
                 claimed_checkpoint: Some(claimed_checkpoint),
             };
             assert_eq!(ledger_tip.reason().unwrap(), QueryEndReason::LedgerTip);
@@ -670,7 +679,7 @@ mod tests {
     fn scan_terminal_unclaimed_natural_end_claims_nothing() {
         let position = Position::Transactions {
             tx_seq: 4,
-            public_position: LedgerPoint::transaction(9, 0).into(),
+            public_position: LedgerPoint::transaction(9, 0),
         };
 
         for (end, reason) in [
@@ -683,7 +692,7 @@ mod tests {
             let terminal = ScanTerminal::NaturalRange {
                 end,
                 position,
-                cursor_position: position.public_position().into(),
+                cursor_position: position.public_position(),
                 claimed_checkpoint: None,
             };
             assert_eq!(terminal.reason().unwrap(), reason);
@@ -706,11 +715,11 @@ mod tests {
     fn scan_terminal_cursor_bound_preserves_coverage() {
         let position = Position::Transactions {
             tx_seq: 4,
-            public_position: LedgerPoint::transaction(9, 0).into(),
+            public_position: LedgerPoint::transaction(9, 0),
         };
         let terminal = ScanTerminal::CursorBound {
             position,
-            cursor_position: position.public_position().into(),
+            cursor_position: position.public_position(),
             kind: CursorKind::Boundary,
         };
         assert_eq!(terminal.reason().unwrap(), QueryEndReason::CursorBound);
@@ -735,11 +744,11 @@ mod tests {
         let position = Position::Events {
             tx_seq: 4,
             event_index: 2,
-            public_position: LedgerPoint::event(9, 0, 2).into(),
+            public_position: LedgerPoint::event(9, 0, 2),
         };
         let terminal = ScanTerminal::CursorBound {
             position,
-            cursor_position: position.public_position().into(),
+            cursor_position: position.public_position(),
             kind: CursorKind::Item,
         };
         assert_eq!(terminal.reason().unwrap(), QueryEndReason::CursorBound);

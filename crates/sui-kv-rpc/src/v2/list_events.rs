@@ -30,7 +30,6 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
-use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
@@ -43,6 +42,7 @@ use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpo
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
@@ -303,8 +303,7 @@ pub(crate) async fn list_events(
                                 item_checkpoint,
                                 rendered.tx_offset as u64,
                                 rendered.position.index,
-                            )
-                            .into(),
+                            ),
                         },
                         direction,
                         covered_checkpoint_bound,
@@ -686,7 +685,7 @@ fn event_frontier_watermark(
         Position::Events {
             tx_seq: position.tx_seq,
             event_index: position.index,
-            public_position: cursor_position.into(),
+            public_position: cursor_position,
         },
         *covered_checkpoint_bound,
     )
@@ -853,7 +852,7 @@ async fn resolve_event_range(
     let range_end = resolved.range_end(&window, options, |position, point| Position::Events {
         tx_seq: position.tx_seq,
         event_index: position.index,
-        public_position: point.into(),
+        public_position: point,
     });
     Ok((resolved, range_end))
 }
@@ -890,7 +889,7 @@ mod tests {
         let after_past_tip = CursorToken::boundary(Position::Events {
             tx_seq: 1_000_000,
             event_index: 0,
-            public_position: LedgerPoint::checkpoint_start(1_000).into(),
+            public_position: LedgerPoint::checkpoint_start(1_000),
         })
         .encode();
         for (start_checkpoint, after) in [(Some(1_000), None), (None, Some(after_past_tip))] {
@@ -1204,7 +1203,7 @@ mod tests {
         let expected_cursor = CursorToken::boundary(Position::Events {
             tx_seq: 0,
             event_index: 0,
-            public_position: sui_rpc_cursor::PublicPosition::default(),
+            public_position: LedgerPoint::GENESIS,
         })
         .encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));

@@ -16,14 +16,52 @@ pub struct CursorToken {
     pub position: Position,
 }
 
-/// A boundary in public ledger coordinates (`sui.rpc.v2.LedgerPosition`): just before the item
-/// keyed `(checkpoint, transaction_index, event_index)`. Transaction cursors carry
-/// `event_index` 0.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct PublicPosition {
+/// A boundary in public ledger order (`sui.rpc.v2.LedgerPosition`): just before the item keyed
+/// `(checkpoint, transaction_index, event_index)`. An index past the last transaction of a
+/// checkpoint (or past the last event of a transaction) names the start of the next one, so
+/// different points can name the same boundary; they still order correctly against every item
+/// key. Transaction cursors carry `event_index` 0.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
+pub struct LedgerPoint {
     pub checkpoint: u64,
     pub transaction_index: u64,
     pub event_index: u32,
+}
+
+impl LedgerPoint {
+    /// The start of the ledger.
+    pub const GENESIS: Self = Self {
+        checkpoint: 0,
+        transaction_index: 0,
+        event_index: 0,
+    };
+
+    /// The boundary before `checkpoint`'s first item.
+    pub fn checkpoint_start(checkpoint: u64) -> Self {
+        Self {
+            checkpoint,
+            ..Self::GENESIS
+        }
+    }
+
+    /// The boundary before the transaction at `transaction_index` of `checkpoint`, or a
+    /// transaction's key.
+    pub fn transaction(checkpoint: u64, transaction_index: u64) -> Self {
+        Self {
+            checkpoint,
+            transaction_index,
+            event_index: 0,
+        }
+    }
+
+    /// The boundary before an event, or an event's key.
+    pub fn event(checkpoint: u64, transaction_index: u64, event_index: u32) -> Self {
+        Self {
+            checkpoint,
+            transaction_index,
+            event_index,
+        }
+    }
 }
 
 /// Endpoint-specific cursor position. Transaction and event positions carry `public_position`,
@@ -37,24 +75,21 @@ pub enum Position {
     },
     Transactions {
         tx_seq: u64,
-        public_position: PublicPosition,
+        public_position: LedgerPoint,
     },
     Events {
         tx_seq: u64,
         event_index: u32,
-        public_position: PublicPosition,
+        public_position: LedgerPoint,
     },
 }
 
 impl Position {
     /// This coordinate in public ledger coordinates: a checkpoint position's checkpoint start, or
     /// the public position a transaction or event position carries.
-    pub fn public_position(&self) -> PublicPosition {
+    pub fn public_position(&self) -> LedgerPoint {
         match *self {
-            Position::Checkpoints { checkpoint } => PublicPosition {
-                checkpoint,
-                ..PublicPosition::default()
-            },
+            Position::Checkpoints { checkpoint } => LedgerPoint::checkpoint_start(checkpoint),
             Position::Transactions {
                 public_position, ..
             }
@@ -114,17 +149,17 @@ impl CursorKind {
     }
 }
 
-impl From<PublicPosition> for grpc::PublicPosition {
-    fn from(position: PublicPosition) -> Self {
+impl From<LedgerPoint> for grpc::PublicPosition {
+    fn from(point: LedgerPoint) -> Self {
         Self {
-            checkpoint: position.checkpoint,
-            transaction_index: position.transaction_index,
-            event_index: position.event_index,
+            checkpoint: point.checkpoint,
+            transaction_index: point.transaction_index,
+            event_index: point.event_index,
         }
     }
 }
 
-impl From<grpc::PublicPosition> for PublicPosition {
+impl From<grpc::PublicPosition> for LedgerPoint {
     fn from(position: grpc::PublicPosition) -> Self {
         Self {
             checkpoint: position.checkpoint,
@@ -182,7 +217,7 @@ impl TryFrom<grpc::CursorToken> for CursorToken {
             .ok()
             .and_then(CursorKind::from_proto)
             .with_context(|| format!("unknown cursor kind: {}", proto.kind))?;
-        let public_position = || -> anyhow::Result<PublicPosition> {
+        let public_position = || -> anyhow::Result<LedgerPoint> {
             proto
                 .public_position
                 .map(Into::into)
@@ -210,7 +245,7 @@ impl TryFrom<grpc::CursorToken> for CursorToken {
 mod tests {
     use super::*;
 
-    const PUBLIC: PublicPosition = PublicPosition {
+    const PUBLIC: LedgerPoint = LedgerPoint {
         checkpoint: 11,
         transaction_index: 2,
         event_index: 13,
@@ -234,11 +269,7 @@ mod tests {
             CursorToken::item(Position::Checkpoints { checkpoint: 7 }),
             CursorToken::boundary(Position::Transactions {
                 tx_seq: 10,
-                public_position: PublicPosition {
-                    checkpoint: 9,
-                    transaction_index: 4,
-                    event_index: 0,
-                },
+                public_position: LedgerPoint::transaction(9, 4),
             }),
             CursorToken::item(Position::Events {
                 tx_seq: 12,
@@ -249,7 +280,7 @@ mod tests {
             CursorToken::boundary(Position::Events {
                 tx_seq: 0,
                 event_index: 0,
-                public_position: PublicPosition::default(),
+                public_position: LedgerPoint::GENESIS,
             }),
         ] {
             let bytes = token.encode();
@@ -273,11 +304,7 @@ mod tests {
                 ],
                 CursorToken::item(Position::Transactions {
                     tx_seq: 7,
-                    public_position: PublicPosition {
-                        checkpoint: 42,
-                        transaction_index: 3,
-                        event_index: 0,
-                    },
+                    public_position: LedgerPoint::transaction(42, 3),
                 }),
                 &[
                     0x28, 0x01, 0x3a, 0x02, 0x10, 0x07, 0x4a, 0x04, 0x08, 0x2a, 0x10, 0x03,
@@ -293,11 +320,7 @@ mod tests {
                 CursorToken::item(Position::Events {
                     tx_seq: 7,
                     event_index: 1,
-                    public_position: PublicPosition {
-                        checkpoint: 42,
-                        transaction_index: 3,
-                        event_index: 1,
-                    },
+                    public_position: LedgerPoint::event(42, 3, 1),
                 }),
                 &[
                     0x28, 0x01, 0x42, 0x04, 0x10, 0x07, 0x18, 0x01, 0x4a, 0x06, 0x08, 0x2a, 0x10,
@@ -348,11 +371,7 @@ mod tests {
         );
         assert_eq!(
             token.position.public_position(),
-            PublicPosition {
-                checkpoint: 5,
-                transaction_index: 0,
-                event_index: 0,
-            }
+            LedgerPoint::checkpoint_start(5)
         );
     }
 

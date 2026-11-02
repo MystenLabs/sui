@@ -8,12 +8,13 @@ use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::Ordering as ProtoOrdering;
 use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
 use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 
 use crate::ErrorDetails;
 use crate::ErrorReason;
 use crate::RpcError;
-use crate::ledger_history::ledger_point::LedgerPoint;
+use crate::ledger_history::ledger_point::item_resume;
 use crate::ledger_history::watermark::RangeEnd;
 use crate::proto::google::rpc::ErrorInfo;
 use crate::proto::google::rpc::bad_request::FieldViolation;
@@ -822,7 +823,7 @@ where
         // position and kind; `ResolvedScan::resolve` restates it as the boundary at the first
         // position it admits. An Item at the last position admits none, so it keeps Item kind.
         if options.is_ascending() {
-            Some((LedgerPoint::of_cursor(cursor), position, cursor.kind))
+            Some((cursor.position.public_position(), position, cursor.kind))
         } else {
             Some((
                 descending_terminal_point,
@@ -838,7 +839,7 @@ where
         options: &QueryOptions,
     ) -> Option<(LedgerPoint, P, sui_rpc_cursor::CursorKind)> {
         let cursor = options.before.as_ref()?;
-        let point = LedgerPoint::of_cursor(cursor);
+        let point = cursor.position.public_position();
         let position: P = cursor.coordinate();
 
         if !hi_admits_upper_bound(self.bounds.hi, position) {
@@ -1048,7 +1049,7 @@ where
             }
             let before = options.before.as_ref()?;
             let upper = position(before);
-            (upper <= window.start).then(|| (LedgerPoint::of_cursor(before), upper))
+            (upper <= window.start).then(|| (before.position.public_position(), upper))
         }
     }
 }
@@ -1087,7 +1088,7 @@ where
             sui_rpc_cursor::CursorKind::Boundary => position > tip,
         };
         if past_tip {
-            let requested_checkpoint = LedgerPoint::of_cursor(cursor).checkpoint;
+            let requested_checkpoint = cursor.position.public_position().checkpoint;
             return Err(above_latest_available(
                 "cursor",
                 requested_checkpoint,
@@ -1129,7 +1130,7 @@ where
         && before.coordinate() <= end
     {
         return Some((
-            LedgerPoint::of_cursor(before),
+            before.position.public_position(),
             before.coordinate(),
             RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
@@ -1177,7 +1178,7 @@ where
             .before
             .as_ref()
             .filter(|before| ScanCursor::<P>::coordinate(*before) == position)
-            .map(LedgerPoint::of_cursor)
+            .map(|before| before.position.public_position())
     })
 }
 
@@ -1190,9 +1191,9 @@ fn after_resume_point(
 ) -> LedgerPoint {
     match (after.kind, resumed_kind) {
         (sui_rpc_cursor::CursorKind::Item, sui_rpc_cursor::CursorKind::Boundary) => {
-            LedgerPoint::item_resume(&after.position, ScanDirection::Ascending)
+            item_resume(&after.position, ScanDirection::Ascending)
         }
-        _ => LedgerPoint::of_cursor(after),
+        _ => after.position.public_position(),
     }
 }
 
@@ -1394,6 +1395,7 @@ fn assert_above_latest_available_error(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ledger_history::ledger_point::ledger_position;
 
     /// The event-coordinate window spanning whole transactions `[start, end)`.
     fn tx_window(range: Range<u64>) -> Range<IntraTxCoordinate> {
@@ -1436,7 +1438,7 @@ mod tests {
     fn tx_position(tx_seq: u64, point: LedgerPoint) -> Position {
         Position::Transactions {
             tx_seq,
-            public_position: point.into(),
+            public_position: point,
         }
     }
 
@@ -1444,7 +1446,7 @@ mod tests {
         Position::Events {
             tx_seq,
             event_index,
-            public_position: point.into(),
+            public_position: point,
         }
     }
 
@@ -3528,9 +3530,9 @@ mod tests {
             let resume = first_admitted_key(after).expect("model cursors have a successor");
             let resume_point = match after.kind {
                 sui_rpc_cursor::CursorKind::Item => {
-                    LedgerPoint::item_resume(&after.position, ScanDirection::Ascending)
+                    item_resume(&after.position, ScanDirection::Ascending)
                 }
-                sui_rpc_cursor::CursorKind::Boundary => LedgerPoint::of_cursor(after),
+                sui_rpc_cursor::CursorKind::Boundary => after.position.public_position(),
             };
             // The terminal cursor carries `after`'s point where both cursors name its position.
             let (reason, end, end_point) = match options.before.as_ref() {
@@ -3542,7 +3544,7 @@ mod tests {
                     if cursor_key(before) == resume {
                         resume_point
                     } else {
-                        LedgerPoint::of_cursor(before)
+                        before.position.public_position()
                     },
                 ),
                 _ => (RangeExhaustion::LedgerTip, resume, resume_point),
@@ -4170,7 +4172,7 @@ mod tests {
         assert_eq!(watermark.cursor, Some(past_tip_after.encode()));
         assert_eq!(
             watermark.cursor_position,
-            Some(past_tip_point.to_proto(&past_tip_after.position))
+            Some(ledger_position(past_tip_point, &past_tip_after.position))
         );
 
         // An Item cursor resumes right after its item.

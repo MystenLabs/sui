@@ -78,9 +78,9 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
-use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::base_types::ObjectID;
@@ -1126,7 +1126,7 @@ fn assert_response_positions(request: &Request, response: &[Frame]) {
                      {:?} ({named:?}): {response:#?} {request:?}",
                     token.position
                 );
-                let public = LedgerPoint::from(token.position.public_position());
+                let public = token.position.public_position();
                 assert!(
                     names_same_boundary(request, public, named),
                     "public position {public:?} of the cursor of frame {index} names the \
@@ -1596,11 +1596,11 @@ async fn assert_cursor_bound_claim(
         Endpoint::Events => Position::Events {
             tx_seq: BOUND_TX,
             event_index: 0,
-            public_position: point.into(),
+            public_position: point,
         },
         Endpoint::Transactions => Position::Transactions {
             tx_seq: BOUND_TX,
-            public_position: point.into(),
+            public_position: point,
         },
         Endpoint::Checkpoints => unreachable!("checkpoint positions are not modeled"),
     };
@@ -1688,11 +1688,11 @@ async fn assert_mid_checkpoint_cursor_bound(
         Endpoint::Events => Position::Events {
             tx_seq: MID_CHECKPOINT_BOUND_TX,
             event_index: 0,
-            public_position: boundary.into(),
+            public_position: boundary,
         },
         Endpoint::Transactions => Position::Transactions {
             tx_seq: MID_CHECKPOINT_BOUND_TX,
-            public_position: boundary.into(),
+            public_position: boundary,
         },
         Endpoint::Checkpoints => unreachable!("checkpoint positions are not modeled"),
     };
@@ -2073,7 +2073,7 @@ async fn ascending_past_tip_frames_echo_the_start_fields() {
                 LedgerPoint::transaction(beyond_tip, 2),
                 Position::Transactions {
                     tx_seq: total_txs,
-                    public_position: tip_point.into(),
+                    public_position: tip_point,
                 },
                 LedgerPoint::transaction(beyond_tip, 1),
             ),
@@ -2082,7 +2082,7 @@ async fn ascending_past_tip_frames_echo_the_start_fields() {
                 Position::Events {
                     tx_seq: total_txs,
                     event_index: 0,
-                    public_position: tip_point.into(),
+                    public_position: tip_point,
                 },
                 LedgerPoint::event(beyond_tip, 1, 0),
             ),
@@ -2093,12 +2093,12 @@ async fn ascending_past_tip_frames_echo_the_start_fields() {
             },
             Endpoint::Transactions => Position::Transactions {
                 tx_seq: total_txs + 3,
-                public_position: past_tip_point.into(),
+                public_position: past_tip_point,
             },
             Endpoint::Events => Position::Events {
                 tx_seq: total_txs + 3,
                 event_index: 0,
-                public_position: past_tip_point.into(),
+                public_position: past_tip_point,
             },
         };
 

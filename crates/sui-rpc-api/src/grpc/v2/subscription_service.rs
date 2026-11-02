@@ -42,6 +42,7 @@ use sui_rpc::proto::sui::rpc::v2::SubscribeTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::effects::TransactionEffectsAPI;
@@ -52,7 +53,6 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::filter::transaction_filter_to_query;
-use crate::ledger_history::ledger_point::LedgerPoint;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -330,7 +330,7 @@ fn transaction_item_watermark(
     item_watermark(
         Position::Transactions {
             tx_seq: tx_lo + transaction_index,
-            public_position: LedgerPoint::transaction(cp, transaction_index).into(),
+            public_position: LedgerPoint::transaction(cp, transaction_index),
         },
         ScanDirection::Ascending,
         boundary,
@@ -350,7 +350,7 @@ fn event_item_watermark(
         Position::Events {
             tx_seq: tx_lo + transaction_index,
             event_index,
-            public_position: LedgerPoint::event(cp, transaction_index, event_index).into(),
+            public_position: LedgerPoint::event(cp, transaction_index, event_index),
         },
         ScanDirection::Ascending,
         boundary,
@@ -363,7 +363,7 @@ fn transaction_tick_watermark(cp: u64, tx_hi: u64, boundary: Option<u64>) -> Wat
     boundary_watermark(
         Position::Transactions {
             tx_seq: tx_hi,
-            public_position: LedgerPoint::checkpoint_start(cp + 1).into(),
+            public_position: LedgerPoint::checkpoint_start(cp + 1),
         },
         boundary,
     )
@@ -375,7 +375,7 @@ fn event_tick_watermark(cp: u64, tx_hi: u64, boundary: Option<u64>) -> Watermark
         Position::Events {
             tx_seq: tx_hi,
             event_index: 0,
-            public_position: LedgerPoint::checkpoint_start(cp + 1).into(),
+            public_position: LedgerPoint::checkpoint_start(cp + 1),
         },
         boundary,
     )
@@ -567,6 +567,8 @@ mod tests {
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
+    use crate::ledger_history::ledger_point::ledger_position;
+
     #[test]
     fn initial_watermark_tick_covers_checkpoint_before_entry() {
         let options = QueryOptions::subscription();
@@ -586,13 +588,16 @@ mod tests {
         let point = LedgerPoint::checkpoint_start(42);
         let cursor = Position::Transactions {
             tx_seq: 100,
-            public_position: point.into(),
+            public_position: point,
         };
         assert_eq!(
             watermark.cursor,
             Some(sui_rpc_cursor::CursorToken::boundary(cursor).encode())
         );
-        assert_eq!(watermark.cursor_position, Some(point.to_proto(&cursor)));
+        assert_eq!(
+            watermark.cursor_position,
+            Some(ledger_position(point, &cursor))
+        );
     }
 
     /// Item frames resume right after their item; progress ticks at the start of the checkpoint
@@ -642,7 +647,7 @@ mod tests {
             cursor(&transaction_frames[0]),
             sui_rpc_cursor::CursorToken::item(Position::Transactions {
                 tx_seq: 30,
-                public_position: LedgerPoint::transaction(7, 0).into(),
+                public_position: LedgerPoint::transaction(7, 0),
             })
         );
         assert_eq!(
@@ -650,7 +655,7 @@ mod tests {
             sui_rpc_cursor::CursorToken::item(Position::Events {
                 tx_seq: 31,
                 event_index: 1,
-                public_position: LedgerPoint::event(7, 1, 1).into(),
+                public_position: LedgerPoint::event(7, 1, 1),
             })
         );
         assert_eq!(
@@ -658,7 +663,7 @@ mod tests {
             sui_rpc_cursor::CursorToken::boundary(Position::Events {
                 tx_seq: 33,
                 event_index: 0,
-                public_position: LedgerPoint::checkpoint_start(8).into(),
+                public_position: LedgerPoint::checkpoint_start(8),
             })
         );
     }

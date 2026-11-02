@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -27,7 +28,6 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
 use crate::ledger_history::filter::transaction_filter_to_query;
-use crate::ledger_history::ledger_point::LedgerPoint;
 use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::LedgerWindow;
 use crate::ledger_history::query_options::QueryOptions;
@@ -922,6 +922,7 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
     use sui_rpc_cursor::CursorToken;
 
+    use crate::ledger_history::ledger_point::ledger_position;
     use crate::ledger_history::watermark::ScanTerminal;
 
     use crate::ledger_history::query_options::ScanBounds;
@@ -1299,7 +1300,10 @@ mod tests {
             assert_eq!(watermark.checkpoint, expected_proof, "{case}");
             assert_eq!(
                 watermark.cursor_position,
-                Some(LedgerPoint::checkpoint_start(expected_cursor).to_proto(&expected_position)),
+                Some(ledger_position(
+                    LedgerPoint::checkpoint_start(expected_cursor),
+                    &expected_position
+                )),
                 "{case}: a checkpoint cursor names its own ledger point",
             );
             if let Some(covered) = covered {

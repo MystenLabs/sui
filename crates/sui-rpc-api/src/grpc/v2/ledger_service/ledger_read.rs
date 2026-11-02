@@ -4,12 +4,12 @@
 use std::ops::Range;
 
 use mysten_common::ZipDebugEqIteratorExt;
+use sui_rpc_cursor::LedgerPoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::LedgerTxSeqDigest;
 
 use crate::RpcError;
 use crate::RpcService;
-use crate::ledger_history::ledger_point::LedgerPoint;
 use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::below_serving_floor;
 

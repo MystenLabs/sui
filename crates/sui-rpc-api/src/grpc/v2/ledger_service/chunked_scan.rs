@@ -218,10 +218,10 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::ledger_history::ledger_point::LedgerPoint;
     use crate::ledger_history::query_options::RangeExhaustion;
     use crate::ledger_history::watermark::NaturalRangeEnd;
     use std::time::Instant;
+    use sui_rpc_cursor::LedgerPoint;
     use sui_rpc_cursor::Position;
 
     use prometheus::Registry;
@@ -257,7 +257,7 @@ mod tests {
                         RangeExhaustion::CheckpointBound,
                         Position::Transactions {
                             tx_seq: 0,
-                            public_position: LedgerPoint::GENESIS.into(),
+                            public_position: LedgerPoint::GENESIS,
                         },
                         LedgerPoint::GENESIS,
                         None,
@@ -279,7 +279,7 @@ mod tests {
                 end: NaturalRangeEnd::CheckpointBound,
                 position: Position::Transactions {
                     tx_seq: 0,
-                    public_position: LedgerPoint::GENESIS.into(),
+                    public_position: LedgerPoint::GENESIS,
                 },
                 cursor_position: LedgerPoint::GENESIS,
                 claimed_checkpoint: None,
@@ -306,7 +306,7 @@ mod tests {
                         RangeExhaustion::CheckpointBound,
                         Position::Transactions {
                             tx_seq: 0,
-                            public_position: LedgerPoint::GENESIS.into(),
+                            public_position: LedgerPoint::GENESIS,
                         },
                         LedgerPoint::GENESIS,
                         None,
@@ -443,7 +443,7 @@ mod tests {
                         RangeExhaustion::CheckpointBound,
                         Position::Transactions {
                             tx_seq: 0,
-                            public_position: LedgerPoint::GENESIS.into(),
+                            public_position: LedgerPoint::GENESIS,
                         },
                         LedgerPoint::GENESIS,
                         None,

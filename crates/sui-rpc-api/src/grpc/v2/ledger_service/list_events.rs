@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
@@ -28,7 +29,6 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::checkpoint_positions::CheckpointPositions;
 use crate::ledger_history::filter::event_filter_to_query;
-use crate::ledger_history::ledger_point::LedgerPoint;
 use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::IntraTxScanBounds;
 use crate::ledger_history::query_options::QueryOptions;
@@ -563,7 +563,7 @@ fn event_frontier_watermark(
         Position::Events {
             tx_seq: frontier.tx_seq,
             event_index: frontier.index,
-            public_position: cursor_position.into(),
+            public_position: cursor_position,
         },
         boundary,
     )
@@ -668,8 +668,7 @@ fn render_event_chunk(
                     row.checkpoint_number,
                     row.tx_offset as u64,
                     event_ref.position.index,
-                )
-                .into(),
+                ),
             },
             options.scan_direction(),
             checkpoint_boundary,
@@ -744,7 +743,7 @@ fn resolve_event_range(
     let range_end = resolved.range_end(&window, options, |position, point| Position::Events {
         tx_seq: position.tx_seq,
         event_index: position.index,
-        public_position: point.into(),
+        public_position: point,
     });
     Ok((resolved, range_end))
 }
@@ -772,6 +771,7 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
 
+    use crate::ledger_history::ledger_point::ledger_position;
     use crate::ledger_history::watermark::ScanTerminal;
     use sui_rpc_cursor::CursorToken;
 
@@ -817,7 +817,7 @@ mod tests {
             let expected_position = Position::Events {
                 tx_seq: frontier.tx_seq,
                 event_index: frontier.index,
-                public_position: cursor_position.into(),
+                public_position: cursor_position,
             };
             let watermark = event_frontier_watermark(
                 &options,
@@ -834,7 +834,7 @@ mod tests {
             assert_eq!(watermark.checkpoint, expected_proof);
             assert_eq!(
                 watermark.cursor_position,
-                Some(cursor_position.to_proto(&expected_position))
+                Some(ledger_position(cursor_position, &expected_position))
             );
             let terminal = ScanTerminal::ScanLimit { watermark };
             let response = end_response(
@@ -867,7 +867,7 @@ mod tests {
                 Position::Events {
                     tx_seq,
                     event_index,
-                    public_position: LedgerPoint::event(checkpoint, tx_offset, event_index).into(),
+                    public_position: LedgerPoint::event(checkpoint, tx_offset, event_index),
                 },
                 direction,
                 None,

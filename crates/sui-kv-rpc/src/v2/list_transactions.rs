@@ -24,7 +24,6 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
-use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
@@ -34,6 +33,7 @@ use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
@@ -327,8 +327,7 @@ pub(crate) async fn list_transactions(
                             public_position: LedgerPoint::transaction(
                                 item_checkpoint,
                                 tx_offset as u64,
-                            )
-                            .into(),
+                            ),
                         },
                         direction,
                         covered_checkpoint_bound,
@@ -455,7 +454,7 @@ fn transaction_frontier_watermark(
     boundary_watermark(
         Position::Transactions {
             tx_seq: position,
-            public_position: cursor_position.into(),
+            public_position: cursor_position,
         },
         *covered_checkpoint_bound,
     )
@@ -632,7 +631,7 @@ async fn resolve_tx_range(
     let resolved = ResolvedScan::<u64>::resolve(cp_range, window.clone(), options)?;
     let range_end = resolved.range_end(&window, options, |tx_seq, point| Position::Transactions {
         tx_seq,
-        public_position: point.into(),
+        public_position: point,
     });
     Ok((resolved, range_end))
 }
@@ -697,6 +696,7 @@ mod tests {
     use crate::config::StagesConfig;
     use crate::v2::get_transaction::get_transaction;
     use sui_inverted_index::ScanDirection;
+    use sui_rpc_api::ledger_history::ledger_point::ledger_position;
     use sui_rpc_cursor::CursorToken;
 
     use crate::v2::test_utils::{
@@ -721,7 +721,7 @@ mod tests {
         insert_checkpoint_rows(&mock, &checkpoint).await;
         let after_past_tip = CursorToken::boundary(Position::Transactions {
             tx_seq: 1_000_000,
-            public_position: LedgerPoint::checkpoint_start(1_000).into(),
+            public_position: LedgerPoint::checkpoint_start(1_000),
         })
         .encode();
         for (start_checkpoint, after) in [(Some(1_000), None), (None, Some(after_past_tip))] {
@@ -969,7 +969,7 @@ mod tests {
             .expect("ledger exhaustion proves a terminal boundary");
         let expected_cursor = CursorToken::boundary(Position::Transactions {
             tx_seq: 0,
-            public_position: sui_rpc_cursor::PublicPosition::default(),
+            public_position: LedgerPoint::GENESIS,
         })
         .encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
@@ -1086,7 +1086,7 @@ mod tests {
             // The cursor carries the frame's point.
             let cursor = Position::Transactions {
                 tx_seq: position,
-                public_position: expected_point.into(),
+                public_position: expected_point,
             };
             assert_eq!(
                 CursorToken::decode(watermark.cursor.as_deref().expect("cursor")).unwrap(),
@@ -1094,7 +1094,7 @@ mod tests {
             );
             assert_eq!(
                 watermark.cursor_position,
-                Some(expected_point.to_proto(&cursor))
+                Some(ledger_position(expected_point, &cursor))
             );
             assert_eq!(
                 watermark.checkpoint, expected_proof,
@@ -1133,8 +1133,7 @@ mod tests {
                     public_position: LedgerPoint::transaction(
                         row.checkpoint_number,
                         row.tx_offset as u64,
-                    )
-                    .into(),
+                    ),
                 },
                 ScanDirection::Ascending,
                 Some(8),
@@ -1152,11 +1151,7 @@ mod tests {
             Some(
                 &sui_rpc_cursor::CursorToken::item(Position::Transactions {
                     tx_seq: 42,
-                    public_position: sui_rpc_cursor::PublicPosition {
-                        checkpoint: 9,
-                        transaction_index: 5,
-                        event_index: 0,
-                    },
+                    public_position: LedgerPoint::transaction(9, 5),
                 })
                 .encode()
             )

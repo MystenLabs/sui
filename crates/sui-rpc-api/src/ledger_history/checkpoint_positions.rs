@@ -17,10 +17,10 @@ use std::ops::Range;
 
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc_cursor::LedgerPoint;
 
 use crate::ErrorReason;
 use crate::RpcError;
-use crate::ledger_history::ledger_point::LedgerPoint;
 use crate::ledger_history::query_options::IntraTxCoordinate;
 use crate::ledger_history::query_options::LedgerWindow;
 use crate::ledger_history::query_options::ScanWindow;
@@ -380,7 +380,7 @@ mod tests {
         let transaction_index = tx_seq - BOUNDARIES[checkpoint];
         Position::Transactions {
             tx_seq,
-            public_position: LedgerPoint::transaction(checkpoint as u64, transaction_index).into(),
+            public_position: LedgerPoint::transaction(checkpoint as u64, transaction_index),
         }
     }
 

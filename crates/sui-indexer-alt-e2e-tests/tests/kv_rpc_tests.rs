@@ -55,8 +55,8 @@ use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::LedgerPoint;
 use sui_rpc_cursor::Position;
-use sui_rpc_cursor::PublicPosition;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -3664,11 +3664,7 @@ async fn test_list_after_cursor_past_the_tip() {
     // A transaction cursor at `tx_seq`, the transaction at `transaction_index` in `checkpoint`.
     let tx = |tx_seq, checkpoint, transaction_index| Position::Transactions {
         tx_seq,
-        public_position: PublicPosition {
-            checkpoint,
-            transaction_index,
-            event_index: 0,
-        },
+        public_position: LedgerPoint::transaction(checkpoint, transaction_index),
     };
     // Past the tip, `tip_checkpoint` holds two transactions and the next checkpoint the rest.
     let past_tip = CursorToken::boundary(tx(tip_tx + 3, tip_checkpoint + 1, 1));
@@ -3734,10 +3730,7 @@ async fn test_list_after_cursor_past_the_tip() {
         CursorToken::item(Position::Events {
             tx_seq: tip_tx,
             event_index: 0,
-            public_position: PublicPosition {
-                checkpoint: tip_checkpoint,
-                ..PublicPosition::default()
-            },
+            public_position: LedgerPoint::checkpoint_start(tip_checkpoint),
         })
         .encode(),
     );
@@ -3752,11 +3745,7 @@ async fn test_list_after_cursor_past_the_tip() {
         CursorToken::boundary(Position::Events {
             tx_seq: tip_tx,
             event_index: 1,
-            public_position: PublicPosition {
-                checkpoint: tip_checkpoint,
-                transaction_index: 0,
-                event_index: 1,
-            },
+            public_position: LedgerPoint::event(tip_checkpoint, 0, 1),
         })
     );
     assert_eq!(resp.frames.last().unwrap().1.checkpoint, None);

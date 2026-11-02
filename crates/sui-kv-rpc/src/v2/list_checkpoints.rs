@@ -699,9 +699,10 @@ fn clamp_cp_frontier_past_last(
 mod tests {
     use super::*;
     use mysten_common::ZipDebugEqIteratorExt;
-    use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
+    use sui_rpc_api::ledger_history::ledger_point::ledger_position;
     use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
     use sui_rpc_cursor::CursorToken;
+    use sui_rpc_cursor::LedgerPoint;
 
     use crate::pipeline::PlacedFrontier;
     use crate::v2::test_utils::{
@@ -816,10 +817,10 @@ mod tests {
             // Ascending, an item frame resumes right after its checkpoint.
             assert_eq!(
                 watermark.cursor_position,
-                Some(
-                    LedgerPoint::checkpoint_start(checkpoint + 1)
-                        .to_proto(&Position::Checkpoints { checkpoint })
-                )
+                Some(ledger_position(
+                    LedgerPoint::checkpoint_start(checkpoint + 1),
+                    &Position::Checkpoints { checkpoint }
+                ))
             );
             if index < 2 {
                 assert!(response.end.is_none(), "response {index} is not terminal");
@@ -895,7 +896,7 @@ mod tests {
         let start = Position::Checkpoints { checkpoint: 0 };
         assert_eq!(
             watermark.cursor_position,
-            Some(LedgerPoint::checkpoint_start(0).to_proto(&start))
+            Some(ledger_position(LedgerPoint::checkpoint_start(0), &start))
         );
         let families = registry.gather();
         for name in LIST_PIPELINE_METRICS {
@@ -957,7 +958,7 @@ mod tests {
         let start = Position::Checkpoints { checkpoint: 0 };
         assert_eq!(
             watermark.cursor_position,
-            Some(LedgerPoint::checkpoint_start(0).to_proto(&start))
+            Some(ledger_position(LedgerPoint::checkpoint_start(0), &start))
         );
         assert_eq!(
             response.end.as_ref().and_then(|end| end.reason),
@@ -1053,7 +1054,10 @@ mod tests {
             );
             assert_eq!(
                 watermark.cursor_position,
-                Some(LedgerPoint::checkpoint_start(expected_cursor).to_proto(&cursor)),
+                Some(ledger_position(
+                    LedgerPoint::checkpoint_start(expected_cursor),
+                    &cursor
+                )),
                 "a checkpoint cursor's coordinate is its own ledger point"
             );
             assert_eq!(
