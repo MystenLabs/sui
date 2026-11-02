@@ -508,14 +508,25 @@ async fn test_consensus_observer_joins_committee() {
         .await;
     let digest = *tx.digest();
 
+    // The epoch store switches to the new epoch before reconfiguration starts the validator gRPC
+    // server, so submission is retried until the server accepts connections.
     let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key);
-    let response = tokio::time::timeout(
-        Duration::from_secs(60),
-        client.submit_transaction(SubmitTxRequest::new_transaction(tx), None),
-    )
-    .await
-    .expect("timed out submitting a transaction to the new validator")
-    .expect("new validator should accept the transaction");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let response = loop {
+        match client
+            .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
+            .await
+        {
+            Ok(response) => break response,
+            Err(e) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "new validator did not accept the transaction: {e:?}"
+                );
+                sleep(Duration::from_secs(1)).await;
+            }
+        }
+    };
     assert!(
         matches!(
             response.results.as_slice(),

@@ -285,8 +285,9 @@ impl ConsensusManager {
         );
 
         // The manager outlives role changes across epochs, so consensus runs as a validator only
-        // when this node is in the committee of the epoch being started. The key is read only
-        // then, because observers may not have a usable protocol key configured.
+        // when this node is in the committee of the epoch being started. The consensus protocol
+        // key is the worker key in `NodeConfig`. It is read only then, because observers may not
+        // have a usable worker key configured.
         let is_validator = epoch_store.is_validator();
         let protocol_keypair =
             is_validator.then(|| ProtocolKeyPair::new(node_config.worker_key_pair().copy()));
