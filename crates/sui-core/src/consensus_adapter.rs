@@ -265,6 +265,10 @@ impl ConsensusAdapter {
         }
     }
 
+    pub fn inflight_slot_freed_notify(&self) -> Arc<Notify> {
+        self.inflight_slot_freed_notify.clone()
+    }
+
     /// Get the current number of in-flight transactions
     pub fn num_inflight_transactions(&self) -> u64 {
         self.num_inflight_transactions.load(Ordering::Relaxed)
