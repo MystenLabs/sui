@@ -423,7 +423,7 @@ mod tests {
         test_utils::{
             self, basic_manifest_with_default_envs, basic_manifest_with_env,
             git::{self},
-            graph_builder::TestPackageGraph,
+            graph_builder::{Scenario, TestPackageGraph},
         },
     };
 
@@ -1730,7 +1730,7 @@ pkg_b = { local = "../pkg_b" }"#,
     }
 
     /// Load `root`, write its lockfile, and return the lockfile contents
-    async fn load_and_lock(scenario: &test_utils::graph_builder::Scenario) -> String {
+    async fn load_and_lock(scenario: &Scenario) -> String {
         let mut root = scenario.root_package("root").await;
         root.save_lockfile_to_disk().unwrap();
         root.output_path
@@ -1743,19 +1743,23 @@ pkg_b = { local = "../pkg_b" }"#,
     /// ```mermaid
     /// graph LR
     ///     root -->|use_env="default_alpha"| a
-    ///     a --> b --> c
+    ///     root -->|use_env="default_alpha"| b
     ///     a --> c
+    ///     b --> c
     /// ```
     ///
-    /// Reloading from the lockfile must load each pin in its recorded `use_environment`; otherwise
-    /// the digests don't match and the graph is repinned in the root's environment.
+    /// Reloading must produce the same lockfile. It used to fail with "multiple versions" of `c`,
+    /// because the failed lockfile check left packages from the wrong environment in the cache.
     async fn use_env_lockfile_round_trip() {
         let scenario = TestPackageGraph::new(["root"])
             .add_package("a", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
             .add_package("b", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
             .add_package("c", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
-            .add_deps([("a", "b"), ("a", "c"), ("b", "c")])
+            .add_deps([("a", "c"), ("b", "c")])
             .add_dep("root", "a", |dep| {
+                dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
+            })
+            .add_dep("root", "b", |dep| {
                 dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
             })
             .build();
@@ -1764,6 +1768,38 @@ pkg_b = { local = "../pkg_b" }"#,
         assert!(first.contains(r#"use_environment = "default_alpha""#));
 
         assert_eq!(first, load_and_lock(&scenario).await);
+    }
+
+    /// A repin writes the same lockfile when nothing has moved, so this test moves a branch to
+    /// show that a load with `use-environment` uses the lockfile. See also [git_no_repin].
+    #[test(tokio::test)]
+    async fn use_env_no_repin() {
+        let repo = git::new().await;
+        let commit1 = repo
+            .commit(|project| {
+                project.add_package("a", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
+            })
+            .await;
+        commit1.branch("branch-name").await;
+
+        let scenario = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "a", "branch-name", |dep| {
+                dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
+            })
+            .build();
+
+        let first = load_and_lock(&scenario).await;
+
+        let commit2 = repo
+            .commit(|project| {
+                project.add_package("a", |pkg| {
+                    pkg.add_env("default_alpha", DEFAULT_ENV_ID)
+                        .version("0.0.2")
+                })
+            })
+            .await;
+        commit2.branch("branch-name").await;
+
         assert_eq!(first, load_and_lock(&scenario).await);
     }
 
@@ -1795,7 +1831,81 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let second = load_and_lock(&scenario).await;
         assert!(second.contains(r#"use_environment = "default_beta""#));
-        assert!(!second.contains("default_alpha"));
+    }
+
+    #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root -->|use_env="default_alpha" then "default_beta"| a
+    /// ```
+    ///
+    /// `a` renames the environment that its pin records, so the lockfile is out of date. The load
+    /// must repin instead of failing on the environment that no longer exists.
+    async fn use_env_renamed_environment_repins() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
+            .add_dep("root", "a", |dep| {
+                dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
+            })
+            .build();
+
+        load_and_lock(&scenario).await;
+
+        for package in ["a", "root"] {
+            let manifest = scenario.path_for(package).join("Move.toml");
+            let contents = fs::read_to_string(&manifest).unwrap();
+            fs::write(&manifest, contents.replace("default_alpha", "default_beta")).unwrap();
+        }
+
+        let lockfile = load_and_lock(&scenario).await;
+        assert!(lockfile.contains(r#"use_environment = "default_beta""#));
+    }
+
+    #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root -->|use_env="default_alpha"| a
+    /// ```
+    ///
+    /// The manifest decides the environment of a dependency. A pin that records another
+    /// environment is out of date, even though `a` has no dependencies and its digest matches.
+    async fn use_env_stale_pin_repins() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
+            .add_dep("root", "a", |dep| {
+                dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
+            })
+            .build();
+
+        let first = load_and_lock(&scenario).await;
+
+        let stale = first.replace(
+            r#"use_environment = "default_alpha""#,
+            &format!(r#"use_environment = "{DEFAULT_ENV_NAME}""#),
+        );
+        assert_ne!(first, stale);
+        fs::write(scenario.path_for("root").join("Move.lock"), stale).unwrap();
+
+        assert_eq!(first, load_and_lock(&scenario).await);
+    }
+
+    /// The root package always loads in the requested environment, whatever its pin records.
+    #[test(tokio::test)]
+    async fn root_pin_environment_is_ignored() {
+        let scenario = TestPackageGraph::new([] as [&str; 0])
+            .add_package("root", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
+            .build();
+
+        let first = load_and_lock(&scenario).await;
+
+        let stale = first.replace(
+            &format!(r#"use_environment = "{DEFAULT_ENV_NAME}""#),
+            r#"use_environment = "default_alpha""#,
+        );
+        assert_ne!(first, stale);
+        fs::write(scenario.path_for("root").join("Move.lock"), stale).unwrap();
+
+        assert_eq!(first, load_and_lock(&scenario).await);
     }
 
     #[test(tokio::test)]

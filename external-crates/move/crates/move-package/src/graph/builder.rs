@@ -120,14 +120,27 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
             let dep = Pinned::from_lockfile(lockfile.file(), &pin.source)?;
-            // Load each pin in the environment it was resolved in, so its digest matches.
-            let dep_env = Environment::new(
-                pin.use_environment
-                    .clone()
-                    .unwrap_or_else(|| env.name().clone()),
-                env.id().clone(),
-            );
-            let package = self.cache.fetch(&dep, &dep_env, mtx, self.config).await?;
+            // Load each pin in the environment it was resolved in, so its digest matches. The root
+            // always loads in `env`, because the second pass checks every other pin against the
+            // manifest of the package that depends on it.
+            let dep_env = match &pin.use_environment {
+                Some(name) if !dep.is_root() => Environment::new(name.clone(), env.id().clone()),
+                _ => env.clone(),
+            };
+            let package = match self.cache.fetch(&dep, &dep_env, mtx, self.config).await {
+                Ok(package) => package,
+                Err(PackageError::DepError { dep, err })
+                    if check_digests && matches!(*err, PackageError::UnknownBuildEnv(_)) =>
+                {
+                    user_note!(
+                        "Updating dependencies for `{}` environment because {dep} no longer declares `{}`.",
+                        env.name(),
+                        dep_env.name()
+                    );
+                    return Ok(None);
+                }
+                Err(err) => return Err(err),
+            };
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
                 user_note!(
@@ -183,6 +196,20 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
                     .clone();
 
                 let dep = PinnedDependency::from_combined(dep.clone(), pin);
+
+                // The manifest decides the environment of a dependency, and the digest check can't
+                // detect a pin that records another one.
+                let target = &inner[*target_index];
+                if check_digests && dep.use_environment() != target.environment_name() {
+                    user_note!(
+                        "Updating dependencies for `{}` environment because the pin for {:?} records `{}` instead of `{}`.",
+                        env.name(),
+                        target_id,
+                        target.environment_name(),
+                        dep.use_environment()
+                    );
+                    return Ok(None);
+                }
 
                 inner.add_edge(*source_index, *target_index, dep.clone());
             }
