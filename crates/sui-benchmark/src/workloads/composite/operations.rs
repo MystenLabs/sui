@@ -94,6 +94,8 @@ pub const COIN_MERGE: &str = "coin_merge";
 pub const COIN_STALE_MERGE: &str = "coin_stale_merge";
 
 pub const GASLESS_TRANSFER: &str = "gasless_transfer";
+pub const GASLESS_ALLOWANCE_SPEND: &str = "gasless_allowance_spend";
+pub const GASLESS_SELF_ALLOWANCE_SPEND: &str = "gasless_self_allowance_spend";
 
 pub const SPONSORED_TX: &str = "sponsored_tx";
 
@@ -1265,7 +1267,7 @@ impl Operation for ImmutableObjectRead {
 }
 
 /// Spends `amount` through the allowance and returns it to the funder, keeping its balance level.
-fn add_allowance_spend_commands(
+pub fn add_allowance_spend_commands(
     builder: &mut ProgrammableTransactionBuilder,
     allowance_id: ObjectID,
     initial_shared_version: SequenceNumber,
@@ -1322,17 +1324,27 @@ fn allowance_spend_amount(address_balance_amount: u64) -> u64 {
 }
 
 /// Issues an `Allowance<Balance<SUI>>` funded by the tx sender for `spender`.
-/// The cap and expiration are effectively unlimited so spends never trip them.
+/// The cap, expiration, and rate limit are effectively unlimited so spends never trip them. The
+/// rate limit still makes the first spend anchor its window, which grows the allowance.
 pub fn add_allowance_issue_commands(
     builder: &mut ProgrammableTransactionBuilder,
     spender: SuiAddress,
 ) {
-    let no_rate_limit = builder.programmable_move_call(
+    let period_ms = builder.pure(86_400_000u64).unwrap();
+    let limit = builder.pure(U256::from(u64::MAX)).unwrap();
+    let rate_limit = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("periodic_rate_limit").unwrap(),
+        vec![],
+        vec![period_ms, limit],
+    );
+    let rate_limit = builder.programmable_move_call(
         MOVE_STDLIB_PACKAGE_ID,
         Identifier::new("option").unwrap(),
-        Identifier::new("none").unwrap(),
+        Identifier::new("some").unwrap(),
         vec!["0x2::allowance::RateLimit".parse().unwrap()],
-        vec![],
+        vec![rate_limit],
     );
     let args = vec![
         builder.pure("".to_string()).unwrap(),
@@ -1340,7 +1352,7 @@ pub fn add_allowance_issue_commands(
         builder.pure(Some(U256::from(u64::MAX))).unwrap(),
         builder.pure(None::<u64>).unwrap(),
         builder.pure(Some(u64::MAX)).unwrap(),
-        no_rate_limit,
+        rate_limit,
     ];
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,

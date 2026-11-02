@@ -17,15 +17,16 @@ pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, ALLOWED_PROPOSERS_TX,
     AccumulatorBalanceRead, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
     AllowanceSelfWithdraw, AllowanceWithdraw, AuthenticatedEventEmit, COIN_MERGE,
-    CoinReservationWithdraw, GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, MULTISIG_TX,
-    OWNED_CREATE, OWNED_DELETE, OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw,
-    ObjectBalanceWithdraw, OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM,
-    PARTY_HAND_OFF, PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE,
-    PARTY_RESTART_STREAM, PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD,
-    RECEIVE_CREATE_PARENT, RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE,
-    SHARED_DELETE_INCREMENT, SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSORED_TX,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    CoinReservationWithdraw, GASLESS_ALLOWANCE_SPEND, GASLESS_SELF_ALLOWANCE_SPEND,
+    GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, MULTISIG_TX, OWNED_CREATE,
+    OWNED_DELETE, OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
+    OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF,
+    PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
+    PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
+    RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
+    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSORED_TX, SharedCounterIncrement,
+    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
+    TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -46,7 +47,7 @@ use lifecycle::{
 };
 use operations::{
     AllowanceInfo, InitRequirement, Operation, OperationResources, PayloadAllowances,
-    ResourceRequest, add_allowance_issue_commands,
+    ResourceRequest, add_allowance_issue_commands, add_allowance_spend_commands,
 };
 use owned::{CoinMergeLifecycle, OwnedLifecycle};
 use party::PartyLifecycle;
@@ -187,6 +188,15 @@ fn sample_timestamp_window(rng: &mut impl Rng) -> (Option<u64>, Option<u64>) {
             (min, Some(max))
         }
     }
+}
+
+fn gasless_allowance_spend_enabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config.is_some_and(|cfg| cfg.gasless_allowance_spend())
+}
+
+/// Gasless allowance spends need SUI in the gasless allowlist as well as `gasless_allowance_spend`.
+fn gasless_sui_allowance_spend_allowed(protocol_config: &ProtocolConfig) -> bool {
+    gasless_sui_transfer_allowed(protocol_config) && protocol_config.gasless_allowance_spend()
 }
 
 fn allowances_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
@@ -435,8 +445,10 @@ pub struct CompositeWorkloadConfig {
     /// one. The coin-merge lifecycle uses the same probability and also needs the TestCoinCap.
     /// Zero disables both.
     pub owned_object_probability: f32,
-    /// Per-batch probability of adding a gasless SUI transfer to the partner. The protocol
-    /// config must allow SUI in gasless txs, or validators reject these txs.
+    /// Per-batch probability of adding a gasless tx. It transfers SUI to the partner or, when
+    /// `gasless_allowance_spend` is on and allowances are issued, spends through the neighbor or
+    /// own allowance. The protocol config must allow SUI in gasless txs, or validators reject
+    /// these txs.
     pub gasless_probability: f32,
     /// Per-tx probability that the partner payload sponsors a composite tx. Zero disables
     /// sponsorship.
@@ -696,6 +708,14 @@ struct AliasState {
     cycle_state: AliasRevokeCycleState,
 }
 
+/// Where a gasless tx withdraws its SUI from.
+#[derive(Clone, Copy, Debug)]
+enum GaslessSource {
+    SenderBalance,
+    NeighborAllowance,
+    OwnAllowance,
+}
+
 #[derive(Clone, Copy, Debug)]
 enum BatchTxKind {
     /// Standard composite PTB.
@@ -708,7 +728,7 @@ enum BatchTxKind {
     AliasAdd,
     /// Alias-signed transfer after revocation (expected to fail).
     InvalidPostRevocation,
-    /// A gasless SUI transfer.
+    /// A gasless SUI transfer or allowance spend.
     Gasless,
     /// A tx from the payload's multisig account.
     Multisig,
@@ -1215,33 +1235,56 @@ impl CompositePayload {
         tx
     }
 
-    /// Builds a gasless tx that sends SUI from the sender's address balance to the partner.
-    /// Gasless txs may call only framework fund functions, so it carries no sampled ops.
+    /// Builds a gasless tx that sends SUI from `source` to the partner, or for an allowance
+    /// back to its funder. Gasless txs may call only framework fund functions, so it carries no
+    /// sampled ops.
     fn generate_gasless_transaction(
         &mut self,
         sender: SuiAddress,
         keypair: &AccountKeyPair,
         current_epoch: u64,
+        source: GaslessSource,
     ) -> Transaction {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let withdrawal = builder
-            .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(1, GAS::type_tag()))
-            .unwrap();
-        let balance = builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            Identifier::new("balance").unwrap(),
-            Identifier::new("redeem_funds").unwrap(),
-            vec![GAS::type_tag()],
-            vec![withdrawal],
-        );
-        let recipient = builder.pure(self.partner_address).unwrap();
-        builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            Identifier::new("balance").unwrap(),
-            Identifier::new("send_funds").unwrap(),
-            vec![GAS::type_tag()],
-            vec![balance, recipient],
-        );
+        let allowance = match source {
+            GaslessSource::SenderBalance => None,
+            GaslessSource::NeighborAllowance => Some(self.allowances.unwrap().neighbor),
+            GaslessSource::OwnAllowance => Some(self.allowances.unwrap().own),
+        };
+        let op_name = if let Some((allowance_id, initial_shared_version, funder)) = allowance {
+            add_allowance_spend_commands(
+                &mut builder,
+                allowance_id,
+                initial_shared_version,
+                funder,
+                1,
+            );
+            if funder == sender {
+                GASLESS_SELF_ALLOWANCE_SPEND
+            } else {
+                GASLESS_ALLOWANCE_SPEND
+            }
+        } else {
+            let withdrawal = builder
+                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(1, GAS::type_tag()))
+                .unwrap();
+            let balance = builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("balance").unwrap(),
+                Identifier::new("redeem_funds").unwrap(),
+                vec![GAS::type_tag()],
+                vec![withdrawal],
+            );
+            let recipient = builder.pure(self.partner_address).unwrap();
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("balance").unwrap(),
+                Identifier::new("send_funds").unwrap(),
+                vec![GAS::type_tag()],
+                vec![balance, recipient],
+            );
+            GASLESS_TRANSFER
+        };
         let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
         let mut data = TransactionData::new_programmable_with_address_balance_gas(
             sender,
@@ -1252,7 +1295,7 @@ impl CompositePayload {
             current_epoch,
             nonce,
         );
-        let mut op_set = OperationSet::new().with(GASLESS_TRANSFER);
+        let mut op_set = OperationSet::new().with(op_name);
         if self.sample_restrict_proposers() {
             self.restrict_proposers(&mut data, current_epoch);
             op_set = op_set.with(ALLOWED_PROPOSERS_TX);
@@ -1702,10 +1745,24 @@ impl Payload for CompositePayload {
             && rng.gen_bool(self.config.gasless_probability as f64)
         {
             self.direct_submission = true;
+            let source = if self.allowances.is_some()
+                && gasless_allowance_spend_enabled(system_state.protocol_config.as_ref())
+            {
+                *[
+                    GaslessSource::SenderBalance,
+                    GaslessSource::NeighborAllowance,
+                    GaslessSource::OwnAllowance,
+                ]
+                .choose(&mut rng)
+                .unwrap()
+            } else {
+                GaslessSource::SenderBalance
+            };
             transactions.push(self.generate_gasless_transaction(
                 sender,
                 keypair.as_ref(),
                 current_epoch,
+                source,
             ));
         }
 
@@ -1751,6 +1808,14 @@ impl Payload for CompositePayload {
                     "gasless composite transfer executed",
                     gasless_sui_transfer_allowed
                 );
+                if tx_info.op_set.contains(GASLESS_ALLOWANCE_SPEND)
+                    || tx_info.op_set.contains(GASLESS_SELF_ALLOWANCE_SPEND)
+                {
+                    assert_reachable_gated!(
+                        "gasless composite allowance spend executed",
+                        gasless_sui_allowance_spend_allowed
+                    );
+                }
             }
             if let (BatchTxKind::Multisig, BatchedTransactionStatus::Success { effects }) =
                 (tx_info.kind, &result.status)
