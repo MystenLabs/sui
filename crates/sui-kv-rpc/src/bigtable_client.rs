@@ -372,9 +372,21 @@ impl BigTableClient {
     }
 
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
-    /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
-    /// during filter validation. `pacing` decides which scan watermarks reach
-    /// the stream (see [`crate::operation::QueryContext::watermark_pacing`]).
+    /// semaphore; each unique stored dimension key in the query is one
+    /// concurrent Bigtable scan. Filter validation caps a request at
+    /// `max_bitmap_filter_literals` literals, and a transaction filter's
+    /// `AffectedAddress` literal also scans the `Sender` dimension, so one
+    /// request runs at most twice `max_bitmap_filter_literals` concurrent
+    /// Bigtable scans. The synthetic tx universe key is generated in memory
+    /// and never read from Bigtable. `pacing` decides which scan watermarks
+    /// reach the stream (see [`crate::operation::QueryContext::watermark_pacing`]).
+    ///
+    /// `budget` is raised to the query's unique leaf count when it is lower,
+    /// so every leaf stream can report its first bucket before `SCAN_LIMIT`.
+    /// Config validation keeps `budget >= max_bitmap_filter_literals`, but a
+    /// query can have more leaves than literals: a transaction filter's
+    /// `AffectedAddress` literal also scans the `Sender` dimension, and an
+    /// exclude-only term adds a synthetic universe include.
     pub(crate) fn eval_bitmap_query_stream<F>(
         &self,
         query: BitmapQuery,
@@ -389,6 +401,7 @@ impl BigTableClient {
     where
         F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
     {
+        let budget = budget.max(query.unique_leaf_count() as u64);
         let source = BigTableBitmapSource::new(self.inner.clone(), spec);
         eval_bitmap_query_stream(
             source,
