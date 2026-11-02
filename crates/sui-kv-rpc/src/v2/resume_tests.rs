@@ -1859,7 +1859,16 @@ async fn affected_address_filters_match_senders_within_literal_budget() {
         };
         let expected = expected_items(&request, SPARSE_CHECKPOINTS);
         let mut received = Vec::new();
-        page_to_end(&ctx, &request, &expected, &mut received, None).await;
+        page_to_end(
+            &ctx,
+            &request,
+            &expected,
+            &mut received,
+            &[],
+            None,
+            ResumeMode::Cursor,
+        )
+        .await;
         assert_eq!(received, expected, "{endpoint:?}");
         server.abort();
     }
