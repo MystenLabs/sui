@@ -62,7 +62,7 @@
   }
 }
 
-//# run-graphql --cursors 1
+//# run-graphql --cursors bcs(0u8,2u8,1)
 { 
   # Fetch an epoch and its checkpoints with cursors applied
   epoch0checkpointsAfterCursor1: epoch(epochId: 0) {

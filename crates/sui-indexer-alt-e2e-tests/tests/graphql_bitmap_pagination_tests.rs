@@ -20,7 +20,6 @@ use sui_indexer_alt_e2e_tests::local_ingestion_client_args;
 use sui_indexer_alt_e2e_tests::write_checkpoint;
 use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
-use sui_kv_rpc::KvRpcConfig;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
@@ -66,10 +65,6 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
     let cluster = OffchainCluster::new(
         client_args,
         OffchainClusterConfig {
-            kv_rpc_config: KvRpcConfig {
-                enable_list_apis: Some(true),
-                ..Default::default()
-            },
             // Minimum set of PG pipelines. Graphql's watermark task polls the named pipelines.
             indexer_config: IndexerConfig {
                 pipeline: PipelineLayer {
@@ -411,23 +406,29 @@ async fn checkpoint_transactions_page(
     (digests, page_info)
 }
 
-/// Re-encode a transactions cursor with its checkpoint hint replaced,
-/// mimicking position-only cursor sources (e.g. graphql's pg path) that
-/// synthesize a hint instead of carrying a real one.
-fn restamp_cursor_checkpoint(cursor: &str, checkpoint: u64) -> String {
-    let bytes = Base64::decode(cursor).expect("cursor should be base64");
-    let token = CursorToken::decode(&bytes).expect("cursor should decode");
-    let position = match token.position {
-        Position::Transactions { tx_seq, .. } => Position::Transactions { checkpoint, tx_seq },
-        position => panic!("expected transactions cursor, got {position:?}"),
-    };
-    Base64::encode(
-        CursorToken {
-            kind: token.kind,
-            position,
-        }
-        .encode(),
-    )
+/// A legacy transactions cursor at `tx_seq` labelled with `checkpoint`, as Postgres-backed
+/// pagination issued it (with label 0) or a client gets it straight from the ledger service.
+fn legacy_cursor(checkpoint: u64, tx_seq: u64) -> String {
+    Base64::encode(CursorToken::item(Position::Transactions { checkpoint, tx_seq }).encode())
+}
+
+/// A GraphQL cursor at the transaction at `(checkpoint, transaction_index)`, with no ledger bytes,
+/// as subscriptions mint them: the format marker, then the BCS envelope `Transaction` (0),
+/// `OwnedCursor::Point` (0), `Point::At` (0), and the key.
+fn place_tx_cursor(checkpoint: u64, transaction_index: u64) -> String {
+    let mut bytes = vec![0x00, 0, 0, 0];
+    bytes.extend(checkpoint.to_le_bytes());
+    bytes.extend(transaction_index.to_le_bytes());
+    Base64::encode(bytes)
+}
+
+/// The event counterpart of [`place_tx_cursor`]: envelope `Event` (1).
+fn place_event_cursor(checkpoint: u64, transaction_index: u64, event_index: u32) -> String {
+    let mut bytes = vec![0x00, 1, 0, 0];
+    bytes.extend(checkpoint.to_le_bytes());
+    bytes.extend(transaction_index.to_le_bytes());
+    bytes.extend(event_index.to_le_bytes());
+    Base64::encode(bytes)
 }
 
 fn test_event(package: ObjectID, module: &str, sender: SuiAddress, type_str: &str) -> Event {
@@ -653,9 +654,8 @@ async fn exact_fit_page_reports_no_further_page() {
 }
 
 /// A transactions cursor's checkpoint is a hint: the grpc scan window is driven by the tx_seq
-/// position clamp, so neutralized hints — `0` on `after`, `u64::MAX` on `before`, the values
-/// position-only cursor sources (e.g. graphql's pg path) synthesize — must page identically to the
-/// real checkpoints grpc mints.
+/// position clamp, so the placeholder hint `0` that position-only cursor sources (e.g. graphql's pg
+/// path) mint must page identically to the real checkpoints grpc mints.
 #[tokio::test]
 async fn cursor_checkpoint_hint_is_redundant() {
     let (cluster, temp_dir) = alpha_cluster().await;
@@ -680,6 +680,10 @@ async fn cursor_checkpoint_hint_is_redundant() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     fn digests(page: &[(String, String)]) -> Vec<String> {
         page.iter().map(|(_, digest)| digest.clone()).collect()
@@ -691,7 +695,10 @@ async fn cursor_checkpoint_hint_is_redundant() {
     let before_real = all[4].0.clone();
     let expected = digests(&all[1..4]);
 
-    // Baseline: the between-page with the real checkpoint hints grpc minted.
+    // Checkpoint 0 holds one transaction, so Alice's six are sequence numbers 1 to 6.
+    let (after_seq, before_seq) = (1, 5);
+
+    // Baseline: the between-page with the cursors GraphQL minted from the ledger's pages.
     let real = transactions_page(
         &cluster,
         &alice,
@@ -702,28 +709,28 @@ async fn cursor_checkpoint_hint_is_redundant() {
     .await;
     assert_eq!(digests(&real), expected);
 
-    // Pg-minted cursors carry the `checkpoint: 0` placeholder, which graphql's grpc edge rewrites
-    // to the neutral upper sentinel before forwarding: a client round-tripping a pg-minted cursor
-    // as `before` must see the same page.
+    // Pg-minted cursors carry the `checkpoint: 0` placeholder, which graphql forwards unchanged and
+    // the ledger does not bound the scan by: a client passing a pg-minted cursor as `before` must
+    // see the same page.
     let pg_minted = transactions_page(
         &cluster,
         &alice,
         false,
         Some(after_real.clone()),
-        Some(restamp_cursor_checkpoint(&before_real, 0)),
+        Some(legacy_cursor(0, before_seq)),
     )
     .await;
     assert_eq!(digests(&pg_minted), expected);
 
-    // Ordering-invariance: the same neutralized window paged from the back (`last`, a descending
-    // scan). `after`/`before` bound coordinate sides, not scan-order sides, so the neutral values
-    // hold in both orderings.
+    // Ordering-invariance: the same placeholder-labelled window paged from the back (`last`, a
+    // descending scan). `after`/`before` bound coordinate sides, not scan-order sides, so the
+    // placeholder hints hold in both orderings.
     let neutral_desc = transactions_page(
         &cluster,
         &alice,
         true,
-        Some(restamp_cursor_checkpoint(&after_real, 0)),
-        Some(restamp_cursor_checkpoint(&before_real, 0)),
+        Some(legacy_cursor(0, after_seq)),
+        Some(legacy_cursor(0, before_seq)),
     )
     .await;
     assert_eq!(digests(&neutral_desc), expected);
@@ -735,7 +742,7 @@ async fn cursor_checkpoint_hint_is_redundant() {
         &alice,
         false,
         Some(after_real),
-        Some(restamp_cursor_checkpoint(&before_real, 1)),
+        Some(legacy_cursor(1, before_seq)),
     )
     .await;
     assert_eq!(digests(&wrong), expected);
@@ -768,6 +775,10 @@ async fn transactions_empty_window_past_cursor_has_no_more_pages() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     let all = transactions_page(&cluster, &alice, false, None, None).await;
     assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
@@ -781,14 +792,9 @@ async fn transactions_empty_window_past_cursor_has_no_more_pages() {
         // Forward, cursor in a checkpoint at or past `beforeCheckpoint`.
         (&before_cp2, false, Some(cursor(3)), None),
         (&before_cp2, false, Some(cursor(5)), None),
-        // Forward, a cursor with a placeholder checkpoint hint (as pg-minted cursors carry) that
-        // still lies past the window.
-        (
-            &before_cp2,
-            false,
-            Some(restamp_cursor_checkpoint(&cursor(4), 0)),
-            None,
-        ),
+        // Forward, a legacy cursor with the placeholder checkpoint label pg-minted cursors carry,
+        // at Alice's fifth transaction (sequence number 5), which still lies past the window.
+        (&before_cp2, false, Some(legacy_cursor(0, 5)), None),
     ];
 
     for (filter, from_back, after, before) in cases {
@@ -895,6 +901,10 @@ async fn events_empty_window_past_cursor_has_no_more_pages() {
         .wait_for_graphql(2, Duration::from_secs(30))
         .await
         .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
 
     let sender = json!({ "sender": alice.to_string() });
     let (all, _) = events_page(&cluster, &sender, Some(50), None, None, None).await;
@@ -989,6 +999,179 @@ async fn events_empty_window_past_cursor_has_no_more_pages() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn transactions_cursor_window_ends() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1).to_string();
+
+    // Three Alice transactions in each of cp 1 and cp 2.
+    let mut total_txs = 1u64;
+    for cp in [1u64, 2] {
+        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
+        for i in 0..3u64 {
+            builder = builder
+                .start_transaction(1)
+                .create_owned_object(cp * 10 + i)
+                .finish_transaction();
+        }
+        total_txs += 3;
+        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
+            .await
+            .unwrap();
+    }
+    cluster
+        .wait_for_graphql(2, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
+
+    let all = transactions_page(&cluster, &alice, false, None, None).await;
+    assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
+    let cursor = |i: usize| Some(all[i].0.clone());
+    let filter = json!({ "sentAddress": alice });
+    let empty = json!({
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "startCursor": null,
+        "endCursor": null,
+    });
+
+    let (edges, info) =
+        transactions_page_info(&cluster, &filter, false, cursor(0), cursor(3)).await;
+    assert_eq!(edges, 2, "forward: {info}");
+    let after = info["endCursor"].as_str().map(String::from);
+    let (edges, info) = transactions_page_info(&cluster, &filter, false, after, cursor(3)).await;
+    assert_eq!((edges, info), (0, empty.clone()), "forward, next page");
+
+    let (edges, info) = transactions_page_info(&cluster, &filter, true, cursor(2), cursor(5)).await;
+    assert_eq!(edges, 2, "backward: {info}");
+    let before = info["startCursor"].as_str().map(String::from);
+    let (edges, info) = transactions_page_info(&cluster, &filter, true, cursor(2), before).await;
+    assert_eq!((edges, info), (0, empty.clone()), "backward, next page");
+
+    for (after, before) in [(3, 1), (2, 2), (0, 1), (2, 3)] {
+        for from_back in [false, true] {
+            let (edges, info) =
+                transactions_page_info(&cluster, &filter, from_back, cursor(after), cursor(before))
+                    .await;
+            assert_eq!(
+                (edges, info),
+                (0, empty.clone()),
+                "after tx{after}, before tx{before}, from_back={from_back}"
+            );
+        }
+    }
+
+    let (edges, info) = transactions_page_info(&cluster, &filter, true, cursor(5), None).await;
+    assert_eq!(edges, 0, "last, after tx5: {info}");
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(true),
+        "last, after tx5: {info}"
+    );
+    let (edges, info) = transactions_page_info(&cluster, &filter, false, None, cursor(0)).await;
+    assert_eq!(edges, 0, "first, before tx0: {info}");
+    assert_eq!(
+        info["hasNextPage"],
+        json!(true),
+        "first, before tx0: {info}"
+    );
+}
+
+/// Events counterpart of [`transactions_cursor_window_ends`].
+#[tokio::test]
+async fn events_cursor_window_ends() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let pkg = ObjectID::from_single_byte(0x42);
+
+    // Two Alice transactions in each of cp 1 and cp 2, each emitting two events.
+    let mut total_txs = 1u64;
+    for cp in [1u64, 2] {
+        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
+        for i in 0..2u64 {
+            let ev = || test_event(pkg, "m", alice, "0x42::m::T");
+            builder = builder
+                .start_transaction(1)
+                .with_events(vec![ev(), ev()])
+                .create_owned_object(cp * 10 + i)
+                .finish_transaction();
+        }
+        total_txs += 2;
+        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
+            .await
+            .unwrap();
+    }
+    cluster
+        .wait_for_graphql(2, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 2");
+    cluster
+        .wait_for_kv_rpc(2, Duration::from_secs(30))
+        .await
+        .expect("kv-rpc did not reach checkpoint 2");
+
+    let filter = json!({ "sender": alice.to_string() });
+    let (all, _) = events_page(&cluster, &filter, Some(50), None, None, None).await;
+    assert_eq!(all.len(), 8, "expected all Alice events, got {all:?}");
+    let cursor = |i: usize| Some(all[i].0.clone());
+    let empty = json!({
+        "hasNextPage": false,
+        "hasPreviousPage": false,
+        "startCursor": null,
+        "endCursor": null,
+    });
+
+    let (page, info) = events_page(&cluster, &filter, Some(10), cursor(0), None, cursor(3)).await;
+    assert_eq!(page.len(), 2, "forward: {info}");
+    let after = info["endCursor"].as_str().map(String::from);
+    let (page, info) = events_page(&cluster, &filter, Some(10), after, None, cursor(3)).await;
+    assert_eq!((page.len(), info), (0, empty.clone()), "forward, next page");
+
+    let (page, info) = events_page(&cluster, &filter, None, cursor(2), Some(10), cursor(5)).await;
+    assert_eq!(page.len(), 2, "backward: {info}");
+    let before = info["startCursor"].as_str().map(String::from);
+    let (page, info) = events_page(&cluster, &filter, None, cursor(2), Some(10), before).await;
+    assert_eq!(
+        (page.len(), info),
+        (0, empty.clone()),
+        "backward, next page"
+    );
+
+    for (after, before) in [(5, 1), (2, 2), (0, 1), (1, 2), (3, 4)] {
+        for (first, last) in [(Some(10), None), (None, Some(10))] {
+            let (page, info) = events_page(
+                &cluster,
+                &filter,
+                first,
+                cursor(after),
+                last,
+                cursor(before),
+            )
+            .await;
+            assert_eq!(
+                (page.len(), info),
+                (0, empty.clone()),
+                "after e{after}, before e{before}, last={last:?}"
+            );
+        }
+    }
+
+    let (page, info) = events_page(&cluster, &filter, None, cursor(7), Some(10), None).await;
+    assert_eq!(page.len(), 0, "last, after e7: {info}");
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(true),
+        "last, after e7: {info}"
+    );
+    let (page, info) = events_page(&cluster, &filter, Some(10), None, None, cursor(0)).await;
+    assert_eq!(page.len(), 0, "first, before e0: {info}");
+    assert_eq!(info["hasNextPage"], json!(true), "first, before e0: {info}");
 }
 
 #[tokio::test]
@@ -1900,5 +2083,126 @@ async fn paging_back_from_empty_last_after_page_skips_nothing() {
         page_count == 0 || collected == expected,
         "paging back skipped a transaction: got {collected:?} over {page_count} pages, expected \
          {expected:?} or no previous page"
+    );
+}
+
+/// Cursors that carry only a place inside a checkpoint (as subscriptions mint them) resume there:
+/// GraphQL sends the place as the request's start or end position. Each page asks for one item
+/// and its lookahead, too few to reach the place from the checkpoint's start or end, so a ledger
+/// service that started at the checkpoint's edge would return only items GraphQL drops.
+#[tokio::test]
+async fn place_cursors_resume_inside_a_checkpoint() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let alice = TestCheckpointBuilder::derive_address(1);
+    let pkg = ObjectID::from_single_byte(0x42);
+    let ev = || test_event(pkg, "m", alice, "0x42::m::T");
+
+    // Six Alice transactions in cp 1, with two events each.
+    let mut builder = TestCheckpointBuilder::new(1).with_network_total_transactions(1);
+    for i in 0..6u64 {
+        builder = builder
+            .start_transaction(1)
+            .with_events(vec![ev(), ev()])
+            .create_owned_object(i)
+            .finish_transaction();
+    }
+    let checkpoint = builder.build_checkpoint();
+    let digest = |i: usize| Base58::encode(checkpoint.transactions[i].transaction.digest());
+    let digests: Vec<String> = (0..6).map(digest).collect();
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let query = r#"query($sender: SuiAddress, $first: Int, $last: Int, $after: String, $before: String) {
+        transactions(first: $first, last: $last, filter: { sentAddress: $sender }, after: $after, before: $before) {
+            edges { node { digest } }
+            pageInfo { hasNextPage hasPreviousPage }
+        }
+    }"#;
+    let transactions = |variables: Value| {
+        let cluster = &cluster;
+        async move {
+            let resp = graphql(cluster, query, variables).await;
+            let edges = resp["transactions"]["edges"]
+                .as_array()
+                .unwrap_or_else(|| panic!("expected edges array in {resp}"))
+                .iter()
+                .map(|e| e["node"]["digest"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>();
+            (edges, resp["transactions"]["pageInfo"].clone())
+        }
+    };
+    let sender = alice.to_string();
+
+    let (page, info) = transactions(json!({
+        "sender": sender, "first": 1, "after": place_tx_cursor(1, 3),
+    }))
+    .await;
+    assert_eq!(page, digests[4..5], "first: 1 after tx3: {info}");
+    assert_eq!(
+        info["hasNextPage"],
+        json!(true),
+        "first: 1 after tx3: {info}"
+    );
+
+    let (page, info) = transactions(json!({
+        "sender": sender, "last": 1, "before": place_tx_cursor(1, 3),
+    }))
+    .await;
+    assert_eq!(page, digests[2..3], "last: 1 before tx3: {info}");
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(true),
+        "last: 1 before tx3: {info}"
+    );
+
+    // The window ends at a position inside the last checkpoint the ledger has: the page reaches
+    // the `before` cursor, with more past it.
+    let (page, info) = transactions(json!({
+        "sender": sender,
+        "first": 10,
+        "after": place_tx_cursor(1, 1),
+        "before": place_tx_cursor(1, 4),
+    }))
+    .await;
+    assert_eq!(page, digests[2..4], "between tx1 and tx4: {info}");
+    assert_eq!(
+        info["hasNextPage"],
+        json!(true),
+        "between tx1 and tx4: {info}"
+    );
+
+    let filter = json!({ "sender": sender });
+    let events = |page: Vec<(String, String, u64)>| {
+        page.into_iter()
+            .map(|(_, digest, index)| (digest, index))
+            .collect::<Vec<_>>()
+    };
+
+    // After a transaction's last event, the page resumes at the next transaction.
+    let after = Some(place_event_cursor(1, 2, 1));
+    let (page, info) = events_page(&cluster, &filter, Some(1), after, None, None).await;
+    assert_eq!(
+        events(page),
+        [(digests[3].clone(), 0)],
+        "after tx2's last event: {info}"
+    );
+
+    let after = Some(place_event_cursor(1, 2, 0));
+    let (page, info) = events_page(&cluster, &filter, Some(1), after, None, None).await;
+    assert_eq!(
+        events(page),
+        [(digests[2].clone(), 1)],
+        "after tx2's first event: {info}"
+    );
+
+    let before = Some(place_event_cursor(1, 3, 1));
+    let (page, info) = events_page(&cluster, &filter, None, None, Some(1), before).await;
+    assert_eq!(
+        events(page),
+        [(digests[3].clone(), 0)],
+        "before tx3's last event: {info}"
     );
 }

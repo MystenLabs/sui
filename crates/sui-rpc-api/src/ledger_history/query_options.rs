@@ -10,8 +10,13 @@ use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 
+use crate::ErrorDetails;
 use crate::ErrorReason;
 use crate::RpcError;
+use crate::ledger_history::ledger_point::LedgerPoint;
+use crate::ledger_history::ledger_point::TerminalLedgerPosition;
+use crate::ledger_history::watermark::RangeEnd;
+use crate::proto::google::rpc::ErrorInfo;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 
 const ORDERING_ASCENDING: i32 = ProtoOrdering::Ascending as i32;
@@ -90,6 +95,43 @@ pub struct ScanBounds<P> {
 
 pub type IntraTxScanBounds = ScanBounds<IntraTxCoordinate>;
 
+/// A request's checkpoint window in a lane's scan-position space, narrowed to the request's start
+/// and end positions inside the window's edge checkpoints (see
+/// [`CheckpointPositions`](crate::ledger_history::checkpoint_positions::CheckpointPositions)).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScanWindow<P> {
+    /// Half-open scan-position interval. A start position past the end position leaves it
+    /// inverted.
+    pub range: Range<P>,
+    /// Whether `range.start` is not the first position of the window's first checkpoint, so the
+    /// window may leave part of that checkpoint out. An event index past its transaction's events
+    /// sets it even where it leaves nothing out, which only makes coverage claims conservative.
+    pub start_cuts_checkpoint: bool,
+    /// Whether `range.end` is not the end of the window's last checkpoint, so the window may leave
+    /// part of that checkpoint out. As for `start_cuts_checkpoint`, an event index past its
+    /// transaction's events sets it even where it leaves nothing out.
+    pub end_cuts_checkpoint: bool,
+    /// The same window in ledger coordinates.
+    pub ledger: LedgerWindow,
+}
+
+/// A request's window in ledger coordinates, for placing the resume point of a scan's terminal
+/// frame, and the public position of its cursor, where the window names it (see
+/// [`ResolvedScan::end_ledger_position`]).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LedgerWindow {
+    /// The point of [`ScanWindow::range`]'s start.
+    pub start: LedgerPoint,
+    /// The point of [`ScanWindow::range`]'s end.
+    pub end: LedgerPoint,
+    /// For a window that holds no checkpoint (the request's checkpoint window, clamped to this
+    /// server's tip, holds none), the points the request's own start and end fields name, where
+    /// its terminal frame resumes ascending and descending: the start not clamped to this
+    /// server's tip (an unset field counting as 0), and the end when the request set
+    /// `end_checkpoint`, else `end`. `None` for a window that holds a checkpoint.
+    pub requested: Option<(LedgerPoint, LedgerPoint)>,
+}
+
 /// A request's checkpoint bounds resolved into the scan-position interval to scan, along with the
 /// checkpoint-space facts for watermark rendering.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -108,12 +150,15 @@ pub struct ResolvedScan<P> {
     pub end_position: P,
     /// Why the interval is exhausted once the scan drains it.
     pub exhaustion: RangeExhaustion,
-    /// The window's terminal checkpoint in scan direction (see
-    /// [`ResolvedCheckpointRange::terminal_checkpoint`]), or `None` when the window holds no
-    /// checkpoint. Cursors do not move it, unlike `end_checkpoint`, which carries the checkpoint
-    /// field of a cursor that ends the scan: a non-empty window's natural end claims its edge even
-    /// when the scan reads nothing, because the request's starting cursor vouches for every
-    /// position before it.
+    /// Checkpoint field of the cursor at the window's terminal edge in scan direction, or `None`
+    /// when the window holds no checkpoint or an ascending scan's `after` cursor resumes past the
+    /// ledger tip (see [`ResolvedScan::resolve`]). At a checkpoint boundary that is
+    /// [`ResolvedCheckpointRange::terminal_checkpoint`]; at a request position that cuts the
+    /// window's last checkpoint in scan direction, it is the field of a cursor at that position:
+    /// the cut checkpoint ascending, and the checkpoint above it descending. Cursors do not move
+    /// it, unlike `end_checkpoint`, which carries the checkpoint field of a cursor that ends the
+    /// scan: a non-empty window's natural end claims its edge even when the scan reads nothing,
+    /// because the request's starting cursor vouches for every position before it.
     pub window_terminal_checkpoint: Option<u64>,
 }
 
@@ -154,22 +199,78 @@ impl IntraTxCoordinate {
     pub fn start_of_tx(tx_seq: u64) -> Self {
         Self { tx_seq, index: 0 }
     }
-
-    /// The event-coordinate window spanning whole transactions `[start, end)`.
-    pub fn tx_window(range: Range<u64>) -> Range<Self> {
-        Self::start_of_tx(range.start)..Self::start_of_tx(range.end)
-    }
 }
 
 /// The error for a request that needs data below this server's serving floor, whose lowest
 /// available checkpoint is `floor_checkpoint`: that data is pruned and permanently gone.
+/// It is `OutOfRange` with a `BELOW_EARLIEST_AVAILABLE` [`ErrorInfo`] whose
+/// `lowestAvailableCheckpoint` is `floor_checkpoint`; retrying it on this server fails the same
+/// way.
 pub fn below_serving_floor(floor_checkpoint: u64) -> RpcError {
+    let error_info = ledger_error_info(
+        ErrorReason::BelowEarliestAvailable,
+        [("lowestAvailableCheckpoint", floor_checkpoint.to_string())],
+    );
     RpcError::new(
         tonic::Code::OutOfRange,
         format!(
             "requested data below earliest available; lowest available checkpoint is {floor_checkpoint}"
         ),
     )
+    .with_details(ErrorDetails::new().with_error_info(error_info))
+}
+
+/// The error for a request that reads above the data this server has indexed, all of which lies
+/// below `checkpoint_hi_exclusive`. `bound` names what reads past it: "cursor" for an `after` or
+/// `before` cursor, or the request field, "start_checkpoint" or "end_checkpoint";
+/// `requested_checkpoint` is the cursor's recorded checkpoint or the field's value. It is
+/// `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`] carrying all three, by which
+/// clients recognize a request that becomes servable once this server catches up.
+fn above_latest_available(
+    bound: &str,
+    requested_checkpoint: u64,
+    checkpoint_hi_exclusive: u64,
+) -> RpcError {
+    let message = if bound == "cursor" {
+        format!(
+            "requested data above latest available; cursor is at checkpoint \
+             {requested_checkpoint}, and only checkpoints below {checkpoint_hi_exclusive} are \
+             available"
+        )
+    } else {
+        format!(
+            "requested data above latest available; {bound} is {requested_checkpoint}, and only \
+             checkpoints below {checkpoint_hi_exclusive} are available"
+        )
+    };
+    let error_info = ledger_error_info(
+        ErrorReason::AboveLatestAvailable,
+        [
+            ("bound", bound.to_owned()),
+            ("requestedCheckpoint", requested_checkpoint.to_string()),
+            (
+                "firstUnavailableCheckpoint",
+                checkpoint_hi_exclusive.to_string(),
+            ),
+        ],
+    );
+    RpcError::new(tonic::Code::OutOfRange, message)
+        .with_details(ErrorDetails::new().with_error_info(error_info))
+}
+
+/// An [`ErrorInfo`] in the [`ErrorReason::DOMAIN`] domain with `reason` and `metadata`.
+fn ledger_error_info<const N: usize>(
+    reason: ErrorReason,
+    metadata: [(&str, String); N],
+) -> ErrorInfo {
+    let metadata = metadata
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value))
+        .collect();
+    ErrorInfo::default()
+        .with_reason(reason.as_str_name())
+        .with_domain(ErrorReason::DOMAIN)
+        .with_metadata(metadata)
 }
 
 impl QueryOptions {
@@ -303,6 +404,42 @@ impl ResolvedCheckpointRange {
     }
 }
 
+impl<P> ScanWindow<P> {
+    /// A window whose edges are checkpoint boundaries, `ledger` in ledger coordinates.
+    pub fn whole_checkpoints(range: Range<P>, ledger: LedgerWindow) -> Self {
+        Self {
+            range,
+            start_cuts_checkpoint: false,
+            end_cuts_checkpoint: false,
+            ledger,
+        }
+    }
+}
+
+impl LedgerWindow {
+    /// The window of a checkpoint scan over `range`, the request's checkpoint window
+    /// `start_checkpoint..end_checkpoint` clamped to this server's tip.
+    pub fn checkpoints(
+        range: &Range<u64>,
+        start_checkpoint: Option<u64>,
+        end_checkpoint: Option<u64>,
+    ) -> Self {
+        let start = LedgerPoint::checkpoint_start(range.start);
+        let end = LedgerPoint::checkpoint_start(range.end);
+        let requested = range.is_empty().then(|| {
+            (
+                LedgerPoint::checkpoint_start(start_checkpoint.unwrap_or(0)),
+                LedgerPoint::checkpoint_start(end_checkpoint.unwrap_or(range.end)),
+            )
+        });
+        Self {
+            start,
+            end,
+            requested,
+        }
+    }
+}
+
 impl ResolvedScan<u64> {
     /// Collapse the symbolic bounds to the half-open store range.
     pub fn range(&self) -> Range<u64> {
@@ -407,18 +544,43 @@ impl<P: ScanPosition> ResolvedScan<P>
 where
     CursorToken: ScanCursor<P>,
 {
-    /// Record the request's checkpoint bounds, then apply cursor bounds to tighten the `range`
+    /// Record the request's checkpoint bounds, then apply cursor bounds to tighten the `window`
     /// scanning interval. Cursors bound the scan by position alone; their checkpoint fields only
     /// label the cursors this scan hands back. If the backend data source has a serving floor,
     /// `apply_serving_floor` must be called to reconcile the scanning interval.
+    ///
+    /// The window's request positions and its cursors bound the scan by intersection. A position
+    /// that cuts the window's first checkpoint in scan direction acts as a starting cursor does:
+    /// it vouches for every position before it, so the scan still claims that checkpoint once it
+    /// reaches its end. A position that cuts the window's last checkpoint in scan direction acts as
+    /// a far cursor does: the scan never reaches that checkpoint's end, so its natural end does not
+    /// claim it.
+    ///
+    /// In a window that reaches the ledger tip, empty or not, an ascending scan whose `after`
+    /// cursor resumes past the tip ends empty where that cursor resumes, or at a `before` cursor
+    /// at or below that position, and claims no checkpoint.
     pub fn resolve(
         cp_range: ResolvedCheckpointRange,
-        range: Range<P>,
+        window: ScanWindow<P>,
         options: &QueryOptions,
     ) -> Result<Self, RpcError> {
+        let ScanWindow {
+            range,
+            start_cuts_checkpoint,
+            end_cuts_checkpoint,
+            ledger: _,
+        } = window;
         if cp_range.reaches_ledger_tip {
-            reject_cursors_past_tip(options, range.end, cp_range.range.end)?;
+            reject_descending_cursors_past_tip(options, range.end, cp_range.range.end)?;
         }
+
+        // Positions that cross leave nothing between them: collapse the window onto its terminal
+        // edge in scan direction.
+        let range = match options.ordering {
+            _ if range.start <= range.end => range,
+            Ordering::Ascending => range.end..range.end,
+            Ordering::Descending => range.start..range.start,
+        };
 
         let entry_checkpoint = if cp_range.is_empty() {
             // No checkpoint entered, pin entry to terminal boundary
@@ -429,24 +591,49 @@ where
             cp_range.range.end - 1
         };
 
+        // A cursor at a position inside checkpoint `C` carries `C` ascending and `C + 1`
+        // descending (see `boundary_cursor_cp`).
+        let terminal_checkpoint = match options.ordering {
+            Ordering::Ascending if end_cuts_checkpoint => cp_range.range.end - 1,
+            Ordering::Descending if start_cuts_checkpoint => cp_range.range.start + 1,
+            Ordering::Ascending | Ordering::Descending => {
+                cp_range.terminal_checkpoint(options.ordering)
+            }
+        };
+
         let resolved = Self {
             bounds: ScanBounds::from_range(range.start..range.end),
             entry_checkpoint,
-            end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
+            end_checkpoint: terminal_checkpoint,
             end_position: match options.ordering {
                 Ordering::Ascending => range.end,
                 Ordering::Descending => range.start,
             },
             exhaustion: cp_range.exhaustion,
-            window_terminal_checkpoint: (!cp_range.is_empty())
-                .then(|| cp_range.terminal_checkpoint(options.ordering)),
+            window_terminal_checkpoint: (!cp_range.is_empty()).then_some(terminal_checkpoint),
         }
         .apply_cursor_bounds(options);
+
+        if cp_range.reaches_ledger_tip
+            && let Some((checkpoint, position, exhaustion)) =
+                ascending_after_past_tip_end(options, range.end)
+        {
+            // The client's coverage already reaches past this server's tip, so a claim from this
+            // view could only lower it.
+            return Ok(Self {
+                bounds: ScanBounds::empty_at(position),
+                end_checkpoint: checkpoint,
+                end_position: position,
+                exhaustion,
+                window_terminal_checkpoint: None,
+                ..resolved
+            });
+        }
 
         if !cp_range.is_empty()
             && resolved.bounds.admits_no_position()
             && let Some((checkpoint, position)) =
-                starting_cursor_end(options, &cp_range.range, &range)
+                starting_cursor_end(options, terminal_checkpoint, &range)
         {
             // The starting cursor leaves the window nothing to scan, and no far cursor stops the
             // scan first: the page ends with the window's reason, where `starting_cursor_end`
@@ -470,13 +657,101 @@ where
     /// the window's last checkpoint in scan direction, just below its exclusive upper edge
     /// ascending, or its inclusive lower edge descending. A scan that drains its window has
     /// covered every checkpoint up to that edge, and so has a scan its starting cursor leaves
-    /// empty, because the cursor vouches for every position before it. `None` when the window
-    /// has no checkpoint.
+    /// empty, because the cursor vouches for every position before it. A request position that
+    /// cuts that last checkpoint moves the claim to the checkpoint before it in scan direction.
+    /// `None` when the window has no checkpoint, when an ascending scan's `after` cursor resumes
+    /// past the ledger tip, or when the claim would precede `entry_checkpoint`.
     pub fn natural_end_claim(&self, options: &QueryOptions) -> Option<u64> {
         let window_terminal_checkpoint = self.window_terminal_checkpoint?;
         match options.ordering {
-            Ordering::Ascending => window_terminal_checkpoint.checked_sub(1),
-            Ordering::Descending => Some(window_terminal_checkpoint),
+            Ordering::Ascending => window_terminal_checkpoint
+                .checked_sub(1)
+                .filter(|claim| *claim >= self.entry_checkpoint),
+            Ordering::Descending => {
+                Some(window_terminal_checkpoint).filter(|claim| *claim <= self.entry_checkpoint)
+            }
+        }
+    }
+
+    /// Where this scan ends once it drains its range, as its terminal frame renders it: its
+    /// reason, the terminal cursor `position_at` builds from the end's checkpoint field and scan
+    /// position, that end in ledger coordinates (see [`Self::end_ledger_position`]), and the
+    /// natural end's claim (see [`Self::natural_end_claim`]). `window` is the window this scan was
+    /// resolved from.
+    pub fn range_end(
+        &self,
+        window: &ScanWindow<P>,
+        options: &QueryOptions,
+        position_at: impl FnOnce(u64, P) -> Position,
+    ) -> RangeEnd {
+        RangeEnd {
+            exhaustion: self.exhaustion,
+            position: position_at(self.end_checkpoint, self.end_position),
+            ledger: self.end_ledger_position(window, options),
+            natural_end_claim: self.natural_end_claim(options),
+        }
+    }
+
+    /// Where this scan's terminal frame resumes in ledger coordinates, and the public position of
+    /// its cursor, all without a read. `window` is the window this scan was resolved from.
+    ///
+    /// The frame resumes at its end position, clamped so it never lies before the request's
+    /// effective start ascending (the window's start, the position its `after` cursor resumes at)
+    /// or past its effective end descending (the window's end, its `before` cursor). A window
+    /// that holds no checkpoint names the request's own start (ascending) or end (descending):
+    /// past this server's tip, an ascending terminal echoes where the request starts.
+    ///
+    /// A position is placed by the serving floor, by a window edge (the request's own fields), or
+    /// by the public position of a request cursor that names it (see `request_cursor_point`):
+    /// where an `after` cursor resumes, including past this server's tip, or a `before` cursor's
+    /// position. The cursor's own public position is that of the end position; a request cursor
+    /// that names it is echoed with its own public position, or none.
+    pub fn end_ledger_position(
+        &self,
+        window: &ScanWindow<P>,
+        options: &QueryOptions,
+    ) -> TerminalLedgerPosition {
+        if let RangeExhaustion::ServingFloor { floor_checkpoint } = self.exhaustion {
+            // The floor is the first position of its checkpoint.
+            return TerminalLedgerPosition::known(LedgerPoint::checkpoint_start(floor_checkpoint));
+        }
+        let cursor_point = match request_cursor_point(options, self.end_position) {
+            Some(point) => point,
+            None => window_edge_point(window, options.ordering, self.end_position),
+        };
+        if let Some((requested_start, requested_end)) = window.ledger.requested {
+            let cursor_position = match options.ordering {
+                Ordering::Ascending => requested_start,
+                Ordering::Descending => requested_end,
+            };
+            return TerminalLedgerPosition {
+                cursor_position: Some(cursor_position),
+                cursor_point,
+            };
+        }
+        let position = match options.ordering {
+            Ordering::Ascending => {
+                let after_resumes_at = options
+                    .after
+                    .as_ref()
+                    // An Item at the last position keeps naming itself, a saturated resume point.
+                    .map(|after| after_resume::<P>(after.coordinate(), after.kind).0);
+                let entry = after_resumes_at
+                    .map_or(window.range.start, |resume| resume.max(window.range.start));
+                self.end_position.max(entry)
+            }
+            Ordering::Descending => {
+                let entry = options.before.as_ref().map_or(window.range.end, |before| {
+                    ScanCursor::<P>::coordinate(before).min(window.range.end)
+                });
+                self.end_position.min(entry)
+            }
+        };
+        let cursor_position = window_edge_point(window, options.ordering, position)
+            .or_else(|| request_cursor_point(options, position).flatten());
+        TerminalLedgerPosition {
+            cursor_position,
+            cursor_point,
         }
     }
 
@@ -531,21 +806,11 @@ where
         }
 
         // The after cursor is the terminal bound for a descending scan. Its closing cursor names
-        // the boundary just below the lowest position the scan admits, so that sent back as
-        // `before` it resumes with the next position down: `after: Boundary(X)` admits X, so the
-        // boundary is at X; `after: Item(X)` excludes X, so the boundary is at the position after
-        // X. That boundary keeps the item's checkpoint field, the checkpoint of the position
-        // before it, as an ascending scan frontier's does. With no position after X, the
-        // closing cursor restates the item.
-        let (descending_terminal, descending_terminal_kind) = match cursor.kind {
-            sui_rpc_cursor::CursorKind::Boundary => {
-                (position, sui_rpc_cursor::CursorKind::Boundary)
-            }
-            sui_rpc_cursor::CursorKind::Item => match position.successor() {
-                Some(next) => (next, sui_rpc_cursor::CursorKind::Boundary),
-                None => (position, sui_rpc_cursor::CursorKind::Item),
-            },
-        };
+        // the boundary just below the lowest position the scan admits, where `after` resumes, so
+        // that sent back as `before` it resumes with the next position down. That boundary keeps
+        // the item's checkpoint field, the checkpoint of the position before it, as an ascending
+        // scan frontier's does.
+        let (descending_terminal, descending_terminal_kind) = after_resume(position, cursor.kind);
         if !options.is_ascending() {
             self.set_terminal_record(
                 checkpoint,
@@ -663,13 +928,14 @@ impl ResolvedCheckpointRange {
     /// Validate the requested checkpoint window, clamp it to the indexed tip, and attribute the
     /// exhaustion reason the scan will report once it drains it.
     ///
-    /// A descending window that reaches past the tip returns `OutOfRange`: an `end_checkpoint`
-    /// above the tip, or, with `end_checkpoint` unset, a `start_checkpoint` at or above it. A
-    /// descending scan starts at its window's high end, so answering from this view would skip
-    /// the checkpoints between the tip and that end; like a cursor past the tip, the request
-    /// becomes servable once this server catches up. An ascending window past the tip ends at the
-    /// tip, where the client resumes once this server has caught up, so only an ascending scan
-    /// ends with `LedgerTip`.
+    /// A descending window that reaches past the tip returns `OutOfRange` with the
+    /// `ABOVE_LATEST_AVAILABLE` reason: an `end_checkpoint` above the tip, or, with
+    /// `end_checkpoint` unset, a `start_checkpoint` at or above it. A descending scan starts at
+    /// its window's high end, so answering from this view would skip the checkpoints between the
+    /// tip and that end; like a descending scan's cursor past the tip, the request becomes
+    /// servable once this server catches up. An ascending window past the tip ends at the tip,
+    /// where the client resumes once this server has caught up, so only an ascending scan ends
+    /// with `LedgerTip`.
     ///
     /// The request's cursors do not narrow the window here. A cursor's checkpoint field is a
     /// label whose meaning depends on the scan that issued it, so [`ResolvedScan::resolve`]
@@ -689,12 +955,10 @@ impl ResolvedCheckpointRange {
             Some(_) | None => None,
         };
         if let Some((field, requested)) = descending_past_tip {
-            return Err(RpcError::new(
-                tonic::Code::OutOfRange,
-                format!(
-                    "requested data above latest available; {field} is {requested}, and only \
-                     checkpoints below {checkpoint_hi_exclusive} are available"
-                ),
+            return Err(above_latest_available(
+                field,
+                requested,
+                checkpoint_hi_exclusive,
             ));
         }
         let requested_end = end_checkpoint.unwrap_or(checkpoint_hi_exclusive);
@@ -742,7 +1006,7 @@ impl ResolvedCheckpointRange {
 /// start.
 ///
 /// - At the edge, the page ends at the window's edge, as the page that handed the cursor back
-///   did.
+///   did, under `window_terminal_checkpoint`, the checkpoint field of a cursor at that edge.
 /// - Past the edge, the page ends at the boundary where the starting cursor resumes, under the
 ///   cursor's own checkpoint field: the boundary after an `after` Item cursor's item, or a
 ///   `before` cursor's position. Ending at the window's edge instead would hand back a cursor
@@ -753,7 +1017,7 @@ impl ResolvedCheckpointRange {
 /// boundary after it.
 fn starting_cursor_end<P: ScanPosition>(
     options: &QueryOptions,
-    checkpoints: &Range<u64>,
+    window_terminal_checkpoint: u64,
     window: &Range<P>,
 ) -> Option<(u64, P)>
 where
@@ -776,7 +1040,7 @@ where
             };
             match first_admitted.cmp(&window.end) {
                 std::cmp::Ordering::Less => None,
-                std::cmp::Ordering::Equal => Some((checkpoints.end, window.end)),
+                std::cmp::Ordering::Equal => Some((window_terminal_checkpoint, window.end)),
                 std::cmp::Ordering::Greater => Some((after.position.checkpoint(), first_admitted)),
             }
         }
@@ -792,24 +1056,25 @@ where
             let upper = position(before);
             match upper.cmp(&window.start) {
                 std::cmp::Ordering::Greater => None,
-                std::cmp::Ordering::Equal => Some((checkpoints.start, window.start)),
+                std::cmp::Ordering::Equal => Some((window_terminal_checkpoint, window.start)),
                 std::cmp::Ordering::Less => Some((before.position.checkpoint(), upper)),
             }
         }
     }
 }
 
-/// Rejects a request whose cursor names a position at or past `tip`, the first position this
-/// server has not indexed. Such a cursor comes from a newer view of the ledger than this server's,
-/// from another replica or derived from a newer tip. Answering from this view would resume an
-/// ascending scan behind its `after` cursor, replaying items the client already has, start a
-/// descending scan below its `before` cursor, skipping items the client has not seen, or end a
-/// descending scan bounded by its `after` cursor empty, though items lie above that cursor.
-/// `OutOfRange` marks the request as reading past the data this server has, the mirror of a
-/// cursor below the pruned floor; unlike that one, it becomes servable once this server catches
-/// up, so clients may retry it. An ascending scan's `before` cursor may lie past the tip: the
-/// scan stops at the tip, and resumes from there once this server has caught up.
-fn reject_cursors_past_tip<P: Ord>(
+/// Rejects a descending scan whose cursor names a position at or past `tip`, the first position
+/// this server has not indexed. Such a cursor comes from a newer view of the ledger than this
+/// server's, from another replica or derived from a newer tip. Answering from this view would
+/// start the scan below its `before` cursor, skipping items the client has not seen, or end a
+/// scan bounded by its `after` cursor empty, though items lie above that cursor. `OutOfRange` with
+/// the `ABOVE_LATEST_AVAILABLE` reason (see [`above_latest_available`]) marks the request as
+/// reading past the data this server has, the mirror of a cursor below the pruned floor; unlike
+/// that one, it becomes servable once this server catches up, so clients that recognize the
+/// reason may retry it. An ascending scan's cursors may lie past the tip: its `before` cursor
+/// leaves the tip as the scan's high end, and [`ascending_after_past_tip_end`] places the end of a
+/// page whose `after` cursor resumes past it.
+fn reject_descending_cursors_past_tip<P: Ord>(
     options: &QueryOptions,
     tip: P,
     checkpoint_hi_exclusive: u64,
@@ -817,11 +1082,13 @@ fn reject_cursors_past_tip<P: Ord>(
 where
     CursorToken: ScanCursor<P>,
 {
-    let cursors = match options.ordering {
-        Ordering::Ascending => [options.after.as_ref(), None],
-        Ordering::Descending => [options.before.as_ref(), options.after.as_ref()],
-    };
-    for cursor in cursors.into_iter().flatten() {
+    if options.is_ascending() {
+        return Ok(());
+    }
+    for cursor in [options.before.as_ref(), options.after.as_ref()]
+        .into_iter()
+        .flatten()
+    {
         let position = cursor.coordinate();
         // A boundary exactly at the tip is where a caught-up scan resumes; an item there, or any
         // position beyond it, has not been indexed here.
@@ -830,17 +1097,152 @@ where
             sui_rpc_cursor::CursorKind::Boundary => position > tip,
         };
         if past_tip {
-            return Err(RpcError::new(
-                tonic::Code::OutOfRange,
-                format!(
-                    "requested data above latest available; cursor is at checkpoint {}, and only \
-                     checkpoints below {checkpoint_hi_exclusive} are available",
-                    cursor.position.checkpoint(),
-                ),
+            // The public position names the cursor's checkpoint exactly. Checkpoint cursors, and
+            // cursors minted without a public position, carry only their checkpoint field.
+            let requested_checkpoint = cursor
+                .public_position
+                .map_or(cursor.position.checkpoint(), |position| position.checkpoint);
+            return Err(above_latest_available(
+                "cursor",
+                requested_checkpoint,
+                checkpoint_hi_exclusive,
             ));
         }
     }
     Ok(())
+}
+
+/// Where an ascending page ends when its `after` cursor resumes past `tip`, the first position
+/// this server has not indexed, as `(checkpoint field, position, reason)`. Such a cursor comes
+/// from a newer view of the ledger than this server's, from another replica or derived from a
+/// newer tip. This server holds nothing past its tip, so the page is empty and ends with
+/// `LedgerTip` where the cursor resumes, under the cursor's own checkpoint field: at the boundary
+/// after an Item cursor's item, or at a Boundary cursor's position. The client resumes from there
+/// once this server has caught up; ending at this server's tip instead would hand back a cursor
+/// behind the client's, which replays the positions in between.
+///
+/// A `before` cursor at or below that position leaves nothing between the cursors, so the page
+/// ends at `before` with `CursorBound`, as it does on a server that has caught up. An Item cursor
+/// at the last position admits nothing, so its page ends at `before` too, or with no `before`, at
+/// the Item with `CursorBound`.
+///
+/// `None` for a descending scan, or for an `after` cursor that resumes at or below `tip`.
+fn ascending_after_past_tip_end<P: ScanPosition>(
+    options: &QueryOptions,
+    tip: P,
+) -> Option<(u64, P, RangeExhaustion)>
+where
+    CursorToken: ScanCursor<P>,
+{
+    let after = options.after.as_ref().filter(|_| options.is_ascending())?;
+    let (end, kind) = after_resume(after.coordinate(), after.kind);
+    if end <= tip {
+        return None;
+    }
+    if let Some(before) = options.before.as_ref()
+        && before.coordinate() <= end
+    {
+        return Some((
+            before.position.checkpoint(),
+            before.coordinate(),
+            RangeExhaustion::CursorBound {
+                kind: sui_rpc_cursor::CursorKind::Boundary,
+            },
+        ));
+    }
+    let exhaustion = match kind {
+        sui_rpc_cursor::CursorKind::Boundary => RangeExhaustion::LedgerTip,
+        sui_rpc_cursor::CursorKind::Item => RangeExhaustion::CursorBound { kind },
+    };
+    Some((after.position.checkpoint(), end, exhaustion))
+}
+
+/// Where an `after` cursor at `position` resumes a scan, as `(position, kind)` of the cursor that
+/// names that place: a Boundary cursor's own position, or the boundary after an Item cursor's
+/// item. An Item at the last position names no boundary after it, so it names itself, still an
+/// Item.
+fn after_resume<P: ScanPosition>(
+    position: P,
+    kind: sui_rpc_cursor::CursorKind,
+) -> (P, sui_rpc_cursor::CursorKind) {
+    match kind {
+        sui_rpc_cursor::CursorKind::Boundary => (position, kind),
+        sui_rpc_cursor::CursorKind::Item => match position.successor() {
+            Some(next) => (next, sui_rpc_cursor::CursorKind::Boundary),
+            None => (position, kind),
+        },
+    }
+}
+
+/// The public position of scan position `position` when a request cursor names it, the point a
+/// terminal there resumes at: where the `after` cursor resumes (see [`after_resume`]), or the
+/// `before` cursor's own position. `Some(None)` when only cursors that carry no public position
+/// name it, `None` when no request cursor does. A position both cursors name takes the one that
+/// carries a public position.
+fn request_cursor_point<P: ScanPosition>(
+    options: &QueryOptions,
+    position: P,
+) -> Option<Option<LedgerPoint>>
+where
+    CursorToken: ScanCursor<P>,
+{
+    let after = options.after.as_ref().and_then(|after| {
+        let (resume, kind) = after_resume::<P>(after.coordinate(), after.kind);
+        (resume == position).then(|| after_resume_point(after, kind))
+    });
+    let before = options
+        .before
+        .as_ref()
+        .filter(|before| ScanCursor::<P>::coordinate(*before) == position)
+        .map(LedgerPoint::of_cursor);
+    match (after, before) {
+        (Some(Some(point)), _) | (_, Some(Some(point))) => Some(Some(point)),
+        (after, before) => after.or(before),
+    }
+}
+
+/// The public position of where `after` resumes as a cursor of `resumed_kind` (see
+/// [`after_resume`]): the boundary right after an Item cursor's item (its key with the finest
+/// index incremented), or the cursor's own public position where it names itself.
+fn after_resume_point(
+    after: &CursorToken,
+    resumed_kind: sui_rpc_cursor::CursorKind,
+) -> Option<LedgerPoint> {
+    let point = LedgerPoint::of_cursor(after)?;
+    Some(match (after.kind, resumed_kind) {
+        (sui_rpc_cursor::CursorKind::Item, sui_rpc_cursor::CursorKind::Boundary) => {
+            point.item_resume(&after.position, ScanDirection::Ascending)
+        }
+        _ => point,
+    })
+}
+
+/// The point of `position` when it is one of `window`'s edges. Where the edges are one scan
+/// position (the window spans only empty checkpoints, or a start index past its checkpoint's
+/// end), it names the edge in scan direction, the one its checkpoint claim reaches.
+fn window_edge_point<P: Eq + Copy>(
+    window: &ScanWindow<P>,
+    ordering: Ordering,
+    position: P,
+) -> Option<LedgerPoint> {
+    let ledger = &window.ledger;
+    let (terminal_edge, entry_edge) = match ordering {
+        Ordering::Ascending => (
+            (window.range.end, ledger.end),
+            (window.range.start, ledger.start),
+        ),
+        Ordering::Descending => (
+            (window.range.start, ledger.start),
+            (window.range.end, ledger.end),
+        ),
+    };
+    if position == terminal_edge.0 {
+        Some(terminal_edge.1)
+    } else if position == entry_edge.0 {
+        Some(entry_edge.1)
+    } else {
+        None
+    }
 }
 
 impl ScanCursor<u64> for CursorToken {
@@ -933,9 +1335,97 @@ fn invalid_cursor(field: &'static str, description: impl Into<String>) -> RpcErr
         .into()
 }
 
+/// Asserts `error` is `OutOfRange` with `message` and an [`ErrorInfo`] in the
+/// [`ErrorReason::DOMAIN`] domain whose reason is `reason` and whose metadata is exactly
+/// `metadata`.
+#[cfg(test)]
+fn assert_out_of_range_error_info(
+    error: RpcError,
+    message: &str,
+    reason: ErrorReason,
+    metadata: &[(&str, &str)],
+) {
+    let status = error.into_status_proto();
+    assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
+    assert_eq!(status.message, message);
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    let expected_metadata: std::collections::BTreeMap<String, String> = metadata
+        .iter()
+        .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+        .collect();
+    assert_eq!(error_info.metadata, expected_metadata, "{status:?}");
+}
+
+/// Asserts `error` is [`below_serving_floor`] for `floor_checkpoint`: its message and its
+/// `BELOW_EARLIEST_AVAILABLE` [`ErrorInfo`].
+#[cfg(test)]
+pub(crate) fn assert_below_serving_floor_error(error: RpcError, floor_checkpoint: u64) {
+    assert_out_of_range_error_info(
+        error,
+        &format!(
+            "requested data below earliest available; lowest available checkpoint is \
+             {floor_checkpoint}"
+        ),
+        ErrorReason::BelowEarliestAvailable,
+        &[("lowestAvailableCheckpoint", &floor_checkpoint.to_string())],
+    );
+}
+
+/// Asserts `error` is [`above_latest_available`] for `bound` at `requested_checkpoint` on a
+/// server that has indexed the checkpoints below `checkpoint_hi_exclusive`: its message and its
+/// `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`].
+#[cfg(test)]
+fn assert_above_latest_available_error(
+    error: RpcError,
+    bound: &str,
+    requested_checkpoint: u64,
+    checkpoint_hi_exclusive: u64,
+) {
+    let requested = match bound {
+        "cursor" => format!("cursor is at checkpoint {requested_checkpoint}"),
+        field => format!("{field} is {requested_checkpoint}"),
+    };
+    assert_out_of_range_error_info(
+        error,
+        &format!(
+            "requested data above latest available; {requested}, and only checkpoints below \
+             {checkpoint_hi_exclusive} are available"
+        ),
+        ErrorReason::AboveLatestAvailable,
+        &[
+            ("bound", bound),
+            ("requestedCheckpoint", &requested_checkpoint.to_string()),
+            (
+                "firstUnavailableCheckpoint",
+                &checkpoint_hi_exclusive.to_string(),
+            ),
+        ],
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The event-coordinate window spanning whole transactions `[start, end)`.
+    fn tx_window(range: Range<u64>) -> Range<IntraTxCoordinate> {
+        IntraTxCoordinate::start_of_tx(range.start)..IntraTxCoordinate::start_of_tx(range.end)
+    }
+
+    /// A window with checkpoint edges over `range`, for tests that do not place a scan's
+    /// terminal in ledger coordinates.
+    fn unplaced_window<P>(range: Range<P>) -> ScanWindow<P> {
+        ScanWindow::whole_checkpoints(range, LedgerWindow::checkpoints(&(0..0), None, None))
+    }
 
     fn query_options_from_proto(
         request: Option<&ProtoQueryOptions>,
@@ -1040,16 +1530,8 @@ mod tests {
     /// Asserts `result` is the `OutOfRange` error for data below a serving floor at
     /// `floor_checkpoint`.
     fn assert_below_serving_floor(result: Result<(), RpcError>, floor_checkpoint: u64) {
-        let status = result
-            .expect_err("expected OutOfRange below the serving floor")
-            .into_status_proto();
-        assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
-        assert_eq!(
-            status.message,
-            format!(
-                "requested data below earliest available; lowest available checkpoint is {floor_checkpoint}"
-            )
-        );
+        let error = result.expect_err("expected OutOfRange below the serving floor");
+        assert_below_serving_floor_error(error, floor_checkpoint);
     }
 
     /// Serving-floor reconciliation for tx intervals: a floor inside the interval starts an
@@ -1237,7 +1719,12 @@ mod tests {
             ..resolved_range(0..100)
         };
         assert_eq!(resolved.natural_end_claim(&asc), Some(9));
-        assert_eq!(resolved.natural_end_claim(&desc), Some(10));
+        // A descending scan enters its window at the top, above its terminal edge.
+        let descending = ResolvedScan {
+            entry_checkpoint: 19,
+            ..resolved.clone()
+        };
+        assert_eq!(descending.natural_end_claim(&desc), Some(10));
 
         let at_genesis = ResolvedScan {
             window_terminal_checkpoint: Some(0),
@@ -1600,7 +2087,7 @@ mod tests {
         assert_eq!(
             ResolvedScan::<IntraTxCoordinate>::resolve(
                 cp_range,
-                IntraTxCoordinate::tx_window(100..100),
+                unplaced_window(tx_window(100..100)),
                 &options
             )
             .unwrap(),
@@ -1624,20 +2111,16 @@ mod tests {
         let mut request = ProtoQueryOptions::default();
         request.ordering = Some(ProtoOrdering::Descending as i32);
         let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        for (start, end) in [
-            (Some(30), None),
-            (Some(20), None),
-            (Some(10), Some(21)),
-            (None, Some(u64::MAX)),
-            (Some(25), Some(30)),
+        for (start, end, bound, requested) in [
+            (Some(30), None, "start_checkpoint", 30),
+            (Some(20), None, "start_checkpoint", 20),
+            (Some(10), Some(21), "end_checkpoint", 21),
+            (None, Some(u64::MAX), "end_checkpoint", u64::MAX),
+            (Some(25), Some(30), "end_checkpoint", 30),
         ] {
             let error = ResolvedCheckpointRange::from_request(start, end, 20, &options)
                 .expect_err("descending window past the tip");
-            assert_eq!(
-                error.into_status_proto().code,
-                tonic::Code::OutOfRange as i32,
-                "window {start:?}..{end:?}"
-            );
+            assert_above_latest_available_error(error, bound, requested, 20);
         }
 
         let resolved = ResolvedCheckpointRange::from_request(Some(10), Some(20), 20, &options);
@@ -1646,6 +2129,33 @@ mod tests {
             ResolvedCheckpointRange::from_request(Some(20), Some(20), 20, &options).unwrap(),
             ResolvedCheckpointRange::empty_at(20, RangeExhaustion::CheckpointBound, false)
         );
+    }
+
+    /// A descending cursor past the tip reports the checkpoint of its public position as
+    /// `requestedCheckpoint`. A cursor without one, as checkpoint cursors are, reports its
+    /// checkpoint field.
+    #[test]
+    fn descending_cursor_past_tip_reports_its_public_checkpoint() {
+        let descending = |before| options_with(Ordering::Descending, None, Some(before));
+        // A descending scan's boundary cursor carries the checkpoint after the one holding the
+        // position below it (see `boundary_cursor_cp`): here `TIP + 2` for position `(TIP + 1, 1)`.
+        let unplaced = tx_boundary(TIP + 2, first_tx(TIP + 1) + 1);
+        let placed = unplaced
+            .clone()
+            .with_public_position(Some(sui_rpc_cursor::PublicPosition {
+                checkpoint: TIP + 1,
+                transaction_index: 1,
+                event_index: 0,
+            }));
+        for (cursor, requested) in [(placed, TIP + 1), (unplaced, TIP + 2)] {
+            let error = resolve_tx_request((None, None), &descending(cursor))
+                .expect_err("descending transaction cursor past the tip");
+            assert_above_latest_available_error(error, "cursor", requested, TIP);
+        }
+
+        let error = resolve_checkpoint_request((None, None), &descending(cp_item(TIP)))
+            .expect_err("descending checkpoint cursor past the tip");
+        assert_above_latest_available_error(error, "cursor", TIP, TIP);
     }
 
     /// When the resolved checkpoint range is below checkpoint_hi_exclusive and empties, the
@@ -1664,7 +2174,7 @@ mod tests {
             assert_eq!(
                 ResolvedScan::<IntraTxCoordinate>::resolve(
                     cp_range,
-                    IntraTxCoordinate::tx_window(100..100),
+                    unplaced_window(tx_window(100..100)),
                     &options
                 )
                 .unwrap(),
@@ -1699,7 +2209,7 @@ mod tests {
                 ResolvedCheckpointRange::from_request(Some(10), Some(10), 20, &options).unwrap();
             let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
                 cp_range,
-                IntraTxCoordinate::tx_window(100..100),
+                unplaced_window(tx_window(100..100)),
                 &options,
             )
             .unwrap();
@@ -1717,7 +2227,7 @@ mod tests {
         assert_eq!(cp_range.range, 3..10);
         let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
             cp_range.clone(),
-            IntraTxCoordinate::tx_window(100..200),
+            unplaced_window(tx_window(100..200)),
             &options,
         )
         .unwrap();
@@ -1734,7 +2244,7 @@ mod tests {
         let options = directional_options(false);
         let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
             cp_range,
-            IntraTxCoordinate::tx_window(100..200),
+            unplaced_window(tx_window(100..200)),
             &options,
         )
         .unwrap();
@@ -2561,13 +3071,13 @@ mod tests {
     ) -> Result<ResolvedScan<u64>, RpcError> {
         let cp_range = ResolvedCheckpointRange::from_request(None, end_checkpoint, TIP, options)?;
         let range = cp_range.range.clone();
-        ResolvedScan::<u64>::resolve(cp_range, range, options)
+        ResolvedScan::<u64>::resolve(cp_range, unplaced_window(range), options)
     }
 
     fn resolve_transactions(options: &QueryOptions) -> Result<ResolvedScan<u64>, RpcError> {
         let cp_range = ResolvedCheckpointRange::from_request(None, None, TIP, options)?;
         let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
-        ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
+        ResolvedScan::<u64>::resolve(cp_range, unplaced_window(tx_range), options)
     }
 
     fn resolve_events(options: &QueryOptions) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
@@ -2575,7 +3085,7 @@ mod tests {
         let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
         ResolvedScan::<IntraTxCoordinate>::resolve(
             cp_range,
-            IntraTxCoordinate::tx_window(tx_range),
+            unplaced_window(tx_window(tx_range)),
             options,
         )
     }
@@ -2584,42 +3094,53 @@ mod tests {
         resolved.is_err_and(|e| e.into_status_proto().code == tonic::Code::OutOfRange as i32)
     }
 
+    /// Where a resolved scan's page ends: `(terminal cursor's checkpoint field, terminal
+    /// position, end reason, natural end claim)`.
+    fn page_end<P: ScanPosition>(
+        resolved: &ResolvedScan<P>,
+        options: &QueryOptions,
+    ) -> (u64, P, RangeExhaustion, Option<u64>)
+    where
+        CursorToken: ScanCursor<P>,
+    {
+        (
+            resolved.end_checkpoint,
+            resolved.end_position,
+            resolved.exhaustion,
+            resolved.natural_end_claim(options),
+        )
+    }
+
+    /// An ascending `after` cursor at the tip is caught up: its page ends at the tip and claims
+    /// the checkpoint below it. A window the request ends at the tip does not reach it, so a cursor
+    /// past the tip ends that window's page where it resumes, with `CheckpointBound` and the
+    /// window's claim.
     #[test]
-    fn ascending_after_cursor_past_the_tip_is_out_of_range() {
+    fn ascending_after_cursor_at_the_tip_edge() {
         let ascending = |cursor| after_options(Ordering::Ascending, cursor);
 
-        // The last indexed checkpoint, and the boundary a caught-up scan resumes from.
-        assert!(resolve_checkpoints(None, &ascending(cp_item(TIP - 1))).is_ok());
-        let caught_up = resolve_checkpoints(
-            None,
-            &ascending(CursorToken::boundary(Position::Checkpoints {
-                checkpoint: TIP,
-            })),
-        )
-        .unwrap();
-        assert!(caught_up.is_empty());
-        assert_eq!(caught_up.end_position, TIP);
+        let tip_boundary = CursorToken::boundary(Position::Checkpoints { checkpoint: TIP });
+        for cursor in [cp_item(TIP - 1), tip_boundary] {
+            let options = ascending(cursor);
+            let resolved = resolve_checkpoints(None, &options).unwrap();
+            assert!(resolved.is_empty());
+            assert_eq!(
+                page_end(&resolved, &options),
+                (TIP, TIP, RangeExhaustion::LedgerTip, Some(TIP - 1))
+            );
+        }
 
-        // Positions this server has not indexed.
-        assert!(is_out_of_range(resolve_checkpoints(
-            None,
-            &ascending(cp_item(TIP))
-        )));
-        assert!(is_out_of_range(resolve_checkpoints(
-            None,
-            &ascending(CursorToken::boundary(Position::Checkpoints {
-                checkpoint: TIP + 1,
-            })),
-        )));
-
-        // A window the request ends at or below the tip is exhausted, not rejected; one that
-        // ends above it is bounded by the tip.
-        let past_window = resolve_checkpoints(Some(TIP), &ascending(cp_item(TIP + 5))).unwrap();
-        assert!(past_window.is_empty());
-        assert!(is_out_of_range(resolve_checkpoints(
-            Some(TIP + 1),
-            &ascending(cp_item(TIP + 5)),
-        )));
+        let options = ascending(cp_item(TIP + 5));
+        let resolved = resolve_checkpoints(Some(TIP), &options).unwrap();
+        assert_eq!(
+            page_end(&resolved, &options),
+            (
+                TIP + 5,
+                TIP + 6,
+                RangeExhaustion::CheckpointBound,
+                Some(TIP - 1)
+            )
+        );
     }
 
     #[test]
@@ -2657,31 +3178,6 @@ mod tests {
         // A window the request ends at or below the tip is exhausted, not rejected.
         let past_window = resolve_checkpoints(Some(TIP), &after(cp_item(TIP + 5))).unwrap();
         assert!(past_window.is_empty());
-    }
-
-    /// A transaction or event cursor inside the first unindexed checkpoint is past the tip even
-    /// though its checkpoint equals the tip; only the start of that checkpoint is caught up.
-    #[test]
-    fn cursor_inside_the_first_unindexed_checkpoint_is_out_of_range() {
-        let ascending = |cursor| after_options(Ordering::Ascending, cursor);
-        let tip_tx = first_tx(TIP);
-
-        assert!(resolve_transactions(&ascending(tx_item(TIP - 1, tip_tx - 1))).is_ok());
-        assert!(resolve_transactions(&ascending(tx_boundary(TIP, tip_tx))).is_ok());
-        assert!(is_out_of_range(resolve_transactions(&ascending(
-            tx_boundary(TIP, tip_tx + 2,)
-        ))));
-        assert!(is_out_of_range(resolve_transactions(&ascending(tx_item(
-            TIP, tip_tx
-        )))));
-
-        assert!(resolve_events(&ascending(ev_boundary(TIP, tip_tx, 0))).is_ok());
-        assert!(is_out_of_range(resolve_events(&ascending(ev_item(
-            TIP, tip_tx, 0
-        )))));
-        assert!(is_out_of_range(resolve_events(&ascending(ev_boundary(
-            TIP, tip_tx, 1
-        )))));
     }
 
     // Boundary checkpoint fields read in either direction, on the ledger of the cursor-past-tip
@@ -2732,22 +3228,63 @@ mod tests {
         tx / 5
     }
 
-    /// The transaction cursor `issuer` mints at `tx`, where it can mint one.
+    /// The model point just before the event slot `(tx, index)`, or before transaction `tx` at
+    /// index 0.
+    fn model_point(tx: u64, index: u32) -> LedgerPoint {
+        LedgerPoint::event(containing_checkpoint(tx), tx % 5, index)
+    }
+
+    /// The point an ascending frontier at the start of `tx` carries: placed after the transaction
+    /// before it (see [`RowPlacement`]), so at a checkpoint's start it names the end of the
+    /// checkpoint before.
+    ///
+    /// [`RowPlacement`]: crate::ledger_history::ledger_point::RowPlacement
+    fn after_transaction_point(tx: u64) -> LedgerPoint {
+        tx.checked_sub(1).map_or(LedgerPoint::GENESIS, |previous| {
+            LedgerPoint::transaction(containing_checkpoint(previous), previous % 5 + 1)
+        })
+    }
+
+    /// `cursor` carrying `point` as its public position, as the server that minted it does.
+    fn labelled(cursor: CursorToken, point: LedgerPoint) -> CursorToken {
+        let public_position = point.public_position(&cursor.position);
+        cursor.with_public_position(public_position)
+    }
+
+    /// `cursor` carrying the exact model point of its coordinate.
+    fn with_model_point(cursor: CursorToken) -> CursorToken {
+        let point = match cursor.position {
+            Position::Transactions { tx_seq, .. } => model_point(tx_seq, 0),
+            Position::Events {
+                tx_seq,
+                event_index,
+                ..
+            } => model_point(tx_seq, event_index),
+            Position::Checkpoints { .. } => return cursor,
+        };
+        labelled(cursor, point)
+    }
+
+    /// The transaction cursor `issuer` mints at `tx`, where it can mint one, carrying the public
+    /// position that issuer places it at.
     fn issued_tx_cursor(issuer: Issuer, tx: u64) -> Option<CursorToken> {
         let indexed = tx < first_tx(TIP);
         let checkpoint = containing_checkpoint(tx);
         match issuer {
-            Issuer::Item => indexed.then(|| tx_item(checkpoint, tx)),
-            Issuer::ExactBoundary => Some(tx_boundary(checkpoint, tx)),
-            Issuer::AscendingFrontier => Some(tx_boundary(
-                tx.checked_sub(1).map_or(0, containing_checkpoint),
-                tx,
+            Issuer::Item => indexed.then(|| with_model_point(tx_item(checkpoint, tx))),
+            Issuer::ExactBoundary => Some(with_model_point(tx_boundary(checkpoint, tx))),
+            Issuer::AscendingFrontier => Some(labelled(
+                tx_boundary(tx.checked_sub(1).map_or(0, containing_checkpoint), tx),
+                after_transaction_point(tx),
             )),
-            Issuer::DescendingFrontier => indexed.then(|| tx_boundary(checkpoint + 1, tx)),
+            Issuer::DescendingFrontier => {
+                indexed.then(|| with_model_point(tx_boundary(checkpoint + 1, tx)))
+            }
         }
     }
 
-    /// The event cursor `issuer` mints at `(tx, index)`, where it can mint one.
+    /// The event cursor `issuer` mints at `(tx, index)`, where it can mint one, carrying the
+    /// public position that issuer places it at.
     fn issued_event_cursor(issuer: Issuer, tx: u64, index: u32) -> Option<CursorToken> {
         let indexed = tx < first_tx(TIP);
         let checkpoint = containing_checkpoint(tx);
@@ -2757,13 +3294,25 @@ mod tests {
             tx.checked_sub(1)
         };
         match issuer {
-            Issuer::Item => (indexed && index < 2).then(|| ev_item(checkpoint, tx, index)),
-            Issuer::ExactBoundary => {
-                (indexed || index == 0).then(|| ev_boundary(checkpoint, tx, index))
+            Issuer::Item => {
+                (indexed && index < 2).then(|| with_model_point(ev_item(checkpoint, tx, index)))
             }
-            Issuer::AscendingFrontier => (indexed || index == 0)
-                .then(|| ev_boundary(slot_before.map_or(0, containing_checkpoint), tx, index)),
-            Issuer::DescendingFrontier => indexed.then(|| ev_boundary(checkpoint + 1, tx, index)),
+            Issuer::ExactBoundary => (indexed || index == 0)
+                .then(|| with_model_point(ev_boundary(checkpoint, tx, index))),
+            Issuer::AscendingFrontier => (indexed || index == 0).then(|| {
+                let point = if index == 0 {
+                    after_transaction_point(tx)
+                } else {
+                    model_point(tx, index)
+                };
+                labelled(
+                    ev_boundary(slot_before.map_or(0, containing_checkpoint), tx, index),
+                    point,
+                )
+            }),
+            Issuer::DescendingFrontier => {
+                indexed.then(|| with_model_point(ev_boundary(checkpoint + 1, tx, index)))
+            }
         }
     }
 
@@ -2802,6 +3351,37 @@ mod tests {
         [0, 4, 5, 20, 24, 25, 29, 30, 34, 35, 64, 65, 95, 99, 100].into_iter()
     }
 
+    /// Transaction cursors a server further along than the model mints past its tip: in the first
+    /// unindexed checkpoint and the one after it.
+    fn past_tip_tx_cursors() -> Vec<CursorToken> {
+        let tip_tx = first_tx(TIP);
+        [
+            tx_item(TIP, tip_tx),
+            tx_boundary(TIP, tip_tx + 1),
+            tx_item(TIP, tip_tx + 4),
+            tx_boundary(TIP + 1, tip_tx + 5),
+            tx_item(TIP + 1, tip_tx + 7),
+        ]
+        .into_iter()
+        .map(with_model_point)
+        .collect()
+    }
+
+    /// Event cursors a server further along than the model mints past its tip.
+    fn past_tip_event_cursors() -> Vec<CursorToken> {
+        let tip_tx = first_tx(TIP);
+        [
+            ev_item(TIP, tip_tx, 0),
+            ev_boundary(TIP, tip_tx, 1),
+            ev_item(TIP, tip_tx, 1),
+            ev_boundary(TIP, tip_tx + 1, 0),
+            ev_item(TIP + 1, tip_tx + 5, 2),
+        ]
+        .into_iter()
+        .map(with_model_point)
+        .collect()
+    }
+
     fn options_with(
         ordering: Ordering,
         after: Option<CursorToken>,
@@ -2821,8 +3401,21 @@ mod tests {
         cursors: &[CursorToken],
         pair_cursors: &[CursorToken],
     ) -> Vec<(Window, QueryOptions)> {
+        requests_in(
+            WINDOWS.into_iter().chain(PAST_TIP_WINDOWS),
+            cursors,
+            pair_cursors,
+        )
+    }
+
+    /// [`requests`] in `windows`.
+    fn requests_in(
+        windows: impl IntoIterator<Item = Window>,
+        cursors: &[CursorToken],
+        pair_cursors: &[CursorToken],
+    ) -> Vec<(Window, QueryOptions)> {
         let mut requests = Vec::new();
-        for window in WINDOWS.into_iter().chain(PAST_TIP_WINDOWS) {
+        for window in windows {
             for ordering in ORDERINGS {
                 for cursor in cursors {
                     requests.push((window, options_with(ordering, Some(cursor.clone()), None)));
@@ -2841,35 +3434,74 @@ mod tests {
         requests
     }
 
+    /// A request's scan and the window it was resolved from, which places its terminal in
+    /// ledger coordinates. The model's checkpoint windows have checkpoint edges, so their ledger
+    /// coordinates are a checkpoint scan's whatever the lane.
+    fn resolve_in_window<P: ScanPosition>(
+        window: Window,
+        options: &QueryOptions,
+        lane_range: impl FnOnce(Range<u64>) -> Range<P>,
+    ) -> Result<(ResolvedScan<P>, ScanWindow<P>), RpcError>
+    where
+        CursorToken: ScanCursor<P>,
+    {
+        let cp_range = ResolvedCheckpointRange::from_request(window.0, window.1, TIP, options)?;
+        let ledger = LedgerWindow::checkpoints(&cp_range.range, window.0, window.1);
+        let scan_window = ScanWindow::whole_checkpoints(lane_range(cp_range.range.clone()), ledger);
+        let resolved = ResolvedScan::resolve(cp_range, scan_window.clone(), options)?;
+        Ok((resolved, scan_window))
+    }
+
+    fn resolve_tx_in_window(
+        window: Window,
+        options: &QueryOptions,
+    ) -> Result<(ResolvedScan<u64>, ScanWindow<u64>), RpcError> {
+        resolve_in_window(window, options, |range| {
+            first_tx(range.start)..first_tx(range.end)
+        })
+    }
+
+    fn resolve_event_in_window(
+        window: Window,
+        options: &QueryOptions,
+    ) -> Result<
+        (
+            ResolvedScan<IntraTxCoordinate>,
+            ScanWindow<IntraTxCoordinate>,
+        ),
+        RpcError,
+    > {
+        resolve_in_window(window, options, |range| {
+            tx_window(first_tx(range.start)..first_tx(range.end))
+        })
+    }
+
+    fn resolve_checkpoint_in_window(
+        window: Window,
+        options: &QueryOptions,
+    ) -> Result<(ResolvedScan<u64>, ScanWindow<u64>), RpcError> {
+        resolve_in_window(window, options, std::convert::identity)
+    }
+
     fn resolve_tx_request(
         window: Window,
         options: &QueryOptions,
     ) -> Result<ResolvedScan<u64>, RpcError> {
-        let cp_range = ResolvedCheckpointRange::from_request(window.0, window.1, TIP, options)?;
-        let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
-        ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
+        resolve_tx_in_window(window, options).map(|(resolved, _)| resolved)
     }
 
     fn resolve_event_request(
         window: Window,
         options: &QueryOptions,
     ) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
-        let cp_range = ResolvedCheckpointRange::from_request(window.0, window.1, TIP, options)?;
-        let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
-        ResolvedScan::<IntraTxCoordinate>::resolve(
-            cp_range,
-            IntraTxCoordinate::tx_window(tx_range),
-            options,
-        )
+        resolve_event_in_window(window, options).map(|(resolved, _)| resolved)
     }
 
     fn resolve_checkpoint_request(
         window: Window,
         options: &QueryOptions,
     ) -> Result<ResolvedScan<u64>, RpcError> {
-        let cp_range = ResolvedCheckpointRange::from_request(window.0, window.1, TIP, options)?;
-        let range = cp_range.range.clone();
-        ResolvedScan::<u64>::resolve(cp_range, range, options)
+        resolve_checkpoint_in_window(window, options).map(|(resolved, _)| resolved)
     }
 
     fn ledger_txs() -> Vec<u64> {
@@ -2925,17 +3557,22 @@ mod tests {
     /// One request on the model ledger, over `positions`, every scan position its cursors can
     /// name:
     /// - it admits exactly the positions its window and cursors admit;
-    /// - it errs exactly when it is descending and its window reaches past the tip, or when its
-    ///   window reaches the tip and a cursor other than an ascending scan's `before` names a
-    ///   position past the tip, and then with `OutOfRange`;
-    /// - in a non-empty window, its entry checkpoint is the window's first checkpoint in scan
-    ///   direction, whatever its cursors' checkpoint fields;
-    /// - in a non-empty window, it ends with the window's reason and claims the window's last
-    ///   checkpoint in scan direction exactly when no far cursor stops the scan at or before the
-    ///   window's edge (ascending, a `before` at or below the window's end; descending, an
-    ///   `after` at or above the window's start), and otherwise with `CursorBound`. It ends at
-    ///   the window's edge, or past it, where a starting cursor beyond the edge resumes: the
-    ///   first position an `after` cursor admits, or a `before` cursor's position.
+    /// - it errs exactly when it is descending and either its window reaches past the tip, or its
+    ///   window reaches the tip and a cursor names a position past the tip, and then with
+    ///   `OutOfRange`;
+    /// - in a window that reaches the tip, empty or not, an ascending request whose `after` cursor
+    ///   resumes past the tip ends an empty page where that cursor resumes, under its checkpoint
+    ///   field, with `LedgerTip` and no checkpoint claim, or at a `before` cursor at or below that
+    ///   position, under `before`'s checkpoint field, with `CursorBound`;
+    /// - otherwise, in a non-empty window, its entry checkpoint is the window's first checkpoint
+    ///   in scan direction, whatever its cursors' checkpoint fields;
+    /// - otherwise, in a non-empty window, it ends with the window's reason and claims the
+    ///   window's last checkpoint in scan direction exactly when no far cursor stops the scan at
+    ///   or before the window's edge (ascending, a `before` at or below the window's end;
+    ///   descending, an `after` at or above the window's start), and otherwise with
+    ///   `CursorBound`. It ends at the window's edge, or past it, where a starting cursor beyond
+    ///   the edge resumes: the first position an `after` cursor admits, or a `before` cursor's
+    ///   position.
     fn check_request<P: ScanPosition + std::fmt::Debug>(
         window: Window,
         options: &QueryOptions,
@@ -2946,26 +3583,29 @@ mod tests {
         CursorToken: ScanCursor<P>,
     {
         let context = format!("window {window:?}, {options:?}");
-        let tip_checked_cursors = match options.ordering {
-            Ordering::Ascending => [options.after.as_ref(), None],
-            Ordering::Descending => [options.before.as_ref(), options.after.as_ref()],
-        };
         let tip_key = (first_tx(TIP), 0);
+        // A boundary exactly at the tip is where a caught-up scan resumes; an item there, or any
+        // position beyond it, has not been indexed.
+        let past_tip = |cursor: &CursorToken| {
+            let cursor_key = scan_order(&cursor.position);
+            match cursor.kind {
+                sui_rpc_cursor::CursorKind::Item => cursor_key >= tip_key,
+                sui_rpc_cursor::CursorKind::Boundary => cursor_key > tip_key,
+            }
+        };
         let window_reaches_tip = window.1.is_none_or(|end| end > TIP);
         let descending_window_past_tip = options.ordering == Ordering::Descending
             && match window.1 {
                 Some(end) => end > TIP,
                 None => window.0.unwrap_or(0) >= TIP,
             };
-        let cursor_past_tip = window_reaches_tip
-            && tip_checked_cursors.into_iter().flatten().any(|cursor| {
-                let cursor_key = scan_order(&cursor.position);
-                match cursor.kind {
-                    sui_rpc_cursor::CursorKind::Item => cursor_key >= tip_key,
-                    sui_rpc_cursor::CursorKind::Boundary => cursor_key > tip_key,
-                }
-            });
-        let out_of_range = descending_window_past_tip || cursor_past_tip;
+        let descending_cursor_past_tip = options.ordering == Ordering::Descending
+            && window_reaches_tip
+            && [options.before.as_ref(), options.after.as_ref()]
+                .into_iter()
+                .flatten()
+                .any(past_tip);
+        let out_of_range = descending_window_past_tip || descending_cursor_past_tip;
         let resolved = match resolve(window, options) {
             Ok(resolved) => resolved,
             Err(error) => {
@@ -2988,13 +3628,6 @@ mod tests {
             .collect();
         assert_eq!(admitted, expected, "admitted positions: {context}");
 
-        let window_start = window.0.unwrap_or(0);
-        let window_end = window.1.unwrap_or(TIP).min(TIP);
-        if window_start >= window_end {
-            return;
-        }
-        let window_lo = (first_tx(window_start), 0);
-        let window_hi = (first_tx(window_end), 0);
         let cursor_key = |cursor: &CursorToken| key(cursor.coordinate());
         let first_admitted_key = |cursor: &CursorToken| {
             let position: P = cursor.coordinate();
@@ -3003,6 +3636,48 @@ mod tests {
                 sui_rpc_cursor::CursorKind::Boundary => Some(key(position)),
             }
         };
+
+        if options.is_ascending()
+            && window_reaches_tip
+            && let Some(after) = options.after.as_ref().filter(|after| past_tip(after))
+        {
+            let resume = first_admitted_key(after).expect("model cursors have a successor");
+            let (reason, end, end_checkpoint) = match options.before.as_ref() {
+                Some(before) if cursor_key(before) <= resume => (
+                    RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                    },
+                    cursor_key(before),
+                    before.position.checkpoint(),
+                ),
+                _ => (
+                    RangeExhaustion::LedgerTip,
+                    resume,
+                    after.position.checkpoint(),
+                ),
+            };
+            assert!(resolved.is_empty(), "empty page: {context}");
+            assert_eq!(resolved.exhaustion, reason, "end reason: {context}");
+            assert_eq!(key(resolved.end_position), end, "end position: {context}");
+            assert_eq!(
+                resolved.end_checkpoint, end_checkpoint,
+                "end checkpoint field: {context}"
+            );
+            assert_eq!(
+                resolved.natural_end_claim(options),
+                None,
+                "checkpoint claim: {context}"
+            );
+            return;
+        }
+
+        let window_start = window.0.unwrap_or(0);
+        let window_end = window.1.unwrap_or(TIP).min(TIP);
+        if window_start >= window_end {
+            return;
+        }
+        let window_lo = (first_tx(window_start), 0);
+        let window_hi = (first_tx(window_end), 0);
         // Where the page ends with the window's reason, or `None` when a far cursor stops the
         // scan at or before the window's edge.
         let (entry, claim, reason, window_reason_end) = match options.ordering {
@@ -3100,8 +3775,8 @@ mod tests {
 
     #[test]
     fn transaction_cursors_admit_their_positions_in_either_direction() {
-        let cursors = every_tx_cursor(0..=first_tx(TIP));
-        let pair_cursors = every_tx_cursor(edge_txs());
+        let cursors = [every_tx_cursor(0..=first_tx(TIP)), past_tip_tx_cursors()].concat();
+        let pair_cursors = [every_tx_cursor(edge_txs()), past_tip_tx_cursors()].concat();
         let positions = ledger_txs();
         for (window, options) in requests(&cursors, &pair_cursors) {
             check_request(window, &options, resolve_tx_request, &positions, |tx| {
@@ -3112,8 +3787,16 @@ mod tests {
 
     #[test]
     fn event_cursors_admit_their_positions_in_either_direction() {
-        let cursors = every_event_cursor(0..=first_tx(TIP));
-        let pair_cursors = every_event_cursor(event_edge_txs());
+        let cursors = [
+            every_event_cursor(0..=first_tx(TIP)),
+            past_tip_event_cursors(),
+        ]
+        .concat();
+        let pair_cursors = [
+            every_event_cursor(event_edge_txs()),
+            past_tip_event_cursors(),
+        ]
+        .concat();
         let positions = ledger_event_slots();
         for (window, options) in requests(&cursors, &pair_cursors) {
             check_request(
@@ -3140,6 +3823,7 @@ mod tests {
         CursorToken {
             kind,
             position: position_at(resolved.end_checkpoint, resolved.end_position),
+            public_position: None,
         }
     }
 
@@ -3403,9 +4087,9 @@ mod tests {
         );
     }
 
-    /// An Item and a Boundary cursor at every checkpoint up to the tip.
+    /// An Item and a Boundary cursor at every checkpoint up to two past the tip.
     fn every_checkpoint_cursor() -> Vec<CursorToken> {
-        (0..=TIP)
+        (0..=TIP + 2)
             .flat_map(|checkpoint| {
                 [
                     cp_item(checkpoint),
@@ -3428,6 +4112,275 @@ mod tests {
                 |checkpoint| (first_tx(checkpoint), 0),
             );
         }
+    }
+
+    /// Every request the model checks, plus each ordering with no cursor, in the model's windows
+    /// and in a window that holds no checkpoint.
+    fn terminal_requests(
+        cursors: &[CursorToken],
+        pair_cursors: &[CursorToken],
+    ) -> Vec<(Window, QueryOptions)> {
+        let windows = WINDOWS
+            .into_iter()
+            .chain(PAST_TIP_WINDOWS)
+            .chain([(Some(6), Some(6))]);
+        let mut requests = requests_in(windows.clone(), cursors, pair_cursors);
+        for window in windows {
+            for ordering in ORDERINGS {
+                requests.push((window, options_with(ordering, None, None)));
+            }
+        }
+        requests
+    }
+
+    /// `options` with its cursors stripped of their public positions, as cursors minted before
+    /// cursors carried one decode.
+    fn without_public_positions(options: &QueryOptions) -> QueryOptions {
+        let strip = |cursor: &CursorToken| cursor.clone().with_public_position(None);
+        QueryOptions {
+            after: options.after.as_ref().map(strip),
+            before: options.before.as_ref().map(strip),
+            ..options.clone()
+        }
+    }
+
+    /// One request on the model ledger: its terminal frame's `cursor_position` splits the model's
+    /// positions exactly where the page leaves them. Ascending, a position lies before it exactly
+    /// when the request admits it (every admitted position was delivered by the time the page
+    /// ends) or the request's start excludes it (the point never lies before the start: the
+    /// window's start, or where its `after` cursor resumes). Descending, a position lies at or
+    /// after it exactly when the request admits it or its end excludes it (the window's end, or
+    /// its `before` cursor). A window that holds no checkpoint ignores the cursors, and is
+    /// bounded by its fields alone.
+    ///
+    /// Every terminal is placed without a read, by a window edge or the public position of a
+    /// request cursor, and its cursor carries the public position of its own scan position.
+    /// Cursors without public positions place a terminal the same way, or leave it unplaced.
+    fn check_terminal_ledger_position<P: ScanPosition + std::fmt::Debug>(
+        window: Window,
+        options: &QueryOptions,
+        resolve: impl Fn(Window, &QueryOptions) -> Result<(ResolvedScan<P>, ScanWindow<P>), RpcError>,
+        positions: &[P],
+        key: impl Fn(P) -> (u64, u32),
+        point: impl Fn(P) -> LedgerPoint,
+    ) where
+        CursorToken: ScanCursor<P>,
+    {
+        let context = format!("window {window:?}, {options:?}");
+        // `check_request` covers the requests that fail.
+        let Ok((resolved, scan_window)) = resolve(window, options) else {
+            return;
+        };
+        let terminal = resolved.end_ledger_position(&scan_window, options);
+        let (Some(cursor_position), Some(cursor_point)) =
+            (terminal.cursor_position, terminal.cursor_point)
+        else {
+            panic!("every terminal is placed: {terminal:?}: {context}");
+        };
+
+        // The terminal cursor's public position names its own scan position.
+        let end_key = key(resolved.end_position);
+        for &position in positions {
+            assert_eq!(
+                point(position) < cursor_point,
+                key(position) < end_key,
+                "{position:?} against the cursor's {cursor_point:?}: {context}"
+            );
+        }
+
+        let unlabelled = without_public_positions(options);
+        let (unlabelled_resolved, unlabelled_window) = resolve(window, &unlabelled)
+            .unwrap_or_else(|e| panic!("resolves without public positions: {:?}", status(e)));
+        // Public positions only label cursors: the scan resolves the same without them.
+        assert_eq!(unlabelled_resolved, resolved, "{context}");
+        let unlabelled_terminal =
+            unlabelled_resolved.end_ledger_position(&unlabelled_window, &unlabelled);
+        assert!(
+            unlabelled_terminal
+                .cursor_position
+                .is_none_or(|point| point == cursor_position)
+                && unlabelled_terminal
+                    .cursor_point
+                    .is_none_or(|point| point == cursor_point),
+            "{unlabelled_terminal:?} without public positions, {terminal:?} with: {context}"
+        );
+
+        let cursor_key = |cursor: &CursorToken| key(cursor.coordinate());
+        let window_start = window.0.unwrap_or(0);
+        let window_end = window.1.unwrap_or(TIP).min(TIP);
+        let holds_no_checkpoint = window_start >= window_end;
+        let start_excludes = |position: P| {
+            key(position) < (first_tx(window_start), 0)
+                || (!holds_no_checkpoint
+                    && options
+                        .after
+                        .as_ref()
+                        .is_some_and(|after| match after.kind {
+                            sui_rpc_cursor::CursorKind::Item => key(position) <= cursor_key(after),
+                            sui_rpc_cursor::CursorKind::Boundary => {
+                                key(position) < cursor_key(after)
+                            }
+                        }))
+        };
+        let end_excludes = |position: P| {
+            key(position) >= (first_tx(window_end), 0)
+                || (!holds_no_checkpoint
+                    && options
+                        .before
+                        .as_ref()
+                        .is_some_and(|before| key(position) >= cursor_key(before)))
+        };
+        for &position in positions {
+            let admitted = admits(window, options, key(position));
+            let before_point = point(position) < cursor_position;
+            if options.is_ascending() {
+                assert_eq!(
+                    before_point,
+                    admitted || start_excludes(position),
+                    "{position:?} against {cursor_position:?}: {context}"
+                );
+            } else {
+                assert_eq!(
+                    !before_point,
+                    admitted || end_excludes(position),
+                    "{position:?} against {cursor_position:?}: {context}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn transaction_terminal_ledger_position_splits_the_ledger_where_the_page_ends() {
+        let cursors = [every_tx_cursor(0..=first_tx(TIP)), past_tip_tx_cursors()].concat();
+        let pair_cursors = [every_tx_cursor(edge_txs()), past_tip_tx_cursors()].concat();
+        let positions = ledger_txs();
+        for (window, options) in terminal_requests(&cursors, &pair_cursors) {
+            check_terminal_ledger_position(
+                window,
+                &options,
+                resolve_tx_in_window,
+                &positions,
+                |tx| (tx, 0),
+                |tx| model_point(tx, 0),
+            );
+        }
+    }
+
+    #[test]
+    fn event_terminal_ledger_position_splits_the_ledger_where_the_page_ends() {
+        let cursors = [
+            every_event_cursor(0..=first_tx(TIP)),
+            past_tip_event_cursors(),
+        ]
+        .concat();
+        let pair_cursors = [
+            every_event_cursor(event_edge_txs()),
+            past_tip_event_cursors(),
+        ]
+        .concat();
+        let positions = ledger_event_slots();
+        for (window, options) in terminal_requests(&cursors, &pair_cursors) {
+            check_terminal_ledger_position(
+                window,
+                &options,
+                resolve_event_in_window,
+                &positions,
+                |position| (position.tx_seq, position.index),
+                |position| model_point(position.tx_seq, position.index),
+            );
+        }
+    }
+
+    /// A checkpoint scan's terminal is its own point, including where an `after` cursor past the
+    /// tip places it: a checkpoint cursor's checkpoint is exact.
+    #[test]
+    fn checkpoint_terminal_ledger_position_splits_the_ledger_where_the_page_ends() {
+        let cursors = every_checkpoint_cursor();
+        let positions: Vec<u64> = (0..TIP).collect();
+        for (window, options) in terminal_requests(&cursors, &cursors) {
+            check_terminal_ledger_position(
+                window,
+                &options,
+                resolve_checkpoint_in_window,
+                &positions,
+                |checkpoint| (first_tx(checkpoint), 0),
+                LedgerPoint::checkpoint_start,
+            );
+        }
+    }
+
+    /// Past the tip, an ascending terminal echoes the request's start fields, whatever its
+    /// cursors. With start fields inside the tip, an `after` cursor past it places the terminal
+    /// where it resumes by the public position it carries, and its echo keeps the cursor's bytes;
+    /// a cursor without one leaves the terminal unplaced.
+    #[test]
+    fn ascending_terminal_past_the_tip_echoes_the_requested_start() {
+        let past_tip_point = LedgerPoint::checkpoint_start(TIP + 1);
+        let past_tip_after = labelled(tx_boundary(TIP + 1, first_tx(TIP + 1)), past_tip_point);
+        for (after, cursor_point) in [
+            (None, LedgerPoint::checkpoint_start(TIP)),
+            (Some(past_tip_after.clone()), past_tip_point),
+        ] {
+            let options = options_with(Ordering::Ascending, after, None);
+            let (resolved, window) = resolve_tx_in_window((Some(TIP + 3), None), &options).unwrap();
+            assert_eq!(
+                resolved.end_ledger_position(&window, &options),
+                TerminalLedgerPosition {
+                    cursor_position: Some(LedgerPoint::checkpoint_start(TIP + 3)),
+                    cursor_point: Some(cursor_point),
+                }
+            );
+        }
+
+        let options = options_with(Ordering::Ascending, Some(past_tip_after.clone()), None);
+        let (resolved, window) = resolve_tx_in_window((Some(3), None), &options).unwrap();
+        let terminal = resolved.end_ledger_position(&window, &options);
+        assert_eq!(terminal, TerminalLedgerPosition::known(past_tip_point));
+        let watermark = crate::ledger_history::watermark::ScanTerminal::from_range_exhaustion(
+            resolved.exhaustion,
+            Position::Transactions {
+                checkpoint: resolved.end_checkpoint,
+                tx_seq: resolved.end_position,
+            },
+            terminal,
+            resolved.natural_end_claim(&options),
+        )
+        .into_watermark(None);
+        assert_eq!(watermark.cursor, Some(past_tip_after.encode()));
+        assert_eq!(
+            watermark.cursor_position,
+            Some(past_tip_point.to_proto(&past_tip_after.position))
+        );
+
+        // An Item cursor resumes right after its item.
+        let past_tip_item = with_model_point(tx_item(TIP, first_tx(TIP)));
+        let options = options_with(Ordering::Ascending, Some(past_tip_item), None);
+        let (resolved, window) = resolve_tx_in_window((Some(3), None), &options).unwrap();
+        assert_eq!(
+            resolved.end_ledger_position(&window, &options),
+            TerminalLedgerPosition::known(LedgerPoint::transaction(TIP, 1))
+        );
+
+        let options = without_public_positions(&options);
+        let (resolved, window) = resolve_tx_in_window((Some(3), None), &options).unwrap();
+        assert_eq!(
+            resolved.end_ledger_position(&window, &options),
+            TerminalLedgerPosition::default()
+        );
+    }
+
+    /// A descending scan that reaches the serving floor resumes at the floor checkpoint's start.
+    #[test]
+    fn serving_floor_terminal_is_the_floor_checkpoint_start() {
+        let options = options_with(Ordering::Descending, None, None);
+        let (mut resolved, window) = resolve_tx_in_window((None, None), &options).unwrap();
+        resolved
+            .apply_serving_floor(first_tx(4), 4, &options)
+            .unwrap();
+        assert_eq!(
+            resolved.end_ledger_position(&window, &options),
+            TerminalLedgerPosition::known(LedgerPoint::checkpoint_start(4))
+        );
     }
 
     /// An ascending scan whose high end is the tip, with nothing left to scan, ends at the tip
@@ -3614,6 +4567,23 @@ mod tests {
         assert!(is_out_of_range(resolve_transactions(&options)));
         let resolved = resolve_tx_request((None, Some(10)), &options).unwrap();
         assert!(resolved.is_empty());
+        // An ascending `after` Item at the last position admits nothing, so its page ends at it,
+        // in a window with checkpoints or without.
+        let options = after_options(Ordering::Ascending, tx_item(u64::MAX, u64::MAX));
+        for window in [(None, None), (Some(TIP + 1), None)] {
+            let resolved = resolve_tx_request(window, &options).unwrap();
+            assert!(resolved.is_empty(), "{window:?}");
+            assert_eq!(
+                (resolved.end_position, resolved.exhaustion),
+                (
+                    u64::MAX,
+                    RangeExhaustion::CursorBound {
+                        kind: sui_rpc_cursor::CursorKind::Item
+                    }
+                ),
+                "{window:?}"
+            );
+        }
     }
 
     /// Cursors in the decode-only legacy format resolve like current ones.
@@ -3665,8 +4635,8 @@ mod tests {
             Position::Checkpoints { .. } => panic!("checkpoint cursors keep their checkpoint"),
         };
         CursorToken {
-            kind: cursor.kind,
             position,
+            ..cursor.clone()
         }
     }
 

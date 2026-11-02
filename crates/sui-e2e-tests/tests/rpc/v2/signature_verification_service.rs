@@ -8,23 +8,31 @@ use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::sui::rpc::v2::VerifySignatureRequest;
+use sui_rpc::proto::sui::rpc::v2::VerifySignatureResponse;
 use sui_rpc::proto::sui::rpc::v2::signature_verification_service_client::SignatureVerificationServiceClient;
 use sui_rpc::proto::sui::rpc::v2::{ActiveJwk, Jwk, JwkId};
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{ObjectDigest, ObjectID, SuiAddress};
+use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
+use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::{PublicKey, Signature, SuiKeyPair, get_key_pair};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData};
 use sui_types::utils::{
     PINNED_PROOF_ADDRESS_SEED, PINNED_V1_PROOF_JSON, PINNED_V2_PROOF_JSON, pinned_jwks,
 };
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
-use test_cluster::TestClusterBuilder;
+use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use test_cluster::{TestCluster, TestClusterBuilder};
+use tonic::transport::Channel;
 
 #[sim_test]
 async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
@@ -32,6 +40,94 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
         return Ok(());
     }
 
+    verify_signature_zklogin().await
+}
+
+#[sim_test]
+async fn test_verify_signature_zklogin_when_network_requires_v2() -> Result<(), anyhow::Error> {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return Ok(());
+    }
+
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_zklogin_circuit_mode_for_testing(2);
+        config
+    });
+
+    verify_signature_zklogin().await
+}
+
+#[sim_test]
+async fn test_verify_signature_mldsa65() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut client = SignatureVerificationServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let kp = SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()));
+    let address = SuiAddress::from(&kp.public());
+    let personal_message = PersonalMessage {
+        message: b"hello".to_vec(),
+    };
+    let intent_msg = IntentMessage::new(Intent::personal_message(), personal_message.clone());
+    let signature = GenericSignature::Signature(Signature::new_secure(&intent_msg, &kp));
+
+    let verify = |message: Vec<u8>, signature: &GenericSignature, address: Option<SuiAddress>| {
+        let mut request = VerifySignatureRequest::default();
+        request.message = Some(Bcs::from(message));
+        request.signature = Some({
+            let mut proto = UserSignature::default();
+            proto.bcs = Some(Bcs::from(signature.as_ref().to_owned()));
+            proto
+        });
+        request.address = address.map(|a| a.to_string());
+        request
+    };
+    let message = bcs::to_bytes(&personal_message).unwrap();
+
+    let response = client
+        .verify_signature(verify(message.clone(), &signature, Some(address)))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+
+    let response = client
+        .verify_signature(verify(
+            bcs::to_bytes(&PersonalMessage {
+                message: b"other".to_vec(),
+            })
+            .unwrap(),
+            &signature,
+            None,
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert!(response.reason.is_some());
+
+    // A hybrid committee: both members sign, the ML-DSA member verifies too.
+    let ed_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let multisig_pk =
+        MultiSigPublicKey::new(vec![kp.public(), ed_kp.public()], vec![1, 1], 2).unwrap();
+    let multisig_address = SuiAddress::from(&multisig_pk);
+    let ed_signature: GenericSignature = Signature::new_secure(&intent_msg, &ed_kp).into();
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(vec![signature.clone(), ed_signature], multisig_pk).unwrap(),
+    );
+    let response = client
+        .verify_signature(verify(message, &multisig, Some(multisig_address)))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+}
+
+async fn verify_signature_zklogin() -> Result<(), anyhow::Error> {
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .with_epoch_duration_ms(10000)
@@ -152,7 +248,8 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     assert!(response.reason.is_some());
 
     // Verify zklogin signatures carrying the pinned v1 and v2 circuit proofs, with the
-    // matching test-issuer JWKs supplied in the request. In circuit mode 1 both proofs verify.
+    // matching test-issuer JWKs supplied in the request. Both proofs should verify regardless
+    // of the network's circuit activation rules.
     let jwks: Vec<ActiveJwk> = pinned_jwks()
         .into_iter()
         .map(|(id, jwk)| {
@@ -241,8 +338,60 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+async fn verify_with_aliases(
+    client: &mut SignatureVerificationServiceClient<Channel>,
+    message: &[u8],
+    signature: &GenericSignature,
+    address: Option<SuiAddress>,
+    check_address_aliases: Option<bool>,
+) -> Result<VerifySignatureResponse, tonic::Status> {
+    let mut request = VerifySignatureRequest::default();
+    request.message = Some(Bcs::from(message.to_vec()));
+    request.signature = Some({
+        let mut proto = UserSignature::default();
+        proto.bcs = Some(Bcs::from(signature.as_ref().to_owned()));
+        proto
+    });
+    request.address = address.map(|a| a.to_string());
+    request.check_address_aliases = check_address_aliases;
+    client
+        .verify_signature(request)
+        .await
+        .map(tonic::Response::into_inner)
+}
+
+async fn call_address_alias(
+    test_cluster: &TestCluster,
+    sender: SuiAddress,
+    function: &'static str,
+    object: (ObjectID, SequenceNumber),
+    args: Vec<CallArg>,
+) -> TransactionEffects {
+    let mut call_args = vec![CallArg::Object(ObjectArg::SharedObject {
+        id: object.0,
+        initial_shared_version: object.1,
+        mutability: SharedObjectMutability::Mutable,
+    })];
+    call_args.extend(args);
+
+    let tx_data = test_cluster
+        .test_transaction_builder_with_sender(sender)
+        .await
+        .move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            "address_alias",
+            function,
+            call_args,
+        )
+        .build();
+    test_cluster
+        .sign_and_execute_transaction(&tx_data)
+        .await
+        .effects
+}
+
 #[sim_test]
-async fn test_verify_signature_mldsa65() {
+async fn test_verify_signature_address_aliases() {
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .build()
@@ -251,62 +400,139 @@ async fn test_verify_signature_mldsa65() {
         .await
         .unwrap();
 
-    let kp = SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()));
-    let address = SuiAddress::from(&kp.public());
+    let addresses = test_cluster.get_addresses();
+    let (owner, delegate) = (addresses[0], addresses[1]);
+    let keystore = &test_cluster.wallet.config.keystore;
+    let owner_kp = keystore.export(&owner).unwrap();
+    let delegate_kp = keystore.export(&delegate).unwrap();
+
     let personal_message = PersonalMessage {
         message: b"hello".to_vec(),
     };
-    let intent_msg = IntentMessage::new(Intent::personal_message(), personal_message.clone());
-    let signature = GenericSignature::Signature(Signature::new_secure(&intent_msg, &kp));
+    let personal_bytes = bcs::to_bytes(&personal_message).unwrap();
+    let personal_intent = IntentMessage::new(Intent::personal_message(), personal_message);
+    let owner_sig: GenericSignature = Signature::new_secure(&personal_intent, owner_kp).into();
+    let delegate_sig: GenericSignature =
+        Signature::new_secure(&personal_intent, delegate_kp).into();
 
-    let verify = |message: Vec<u8>, signature: &GenericSignature, address: Option<SuiAddress>| {
-        let mut request = VerifySignatureRequest::default();
-        request.message = Some(Bcs::from(message));
-        request.signature = Some({
-            let mut proto = UserSignature::default();
-            proto.bcs = Some(Bcs::from(signature.as_ref().to_owned()));
-            proto
-        });
-        request.address = address.map(|a| a.to_string());
-        request
-    };
-    let message = bcs::to_bytes(&personal_message).unwrap();
-
-    let response = client
-        .verify_signature(verify(message.clone(), &signature, Some(address)))
+    // Checking aliases requires an address.
+    let status = verify_with_aliases(&mut client, &personal_bytes, &owner_sig, None, Some(true))
         .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+        .unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument, "{status:?}");
 
-    let response = client
-        .verify_signature(verify(
-            bcs::to_bytes(&PersonalMessage {
-                message: b"other".to_vec(),
-            })
-            .unwrap(),
-            &signature,
-            None,
-        ))
+    // Without an alias configuration, the address is its own sole alias.
+    for (signature, is_valid) in [(&owner_sig, true), (&delegate_sig, false)] {
+        let r = verify_with_aliases(
+            &mut client,
+            &personal_bytes,
+            signature,
+            Some(owner),
+            Some(true),
+        )
         .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(response.is_valid, Some(false));
-    assert!(response.reason.is_some());
+        .unwrap();
+        assert_eq!(
+            (r.is_valid, r.address_aliases_checked),
+            (Some(is_valid), Some(true)),
+            "{:?}",
+            r.reason
+        );
+    }
 
-    // A hybrid committee: both members sign, the ML-DSA member verifies too.
-    let ed_kp = SuiKeyPair::Ed25519(get_key_pair().1);
-    let multisig_pk =
-        MultiSigPublicKey::new(vec![kp.public(), ed_kp.public()], vec![1, 1], 2).unwrap();
-    let multisig_address = SuiAddress::from(&multisig_pk);
-    let ed_signature: GenericSignature = Signature::new_secure(&intent_msg, &ed_kp).into();
-    let multisig = GenericSignature::MultiSig(
-        MultiSig::combine(vec![signature.clone(), ed_signature], multisig_pk).unwrap(),
+    let alias_state_version = test_cluster.fullnode_handle.sui_node.with(|node| {
+        get_address_alias_state_obj_initial_shared_version(node.state().get_object_store().as_ref())
+            .unwrap()
+            .expect("address alias state object should exist")
+    });
+    let effects = call_address_alias(
+        &test_cluster,
+        owner,
+        "enable",
+        (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, alias_state_version),
+        vec![],
+    )
+    .await;
+    let ((aliases_id, aliases_version, _), _) = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| matches!(owner, Owner::ConsensusAddressOwner { .. }))
+        .expect("AddressAliases object should be created");
+    let aliases = (aliases_id, aliases_version);
+    call_address_alias(
+        &test_cluster,
+        owner,
+        "add",
+        aliases,
+        vec![CallArg::Pure(bcs::to_bytes(&delegate).unwrap())],
+    )
+    .await;
+
+    // The delegate can now sign for the owner, but only when aliases are checked.
+    for (check_address_aliases, expected) in [
+        (Some(true), (Some(true), Some(true))),
+        (None, (Some(false), None)),
+    ] {
+        let r = verify_with_aliases(
+            &mut client,
+            &personal_bytes,
+            &delegate_sig,
+            Some(owner),
+            check_address_aliases,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (r.is_valid, r.address_aliases_checked),
+            expected,
+            "{:?}",
+            r.reason
+        );
+    }
+
+    // An alias match doesn't skip verifying the signature itself.
+    let other_message = bcs::to_bytes(&PersonalMessage {
+        message: b"other".to_vec(),
+    })
+    .unwrap();
+    let r = verify_with_aliases(
+        &mut client,
+        &other_message,
+        &delegate_sig,
+        Some(owner),
+        Some(true),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        (r.is_valid, r.address_aliases_checked),
+        (Some(false), Some(true))
     );
-    let response = client
-        .verify_signature(verify(message, &multisig, Some(multisig_address)))
+
+    // Once the owner removes itself, its own key only works without the alias check.
+    call_address_alias(
+        &test_cluster,
+        owner,
+        "remove",
+        aliases,
+        vec![CallArg::Pure(bcs::to_bytes(&owner).unwrap())],
+    )
+    .await;
+
+    for (signature, check_address_aliases, is_valid) in [
+        (&owner_sig, Some(true), false),
+        (&owner_sig, None, true),
+        (&delegate_sig, Some(true), true),
+    ] {
+        let r = verify_with_aliases(
+            &mut client,
+            &personal_bytes,
+            signature,
+            Some(owner),
+            check_address_aliases,
+        )
         .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+        .unwrap();
+        assert_eq!(r.is_valid, Some(is_valid), "{:?}", r.reason);
+    }
 }

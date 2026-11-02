@@ -14219,7 +14219,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1313d5112464ecc25d7407f42442adea08589fc5#1313d5112464ecc25d7407f42442adea08589fc5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14858,6 +14858,7 @@ dependencies = [
  "sui-indexer-alt-graphql",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
+ "sui-keys",
  "sui-kv-rpc",
  "sui-kvstore",
  "sui-macros",
@@ -14980,6 +14981,7 @@ dependencies = [
  "move-ir-types",
  "pin-project",
  "prometheus",
+ "prost 0.14.1",
  "prost-types 0.14.1",
  "regex",
  "reqwest",
@@ -14997,7 +14999,6 @@ dependencies = [
  "sui-pg-db",
  "sui-protocol-config",
  "sui-rpc",
- "sui-rpc-cursor",
  "sui-sdk-types",
  "sui-sql-macro",
  "sui-types",
@@ -16020,7 +16021,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1313d5112464ecc25d7407f42442adea08589fc5#1313d5112464ecc25d7407f42442adea08589fc5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16214,7 +16215,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1313d5112464ecc25d7407f42442adea08589fc5#1313d5112464ecc25d7407f42442adea08589fc5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
 dependencies = [
  "base64ct",
  "bcs",

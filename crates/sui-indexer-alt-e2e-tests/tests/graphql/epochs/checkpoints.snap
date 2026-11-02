@@ -81,8 +81,8 @@ Response: {
       "totalCheckpoints": 4,
       "checkpoints": {
         "pageInfo": {
-          "startCursor": "KAEyAggA",
-          "endCursor": "KAEyAggD",
+          "startCursor": "AAIAAAAAAAAAAA==",
+          "endCursor": "AAIDAAAAAAAAAA==",
           "hasPreviousPage": false,
           "hasNextPage": false
         },
@@ -130,15 +130,15 @@ Response: {
 }
 
 task 14, lines 65-86:
-//# run-graphql --cursors 1
+//# run-graphql --cursors bcs(0u8,2u8,1)
 Response: {
   "data": {
     "epoch0checkpointsAfterCursor1": {
       "totalCheckpoints": 4,
       "checkpoints": {
         "pageInfo": {
-          "startCursor": "KAEyAggC",
-          "endCursor": "KAEyAggD",
+          "startCursor": "AAICAAAAAAAAAA==",
+          "endCursor": "AAIDAAAAAAAAAA==",
           "hasPreviousPage": true,
           "hasNextPage": false
         },

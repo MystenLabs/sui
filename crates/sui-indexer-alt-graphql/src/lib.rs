@@ -96,7 +96,7 @@ pub use crate::api::scalars::cursor::JsonCursor;
 pub use crate::api::types::checkpoint::CCheckpoint;
 pub use crate::api::types::checkpoint::CheckpointToken;
 pub use crate::api::types::event::CEvent;
-pub use crate::api::types::event::EventCursor;
+pub use crate::api::types::ledger_cursor::Point;
 pub use crate::api::types::transaction::CTransaction;
 pub mod args;
 pub mod config;
@@ -351,8 +351,8 @@ pub async fn start_rpc(
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
-    // The highest ledger checkpoint the watermark task has published. Both ledger readers stamp it
-    // on their requests, so a load-balanced kv-rpc replica never answers from an older view than
+    // The highest ledger checkpoint the watermark task has published. The ledger reader stamps it
+    // on its requests, so a load-balanced kv-rpc replica never answers from an older view than
     // the one the rest of GraphQL is working from.
     let ledger_grpc_floor = CheckpointFloor::default();
 
@@ -365,27 +365,15 @@ pub async fn start_rpc(
             config.limits.ledger_grpc_num_connections,
             Some(ledger_grpc_floor.clone()),
         )
-        .await?;
-
-    let alpha_ledger_grpc_reader = kv_args
-        .alpha_ledger_grpc_reader(
-            Some("graphql_alpha_ledger_grpc"),
-            registry,
-            config.limits.ledger_grpc_num_connections,
-            Some(ledger_grpc_floor.clone()),
-        )
-        .await?;
+        .await?
+        .context("--ledger-grpc-url must be configured")?;
 
     let pg_reader =
         PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-    let kv_loader = KvLoader::new(
-        ledger_grpc_reader
-            .clone()
-            .context("--ledger-grpc-url must be configured")?,
-    );
+    let kv_loader = KvLoader::new(ledger_grpc_reader.clone());
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 
@@ -405,7 +393,7 @@ pub async fn start_rpc(
         config.watermark,
         pg_pipelines,
         pg_reader.clone(),
-        ledger_grpc_reader.clone(),
+        Some(ledger_grpc_reader.clone()),
         consistent_reader.clone(),
         ledger_grpc_floor,
         metrics.clone(),
@@ -415,14 +403,6 @@ pub async fn start_rpc(
 
     let streaming_setup = match subscription_args.checkpoint_stream_url {
         Some(uri) => {
-            let ledger_grpc = ledger_grpc_reader
-                .clone()
-                .context("Ledger gRPC reader is required when streaming is enabled")?;
-
-            alpha_ledger_grpc_reader
-                .as_ref()
-                .context("Alpha ledger gRPC reader is required when streaming is enabled")?;
-
             let streaming_packages = Arc::new(StreamingPackageStore::new(package_store.clone()));
             let streaming_transactions = Arc::new(StreamedTransactionStore::new());
             let streaming_objects = Arc::new(StreamedObjectStore::new());
@@ -434,7 +414,7 @@ pub async fn start_rpc(
                 streaming_transactions.clone(),
                 streaming_objects.clone(),
                 readiness.clone(),
-                ledger_grpc.clone(),
+                ledger_grpc_reader.clone(),
                 watermark_task.watermarks_rx(),
                 subscription_metrics.clone(),
             );
@@ -477,18 +457,11 @@ pub async fn start_rpc(
         .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
+        .data(ledger_grpc_reader)
         .data(package_store);
-
-    if let Some(reader) = alpha_ledger_grpc_reader {
-        rpc = rpc.data(reader);
-    }
 
     if let Some(fullnode_client) = fullnode_client {
         rpc = rpc.layer(fullnode_client);
-    }
-
-    if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
-        rpc = rpc.data(ledger_grpc_reader);
     }
 
     let subscriptions_enabled = streaming_setup.is_some();
