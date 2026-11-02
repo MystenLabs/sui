@@ -57,7 +57,7 @@ struct PackageCache<F: MoveFlavor> {
     // infra
     // TODO: would dashmap simplify this?
     #[allow(clippy::type_complexity)]
-    cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
+    cache: Mutex<BTreeMap<(EnvironmentName, PathBuf), Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
 }
 
 pub struct PackageGraphBuilder<'a, F: MoveFlavor> {
@@ -120,7 +120,14 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
             let dep = Pinned::from_lockfile(lockfile.file(), &pin.source)?;
-            let package = self.cache.fetch(&dep, env, mtx, self.config).await?;
+            // Load each pin in the environment it was resolved in, so its digest matches.
+            let dep_env = Environment::new(
+                pin.use_environment
+                    .clone()
+                    .unwrap_or_else(|| env.name().clone()),
+                env.id().clone(),
+            );
+            let package = self.cache.fetch(&dep, &dep_env, mtx, self.config).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
                 user_note!(
@@ -365,11 +372,15 @@ impl<F: MoveFlavor> PackageCache<F> {
     ) -> PackageResult<Arc<Package<F>>> {
         // Key by canonical identity so two relative spellings of the same dep dir share a cache
         // entry (the cleaned unfetched path can be relative when the root path is relative).
+        // Key by environment too, because a package's deps and digest depend on it.
         let cell = self
             .cache
             .lock()
             .expect("unpoisoned")
-            .entry(canonical_identity(&dep.unfetched_path(env.id())))
+            .entry((
+                env.name().clone(),
+                canonical_identity(&dep.unfetched_path(env.id())),
+            ))
             .or_default()
             .clone();
 

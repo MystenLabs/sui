@@ -1729,6 +1729,75 @@ pkg_b = { local = "../pkg_b" }"#,
         );
     }
 
+    /// Load `root`, write its lockfile, and return the lockfile contents
+    async fn load_and_lock(scenario: &test_utils::graph_builder::Scenario) -> String {
+        let mut root = scenario.root_package("root").await;
+        root.save_lockfile_to_disk().unwrap();
+        root.output_path
+            .dump_lockfile(&root.mutex)
+            .await
+            .render_as_toml()
+    }
+
+    #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root -->|use_env="default_alpha"| a
+    ///     a --> b --> c
+    ///     a --> c
+    /// ```
+    ///
+    /// Reloading from the lockfile must load each pin in its recorded `use_environment`; otherwise
+    /// the digests don't match and the graph is repinned in the root's environment.
+    async fn use_env_lockfile_round_trip() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
+            .add_package("b", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
+            .add_package("c", |pkg| pkg.add_env("default_alpha", DEFAULT_ENV_ID))
+            .add_deps([("a", "b"), ("a", "c"), ("b", "c")])
+            .add_dep("root", "a", |dep| {
+                dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
+            })
+            .build();
+
+        let first = load_and_lock(&scenario).await;
+        assert!(first.contains(r#"use_environment = "default_alpha""#));
+
+        assert_eq!(first, load_and_lock(&scenario).await);
+        assert_eq!(first, load_and_lock(&scenario).await);
+    }
+
+    #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root -->|use_env="default_alpha" then "default_beta"| a
+    /// ```
+    ///
+    /// Changing `use-environment` must repin `a` in the new environment, even though `a` was
+    /// already loaded in the old environment while checking the lockfile.
+    async fn use_env_change_repins() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |pkg| {
+                pkg.add_env("default_alpha", DEFAULT_ENV_ID)
+                    .add_env("default_beta", DEFAULT_ENV_ID)
+            })
+            .add_dep("root", "a", |dep| {
+                dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
+            })
+            .build();
+
+        let first = load_and_lock(&scenario).await;
+        assert!(first.contains(r#"use_environment = "default_alpha""#));
+
+        let manifest = scenario.path_for("root").join("Move.toml");
+        let contents = fs::read_to_string(&manifest).unwrap();
+        fs::write(&manifest, contents.replace("default_alpha", "default_beta")).unwrap();
+
+        let second = load_and_lock(&scenario).await;
+        assert!(second.contains(r#"use_environment = "default_beta""#));
+        assert!(!second.contains("default_alpha"));
+    }
+
     #[test(tokio::test)]
     /// ```mermaid
     /// graph LR
