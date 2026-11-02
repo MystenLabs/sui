@@ -362,8 +362,10 @@ pub struct LedgerHistoryConfig {
     /// eval evaluates, NOT how many bucket reads BigTable receives — at
     /// exhaustion each leaf stream may have fetched one additional bucket that is
     /// discarded rather than evaluated, so observed reads can exceed this by up
-    /// to `max_bitmap_filter_literals`. Exhausting it ends the query with
-    /// `SCAN_LIMIT` and a resume cursor.
+    /// to the query's unique leaf count (at most twice
+    /// `max_bitmap_filter_literals`, plus one synthetic universe key). A query
+    /// with more leaves than this budget is granted one bucket per leaf.
+    /// Exhausting it ends the query with `SCAN_LIMIT` and a resume cursor.
     ///
     /// Defaults to `4000` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -407,9 +409,11 @@ pub struct LedgerHistoryConfig {
     pub watermark_beacon_buckets: Option<NonZeroU64>,
 
     /// Maximum total filter literals (bitmap dimensions) accepted in one filtered
-    /// request, across all DNF terms. Each literal becomes one bitmap leaf, so
-    /// this bounds a single filter's scan fanout. Must not exceed either bitmap
-    /// budget (see [`LedgerHistoryConfig::validate`]).
+    /// request, across all DNF terms. Each literal becomes one bitmap leaf (a
+    /// transaction filter's `AffectedAddress` literal also scans the `Sender`
+    /// dimension, so it becomes two), so this bounds a single filter's scan
+    /// fanout. Must not exceed either bitmap budget (see
+    /// [`LedgerHistoryConfig::validate`]).
     ///
     /// Defaults to `10` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -508,8 +508,9 @@ pub struct LedgerHistoryConfig {
     pub chunk_bucket_scan_budget: Option<usize>,
 
     /// Maximum total filter literals (bitmap dimensions) accepted in one filtered
-    /// request, across all DNF terms. Each literal becomes one bitmap leaf, so
-    /// this bounds a single filter's scan fanout. Must not exceed
+    /// request, across all DNF terms. Each literal becomes one bitmap leaf (an
+    /// `AffectedAddress` literal also scans the `Sender` dimension, so it becomes
+    /// two), so this bounds a single filter's scan fanout. Must not exceed
     /// `bitmap_bucket_scan_budget` (see [`LedgerHistoryConfig::validate`]).
     ///
     /// Defaults to `10` if not specified.

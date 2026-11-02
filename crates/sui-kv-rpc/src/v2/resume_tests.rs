@@ -432,13 +432,17 @@ impl Endpoint {
     }
 }
 
-/// The filter of a request: none (dense ledger), the matching sender, or
-/// the two AND-ed senders that intersect only at the matches (sparse ledger).
+/// The filter of a request: none (dense ledger), the matching sender, the
+/// two AND-ed senders that intersect only at the matches (sparse ledger), or
+/// `AffectedAddress` literals on those two senders. The sparse ledger has no
+/// `AffectedAddress` rows, so the last matches only through the `Sender`
+/// dimension.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Filter {
     None,
     Sender,
     AndSenders,
+    AndAffectedAddresses,
 }
 
 impl Filter {
@@ -446,7 +450,7 @@ impl Filter {
         match self {
             Self::None => vec![],
             Self::Sender => vec![match_sender()],
-            Self::AndSenders => and_senders().to_vec(),
+            Self::AndSenders | Self::AndAffectedAddresses => and_senders().to_vec(),
         }
     }
 }
@@ -565,10 +569,17 @@ fn transaction_filter(filter: Filter) -> Option<proto::TransactionFilter> {
         .senders()
         .into_iter()
         .map(|address| {
-            let mut sender = proto::SenderFilter::default();
-            sender.address = Some(address.to_string());
+            let predicate = if filter == Filter::AndAffectedAddresses {
+                let mut affected = proto::AffectedAddressFilter::default();
+                affected.address = Some(address.to_string());
+                proto::transaction_literal::Predicate::AffectedAddress(affected)
+            } else {
+                let mut sender = proto::SenderFilter::default();
+                sender.address = Some(address.to_string());
+                proto::transaction_literal::Predicate::Sender(sender)
+            };
             let mut literal = proto::TransactionLiteral::default();
-            literal.predicate = Some(proto::transaction_literal::Predicate::Sender(sender));
+            literal.predicate = Some(predicate);
             literal
         })
         .collect();
@@ -582,6 +593,11 @@ fn transaction_filter(filter: Filter) -> Option<proto::TransactionFilter> {
 }
 
 fn event_filter(filter: Filter) -> Option<proto::EventFilter> {
+    assert_ne!(
+        filter,
+        Filter::AndAffectedAddresses,
+        "event filters have no AffectedAddress predicate"
+    );
     let literals: Vec<_> = filter
         .senders()
         .into_iter()
@@ -1227,8 +1243,8 @@ async fn assert_cursor_bound_claim(
         Endpoint::Transactions | Endpoint::Checkpoints => TX_BUCKET,
     };
     let last_read_tx = match base.filter {
-        Filter::AndSenders if ascending => BOUND_TX - 1,
-        Filter::AndSenders => BOUND_TX,
+        Filter::AndSenders | Filter::AndAffectedAddresses if ascending => BOUND_TX - 1,
+        Filter::AndSenders | Filter::AndAffectedAddresses => BOUND_TX,
         Filter::Sender | Filter::None => {
             let past_bound = expected.iter().map(|&(tx, _)| tx);
             let last = if ascending {
@@ -1296,6 +1312,43 @@ async fn list_transactions_resumes_after_any_frame() {
 #[tokio::test]
 async fn list_checkpoints_resumes_after_any_frame() {
     assert_all_modes(Endpoint::Checkpoints).await;
+}
+
+/// An `AffectedAddress` literal also scans the `Sender` dimension, so the
+/// query has twice as many leaves as literals. With a bucket budget equal to
+/// `max_bitmap_filter_literals`, paging still returns every match, all found
+/// through `Sender` rows.
+#[tokio::test]
+async fn affected_address_filters_match_senders_within_literal_budget() {
+    let mock = MockBigtableServer::new();
+    sparse_ledger(&mock).await;
+    for endpoint in [Endpoint::Transactions, Endpoint::Checkpoints] {
+        let (ctx, server) = context(
+            &mock,
+            SPARSE_CHECKPOINTS,
+            endpoint.method(),
+            Limits {
+                bucket_budget: 2,
+                max_limit_items: 100,
+                beacon_buckets: NonZeroU64::MIN,
+            },
+        )
+        .await;
+        let request = Request {
+            endpoint,
+            filter: Filter::AndAffectedAddresses,
+            ascending: true,
+            start_checkpoint: None,
+            end_checkpoint: None,
+            limit: 100,
+            far_bound: None,
+        };
+        let expected = expected_items(&request, SPARSE_CHECKPOINTS);
+        let mut received = Vec::new();
+        page_to_end(&ctx, &request, &expected, &mut received, None).await;
+        assert_eq!(received, expected, "{endpoint:?}");
+        server.abort();
+    }
 }
 
 /// Every cursor a response carries, sent back in the opposite ordering, returns exactly the
