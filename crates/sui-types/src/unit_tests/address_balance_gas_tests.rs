@@ -288,7 +288,8 @@ fn test_address_balance_payment_multi_epoch_range_rejected() {
 
 #[test]
 fn test_address_balance_payment_timestamp_validation() {
-    let config = create_config_with_address_balance_gas_payments_enabled();
+    let mut config = create_config_with_address_balance_gas_payments_enabled();
+    config.set_enable_timestamp_transaction_expiration_for_testing(false);
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -415,7 +416,8 @@ fn test_regular_gas_payment_with_valid_during_expiration() {
 
 #[test]
 fn test_regular_gas_payment_with_invalid_valid_during_timestamp() {
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+    config.set_enable_timestamp_transaction_expiration_for_testing(false);
 
     let tx_data = create_test_transaction_data(
         vec![random_object_ref()],
@@ -788,4 +790,69 @@ fn test_address_balance_with_shared_objects_and_coin_reservation_allows_relaxed_
         result.is_ok(),
         "Transaction with shared objects + coin reservation should allow None expiration"
     );
+}
+
+fn valid_during_with_timestamps(
+    min_timestamp: Option<u64>,
+    max_timestamp: Option<u64>,
+) -> TransactionExpiration {
+    TransactionExpiration::ValidDuring {
+        min_epoch: Some(0),
+        max_epoch: Some(0),
+        min_timestamp,
+        max_timestamp,
+        chain: ChainIdentifier::from(CheckpointDigest::default()),
+        nonce: 7,
+    }
+}
+
+#[test]
+fn test_timestamp_expiration_accepted_when_enabled() {
+    let mut config = create_config_with_address_balance_gas_payments_enabled();
+    config.set_enable_timestamp_transaction_expiration_for_testing(true);
+
+    for (min, max) in [
+        (Some(1000), None),
+        (None, Some(2000)),
+        (Some(1000), Some(2000)),
+        (Some(1000), Some(1000)),
+    ] {
+        let tx_data = create_test_transaction_data(vec![], valid_during_with_timestamps(min, max));
+        let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+        assert!(result.is_ok(), "({min:?}, {max:?}): {result:?}");
+    }
+}
+
+#[test]
+fn test_timestamp_expiration_rejects_inverted_window() {
+    let mut config = create_config_with_address_balance_gas_payments_enabled();
+    config.set_enable_timestamp_transaction_expiration_for_testing(true);
+
+    let tx_data =
+        create_test_transaction_data(vec![], valid_during_with_timestamps(Some(2000), Some(1000)));
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::InvalidExpiration { error },
+        } => {
+            assert!(error.contains("greater than max_timestamp"), "{error}");
+        }
+        e => panic!("Expected InvalidExpiration, got {e:?}"),
+    }
+}
+
+#[test]
+fn test_is_valid_at_timestamp() {
+    assert!(TransactionExpiration::None.is_valid_at_timestamp(5));
+    assert!(TransactionExpiration::Epoch(0).is_valid_at_timestamp(5));
+    assert!(valid_during_with_timestamps(None, None).is_valid_at_timestamp(5));
+
+    let window = valid_during_with_timestamps(Some(10), Some(20));
+    assert!(!window.is_valid_at_timestamp(9));
+    assert!(window.is_valid_at_timestamp(10));
+    assert!(window.is_valid_at_timestamp(20));
+    assert!(!window.is_valid_at_timestamp(21));
+
+    assert!(valid_during_with_timestamps(Some(10), None).is_valid_at_timestamp(u64::MAX));
+    assert!(!valid_during_with_timestamps(None, Some(20)).is_valid_at_timestamp(21));
 }
