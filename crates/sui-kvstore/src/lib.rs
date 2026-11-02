@@ -252,6 +252,14 @@ pub struct TxSeqDigestData {
     pub checkpoint_number: CheckpointSequenceNumber,
 }
 
+/// A transaction's position in the ledger: its checkpoint and its zero-based
+/// offset within that checkpoint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TxCheckpointPosition {
+    pub checkpoint_number: CheckpointSequenceNumber,
+    pub tx_offset: u32,
+}
+
 /// Epoch data returned by reader methods.
 /// All fields are optional to support partial column queries.
 #[derive(Clone, Debug, Default)]

@@ -61,6 +61,7 @@ use crate::PackageData;
 use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
+use crate::TxCheckpointPosition;
 use crate::TxSeqDigestData;
 use crate::WatermarkV0;
 use crate::WatermarkV1;
@@ -1453,6 +1454,35 @@ impl BigTableClient {
             .collect())
     }
 
+    /// Resolve one tx_sequence_number to its checkpoint and offset within
+    /// that checkpoint, reading only the `tx_offset` and checkpoint-number
+    /// columns of `tx_seq_digest`. `None` when the transaction has no row
+    /// (e.g. not yet indexed).
+    pub async fn resolve_tx_checkpoint_position(
+        &mut self,
+        tx_sequence_number: u64,
+    ) -> Result<Option<TxCheckpointPosition>> {
+        let filter = Some(Self::column_filter(&[
+            tx_seq_digest::col::TX_OFFSET,
+            tx_seq_digest::col::CHECKPOINT_NUMBER,
+        ]));
+        let rows = self
+            .multi_get(
+                tx_seq_digest::NAME,
+                vec![tx_seq_digest::encode_key(tx_sequence_number)],
+                filter,
+            )
+            .await?;
+        let Some((_, cells)) = rows.first() else {
+            return Ok(None);
+        };
+        let (tx_offset, checkpoint_number) = tx_seq_digest::decode_checkpoint_position(cells)?;
+        Ok(Some(TxCheckpointPosition {
+            checkpoint_number,
+            tx_offset,
+        }))
+    }
+
     /// Streaming variant of `resolve_tx_digests`. Emits each resolved row as
     /// it arrives from BigTable. Rows missing from the table are silently
     /// dropped (same contract as the non-streaming version, minus the
@@ -1548,27 +1578,8 @@ impl BigTableClient {
         .boxed())
     }
 
-    /// Resolve tx_sequence_numbers to their containing checkpoint numbers.
-    /// Reads only the checkpoint-number column from `tx_seq_digest`.
-    pub async fn resolve_tx_checkpoints(
-        &mut self,
-        tx_sequence_numbers: &[u64],
-    ) -> Result<Vec<(u64, CheckpointSequenceNumber)>> {
-        if tx_sequence_numbers.is_empty() {
-            return Ok(Vec::new());
-        }
-        let rows = self
-            .resolve_tx_checkpoints_stream(tx_sequence_numbers.to_vec())
-            .await?;
-        futures::pin_mut!(rows);
-        let mut result = Vec::with_capacity(tx_sequence_numbers.len());
-        while let Some(row) = rows.next().await {
-            result.push(row?);
-        }
-        Ok(result)
-    }
-
-    /// Streaming variant of `resolve_tx_checkpoints`. Yields
+    /// Resolve tx_sequence_numbers to their containing checkpoint numbers, reading only the
+    /// checkpoint-number column from `tx_seq_digest`. Yields
     /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (row-key
     /// order, not the order of `tx_sequence_numbers` — callers needing that
     /// order must reorder).

@@ -98,11 +98,14 @@ pub struct ExpectedCall {
 }
 
 /// A single recorded `ReadRows` call: the resolved table name (suffix after
-/// `/tables/`) and the row keys selected by the request.
+/// `/tables/`), the row keys selected by the request, and the column
+/// qualifiers its filter restricts the read to (sorted; `None` when the
+/// filter has no column qualifier restriction).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadRowsCall {
     pub table: String,
     pub row_keys: Vec<Bytes>,
+    pub column_qualifiers: Option<Vec<Bytes>>,
 }
 
 /// Order in which `ReadRows` emits matching rows relative to the request's
@@ -954,6 +957,14 @@ impl Bigtable for MockBigtableServer {
         state.read_rows_calls.push(ReadRowsCall {
             table: table.clone(),
             row_keys: requested_keys.clone(),
+            column_qualifiers: allowed_qualifiers.as_ref().map(|allowed| {
+                let mut qualifiers: Vec<Bytes> = allowed
+                    .iter()
+                    .map(|qualifier| Bytes::copy_from_slice(qualifier))
+                    .collect();
+                qualifiers.sort_unstable();
+                qualifiers
+            }),
         });
         if ranges.is_empty()
             && state.read_rows_response_order == ReadRowsResponseOrder::ReverseRequestOrder
