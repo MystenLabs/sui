@@ -64,7 +64,7 @@ const MAX_EXPANDED_TRANSACTION_TERMS: usize = 64;
 /// `max_literals` caps the total number of literals across all terms of the
 /// request. Each literal becomes one bitmap dimension stream, except
 /// `AffectedAddress`, which also scans the `Sender` dimension (see
-/// [`MAX_EXPANDED_TRANSACTION_TERMS`]), so this prevents one filter from
+/// `MAX_EXPANDED_TRANSACTION_TERMS`), so this prevents one filter from
 /// monopolizing bitmap scan fanout.
 pub fn transaction_filter_to_query(
     filter: &TransactionFilter,
