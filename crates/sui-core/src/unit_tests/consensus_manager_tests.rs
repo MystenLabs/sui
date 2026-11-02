@@ -9,9 +9,8 @@ use futures::FutureExt;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::{
-    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary},
-    node_role::NodeRole,
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
 };
 use tokio::{sync::mpsc, time::sleep};
 
@@ -80,7 +79,6 @@ async fn test_consensus_manager() {
         &registry_service,
         consensus_client,
         None,
-        sui_types::node_role::NodeRole::Validator,
     );
 
     let boot_counter = *manager.boot_counter.lock().await;
@@ -166,7 +164,6 @@ async fn test_consensus_manager_address_update() {
         &registry_service,
         consensus_client,
         None,
-        NodeRole::Validator,
     ));
 
     // Start consensus
@@ -309,7 +306,6 @@ async fn test_consensus_active_address_source_metric() {
         &registry_service,
         consensus_client,
         None,
-        NodeRole::Validator,
     );
 
     // A committee peer's consensus network public key, and its metric label.
