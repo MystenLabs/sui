@@ -13,6 +13,7 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 bcs.workspace = true
+fastcrypto.workspace = true
 leb128.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -42,6 +43,11 @@ sui-protocol-config.workspace = true
 sui-types.workspace = true
 parking_lot.workspace = true
 either.workspace = true
+
+[dev-dependencies]
+sui-framework.workspace = true
+tokio.workspace = true
+prometheus.workspace = true
 
 [features]
 tracing = [
