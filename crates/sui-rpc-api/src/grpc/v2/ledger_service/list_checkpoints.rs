@@ -872,8 +872,8 @@ fn apply_serving_floor_to_filtered_window(
     if options.is_ascending() {
         cp_range.entry_checkpoint = cp_range.entry_checkpoint.max(floor_checkpoint);
     } else {
-        cp_range.end_point = LedgerPoint::checkpoint_start(floor_checkpoint);
-        cp_range.end_position = floor_checkpoint;
+        cp_range.end_public_position = LedgerPoint::checkpoint_start(floor_checkpoint);
+        cp_range.end_scan_position = floor_checkpoint;
         cp_range.exhaustion = RangeExhaustion::ServingFloor { floor_checkpoint };
     }
     Ok(())
@@ -966,7 +966,8 @@ mod tests {
     /// consumes it and is `OutOfRange` in both directions.
     #[test]
     fn filtered_window_serving_floor_matrix() {
-        // (ascending, floor_tx, floor_cp, expected: tx_range, entry, end_point, end_pos, exhaustion)
+        // (ascending, floor_tx, floor_cp, expected: tx_range, entry, end_public_position,
+        // end_scan_position, exhaustion)
         // Window: txs 0..40 spanning checkpoints 0..=8. A floor tx inside
         // the window maps to a checkpoint inside the interval (tx 20 -> cp 4).
         for (
@@ -975,8 +976,8 @@ mod tests {
             floor_cp,
             expected_range,
             entry,
-            end_point,
-            end_pos,
+            end_public_position,
+            end_scan_position,
             exhaustion,
         ) in [
             // Floor inside: ascending raises the entry claim only.
@@ -1018,8 +1019,11 @@ mod tests {
             let context = format!("floor_tx {floor_tx} asc {ascending}");
             assert_eq!(tx_range, expected_range, "{context}");
             assert_eq!(cp_range.entry_checkpoint, entry, "{context}");
-            assert_eq!(cp_range.end_point, end_point, "{context}");
-            assert_eq!(cp_range.end_position, end_pos, "{context}");
+            assert_eq!(
+                cp_range.end_public_position, end_public_position,
+                "{context}"
+            );
+            assert_eq!(cp_range.end_scan_position, end_scan_position, "{context}");
             assert_eq!(cp_range.exhaustion, exhaustion, "{context}");
         }
 
@@ -1044,7 +1048,7 @@ mod tests {
 
     /// The checkpoint metadata of a filtered scan over checkpoints 0..=8 (txs 0..40).
     fn filtered_window(ascending: bool) -> ResolvedScan<u64> {
-        let (entry_checkpoint, end_checkpoint, end_position, window_claim) = if ascending {
+        let (entry_checkpoint, end_checkpoint, end_scan_position, window_claim) = if ascending {
             (0, 8, 40, Some(7))
         } else {
             (8, 0, 0, Some(0))
@@ -1052,8 +1056,8 @@ mod tests {
         ResolvedScan {
             bounds: ScanBounds::from_range(0..9),
             entry_checkpoint,
-            end_point: LedgerPoint::checkpoint_start(end_checkpoint),
-            end_position,
+            end_public_position: LedgerPoint::checkpoint_start(end_checkpoint),
+            end_scan_position,
             exhaustion: RangeExhaustion::CheckpointBound,
             window_claim,
         }

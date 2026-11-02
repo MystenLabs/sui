@@ -184,14 +184,14 @@ pub struct RangeEnd {
     /// Why the range is exhausted.
     pub exhaustion: RangeExhaustion,
     /// The terminal cursor's coordinates and public position (see
-    /// [`ResolvedScan::end_cursor_point`]).
+    /// [`ResolvedScan::end_cursor_public_position`]).
     ///
-    /// [`ResolvedScan::end_cursor_point`]: crate::ledger_history::query_options::ResolvedScan::end_cursor_point
+    /// [`ResolvedScan::end_cursor_public_position`]: crate::ledger_history::query_options::ResolvedScan::end_cursor_public_position
     pub position: Position,
     /// Where the terminal frame resumes in ledger coordinates (see
-    /// [`ResolvedScan::end_ledger_position`]).
+    /// [`ResolvedScan::end_resume_position`]).
     ///
-    /// [`ResolvedScan::end_ledger_position`]: crate::ledger_history::query_options::ResolvedScan::end_ledger_position
+    /// [`ResolvedScan::end_resume_position`]: crate::ledger_history::query_options::ResolvedScan::end_resume_position
     pub cursor_position: LedgerPoint,
     /// The checkpoint a natural end claims (see [`ResolvedScan::natural_end_claim`]).
     ///
@@ -220,9 +220,9 @@ pub enum ScanTerminal {
     NaturalRange {
         end: NaturalRangeEnd,
         position: Position,
-        /// Where the frame resumes (see [`ResolvedScan::end_ledger_position`]).
+        /// Where the frame resumes (see [`ResolvedScan::end_resume_position`]).
         ///
-        /// [`ResolvedScan::end_ledger_position`]: crate::ledger_history::query_options::ResolvedScan::end_ledger_position
+        /// [`ResolvedScan::end_resume_position`]: crate::ledger_history::query_options::ResolvedScan::end_resume_position
         cursor_position: LedgerPoint,
         /// The checkpoint this page's natural end reports as fully covered in
         /// `Watermark.checkpoint`, or `None` when nothing remains to claim: the window has no

@@ -431,8 +431,8 @@ mod tests {
             .unwrap();
         let resolved = ResolvedScan::resolve(cp_range, window.clone(), options).unwrap();
         (
-            resolved.end_ledger_position(&window, options),
-            resolved.end_cursor_point(options),
+            resolved.end_resume_position(&window, options),
+            resolved.end_cursor_public_position(options),
         )
     }
 
@@ -557,8 +557,8 @@ mod tests {
     ) -> (Range<u64>, LedgerPoint, u64, RangeExhaustion, Option<u64>) {
         (
             resolved.range(),
-            resolved.end_cursor_point(options),
-            resolved.end_position,
+            resolved.end_cursor_public_position(options),
+            resolved.end_scan_position,
             resolved.exhaustion,
             resolved.natural_end_claim(options),
         )
@@ -835,8 +835,8 @@ mod tests {
             assert_eq!(
                 (
                     resolved.range(),
-                    resolved.end_cursor_point(&options),
-                    resolved.end_position,
+                    resolved.end_cursor_public_position(&options),
+                    resolved.end_scan_position,
                     resolved.exhaustion
                 ),
                 expected,
