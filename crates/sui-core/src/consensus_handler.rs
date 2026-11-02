@@ -2992,6 +2992,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             )
                             .expect("db error")
                     {
+                        assert_reachable!("timestamp-expired transaction dropped in consensus");
                         debug!(
                             "Dropping transaction {} expired at commit timestamp {}",
                             tx.digest(),
