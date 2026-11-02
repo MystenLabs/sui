@@ -34,6 +34,17 @@ message CursorToken {
         TransactionsPosition transactions = 7;
         EventsPosition events = 8;
     }
+
+    // The boundary immediately before the item at this cursor's coordinate
+    // (`tx_seq` and `event_index`), in public ledger coordinates; independent
+    // of `kind`. An item cursor carries its item's key; a boundary cursor the
+    // boundary it names. Set on transaction and event cursors whose issuer
+    // knew it; a checkpoint cursor's `checkpoint` is already its public
+    // position. Servers use it only to report positions (`cursor_position`):
+    // scans stay bounded by `tx_seq` and `event_index`, so a forged value only
+    // misleads the client that sent it. Readers must accept a cursor without
+    // it.
+    PublicPosition public_position = 9;
 }
 
 message CheckpointsPosition {
@@ -70,3 +81,16 @@ message EventsPosition {
 // event coordinate; the start of transaction N is `{ tx_seq: N, event_index: 0 }`.
 // `before` cursors bound the scan exclusively at the event coordinate for both
 // Item and Boundary kinds.
+
+// A position in public ledger coordinates, as `sui.rpc.v2.LedgerPosition`
+// names it: the boundary just before the item keyed
+// `(checkpoint, transaction_index, event_index)`. Transaction cursors leave
+// `event_index` unset (0).
+message PublicPosition {
+    // Checkpoint sequence number.
+    uint64 checkpoint = 1;
+    // Zero-based position of a transaction within `checkpoint`.
+    uint64 transaction_index = 2;
+    // Zero-based index of an event within its transaction.
+    uint32 event_index = 3;
+}

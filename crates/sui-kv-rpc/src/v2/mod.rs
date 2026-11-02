@@ -257,9 +257,18 @@ pub(crate) mod test_utils {
     use sui_kvstore::testing::MockBigtableServer;
     use sui_package_resolver::PackageStore;
     use sui_package_resolver::Resolver;
+    use sui_rpc::proto::sui::rpc::v2::EventFilter;
+    use sui_rpc::proto::sui::rpc::v2::EventLiteral;
+    use sui_rpc::proto::sui::rpc::v2::EventTerm;
     use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc::proto::sui::rpc::v2::SenderFilter;
+    use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
+    use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
+    use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
+    use sui_rpc::proto::sui::rpc::v2::event_literal;
+    use sui_rpc::proto::sui::rpc::v2::transaction_literal;
     use sui_types::balance_change::derive_balance_changes_2;
     use sui_types::full_checkpoint_content::Checkpoint;
     use sui_types::storage::{ObjectKey, get_transaction_object_set};
@@ -449,6 +458,35 @@ pub(crate) mod test_utils {
         options.limit = Some(10);
         options.ordering = Some(Ordering::Ascending as i32);
         options
+    }
+
+    /// A sender predicate whose address does not parse, so no filter holding it compiles.
+    fn unparseable_sender() -> SenderFilter {
+        let mut sender = SenderFilter::default();
+        sender.address = Some("0xnot-an-address".to_owned());
+        sender
+    }
+
+    /// A transaction filter the server rejects with `InvalidArgument` (see [`unparseable_sender`]).
+    pub(super) fn unparseable_transaction_filter() -> TransactionFilter {
+        let mut literal = TransactionLiteral::default();
+        literal.predicate = Some(transaction_literal::Predicate::Sender(unparseable_sender()));
+        let mut term = TransactionTerm::default();
+        term.literals = vec![literal];
+        let mut filter = TransactionFilter::default();
+        filter.terms = vec![term];
+        filter
+    }
+
+    /// An event filter the server rejects with `InvalidArgument` (see [`unparseable_sender`]).
+    pub(super) fn unparseable_event_filter() -> EventFilter {
+        let mut literal = EventLiteral::default();
+        literal.predicate = Some(event_literal::Predicate::Sender(unparseable_sender()));
+        let mut term = EventTerm::default();
+        term.literals = vec![literal];
+        let mut filter = EventFilter::default();
+        filter.terms = vec![term];
+        filter
     }
 
     pub(super) async fn query_context(

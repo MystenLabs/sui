@@ -4,27 +4,20 @@
 use std::collections::VecDeque;
 
 use sui_rpc::proto::sui::rpc::v2::Watermark;
-use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::sync::DropGuard;
 
 use crate::RpcError;
-use crate::ledger_history::query_options::RangeExhaustion;
+use crate::ledger_history::watermark::RangeEnd;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::metrics::ListStreamMetrics;
 
 /// Chunk terminal for a scan that either exhausted its request scan budget
-/// (authoritative frontier watermark, built lazily) or ended at the resolved
-/// range boundary, where it claims `natural_end_claim` (see
-/// [`ResolvedScan::natural_end_claim`]).
-///
-/// [`ResolvedScan::natural_end_claim`]: crate::ledger_history::query_options::ResolvedScan::natural_end_claim
+/// (authoritative frontier watermark, built lazily) or ended at `range_end`.
 pub(crate) fn scan_limit_or_range<Frontier>(
     request_scan_limit_reached: bool,
-    exhaustion: RangeExhaustion,
-    position: Position,
-    natural_end_claim: Option<u64>,
+    range_end: RangeEnd,
     frontier_watermark: Frontier,
 ) -> Result<ScanTerminal, RpcError>
 where
@@ -35,11 +28,7 @@ where
             watermark: frontier_watermark()?,
         })
     } else {
-        Ok(ScanTerminal::from_range_exhaustion(
-            exhaustion,
-            position,
-            natural_end_claim,
-        ))
+        Ok(range_end.terminal())
     }
 }
 
@@ -229,8 +218,12 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::ledger_history::ledger_point::LedgerPoint;
+    use crate::ledger_history::ledger_point::TerminalLedgerPosition;
+    use crate::ledger_history::query_options::RangeExhaustion;
     use crate::ledger_history::watermark::NaturalRangeEnd;
     use std::time::Instant;
+    use sui_rpc_cursor::Position;
 
     use prometheus::Registry;
     use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
@@ -267,6 +260,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
+                        TerminalLedgerPosition::known(LedgerPoint::GENESIS),
                         None,
                     ),
                     remaining_scan_budget: scan_budget - 1,
@@ -288,6 +282,7 @@ mod tests {
                     checkpoint: 0,
                     tx_seq: 0,
                 },
+                ledger: TerminalLedgerPosition::known(LedgerPoint::GENESIS),
                 claimed_checkpoint: None,
             })
         );
@@ -314,6 +309,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
+                        TerminalLedgerPosition::known(LedgerPoint::GENESIS),
                         None,
                     ),
                     remaining_scan_budget: args.scan_budget,
@@ -450,6 +446,7 @@ mod tests {
                             checkpoint: 0,
                             tx_seq: 0,
                         },
+                        TerminalLedgerPosition::known(LedgerPoint::GENESIS),
                         None,
                     ),
                     remaining_scan_budget: args.scan_budget - buckets_evaluated,

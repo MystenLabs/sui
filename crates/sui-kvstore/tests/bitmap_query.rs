@@ -7,6 +7,8 @@
 //! - `eval_bitmap_query_stream` composes DNF terms and signed literals correctly
 //! - `checkpoint_to_tx_range` resolves bounds
 //! - `resolve_tx_digests` resolves sequence numbers to digests via tx_seq_digest
+//! - `resolve_tx_checkpoint_position` resolves a sequence number to its
+//!   checkpoint and offset via tx_seq_digest
 
 use std::ops::Range;
 
@@ -28,6 +30,7 @@ use sui_kvstore::BitmapQuery;
 use sui_kvstore::BitmapTerm;
 use sui_kvstore::CheckpointSpan;
 use sui_kvstore::ScanDirection;
+use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
 use sui_kvstore::tables;
 use sui_kvstore::tables::transaction_bitmap_index;
@@ -526,7 +529,11 @@ async fn test_resolve_tx_digests() -> Result<()> {
     assert_eq!(result[0], Some(tx_seq_digest_data(1, d1, 0)));
     assert_eq!(result[1], Some(tx_seq_digest_data(4, d4, 1)));
 
-    let mut checkpoints = client.resolve_tx_checkpoints(&[4, 0, 99]).await?;
+    let mut checkpoints: Vec<(u64, CheckpointSequenceNumber)> = client
+        .resolve_tx_checkpoints_stream(vec![4, 0, 99])
+        .await?
+        .try_collect()
+        .await?;
     checkpoints.sort_by_key(|(tx_seq, _)| *tx_seq);
     assert_eq!(checkpoints, vec![(0, 0), (4, 1)]);
 
@@ -537,6 +544,45 @@ async fn test_resolve_tx_digests() -> Result<()> {
     // Empty input
     let result = client.resolve_tx_digests(&[]).await?;
     assert!(result.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_resolve_tx_checkpoint_position() -> Result<()> {
+    let (mut client, _emulator) = setup_emulator().await?;
+
+    // Checkpoint 0 holds tx 0; checkpoint 1 holds txs 1..=3, tx 3 at offset 2.
+    write_tx_seq_digest(&mut client, 0, &TransactionDigest::random(), 0).await?;
+    let entry = tables::make_entry(
+        tables::tx_seq_digest::encode_key(3),
+        tables::tx_seq_digest::encode(&TransactionDigest::random(), 4, 2, 1),
+        None,
+    );
+    client
+        .write_entries(
+            tables::tx_seq_digest::NAME,
+            vec![entry],
+            CheckpointSpan::single(1),
+        )
+        .await?;
+
+    assert_eq!(
+        client.resolve_tx_checkpoint_position(0).await?,
+        Some(TxCheckpointPosition {
+            checkpoint_number: 0,
+            tx_offset: 0,
+        })
+    );
+    assert_eq!(
+        client.resolve_tx_checkpoint_position(3).await?,
+        Some(TxCheckpointPosition {
+            checkpoint_number: 1,
+            tx_offset: 2,
+        })
+    );
+    // Unknown tx_seq → None
+    assert_eq!(client.resolve_tx_checkpoint_position(99).await?, None);
 
     Ok(())
 }
