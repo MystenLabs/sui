@@ -439,6 +439,7 @@ const MAINNET_USDB: &str =
 //              Simplify Nitro attestation header validation.
 //              Disable forwarding addresses on devnet.
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
+//              Enable ML-DSA-65 account signatures on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5045,6 +5046,9 @@ impl ProtocolConfig {
                     cfg.package_publish_charge_fixed = Some(1_000_000_000);
                     cfg.package_publish_charge_per_module = Some(10_000_000);
                     cfg.package_publish_charge_per_dependency = Some(10_000_000);
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.mldsa65_auth = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
