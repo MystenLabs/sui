@@ -355,7 +355,7 @@ impl InvariantChecker {
                     get_input_sui(store, &id, input.version, layout_resolver)? as u128;
             }
             if let Some(object) = output {
-                total_output_sui += object.get_total_sui(layout_resolver).map_err(|e| {
+                total_output_sui += get_total_sui(object, layout_resolver).map_err(|e| {
                     make_invariant_violation!(
                         "Failed looking up output SUI in SUI conservation checking for \
                          mutated type {:?}: {e:#?}",
@@ -429,6 +429,16 @@ fn get_modified_objects<'a>(store: &'a TemporaryStore<'_>) -> Vec<ModifiedObject
         .collect()
 }
 
+// The execution layout resolver builds package linkage and creates a VM. These known
+// layouts contain no embedded SUI, so only their storage rebates contribute.
+fn get_total_sui(object: &Object, layout_resolver: &mut impl LayoutResolver) -> SuiResult<u64> {
+    if crate::accumulator_settlement::has_no_sui(object) {
+        Ok(object.storage_rebate)
+    } else {
+        object.get_total_sui(layout_resolver)
+    }
+}
+
 fn get_input_sui(
     store: &TemporaryStore<'_>,
     id: &ObjectID,
@@ -445,7 +455,7 @@ fn get_input_sui(
                 obj.version(),
             );
         }
-        obj.get_total_sui(layout_resolver).map_err(|e| {
+        get_total_sui(obj, layout_resolver).map_err(|e| {
             make_invariant_violation!(
                 "Failed looking up input SUI in SUI conservation checking for input with \
                      type {:?}: {e:#?}",
@@ -459,7 +469,7 @@ fn get_input_sui(
                 "Failed looking up dynamic field {id} in SUI conservation checking"
             );
         };
-        obj.get_total_sui(layout_resolver).map_err(|e| {
+        get_total_sui(&obj, layout_resolver).map_err(|e| {
             make_invariant_violation!(
                 "Failed looking up input SUI in SUI conservation checking for type \
                      {:?}: {e:#?}",

@@ -220,12 +220,12 @@ impl IdentStr {
     }
 
     /// Returns the length of `self` in bytes.
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Returns `true` if `self` has a length of zero bytes.
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -233,23 +233,23 @@ impl IdentStr {
     ///
     /// This is not implemented as a `From` trait to discourage automatic conversions -- these
     /// conversions should not typically happen.
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Converts `self` to a byte slice.
-    pub fn as_bytes(&self) -> &[u8] {
+    pub const fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
 
     /// Returns the abstract size of the struct
     /// TODO (ade): use macro to enfornce determinism
-    pub fn abstract_size_for_gas_metering(&self) -> AbstractMemorySize {
+    pub const fn abstract_size_for_gas_metering(&self) -> AbstractMemorySize {
         AbstractMemorySize::new((self.len()) as u64)
     }
 
     /// Returns a borrow of the underlying string.
-    pub fn borrow_str(&self) -> &str {
+    pub const fn borrow_str(&self) -> &str {
         &self.0
     }
 }

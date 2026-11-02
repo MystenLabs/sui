@@ -13,6 +13,8 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metadata");
+pub const RECORD_ACCUMULATOR_OBJECT_CHANGES_FUNC: &IdentStr =
+    ident_str!("record_accumulator_object_changes");
 pub const ACCUMULATOR_OBJECT_COUNT_KEY_STRUCT_NAME: &IdentStr =
     ident_str!("AccumulatorObjectCountKey");
 
