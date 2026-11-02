@@ -198,7 +198,8 @@ pub fn simulate_transaction(
     let execution_params = match early_execution_error {
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
-    };
+    }
+    .with_timestamp_expiration(transaction.expiration());
 
     let tracking_store = TrackingBackingStore::new(backing_store);
 

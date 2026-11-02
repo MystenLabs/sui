@@ -2961,10 +2961,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // Expiry is checked only when a transaction is first sequenced, before it takes
-                // owned object locks. A transaction deferred from an earlier commit keeps the
-                // validity it had then, and a copy of an already-processed transaction is left
-                // to deduplication so that its waiters still receive effects.
+                // A transaction that is expired when first sequenced is dropped before it takes
+                // owned object locks. A transaction that expires while deferred already holds its
+                // locks, so execution aborts it with `TransactionExpired` instead. A copy of an
+                // already-processed transaction is left to deduplication so that its waiters
+                // still receive effects.
                 //
                 // The dropped key is deliberately not recorded as processed. Otherwise a later
                 // copy would bypass this check, acquire locks, and then be discarded by

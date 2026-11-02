@@ -2444,11 +2444,13 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
-        /// before this value.
+        /// Transaction invalid if its consensus commit timestamp (Unix ms) is before this value.
+        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
+        /// after deferral.
         min_timestamp: Option<u64>,
-        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
-        /// after this value.
+        /// Transaction invalid if its consensus commit timestamp (Unix ms) is after this value.
+        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
+        /// after deferral.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2462,11 +2464,13 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
-        /// before this value.
+        /// Transaction invalid if its consensus commit timestamp (Unix ms) is before this value.
+        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
+        /// after deferral.
         min_timestamp: Option<u64>,
-        /// Transaction invalid if first sequenced by a consensus commit with a timestamp (Unix ms)
-        /// after this value.
+        /// Transaction invalid if its consensus commit timestamp (Unix ms) is after this value.
+        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
+        /// after deferral.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2527,6 +2531,23 @@ impl TransactionExpiration {
                 ..
             } if *max_epoch == *min_epoch || *max_epoch == min_epoch.saturating_add(1)
         )
+    }
+
+    /// Whether the expiration sets `min_timestamp` or `max_timestamp`.
+    pub fn has_timestamp_bounds(&self) -> bool {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
+            TransactionExpiration::ValidDuring {
+                min_timestamp,
+                max_timestamp,
+                ..
+            }
+            | TransactionExpiration::Validity {
+                min_timestamp,
+                max_timestamp,
+                ..
+            } => min_timestamp.is_some() || max_timestamp.is_some(),
+        }
     }
 
     /// Whether `timestamp_ms` lies within the inclusive `[min_timestamp, max_timestamp]` window.

@@ -2038,7 +2038,8 @@ impl AuthorityState {
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
-        };
+        }
+        .with_timestamp_expiration(transaction_data.expiration());
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
         // was deleted.

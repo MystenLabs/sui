@@ -155,7 +155,8 @@ pub fn execute_transaction_to_effects(
     let execution_params = match early_execution_error {
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
-    };
+    }
+    .with_timestamp_expiration(txn_data.expiration());
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
