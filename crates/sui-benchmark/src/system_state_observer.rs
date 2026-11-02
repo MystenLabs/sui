@@ -23,12 +23,37 @@ pub struct SystemState {
     pub epoch: EpochId,
 }
 
+/// Gas price for setup transactions: the reference gas price scaled by the configured
+/// multiplier, rounded up so a multiplier above 1.0 always outbids the reference price.
+pub fn setup_gas_price(reference_gas_price: u64, multiplier: f64) -> u64 {
+    let scaled = (reference_gas_price as f64 * multiplier.max(1.0)).ceil();
+    if scaled >= u64::MAX as f64 {
+        u64::MAX
+    } else {
+        (scaled as u64).max(reference_gas_price)
+    }
+}
+
 #[derive(Debug)]
 pub struct SystemStateObserver {
     pub state: Receiver<SystemState>,
+    setup_gas_price_multiplier: f64,
 }
 
 impl SystemStateObserver {
+    /// Gas price for the benchmark's setup transactions.
+    pub fn setup_gas_price(&self) -> u64 {
+        setup_gas_price(
+            self.state.borrow().reference_gas_price,
+            self.setup_gas_price_multiplier,
+        )
+    }
+
+    pub fn with_setup_gas_price_multiplier(mut self, multiplier: f64) -> Self {
+        self.setup_gas_price_multiplier = multiplier;
+        self
+    }
+
     pub fn new(proxy: Arc<dyn ValidatorProxy + Send + Sync>) -> Self {
         let mut interval = tokio::time::interval_at(Instant::now(), Duration::from_secs(60));
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
@@ -67,7 +92,10 @@ impl SystemStateObserver {
                 }
             }
         });
-        Self { state: rx }
+        Self {
+            state: rx,
+            setup_gas_price_multiplier: 1.0,
+        }
     }
 
     pub fn new_from_test_cluster(test_cluster: &TestCluster) -> Self {
@@ -106,6 +134,23 @@ impl SystemStateObserver {
                 });
             }
         });
-        Self { state: rx }
+        Self {
+            state: rx,
+            setup_gas_price_multiplier: 1.0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::setup_gas_price;
+
+    #[test]
+    fn setup_gas_price_scales_and_rounds_up() {
+        assert_eq!(setup_gas_price(1000, 1.0), 1000);
+        assert_eq!(setup_gas_price(1000, 2.0), 2000);
+        assert_eq!(setup_gas_price(1000, 1.0005), 1001);
+        assert_eq!(setup_gas_price(1000, 0.5), 1000);
+        assert_eq!(setup_gas_price(u64::MAX, 2.0), u64::MAX);
     }
 }

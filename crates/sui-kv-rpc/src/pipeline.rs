@@ -14,6 +14,7 @@ use futures::stream::BoxStream;
 use sui_futures::task::TaskGuard;
 use sui_inverted_index::ScanStop;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
@@ -1093,11 +1094,27 @@ where
     future::ready(Ok(rows))
 }
 
+/// A scan frontier placed by the one `tx_seq_digest` row its
+/// [`RowPlacement`] names: the transaction on the frontier's covered side.
+///
+/// [`RowPlacement`]: sui_rpc_api::ledger_history::ledger_point::RowPlacement
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PlacedFrontier {
+    /// The checkpoint of the placing transaction, which bounds the covered
+    /// range.
+    pub(crate) checkpoint: u64,
+    /// The frontier in ledger coordinates.
+    pub(crate) point: LedgerPoint,
+}
+
 /// Resolved pipeline frame: items pass through; watermarks carry both the
-/// original scan-domain position and its checkpoint.
+/// original scan-domain position and its placement.
 pub(crate) enum ResolvedWatermarked<T, P = u64> {
     Item(T),
-    Watermark { position: P, cp: u64 },
+    Watermark {
+        position: P,
+        frontier: PlacedFrontier,
+    },
 }
 
 #[derive(Debug)]
@@ -1152,10 +1169,10 @@ where
                         }
                     })
                 }
-                Ok(ResolvedWatermarked::Watermark { position, cp }) => {
+                Ok(ResolvedWatermarked::Watermark { position, frontier }) => {
                     future::Either::Right(future::ready(Ok(ResolvedWatermarked::Watermark {
                         position,
-                        cp,
+                        frontier,
                     })))
                 }
                 Err(error) => {
@@ -1170,25 +1187,22 @@ where
 /// Terminal outcome from [`resolve_scan_watermarks`].
 ///
 /// A scan limit always carries the authoritative terminal position in the same
-/// domain as ordinary watermark frames. Its checkpoint is optional because a
-/// frontier at a numeric edge can be a safe resume position without proving
-/// any checkpoint fully covered.
+/// domain as ordinary watermark frames. Its placement is `None` only at the
+/// ascending genesis frontier, which covers no checkpoint and lies at
+/// [`LedgerPoint::GENESIS`].
 #[derive(Debug)]
 pub(crate) enum ResolvedScanStop<P> {
     ScanLimit {
         position: P,
-        checkpoint: Option<u64>,
+        frontier: Option<PlacedFrontier>,
     },
     Cancelled,
     Fault(anyhow::Error),
 }
 impl<P> ResolvedScanStop<P> {
-    pub(crate) fn into_scan_limit(self) -> Result<(P, Option<u64>), RpcError> {
+    pub(crate) fn into_scan_limit(self) -> Result<(P, Option<PlacedFrontier>), RpcError> {
         match self {
-            Self::ScanLimit {
-                position,
-                checkpoint,
-            } => Ok((position, checkpoint)),
+            Self::ScanLimit { position, frontier } => Ok((position, frontier)),
             Self::Cancelled => Err(RpcError::new(
                 tonic::Code::Cancelled,
                 ScanStop::Cancelled.to_string(),
@@ -1209,10 +1223,13 @@ impl<P> ResolvedScanStop<P> {
 /// first output; discards its held watermark at a stop; and emits it at a
 /// clean end only for cursor-bound ranges (see
 /// `QueryContext::watermark_pacing`). So every watermark that reaches this
-/// stage is resolved, in arrival order, each by one `tx_cp_resolve` lookup,
-/// and emitted as a beacon when the lookup finds a checkpoint. Items keep
-/// their order relative to watermarks: an item passes through at once unless
-/// a lookup for an earlier watermark is still running.
+/// stage is resolved, in arrival order, each by one `tx_cp_resolve` lookup
+/// that reads the `tx_seq_digest` row placing it (its checkpoint and its
+/// position in ledger coordinates), and emitted as a beacon when the lookup
+/// places it in a checkpoint (every lookup but the ascending genesis
+/// frontier's, which reads nothing). Items keep their order relative to
+/// watermarks: an item passes through at once unless a lookup for an earlier
+/// watermark is still running.
 ///
 /// A lookup always runs to completion: upstream is not polled meanwhile, so
 /// frames that arrive during a lookup, items included, wait for it rather than
@@ -1238,7 +1255,7 @@ where
     T: Send + 'static,
     P: Copy + Eq + Send + 'static,
     F: Fn(P) -> Fut + Send + 'static,
-    Fut: Future<Output = Result<Option<u64>, ScanStop>> + Send,
+    Fut: Future<Output = Result<Option<PlacedFrontier>, ScanStop>> + Send,
     C: Fn(u64) -> P + Send + 'static,
 {
     fn resolver_error<P>(error: ScanStop) -> ResolvedScanStop<P> {
@@ -1255,7 +1272,7 @@ where
     async_stream::try_stream! {
         let mut upstream = std::pin::pin!(upstream);
         // Most recent completed lookup, including a completed `None`.
-        let mut completed: Option<(P, Option<u64>)> = None;
+        let mut completed: Option<(P, Option<PlacedFrontier>)> = None;
 
         while let Some(next) = upstream.next().await {
             match next {
@@ -1263,22 +1280,19 @@ where
                     yield ResolvedWatermarked::Item(item);
                 }
                 Ok(Watermarked::Watermark(position)) => {
-                    let checkpoint = resolver(position).await.map_err(resolver_error)?;
-                    completed = Some((position, checkpoint));
-                    if let Some(cp) = checkpoint {
-                        yield ResolvedWatermarked::Watermark { position, cp };
+                    let placed = resolver(position).await.map_err(resolver_error)?;
+                    completed = Some((position, placed));
+                    if let Some(frontier) = placed {
+                        yield ResolvedWatermarked::Watermark { position, frontier };
                     }
                 }
                 Err(ScanStop::ScanLimit { scan_frontier }) => {
                     let position = scan_frontier_to_position(scan_frontier);
-                    let checkpoint = match completed {
-                        Some((resolved, checkpoint)) if resolved == position => checkpoint,
+                    let frontier = match completed {
+                        Some((resolved, placed)) if resolved == position => placed,
                         _ => resolver(position).await.map_err(resolver_error)?,
                     };
-                    Err(ResolvedScanStop::ScanLimit {
-                        position,
-                        checkpoint,
-                    })?;
+                    Err(ResolvedScanStop::ScanLimit { position, frontier })?;
                 }
                 Err(error) => {
                     Err(resolver_error(error))?;
@@ -1380,12 +1394,16 @@ mod tests {
 
     #[tokio::test]
     async fn render_ahead_preserves_items_and_watermarks_in_input_order() {
+        let placed = PlacedFrontier {
+            checkpoint: 20,
+            point: LedgerPoint::transaction(20, 3),
+        };
         let upstream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>> =
             stream::iter([
                 Ok(ResolvedWatermarked::Item(0u64)),
                 Ok(ResolvedWatermarked::Watermark {
                     position: 10,
-                    cp: 20,
+                    frontier: placed,
                 }),
                 Ok(ResolvedWatermarked::Item(1u64)),
             ])
@@ -1424,8 +1442,8 @@ mod tests {
         match stream.next().await {
             Some(Ok(ResolvedWatermarked::Watermark {
                 position: 10,
-                cp: 20,
-            })) => {}
+                frontier,
+            })) if frontier == placed => {}
             _ => panic!("expected watermark second"),
         }
         match stream.next().await {
@@ -3290,7 +3308,26 @@ mod tests {
 
     // ---- resolve_scan_watermarks ----
 
+    /// A lookup's reply as the test gives it: the checkpoint of the placing
+    /// row, or `None` for a frontier no row places.
     type LookupReply = Result<Option<u64>, ScanStop>;
+
+    /// The placement the harness resolver returns for a row in `checkpoint`:
+    /// a point derived from the checkpoint, so the frames can check the
+    /// resolver's point reaches them unchanged.
+    fn placed_in(checkpoint: u64) -> PlacedFrontier {
+        PlacedFrontier {
+            checkpoint,
+            point: LedgerPoint::transaction(checkpoint, checkpoint + 1),
+        }
+    }
+
+    /// The checkpoint of a placement the harness resolver returned, checking
+    /// its point passed through unchanged.
+    fn placed_checkpoint(frontier: PlacedFrontier) -> u64 {
+        assert_eq!(frontier, placed_in(frontier.checkpoint));
+        frontier.checkpoint
+    }
 
     /// One resolver call: its position, the sender the test uses to complete
     /// it, and whether its future was dropped before the reply arrived.
@@ -3360,7 +3397,7 @@ mod tests {
                     };
                     let result = response.await.expect("the test replies to every lookup");
                     unfinished.armed = false;
-                    result
+                    result.map(|checkpoint| checkpoint.map(placed_in))
                 }
             };
             let mut resolved = resolve_scan_watermarks(upstream, resolver, std::convert::identity);
@@ -3369,13 +3406,12 @@ mod tests {
                 while let Some(next) = resolved.next().await {
                     let frame = match next {
                         Ok(ResolvedWatermarked::Item(item)) => Frame::Item(item),
-                        Ok(ResolvedWatermarked::Watermark { position, cp }) => {
-                            Frame::Beacon(position, cp)
+                        Ok(ResolvedWatermarked::Watermark { position, frontier }) => {
+                            Frame::Beacon(position, placed_checkpoint(frontier))
                         }
-                        Err(ResolvedScanStop::ScanLimit {
-                            position,
-                            checkpoint,
-                        }) => Frame::ScanLimit(position, checkpoint),
+                        Err(ResolvedScanStop::ScanLimit { position, frontier }) => {
+                            Frame::ScanLimit(position, frontier.map(placed_checkpoint))
+                        }
                         Err(ResolvedScanStop::Cancelled) => Frame::Cancelled,
                         Err(ResolvedScanStop::Fault(error)) => Frame::Fault(error.to_string()),
                     };

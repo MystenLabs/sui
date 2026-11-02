@@ -469,11 +469,6 @@ impl OffchainCluster {
             ..Default::default()
         };
 
-        // One switch drives both sides: the kv-rpc server only serves the List
-        // APIs when they are enabled, and the graphql reader only consumes them
-        // when they are. Off by default, matching production.
-        let enable_list_apis = kv_rpc_config.enable_list_apis();
-
         let (bigtable_client, bigtable_emulator, archival_service) = start_archival(
             client_args.clone(),
             kv_rpc_address,
@@ -490,7 +485,6 @@ impl OffchainCluster {
                     .parse()
                     .expect("Failed to parse kv-rpc URI"),
             ),
-            enable_list_apis: Some(enable_list_apis),
             ..Default::default()
         };
 
@@ -961,7 +955,6 @@ async fn start_archival(
         kv_rpc_config.request_bigtable_concurrency(),
         kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),
-        kv_rpc_config.enable_list_apis(),
         kv_rpc_config.watermark_source(),
     )
     .await

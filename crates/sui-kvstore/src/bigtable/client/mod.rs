@@ -61,6 +61,7 @@ use crate::PackageData;
 use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
+use crate::TxCheckpointPosition;
 use crate::TxSeqDigestData;
 use crate::WatermarkV0;
 use crate::WatermarkV1;
@@ -1453,6 +1454,35 @@ impl BigTableClient {
             .collect())
     }
 
+    /// Resolve one tx_sequence_number to its checkpoint and offset within
+    /// that checkpoint, reading only the `tx_offset` and checkpoint-number
+    /// columns of `tx_seq_digest`. `None` when the transaction has no row
+    /// (e.g. not yet indexed).
+    pub async fn resolve_tx_checkpoint_position(
+        &mut self,
+        tx_sequence_number: u64,
+    ) -> Result<Option<TxCheckpointPosition>> {
+        let filter = Some(Self::column_filter(&[
+            tx_seq_digest::col::TX_OFFSET,
+            tx_seq_digest::col::CHECKPOINT_NUMBER,
+        ]));
+        let rows = self
+            .multi_get(
+                tx_seq_digest::NAME,
+                vec![tx_seq_digest::encode_key(tx_sequence_number)],
+                filter,
+            )
+            .await?;
+        let Some((_, cells)) = rows.first() else {
+            return Ok(None);
+        };
+        let (tx_offset, checkpoint_number) = tx_seq_digest::decode_checkpoint_position(cells)?;
+        Ok(Some(TxCheckpointPosition {
+            checkpoint_number,
+            tx_offset,
+        }))
+    }
+
     /// Streaming variant of `resolve_tx_digests`. Emits each resolved row as
     /// it arrives from BigTable. Rows missing from the table are silently
     /// dropped (same contract as the non-streaming version, minus the
@@ -1548,27 +1578,8 @@ impl BigTableClient {
         .boxed())
     }
 
-    /// Resolve tx_sequence_numbers to their containing checkpoint numbers.
-    /// Reads only the checkpoint-number column from `tx_seq_digest`.
-    pub async fn resolve_tx_checkpoints(
-        &mut self,
-        tx_sequence_numbers: &[u64],
-    ) -> Result<Vec<(u64, CheckpointSequenceNumber)>> {
-        if tx_sequence_numbers.is_empty() {
-            return Ok(Vec::new());
-        }
-        let rows = self
-            .resolve_tx_checkpoints_stream(tx_sequence_numbers.to_vec())
-            .await?;
-        futures::pin_mut!(rows);
-        let mut result = Vec::with_capacity(tx_sequence_numbers.len());
-        while let Some(row) = rows.next().await {
-            result.push(row?);
-        }
-        Ok(result)
-    }
-
-    /// Streaming variant of `resolve_tx_checkpoints`. Yields
+    /// Resolve tx_sequence_numbers to their containing checkpoint numbers, reading only the
+    /// checkpoint-number column from `tx_seq_digest`. Yields
     /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (row-key
     /// order, not the order of `tx_sequence_numbers` — callers needing that
     /// order must reorder).
@@ -1668,35 +1679,52 @@ impl BigTableClient {
         &mut self,
         checkpoint_range: Range<u64>,
     ) -> Result<Range<u64>> {
-        use crate::tables::checkpoints;
+        let boundaries = self
+            .checkpoint_tx_boundaries(&[checkpoint_range.start, checkpoint_range.end])
+            .await?;
+        Ok(boundaries[&checkpoint_range.start]..boundaries[&checkpoint_range.end])
+    }
 
-        let mut keys: Vec<u64> = [checkpoint_range.start, checkpoint_range.end]
-            .into_iter()
-            .filter(|&cp| cp > 0)
+    /// Resolve each of `checkpoints` to the tx_sequence_number of its first transaction, one past
+    /// the last transaction of the checkpoint before it, in one read. Checkpoint 0 resolves to
+    /// tx_sequence_number 0.
+    pub async fn checkpoint_tx_boundaries(
+        &mut self,
+        checkpoints: &[u64],
+    ) -> Result<HashMap<u64, u64>> {
+        let mut keys: Vec<u64> = checkpoints
+            .iter()
+            .filter(|&&cp| cp > 0)
             .map(|cp| cp - 1)
             .collect();
+        keys.sort_unstable();
         keys.dedup();
 
         let rows = if keys.is_empty() {
             vec![]
         } else {
-            self.get_checkpoints_filtered(&keys, Some(&[checkpoints::col::SUMMARY]))
+            self.get_checkpoints_filtered(&keys, Some(&[tables::checkpoints::col::SUMMARY]))
                 .await?
         };
+        let network_totals: HashMap<u64, u64> = rows
+            .iter()
+            .filter_map(|row| row.summary.as_ref())
+            .map(|summary| (summary.sequence_number, summary.network_total_transactions))
+            .collect();
 
-        let boundary = |cp: u64| -> Result<u64> {
-            if cp == 0 {
-                return Ok(0);
-            }
-            let lookup_cp = cp - 1;
-            rows.iter()
-                .filter_map(|row| row.summary.as_ref())
-                .find(|summary| summary.sequence_number == lookup_cp)
-                .map(|summary| summary.network_total_transactions)
-                .with_context(|| format!("checkpoint summary {} not found", lookup_cp))
-        };
-
-        Ok(boundary(checkpoint_range.start)?..boundary(checkpoint_range.end)?)
+        checkpoints
+            .iter()
+            .map(|&cp| {
+                if cp == 0 {
+                    return Ok((cp, 0));
+                }
+                let lookup_cp = cp - 1;
+                network_totals
+                    .get(&lookup_cp)
+                    .map(|total| (cp, *total))
+                    .with_context(|| format!("checkpoint summary {} not found", lookup_cp))
+            })
+            .collect()
     }
 
     /// Resolve `tx_sequence_number`s to fully-populated transaction rows in

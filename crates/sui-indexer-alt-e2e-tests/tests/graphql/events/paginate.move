@@ -104,9 +104,9 @@ fragment E on Event {
 }
 */
 
-//# run-graphql --cursors {"t":2,"e":0}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8)
 /*
-{
+{ # Cursors are legacy protobuf items: events { checkpoint: 0, tx_seq: 2, event_index: 0 }.
   eventsAfterT2E0HasPreviousPage: events(first: 50, after: "@{cursor_0}") {
     pageInfo { 
       hasNextPage
@@ -116,7 +116,7 @@ fragment E on Event {
 }
 */
 
-//# run-graphql --cursors {"t":4,"e":9}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,4u8,24u8,9u8)
 /*
 {
   eventsBeforeT3E9HasNextPage: events(last: 50, before: "@{cursor_0}") {
@@ -128,7 +128,7 @@ fragment E on Event {
 }
 */
 
-//# run-graphql --cursors {"t":2,"e":0} {"t":4,"e":9}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8) bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,4u8,24u8,9u8)
 /*
 {
   firstEventBetweenT2E0AndT4E9: events(first: 1, after: "@{cursor_0}", before: "@{cursor_1}") {
@@ -158,7 +158,7 @@ fragment E on Event {
 */
 
 
-//# run-graphql --cursors {"t":2,"e":0}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8)
 /*
 {
   eventsAfterTransaction2AndEvent0: events(first: 1, after: "@{cursor_0}") {
@@ -177,7 +177,7 @@ fragment E on Event {
 }
 */
 
-//# run-graphql --cursors {"t":3,"e":0}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,3u8,24u8,0u8)
 /*
 {
   eventsBeforeTransaction3AndEvent0: events(first: 1, before: "@{cursor_0}") {
@@ -196,7 +196,7 @@ fragment E on Event {
 }
 */
 
-//# run-graphql --cursors {"t":3,"e":1}
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,3u8,24u8,1u8)
 /*
 {
   eventsBeforeTransaction3AndEvent1FromBack: events(last: 2, before: "@{cursor_0}") {

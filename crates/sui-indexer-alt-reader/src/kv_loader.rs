@@ -25,7 +25,6 @@ use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
-use crate::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use crate::checkpoints::CheckpointKey;
 use crate::error::Error;
 use crate::events::TransactionEventsKey;
@@ -51,9 +50,10 @@ pub struct KvArgs {
     #[arg(long)]
     pub ledger_grpc_url: Option<Uri>,
 
-    /// Whether the configured ledger gRPC service serves the List APIs (e.g. bitmap-backed
-    /// transaction pagination). When unset, treated as `false`.
-    #[arg(long, alias = "experimental-query-apis")]
+    /// Ignored: the ledger gRPC List APIs are always used. Still accepted so that deployments
+    /// passing it keep starting.
+    // TODO: Remove in a future release, once deployments stop passing it.
+    #[arg(long, alias = "experimental-query-apis", hide = true)]
     pub enable_list_apis: Option<bool>,
 
     /// Time spent waiting for a request to the kv store to complete, in milliseconds.
@@ -132,39 +132,6 @@ impl KvArgs {
                 max_batch_get_objects
                     .unwrap_or(MAX_BATCH_GET_OBJECTS)
                     .min(MAX_BATCH_GET_OBJECTS),
-                min_checkpoint,
-            )
-            .await?,
-        ))
-    }
-
-    /// Construct a streaming list reader when the operator has opted in via
-    /// `enable_list_apis` AND a ledger gRPC URL is configured. Returns `None`
-    /// otherwise. Spreads its requests over `num_connections` HTTP/2 connections, and asks for a
-    /// view at least as new as `min_checkpoint` when it is set.
-    pub async fn alpha_ledger_grpc_reader(
-        &self,
-        prefix: Option<&str>,
-        registry: &Registry,
-        num_connections: usize,
-        min_checkpoint: Option<CheckpointFloor>,
-    ) -> anyhow::Result<Option<AlphaLedgerGrpcReader>> {
-        if !self.enable_list_apis.unwrap_or(false) {
-            return Ok(None);
-        }
-        let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            AlphaLedgerGrpcReader::new(
-                ledger_grpc_url.clone(),
-                LedgerGrpcArgs {
-                    ledger_grpc_num_connections: num_connections,
-                    ..self.ledger_grpc_args()
-                },
-                prefix,
-                registry,
                 min_checkpoint,
             )
             .await?,

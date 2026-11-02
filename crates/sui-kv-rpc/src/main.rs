@@ -22,7 +22,7 @@ bin_version::bin_version!();
 #[derive(Parser)]
 struct App {
     /// Path to a TOML config file ([`KvRpcConfig`]). New tunables (concurrency,
-    /// scan budgets, per-endpoint list limits, List APIs) are configured here.
+    /// scan budgets, per-endpoint list limits) are configured here.
     /// Run with --config-schema to print the file format.
     #[clap(long, value_name = "PATH", conflicts_with = "config_path")]
     config: Option<PathBuf>,
@@ -63,8 +63,7 @@ struct App {
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
     /// (deprecated, ignored) Pipeline watermark to include in GetServiceInfo
-    /// checkpoint height. The set is now derived from the `enable-list-apis`
-    /// config field.
+    /// checkpoint height. The set always includes the List API pipelines.
     #[clap(
         long = "watermark-pipeline",
         value_name = "PIPELINE",
@@ -144,14 +143,6 @@ fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
         &mut config.bigtable_max_pool_size,
     );
 
-    if config.enable_experimental_query_apis.is_some() {
-        tracing::warn!(
-            "the `enable-experimental-query-apis` config field is deprecated and \
-             will be removed; it is still honored, but rename it to \
-             `enable-list-apis`"
-        );
-    }
-
     // Named in the warning only, so an operator can see exactly which entries
     // stopped having an effect; nothing reads the value.
     let ignored_pipelines: Vec<&str> = config
@@ -165,7 +156,7 @@ fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
         tracing::warn!(
             pipelines = ?ignored_pipelines,
             "`watermark-pipeline` is deprecated and ignored; the GetServiceInfo \
-             watermark set is derived from `enable-list-apis`"
+             watermark set always includes the List API pipelines"
         );
     }
 }
@@ -233,7 +224,6 @@ async fn main() -> Result<()> {
         config.request_bigtable_concurrency(),
         config.monotonic_read_wait_timeout(),
         config.stages(),
-        config.enable_list_apis(),
         config.watermark_source(),
     )
     .await?;

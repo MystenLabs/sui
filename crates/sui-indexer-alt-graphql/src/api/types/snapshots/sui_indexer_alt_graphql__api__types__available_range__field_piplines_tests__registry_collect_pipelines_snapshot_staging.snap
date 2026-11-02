@@ -78,7 +78,7 @@ Address.objects
   => {"consistent"}
 
 Address.transactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 AddressAliasStateCreateTransaction._
   => {}
@@ -225,22 +225,7 @@ Checkpoint.validatorSignatures
   => {}
 
 Checkpoint.transactions
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Checkpoint.transactions (filter: function)
-  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
-
-Checkpoint.transactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
-
-Checkpoint.transactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Checkpoint.transactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
-
-Checkpoint.transactions (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 CircomG1.e0
   => {}
@@ -366,7 +351,7 @@ CoinMetadata.storageRebate
   => {}
 
 CoinMetadata.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 CoinMetadata.regulatedState
   => {"consistent"}
@@ -531,7 +516,7 @@ DynamicField.storageRebate
   => {}
 
 DynamicField.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 DynamicField.value
   => {}
@@ -609,22 +594,7 @@ Epoch.totalTransactions
   => {}
 
 Epoch.transactions
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Epoch.transactions (filter: function)
-  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
-
-Epoch.transactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
-
-Epoch.transactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Epoch.transactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
-
-Epoch.transactions (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 Epoch.validatorSet
   => {}
@@ -819,7 +789,7 @@ IObject.storageRebate
   => {}
 
 IObject.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 Immutable._
   => {}
@@ -1083,7 +1053,7 @@ MoveObject.storageRebate
   => {}
 
 MoveObject.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 MovePackage.id
   => {}
@@ -1170,7 +1140,7 @@ MovePackage.storageRebate
   => {}
 
 MovePackage.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 MovePackage.typeOrigins
   => {}
@@ -1356,7 +1326,7 @@ Object.storageRebate
   => {}
 
 Object.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 ObjectChange.address
   => {}
@@ -1485,10 +1455,7 @@ Query.epochs
   => {}
 
 Query.events
-  => {"ev_struct_inst", "tx_digests"}
-
-Query.events (filter: module)
-  => {"ev_emit_mod", "tx_digests"}
+  => {"ledger_grpc"}
 
 Query.multiGetAddresses
   => {}
@@ -1563,22 +1530,7 @@ Query.transactionEffects
   => {}
 
 Query.transactions
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Query.transactions (filter: function)
-  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
-
-Query.transactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
-
-Query.transactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Query.transactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
-
-Query.transactions (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+  => {"ledger_grpc"}
 
 Query.type
   => {}

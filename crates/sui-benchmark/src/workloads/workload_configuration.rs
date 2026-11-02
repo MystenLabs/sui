@@ -241,19 +241,16 @@ impl WorkloadConfiguration {
         gas_request_chunk_size: u64,
         submission_amplification_by_group: BTreeMap<GroupID, SubmissionAmplification>,
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
-        // Generate the workloads and init them
-        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
+        // Generate the workloads and init them. Gas coin splits are setup transactions and
+        // pay the setup gas price so they are not queued behind the workload's transactions.
+        let setup_gas_price = system_state_observer.setup_gas_price();
         let (workload_params, workload_builders): (Vec<_>, Vec<_>) = workload_builders
             .into_iter()
             .flatten()
             .map(|x| (x.workload_params, x.workload_builder))
             .unzip();
         let workloads = bank
-            .generate(
-                workload_builders,
-                reference_gas_price,
-                gas_request_chunk_size,
-            )
+            .generate(workload_builders, setup_gas_price, gas_request_chunk_size)
             .await?;
         let init_futures = workloads.into_iter().map(|mut workload| {
             let execution_proxy = bank.execution_proxy.clone();
