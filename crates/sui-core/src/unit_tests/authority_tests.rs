@@ -3107,9 +3107,10 @@ async fn test_implicit_clock_read_uses_pinned_version() {
 async fn test_timestamp_expiration_checked_against_pinned_clock() {
     // A deferred transaction can execute in a commit after its window closes. Execution must
     // abort it based on the Clock version pinned for it, and record that read in effects so
-    // checkpoint executors read the same version.
+    // checkpoint executors read the same version. Execution must never abort a transaction for
+    // being before its `min_timestamp`, because the signer must be able to retry it later.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_ids = [ObjectID::random(), ObjectID::random()];
+    let gas_object_ids = [ObjectID::random(), ObjectID::random(), ObjectID::random()];
     let (authority_state, package_object_ref) = init_state_with_ids_and_object_basics(
         gas_object_ids
             .iter()
@@ -3147,10 +3148,12 @@ async fn test_timestamp_expiration_checked_against_pinned_clock() {
     };
     let in_window_version = SequenceNumber::from_u64(2);
     let expired_version = SequenceNumber::from_u64(3);
+    let not_started_version = SequenceNumber::from_u64(4);
     authority_state
         .insert_objects_unsafe_for_testing_only(&[
             clock_at(in_window_version.value(), 200),
             clock_at(expired_version.value(), 300),
+            clock_at(not_started_version.value(), 50),
         ])
         .await
         .unwrap();
@@ -3245,6 +3248,10 @@ async fn test_timestamp_expiration_checked_against_pinned_clock() {
             .map(|v| v.version),
         Some(expired_version)
     );
+
+    let effects = execute_with_clock(gas_object_ids[2], not_started_version).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert_eq!(effects.created().len(), 1);
 }
 
 #[sim_test]

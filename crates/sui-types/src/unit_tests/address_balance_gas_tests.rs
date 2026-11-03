@@ -856,3 +856,17 @@ fn test_is_valid_at_timestamp() {
     assert!(valid_during_with_timestamps(Some(10), None).is_valid_at_timestamp(u64::MAX));
     assert!(!valid_during_with_timestamps(None, Some(20)).is_valid_at_timestamp(21));
 }
+
+#[test]
+fn test_is_expired_at() {
+    assert!(!TransactionExpiration::None.is_expired_at(5));
+    assert!(!TransactionExpiration::Epoch(0).is_expired_at(5));
+    assert!(!valid_during_with_timestamps(None, None).is_expired_at(u64::MAX));
+
+    // Being before `min_timestamp` is not expiry.
+    let window = valid_during_with_timestamps(Some(10), Some(20));
+    assert!(!window.is_expired_at(0));
+    assert!(!window.is_expired_at(20));
+    assert!(window.is_expired_at(21));
+    assert!(!valid_during_with_timestamps(Some(10), None).is_expired_at(u64::MAX));
+}
