@@ -7681,7 +7681,6 @@ dependencies = [
  "libc",
  "libz-sys",
  "lz4-sys",
- "tikv-jemalloc-sys",
  "zstd-sys",
 ]
 
@@ -18443,6 +18442,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tidehunter",
+ "tikv-jemalloc-sys",
  "tokio",
  "tracing",
  "typed-store-derive",
