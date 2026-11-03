@@ -401,9 +401,15 @@ impl AtCheckpointLowerBound {
     /// may have been pruned, so an answer could be wrong.
     pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
         if checkpoint < self.lowest_intact {
-            return Err(below_serving_floor(self.lowest_intact));
+            return Err(self.pruned());
         }
         Ok(())
+    }
+
+    /// `OutOfRange` (`BELOW_EARLIEST_AVAILABLE`) for data this node has pruned, such as a
+    /// replaced version of an object named by its version rather than a checkpoint.
+    pub fn pruned(&self) -> crate::RpcError {
+        below_serving_floor(self.lowest_intact)
     }
 }
 

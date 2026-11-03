@@ -5,7 +5,7 @@ use crate::{
     ErrorReason, Result, RpcError, RpcService,
     grpc::v2::move_package_service::{
         conversions::{convert_error, convert_module},
-        load_package, load_package_by_id, parse_package_id,
+        load_package, load_package_by_id, load_package_by_id_and_version, parse_package_id,
     },
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
@@ -45,6 +45,10 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
 ///
 /// Package-version index rows are keyed by the lineage's original package id,
 /// so a member's storage id is mapped to that original id before the lookup.
+/// The index is never pruned, but the package object can be: system packages
+/// are upgraded in place, so pruning deletes their replaced versions, and nodes
+/// without object version history drop them at once. A version this node no
+/// longer stores is refused: as unavailable on those nodes, otherwise as pruned.
 fn load_package_at_version(
     service: &RpcService,
     package_id_str: &str,
@@ -67,7 +71,13 @@ fn load_package_at_version(
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
         .ok_or_else(RpcError::not_found)?;
 
-    load_package_by_id(service, storage_id)
+    match load_package_by_id_and_version(service, storage_id, version)? {
+        Some(package) => Ok(package),
+        None => {
+            service.reader.require_object_version_history()?;
+            Err(service.reader.at_checkpoint_lower_bound()?.pruned())
+        }
+    }
 }
 
 /// Load the latest package in `package_id_str`'s upgrade lineage that
@@ -105,7 +115,10 @@ fn load_package_at_checkpoint(
             .get_package_at_checkpoint(package.original_package_id(), at_checkpoint)
             .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
             .ok_or_else(RpcError::not_found)
-            .and_then(|(_, storage_id)| load_package_by_id(service, storage_id))
+            .and_then(|(version, storage_id)| {
+                load_package_by_id_and_version(service, storage_id, version)?
+                    .ok_or_else(RpcError::not_found)
+            })
     });
 
     service
