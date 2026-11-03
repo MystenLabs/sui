@@ -1015,6 +1015,15 @@ impl PartialEq<SuiError> for SuiErrorKind {
 }
 
 impl SuiError {
+    /// The error for a transaction whose `min_timestamp` is after `timestamp_ms`. It is not
+    /// `SuiErrorKind::TransactionExpired`, because the transaction can become valid later.
+    pub fn not_yet_valid(timestamp_ms: u64) -> Self {
+        UserInputError::InvalidExpiration {
+            error: format!("transaction is not valid until its min_timestamp (now {timestamp_ms})"),
+        }
+        .into()
+    }
+
     pub fn as_inner(&self) -> &SuiErrorKind {
         &self.0
     }

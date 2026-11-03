@@ -2128,6 +2128,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 }
             }
         } else {
+            if protocol_config.enable_timestamp_transaction_expiration()
+                && transaction
+                    .tx()
+                    .transaction_data()
+                    .expiration()
+                    .is_expired_at(commit_info.timestamp)
+            {
+                // Execution aborts these, since the Clock assigned to them has this timestamp.
+                if previously_deferred_tx_digests.contains_key(&tx_digest) {
+                    assert_reachable!("deferred transaction scheduled after its max_timestamp");
+                } else {
+                    assert_reachable!("new transaction scheduled after its max_timestamp");
+                }
+            }
             // Update object execution cost for all scheduled transactions
             shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
             scheduled_txns.push(transaction);
@@ -2961,16 +2975,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // A transaction that is expired when first sequenced is dropped before it takes
-                // owned object locks. A transaction that expires while deferred already holds its
-                // locks, so execution aborts it with `TransactionExpired` instead. A copy of an
+                // A transaction sequenced before its `min_timestamp` is dropped before it takes
+                // owned object locks, so the signer can submit it again later. A transaction past
+                // its `max_timestamp` is not dropped here: it is sequenced normally, and execution
+                // aborts it with `TransactionExpired` whether or not it was deferred. A copy of an
                 // already-processed transaction is left to deduplication so that its waiters
                 // still receive effects.
                 //
                 // The dropped key is deliberately not recorded as processed. Otherwise a later
                 // copy would bypass this check, acquire locks, and then be discarded by
                 // deduplication, leaving its owned objects locked for the rest of the epoch.
-                // It also lets a transaction sequenced before its `min_timestamp` be resubmitted.
                 if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                     &parsed.transaction.kind
                     && self
@@ -2979,10 +2993,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .enable_timestamp_transaction_expiration()
                 {
                     let tx = tx_with_claims.tx();
-                    if !tx
+                    if tx
                         .transaction_data()
                         .expiration()
-                        .is_valid_at_timestamp(commit_info.timestamp)
+                        .is_not_yet_valid_at(commit_info.timestamp)
                         && !self
                             .epoch_store
                             .is_consensus_message_processed(
@@ -2992,21 +3006,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             )
                             .expect("db error")
                     {
-                        assert_reachable!("timestamp-expired transaction dropped in consensus");
+                        assert_reachable!(
+                            "transaction before its min_timestamp dropped in consensus"
+                        );
                         debug!(
-                            "Dropping transaction {} expired at commit timestamp {}",
+                            "Dropping transaction {} not yet valid at commit timestamp {}",
                             tx.digest(),
                             commit_info.timestamp
                         );
                         self.metrics
                             .consensus_handler_dropped_transactions
-                            .with_label_values(&["expired"])
+                            .with_label_values(&["not_yet_valid"])
                             .inc();
                         status_updates.push((position, ConsensusTxStatus::Dropped));
                         num_dropped_user_transactions[author] += 1;
                         self.epoch_store.set_rejection_vote_reason(
                             position,
-                            &sui_types::error::SuiErrorKind::TransactionExpired.into(),
+                            &sui_types::error::SuiError::not_yet_valid(commit_info.timestamp),
                         );
                         continue;
                     }
@@ -4525,7 +4541,7 @@ mod tests {
     }
 
     #[sim_test]
-    async fn test_timestamp_expired_transaction_is_dropped_before_locking() {
+    async fn test_timestamp_window_in_consensus() {
         telemetry_subscribers::init_for_testing();
 
         let (sender, keypair) = deterministic_random_account_key();
@@ -4585,7 +4601,9 @@ mod tests {
             (digest, consensus_tx)
         };
         // The first commit has timestamp `start + 1000`.
-        let (_, expired_tx) = make_tx(0, expiration(None, Some(start + 999))).await;
+        // An expired transaction is sequenced and locked so that execution aborts it. Only a
+        // transaction before its `min_timestamp` is dropped, because it can become valid later.
+        let (expired_digest, expired_tx) = make_tx(0, expiration(None, Some(start + 999))).await;
         let (valid_digest, valid_tx) =
             make_tx(1, expiration(Some(start + 1000), Some(start + 1000))).await;
         let (early_digest, early_tx) = make_tx(2, expiration(Some(start + 2000), None)).await;
@@ -4620,7 +4638,7 @@ mod tests {
         };
         assert!(matches!(
             status_at(round, 0).await,
-            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
         ));
         assert!(matches!(
             status_at(round, 1).await,
@@ -4635,18 +4653,18 @@ mod tests {
                 .consensus_handler
                 .metrics
                 .consensus_handler_dropped_transactions
-                .with_label_values(&["expired"])
+                .with_label_values(&["not_yet_valid"])
                 .get(),
-            2
+            1
         );
 
-        // Dropped transactions take no locks and are not marked processed.
+        // The dropped transaction takes no lock and is not marked processed.
         let locks = epoch_store.get_owned_object_locks_map(&owned_refs);
-        assert_eq!(locks.get(&owned_refs[0]), None);
+        assert_eq!(locks.get(&owned_refs[0]), Some(&expired_digest));
         assert_eq!(locks.get(&owned_refs[1]), Some(&valid_digest));
         assert_eq!(locks.get(&owned_refs[2]), None);
         assert!(
-            !epoch_store
+            epoch_store
                 .is_consensus_message_processed(&expired_key)
                 .unwrap()
         );
@@ -4669,10 +4687,12 @@ mod tests {
                         round: round as u32,
                         digest: Default::default(),
                     },
-                    index: 0,
+                    index: 2,
                 })
                 .map(|e| e.into_inner()),
-            Some(sui_types::error::SuiErrorKind::TransactionExpired)
+            Some(sui_types::error::SuiErrorKind::UserInputError {
+                error: sui_types::error::UserInputError::InvalidExpiration { .. }
+            })
         ));
 
         // A transaction sequenced before its window opens is accepted once resequenced inside it.
