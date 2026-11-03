@@ -20,6 +20,7 @@ const START_BACK: u64 = 900_000;
 const VESTING_DURATION: u64 = 1_000_000;
 const BACK_PERCENTAGE: u8 = 80;
 
+#[allow(deprecated_usage)]
 fun test_setup(
     start_front: u64,
     start_back: u64,
@@ -57,7 +58,7 @@ fun test_invalid_percentage_range() {
     ts::end(ts);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_backloaded_vesting() {
     let mut ts = test_setup(START_FRONT, START_BACK, VESTING_DURATION, BACK_PERCENTAGE);
     ts.next_tx(OWNER_ADDR);
@@ -113,7 +114,7 @@ fun test_backloaded_vesting() {
     let _end = ts::end(ts);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_backloaded_claimable() {
     let mut ts = test_setup(START_FRONT, START_FRONT + 100, 200, BACK_PERCENTAGE);
     ts.next_tx(OWNER_ADDR);
@@ -123,7 +124,7 @@ fun test_backloaded_claimable() {
     let last_duration_claimable = FULLY_VESTED_AMOUNT * (BACK_PERCENTAGE as u64) / 100;
 
     // check zero vested
-    now.increment_for_testing(START_FRONT);
+    now.set_for_testing(START_FRONT);
     assert!(wallet.claimable(&now) == 0);
     assert!(wallet.balance() == FULLY_VESTED_AMOUNT);
 

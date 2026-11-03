@@ -175,7 +175,7 @@ fun test_delist_placed() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EObjectNotExist)]
+#[expected_failure(abort_code = rentables_ext::EObjectNotExist), allow(deprecated_usage)]
 fun test_delist_rented() {
     let mut ts = ts::begin(RENTER);
 
@@ -230,7 +230,7 @@ fun test_delist_with_wrong_cap() {
     abort 0xbad
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_rent_with_extension() {
     let mut ts = ts::begin(BORROWER);
 
@@ -258,7 +258,7 @@ fun test_rent_with_extension() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled)]
+#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled), allow(deprecated_usage)]
 fun test_rent_without_extension() {
     let mut ts = ts::begin(BORROWER);
 
@@ -282,7 +282,7 @@ fun test_rent_without_extension() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ENotEnoughCoins)]
+#[expected_failure(abort_code = rentables_ext::ENotEnoughCoins), allow(deprecated_usage)]
 fun test_rent_with_not_enough_coins() {
     let mut ts = ts::begin(BORROWER);
 
@@ -307,7 +307,7 @@ fun test_rent_with_not_enough_coins() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ETotalPriceOverflow)]
+#[expected_failure(abort_code = rentables_ext::ETotalPriceOverflow), allow(deprecated_usage)]
 fun test_rent_with_overflow() {
     let mut ts = ts::begin(BORROWER);
 
@@ -331,7 +331,7 @@ fun test_rent_with_overflow() {
     abort 0xbad
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_borrow() {
     let mut ts = ts::begin(BORROWER);
 
@@ -361,7 +361,7 @@ fun test_borrow() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ENotOwner)]
+#[expected_failure(abort_code = rentables_ext::ENotOwner), allow(deprecated_usage)]
 fun test_borrow_with_wrong_cap() {
     let mut ts = ts::begin(BORROWER);
 
@@ -391,7 +391,7 @@ fun test_borrow_with_wrong_cap() {
     abort 0xbad
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_borrow_val() {
     let mut ts = ts::begin(BORROWER);
 
@@ -422,7 +422,7 @@ fun test_borrow_val() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ENotOwner)]
+#[expected_failure(abort_code = rentables_ext::ENotOwner), allow(deprecated_usage)]
 fun test_borrow_val_with_wrong_cap() {
     let mut ts = ts::begin(BORROWER);
 
@@ -458,7 +458,7 @@ fun test_borrow_val_with_wrong_cap() {
     abort 0xbad
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_return_val() {
     let mut ts = ts::begin(BORROWER);
 
@@ -490,7 +490,7 @@ fun test_return_val() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled)]
+#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled), allow(deprecated_usage)]
 fun test_return_val_without_extension() {
     let mut ts = ts::begin(BORROWER);
 
@@ -519,7 +519,7 @@ fun test_return_val_without_extension() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EInvalidKiosk)]
+#[expected_failure(abort_code = rentables_ext::EInvalidKiosk), allow(deprecated_usage)]
 fun test_return_val_wrong_kiosk() {
     let mut ts = ts::begin(BORROWER);
 
@@ -546,7 +546,7 @@ fun test_return_val_wrong_kiosk() {
     abort 0xbad
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_reclaim() {
     let mut ts = ts::begin(BORROWER);
 
@@ -575,7 +575,7 @@ fun test_reclaim() {
     ts.end();
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_reclaim_locked() {
     let mut ts = ts::begin(RENTER);
 
@@ -606,7 +606,7 @@ fun test_reclaim_locked() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EInvalidKiosk)]
+#[expected_failure(abort_code = rentables_ext::EInvalidKiosk), allow(deprecated_usage)]
 fun test_reclaim_wrong_kiosk() {
     let mut ts = ts::begin(BORROWER);
 
@@ -635,7 +635,7 @@ fun test_reclaim_wrong_kiosk() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ERentingPeriodNotOver)]
+#[expected_failure(abort_code = rentables_ext::ERentingPeriodNotOver), allow(deprecated_usage)]
 fun test_reclaim_renting_period_not_over() {
     let mut ts = ts::begin(BORROWER);
 
@@ -662,7 +662,7 @@ fun test_reclaim_renting_period_not_over() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled)]
+#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled), allow(deprecated_usage)]
 fun test_reclaim_without_extension() {
     let mut ts = ts::begin(BORROWER);
 
@@ -913,6 +913,7 @@ fun return_val(ts: &mut Scenario, promise: Promise, sender: address, kiosk_id: I
 
 use fun reclaim as Scenario.reclaim;
 
+#[allow(deprecated_usage)]
 fun reclaim(
     ts: &mut Scenario,
     sender: address,

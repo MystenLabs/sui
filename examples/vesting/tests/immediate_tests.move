@@ -18,6 +18,7 @@ const FULLY_VESTED_AMOUNT: u64 = 10_000;
 const VESTING_DURATION: u64 = 0;
 const START_TIME: u64 = 1;
 
+#[allow(deprecated_usage)]
 fun test_setup(): ts::Scenario {
     let mut ts = ts::begin(CONTROLLER_ADDR);
     let coins = coin::mint_for_testing<SUI>(FULLY_VESTED_AMOUNT, ts.ctx());
@@ -28,7 +29,7 @@ fun test_setup(): ts::Scenario {
     ts
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_immediate_vesting() {
     let mut ts = test_setup();
     ts.next_tx(OWNER_ADDR);

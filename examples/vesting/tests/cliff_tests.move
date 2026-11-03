@@ -17,6 +17,7 @@ const CONTROLLER_ADDR: address = @0xBBBB;
 const FULLY_VESTED_AMOUNT: u64 = 10_000;
 const CLIFF_TIME: u64 = 1_000;
 
+#[allow(deprecated_usage)]
 fun test_setup(): ts::Scenario {
     let mut ts = ts::begin(CONTROLLER_ADDR);
     let coins = coin::mint_for_testing<SUI>(FULLY_VESTED_AMOUNT, ts.ctx());
@@ -28,7 +29,7 @@ fun test_setup(): ts::Scenario {
 }
 
 #[test]
-#[expected_failure(abort_code = cliff::EInvalidCliffTime)]
+#[expected_failure(abort_code = cliff::EInvalidCliffTime), allow(deprecated_usage)]
 fun test_invalid_cliff_time() {
     let mut ts = ts::begin(CONTROLLER_ADDR);
     let coins = coin::mint_for_testing<SUI>(FULLY_VESTED_AMOUNT, ts.ctx());
@@ -39,7 +40,7 @@ fun test_invalid_cliff_time() {
     ts::end(ts);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_cliff_vesting() {
     let mut ts = test_setup();
     ts.next_tx(OWNER_ADDR);

@@ -24,7 +24,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_vm_runtime::execution::values::{GlobalValue, Value};
+use move_vm_runtime::execution::values::{GlobalValue, Reference, StructRef, Value};
 use move_vm_runtime::natives::extensions::NativeExtensionMarker;
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
@@ -284,10 +284,14 @@ impl<'a> ObjectRuntime<'a> {
             .and_then(|clock| clock.borrow_global())
     }
 
-    /// Drops the loaded Clock so the next borrow reads the test store again. Live references
-    /// keep the old value alive.
-    pub fn clear_clock_for_testing(&mut self) {
-        self.clock = None;
+    /// Writes `timestamp_ms` into the loaded Clock, if any, so live references see it.
+    pub fn set_clock_timestamp_ms_for_testing(&mut self, timestamp_ms: u64) -> PartialVMResult<()> {
+        let Some(clock) = &self.clock else {
+            return Ok(());
+        };
+        let clock: StructRef = clock.borrow_global()?.value_as()?;
+        let timestamp: Reference = clock.borrow_field(1)?.value_as()?;
+        timestamp.write_ref(Value::u64(timestamp_ms))
     }
 
     pub fn check_object_funds_sufficiency(

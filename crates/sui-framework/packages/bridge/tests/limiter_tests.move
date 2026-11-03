@@ -21,7 +21,7 @@ use std::unit_test::{assert_eq, destroy};
 use sui::clock;
 use sui::test_scenario;
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_24_hours_windows() {
     let mut limiter = make_transfer_limiter();
 
@@ -106,7 +106,7 @@ fun test_24_hours_windows() {
     test_scenario::end(scenario);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_24_hours_windows_multiple_route() {
     let mut limiter = make_transfer_limiter();
 
@@ -160,7 +160,7 @@ fun test_24_hours_windows_multiple_route() {
     test_scenario::end(scenario);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_exceed_limit() {
     let mut limiter = make_transfer_limiter();
 
@@ -241,7 +241,15 @@ fun test_exceed_limit() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = bridge::limiter::ELimitNotFoundForRoute)]
+#[
+    test,
+    expected_failure(
+        abort_code = bridge::limiter::ELimitNotFoundForRoute,
+    ),
+    allow(
+        deprecated_usage,
+    ),
+]
 fun test_limiter_does_not_limit_receiving_transfers() {
     let mut limiter = new();
 
@@ -264,7 +272,7 @@ fun test_limiter_does_not_limit_receiving_transfers() {
     test_scenario::end(scenario);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_limiter_basic_op() {
     // In this test we use very simple number for easier calculation.
     let mut limiter = make_transfer_limiter();

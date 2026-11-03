@@ -18,6 +18,7 @@ const FULLY_VESTED_AMOUNT: u64 = 10_000;
 const VESTING_DURATION: u64 = 1_000_000;
 const START_TIME: u64 = 1_000;
 
+#[allow(deprecated_usage)]
 fun test_setup(): ts::Scenario {
     let mut ts = ts::begin(CONTROLLER_ADDR);
     let coins = coin::mint_for_testing<SUI>(FULLY_VESTED_AMOUNT, ts.ctx());
@@ -29,7 +30,7 @@ fun test_setup(): ts::Scenario {
 }
 
 #[test]
-#[expected_failure(abort_code = linear::EInvalidStartTime)]
+#[expected_failure(abort_code = linear::EInvalidStartTime), allow(deprecated_usage)]
 fun test_invalid_start_time() {
     let mut ts = ts::begin(CONTROLLER_ADDR);
     let coins = coin::mint_for_testing<SUI>(FULLY_VESTED_AMOUNT, ts.ctx());
@@ -40,7 +41,7 @@ fun test_invalid_start_time() {
     ts::end(ts);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_linear_vesting() {
     let mut ts = test_setup();
     ts.next_tx(OWNER_ADDR);

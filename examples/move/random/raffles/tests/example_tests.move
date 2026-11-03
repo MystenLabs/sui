@@ -17,7 +17,7 @@ fun mint(addr: address, amount: u64, scenario: &mut ts::Scenario) {
     scenario.next_tx(addr);
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_example1() {
     let user1 = @0x0;
     let user2 = @0x1;
@@ -95,7 +95,7 @@ fun test_example1() {
     ts.end();
 }
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_example2() {
     let user1 = @0x0;
     let user2 = @0x1;

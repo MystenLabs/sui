@@ -4,7 +4,8 @@
 #[test_only]
 // `test_tx!` hands bodies a `&mut Clock`; expansions that never touch time
 // trip unused_mut_ref per call site, and an allow on the macro has no effect.
-#[allow(unused_mut_ref)]
+// The same holds for the deprecated Clock helpers the macros use.
+#[allow(unused_mut_ref, deprecated_usage)]
 module sui::allowance_tests;
 
 use std::string::String;

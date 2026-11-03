@@ -8,6 +8,10 @@ module sui::clock;
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
+#[test_only]
+/// The test Clock was set to a timestamp earlier than its current one.
+const ETimestampDecreased: u64 = 1;
+
 /// Singleton shared object that exposes time to Move calls.  This
 /// object is found at address 0x6, and can only be read (accessed
 /// via an immutable reference) by entry functions.
@@ -67,47 +71,64 @@ fun consensus_commit_prologue(clock: &mut Clock, timestamp_ms: u64, ctx: &TxCont
     clock.timestamp_ms = timestamp_ms
 }
 
-// TODO: forbid creating more than one Clock in a test, so that the
-// Clock returned by `borrow` cannot disagree with a Clock a test holds.
-#[test_only]
+#[
+    test_only,
+    deprecated(
+        note = b"Use `sui::clock::borrow` for the Clock and `sui::test_scenario::set_clock_timestamp` or `sui::test_scenario::increment_clock_timestamp` to change its time",
+    ),
+]
 /// Expose the functionality of `create()` (usually only done during
 /// genesis) for tests that want to create a Clock.
 public fun create_for_testing(ctx: &mut TxContext): Clock {
-    native_set_timestamp_ms_for_testing(0);
     Clock {
         id: object::new(ctx),
-        timestamp_ms: 0,
+        timestamp_ms: borrow().timestamp_ms(),
     }
 }
 
-#[test_only]
+#[
+    test_only,
+    deprecated(
+        note = b"Use `sui::clock::borrow` for the Clock and `sui::test_scenario::set_clock_timestamp` or `sui::test_scenario::increment_clock_timestamp` to change its time",
+    ),
+]
 /// For transactional tests (if a Clock is used as a shared object).
 public fun share_for_testing(clock: Clock) {
     transfer::share_object(clock)
 }
 
-#[test_only]
+#[test_only, deprecated(note = b"Use `sui::test_scenario::increment_clock_timestamp`")]
 public fun increment_for_testing(clock: &mut Clock, tick: u64) {
-    clock.timestamp_ms = clock.timestamp_ms + tick;
-    native_set_timestamp_ms_for_testing(clock.timestamp_ms);
+    set_for_testing(clock, borrow().timestamp_ms() + tick);
 }
 
-#[test_only]
+#[test_only, deprecated(note = b"Use `sui::test_scenario::set_clock_timestamp`")]
 public fun set_for_testing(clock: &mut Clock, timestamp_ms: u64) {
-    assert!(timestamp_ms >= clock.timestamp_ms);
+    set_timestamp_ms_for_testing(timestamp_ms);
     clock.timestamp_ms = timestamp_ms;
-    native_set_timestamp_ms_for_testing(clock.timestamp_ms);
 }
 
-#[test_only]
+#[
+    test_only,
+    deprecated(
+        note = b"Use `sui::clock::borrow` for the Clock and `sui::test_scenario::set_clock_timestamp` or `sui::test_scenario::increment_clock_timestamp` to change its time",
+    ),
+]
 public fun destroy_for_testing(clock: Clock) {
     let Clock { id, timestamp_ms: _ } = clock;
     id.delete();
 }
 
 #[test_only]
-/// Keeps the `Clock` returned by `borrow` in step with the `Clock` a
-/// test creates or mutates, since tests have no consensus commits to
-/// set it. With several test Clocks, the most recently created or
-/// mutated one wins.
+/// Sets the timestamp of the `Clock` returned by `borrow`, including
+/// references already borrowed, since tests have no consensus commits
+/// to set it.
+/// Aborts with `ETimestampDecreased` if `timestamp_ms` is earlier than
+/// the current timestamp.
+public(package) fun set_timestamp_ms_for_testing(timestamp_ms: u64) {
+    assert!(timestamp_ms >= borrow().timestamp_ms(), ETimestampDecreased);
+    native_set_timestamp_ms_for_testing(timestamp_ms);
+}
+
+#[test_only]
 native fun native_set_timestamp_ms_for_testing(timestamp_ms: u64);

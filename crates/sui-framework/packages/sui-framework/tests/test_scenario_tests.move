@@ -1327,7 +1327,7 @@ fun with_shared() {
     test.create_system_objects();
 
     test.with_shared!<Clock>(|clock, test| {
-        assert_eq!(clock.timestamp_ms(), 0);
+        assert_eq!(clock.timestamp_ms(), 1);
 
         test.with_shared!<Random>(|random, test| {
             let _ = random.new_generator(test.ctx());
@@ -1354,8 +1354,35 @@ fun with_shared_by_id() {
     test.next_tx(@0);
 
     test.with_shared_by_id!<Clock>(test_clock_id, |clock, _| {
-        assert_eq!(clock.timestamp_ms(), 0);
+        assert_eq!(clock.timestamp_ms(), 1);
     });
 
     test.end();
+}
+
+#[test]
+fun next_with_context_returns_the_effects_of_the_ended_transaction() {
+    let sender = @0x1;
+    let mut scenario = test_scenario::begin(sender);
+    let id = scenario.new_object();
+    let object_id = id.to_inner();
+    transfer::public_transfer(Object { id, value: 10 }, sender);
+
+    let ctx_builder = scenario.ctx_builder();
+    let effects = scenario.next_with_context(ctx_builder);
+    assert_eq!(effects.created(), vector[object_id]);
+    assert_eq!(effects.transferred_to_account().length(), 1);
+
+    let id = scenario.new_object();
+    let object_id = id.to_inner();
+    transfer::public_transfer(Object { id, value: 10 }, sender);
+
+    let ctx_builder = scenario.ctx_builder().set_epoch(5);
+    let effects = scenario.next_with_context(ctx_builder);
+    assert_eq!(scenario.ctx().epoch(), 5);
+    assert_eq!(scenario.num_concluded_txes(), 6);
+    assert_eq!(effects.created(), vector[object_id]);
+    assert_eq!(effects.transferred_to_account().length(), 1);
+
+    scenario.end();
 }

@@ -8,7 +8,7 @@ use std::unit_test::assert_eq;
 use sui::nitro_attestation;
 use sui::test_scenario;
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun test_nitro_attestation() {
     let mut scenario = test_scenario::begin(@0x0);
     let ctx = scenario.ctx();
@@ -61,7 +61,7 @@ fun test_nitro_attestation() {
 }
 
 #[test]
-#[expected_failure(abort_code = nitro_attestation::EParseError)]
+#[expected_failure(abort_code = nitro_attestation::EParseError), allow(deprecated_usage)]
 fun test_nitro_attestation_invalid_attestation() {
     let mut scenario = test_scenario::begin(@0x0);
     let ctx = scenario.ctx();
@@ -74,7 +74,7 @@ fun test_nitro_attestation_invalid_attestation() {
 }
 
 #[test]
-#[expected_failure(abort_code = nitro_attestation::EVerifyError)]
+#[expected_failure(abort_code = nitro_attestation::EVerifyError), allow(deprecated_usage)]
 fun test_nitro_attestation_expired() {
     let mut scenario = test_scenario::begin(@0x0);
     let ctx = scenario.ctx();
