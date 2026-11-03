@@ -2571,6 +2571,18 @@ impl TransactionExpiration {
         }
     }
 
+    /// Whether `timestamp_ms` is after `max_timestamp`. Unlike a timestamp before `min_timestamp`,
+    /// this condition is permanent, so a transaction may be executed to abort for it.
+    pub fn is_expired_at(&self, timestamp_ms: u64) -> bool {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
+            TransactionExpiration::ValidDuring { max_timestamp, .. }
+            | TransactionExpiration::Validity { max_timestamp, .. } => {
+                max_timestamp.is_some_and(|max| timestamp_ms > max)
+            }
+        }
+    }
+
     /// The validators allowed to propose this transaction in consensus during `epoch`.
     ///
     /// A set recorded for any other epoch indexes into a committee that is not the one deciding

@@ -95,11 +95,15 @@ pub(crate) mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
-    /// Fails a transaction whose timestamp window excludes the Clock version assigned to it. The
+    /// Fails a transaction whose `max_timestamp` is before the Clock version assigned to it. The
     /// consensus handler checks the window only when a transaction is first sequenced, and a
     /// deferred transaction executes in a later commit after it has already locked its owned
     /// inputs, so it must abort here rather than be dropped. Reading the Clock records it in
     /// effects, which lets nodes that execute from checkpoints read the same version.
+    ///
+    /// `min_timestamp` is never checked here. Aborting would consume the transaction, but the
+    /// signer must be able to submit it again once `min_timestamp` is reached. Commit timestamps
+    /// do not decrease, so a transaction that met `min_timestamp` when sequenced still meets it.
     fn check_timestamp_expiration(
         temporary_store: &TemporaryStore<'_>,
         protocol_config: &ProtocolConfig,
@@ -122,7 +126,7 @@ pub(crate) mod checked {
         else {
             return execution_params;
         };
-        if !expiration.is_valid_at_timestamp(timestamp_ms) {
+        if expiration.is_expired_at(timestamp_ms) {
             assert_reachable!("deferred transaction aborted for timestamp expiration");
             execution_params.fail_if_ok(ExecutionErrorKind::TransactionExpired);
         }
