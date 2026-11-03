@@ -59,10 +59,11 @@ Exploit: submit a PTB with `min_out = 0` (or crafted price) and sandwich/drain t
 front-run a shared-object write.
 Source: `MystenLabs/skills → object-model/`, `MystenLabs/skills → ptbs/fundamentals.md` (PTBs are adversarial).
 
-### SM-D2 — Shared-object contention / equivocation DoS   [Medium]
-Invariant: hot shared objects on a common write path are sharded or contention-aware; the design
-tolerates competing transactions on the same version.
+### SM-D2 — Shared-object congestion DoS   [Medium]
+Invariant: hot shared objects on a common write path are sharded or contention-aware, so one
+object's write budget does not gate every user action.
 Detect: a single global shared object mutated by every user action.
-Exploit: flood concurrent txns on the same shared-object version; split validator reservations →
-the object is unavailable until the next epoch (liveness DoS).
-Source: `MystenLabs/skills → ptbs/troubleshooting.md`.
+Exploit: flood transactions that write the same shared object; congestion control defers
+transactions over that object's per-commit budget and eventually cancels them, so honest users
+of the object are delayed or cancelled (liveness DoS).
+Source: `crates/sui-core/src/authority/shared_object_congestion_tracker.rs`.

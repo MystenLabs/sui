@@ -484,10 +484,9 @@ impl PingType {
 
 pub struct WaitForEffectsRequest {
     pub transaction_digest: Option<crate::digests::TransactionDigest>,
-    /// If consensus position is provided, waits in the server handler for the transaction in it to execute,
-    /// either in fastpath outputs or finalized.
-    /// If it is not provided, only waits for finalized effects of the transaction in the server handler,
-    /// but not for fastpath outputs.
+    /// If consensus position is provided, the server handler also watches the transaction's consensus
+    /// status, so it responds promptly if consensus rejected or dropped the transaction.
+    /// Either way, the handler waits for the transaction's finalized effects.
     pub consensus_position: Option<crate::messages_consensus::ConsensusPosition>,
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
@@ -539,9 +538,9 @@ pub struct RawWaitForEffectsRequest {
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub transaction_digest: Option<Bytes>,
 
-    /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
-    /// in addition to waiting for finalized effects.
-    /// If not provided, only wait for finalized effects.
+    /// If provided, also watch the transaction's consensus status at this position, so a rejected or
+    /// dropped transaction gets a response without waiting for effects that will not be produced.
+    /// Finalized effects are waited for in either case.
     #[prost(bytes = "bytes", optional, tag = "2")]
     pub consensus_position: Option<Bytes>,
 
@@ -550,7 +549,7 @@ pub struct RawWaitForEffectsRequest {
     #[prost(bool, tag = "3")]
     pub include_details: bool,
 
-    /// Set when this is a ping request, to differentiate between fastpath and consensus pings.
+    /// Set when this is a ping request.
     #[prost(enumeration = "PingType", optional, tag = "4")]
     pub ping_type: Option<i32>,
 }
