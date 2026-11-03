@@ -288,12 +288,26 @@ macro_rules! monitored_future {
 #[macro_export]
 macro_rules! forward_server_timing_and_spawn {
     ($fut: expr) => {
-        if let Some(timing) = $crate::get_server_timing() {
-            tokio::task::spawn(async move { $crate::with_server_timing(timing, $fut).await })
-        } else {
-            tokio::task::spawn($fut)
-        }
+        $crate::spawn_with_server_timing($fut)
     };
+}
+
+/// Spawns `fut`, propagating the current ServerTiming context if there is one. Only intended for
+/// use by macros within this module.
+///
+/// The future is spawned as a boxed trait object so that tokio's task machinery is instantiated
+/// once per output type rather than once per spawned future type, which reduces compile time.
+#[track_caller]
+pub fn spawn_with_server_timing<F>(fut: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    let fut: Pin<Box<dyn Future<Output = F::Output> + Send>> = match get_server_timing() {
+        Some(timing) => Box::pin(with_server_timing(timing, fut)),
+        None => Box::pin(fut),
+    };
+    tokio::task::spawn(fut)
 }
 
 #[macro_export]
