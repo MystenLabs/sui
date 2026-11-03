@@ -19,6 +19,7 @@ use fastcrypto::traits::ToFromBytes;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use shared_crypto::intent::Intent;
+use shared_crypto::intent::IntentMessage;
 use shared_crypto::intent::IntentScope;
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
@@ -39,6 +40,9 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::multisig::MultiSig;
+use sui_types::multisig::MultiSigPublicKey;
+use sui_types::signature::GenericSignature;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::transaction::TransactionData;
 use tempfile::TempDir;
@@ -769,4 +773,68 @@ async fn keytool_list_abbreviates_mldsa65_keys_only() {
     let shown = format!("{}", CommandOutput::List(vec![Key::from(&ed25519_kp)]));
     assert!(shown.contains(&full_ed25519));
     assert!(!shown.contains("add --json for the full key"));
+}
+
+fn pay_sui_from(sender: SuiAddress) -> TransactionData {
+    let gas = (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::random(),
+    );
+    TransactionData::new_pay_sui(
+        sender,
+        vec![gas],
+        vec![SuiAddress::random_for_testing_only()],
+        vec![10000],
+        gas,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        1,
+    )
+    .unwrap()
+}
+
+// `VerifyParams::default()` rejects ML-DSA-65, so the offline verifiers must opt in
+// or every valid ML-DSA-65 signature decodes as invalid.
+#[tokio::test]
+async fn keytool_verifies_mldsa65_offline() -> Result<(), anyhow::Error> {
+    let kp = SuiKeyPair::decode(MLDSA65_TEST_SUIPRIVKEY).unwrap();
+    let keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+    let mut context = WalletContext::new_for_tests(keystore, None, None);
+
+    let tx_data = pay_sui_from((&kp.public()).into());
+    let sig = Signature::new_secure(
+        &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+        &kp,
+    );
+    let out = KeyToolCommand::DecodeOrVerifyTx {
+        tx_bytes: Base64::encode(bcs::to_bytes(&tx_data)?),
+        sig: Some(GenericSignature::Signature(sig)),
+        cur_epoch: 0,
+    }
+    .execute(&mut context)
+    .await?;
+    match out {
+        CommandOutput::DecodeOrVerifyTx(o) => o.result.expect("a signature was passed")?,
+        other => panic!("unexpected output {other}"),
+    }
+
+    let multisig_pk = MultiSigPublicKey::new(vec![kp.public()], vec![1], 1)?;
+    let tx_data = pay_sui_from((&multisig_pk).into());
+    let sig = Signature::new_secure(
+        &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+        &kp,
+    );
+    let multisig = MultiSig::combine(vec![GenericSignature::Signature(sig)], multisig_pk)?;
+    let out = KeyToolCommand::DecodeMultiSig {
+        multisig,
+        tx_bytes: Some(Base64::encode(bcs::to_bytes(&tx_data)?)),
+        cur_epoch: 0,
+    }
+    .execute(&mut context)
+    .await?;
+    match out {
+        CommandOutput::DecodeMultiSig(o) => assert_eq!(o.sig_verify_result, "OK"),
+        other => panic!("unexpected output {other}"),
+    }
+    Ok(())
 }
