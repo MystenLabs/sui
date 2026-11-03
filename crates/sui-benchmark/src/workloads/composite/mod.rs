@@ -57,7 +57,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
-use sui_protocol_config::reachability::register_reachability_for_config_in_modules;
+use sui_protocol_config::reachability::register_reachability_for_config;
 use sui_protocol_config::{ProtocolConfig, assert_reachable_gated};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::TypeTag;
@@ -1379,7 +1379,7 @@ impl Payload for CompositePayload {
         let alias_tx_needed = self.advance_alias_state().await;
         let system_state = self.system_state_observer.state.borrow().clone();
         if let Some(protocol_config) = system_state.protocol_config.as_ref() {
-            register_reachability_for_config_in_modules(protocol_config, module_path!());
+            register_reachability_for_config(protocol_config);
         }
         let sender = self.gas.lock().unwrap().1;
 

@@ -115,20 +115,12 @@ impl GatedReachabilityPoint {
 /// Call this each time the node adopts a protocol config, including at startup. It is
 /// idempotent, so repeated calls with the same config emit nothing after the first.
 pub fn register_reachability_for_config(config: &ProtocolConfig) {
-    register_reachability_for_config_in_modules(config, "");
-}
-
-/// Like [`register_reachability_for_config`], but only for points in modules whose path starts
-/// with `module_prefix`. A client such as the stress tool links node crates whose points it
-/// never runs, so it registers only its own points, against the config of the network it
-/// drives.
-pub fn register_reachability_for_config_in_modules(config: &ProtocolConfig, module_prefix: &str) {
     // Calling in to the antithesis sdk breaks determinism in simtests (on linux only).
     if cfg!(msim) {
         return;
     }
     for point in GATED_REACHABILITY_CATALOG.iter() {
-        if point.class.starts_with(module_prefix) && (point.expected_reachable)(config) {
+        if (point.expected_reachable)(config) {
             point.ensure_catalogued();
         }
     }
@@ -215,10 +207,6 @@ mod tests {
     }
 
     fn assert_output(path: &Path, expected: &[(&str, bool)]) {
-        assert_output_with_prefix(path, "gated reachability test:", expected);
-    }
-
-    fn assert_output_with_prefix(path: &Path, id_prefix: &str, expected: &[(&str, bool)]) {
         use mysten_common::ZipDebugEqIteratorExt as _;
 
         let output = std::fs::read_to_string(path).unwrap();
@@ -229,7 +217,7 @@ mod tests {
                 let assertion = event.get_mut("antithesis_assert")?;
                 assertion["id"]
                     .as_str()?
-                    .starts_with(id_prefix)
+                    .starts_with("gated reachability test:")
                     .then(|| assertion.take())
             })
             .collect();
@@ -242,51 +230,6 @@ mod tests {
             assert_eq!(assertion["assert_type"], "reachability");
             assert_eq!(assertion["display_type"], "Reachable");
         }
-    }
-
-    mod client {
-        pub(super) fn point() {
-            assert_reachable_gated!("gated module filter test: client", |_| true);
-        }
-    }
-
-    fn node_point() {
-        assert_reachable_gated!("gated module filter test: node", |_| true);
-    }
-
-    #[test]
-    fn registers_only_points_under_the_module_prefix() {
-        let expected = [("gated module filter test: client", false)];
-        const CHILD: &str = "SUI_REACHABILITY_MODULE_FILTER_TEST_CHILD";
-        if std::env::var_os(CHILD).is_none() {
-            let dir = tempfile::tempdir().unwrap();
-            let path = dir.path().join("sdk.jsonl");
-            let output = Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "reachability::tests::registers_only_points_under_the_module_prefix",
-                    "--nocapture",
-                ])
-                .env(CHILD, "1")
-                .env("ANTITHESIS_SDK_LOCAL_OUTPUT", &path)
-                .output()
-                .unwrap();
-            assert!(
-                output.status.success(),
-                "child failed:\nstdout: {}\nstderr: {}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            );
-            assert_output_with_prefix(&path, "gated module filter test:", &expected);
-            return;
-        }
-
-        std::hint::black_box(client::point as fn());
-        std::hint::black_box(node_point as fn());
-        let config = ProtocolConfig::get_for_max_version_UNSAFE();
-        register_reachability_for_config_in_modules(&config, concat!(module_path!(), "::client"));
-        let path = std::env::var_os("ANTITHESIS_SDK_LOCAL_OUTPUT").unwrap();
-        assert_output_with_prefix(Path::new(&path), "gated module filter test:", &expected);
     }
 
     #[test]
