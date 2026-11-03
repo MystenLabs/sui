@@ -208,7 +208,9 @@ impl From<&CursorToken> for grpc::CursorToken {
 }
 
 /// A transaction or event cursor without `public_position` is invalid. A checkpoint cursor's
-/// `public_position` is ignored: its checkpoint is already its public position.
+/// `public_position` is ignored: its checkpoint is already its public position. A transaction
+/// cursor's position is a place between or at transactions, so its `public_position.event_index`
+/// is ignored and decodes as 0.
 impl TryFrom<grpc::CursorToken> for CursorToken {
     type Error = anyhow::Error;
 
@@ -227,10 +229,17 @@ impl TryFrom<grpc::CursorToken> for CursorToken {
             grpc::cursor_token::Position::Checkpoints(position) => Position::Checkpoints {
                 checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
             },
-            grpc::cursor_token::Position::Transactions(position) => Position::Transactions {
-                tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
-                public_position: public_position()?,
-            },
+            grpc::cursor_token::Position::Transactions(position) => {
+                let tx_seq = position.tx_seq.context("cursor missing tx_seq")?;
+                let point = public_position()?;
+                Position::Transactions {
+                    tx_seq,
+                    public_position: LedgerPoint::transaction(
+                        point.checkpoint,
+                        point.transaction_index,
+                    ),
+                }
+            }
             grpc::cursor_token::Position::Events(position) => Position::Events {
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
                 event_index: position.event_index.context("cursor missing event_index")?,
@@ -333,6 +342,42 @@ mod tests {
             assert_eq!(token, expected);
             assert_eq!(token.encode().as_ref(), unlabelled);
         }
+    }
+
+    /// A transaction cursor carrying a public `event_index` decodes and re-encodes without it,
+    /// whatever its kind. An event cursor keeps it.
+    #[test]
+    fn transaction_cursors_drop_a_public_event_index() {
+        for (kind, token) in [
+            (0x01, CursorToken::item as fn(Position) -> CursorToken),
+            (0x02, CursorToken::boundary),
+        ] {
+            // kind; transactions { tx_seq: 42 };
+            // public_position { checkpoint: 7, transaction_index: 3, event_index: 9 }.
+            let forged: &[u8] = &[
+                0x28, kind, 0x3a, 0x02, 0x10, 0x2a, 0x4a, 0x06, 0x08, 0x07, 0x10, 0x03, 0x18, 0x09,
+            ];
+            // The same cursor with public_position { checkpoint: 7, transaction_index: 3 }.
+            let projected: &[u8] = &[
+                0x28, kind, 0x3a, 0x02, 0x10, 0x2a, 0x4a, 0x04, 0x08, 0x07, 0x10, 0x03,
+            ];
+            let decoded = CursorToken::decode(forged).unwrap();
+            assert_eq!(
+                decoded,
+                token(Position::Transactions {
+                    tx_seq: 42,
+                    public_position: LedgerPoint::transaction(7, 3),
+                })
+            );
+            assert_eq!(decoded.encode().as_ref(), projected);
+        }
+
+        let event = CursorToken::item(Position::Events {
+            tx_seq: 42,
+            event_index: 9,
+            public_position: LedgerPoint::event(7, 3, 9),
+        });
+        assert_eq!(CursorToken::decode(&event.encode()).unwrap(), event);
     }
 
     #[test]
