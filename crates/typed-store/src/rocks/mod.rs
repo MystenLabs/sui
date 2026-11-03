@@ -927,11 +927,6 @@ fn get_raw<'a>(
     opts: &ReadWriteOptions,
     key_buf: &[u8],
 ) -> Result<Option<GetResult<'a>>, TypedStoreError> {
-    let _timer = db_metrics
-        .op_metrics
-        .rocksdb_get_latency_seconds
-        .with_label_values(&[cf])
-        .start_timer();
     let perf_ctx = if get_sample_interval.sample() {
         Some(RocksDBPerfContext)
     } else {
@@ -1882,6 +1877,12 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
+        let _timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_get_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
         let key_buf = be_fix_int_ser(key);
         let res = get_raw(
             &self.db,

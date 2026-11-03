@@ -297,6 +297,7 @@ macro_rules! forward_server_timing_and_spawn {
 ///
 /// The future is spawned as a boxed trait object so that tokio's task machinery is instantiated
 /// once per output type rather than once per spawned future type, which reduces compile time.
+#[doc(hidden)]
 #[track_caller]
 pub fn spawn_with_server_timing<F>(fut: F) -> tokio::task::JoinHandle<F::Output>
 where
