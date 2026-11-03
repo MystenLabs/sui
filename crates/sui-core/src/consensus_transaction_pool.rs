@@ -211,7 +211,6 @@ struct PoolEntry {
     transactions: Vec<Transaction>,
     total_bytes: usize,
     gas_price: u64,
-    enqueued: Instant,
     tx_type: &'static str, // tx label for metrics
     /// See `proposers_metric_label`.
     proposers: &'static str,
@@ -278,7 +277,7 @@ impl AdmissionQueueEntry for PoolEntry {
     }
 
     fn enqueue_time(&self) -> Instant {
-        self.enqueued
+        self.ack.created
     }
 
     fn notify_expired(self, retry_after_secs: u64) {
@@ -544,7 +543,6 @@ impl ConsensusTransactionPool {
             transactions: serialized,
             total_bytes,
             gas_price,
-            enqueued: Instant::now(),
             tx_type,
             proposers: proposers_metric_label(&transactions, &self.epoch_store),
             ack: PendingAck::new(EntryAck::User(sender), keys),
@@ -633,7 +631,6 @@ impl ConsensusTransactionPool {
             transactions: serialized,
             total_bytes,
             gas_price: 0,
-            enqueued: Instant::now(),
             tx_type: tx_type_label(transactions),
             proposers: "na",
             ack: PendingAck::new(
@@ -1787,7 +1784,6 @@ mod tests {
             transactions: vec![Transaction::new(serialized.clone())],
             total_bytes: serialized.len(),
             gas_price: 1,
-            enqueued: Instant::now(),
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
             proposers: "na",
             ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
