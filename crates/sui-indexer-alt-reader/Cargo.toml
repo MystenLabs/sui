@@ -49,4 +49,5 @@ sui-sql-macro.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
+move-binary-format.workspace = true
 tokio-stream.workspace = true

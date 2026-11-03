@@ -682,9 +682,15 @@ pub(crate) mod test_support {
     use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
     use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
     use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsResponse;
+    use sui_rpc::proto::sui::rpc::v2::Bcs;
+    use sui_rpc::proto::sui::rpc::v2::Checkpoint;
+    use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
+    use sui_rpc::proto::sui::rpc::v2::GetCheckpointResponse;
     use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
     use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
     use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
+    use sui_types::messages_checkpoint::CheckpointSummary;
     use tokio::net::TcpListener;
     use tokio::task::JoinHandle;
     use tokio_stream::wrappers::TcpListenerStream;
@@ -732,19 +738,34 @@ pub(crate) mod test_support {
     }
 
     /// A minimal in-process `LedgerService` that records the shape of every
-    /// `BatchGetTransactions`/`BatchGetObjects` call it receives and responds
-    /// with an empty result set. Every other RPC falls back to the generated
-    /// trait's default `unimplemented` behavior, which is all the chunking
-    /// tests that use this need.
+    /// `BatchGetTransactions`/`BatchGetObjects` call it receives. `BatchGetTransactions`
+    /// responds with an empty result set, `BatchGetObjects` with the results set by
+    /// [`Self::set_object_results`], and `GetCheckpoint` with the summary set by
+    /// [`Self::set_checkpoint`]. Every other RPC falls back to the generated trait's default
+    /// `unimplemented` behavior.
     #[derive(Clone, Default)]
     pub(crate) struct MockLedgerServer {
         transaction_batches: Arc<Mutex<Vec<Vec<String>>>>,
         object_batches: Arc<Mutex<Vec<Vec<GetObjectRequest>>>>,
+        object_results: Arc<Mutex<Vec<GetObjectResult>>>,
+        checkpoint: Arc<Mutex<Option<CheckpointSummary>>>,
     }
 
     impl MockLedgerServer {
         pub(crate) fn new() -> Self {
             Self::default()
+        }
+
+        /// Canned per-object results for the next `BatchGetObjects` calls. When empty (the
+        /// default), calls respond with an empty result set.
+        pub(crate) fn set_object_results(&self, results: Vec<GetObjectResult>) {
+            *self.object_results.lock().unwrap() = results;
+        }
+
+        /// The checkpoint summary `GetCheckpoint` responds with. Until set, calls fail with
+        /// `NOT_FOUND`.
+        pub(crate) fn set_checkpoint(&self, summary: CheckpointSummary) {
+            *self.checkpoint.lock().unwrap() = Some(summary);
         }
 
         pub(crate) async fn start(&self) -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
@@ -793,7 +814,28 @@ pub(crate) mod test_support {
                 .lock()
                 .unwrap()
                 .push(request.into_inner().requests);
-            Ok(Response::new(BatchGetObjectsResponse::default()))
+            let mut response = BatchGetObjectsResponse::default();
+            response.objects = self.object_results.lock().unwrap().clone();
+            Ok(Response::new(response))
+        }
+
+        async fn get_checkpoint(
+            &self,
+            _request: Request<GetCheckpointRequest>,
+        ) -> Result<Response<GetCheckpointResponse>, Status> {
+            let summary = self
+                .checkpoint
+                .lock()
+                .unwrap()
+                .clone()
+                .ok_or_else(|| Status::not_found("no checkpoint set"))?;
+            let mut proto_summary = sui_rpc::proto::sui::rpc::v2::CheckpointSummary::default();
+            proto_summary.bcs = Some(Bcs::serialize(&summary).unwrap());
+            let mut checkpoint = Checkpoint::default();
+            checkpoint.summary = Some(proto_summary);
+            let mut response = GetCheckpointResponse::default();
+            response.checkpoint = Some(checkpoint);
+            Ok(Response::new(response))
         }
     }
 }

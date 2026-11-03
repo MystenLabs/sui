@@ -253,8 +253,8 @@ pub struct SubscriptionConfig {
     /// Subscribers that fall behind by this many checkpoints receive a lagged error.
     pub broadcast_buffer: usize,
 
-    /// How often (in milliseconds) the eviction task checks the `kv_packages` watermark
-    /// and evicts indexed packages from the streaming index.
+    /// How often (in milliseconds) the eviction task checks the `ledger_grpc` watermark
+    /// and evicts indexed packages, transactions, and objects from the streamed caches.
     pub package_eviction_interval_ms: u64,
 
     /// Number of checkpoints fetched concurrently per chunk during upstream gap recovery.

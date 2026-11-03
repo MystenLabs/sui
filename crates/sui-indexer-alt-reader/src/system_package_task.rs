@@ -4,18 +4,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use diesel::QueryableByName;
-use diesel::sql_types::BigInt;
-use diesel::sql_types::Bytea;
-use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
-use sui_sql_macro::query;
+use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tokio::time;
 use tracing::info;
 use tracing::warn;
 
+use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::monotonic_read::CheckpointFloor;
 use crate::package_resolver::PackageCache;
-use crate::pg_reader::PgReader;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct SystemPackageTaskArgs {
@@ -26,9 +23,18 @@ pub struct SystemPackageTaskArgs {
 
 /// Background task responsible for evicting system package from the package resolver's cache after
 /// detecting an epoch boundary.
+///
+/// System packages are the only packages upgraded in place (at the same storage ID), at epoch
+/// boundaries. The task watches the epoch of the same ledger gRPC service that the package cache
+/// reads from, so that a fetch after an eviction sees the upgraded packages.
 pub struct SystemPackageTask {
-    /// Access to the database
-    pg_reader: PgReader,
+    /// The ledger gRPC service backing the package cache.
+    ledger_grpc_reader: LedgerGrpcReader,
+
+    /// The floor `ledger_grpc_reader` stamps on its requests. Raised to the checkpoint that
+    /// revealed a new epoch before evicting, so refetches cannot be answered by a replica that is
+    /// still in the previous epoch.
+    ledger_grpc_floor: CheckpointFloor,
 
     /// The cached store underlying the package resolver.
     package_cache: Arc<PackageCache>,
@@ -46,134 +52,61 @@ impl SystemPackageTaskArgs {
 impl SystemPackageTask {
     pub fn new(
         args: SystemPackageTaskArgs,
-        pg_reader: PgReader,
+        ledger_grpc_reader: LedgerGrpcReader,
+        ledger_grpc_floor: CheckpointFloor,
         package_cache: Arc<PackageCache>,
     ) -> Self {
         Self {
-            pg_reader,
+            ledger_grpc_reader,
+            ledger_grpc_floor,
             package_cache,
             interval: args.epoch_polling_interval(),
         }
     }
 
-    /// Start a new task that regularly polls the database for the latest epoch and evicts system
-    /// packages if it detects that the epoch has changed (which means that a framework upgrade
-    /// could have happened).
+    /// Start a new task that regularly polls the ledger gRPC service for the latest epoch and
+    /// evicts system packages if it detects that the epoch has changed (which means that a
+    /// framework upgrade could have happened).
     ///
     /// This operation consumes the `self` and returns a Service handle.
     pub fn run(self) -> Service {
         Service::new().spawn_aborting(async move {
-            let Self {
-                pg_reader,
-                package_cache,
-                interval,
-            } = self;
-
-            let mut last_epoch: i64 = 0;
-            let mut interval = time::interval(interval);
+            let mut last_epoch: u64 = 0;
+            let mut interval = time::interval(self.interval);
 
             loop {
                 interval.tick().await;
-
-                let mut conn = match pg_reader.connect().await {
-                    Ok(conn) => conn,
-                    Err(e) => {
-                        warn!("Failed to connect to database: {:?}", e);
-                        continue;
-                    }
-                };
-
-                #[derive(QueryableByName, Copy, Clone)]
-                struct Watermark {
-                    #[diesel(sql_type = BigInt)]
-                    epoch_hi_inclusive: i64,
-
-                    #[diesel(sql_type = BigInt)]
-                    checkpoint_hi_inclusive: i64,
-                }
-
-                let query = query!(
-                    r#"
-                    SELECT
-                        epoch_hi_inclusive,
-                        checkpoint_hi_inclusive
-                    FROM
-                        watermarks
-                    WHERE
-                        pipeline = 'kv_packages'
-                    "#
-                );
-
-                let Watermark {
-                    epoch_hi_inclusive: next_epoch,
-                    checkpoint_hi_inclusive,
-                } = match conn.results(query).await.as_deref() {
-                    Ok([watermark]) => *watermark,
-
-                    Ok([]) => {
-                        info!("Package index isn't populated yet, no epoch information");
-                        continue;
-                    }
-
-                    Ok(_) => {
-                        warn!("Expected exactly one row from the watermarks table");
-                        continue;
-                    }
-
-                    Err(e) => {
-                        warn!("Failed to fetch latest epoch: {e}");
-                        continue;
-                    }
-                };
-
-                if next_epoch <= last_epoch {
-                    continue;
-                }
-
-                info!(last_epoch, next_epoch, "Detected epoch boundary");
-                last_epoch = next_epoch;
-
-                #[derive(QueryableByName, Clone)]
-                struct SystemPackage {
-                    #[diesel(sql_type = Bytea)]
-                    original_id: Vec<u8>,
-                }
-
-                let query = query!(
-                    r#"
-                    SELECT DISTINCT
-                        original_id
-                    FROM
-                        kv_packages
-                    WHERE
-                        is_system_package
-                    AND cp_sequence_number <= {BigInt}
-                    "#,
-                    checkpoint_hi_inclusive
-                );
-
-                let system_packages: Vec<SystemPackage> = match conn.results(query).await {
-                    Ok(system_packages) => system_packages,
-
-                    Err(e) => {
-                        warn!("Failed to fetch system packages: {e}");
-                        continue;
-                    }
-                };
-
-                let Ok(system_packages) = system_packages
-                    .into_iter()
-                    .map(|pkg| AccountAddress::from_bytes(pkg.original_id))
-                    .collect::<Result<Vec<_>, _>>()
-                else {
-                    warn!("Failed to deserialize system package addresses");
-                    continue;
-                };
-
-                info!(system_packages = ?system_packages, "Evicting...");
-                package_cache.evict(system_packages)
+                self.evict_on_new_epoch(&mut last_epoch).await;
             }
         })
+    }
+
+    /// Check the ledger gRPC service's latest epoch, and if it is past `last_epoch`, record it and
+    /// evict system packages from the cache.
+    async fn evict_on_new_epoch(&self, last_epoch: &mut u64) {
+        let summary = match self.ledger_grpc_reader.checkpoint_watermark().await {
+            Ok(summary) => summary,
+            Err(e) => {
+                warn!("Failed to fetch latest epoch: {e:#}");
+                return;
+            }
+        };
+
+        let next_epoch = summary.epoch;
+        if next_epoch <= *last_epoch {
+            return;
+        }
+
+        info!(
+            last_epoch = *last_epoch,
+            next_epoch, "Detected epoch boundary"
+        );
+        *last_epoch = next_epoch;
+
+        self.ledger_grpc_floor.raise(summary.sequence_number);
+        info!(system_packages = ?SYSTEM_PACKAGE_ADDRESSES, "Evicting...");
+        self.package_cache
+            .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
     }
 }
 
@@ -182,5 +115,99 @@ impl Default for SystemPackageTaskArgs {
         Self {
             epoch_polling_interval_ms: 10_000,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use move_binary_format::file_format::empty_module;
+    use move_binary_format::file_format_common::VERSION_MAX;
+    use move_core_types::account_address::AccountAddress;
+    use sui_package_resolver::PackageStore;
+    use sui_rpc::proto::sui::rpc::v2 as proto;
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::CheckpointContentsDigest;
+    use sui_types::digests::TransactionDigest;
+    use sui_types::gas::GasCostSummary;
+    use sui_types::messages_checkpoint::CheckpointSummary;
+    use sui_types::move_package::MovePackage;
+    use sui_types::object::Data;
+    use sui_types::object::Object;
+
+    use super::*;
+    use crate::ledger_grpc_reader::test_support::mock_reader;
+    use crate::package_resolver::GrpcPackageStore;
+
+    fn checkpoint(epoch: u64, sequence_number: u64) -> CheckpointSummary {
+        CheckpointSummary {
+            epoch,
+            sequence_number,
+            network_total_transactions: 0,
+            content_digest: CheckpointContentsDigest::new([0; 32]),
+            previous_digest: None,
+            epoch_rolling_gas_cost_summary: GasCostSummary::default(),
+            timestamp_ms: 0,
+            checkpoint_commitments: vec![],
+            end_of_epoch_data: None,
+            version_specific_data: vec![],
+        }
+    }
+
+    /// A `BatchGetObjects` result holding a package at `id` with a single empty module (the
+    /// resolver rejects packages without modules).
+    fn package_result(id: AccountAddress) -> proto::GetObjectResult {
+        let mut module = Vec::new();
+        empty_module()
+            .serialize_with_version(VERSION_MAX, &mut module)
+            .unwrap();
+        let package = MovePackage::new(
+            ObjectID::from(id),
+            SequenceNumber::from_u64(1),
+            BTreeMap::from([("dummy".to_owned(), module)]),
+            u64::MAX,
+            vec![],
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let object =
+            Object::new_package_from_data(Data::Package(package), TransactionDigest::default());
+        let mut proto_object = proto::Object::default();
+        proto_object.bcs = Some(proto::Bcs::serialize(&object).unwrap());
+        proto::GetObjectResult::new_object(proto_object)
+    }
+
+    #[tokio::test]
+    async fn epoch_change_evicts_system_packages_and_raises_floor() {
+        let (reader, mock, _server) = mock_reader().await;
+        let floor = CheckpointFloor::default();
+        let cache = Arc::new(PackageCache::new(GrpcPackageStore::new(&reader)));
+        let task = SystemPackageTask::new(
+            SystemPackageTaskArgs::default(),
+            reader,
+            floor.clone(),
+            cache.clone(),
+        );
+
+        let mut last_epoch = 0;
+        mock.set_checkpoint(checkpoint(0, 5));
+        mock.set_object_results(vec![package_result(AccountAddress::ONE)]);
+
+        // Within an epoch, the cache serves the system package without going back to the store.
+        cache.fetch(AccountAddress::ONE).await.unwrap();
+        task.evict_on_new_epoch(&mut last_epoch).await;
+        cache.fetch(AccountAddress::ONE).await.unwrap();
+        assert_eq!(mock.object_batches().len(), 1);
+        assert_eq!(floor.get(), 0);
+
+        // At an epoch boundary, where a framework upgrade may land, the next fetch goes back to the
+        // store, with the floor raised to the checkpoint that revealed the new epoch.
+        mock.set_checkpoint(checkpoint(1, 10));
+        task.evict_on_new_epoch(&mut last_epoch).await;
+        assert_eq!(floor.get(), 10);
+        cache.fetch(AccountAddress::ONE).await.unwrap();
+        assert_eq!(mock.object_batches().len(), 2);
     }
 }

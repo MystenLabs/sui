@@ -58,8 +58,8 @@ pub struct SubscriptionTestCluster {
 
 impl SubscriptionTestCluster {
     /// Set up a full streaming subscription test environment:
-    /// validator + postgres DB + kv_packages indexer + GraphQL service.
-    /// Waits for kv_packages to index the genesis checkpoint so subscriptions are ready.
+    /// validator + postgres DB + indexer + GraphQL service.
+    /// Waits for the indexer to process the genesis checkpoint before starting GraphQL.
     pub async fn new() -> Self {
         let (cluster, _controller) = Self::new_inner(false, false, GraphQlConfig::default()).await;
         cluster
