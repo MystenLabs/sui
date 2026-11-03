@@ -969,6 +969,12 @@ fn is_true(value: &bool) -> bool {
 impl Config for NodeConfig {}
 
 impl NodeConfig {
+    /// Same as `Config::load`, but not generic, so the deserializer is compiled in this crate
+    /// instead of in each binary that loads a node config.
+    pub fn load_from_path(path: &Path) -> Result<Self, anyhow::Error> {
+        <Self as Config>::load(path)
+    }
+
     pub fn protocol_key_pair(&self) -> &AuthorityKeyPair {
         self.protocol_key_pair.authority_keypair()
     }
