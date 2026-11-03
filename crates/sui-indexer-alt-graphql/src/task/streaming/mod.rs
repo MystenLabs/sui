@@ -80,5 +80,5 @@ pub(crate) use streamed_transaction_store::StreamedTransactionStore;
 pub(crate) use subscription_readiness::SubscriptionReadiness;
 
 /// The full layered package store used by streaming subscriptions:
-/// streamed index → shared PackageCache → DB.
+/// streamed index → shared PackageCache → ledger gRPC.
 pub(crate) type StreamingPackageStore = StreamedPackageStore<Arc<PackageCache>>;

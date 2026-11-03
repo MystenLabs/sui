@@ -382,7 +382,8 @@ pub async fn start_rpc(
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
-        pg_reader.clone(),
+        ledger_grpc_reader.clone(),
+        ledger_grpc_floor.clone(),
         package_store.clone(),
     );
 

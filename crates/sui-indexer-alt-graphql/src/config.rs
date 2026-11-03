@@ -254,7 +254,7 @@ pub struct SubscriptionConfig {
     pub broadcast_buffer: usize,
 
     /// How often (in milliseconds) the eviction task checks the `ledger_grpc` watermark
-    /// and evicts indexed packages from the streaming index.
+    /// and evicts indexed packages, transactions, and objects from the streamed caches.
     pub package_eviction_interval_ms: u64,
 
     /// Number of checkpoints fetched concurrently per chunk during upstream gap recovery.
