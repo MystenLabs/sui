@@ -57,6 +57,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
+use sui_core::transaction_driver::TransactionDriverError;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::TypeTag;
@@ -87,14 +88,21 @@ use super::MultiGas;
 /// Lifecycle steps take up to three txs each, so a batch has room for a few of them.
 const MAX_BATCH_SIZE: usize = 6;
 
-/// A transaction-driver abort can leave an owned input locked on a minority of validators.
-/// Rebuild the allowance transaction with a fresh digest after the transient fault clears.
-const ALLOWANCE_ISSUANCE_MAX_ATTEMPTS: usize = 3;
-const REBUILDABLE_SUBMISSION_ERROR: &str =
-    "Transaction processing aborted (retriable with another submission)";
+/// The transaction driver gives up on a transaction after its own retry budget, for example
+/// across a long network partition, even though a later submission could still finalize it.
+const ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS: usize = 3;
 
-fn is_rebuildable_allowance_submission(error: &impl std::fmt::Debug) -> bool {
-    format!("{error:?}").contains(REBUILDABLE_SUBMISSION_ERROR)
+/// Whether the driver gave up on a transaction that another submission may still finalize.
+/// Resubmitting the same signed transaction is idempotent: if an earlier submission was
+/// finalized, the driver returns its effects.
+fn is_resubmittable(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<TransactionDriverError>(),
+        Some(
+            TransactionDriverError::Aborted { .. }
+                | TransactionDriverError::TimeoutWithLastRetriableError { .. }
+        )
+    )
 }
 
 /// The SUI that each lifecycle gas account's address balance receives at init.
@@ -2056,30 +2064,28 @@ impl CompositeWorkload {
             |((gas_coins, sender, keypair), spender)| {
                 assert_eq!(gas_coins.len(), 1);
                 let proxy_ref = execution_proxy.clone();
-                async move {
-                    for attempt in 1..=ALLOWANCE_ISSUANCE_MAX_ATTEMPTS {
-                        let mut tx_builder =
-                            TestTransactionBuilder::new(*sender, gas_coins[0], gas_price);
-                        add_allowance_issue_commands(tx_builder.ptb_builder_mut(), *spender);
-                        let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
+                let mut tx_builder = TestTransactionBuilder::new(*sender, gas_coins[0], gas_price);
+                add_allowance_issue_commands(tx_builder.ptb_builder_mut(), *spender);
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
-                        match proxy_ref.execute_transaction_block(tx).await {
+                async move {
+                    for submission in 1..=ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS {
+                        match proxy_ref.execute_transaction_block(tx.clone()).await {
                             Ok(effects) => return effects,
                             Err(error)
-                                if attempt < ALLOWANCE_ISSUANCE_MAX_ATTEMPTS
-                                    && is_rebuildable_allowance_submission(&error) =>
+                                if submission < ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS
+                                    && is_resubmittable(&error) =>
                             {
                                 tracing::warn!(
-                                    attempt,
+                                    submission,
                                     ?error,
-                                    "Rebuilding allowance issuance after transaction-driver abort"
+                                    "Resubmitting allowance issuance"
                                 );
-                                tokio::time::sleep(Duration::from_secs(1)).await;
                             }
                             Err(error) => panic!("Allowance issuance should succeed: {error:?}"),
                         }
                     }
-                    unreachable!("allowance issuance loop returns on its final attempt")
+                    unreachable!("allowance issuance loop returns on its final submission")
                 }
             },
         );
@@ -2948,15 +2954,25 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
 #[cfg(test)]
 mod tests {
-    use super::is_rebuildable_allowance_submission;
+    use super::is_resubmittable;
+    use std::time::Duration;
+    use sui_core::transaction_driver::TransactionDriverError;
 
     #[test]
-    fn identifies_rebuildable_allowance_submission_errors() {
-        assert!(is_rebuildable_allowance_submission(
-            &"Transaction processing aborted (retriable with another submission)."
-        ));
-        assert!(!is_rebuildable_allowance_submission(
-            &"Transaction is rejected as invalid by more than 1/3 of validators"
-        ));
+    fn resubmits_only_when_the_driver_gave_up() {
+        let timed_out = TransactionDriverError::TimeoutWithLastRetriableError {
+            last_error: None,
+            attempts: 5,
+            timeout: Duration::from_secs(60),
+        };
+        let invalid = TransactionDriverError::ValidationFailed {
+            error: "invalid".to_string(),
+        };
+
+        assert!(is_resubmittable(&anyhow::Error::from(timed_out)));
+        assert!(!is_resubmittable(&anyhow::Error::from(invalid)));
+        assert!(!is_resubmittable(&anyhow::anyhow!(
+            "Transaction processing aborted (retriable with another submission)."
+        )));
     }
 }
