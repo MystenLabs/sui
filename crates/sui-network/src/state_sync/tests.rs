@@ -1637,3 +1637,395 @@ fn test_adaptive_timeout_calculation() {
     let timeout = compute_adaptive_timeout(10000, min_timeout, max_timeout);
     assert_in_range(timeout, 30.0);
 }
+
+/// Serves state sync like `Server`. With `scramble_pages`, it reverses the order of the
+/// transactions in each `GetCheckpointTransactions` response.
+struct PaginatedTestServer<S> {
+    inner: super::server::Server<S>,
+    scramble_pages: bool,
+}
+
+#[anemo::async_trait]
+impl<S> StateSync for PaginatedTestServer<S>
+where
+    S: WriteStore + Send + Sync + 'static,
+{
+    async fn push_checkpoint_summary(
+        &self,
+        request: Request<sui_types::messages_checkpoint::CertifiedCheckpointSummary>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        self.inner.push_checkpoint_summary(request).await
+    }
+
+    async fn get_checkpoint_summary(
+        &self,
+        request: Request<GetCheckpointSummaryRequest>,
+    ) -> Result<
+        anemo::Response<Option<sui_types::messages_checkpoint::CertifiedCheckpointSummary>>,
+        anemo::rpc::Status,
+    > {
+        self.inner.get_checkpoint_summary(request).await
+    }
+
+    async fn get_checkpoint_availability(
+        &self,
+        request: Request<()>,
+    ) -> Result<anemo::Response<super::GetCheckpointAvailabilityResponse>, anemo::rpc::Status> {
+        self.inner.get_checkpoint_availability(request).await
+    }
+
+    async fn get_checkpoint_contents(
+        &self,
+        request: Request<sui_types::digests::CheckpointContentsDigest>,
+    ) -> Result<
+        anemo::Response<Option<sui_types::messages_checkpoint::FullCheckpointContents>>,
+        anemo::rpc::Status,
+    > {
+        self.inner.get_checkpoint_contents(request).await
+    }
+
+    async fn get_checkpoint_contents_v2(
+        &self,
+        request: Request<sui_types::digests::CheckpointContentsDigest>,
+    ) -> Result<
+        anemo::Response<Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents>>,
+        anemo::rpc::Status,
+    > {
+        self.inner.get_checkpoint_contents_v2(request).await
+    }
+
+    async fn get_checkpoint_contents_digests(
+        &self,
+        request: Request<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
+    ) -> Result<
+        anemo::Response<Option<sui_types::messages_checkpoint::CheckpointContents>>,
+        anemo::rpc::Status,
+    > {
+        self.inner.get_checkpoint_contents_digests(request).await
+    }
+
+    async fn get_checkpoint_transactions(
+        &self,
+        request: Request<super::GetCheckpointTransactionsRequest>,
+    ) -> Result<
+        anemo::Response<Option<Vec<sui_types::base_types::ExecutionData>>>,
+        anemo::rpc::Status,
+    > {
+        let mut response = self.inner.get_checkpoint_transactions(request).await?;
+        if self.scramble_pages
+            && let Some(page) = response.inner_mut()
+        {
+            page.reverse();
+        }
+        Ok(response)
+    }
+}
+
+/// Builds a peer whose store holds all of `checkpoints` with their contents. It refuses full
+/// contents larger than `max_full_contents_response_size` and answers
+/// `GetCheckpointTransactions` within `checkpoint_transactions_response_budget`.
+fn build_paginated_peer(
+    committee: &CommitteeFixture,
+    checkpoints: &[sui_types::messages_checkpoint::VerifiedCheckpoint],
+    contents: &[sui_types::messages_checkpoint::VerifiedCheckpointContents],
+    max_full_contents_response_size: usize,
+    checkpoint_transactions_response_budget: usize,
+    scramble_pages: bool,
+) -> anemo::Network {
+    let store = SharedInMemoryStore::default();
+    store.inner_mut().insert_genesis_state(
+        checkpoints[0].clone(),
+        contents[0].clone(),
+        committee.committee().to_owned(),
+    );
+    for (checkpoint, checkpoint_contents) in checkpoints.iter().zip_debug_eq(contents).skip(1) {
+        store.insert_checkpoint(checkpoint).unwrap();
+        store
+            .insert_checkpoint_contents(checkpoint, checkpoint_contents.clone())
+            .unwrap();
+        store.update_highest_synced_checkpoint(checkpoint).unwrap();
+    }
+    let (_state_sync, mut server) = Builder::new().store(store).build_internal();
+    server.max_full_contents_response_size = max_full_contents_response_size;
+    server.checkpoint_transactions_response_budget = checkpoint_transactions_response_budget;
+    let router =
+        anemo::Router::new().add_rpc_service(super::StateSyncServer::new(PaginatedTestServer {
+            inner: server,
+            scramble_pages,
+        }));
+    build_network(|r| r.merge(router))
+}
+
+/// Downloads checkpoint contents from a set of peers into its own store.
+struct PaginatedTestClient {
+    network: anemo::Network,
+    store: SharedInMemoryStore,
+    peer_heights: std::sync::Arc<std::sync::RwLock<super::PeerHeights>>,
+    genesis_digest: CheckpointDigest,
+}
+
+impl PaginatedTestClient {
+    /// Connects to each peer and records it as having announced the given height.
+    async fn new(genesis_digest: CheckpointDigest, peers: &[(&anemo::Network, u64)]) -> Self {
+        let store = SharedInMemoryStore::default();
+        let (state_sync, _) = Builder::new().store(store.clone()).build_internal();
+        let client = Self {
+            network: build_network(|r| r),
+            store,
+            peer_heights: state_sync.peer_heights.clone(),
+            genesis_digest,
+        };
+        for (peer, height) in peers {
+            client.network.connect(peer.local_addr()).await.unwrap();
+            client.announce(peer.peer_id(), *height);
+        }
+        client
+    }
+
+    fn announce(&self, peer_id: PeerId, height: u64) {
+        self.peer_heights.write().unwrap().peers.insert(
+            peer_id,
+            PeerStateSyncInfo {
+                genesis_checkpoint_digest: self.genesis_digest,
+                on_same_chain_as_us: true,
+                height,
+                lowest: 0,
+            },
+        );
+    }
+
+    /// Downloads `checkpoint`'s contents. Returns whether the store has them.
+    async fn fetch(&self, checkpoint: &sui_types::messages_checkpoint::VerifiedCheckpoint) -> bool {
+        let peers = super::PeerBalancer::new(
+            &self.network,
+            self.peer_heights.clone(),
+            super::PeerCheckpointRequestType::Content,
+        )
+        .with_checkpoint(*checkpoint.sequence_number());
+        super::get_full_checkpoint_contents(
+            peers,
+            &self.store,
+            self.peer_heights.clone(),
+            checkpoint,
+            true,
+            Duration::from_secs(20),
+        )
+        .await
+    }
+
+    /// Whether the store holds every transaction and effects of `contents`.
+    fn has_all_transactions(
+        &self,
+        contents: &sui_types::messages_checkpoint::VerifiedCheckpointContents,
+    ) -> bool {
+        contents.iter().all(|data| {
+            let digest = data.transaction.digest();
+            self.store.get_transaction(digest).is_some()
+                && self.store.get_transaction_effects(digest).as_ref() == Some(&data.effects)
+        })
+    }
+}
+
+/// A peer refuses full contents, so the download falls back to pages of one transaction each.
+/// The client stores the contents and every transaction and effects, but no full contents.
+#[tokio::test]
+async fn paginated_download_after_full_contents_refused() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) =
+        committee.make_random_checkpoints_with_transactions(2, None, 5);
+    let peer = build_paginated_peer(&committee, &checkpoints, &contents, 1, 1, false);
+    let client = PaginatedTestClient::new(*checkpoints[0].digest(), &[(&peer, 1)]).await;
+
+    assert!(client.fetch(&checkpoints[1]).await);
+
+    assert!(
+        client
+            .store
+            .get_checkpoint_contents_by_digest(&checkpoints[1].content_digest)
+            .is_some()
+    );
+    assert!(client.has_all_transactions(&contents[1]));
+    assert!(!client.store.inner().has_full_checkpoint_contents(1));
+}
+
+/// A peer that sends full contents is not asked for pages.
+#[tokio::test]
+async fn full_contents_download_does_not_paginate() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) =
+        committee.make_random_checkpoints_with_transactions(2, None, 5);
+    let peer = build_paginated_peer(&committee, &checkpoints, &contents, usize::MAX, 1, false);
+    let client = PaginatedTestClient::new(*checkpoints[0].digest(), &[(&peer, 1)]).await;
+
+    assert!(client.fetch(&checkpoints[1]).await);
+
+    assert!(client.store.inner().has_full_checkpoint_contents(1));
+}
+
+/// A page whose transactions do not match the checkpoint contents is rejected before anything
+/// is stored. A later download from an honest peer succeeds.
+#[tokio::test]
+async fn paginated_download_rejects_mismatched_page() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) =
+        committee.make_random_checkpoints_with_transactions(2, None, 5);
+    let bad_peer = build_paginated_peer(&committee, &checkpoints, &contents, 1, usize::MAX, true);
+    let client = PaginatedTestClient::new(*checkpoints[0].digest(), &[(&bad_peer, 1)]).await;
+
+    assert!(!client.fetch(&checkpoints[1]).await);
+    assert!(
+        client
+            .store
+            .get_checkpoint_contents_by_digest(&checkpoints[1].content_digest)
+            .is_none()
+    );
+    assert!(contents[1].iter().all(|data| {
+        client
+            .store
+            .get_transaction(data.transaction.digest())
+            .is_none()
+    }));
+
+    let good_peer = build_paginated_peer(&committee, &checkpoints, &contents, 1, usize::MAX, false);
+    client
+        .network
+        .connect(good_peer.local_addr())
+        .await
+        .unwrap();
+    client
+        .peer_heights
+        .write()
+        .unwrap()
+        .peers
+        .remove(&bad_peer.peer_id());
+    client.announce(good_peer.peer_id(), 1);
+
+    assert!(client.fetch(&checkpoints[1]).await);
+    assert!(client.has_all_transactions(&contents[1]));
+}
+
+/// The server fills each page up to its byte budget, always returns at least one transaction,
+/// and rejects invalid ranges.
+#[tokio::test]
+async fn checkpoint_transactions_server_pages() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) =
+        committee.make_random_checkpoints_with_transactions(2, None, 5);
+    let store = SharedInMemoryStore::default();
+    store.inner_mut().insert_genesis_state(
+        checkpoints[0].clone(),
+        contents[0].clone(),
+        committee.committee().to_owned(),
+    );
+    store.insert_checkpoint(&checkpoints[1]).unwrap();
+    store
+        .insert_checkpoint_contents(&checkpoints[1], contents[1].clone())
+        .unwrap();
+    let (_state_sync, mut server) = Builder::new().store(store).build_internal();
+    let request = |start, end| {
+        Request::new(super::GetCheckpointTransactionsRequest {
+            sequence_number: 1,
+            start,
+            end,
+        })
+    };
+    let expected: Vec<_> = contents[1]
+        .iter()
+        .map(|data| data.clone().into_inner())
+        .collect();
+
+    let page = server
+        .get_checkpoint_transactions(request(1, 5))
+        .await
+        .unwrap()
+        .into_inner()
+        .unwrap();
+    assert_eq!(page, expected[1..]);
+
+    server.checkpoint_transactions_response_budget = 1;
+    let page = server
+        .get_checkpoint_transactions(request(2, 5))
+        .await
+        .unwrap()
+        .into_inner()
+        .unwrap();
+    assert_eq!(page, expected[2..3]);
+
+    for (start, end) in [(3, 3), (4, 2), (0, 6)] {
+        let status = server
+            .get_checkpoint_transactions(request(start, end))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            status.status(),
+            anemo::types::response::StatusCode::BadRequest
+        );
+    }
+
+    let missing = server
+        .get_checkpoint_transactions(Request::new(super::GetCheckpointTransactionsRequest {
+            sequence_number: 2,
+            start: 0,
+            end: 1,
+        }))
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(missing.is_none());
+
+    server.max_full_contents_response_size = 1;
+    assert!(
+        server
+            .get_checkpoint_contents_v2(Request::new(checkpoints[1].content_digest))
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn paginated_checkpoints_exceeding_transaction_budget_keep_syncing() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) =
+        committee.make_random_checkpoints_with_transactions(3, None, 4);
+    let source = build_paginated_peer(&committee, &checkpoints, &contents, 1, 1, false);
+    let store = SharedInMemoryStore::default();
+    store.inner_mut().insert_genesis_state(
+        checkpoints[0].clone(),
+        contents[0].clone(),
+        committee.committee().clone(),
+    );
+    let config = StateSyncConfig {
+        checkpoint_content_download_tx_concurrency: Some(1),
+        ..Default::default()
+    };
+    let (builder, router) = Builder::new().store(store.clone()).config(config).build();
+    let network = build_network(|r| r.merge(router));
+    let handle = builder.start(network.clone());
+    let mut synced = handle.subscribe_to_synced_checkpoints();
+    network.connect(source.local_addr()).await.unwrap();
+
+    for checkpoint in checkpoints.iter().skip(1) {
+        let actual = timeout(Duration::from_secs(10), synced.recv())
+            .await
+            .expect("checkpoints exceeding the transaction budget must keep syncing")
+            .unwrap();
+        assert_eq!(actual.digest(), checkpoint.digest());
+        assert!(
+            !store
+                .inner()
+                .has_full_checkpoint_contents(checkpoint.sequence_number)
+        );
+        store
+            .get_full_checkpoint_contents(
+                Some(checkpoint.sequence_number),
+                &checkpoint.content_digest,
+            )
+            .unwrap()
+            .verify_digests(checkpoint.content_digest)
+            .unwrap();
+    }
+    assert_eq!(
+        store.get_highest_synced_checkpoint().unwrap().digest(),
+        checkpoints[2].digest()
+    );
+}

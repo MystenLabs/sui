@@ -1078,24 +1078,30 @@ impl FullCheckpointContents {
     }
 
     pub fn random_for_testing() -> Self {
-        let (a, key): (_, AccountKeyPair) = get_key_pair();
-        let transaction = Transaction::from_data_and_signer(
-            TransactionData::new_transfer(
-                a,
-                FullObjectRef::from_fastpath_ref(random_object_ref()),
-                a,
-                random_object_ref(),
-                100000000000,
-                100,
-            ),
-            vec![&key],
-        );
-        let effects = TestEffectsBuilder::new(transaction.data()).build();
-        let exe_data = ExecutionData {
-            transaction,
-            effects,
-        };
-        FullCheckpointContents::new_with_causally_ordered_transactions(vec![exe_data])
+        Self::random_with_transactions_for_testing(1)
+    }
+
+    pub fn random_with_transactions_for_testing(num_transactions: usize) -> Self {
+        let exe_data = (0..num_transactions).map(|_| {
+            let (a, key): (_, AccountKeyPair) = get_key_pair();
+            let transaction = Transaction::from_data_and_signer(
+                TransactionData::new_transfer(
+                    a,
+                    FullObjectRef::from_fastpath_ref(random_object_ref()),
+                    a,
+                    random_object_ref(),
+                    100000000000,
+                    100,
+                ),
+                vec![&key],
+            );
+            let effects = TestEffectsBuilder::new(transaction.data()).build();
+            ExecutionData {
+                transaction,
+                effects,
+            }
+        });
+        FullCheckpointContents::new_with_causally_ordered_transactions(exe_data)
     }
 }
 

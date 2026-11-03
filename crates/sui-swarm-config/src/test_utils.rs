@@ -144,6 +144,21 @@ impl CommitteeFixture {
         self.make_checkpoints(number_of_checkpoints, previous_checkpoint, random_contents)
     }
 
+    pub fn make_random_checkpoints_with_transactions(
+        &self,
+        number_of_checkpoints: usize,
+        previous_checkpoint: Option<VerifiedCheckpoint>,
+        transactions_per_checkpoint: usize,
+    ) -> MakeCheckpointResults {
+        self.make_checkpoints(number_of_checkpoints, previous_checkpoint, || {
+            VerifiedCheckpointContents::new_unchecked(VersionedFullCheckpointContents::V1(
+                FullCheckpointContents::random_with_transactions_for_testing(
+                    transactions_per_checkpoint,
+                ),
+            ))
+        })
+    }
+
     pub fn make_empty_checkpoints(
         &self,
         number_of_checkpoints: usize,
