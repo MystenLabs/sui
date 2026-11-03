@@ -88,6 +88,12 @@ use super::MultiGas;
 /// Lifecycle steps take up to three txs each, so a batch has room for a few of them.
 const MAX_BATCH_SIZE: usize = 6;
 
+/// Submissions of the allowance setup transaction before giving up. A submission can fail
+/// transiently even when the transaction is valid, for example when a validator has not yet
+/// applied the effects that created the gas coin. Resubmitting the same signed transaction is
+/// idempotent: if an earlier submission was finalized, the response carries its effects.
+const ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS: usize = 3;
+
 /// The SUI that each lifecycle gas account's address balance receives at init.
 const LIFECYCLE_GAS_FUNDING: u64 = 50_000_000_000;
 
@@ -2066,14 +2072,27 @@ impl CompositeWorkload {
         let futures = itertools::zip_eq(&self.payload_gas, spenders).map(
             |((gas_coins, sender, keypair), spender)| {
                 assert_eq!(gas_coins.len(), 1);
+                let proxy_ref = execution_proxy.clone();
                 let mut tx_builder = TestTransactionBuilder::new(*sender, gas_coins[0], gas_price);
                 add_allowance_issue_commands(tx_builder.ptb_builder_mut(), *spender);
                 let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
-                let proxy_ref = execution_proxy.clone();
                 async move {
-                    let execution_result = proxy_ref.execute_transaction_block(tx).await;
-                    execution_result.expect("Allowance issuance should succeed")
+                    for submission in 1..=ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS {
+                        match proxy_ref.execute_transaction_block(tx.clone()).await {
+                            Ok(effects) => return effects,
+                            Err(error) if submission < ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS => {
+                                tracing::warn!(
+                                    submission,
+                                    ?error,
+                                    "Resubmitting allowance issuance"
+                                );
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                            }
+                            Err(error) => panic!("Allowance issuance should succeed: {error:?}"),
+                        }
+                    }
+                    unreachable!("allowance issuance loop returns on its final submission")
                 }
             },
         );
