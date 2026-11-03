@@ -57,7 +57,6 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
-use sui_core::transaction_driver::TransactionDriverError;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::TypeTag;
@@ -88,22 +87,11 @@ use super::MultiGas;
 /// Lifecycle steps take up to three txs each, so a batch has room for a few of them.
 const MAX_BATCH_SIZE: usize = 6;
 
-/// The transaction driver gives up on a transaction after its own retry budget, for example
-/// across a long network partition, even though a later submission could still finalize it.
+/// Submissions of the allowance setup transaction before giving up. A submission can fail
+/// transiently even when the transaction is valid, for example when a validator has not yet
+/// applied the effects that created the gas coin. Resubmitting the same signed transaction is
+/// idempotent: if an earlier submission was finalized, the response carries its effects.
 const ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS: usize = 3;
-
-/// Whether the driver gave up on a transaction that another submission may still finalize.
-/// Resubmitting the same signed transaction is idempotent: if an earlier submission was
-/// finalized, the driver returns its effects.
-fn is_resubmittable(error: &anyhow::Error) -> bool {
-    matches!(
-        error.downcast_ref::<TransactionDriverError>(),
-        Some(
-            TransactionDriverError::Aborted { .. }
-                | TransactionDriverError::TimeoutWithLastRetriableError { .. }
-        )
-    )
-}
 
 /// The SUI that each lifecycle gas account's address balance receives at init.
 const LIFECYCLE_GAS_FUNDING: u64 = 50_000_000_000;
@@ -2072,15 +2060,13 @@ impl CompositeWorkload {
                     for submission in 1..=ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS {
                         match proxy_ref.execute_transaction_block(tx.clone()).await {
                             Ok(effects) => return effects,
-                            Err(error)
-                                if submission < ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS
-                                    && is_resubmittable(&error) =>
-                            {
+                            Err(error) if submission < ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS => {
                                 tracing::warn!(
                                     submission,
                                     ?error,
                                     "Resubmitting allowance issuance"
                                 );
+                                tokio::time::sleep(Duration::from_secs(1)).await;
                             }
                             Err(error) => panic!("Allowance issuance should succeed: {error:?}"),
                         }
@@ -2949,30 +2935,5 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
     fn name(&self) -> &str {
         "Composite"
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_resubmittable;
-    use std::time::Duration;
-    use sui_core::transaction_driver::TransactionDriverError;
-
-    #[test]
-    fn resubmits_only_when_the_driver_gave_up() {
-        let timed_out = TransactionDriverError::TimeoutWithLastRetriableError {
-            last_error: None,
-            attempts: 5,
-            timeout: Duration::from_secs(60),
-        };
-        let invalid = TransactionDriverError::ValidationFailed {
-            error: "invalid".to_string(),
-        };
-
-        assert!(is_resubmittable(&anyhow::Error::from(timed_out)));
-        assert!(!is_resubmittable(&anyhow::Error::from(invalid)));
-        assert!(!is_resubmittable(&anyhow::anyhow!(
-            "Transaction processing aborted (retriable with another submission)."
-        )));
     }
 }
