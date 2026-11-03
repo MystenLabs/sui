@@ -57,7 +57,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::reachability::register_reachability_for_config;
+use sui_protocol_config::{ProtocolConfig, assert_reachable_gated};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
@@ -126,6 +127,20 @@ fn gasless_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
         .map(|cfg| !cfg.enable_gasless())
         .unwrap_or(false)
+}
+
+/// Gasless txs in this workload transfer SUI, which validators accept only if the chain's
+/// gasless allowlist includes it. Production chain configs allow only specific stablecoins.
+fn gasless_sui_transfer_allowed(protocol_config: &ProtocolConfig) -> bool {
+    protocol_config.enable_gasless()
+        && protocol_config
+            .gasless_allowed_token_types()
+            .iter()
+            .any(|(token, _)| {
+                token
+                    .parse::<TypeTag>()
+                    .is_ok_and(|tag| tag == GAS::type_tag())
+            })
 }
 
 fn allowed_proposers_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
@@ -1363,6 +1378,9 @@ impl Payload for CompositePayload {
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let alias_tx_needed = self.advance_alias_state().await;
         let system_state = self.system_state_observer.state.borrow().clone();
+        if let Some(protocol_config) = system_state.protocol_config.as_ref() {
+            register_reachability_for_config(protocol_config);
+        }
         let sender = self.gas.lock().unwrap().1;
 
         self.current_batch_txs.clear();
@@ -1647,7 +1665,10 @@ impl Payload for CompositePayload {
                 (tx_info.kind, &result.status)
                 && effects.is_ok()
             {
-                assert_reachable!("gasless composite transfer executed");
+                assert_reachable_gated!(
+                    "gasless composite transfer executed",
+                    gasless_sui_transfer_allowed
+                );
             }
             if let (BatchTxKind::Multisig, BatchedTransactionStatus::Success { effects }) =
                 (tx_info.kind, &result.status)
@@ -2916,5 +2937,23 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
     fn name(&self) -> &str {
         "Composite"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gasless_sui_transfer_allowed;
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+    #[test]
+    fn gasless_sui_transfers_are_expected_only_where_sui_is_allowlisted() {
+        for chain in [Chain::Unknown, Chain::Testnet, Chain::Mainnet] {
+            let config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain);
+            assert!(!gasless_sui_transfer_allowed(&config), "{chain:?}");
+        }
+
+        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown);
+        config.set_gasless_allowed_token_types_for_testing(vec![("0x2::sui::SUI".to_string(), 0)]);
+        assert!(gasless_sui_transfer_allowed(&config));
     }
 }
