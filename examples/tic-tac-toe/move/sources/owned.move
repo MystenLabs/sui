@@ -7,7 +7,7 @@
 /// board directly. Instead, they convey their intention to place a mark by
 /// transferring a `Mark` object to the `Game`.
 ///
-/// This means that every move takes two owned object fast path operations --
+/// This means that every move takes two owned object transactions --
 /// one by the player, and one by the admin. The admin could be a third party
 /// running a centralized service that monitors marker placement events and
 /// responds to them, or it could be a 1-of-2 multisig address shared between

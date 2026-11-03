@@ -223,8 +223,8 @@ Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui
 use only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
 can use the object as an input to a transaction. It is similar to <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code> two ways. One
 in that the object can potentially be used by anyone, as defined by the <code>default</code> permissions of
-the <code>Party</code> value. The other in that the object must be used in consensus and cannot be
-used in the fast path.
+the <code>Party</code> value. The other in that consensus assigns the object's version when a
+transaction uses it.
 This function has custom rules performed by the Sui Move bytecode verifier that ensures that <code>T</code>
 is an object defined in the module where <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> is invoked. Use <code><a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a></code>
 to transfer an object with <code>store</code> outside of its module.
@@ -259,8 +259,8 @@ Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui
 use only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
 can use the object as an input to a transaction. It is similar to <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code> two ways. One
 in that the object can potentially be used by anyone, as defined by the <code>default</code> permissions of
-the <code>Party</code> value. The other in that the object must be used in consensus and cannot be
-used in the fast path.
+the <code>Party</code> value. The other in that consensus assigns the object's version when a
+transaction uses it.
 The object must have <code>store</code> to be transferred outside of its module.
 
 

@@ -82,7 +82,7 @@ export function NewMultiSigGame(): ReactElement {
             <Em>
                 <Text as="div" mb="2">
                     Create a 1-of-2 multi-sig address to own the new game. Each move in the game
-                    requires two fast path (single-owner) transactions: One from the player's
+                    requires two single-owner transactions: One from the player's
                     address to authorize the move, and one from the multi-sig, signed by the
                     player's address, to make the move.
                 </Text>

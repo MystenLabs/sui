@@ -1,6 +1,6 @@
 # `Owner` enum
 
-This document specifies how **`Owner`** values control object versioning, execution path, PTB input arguments, and permissions in Sui. It also describes the relation between `Owner` and the **Transfer‑to‑Object (TTO)** mechanism and the legal state‑transitions among owner kinds.
+This document specifies how **`Owner`** values control object versioning, ordering, PTB input arguments, and permissions in Sui. It also describes the relation between `Owner` and the **Transfer‑to‑Object (TTO)** mechanism and the legal state‑transitions among owner kinds.
 
 ---
 
@@ -11,20 +11,20 @@ This document specifies how **`Owner`** values control object versioning, execut
 | Property | Definition |
 |----------|------------|
 | **Versioning** | How an object's `SequenceNumber` is determined. **Manual** means the caller must supply the version when using the object as input, and the version is committed to as part of the transaction certificate; **Automatic** means the validator assigns a version at scheduling time. |
-| **Execution path** | **Fastpath** allows validators to execute and commit without global ordering when no inputs require consensus ordering; **Consensus‑only** forces consensus sequencing to produce an order. |
+| **Ordering** | Every transaction is sequenced by consensus before execution. **Owned** inputs are referenced at a fixed version; when transactions use the same version of an address-owned object, the first one in commit order locks that version after consensus and the others are rejected; **Consensus** inputs get their versions assigned by consensus at scheduling time. |
 | **PTB input** | Indicates whether an object can be an input to a PTB, and if so how it is referenced.
 | **Permissions** | The capability set the implied authorization function `A(sender,object)` grants to the transaction sender based on `Owner` (see below for more details): **read (r)** – borrow `&T`; **write (w)** – borrow `&mut T`; **delete (d)** – delete the object; **transfer (t)** – change ownership, wrap. |
 
 
 ### 1.2 Core properties of each variant
 
-| Variant | Versioning model | Execution path | PTB input | Permissions |
+| Variant | Versioning model | Ordering | PTB input | Permissions |
 |---------|-----------------|----------------|-----------------|--------------------|
-| **`AddressOwner(addr)`** | Manual | Fastpath | `ImmOrOwnedObject` | only `addr` ⇒ **r w d t** |
+| **`AddressOwner(addr)`** | Manual | Owned | `ImmOrOwnedObject` | only `addr` ⇒ **r w d t** |
 | **`ObjectOwner(parent)`** | Automatic (via parent) | — | Not accepted directly; accessed through parent UID | Via parent |
-| **`Shared`** | Automatic | Consensus‑only | `SharedObject` | global **r w d** |
-| **`Immutable`** | Manual (final) | Fastpath | `ImmOrOwnedObject` (read‑only) | global **r d** |
-| **`ConsensusAddressOwner(addr)`** | Automatic | Consensus‑only | `SharedObject` | only `addr` ⇒ **r w d t** |
+| **`Shared`** | Automatic | Consensus | `SharedObject` | global **r w d** |
+| **`Immutable`** | Manual (final) | Owned | `ImmOrOwnedObject` (read‑only) | global **r d** |
+| **`ConsensusAddressOwner(addr)`** | Automatic | Consensus | `SharedObject` | only `addr` ⇒ **r w d t** |
 
 ## 2 Transfer‑to‑Object (TTO)
 
@@ -67,6 +67,6 @@ Authorization rules based on `Owner` are applied only for objects used as input 
 
 ---
 
-## 5 Fastpath vs Consensus
+## 5 Owned vs consensus inputs
 
-A PTB is executed via the **fastpath** when all input objects are fastpast-eligible as defined in the properties table above. Introducing any consensus-only object forces **consensus** sequencing before execution.
+All transactions are sequenced by consensus and executed after commit. A transaction whose inputs are all owned or immutable needs no version assignment: it runs once its referenced versions are available, and if two transactions use the same version of an address-owned object, only the first in commit order acquires the lock and executes. Any consensus input, such as a `Shared` or `ConsensusAddressOwner` object, makes the transaction wait for consensus to assign that object's version.
