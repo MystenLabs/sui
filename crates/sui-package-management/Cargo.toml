@@ -21,5 +21,6 @@ sui-protocol-config.workspace = true
 
 
 [build-dependencies]
-sui-framework-snapshot.workspace = true
 anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
