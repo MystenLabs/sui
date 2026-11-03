@@ -13,6 +13,10 @@ use super::operations::{TEST_COIN_DENY, TEST_COIN_UNDENY};
 use crate::workloads::payload::BatchedTransactionStatus;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 
+/// Batches that the partner address stays denied before the undeny step, so that TEST_COIN txs
+/// from both payloads run against the denial.
+const DENIED_BATCHES: usize = 20;
+
 #[derive(Clone, Copy, Debug)]
 pub(super) enum DenyStep {
     Deny,
@@ -30,6 +34,8 @@ pub(super) struct DenyLifecycle {
     deny_list_initial_shared_version: SequenceNumber,
     target: SuiAddress,
     denied: bool,
+    /// Batches stepped since the deny succeeded.
+    denied_batches: usize,
 }
 
 impl DenyLifecycle {
@@ -45,18 +51,23 @@ impl DenyLifecycle {
             deny_list_initial_shared_version,
             target,
             denied: false,
+            denied_batches: 0,
         }
+    }
+
+    fn waiting_while_denied(&self) -> bool {
+        self.denied && self.denied_batches < DENIED_BATCHES
     }
 }
 
 impl Lifecycle for DenyLifecycle {
     fn max_step_calls(&self) -> usize {
-        1
+        if self.waiting_while_denied() { 0 } else { 1 }
     }
 
-    /// Each step is one tx, and the address stays denied between steps.
+    /// Each step is one tx, and the address stays denied until the undeny step.
     fn in_progress(&self) -> bool {
-        false
+        self.denied && self.cap.is_some()
     }
 
     fn start_probability(&self) -> f64 {
@@ -68,6 +79,10 @@ impl Lifecycle for DenyLifecycle {
     }
 
     fn next_step(&mut self, _ctx: &StepContext) -> Vec<LifecycleCall> {
+        if self.waiting_while_denied() {
+            self.denied_batches += 1;
+            return vec![];
+        }
         let cap = self
             .cap
             .expect("a deny step starts only while the cap is known");
@@ -118,11 +133,52 @@ impl Lifecycle for DenyLifecycle {
             DenyStep::Deny => {
                 assert_reachable!("partner address denied for TEST_COIN");
                 self.denied = true;
+                self.denied_batches = 0;
             }
             DenyStep::Undeny => {
                 assert_reachable!("partner address undenied for TEST_COIN");
                 self.denied = false;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::base_types::random_object_ref;
+
+    #[test]
+    fn undeny_follows_the_denied_window() {
+        let mut lifecycle = DenyLifecycle::new(
+            0.05,
+            random_object_ref(),
+            SequenceNumber::from_u64(1),
+            SuiAddress::random_for_testing_only(),
+        );
+        let ctx = StepContext {
+            sender: SuiAddress::random_for_testing_only(),
+            partner: SuiAddress::random_for_testing_only(),
+        };
+        assert!(!lifecycle.in_progress());
+        assert_eq!(lifecycle.op_of_next_step(&ctx), Some(TEST_COIN_DENY));
+
+        lifecycle.denied = true;
+        lifecycle.denied_batches = 0;
+        for _ in 0..DENIED_BATCHES {
+            assert!(lifecycle.in_progress());
+            assert_eq!(lifecycle.max_step_calls(), 0);
+            assert!(lifecycle.next_step(&ctx).is_empty());
+        }
+        assert_eq!(lifecycle.max_step_calls(), 1);
+        assert_eq!(lifecycle.op_of_next_step(&ctx), Some(TEST_COIN_UNDENY));
+    }
+
+    impl DenyLifecycle {
+        fn op_of_next_step(&mut self, ctx: &StepContext) -> Option<&'static str> {
+            let calls = self.next_step(ctx);
+            assert!(calls.len() <= 1);
+            calls.first().map(|call| call.op)
         }
     }
 }
