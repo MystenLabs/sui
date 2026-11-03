@@ -1149,6 +1149,15 @@ impl BigTableClient {
             filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
         }
     }
+
+    /// A `RowFilter` that keeps every cell but empties its value, for reads that need only row
+    /// keys. A filter that dropped the cells instead would drop the rows with them: Bigtable
+    /// leaves a row with no cells out of the response.
+    fn keys_only_filter() -> RowFilter {
+        RowFilter {
+            filter: Some(Filter::StripValueTransformer(true)),
+        }
+    }
 }
 
 struct ActivePollWait {
@@ -2453,51 +2462,19 @@ impl KeyValueStoreReader for BigTableClient {
             .collect()
     }
 
-    async fn get_system_packages(
-        &mut self,
-        cp_bound: u64,
-        after_original_id: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<PackageData>> {
-        if limit == 0 {
-            return Ok(vec![]);
-        }
-
-        let start_key = match after_original_id {
-            Some(id) => Bound::Excluded(Bytes::from(tables::system_packages::encode_key(
-                id.as_ref(),
-            ))),
-            None => Bound::Unbounded,
-        };
-
-        let rows = self
-            .range_scan_stream(
-                tables::system_packages::NAME,
-                start_key,
-                Bound::Unbounded,
-                0,
-                false,
-                None,
-            )
-            .await?;
-
-        futures::pin_mut!(rows);
-        let mut results = Vec::with_capacity(limit.min(100));
-        while let Some(row) = rows.next().await {
-            let (key, cells) = row?;
-            let first_cp = tables::system_packages::decode(&cells)?;
-            if first_cp > cp_bound {
-                continue;
-            }
-            let original_id = ObjectID::from_bytes(key.as_ref())?;
-            if let Some(pkg) = self.get_package_latest(original_id, cp_bound).await? {
-                results.push(pkg);
-                if results.len() >= limit {
-                    break;
-                }
-            }
-        }
-        Ok(results)
+    async fn get_system_package_ids(&mut self) -> Result<Vec<ObjectID>> {
+        self.range_scan(
+            tables::system_packages::NAME,
+            Bound::Unbounded,
+            Bound::Unbounded,
+            0,
+            false,
+            Some(Self::keys_only_filter()),
+        )
+        .await?
+        .into_iter()
+        .map(|(key, _)| Ok(ObjectID::from_bytes(key.as_ref())?))
+        .collect()
     }
 }
 
@@ -3554,44 +3531,5 @@ mod tests {
                 .await
                 .is_err()
         );
-    }
-
-    #[tokio::test]
-    async fn get_system_packages_streams_past_filtered_rows() {
-        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
-        let (addr, _handle) = mock.start().await.unwrap();
-        let mut client =
-            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
-                .await
-                .unwrap();
-
-        // Insert 4 system packages:
-        // pkg1 (0x01) at cp 10
-        // pkg2 (0x02) at cp 50
-        // pkg3 (0x03) at cp 60
-        // pkg4 (0x04) at cp 20
-        let ids = [(1u8, 10u64), (2u8, 50u64), (3u8, 60u64), (4u8, 20u64)];
-        for (byte, first_cp) in ids {
-            let mut id_bytes = [0u8; 32];
-            id_bytes[31] = byte;
-            let orig_id = sui_types::base_types::ObjectID::from_bytes(id_bytes).unwrap();
-
-            let sys_key = tables::system_packages::encode_key(orig_id.as_ref());
-            let sys_cells = tables::system_packages::encode(first_cp);
-            mock.insert_row(tables::system_packages::NAME, sys_key, sys_cells)
-                .await;
-
-            let pkg_key = tables::packages::encode_key(orig_id.as_ref(), 1);
-            let pkg_cells = tables::packages::encode(first_cp, orig_id.as_ref(), true);
-            mock.insert_row(tables::packages::NAME, pkg_key, pkg_cells)
-                .await;
-        }
-
-        // With cp_bound = 30 and limit = 2, packages 0x02 and 0x03 (first_cp > 30) are filtered
-        // out; the scan continues past them to 0x04 and fills the limit.
-        let pkgs = client.get_system_packages(30, None, 2).await.unwrap();
-        assert_eq!(pkgs.len(), 2);
-        assert_eq!(pkgs[0].original_id[31], 1);
-        assert_eq!(pkgs[1].original_id[31], 4);
     }
 }

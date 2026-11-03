@@ -486,13 +486,12 @@ pub trait KeyValueStoreReader {
         descending: bool,
     ) -> Result<Vec<PackageData>>;
 
-    /// Get all system packages with their latest version at or before `cp_bound`.
-    async fn get_system_packages(
-        &mut self,
-        cp_bound: u64,
-        after_original_id: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<PackageData>>;
+    /// The original IDs of the system packages recorded in the `system_packages` table, in
+    /// ascending order. A package gets its row when a transaction sent by `0x0` first outputs one
+    /// of its versions, and rows are never removed, so the IDs include every system package
+    /// created at or below the [`SYSTEM_PACKAGES_PIPELINE`] watermark read before this call. They
+    /// may also include packages created above it.
+    async fn get_system_package_ids(&mut self) -> Result<Vec<ObjectID>>;
 }
 
 impl BigTableIndexer {

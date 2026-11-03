@@ -7,6 +7,7 @@ use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServic
 use sui_rpc::proto::sui::rpc::v2::{
     GetDatatypeRequest, GetDatatypeResponse, GetFunctionRequest, GetFunctionResponse,
     GetPackageRequest, GetPackageResponse, ListPackageVersionsRequest, ListPackageVersionsResponse,
+    ListSystemPackagesRequest, ListSystemPackagesResponse,
 };
 use sui_types::{base_types::ObjectID, move_package::MovePackage, object::Object};
 
@@ -15,6 +16,7 @@ mod get_datatype;
 mod get_function;
 mod get_package;
 mod list_package_versions;
+mod list_system_packages;
 
 pub use get_datatype::get_datatype_response;
 pub use get_function::get_function_response;
@@ -57,6 +59,15 @@ impl MovePackageService for RpcService {
         request: tonic::Request<ListPackageVersionsRequest>,
     ) -> Result<tonic::Response<ListPackageVersionsResponse>, tonic::Status> {
         list_package_versions::list_package_versions(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_system_packages(
+        &self,
+        request: tonic::Request<ListSystemPackagesRequest>,
+    ) -> Result<tonic::Response<ListSystemPackagesResponse>, tonic::Status> {
+        list_system_packages::list_system_packages(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
