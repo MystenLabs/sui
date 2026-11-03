@@ -12,7 +12,7 @@ use consensus_config::{
 };
 use consensus_types::block::Round;
 use itertools::Itertools;
-use mysten_common::debug_fatal;
+use mysten_common::{debug_fatal, in_antithesis};
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
@@ -639,12 +639,19 @@ where
         // of yielding) ensures this task resumes only after the pending drops have run.
         // In production tokio, a canceled task's future is guaranteed to have been dropped when
         // its JoinHandle resolves, so the loop exits on the first check.
+        let (drain_attempts, drain_interval) = if in_antithesis() {
+            // Antithesis can resume a paused executor into a large cancellation backlog. Give
+            // those futures time to drop before diagnosing their DagState owners as leaked.
+            (100, Duration::from_millis(10))
+        } else {
+            (5, Duration::from_millis(1))
+        };
         let mut dag_state_owners = dag_state.strong_count();
-        for _ in 0..5 {
+        for _ in 0..drain_attempts {
             if dag_state_owners == 0 {
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(1)).await;
+            tokio::time::sleep(drain_interval).await;
             dag_state_owners = dag_state.strong_count();
         }
         if dag_state_owners != 0 {
