@@ -1,0 +1,28 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+// Dry-run and dev-inspect must summarize simulated creations without assigning persistent
+// fake IDs. Each PTB creates two coins to verify that every simulated output is unnumbered.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-12:
+//# programmable --sender A --dry-run --inputs 1u64 @A
+// Simulated creations are not assigned persistent fake IDs.
+//> 0: SplitCoins(Gas, [Input(0), Input(0)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(1));
+created: object(_), object(_)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-17:
+//# programmable --sender A --dev-inspect --inputs 1u64 @A
+// Dev-inspect follows the same convention.
+//> 0: SplitCoins(Gas, [Input(0), Input(0)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(1));
+created: object(_), object(_)
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 2964000,  storage_rebate: 0, non_refundable_storage_fee: 0

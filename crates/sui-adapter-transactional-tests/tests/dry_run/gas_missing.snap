@@ -86,7 +86,7 @@ task 10, lines 87-89:
 // Include 3,0 in the gas payment, it should succeed
 //# programmable --sender A --inputs 100 --dry-run --gas-payment object(7,0) --gas-payment object(7,1) --gas-payment object(4,0)
 //> 0: test::m::large_storage_func(Input(0));
-created: object(10,0)
+created: object(_)
 mutated: object(7,0)
 deleted: object(4,0), object(7,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2963704, non_refundable_storage_fee: 296

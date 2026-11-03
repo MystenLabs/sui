@@ -26,7 +26,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 4, lines 24-32:
 // Passing
 //# upgrade --package Test --upgrade-capability 1,1 --sender A --dry-run
-created: object(4,0)
+created: object(_)
 mutated: object(_), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 1633837, non_refundable_storage_fee: 163
 

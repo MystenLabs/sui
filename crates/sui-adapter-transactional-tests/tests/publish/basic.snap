@@ -12,7 +12,7 @@ A: object(0,0)
 
 task 1, lines 10-14:
 //# publish --dry-run
-created: object(1,0)
+created: object(_)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3906400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
