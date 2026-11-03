@@ -3,8 +3,8 @@
 This is an end-to-end example for on-chain tic-tac-toe. It includes:
 
 -   A [Move package](./move), containing two protocols for running a game of
-    tic-tac-toe. One that uses shared objects, and another that uses only
-    owned objects.
+    tic-tac-toe. One that uses shared objects and consensus and another
+    that uses owned objects, and the fast path (no consensus).
 -   A [React front-end](./ui), in TypeScript built on top of
     `create-react-dapp`, using the TS SDK and `dapp-kit`.
 -   [Scripts](./scripts) to publish packages and update configs used
@@ -122,14 +122,12 @@ multisig game, players must exchange public keys instead of addresses.
 
 The shared protocol's main benefit is that its on-chain logic and
 client integration are straightforward, and its main downside is that
-every move needs consensus to assign a version of the shared `Game`.
+it relies on consensus for ordering.
 
-In contrast, the owned protocol uses only owned objects, so its
-transactions never wait for consensus to assign a shared object
-version, but its on-chain logic is more complicated because it needs to
-manage the `TurnCap`, and its off-chain logic is complicated either by a
-third party service to act as an Admin, or a multisig and sponsored
-transaction setup. When using multisig, care also needs to be taken that
-the two players do not both submit a transaction using the same version
-of the `Game`: only the first one in consensus order executes, and the
-other is rejected.
+In contrast, the owned protocol uses only fast-path transactions, but
+its on-chain logic is more complicated because it needs to manage the
+`TurnCap`, and its off-chain logic is complicated either by a third
+party service to act as an Admin, or a multisig and sponsored
+transaction setup. When using multisig, care also needs to be taken to
+avoid equivocation, where the two players both try to execute a
+transaction involving the `Game`.

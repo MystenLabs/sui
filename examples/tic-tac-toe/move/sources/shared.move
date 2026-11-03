@@ -8,9 +8,9 @@
 /// correct player.
 ///
 /// The `owned` module shows a variant of this game implemented using
-/// only owned objects, which avoids contention on a shared object, but
-/// either requires a centralized service or a multi-sig set-up to own
-/// the game.
+/// only fast path transactions, which should be cheaper and lower
+/// latency, but either requires a centralized service or a multi-sig
+/// set-up to own the game.
 module tic_tac_toe::shared;
 
 /// The state of an active game of tic-tac-toe.
