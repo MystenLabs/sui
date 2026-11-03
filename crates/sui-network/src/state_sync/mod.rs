@@ -57,11 +57,13 @@ use std::{
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
+    base_types::VerifiedExecutionData,
     committee::Committee,
     digests::CheckpointDigest,
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, EndOfEpochData,
-        VerifiedCheckpoint, VerifiedCheckpointContents, VersionedFullCheckpointContents,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
+        EndOfEpochData, VerifiedCheckpoint, VerifiedCheckpointContents,
+        VersionedFullCheckpointContents,
     },
     storage::WriteStore,
 };
@@ -93,6 +95,7 @@ pub use generated::{
 };
 pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
+pub use server::GetCheckpointTransactionsRequest;
 use sui_config::node::ArchiveReaderConfig;
 use sui_storage::object_store::util::{build_object_store, fetch_checkpoint};
 use sui_storage::verify_checkpoint;
@@ -1667,7 +1670,7 @@ async fn sync_checkpoint_contents<S>(
     let mut highest_started_network_total_transactions = highest_synced.network_total_transactions;
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
-    let mut tx_concurrency_remaining = checkpoint_content_download_tx_concurrency;
+    let mut tx_in_flight: u64 = 0;
 
     loop {
         tokio::select! {
@@ -1692,7 +1695,7 @@ async fn sync_checkpoint_contents<S>(
                             .expect("store operation should not fail");
                         // We don't care if no one is listening as this is a broadcast channel
                         let _ = checkpoint_event_sender.send(checkpoint.clone());
-                        tx_concurrency_remaining += checkpoint.network_total_transactions - highest_synced.network_total_transactions;
+                        tx_in_flight -= checkpoint.network_total_transactions - highest_synced.network_total_transactions;
                         highest_synced = checkpoint;
 
                     }
@@ -1742,13 +1745,17 @@ async fn sync_checkpoint_contents<S>(
                     current_sequence
                 ));
 
-            // Enforce transaction count concurrency limit.
+            // Enforce transaction count concurrency limit. A checkpoint is always admitted when
+            // nothing is in flight, so a checkpoint with more transactions than the limit is still
+            // downloaded.
             let tx_count = next_checkpoint.network_total_transactions
                 - highest_started_network_total_transactions;
-            if tx_count > tx_concurrency_remaining {
+            if !checkpoint_contents_tasks.is_empty()
+                && tx_in_flight + tx_count > checkpoint_content_download_tx_concurrency
+            {
                 break;
             }
-            tx_concurrency_remaining -= tx_count;
+            tx_in_flight += tx_count;
 
             highest_started_network_total_transactions = next_checkpoint.network_total_transactions;
             current_sequence += 1;
@@ -1824,7 +1831,7 @@ where
     )
     .with_checkpoint(*checkpoint.sequence_number());
     let now = tokio::time::Instant::now();
-    let Some(_contents) = get_full_checkpoint_contents(
+    if !get_full_checkpoint_contents(
         peers,
         &store,
         peer_heights.clone(),
@@ -1833,7 +1840,7 @@ where
         timeout,
     )
     .await
-    else {
+    {
         // Delay completion in case of error so we don't hammer the network with retries.
         let duration = peer_heights
             .read()
@@ -1850,6 +1857,7 @@ where
     Ok(checkpoint)
 }
 
+/// Downloads the checkpoint's contents into `store`. Returns whether the store has them.
 #[instrument(level = "debug", skip_all)]
 async fn get_full_checkpoint_contents<S>(
     peers: PeerBalancer,
@@ -1858,20 +1866,26 @@ async fn get_full_checkpoint_contents<S>(
     checkpoint: &VerifiedCheckpoint,
     use_get_checkpoint_contents_v2: bool,
     timeout: Duration,
-) -> Option<VersionedFullCheckpointContents>
+) -> bool
 where
     S: WriteStore,
 {
-    let sequence_number = checkpoint.sequence_number;
     let digest = checkpoint.content_digest;
-    if let Some(contents) = store.get_full_checkpoint_contents(Some(sequence_number), &digest) {
+    // Stored contents imply that their transactions and effects are stored, so this does not
+    // need to load them.
+    if store.get_checkpoint_contents_by_digest(&digest).is_some() {
         debug!("store already contains checkpoint contents");
-        return Some(contents);
+        return true;
     }
+
+    // Set when a peer that had the checkpoint failed to deliver valid full contents. If no peer
+    // delivers them, the download falls back to paginated download, which works for checkpoints
+    // of any size.
+    let mut full_contents_failed = false;
 
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
-    for mut peer in peers {
+    for mut peer in peers.clone() {
         let peer_id = peer.inner().peer_id();
         debug!(?timeout, "requesting checkpoint contents from {}", peer_id);
         let request = Request::new(digest).with_timeout(timeout);
@@ -1897,6 +1911,7 @@ where
             Err(e) => {
                 trace!("{e:?}");
                 peer_heights.write().unwrap().record_failure(peer_id);
+                full_contents_failed = true;
                 None
             }
         };
@@ -1912,15 +1927,179 @@ where
                 .write()
                 .unwrap()
                 .record_success(peer_id, size, elapsed);
-            let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
+            let verified_contents = VerifiedCheckpointContents::new_unchecked(contents);
             store
                 .insert_checkpoint_contents(checkpoint, verified_contents)
                 .expect("store operation should not fail");
-            return Some(contents);
+            return true;
+        }
+        full_contents_failed = true;
+    }
+    if !full_contents_failed {
+        debug!("no peers had checkpoint contents");
+        return false;
+    }
+
+    debug!("full checkpoint contents download failed, falling back to paginated download");
+    if !get_paginated_checkpoint_contents(peers, &store, &peer_heights, checkpoint).await {
+        debug!("paginated checkpoint contents download failed");
+        return false;
+    }
+    true
+}
+
+/// Downloads the checkpoint's contents in pages, from the peers that have it one at a time,
+/// and inserts each page into `store` as it arrives. Unlike full contents, this works for a
+/// checkpoint of any size, and never holds all of its transactions in memory. A peer that
+/// fails is replaced by the next one, which resumes where the failed peer stopped.
+async fn get_paginated_checkpoint_contents<S: WriteStore>(
+    peers: PeerBalancer,
+    store: &S,
+    peer_heights: &RwLock<PeerHeights>,
+    checkpoint: &VerifiedCheckpoint,
+) -> bool {
+    let mut progress = PaginatedProgress {
+        contents: None,
+        next: 0,
+        max_items: u64::MAX,
+        last_page_len: None,
+    };
+    for peer in peers {
+        let peer_id = peer.inner().peer_id();
+        let start = Instant::now();
+        match get_paginated_checkpoint_contents_from_peer(
+            peer,
+            store,
+            peer_heights,
+            checkpoint,
+            &mut progress,
+        )
+        .await
+        {
+            Ok(size) => {
+                peer_heights
+                    .write()
+                    .unwrap()
+                    .record_success(peer_id, size, start.elapsed());
+                return true;
+            }
+            Err(e) => {
+                debug!("paginated contents download from {peer_id} failed: {e:?}");
+                peer_heights.write().unwrap().record_failure(peer_id);
+            }
         }
     }
-    debug!("no peers had checkpoint contents");
-    None
+    false
+}
+
+/// Downloads the rest of the checkpoint's contents from one peer in pages, starting from
+/// `progress`. Returns the number of bytes downloaded.
+async fn get_paginated_checkpoint_contents_from_peer<S: WriteStore>(
+    mut peer: StateSyncClient<anemo::Peer>,
+    store: &S,
+    peer_heights: &RwLock<PeerHeights>,
+    checkpoint: &VerifiedCheckpoint,
+    progress: &mut PaginatedProgress,
+) -> anyhow::Result<u64> {
+    let sequence_number = *checkpoint.sequence_number();
+    // Pages are bounded in bytes, not transactions, so the adaptive timeout for full
+    // contents does not apply.
+    let page_timeout = peer_heights.read().unwrap().checkpoint_content_timeout_max;
+    let mut size = 0;
+    if progress.contents.is_none() {
+        let contents = peer
+            .get_checkpoint_contents_digests(
+                Request::new(sequence_number).with_timeout(page_timeout),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+            .into_inner()
+            .ok_or_else(|| anyhow::anyhow!("peer does not have the checkpoint contents"))?;
+        anyhow::ensure!(
+            *contents.digest() == checkpoint.content_digest,
+            "checkpoint contents digest {} does not match expected digest {}",
+            contents.digest(),
+            checkpoint.content_digest
+        );
+        size += bcs::serialized_size(&contents)? as u64;
+        progress.contents = Some(contents);
+    }
+    let contents = progress.contents.as_ref().expect("set above");
+
+    let num_transactions = contents.size() as u64;
+    while progress.next < num_transactions {
+        let next = progress.next;
+        let request = GetCheckpointTransactionsRequest {
+            sequence_number,
+            start: next,
+            end: next
+                .saturating_add(progress.max_items)
+                .min(num_transactions),
+        };
+        let requested = request.end - request.start;
+        let response = peer
+            .get_checkpoint_transactions(Request::new(request).with_timeout(page_timeout))
+            .await;
+        let page = match response {
+            Ok(response) => response
+                .into_inner()
+                .ok_or_else(|| anyhow::anyhow!("peer does not have the checkpoint transactions"))?,
+            Err(e) => {
+                // A page can fail because it is too large to arrive in time, so ask the next
+                // peer for a smaller one. Pages never grow, so the download does not return to a
+                // page size that failed.
+                progress.max_items =
+                    (progress.last_page_len.unwrap_or(requested).min(requested) / 2).max(1);
+                anyhow::bail!("{e:?}");
+            }
+        };
+        anyhow::ensure!(
+            !page.is_empty() && page.len() as u64 <= num_transactions - next,
+            "page of {} transactions does not fit range [{next}, {num_transactions})",
+            page.len()
+        );
+        let mut verified = Vec::with_capacity(page.len());
+        for (offset, data) in page.into_iter().enumerate() {
+            let index = next as usize + offset;
+            let expected = contents
+                .inner()
+                .get_digests(index)
+                .copied()
+                .expect("index is within the checkpoint contents");
+            anyhow::ensure!(
+                data.digests() == expected,
+                "transaction {index} has digests {:?}, expected {expected:?}",
+                data.digests()
+            );
+            size += bcs::serialized_size(&data)? as u64;
+            verified.push(VerifiedExecutionData::new_unchecked(data));
+        }
+        store
+            .insert_transactions_and_effects(&verified)
+            .expect("store operation should not fail");
+        progress.next += verified.len() as u64;
+        progress.last_page_len = Some(verified.len() as u64);
+    }
+    store
+        .insert_checkpoint_contents_digests(
+            checkpoint,
+            progress.contents.take().expect("set above"),
+        )
+        .expect("store operation should not fail");
+    Ok(size)
+}
+
+/// State of a paginated contents download, kept across peers.
+struct PaginatedProgress {
+    /// The checkpoint's contents, once downloaded and verified.
+    contents: Option<CheckpointContents>,
+    /// Index of the first transaction not yet stored.
+    next: u64,
+    /// Most transactions to request in one page. The server also limits each page by bytes.
+    /// Halved after a page fails, so that pages too large to arrive in time get smaller.
+    max_items: u64,
+    /// Length of the last page received.
+    last_page_len: Option<u64>,
 }
 
 async fn update_checkpoint_watermark_metrics<S>(

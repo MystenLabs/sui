@@ -214,6 +214,24 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("get_checkpoint_contents_digests")
+                .route_name("GetCheckpointContentsDigests")
+                .request_type("sui_types::messages_checkpoint::CheckpointSequenceNumber")
+                .response_type("Option<sui_types::messages_checkpoint::CheckpointContents>")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_checkpoint_transactions")
+                .route_name("GetCheckpointTransactions")
+                .request_type("crate::state_sync::GetCheckpointTransactionsRequest")
+                .response_type("Option<Vec<sui_types::base_types::ExecutionData>>")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("get_checkpoint_availability")
                 .route_name("GetCheckpointAvailability")
                 .request_type("()")

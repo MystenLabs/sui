@@ -11,10 +11,11 @@ use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::{
+    base_types::ExecutionData,
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
-        VerifiedCheckpoint,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
+        FullCheckpointContents, VerifiedCheckpoint,
     },
     storage::WriteStore,
 };
@@ -27,6 +28,24 @@ pub enum GetCheckpointSummaryRequest {
     BySequenceNumber(CheckpointSequenceNumber),
 }
 
+/// Requests the transactions and effects at indices `[start, end)` of a checkpoint's contents.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GetCheckpointTransactionsRequest {
+    pub sequence_number: CheckpointSequenceNumber,
+    pub start: u64,
+    pub end: u64,
+}
+
+/// Largest full checkpoint contents response that is sent, in serialized bytes before
+/// compression. Matches the decompression bound in `mysten_network::codec`, so a peer can decode
+/// every response it is sent. Clients fetch larger checkpoints with `GetCheckpointTransactions`.
+pub(super) const MAX_FULL_CHECKPOINT_CONTENTS_RESPONSE_SIZE: usize = 128 << 20;
+
+/// Byte budget for one `GetCheckpointTransactions` response. A response always holds at least one
+/// transaction. If the first transaction and its effects exceed the budget, the response holds
+/// only that transaction.
+pub(super) const CHECKPOINT_TRANSACTIONS_RESPONSE_BUDGET: usize = 16 << 20;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetCheckpointAvailabilityResponse {
     pub(crate) highest_synced_checkpoint: Checkpoint,
@@ -38,6 +57,10 @@ pub(super) struct Server<S> {
     pub(super) peer_heights: Arc<RwLock<PeerHeights>>,
     pub(super) sender: mpsc::WeakSender<StateSyncMessage>,
     pub(super) max_checkpoint_lookahead: u64,
+    /// See [`MAX_FULL_CHECKPOINT_CONTENTS_RESPONSE_SIZE`].
+    pub(super) max_full_contents_response_size: usize,
+    /// See [`CHECKPOINT_TRANSACTIONS_RESPONSE_BUDGET`].
+    pub(super) checkpoint_transactions_response_budget: usize,
 }
 
 #[anemo::async_trait]
@@ -147,8 +170,12 @@ where
     ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
         let contents = self
             .store
-            .get_full_checkpoint_contents(None, request.inner());
-        Ok(Response::new(contents.map(|v| v.into_v1())))
+            .get_full_checkpoint_contents(None, request.inner())
+            .map(|v| v.into_v1());
+        if let Some(e) = full_contents_size_error(&contents, self.max_full_contents_response_size) {
+            return Err(e);
+        }
+        Ok(Response::new(contents))
     }
 
     async fn get_checkpoint_contents_v2(
@@ -158,8 +185,85 @@ where
         let contents = self
             .store
             .get_full_checkpoint_contents(None, request.inner());
+        if let Some(e) = full_contents_size_error(&contents, self.max_full_contents_response_size) {
+            return Err(e);
+        }
         Ok(Response::new(contents))
     }
+
+    async fn get_checkpoint_contents_digests(
+        &self,
+        request: Request<CheckpointSequenceNumber>,
+    ) -> Result<Response<Option<CheckpointContents>>, Status> {
+        let contents = self
+            .store
+            .get_checkpoint_contents_by_sequence_number(*request.inner());
+        Ok(Response::new(contents))
+    }
+
+    async fn get_checkpoint_transactions(
+        &self,
+        request: Request<GetCheckpointTransactionsRequest>,
+    ) -> Result<Response<Option<Vec<ExecutionData>>>, Status> {
+        let GetCheckpointTransactionsRequest {
+            sequence_number,
+            start,
+            end,
+        } = *request.inner();
+        let Some(contents) = self
+            .store
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
+        else {
+            return Ok(Response::new(None));
+        };
+        if start >= end || end > contents.size() as u64 {
+            return Err(Status::new_with_message(
+                StatusCode::BadRequest,
+                format!(
+                    "invalid range [{start}, {end}) for checkpoint {sequence_number} with {} transactions",
+                    contents.size()
+                ),
+            ));
+        }
+
+        // Items are loaded one at a time so that memory use stays near the budget.
+        let mut transactions = Vec::new();
+        let mut size = 0;
+        for digests in contents
+            .inner()
+            .digests_iter()
+            .take(end as usize)
+            .skip(start as usize)
+        {
+            let Some(data) = self.store.get_execution_data(digests) else {
+                return Ok(Response::new(None));
+            };
+            let item_size =
+                bcs::serialized_size(&data).map_err(|e| Status::internal(e.to_string()))?;
+            if !transactions.is_empty()
+                && size + item_size > self.checkpoint_transactions_response_budget
+            {
+                break;
+            }
+            size += item_size;
+            transactions.push(data);
+        }
+        Ok(Response::new(Some(transactions)))
+    }
+}
+
+/// Returns an error for a full contents response that a peer could not decode, so that the peer
+/// falls back to paginated download.
+fn full_contents_size_error<T: Serialize>(contents: &Option<T>, max_size: usize) -> Option<Status> {
+    let size = match bcs::serialized_size(contents.as_ref()?) {
+        Ok(size) => size,
+        Err(e) => return Some(Status::internal(e.to_string())),
+    };
+    (size > max_size).then(|| {
+        Status::internal(format!(
+            "full checkpoint contents of {size} bytes exceed the {max_size} byte limit"
+        ))
+    })
 }
 
 /// [`Layer`] for limiting the size of incoming requests.
