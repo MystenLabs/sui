@@ -20,6 +20,8 @@ use sui_types::messages_checkpoint::CheckpointArtifacts;
 
 use crate::RpcError;
 use crate::RpcService;
+use crate::ledger_history::query_options::above_latest_available;
+use crate::ledger_history::query_options::below_serving_floor;
 
 #[tracing::instrument(skip(service))]
 pub(super) fn get_checkpoint_object_proof(
@@ -76,30 +78,23 @@ fn parse_object_id(request: &GetCheckpointObjectProofRequest) -> Result<ObjectID
 fn validate_checkpoint_bounds(service: &RpcService, checkpoint_seq: u64) -> Result<(), RpcError> {
     let reader = service.reader.inner();
     let indexes = reader.indexes().ok_or_else(RpcError::not_found)?;
-    let highest_indexed = indexes
+    // The lowest checkpoint the index has not covered: 0 when it has covered none.
+    let first_unavailable = indexes
         .get_highest_indexed_checkpoint_seq_number()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        .unwrap_or(0);
+        .map_or(0, |highest| highest.saturating_add(1));
     let lowest_available = reader
         .get_lowest_available_checkpoint_objects()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
     if checkpoint_seq < lowest_available {
-        return Err(RpcError::new(
-            tonic::Code::NotFound,
-            format!(
-                "requested checkpoint {checkpoint_seq} has been pruned; lowest available checkpoint \
-                 is {lowest_available}",
-            ),
-        ));
+        return Err(below_serving_floor(lowest_available));
     }
-    if checkpoint_seq > highest_indexed {
-        return Err(RpcError::new(
-            tonic::Code::NotFound,
-            format!(
-                "requested checkpoint {checkpoint_seq} is not yet indexed; highest indexed \
-                 checkpoint is {highest_indexed}",
-            ),
+    if checkpoint_seq >= first_unavailable {
+        return Err(above_latest_available(
+            "checkpoint",
+            checkpoint_seq,
+            first_unavailable,
         ));
     }
     Ok(())

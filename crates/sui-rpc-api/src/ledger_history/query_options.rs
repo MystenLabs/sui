@@ -223,11 +223,12 @@ pub fn below_serving_floor(floor_checkpoint: u64) -> RpcError {
 
 /// The error for a request that reads above the data this server has indexed, all of which lies
 /// below `checkpoint_hi_exclusive`. `bound` names what reads past it: "cursor" for an `after` or
-/// `before` cursor, or the request field, "start_checkpoint" or "end_checkpoint";
-/// `requested_checkpoint` is the checkpoint of the cursor's public position or the field's
-/// value. It is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`] carrying all three,
-/// by which clients recognize a request that becomes servable once this server catches up.
-fn above_latest_available(
+/// `before` cursor, or the request field, such as "start_checkpoint", "end_checkpoint" or
+/// "at_checkpoint"; `requested_checkpoint` is the checkpoint of the cursor's public position or
+/// the field's value. It is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`] carrying
+/// all three, by which clients recognize a request that becomes servable once this server
+/// catches up.
+pub fn above_latest_available(
     bound: &str,
     requested_checkpoint: u64,
     checkpoint_hi_exclusive: u64,

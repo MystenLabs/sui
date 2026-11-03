@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -13,12 +12,10 @@ use prost_types::FieldMask;
 use sui_macros::sim_test;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::google::rpc::ErrorInfo;
 use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
 use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
-use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::EventLiteral;
 use sui_rpc::proto::sui::rpc::v2::EventStreamHeadFilter;
@@ -57,6 +54,9 @@ use sui_types::transaction::TransactionData;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tonic::transport::Channel;
+
+use crate::v2::assert_above_latest_available;
+use crate::v2::assert_below_earliest_available;
 
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 const DEFAULT_CHECKPOINT_RANGE_END: u64 = 3_000_000;
@@ -454,56 +454,6 @@ async fn list_error<T>(
     response: Result<tonic::Response<tonic::Streaming<T>>, tonic::Status>,
 ) -> tonic::Status {
     list_frames_then_error(response).await.1
-}
-
-/// The `google.rpc.ErrorInfo` among `status`'s details.
-fn error_info(status: &tonic::Status) -> ErrorInfo {
-    sui_rpc::proto::google::rpc::Status::decode(status.details())
-        .unwrap()
-        .details
-        .iter()
-        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
-        .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"))
-}
-
-/// Asserts `status` is `OutOfRange` with a `BELOW_EARLIEST_AVAILABLE` ErrorInfo naming
-/// `floor_checkpoint`.
-fn assert_below_earliest_available(status: &tonic::Status, floor_checkpoint: u64) {
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
-    let error_info = error_info(status);
-    assert_eq!(
-        error_info.reason,
-        ErrorReason::BelowEarliestAvailable.as_str_name()
-    );
-    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
-    assert_eq!(
-        error_info.metadata,
-        BTreeMap::from([(
-            "lowestAvailableCheckpoint".to_owned(),
-            floor_checkpoint.to_string()
-        )])
-    );
-}
-
-/// Asserts `status` is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` ErrorInfo for `bound` at
-/// `requested_checkpoint`, whose first unavailable checkpoint lies at or below the requested one.
-fn assert_above_latest_available(status: &tonic::Status, bound: &str, requested_checkpoint: u64) {
-    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
-    let error_info = error_info(status);
-    assert_eq!(
-        error_info.reason,
-        ErrorReason::AboveLatestAvailable.as_str_name()
-    );
-    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
-    let metadata = &error_info.metadata;
-    assert_eq!(metadata.len(), 3, "{metadata:?}");
-    assert_eq!(metadata["bound"], bound);
-    assert_eq!(
-        metadata["requestedCheckpoint"],
-        requested_checkpoint.to_string()
-    );
-    let first_unavailable: u64 = metadata["firstUnavailableCheckpoint"].parse().unwrap();
-    assert!(first_unavailable <= requested_checkpoint, "{metadata:?}");
 }
 
 async fn new_cluster() -> TestCluster {

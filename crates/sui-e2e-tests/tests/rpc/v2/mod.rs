@@ -1,14 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
+use prost::Message;
 use prost_types::FieldMask;
 use sui_move_build::BuildConfig;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::google::rpc::ErrorInfo;
+use sui_rpc::proto::google::rpc::Status as RpcStatus;
+use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::{
     Bcs, ExecuteTransactionRequest, ExecutedTransaction, Transaction, UserSignature,
 };
@@ -169,4 +174,77 @@ async fn publish_package(
         .unwrap();
 
     (package_id, transaction)
+}
+
+/// A failed call's `google.rpc.Status`: a `tonic::Status` carries it encoded in its details, and a
+/// per-item batch error is one.
+trait RpcStatusExt {
+    fn rpc_status(&self) -> RpcStatus;
+}
+
+impl RpcStatusExt for tonic::Status {
+    fn rpc_status(&self) -> RpcStatus {
+        RpcStatus::decode(self.details()).unwrap()
+    }
+}
+
+impl RpcStatusExt for RpcStatus {
+    fn rpc_status(&self) -> RpcStatus {
+        self.clone()
+    }
+}
+
+/// The `google.rpc.ErrorInfo` among `status`'s details.
+fn error_info(status: &RpcStatus) -> ErrorInfo {
+    status
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"))
+}
+
+/// Asserts `status` is `OutOfRange` with a `BELOW_EARLIEST_AVAILABLE` ErrorInfo naming
+/// `floor_checkpoint`.
+fn assert_below_earliest_available(status: &impl RpcStatusExt, floor_checkpoint: u64) {
+    let status = status.rpc_status();
+    assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
+    let error_info = error_info(&status);
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::BelowEarliestAvailable.as_str_name()
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+    assert_eq!(
+        error_info.metadata,
+        BTreeMap::from([(
+            "lowestAvailableCheckpoint".to_owned(),
+            floor_checkpoint.to_string()
+        )])
+    );
+}
+
+/// Asserts `status` is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` ErrorInfo for `bound` at
+/// `requested_checkpoint`, whose first unavailable checkpoint lies at or below the requested one.
+fn assert_above_latest_available(
+    status: &impl RpcStatusExt,
+    bound: &str,
+    requested_checkpoint: u64,
+) {
+    let status = status.rpc_status();
+    assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
+    let error_info = error_info(&status);
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::AboveLatestAvailable.as_str_name()
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+    let metadata = &error_info.metadata;
+    assert_eq!(metadata.len(), 3, "{metadata:?}");
+    assert_eq!(metadata["bound"], bound);
+    assert_eq!(
+        metadata["requestedCheckpoint"],
+        requested_checkpoint.to_string()
+    );
+    let first_unavailable: u64 = metadata["firstUnavailableCheckpoint"].parse().unwrap();
+    assert!(first_unavailable <= requested_checkpoint, "{metadata:?}");
 }

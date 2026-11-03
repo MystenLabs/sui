@@ -26,6 +26,9 @@ use sui_types::transaction::TransactionData;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 
+use crate::v2::assert_above_latest_available;
+use crate::v2::assert_below_earliest_available;
+
 #[sim_test]
 async fn get_object() {
     let test_cluster = TestClusterBuilder::new()
@@ -372,12 +375,7 @@ async fn get_object_at_checkpoint_not_yet_indexed() {
         .get_object(at_checkpoint_request(id, u64::MAX))
         .await
         .unwrap_err();
-    assert_eq!(error.code(), tonic::Code::NotFound);
-    assert!(
-        error.message().contains("is not yet indexed"),
-        "{}",
-        error.message()
-    );
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
 
     // Inside a batch, the out-of-range checkpoint fails only its own item.
     let BatchGetObjectsResponse { objects, .. } = client
@@ -400,12 +398,7 @@ async fn get_object_at_checkpoint_not_yet_indexed() {
 
     match &objects[1].result {
         Some(get_object_result::Result::Error(status)) => {
-            assert_eq!(status.code, tonic::Code::NotFound as i32);
-            assert!(
-                status.message.contains("is not yet indexed"),
-                "{}",
-                status.message
-            );
+            assert_above_latest_available(status, "at_checkpoint", u64::MAX);
         }
         other => panic!("expected a per-item error, got {other:?}"),
     }
@@ -474,12 +467,7 @@ async fn get_object_at_checkpoint_below_available_floor() {
             .get_object(at_checkpoint_request(id, checkpoint))
             .await
             .unwrap_err();
-        assert_eq!(error.code(), tonic::Code::NotFound);
-        assert!(
-            error.message().contains("has been pruned"),
-            "{}",
-            error.message()
-        );
+        assert_below_earliest_available(&error, pruned_to + 1);
     }
 
     // The first checkpoint above the floor still resolves once it is executed and indexed.
@@ -505,12 +493,7 @@ async fn get_object_at_checkpoint_below_available_floor() {
     for index in [0, 2] {
         match &objects[index].result {
             Some(get_object_result::Result::Error(status)) => {
-                assert_eq!(status.code, tonic::Code::NotFound as i32);
-                assert!(
-                    status.message.contains("has been pruned"),
-                    "{}",
-                    status.message
-                );
+                assert_below_earliest_available(status, pruned_to + 1);
             }
             other => panic!("expected a per-item error at {index}, got {other:?}"),
         }

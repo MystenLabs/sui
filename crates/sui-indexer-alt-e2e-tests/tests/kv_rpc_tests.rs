@@ -1628,17 +1628,18 @@ fn assert_not_live_at_checkpoint(read: &ObjectRead, id: ObjectID, checkpoint: u6
     }
 }
 
-/// Assert `read` is the `NotFound` for a checkpoint above the served height.
+/// Assert `read` is the `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) for an `at_checkpoint` above the
+/// served height.
 fn assert_not_yet_indexed(read: &ObjectRead, context: &str) {
     match read {
         Err((code, message)) => {
-            assert_eq!(*code, tonic::Code::NotFound, "{context}: {message}");
+            assert_eq!(*code, tonic::Code::OutOfRange, "{context}: {message}");
             assert!(
-                message.contains("is not yet indexed"),
+                message.contains("above latest available; at_checkpoint is"),
                 "{context}: unexpected message {message}"
             );
         }
-        Ok(object) => panic!("{context}: expected NotFound, got {object:?}"),
+        Ok(object) => panic!("{context}: expected OutOfRange, got {object:?}"),
     }
 }
 
@@ -1752,7 +1753,7 @@ async fn test_get_object_at_checkpoint() {
     );
     assert_not_yet_indexed(&batch[6], "batch item above the served height");
 
-    // 3. A checkpoint above the served height fails a single read with `NotFound`.
+    // 3. A checkpoint above the served height fails a single read with `OutOfRange`.
     for checkpoint in [not_yet_indexed, u64::MAX] {
         let read =
             get_object_read(&mut client, object_request(object, None, Some(checkpoint))).await;

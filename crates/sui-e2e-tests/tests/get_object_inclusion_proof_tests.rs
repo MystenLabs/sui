@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prost::Message;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
+use sui_rpc::proto::google::rpc::ErrorInfo;
+use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2alpha::GetCheckpointObjectProofRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::get_checkpoint_object_proof_response;
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
@@ -143,8 +146,19 @@ async fn test_checkpoint_not_yet_indexed() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert_eq!(err.code(), tonic::Code::NotFound);
-    assert!(err.message().contains("not yet indexed"));
+    assert_eq!(err.code(), tonic::Code::OutOfRange);
+    let error_info = sui_rpc::proto::google::rpc::Status::decode(err.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .expect("ErrorInfo");
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::AboveLatestAvailable.as_str_name()
+    );
+    assert_eq!(error_info.metadata["bound"], "checkpoint");
+    assert_eq!(error_info.metadata["requestedCheckpoint"], "999999");
 }
 
 /// When the object id was not modified in the requested checkpoint, the

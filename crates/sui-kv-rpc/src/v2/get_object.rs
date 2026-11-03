@@ -13,6 +13,7 @@ use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::Object as ProtoObject;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, GetObjectResponse, GetObjectResult};
 use sui_rpc_api::grpc::v2::ledger_service::{ObjectSelector, validate_get_object_requests};
+use sui_rpc_api::ledger_history::query_options::above_latest_available;
 use sui_rpc_api::{ObjectNotFoundError, RpcError};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::object::Object;
@@ -472,13 +473,10 @@ impl AtCheckpointReads {
 /// checkpoint it was read at, so answering from a partially indexed table could hand the caller
 /// a wrong answer to persist; fail closed instead.
 fn not_yet_indexed(checkpoint: u64, served_height: ServedHeight) -> RpcError {
-    RpcError::new(
-        tonic::Code::NotFound,
-        format!(
-            "requested checkpoint {checkpoint} is not yet indexed; highest indexed checkpoint is \
-             {}",
-            served_height.checkpoint,
-        ),
+    above_latest_available(
+        "at_checkpoint",
+        checkpoint,
+        served_height.checkpoint.saturating_add(1),
     )
 }
 

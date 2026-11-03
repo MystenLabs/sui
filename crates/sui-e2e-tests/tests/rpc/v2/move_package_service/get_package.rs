@@ -17,6 +17,8 @@ use sui_types::{
 };
 use test_cluster::TestClusterBuilder;
 
+use crate::v2::assert_above_latest_available;
+use crate::v2::assert_below_earliest_available;
 use crate::v2::move_package_service::system_package_expectations::validate_system_package;
 
 #[sim_test]
@@ -237,8 +239,7 @@ async fn test_get_package_lineage_lookups() {
     request.package_id = Some(original_id.to_string());
     request.selector = Some(Selector::AtCheckpoint(u64::MAX));
     let error = service.get_package(request).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::NotFound);
-    assert!(error.message().contains("is not yet indexed"));
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
 
     // The checkpoint that contains the upgrade transaction resolves to the upgraded package.
     let mut request = GetPackageRequest::default();
@@ -393,8 +394,7 @@ async fn test_get_package_at_checkpoint_below_available_floor() {
     request.package_id = Some("0x3".to_string());
     request.selector = Some(Selector::AtCheckpoint(pruned_to));
     let error = service.get_package(request).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::NotFound);
-    assert!(error.message().contains("has been pruned"));
+    assert_below_earliest_available(&error, pruned_to + 1);
 
     // The first checkpoint above the floor still resolves once it is executed and indexed.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);

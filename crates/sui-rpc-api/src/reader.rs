@@ -15,6 +15,8 @@ use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
 use tap::Pipe;
 
+use crate::ledger_history::query_options::{above_latest_available, below_serving_floor};
+
 #[derive(Clone)]
 pub struct StateReader {
     inner: Arc<dyn RpcStateReader>,
@@ -321,8 +323,9 @@ impl StateReader {
     }
 
     /// The live object as of the end of `checkpoint`, or `None` if it did not exist yet or had
-    /// been deleted or wrapped. `NotFound` if `checkpoint` is above `upper_bound`; check the
-    /// lower bound after the read with [`Self::at_checkpoint_lower_bound`].
+    /// been deleted or wrapped. `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) if `checkpoint` is above
+    /// `upper_bound`; check the lower bound after the read with
+    /// [`Self::at_checkpoint_lower_bound`].
     pub fn get_object_at_checkpoint(
         &self,
         object_id: ObjectID,
@@ -352,17 +355,15 @@ pub struct AtCheckpointUpperBound {
 }
 
 impl AtCheckpointUpperBound {
-    /// `NotFound` if `checkpoint` is above the bound: the indexes may not have caught up to it,
-    /// so an answer could be wrong.
+    /// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`, for the request field `at_checkpoint`) if
+    /// `checkpoint` is above the bound: the indexes may not have caught up to it, so an answer
+    /// could be wrong.
     pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
         if checkpoint > self.highest_indexed {
-            return Err(crate::RpcError::new(
-                tonic::Code::NotFound,
-                format!(
-                    "requested checkpoint {checkpoint} is not yet indexed; highest indexed \
-                     checkpoint is {}",
-                    self.highest_indexed,
-                ),
+            return Err(above_latest_available(
+                "at_checkpoint",
+                checkpoint,
+                self.highest_indexed.saturating_add(1),
             ));
         }
         Ok(())
@@ -377,18 +378,11 @@ pub struct AtCheckpointLowerBound {
 }
 
 impl AtCheckpointLowerBound {
-    /// `NotFound` if `checkpoint` is below the bound: its history may have been pruned, so an
-    /// answer could be wrong.
+    /// `OutOfRange` (`BELOW_EARLIEST_AVAILABLE`) if `checkpoint` is below the bound: its history
+    /// may have been pruned, so an answer could be wrong.
     pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
         if checkpoint < self.lowest_available {
-            return Err(crate::RpcError::new(
-                tonic::Code::NotFound,
-                format!(
-                    "requested checkpoint {checkpoint} has been pruned; lowest available \
-                     checkpoint is {}",
-                    self.lowest_available,
-                ),
-            ));
+            return Err(below_serving_floor(self.lowest_available));
         }
         Ok(())
     }
