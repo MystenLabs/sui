@@ -162,22 +162,27 @@ fn timestamp_expiration_disabled(protocol_config: Option<&ProtocolConfig>) -> bo
 }
 
 /// Picks a `(min_timestamp, max_timestamp)` window. Some windows have already closed, so
-/// validators reject the tx at submission. The rest close within a few seconds, so a tx can
-/// expire before it is sequenced, or while it is deferred.
-fn sample_timestamp_window(rng: &mut impl Rng) -> (Option<u64>, u64) {
+/// validators reject the tx at submission. Some open within 200ms of now, near when the tx reaches
+/// validators. Commit timestamps are a median of block timestamps and can trail the validator's
+/// clock at submission, so such a tx can pass submission and still be sequenced too early. The
+/// rest close within a few seconds, so execution can abort the tx when it is first sequenced or
+/// after it is deferred.
+fn sample_timestamp_window(rng: &mut impl Rng) -> (Option<u64>, Option<u64>) {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    let max = if rng.gen_bool(0.25) {
-        now_ms - rng.gen_range(1..5_000)
-    } else {
-        now_ms + rng.gen_range(0..2_000)
-    };
-    let min = rng
-        .gen_bool(0.5)
-        .then(|| max - rng.gen_range(1_000..10_000));
-    (min, max)
+    match rng.gen_range(0..5) {
+        0 => (None, Some(now_ms - rng.gen_range(1..5_000))),
+        1 => (Some(now_ms - 200 + rng.gen_range(0..400)), None),
+        _ => {
+            let max = now_ms + rng.gen_range(0..2_000);
+            let min = rng
+                .gen_bool(0.5)
+                .then(|| max - rng.gen_range(1_000..10_000));
+            (min, Some(max))
+        }
+    }
 }
 
 fn allowances_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
@@ -441,7 +446,7 @@ pub struct CompositeWorkloadConfig {
     /// Per-tx probability that a composite or gasless tx restricts its allowed proposers.
     pub allowed_proposers_probability: f32,
     /// Per-tx probability that a tx outside any lifecycle pays gas from its address balance and
-    /// gets a `max_timestamp` near the current time. Zero disables it.
+    /// gets a timestamp window near the current time. Zero disables it.
     pub timestamp_expiration_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
@@ -934,7 +939,7 @@ impl CompositePayload {
         current_epoch: u64,
         lifecycle_call: Option<&LifecycleCall>,
         sponsor: Option<TxSponsor>,
-        timestamp_window: Option<(Option<u64>, u64)>,
+        timestamp_window: Option<(Option<u64>, Option<u64>)>,
     ) -> (Transaction, OperationSet) {
         let ops = match lifecycle_call {
             Some(call) if call.bare => vec![],
@@ -998,7 +1003,7 @@ impl CompositePayload {
                 panic!("timestamp windows require a ValidDuring expiration");
             };
             *min_timestamp = min;
-            *max_timestamp = Some(max);
+            *max_timestamp = max;
         }
         if restrict {
             self.restrict_proposers(&mut data, current_epoch);
@@ -1507,6 +1512,10 @@ impl Payload for CompositePayload {
                 && !timestamp_expiration_disabled
                 && rng.gen_bool(self.config.timestamp_expiration_probability as f64))
             .then(|| sample_timestamp_window(&mut rng));
+            // Validators reject a soft bundle if any member is outside its window at submission.
+            if timestamp_window.is_some() {
+                self.direct_submission = true;
+            }
             let builder = if lifecycle_call.is_some_and(|call| call.bare)
                 && !address_balance_gas_disabled
                 && let Some((address, keypair)) = &self.lifecycle_gas

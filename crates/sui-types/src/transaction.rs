@@ -2571,6 +2571,18 @@ impl TransactionExpiration {
         }
     }
 
+    /// Whether `timestamp_ms` is before `min_timestamp`. The transaction can become valid later,
+    /// so it must not be executed to abort for this.
+    pub fn is_not_yet_valid_at(&self, timestamp_ms: u64) -> bool {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
+            TransactionExpiration::ValidDuring { min_timestamp, .. }
+            | TransactionExpiration::Validity { min_timestamp, .. } => {
+                min_timestamp.is_some_and(|min| timestamp_ms < min)
+            }
+        }
+    }
+
     /// Whether `timestamp_ms` is after `max_timestamp`. Unlike a timestamp before `min_timestamp`,
     /// this condition is permanent, so a transaction may be executed to abort for it.
     pub fn is_expired_at(&self, timestamp_ms: u64) -> bool {
