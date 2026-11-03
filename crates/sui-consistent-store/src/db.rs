@@ -179,6 +179,10 @@ struct DbInner {
     /// because [`CfDescriptor::name`] already requires that.
     cf_names: Vec<&'static str>,
     db: rocksdb::DB,
+    /// The database-wide options the database was opened with. They
+    /// share RocksDB's statistics object with the open database, so
+    /// [`Db::compaction_bytes`] reads its tickers through them.
+    db_options: rocksdb::Options,
 }
 
 /// Storage for a single snapshot. The contained [`rocksdb::Snapshot`]
@@ -328,6 +332,7 @@ impl Db {
                 snapshot_capacity,
                 cf_names,
                 db,
+                db_options,
             }),
         })
     }
@@ -788,9 +793,27 @@ impl Db {
             estimated_num_keys: read("rocksdb.estimate-num-keys"),
             background_errors: read("rocksdb.background-errors"),
             total_sst_files_size: read("rocksdb.total-sst-files-size"),
+            live_sst_files_size: read("rocksdb.live-sst-files-size"),
+            estimate_live_data_size: read("rocksdb.estimate-live-data-size"),
             total_blob_files_size: read("rocksdb.total-blob-file-size"),
             actual_delayed_write_rate: read("rocksdb.actual-delayed-write-rate"),
             is_write_stopped: read("rocksdb.is-write-stopped"),
+        }
+    }
+
+    /// Read RocksDB's cumulative compaction byte counters since the
+    /// database was opened.
+    ///
+    /// These are database-wide statistics tickers
+    /// (`rocksdb.compact.read.bytes`, `rocksdb.compact.write.bytes`);
+    /// RocksDB exposes no per-column-family integer property for
+    /// compaction I/O.
+    pub fn compaction_bytes(&self) -> CompactionBytes {
+        use rocksdb::statistics::Ticker;
+        let options = &self.inner.db_options;
+        CompactionBytes {
+            read: options.get_ticker_count(Ticker::CompactReadBytes),
+            written: options.get_ticker_count(Ticker::CompactWriteBytes),
         }
     }
 }
@@ -799,6 +822,18 @@ impl Db {
 /// unavailable: the column family is not registered, or RocksDB
 /// returned an error or an empty result for the property.
 const METRICS_ERROR: i64 = -1;
+
+/// Cumulative bytes read and written by compactions across every
+/// column family of a [`Db`], as returned by [`Db::compaction_bytes`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CompactionBytes {
+    /// `rocksdb.compact.read.bytes` — bytes compactions read from
+    /// input SST files.
+    pub read: u64,
+    /// `rocksdb.compact.write.bytes` — bytes compactions wrote to
+    /// output SST files.
+    pub written: u64,
+}
 
 /// Per-column-family runtime metrics read from RocksDB on demand.
 ///
@@ -858,8 +893,20 @@ pub struct RocksMetrics {
     pub estimated_num_keys: i64,
     /// `rocksdb.background-errors` — accumulated background errors.
     pub background_errors: i64,
-    /// `rocksdb.total-sst-files-size` — bytes occupied by SST files.
+    /// `rocksdb.total-sst-files-size` — bytes of SST files in any of
+    /// the column family's versions: the current version plus older
+    /// versions still pinned by iterators or running compactions.
     pub total_sst_files_size: i64,
+    /// `rocksdb.live-sst-files-size` — bytes of SST files in the
+    /// column family's current version.
+    pub live_sst_files_size: i64,
+    /// `rocksdb.estimate-live-data-size` — RocksDB's estimate of live
+    /// data: the summed size of a maximal set of SST files with no
+    /// key-range overlap, taken from the bottommost level upward.
+    /// Upper-level files that overlap lower levels are excluded, along
+    /// with whatever superseded or snapshot-retained versions they
+    /// hold; superseded versions inside counted files are included.
+    pub estimate_live_data_size: i64,
     /// `rocksdb.total-blob-file-size` — bytes occupied by blob
     /// files.
     pub total_blob_files_size: i64,
@@ -893,6 +940,8 @@ impl Default for RocksMetrics {
             estimated_num_keys: METRICS_ERROR,
             background_errors: METRICS_ERROR,
             total_sst_files_size: METRICS_ERROR,
+            live_sst_files_size: METRICS_ERROR,
+            estimate_live_data_size: METRICS_ERROR,
             total_blob_files_size: METRICS_ERROR,
             actual_delayed_write_rate: METRICS_ERROR,
             is_write_stopped: METRICS_ERROR,
@@ -1144,6 +1193,31 @@ mod tests {
         assert_eq!(
             db.rocksdb().get_cf(&cf, 5u64.to_be_bytes()).unwrap(),
             Some(5u64.to_be_bytes().to_vec()),
+        );
+    }
+
+    #[test]
+    fn compaction_bytes_count_compaction_io() {
+        // Two overlapping L0 files cannot be trivially moved, so the
+        // manual compaction must read both and write the merged output.
+        let dir = TempDir::new().unwrap();
+        let (db, _schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
+        let cf = db.cf_handle("foo").unwrap();
+        assert_eq!(db.compaction_bytes(), CompactionBytes::default());
+        for round in 0..2u64 {
+            for i in 0..32u64 {
+                db.rocksdb()
+                    .put_cf(&cf, i.to_be_bytes(), round.to_be_bytes())
+                    .unwrap();
+            }
+            db.flush().unwrap();
+        }
+        db.compact_range_cf("foo", None, None).unwrap();
+        let bytes = db.compaction_bytes();
+        assert!(bytes.read > 0, "expected compaction reads, got {bytes:?}");
+        assert!(
+            bytes.written > 0,
+            "expected compaction writes, got {bytes:?}"
         );
     }
 

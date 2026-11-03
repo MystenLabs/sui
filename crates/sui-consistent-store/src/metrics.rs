@@ -4,7 +4,10 @@
 //! A canonical [`prometheus::core::Collector`] that exposes the
 //! RocksDB integer properties surfaced by
 //! [`Db::cf_metrics`](crate::Db::cf_metrics) as labeled
-//! `IntGauge`s, one set of gauges per registered column family.
+//! `IntGauge`s, one set of gauges per registered column family, and
+//! the database-wide compaction byte tickers surfaced by
+//! [`Db::compaction_bytes`](crate::Db::compaction_bytes) as unlabeled
+//! `IntCounter`s.
 //!
 //! # Registering
 //!
@@ -56,12 +59,15 @@
 //! RocksDB API call) but not free, so a tight scrape interval over
 //! many CFs has a measurable cost.
 
+use parking_lot::Mutex;
+use prometheus::IntCounter;
 use prometheus::IntGaugeVec;
 use prometheus::Opts;
 use prometheus::core::Collector;
 use prometheus::core::Desc;
 use prometheus::proto::MetricFamily;
 
+use crate::CompactionBytes;
 use crate::Db;
 use crate::DbRef;
 use crate::RocksMetrics;
@@ -71,16 +77,18 @@ use crate::RocksMetrics;
 const DEFAULT_PREFIX: &str = "rocksdb";
 
 /// A [`prometheus::core::Collector`] that emits per-column-family
-/// RocksDB integer properties as labeled `IntGauge`s.
+/// RocksDB integer properties as labeled `IntGauge`s, plus the
+/// database-wide compaction byte counters.
 ///
-/// Each metric has a single `cf_name` label whose value is the
+/// Each gauge has a single `cf_name` label whose value is the
 /// column-family name; every CF the [`Db`] knew about at
 /// construction (both schema-declared and framework-internal) is
 /// sampled on every collect. The collector holds a
 /// [`DbRef`] (weak handle), so registering it does not keep the
 /// database alive — once every strong [`Db`] has been dropped,
 /// subsequent scrapes report every gauge as
-/// [`METRICS_ERROR`](crate::RocksMetrics).
+/// [`METRICS_ERROR`](crate::RocksMetrics) and leave the compaction
+/// counters at their last value.
 pub struct ColumnFamilyStatsCollector {
     db: DbRef,
     /// Snapshot of `db.cf_names()` taken at construction time so
@@ -89,6 +97,7 @@ pub struct ColumnFamilyStatsCollector {
     /// database is open, so the snapshot does not go stale.
     cf_names: Vec<&'static str>,
     gauges: Gauges,
+    compaction: CompactionCounters,
 }
 
 impl ColumnFamilyStatsCollector {
@@ -97,10 +106,12 @@ impl ColumnFamilyStatsCollector {
     /// reference to `db`, so the collector does not keep the
     /// database alive.
     pub fn new(prefix: Option<&str>, db: &Db) -> Self {
+        let prefix = prefix.unwrap_or(DEFAULT_PREFIX);
         Self {
             db: db.downgrade(),
             cf_names: db.cf_names().to_vec(),
-            gauges: Gauges::new(prefix.unwrap_or(DEFAULT_PREFIX)),
+            gauges: Gauges::new(prefix),
+            compaction: CompactionCounters::new(prefix),
         }
     }
 
@@ -190,6 +201,14 @@ impl ColumnFamilyStatsCollector {
             .with_label_values(&labels)
             .set(m.total_sst_files_size);
         self.gauges
+            .live_sst_files_size
+            .with_label_values(&labels)
+            .set(m.live_sst_files_size);
+        self.gauges
+            .estimate_live_data_size
+            .with_label_values(&labels)
+            .set(m.estimate_live_data_size);
+        self.gauges
             .total_blob_files_size
             .with_label_values(&labels)
             .set(m.total_blob_files_size);
@@ -206,7 +225,9 @@ impl ColumnFamilyStatsCollector {
 
 impl Collector for ColumnFamilyStatsCollector {
     fn desc(&self) -> Vec<&Desc> {
-        self.gauges.descs()
+        let mut out = self.gauges.descs();
+        out.extend(self.compaction.descs());
+        out
     }
 
     fn collect(&self) -> Vec<MetricFamily> {
@@ -221,7 +242,61 @@ impl Collector for ColumnFamilyStatsCollector {
             };
             self.populate(cf_name, &m);
         }
-        self.gauges.collect_all()
+        if let Some(db) = &maybe_db {
+            self.compaction.advance_to(db.compaction_bytes());
+        }
+        let mut out = self.gauges.collect_all();
+        out.extend(self.compaction.collect_all());
+        out
+    }
+}
+
+/// Database-wide compaction byte counters. RocksDB keeps the
+/// cumulative totals; each collect advances the counters to them.
+struct CompactionCounters {
+    read: IntCounter,
+    written: IntCounter,
+    /// Serializes [`advance_to`](Self::advance_to) so concurrent
+    /// scrapes cannot both add the same delta.
+    advance: Mutex<()>,
+}
+
+impl CompactionCounters {
+    fn new(prefix: &str) -> Self {
+        let c = |name: &str, help: &str| {
+            IntCounter::with_opts(Opts::new(format!("{prefix}_{name}"), help)).unwrap()
+        };
+        Self {
+            read: c(
+                "compaction_read_bytes",
+                "Bytes read by compactions across all column families.",
+            ),
+            written: c(
+                "compaction_write_bytes",
+                "Bytes written by compactions across all column families.",
+            ),
+            advance: Mutex::new(()),
+        }
+    }
+
+    fn advance_to(&self, totals: CompactionBytes) {
+        let _guard = self.advance.lock();
+        self.read
+            .inc_by(totals.read.saturating_sub(self.read.get()));
+        self.written
+            .inc_by(totals.written.saturating_sub(self.written.get()));
+    }
+
+    fn descs(&self) -> Vec<&Desc> {
+        let mut out = self.read.desc();
+        out.extend(self.written.desc());
+        out
+    }
+
+    fn collect_all(&self) -> Vec<MetricFamily> {
+        let mut out = self.read.collect();
+        out.extend(self.written.collect());
+        out
     }
 }
 
@@ -248,6 +323,8 @@ struct Gauges {
     estimated_num_keys: IntGaugeVec,
     background_errors: IntGaugeVec,
     total_sst_files_size: IntGaugeVec,
+    live_sst_files_size: IntGaugeVec,
+    estimate_live_data_size: IntGaugeVec,
     total_blob_files_size: IntGaugeVec,
     actual_delayed_write_rate: IntGaugeVec,
     is_write_stopped: IntGaugeVec,
@@ -325,7 +402,15 @@ impl Gauges {
             background_errors: g("background_errors", "Accumulated background errors."),
             total_sst_files_size: g(
                 "total_sst_files_size",
-                "Total size of all SST files (bytes).",
+                "Total size of SST files in any version, including versions pinned by iterators or compactions (bytes).",
+            ),
+            live_sst_files_size: g(
+                "live_sst_files_size",
+                "Total size of SST files in the current version (bytes).",
+            ),
+            estimate_live_data_size: g(
+                "estimate_live_data_size",
+                "Estimated live data size: non-overlapping SST files from the bottommost level up (bytes).",
             ),
             total_blob_files_size: g(
                 "total_blob_files_size",
@@ -355,7 +440,7 @@ impl Gauges {
         out
     }
 
-    fn all(&self) -> [&IntGaugeVec; 23] {
+    fn all(&self) -> [&IntGaugeVec; 25] {
         [
             &self.block_cache_capacity,
             &self.block_cache_usage,
@@ -377,6 +462,8 @@ impl Gauges {
             &self.estimated_num_keys,
             &self.background_errors,
             &self.total_sst_files_size,
+            &self.live_sst_files_size,
+            &self.estimate_live_data_size,
             &self.total_blob_files_size,
             &self.actual_delayed_write_rate,
             &self.is_write_stopped,
