@@ -61,60 +61,97 @@ impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'_, K, V> {
     type Item = Result<(K, V), TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Implicitly set iterator to the first entry in the column family if it hasn't been initialized
-        // used for backward compatibility
-        if !self.is_initialized {
-            self.db_iter.seek_to_first();
-            self.is_initialized = true;
+        let (raw_key, raw_value) = match current_entry(&mut self.db_iter, &mut self.is_initialized)
+        {
+            Ok(Some(entry)) => entry,
+            Ok(None) => return None,
+            Err(e) => return Some(Err(e)),
+        };
+        self.bytes_scanned_counter += raw_key.len() + raw_value.len();
+        self.keys_returned_counter += 1;
+
+        let key = bincode::DefaultOptions::new()
+            .with_big_endian()
+            .with_fixint_encoding()
+            .deserialize(raw_key);
+        let value = bcs::from_bytes(raw_value);
+
+        advance(&mut self.db_iter, self.direction);
+
+        match (key, value) {
+            (Ok(key), Ok(value)) => Some(Ok((key, value))),
+            (key, value) => Some(Err(deserialization_error(
+                &self.cf_name,
+                key.err().map(|e| e.to_string()),
+                value.err().map(|e| e.to_string()),
+            ))),
         }
-        if self.db_iter.valid() {
-            let config = bincode::DefaultOptions::new()
-                .with_big_endian()
-                .with_fixint_encoding();
-            let raw_key = self
-                .db_iter
-                .key()
-                .expect("Valid iterator failed to get key");
-            let raw_value = self
-                .db_iter
-                .value()
-                .expect("Valid iterator failed to get value");
-            self.bytes_scanned_counter += raw_key.len() + raw_value.len();
-            self.keys_returned_counter += 1;
+    }
+}
 
-            let key = config.deserialize(raw_key);
-            let value = bcs::from_bytes(raw_value);
+// The helpers below do not depend on the key and value types, so they are compiled once instead
+// of once per table type.
 
-            match self.direction {
-                Direction::Forward => self.db_iter.next(),
-                Direction::Reverse => self.db_iter.prev(),
-            }
+type RawIter<'a> = rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>;
 
-            #[cfg(not(test))]
-            {
-                if let Err(e) = &key {
-                    debug_fatal!("Failed to deserialize key in cf {}: {e}", self.cf_name);
-                }
-                if let Err(e) = &value {
-                    debug_fatal!("Failed to deserialize value in cf {}: {e}", self.cf_name);
-                }
-            }
-
-            match (key, value) {
-                (Ok(key), Ok(value)) => Some(Ok((key, value))),
-                (Err(e), _) => Some(Err(TypedStoreError::SerializationError(format!(
-                    "Failed to deserialize key: {e}"
-                )))),
-                (_, Err(e)) => Some(Err(TypedStoreError::SerializationError(format!(
-                    "Failed to deserialize value: {e}"
-                )))),
-            }
-        } else {
-            match self.db_iter.status() {
-                Ok(_) => None,
-                Err(err) => Some(Err(TypedStoreError::RocksDBError(format!("{err}")))),
-            }
+/// Returns the entry the iterator points at, or `None` at the end of the iteration.
+fn current_entry<'b>(
+    db_iter: &'b mut RawIter<'_>,
+    is_initialized: &mut bool,
+) -> Result<Option<(&'b [u8], &'b [u8])>, TypedStoreError> {
+    // Implicitly set iterator to the first entry in the column family if it hasn't been initialized
+    // used for backward compatibility
+    if !*is_initialized {
+        db_iter.seek_to_first();
+        *is_initialized = true;
+    }
+    if db_iter.valid() {
+        let raw_key = db_iter.key().expect("Valid iterator failed to get key");
+        let raw_value = db_iter.value().expect("Valid iterator failed to get value");
+        Ok(Some((raw_key, raw_value)))
+    } else {
+        match db_iter.status() {
+            Ok(_) => Ok(None),
+            Err(err) => Err(TypedStoreError::RocksDBError(format!("{err}"))),
         }
+    }
+}
+
+fn advance(db_iter: &mut RawIter<'_>, direction: Direction) {
+    match direction {
+        Direction::Forward => db_iter.next(),
+        Direction::Reverse => db_iter.prev(),
+    }
+}
+
+/// Reports key and value deserialization failures, and returns the error for the key if the key
+/// failed, or else the error for the value.
+#[cold]
+#[inline(never)]
+fn deserialization_error(
+    cf_name: &str,
+    key_err: Option<String>,
+    value_err: Option<String>,
+) -> TypedStoreError {
+    #[cfg(not(test))]
+    {
+        if let Some(e) = &key_err {
+            debug_fatal!("Failed to deserialize key in cf {}: {e}", cf_name);
+        }
+        if let Some(e) = &value_err {
+            debug_fatal!("Failed to deserialize value in cf {}: {e}", cf_name);
+        }
+    }
+    #[cfg(test)]
+    let _ = cf_name;
+    match (key_err, value_err) {
+        (Some(e), _) => {
+            TypedStoreError::SerializationError(format!("Failed to deserialize key: {e}"))
+        }
+        (None, Some(e)) => {
+            TypedStoreError::SerializationError(format!("Failed to deserialize value: {e}"))
+        }
+        (None, None) => unreachable!("deserialization_error requires at least one error"),
     }
 }
 

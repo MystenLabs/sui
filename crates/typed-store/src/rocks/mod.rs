@@ -907,8 +907,71 @@ fn report_rocksdb_metrics(database: &Arc<Database>, cf_name: &str, db_metrics: &
         );
 }
 
-impl<K, V> DBMap<K, V> {
-    pub(crate) fn new(
+fn try_catch_up_with_primary(db: &Database) -> Result<(), TypedStoreError> {
+    if let Storage::Rocks(rocks) = &db.storage {
+        rocks
+            .underlying
+            .try_catch_up_with_primary()
+            .map_err(typed_store_err_from_rocks_err)?;
+    }
+    Ok(())
+}
+
+/// Reads the raw value for `key_buf`, recording read metrics.
+fn get_raw<'a>(
+    db: &'a Database,
+    column_family: &ColumnFamily,
+    cf: &str,
+    db_metrics: &DBMetrics,
+    get_sample_interval: &SamplingInterval,
+    opts: &ReadWriteOptions,
+    key_buf: &[u8],
+) -> Result<Option<GetResult<'a>>, TypedStoreError> {
+    let _timer = db_metrics
+        .op_metrics
+        .rocksdb_get_latency_seconds
+        .with_label_values(&[cf])
+        .start_timer();
+    let perf_ctx = if get_sample_interval.sample() {
+        Some(RocksDBPerfContext)
+    } else {
+        None
+    };
+    let res = db.get(column_family, key_buf, &opts.readopts())?;
+    db_metrics
+        .op_metrics
+        .rocksdb_get_bytes
+        .with_label_values(&[cf])
+        .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+    if perf_ctx.is_some() {
+        db_metrics.read_perf_ctx_metrics.report_metrics(cf);
+    }
+    Ok(res)
+}
+
+#[cold]
+#[inline(never)]
+fn report_value_deserialization_error(
+    cf_name: &str,
+    key_buf: &[u8],
+    data: &[u8],
+    error: &TypedStoreError,
+) {
+    let key_hash = default_hash(key_buf);
+    let value_hash = default_hash(data);
+    debug_fatal!(
+        "Failed to deserialize value from DB table {:?}, key_hash: {:?}, value_hash: {:?}, error: {:?}",
+        cf_name,
+        key_hash,
+        value_hash,
+        error
+    );
+}
+
+impl DBMap<(), ()> {
+    // Constructing through the untyped map compiles the constructor once instead of once per
+    // table type.
+    fn new_untyped(
         db: Arc<Database>,
         opts: &ReadWriteOptions,
         opt_cf: &str,
@@ -932,10 +995,8 @@ impl<K, V> DBMap<K, V> {
         }
     }
 
-    /// Reopens an open database as a typed map operating under a specific column family.
-    /// if no column family is passed, the default column family is used.
-    #[instrument(level = "debug", skip(db), err)]
-    pub fn reopen(
+    #[instrument(name = "reopen", level = "debug", skip(db), err)]
+    fn reopen_untyped(
         db: &Arc<Database>,
         opt_cf: Option<&str>,
         rw_options: &ReadWriteOptions,
@@ -944,13 +1005,55 @@ impl<K, V> DBMap<K, V> {
         let cf_key = opt_cf
             .unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
             .to_owned();
-        Ok(DBMap::new(
+        Ok(DBMap::new_untyped(
             db.clone(),
             rw_options,
             &cf_key,
             ColumnFamily::Rocks(cf_key.to_string()),
             is_deprecated,
         ))
+    }
+
+    fn with_types<K, V>(self) -> DBMap<K, V> {
+        let DBMap {
+            db,
+            _phantom,
+            column_family,
+            cf,
+            opts,
+            db_metrics,
+            get_sample_interval,
+            multiget_sample_interval,
+            write_sample_interval,
+            iter_sample_interval,
+            _metrics_task_cancel_handle,
+        } = self;
+        DBMap {
+            db,
+            _phantom: PhantomData,
+            column_family,
+            cf,
+            opts,
+            db_metrics,
+            get_sample_interval,
+            multiget_sample_interval,
+            write_sample_interval,
+            iter_sample_interval,
+            _metrics_task_cancel_handle,
+        }
+    }
+}
+
+impl<K, V> DBMap<K, V> {
+    /// Reopens an open database as a typed map operating under a specific column family.
+    /// if no column family is passed, the default column family is used.
+    pub fn reopen(
+        db: &Arc<Database>,
+        opt_cf: Option<&str>,
+        rw_options: &ReadWriteOptions,
+        is_deprecated: bool,
+    ) -> Result<Self, TypedStoreError> {
+        DBMap::reopen_untyped(db, opt_cf, rw_options, is_deprecated).map(DBMap::with_types)
     }
 
     #[cfg(tidehunter)]
@@ -960,13 +1063,14 @@ impl<K, V> DBMap<K, V> {
         ks: KeySpace,
         prefix: Option<Vec<u8>>,
     ) -> Self {
-        DBMap::new(
+        DBMap::new_untyped(
             db,
             &ReadWriteOptions::default(),
             cf_name,
             ColumnFamily::TideHunter((ks, prefix.clone())),
             false,
         )
+        .with_types()
     }
 
     pub fn cf_name(&self) -> &str {
@@ -1778,44 +1882,21 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
-        let _timer = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_get_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
-        let perf_ctx = if self.get_sample_interval.sample() {
-            Some(RocksDBPerfContext)
-        } else {
-            None
-        };
         let key_buf = be_fix_int_ser(key);
-        let res = self
-            .db
-            .get(&self.column_family, &key_buf, &self.opts.readopts())?;
-        self.db_metrics
-            .op_metrics
-            .rocksdb_get_bytes
-            .with_label_values(&[&self.cf])
-            .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
-        if perf_ctx.is_some() {
-            self.db_metrics
-                .read_perf_ctx_metrics
-                .report_metrics(&self.cf);
-        }
+        let res = get_raw(
+            &self.db,
+            &self.column_family,
+            &self.cf,
+            &self.db_metrics,
+            &self.get_sample_interval,
+            &self.opts,
+            &key_buf,
+        )?;
         match res {
             Some(data) => {
                 let value = bcs::from_bytes(&data).map_err(typed_store_err_from_bcs_err);
-                if value.is_err() {
-                    let key_hash = default_hash(&key_buf);
-                    let value_hash = default_hash(&data);
-                    debug_fatal!(
-                        "Failed to deserialize value from DB table {:?}, key_hash: {:?}, value_hash: {:?}, error: {:?}",
-                        self.cf_name(),
-                        key_hash,
-                        value_hash,
-                        value.as_ref().err().unwrap()
-                    );
+                if let Err(e) = &value {
+                    report_value_deserialization_error(self.cf_name(), &key_buf, &data, e);
                 }
                 Ok(Some(value?))
             }
@@ -2076,13 +2157,7 @@ where
     /// Try to catch up with primary when running as secondary
     #[instrument(level = "trace", skip_all, err)]
     fn try_catch_up_with_primary(&self) -> Result<(), Self::Error> {
-        if let Storage::Rocks(rocks) = &self.db.storage {
-            rocks
-                .underlying
-                .try_catch_up_with_primary()
-                .map_err(typed_store_err_from_rocks_err)?;
-        }
-        Ok(())
+        try_catch_up_with_primary(&self.db)
     }
 }
 
