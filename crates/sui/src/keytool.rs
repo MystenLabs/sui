@@ -479,6 +479,12 @@ pub enum CommandOutput {
     ZkLoginSigVerify(ZkLoginSigVerifyResponse),
 }
 
+/// Offline verification has no protocol config, so accept ML-DSA-65 here.
+/// The network still enforces `mldsa65_auth` at submission.
+fn offline_verify_params() -> VerifyParams {
+    VerifyParams::default().with_mldsa65_in_multisig(true)
+}
+
 impl KeyToolCommand {
     pub async fn execute(
         self,
@@ -553,7 +559,7 @@ impl KeyToolCommand {
                         &IntentMessage::new(Intent::sui_transaction(), tx_data),
                         address,
                         cur_epoch,
-                        &VerifyParams::default(),
+                        &offline_verify_params(),
                         Arc::new(VerifiedDigestCache::new_empty()),
                     );
 
@@ -584,7 +590,7 @@ impl KeyToolCommand {
                             &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
                             tx_data.sender(),
                             cur_epoch,
-                            &VerifyParams::default(),
+                            &offline_verify_params(),
                             Arc::new(VerifiedDigestCache::new_empty()),
                         );
                         CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {

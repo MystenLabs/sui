@@ -77,9 +77,7 @@ impl VerifyParams {
     }
 
     /// Whether ML-DSA-65 signatures are accepted, standalone or as a multisig
-    /// member. Off by default: only the validator path turns it on, from the
-    /// `mldsa65_auth` protocol flag, so client-side verifiers match validators
-    /// until the scheme is enabled.
+    /// member. Validators set it from the `mldsa65_auth` protocol flag.
     pub fn with_mldsa65_in_multisig(mut self, accept: bool) -> Self {
         self.accept_mldsa65_in_multisig = accept;
         self
