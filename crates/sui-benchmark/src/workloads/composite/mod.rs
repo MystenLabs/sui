@@ -2107,21 +2107,6 @@ impl CompositeWorkload {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::is_rebuildable_allowance_submission;
-
-    #[test]
-    fn identifies_rebuildable_allowance_submission_errors() {
-        assert!(is_rebuildable_allowance_submission(
-            &"Transaction processing aborted (retriable with another submission)."
-        ));
-        assert!(!is_rebuildable_allowance_submission(
-            &"Transaction is rejected as invalid by more than 1/3 of validators"
-        ));
-    }
-}
-
 #[async_trait]
 impl Workload<dyn Payload> for CompositeWorkload {
     async fn init(
@@ -2958,5 +2943,20 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
     fn name(&self) -> &str {
         "Composite"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_rebuildable_allowance_submission;
+
+    #[test]
+    fn identifies_rebuildable_allowance_submission_errors() {
+        assert!(is_rebuildable_allowance_submission(
+            &"Transaction processing aborted (retriable with another submission)."
+        ));
+        assert!(!is_rebuildable_allowance_submission(
+            &"Transaction is rejected as invalid by more than 1/3 of validators"
+        ));
     }
 }
