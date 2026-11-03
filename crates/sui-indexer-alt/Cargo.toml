@@ -33,7 +33,7 @@ tracing.workspace = true
 url.workspace = true
 
 sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
-sui-indexer-alt-metrics.workspace = true
+sui-indexer-alt-metrics = { workspace = true, features = ["postgres"] }
 sui-indexer-alt-schema.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
