@@ -93,12 +93,13 @@ impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeIter<'_, K, V> {
 // of once per table type.
 
 type RawIter<'a> = rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>;
+type RawEntry<'b> = (&'b [u8], &'b [u8]);
 
 /// Returns the entry the iterator points at, or `None` at the end of the iteration.
 fn current_entry<'b>(
     db_iter: &'b mut RawIter<'_>,
     is_initialized: &mut bool,
-) -> Result<Option<(&'b [u8], &'b [u8])>, TypedStoreError> {
+) -> Result<Option<RawEntry<'b>>, TypedStoreError> {
     // Implicitly set iterator to the first entry in the column family if it hasn't been initialized
     // used for backward compatibility
     if !*is_initialized {
