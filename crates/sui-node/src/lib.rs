@@ -564,13 +564,12 @@ impl SuiNode {
             .enable_db_write_stall
             .unwrap_or(node_role.runs_consensus());
         // The tidehunter objects compactor retains only the latest version per
-        // ObjectID and is mutually exclusive with the object pruner. Enable it
-        // for validators (which always disable the pruner), and also for any
-        // node configured with `num_epochs_to_retain = 0` — that aggressive
-        // setting is what the compactor replaces. The pruner is force-disabled
-        // in `AuthorityStorePruner::new` whenever this is true.
-        let enable_objects_compactor = node_role.is_validator()
-            || config.authority_store_pruning_config.num_epochs_to_retain == 0;
+        // ObjectID and is mutually exclusive with the object pruner, which
+        // `AuthorityStorePruner::new` force-disables whenever it runs.
+        let enable_objects_compactor = AuthorityPerpetualTablesOptions::objects_compactor_enabled(
+            node_role.is_validator(),
+            config.authority_store_pruning_config.num_epochs_to_retain,
+        );
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
             enable_objects_compactor,
@@ -2958,13 +2957,25 @@ async fn build_http_servers(
         // Serve the index read paths from the embedded rpc-store when it
         // is enabled. Raw chain data comes from the perpetual / checkpoint
         // stores either way.
-        let reader: Arc<dyn RpcStateReader> = match embedded_rpc_store {
-            Some(embedded) => Arc::new(RpcStoreReadStore::new(
-                state.clone(),
-                store,
-                embedded.reader(),
-            )),
-            None => Arc::new(RestReadStore::new(state.clone(), store)),
+        let reader: Arc<dyn RpcStateReader> = {
+            let retains_object_version_history =
+                !AuthorityPerpetualTablesOptions::objects_compactor_enabled(
+                    node_role.is_validator(),
+                    config.authority_store_pruning_config.num_epochs_to_retain,
+                );
+            match embedded_rpc_store {
+                Some(embedded) => Arc::new(RpcStoreReadStore::new(
+                    state.clone(),
+                    store,
+                    embedded.reader(),
+                    retains_object_version_history,
+                )),
+                None => Arc::new(RestReadStore::new(
+                    state.clone(),
+                    store,
+                    retains_object_version_history,
+                )),
+            }
         };
         let mut rpc_service = sui_rpc_api::RpcService::new(reader);
         rpc_service.with_server_version(server_version);

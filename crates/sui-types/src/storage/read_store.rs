@@ -692,6 +692,14 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     /// available.
     fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber>;
 
+    /// Whether this store keeps an object's versions after later transactions replace them, up
+    /// to [`Self::get_lowest_available_checkpoint_objects`]. Reads of an object as of a past
+    /// checkpoint need them. `false` on nodes that run the tidehunter objects compactor, which
+    /// keeps only each object's latest version and never raises that lower bound.
+    fn retains_object_version_history(&self) -> bool {
+        true
+    }
+
     fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
 
     // Get a handle to an instance of the RpcIndexes

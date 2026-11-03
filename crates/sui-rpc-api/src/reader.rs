@@ -309,16 +309,36 @@ impl StateReader {
         Ok(AtCheckpointUpperBound { highest_indexed })
     }
 
-    /// The lower bound for checkpoint-pinned reads: the lowest available checkpoint.
+    /// `Unavailable` if this node does not keep object versions once they are replaced (see
+    /// [`RpcStateReader::retains_object_version_history`]): reads that depend on an object's
+    /// replaced versions would find them gone and answer `NotFound`.
+    pub fn require_object_version_history(&self) -> Result<(), crate::RpcError> {
+        if self.inner().retains_object_version_history() {
+            return Ok(());
+        }
+        Err(crate::RpcError::new(
+            tonic::Code::Unavailable,
+            "this node keeps only the latest version of each object, so it cannot answer reads \
+             that depend on earlier versions",
+        ))
+    }
+
+    /// The lower bound for checkpoint-pinned reads: the checkpoint just below
+    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`]. That checkpoint's input
+    /// objects are available, and they are the object state at the end of the checkpoint before:
+    /// pruning through a checkpoint deletes only the object versions and index rows replaced at
+    /// or before it.
     ///
     /// Read it after the reads, and answer every read at a checkpoint below it as pruned,
     /// whatever the read returned. Pruning can raise the floor while the reads run, and a read
-    /// below the new floor may have seen pruned data. Pruning deletes data and raises the floor in
-    /// the same commit, only deletes data that reads below the new floor need, and never lowers
-    /// the floor, so a read at a checkpoint this bound accepts saw no pruned data.
+    /// below the new floor may have seen pruned data. Pruning raises the floor no later than it
+    /// deletes data (the rpc-store commits its retractions and floor before the object versions
+    /// are deleted), only deletes data that reads below the new floor need, and never lowers the
+    /// floor, so a read at a checkpoint this bound accepts saw no pruned data.
     pub fn at_checkpoint_lower_bound(&self) -> Result<AtCheckpointLowerBound, crate::RpcError> {
+        let lowest_available_objects = self.inner().get_lowest_available_checkpoint_objects()?;
         Ok(AtCheckpointLowerBound {
-            lowest_available: self.get_lowest_available_checkpoint()?,
+            lowest_intact: lowest_available_objects.saturating_sub(1),
         })
     }
 
@@ -373,16 +393,16 @@ impl AtCheckpointUpperBound {
 /// See [`StateReader::at_checkpoint_lower_bound`].
 #[derive(Clone, Copy, Debug)]
 pub struct AtCheckpointLowerBound {
-    /// [`StateReader::get_lowest_available_checkpoint`].
-    lowest_available: u64,
+    /// The lowest checkpoint whose object state is intact.
+    lowest_intact: u64,
 }
 
 impl AtCheckpointLowerBound {
     /// `OutOfRange` (`BELOW_EARLIEST_AVAILABLE`) if `checkpoint` is below the bound: its history
     /// may have been pruned, so an answer could be wrong.
     pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
-        if checkpoint < self.lowest_available {
-            return Err(below_serving_floor(self.lowest_available));
+        if checkpoint < self.lowest_intact {
+            return Err(below_serving_floor(self.lowest_intact));
         }
         Ok(())
     }

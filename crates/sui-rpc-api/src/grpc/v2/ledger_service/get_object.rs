@@ -166,16 +166,19 @@ fn has_at_checkpoint(requests: &[(Address, ObjectSelector)]) -> bool {
         .any(|(_, selector)| matches!(selector, ObjectSelector::AtCheckpoint(_)))
 }
 
-/// Before the reads: the `at_checkpoint` upper bound, read once per request and only when some
-/// item reads at a checkpoint, so that latest and exact-version reads still work on nodes
-/// without rpc indexes.
+/// Before the reads, once per request and only when some item reads at a checkpoint, so that
+/// latest and exact-version reads still work on nodes without rpc indexes or object version
+/// history: refuse the whole request if this node keeps no object version history, else load
+/// the `at_checkpoint` upper bound.
 fn load_at_checkpoint_upper_bound(
     service: &RpcService,
     requests: &[(Address, ObjectSelector)],
 ) -> Result<Option<AtCheckpointUpperBound>, RpcError> {
-    has_at_checkpoint(requests)
-        .then(|| service.reader.at_checkpoint_upper_bound())
-        .transpose()
+    if !has_at_checkpoint(requests) {
+        return Ok(None);
+    }
+    service.reader.require_object_version_history()?;
+    service.reader.at_checkpoint_upper_bound().map(Some)
 }
 
 /// After the reads: answer as pruned every `at_checkpoint` item below the lowest available

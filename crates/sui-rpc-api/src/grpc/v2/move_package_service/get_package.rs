@@ -76,7 +76,9 @@ fn load_package_at_version(
 /// `at_checkpoint` is checked against the shared checkpoint-pinned read
 /// bounds, the upper bound before the package read and the lower bound after
 /// it (see `StateReader::at_checkpoint_upper_bound`), so a successful answer
-/// is exact as of `at_checkpoint`.
+/// is exact as of `at_checkpoint`. Nodes without object version history
+/// refuse: system packages are upgraded in place, so their earlier versions
+/// are gone there.
 fn load_package_at_checkpoint(
     service: &RpcService,
     package_id_str: &str,
@@ -84,6 +86,7 @@ fn load_package_at_checkpoint(
 ) -> Result<MovePackage> {
     let original_id = load_package(service, package_id_str)?.original_package_id();
 
+    service.reader.require_object_version_history()?;
     service
         .reader
         .at_checkpoint_upper_bound()?

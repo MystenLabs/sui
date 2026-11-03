@@ -19,7 +19,9 @@ use test_cluster::TestClusterBuilder;
 
 use crate::v2::assert_above_latest_available;
 use crate::v2::assert_below_earliest_available;
+use crate::v2::halt_chain;
 use crate::v2::move_package_service::system_package_expectations::validate_system_package;
+use crate::v2::prune_objects_below_tip;
 
 #[sim_test]
 async fn test_get_package_system() {
@@ -335,92 +337,35 @@ async fn test_get_package_missing_id() {
     assert!(error.message().contains("missing package_id"));
 }
 
+/// Pruning object versions through a checkpoint leaves packages readable at that checkpoint and
+/// rejects every checkpoint below it as pruned.
 #[sim_test]
 async fn test_get_package_at_checkpoint_below_available_floor() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        // Only the explicit prune below moves the floor.
+        .disable_fullnode_pruning()
         .build()
         .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
-    // Wait for the embedded rpc-store to index genesis before the first index read.
-    cluster.wait_for_rpc_index_ready().await;
+    halt_chain(&cluster).await;
+    let pruned_to = prune_objects_below_tip(&cluster).await;
 
-    // Assert on system package before bumping the floor.
-    let mut request = GetPackageRequest::default();
-    request.package_id = Some("0x3".to_string());
-    request.selector = Some(Selector::AtCheckpoint(0));
-    let package = service
-        .get_package(request)
-        .await
-        .unwrap()
-        .into_inner()
-        .package
-        .unwrap();
-    assert_eq!(package.version, Some(1));
-
-    // Raise the serving floor by bumping the checkpoint store's pruned watermark past genesis,
-    // which moves the floor `get_lowest_available_checkpoint` reports.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    let pruned_to = loop {
-        let highest_executed = cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint()
-                .unwrap()
-        });
-        if let Some(checkpoint) = highest_executed
-            && *checkpoint.sequence_number() >= 1
-        {
-            cluster.fullnode_handle.sui_node.with(|node| {
-                node.state()
-                    .get_checkpoint_store()
-                    .update_highest_pruned_checkpoint(&checkpoint)
-                    .unwrap()
-            });
-            break *checkpoint.sequence_number();
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for the fullnode to execute a checkpoint above genesis"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let request = |at_checkpoint| {
+        let mut request = GetPackageRequest::default();
+        request.package_id = Some("0x3".to_string());
+        request.selector = Some(Selector::AtCheckpoint(at_checkpoint));
+        request
     };
-
-    // Request now below the floor, should be rejected.
-    let mut request = GetPackageRequest::default();
-    request.package_id = Some("0x3".to_string());
-    request.selector = Some(Selector::AtCheckpoint(pruned_to));
-    let error = service.get_package(request).await.unwrap_err();
-    assert_below_earliest_available(&error, pruned_to + 1);
-
-    // The first checkpoint above the floor still resolves once it is executed and indexed.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    loop {
-        let highest_executed = cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("db error")
-                .unwrap_or(0)
-        });
-        if highest_executed > pruned_to {
-            break;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for the fullnode to execute a checkpoint above {pruned_to}"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    for checkpoint in [0, pruned_to - 1] {
+        let error = service.get_package(request(checkpoint)).await.unwrap_err();
+        assert_below_earliest_available(&error, pruned_to);
     }
-    cluster.wait_for_rpc_index_ready().await;
-    let mut request = GetPackageRequest::default();
-    request.package_id = Some("0x3".to_string());
-    request.selector = Some(Selector::AtCheckpoint(pruned_to + 1));
     let package = service
-        .get_package(request)
+        .get_package(request(pruned_to))
         .await
         .unwrap()
         .into_inner()

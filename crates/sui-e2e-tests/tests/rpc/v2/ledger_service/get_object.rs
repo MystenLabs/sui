@@ -28,6 +28,8 @@ use test_cluster::TestClusterBuilder;
 
 use crate::v2::assert_above_latest_available;
 use crate::v2::assert_below_earliest_available;
+use crate::v2::halt_chain;
+use crate::v2::prune_objects_below_tip;
 
 #[sim_test]
 async fn get_object() {
@@ -412,12 +414,13 @@ async fn get_object_at_checkpoint_not_yet_indexed() {
     }
 }
 
-/// A checkpoint below the fullnode's lowest available checkpoint is rejected as pruned.
+/// Pruning object versions through a checkpoint leaves the state at its end readable and rejects
+/// every checkpoint below it as pruned.
 #[sim_test]
 async fn get_object_at_checkpoint_below_available_floor() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
-        // Only the watermark bump below moves the floor.
+        // Only the explicit prune below moves the floor.
         .disable_fullnode_pruning()
         .build()
         .await;
@@ -425,62 +428,49 @@ async fn get_object_at_checkpoint_below_available_floor() {
         .await
         .unwrap();
 
-    // Wait for the embedded rpc-store to index genesis before the first index read.
-    cluster.wait_for_rpc_index_ready().await;
+    // The clock changes in every checkpoint, so the prune deletes the version each checkpoint
+    // below the last pruned one ended with.
+    let id: Address = "0x6".parse().unwrap();
+    let tip = halt_chain(&cluster).await;
+    let pruned_to = tip - 1;
 
-    let id: Address = "0x5".parse().unwrap();
+    let version_at = |outcome: ObjectOutcome| outcome.unwrap().version.unwrap();
+    let before_end = version_at(single_outcome(
+        client
+            .get_object(at_checkpoint_request(id, pruned_to - 1))
+            .await,
+    ));
+    let at_end = version_at(single_outcome(
+        client
+            .get_object(at_checkpoint_request(id, pruned_to))
+            .await,
+    ));
+    assert!(before_end < at_end, "the clock changes in every checkpoint");
 
-    // The genesis checkpoint is servable before the floor is raised.
-    let outcome = single_outcome(client.get_object(at_checkpoint_request(id, 0)).await);
-    assert_at_checkpoint(outcome, id, 0, Some(1));
+    assert_eq!(prune_objects_below_tip(&cluster).await, pruned_to);
 
-    // Raise the serving floor by bumping the checkpoint store's pruned watermark past genesis,
-    // which moves the floor `get_lowest_available_checkpoint` reports.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    let pruned_to = loop {
-        let highest_executed = cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint()
-                .unwrap()
-        });
-        if let Some(checkpoint) = highest_executed
-            && *checkpoint.sequence_number() >= 1
-        {
-            cluster.fullnode_handle.sui_node.with(|node| {
-                node.state()
-                    .get_checkpoint_store()
-                    .update_highest_pruned_checkpoint(&checkpoint)
-                    .unwrap()
-            });
-            break *checkpoint.sequence_number();
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for the fullnode to execute a checkpoint above genesis"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    };
-
-    for checkpoint in [0, pruned_to] {
+    // The last pruned checkpoint still reads the version it ended with; the version it replaced
+    // is gone, so every checkpoint below is rejected.
+    let outcome = single_outcome(
+        client
+            .get_object(at_checkpoint_request(id, pruned_to))
+            .await,
+    );
+    assert_at_checkpoint(outcome, id, pruned_to, Some(at_end));
+    for checkpoint in [0, pruned_to - 1] {
         let error = client
             .get_object(at_checkpoint_request(id, checkpoint))
             .await
             .unwrap_err();
-        assert_below_earliest_available(&error, pruned_to + 1);
+        assert_below_earliest_available(&error, pruned_to);
     }
-
-    // The first checkpoint above the floor still resolves once it is executed and indexed.
-    wait_for_fullnode_checkpoint_above(&cluster, pruned_to).await;
-    cluster.wait_for_rpc_index_ready().await;
 
     // Inside a batch, a pruned checkpoint fails only its own item.
     let BatchGetObjectsResponse { objects, .. } = client
         .batch_get_objects({
             let mut message = BatchGetObjectsRequest::default();
             message.requests = vec![
-                at_checkpoint_request(id, 0),
-                at_checkpoint_request(id, pruned_to + 1),
+                at_checkpoint_request(id, pruned_to - 1),
                 at_checkpoint_request(id, pruned_to),
             ];
             message
@@ -488,24 +478,14 @@ async fn get_object_at_checkpoint_below_available_floor() {
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(objects.len(), 3);
-
-    for index in [0, 2] {
-        match &objects[index].result {
-            Some(get_object_result::Result::Error(status)) => {
-                assert_below_earliest_available(status, pruned_to + 1);
-            }
-            other => panic!("expected a per-item error at {index}, got {other:?}"),
+    assert_eq!(objects.len(), 2);
+    match &objects[0].result {
+        Some(get_object_result::Result::Error(status)) => {
+            assert_below_earliest_available(status, pruned_to);
         }
+        other => panic!("expected a per-item error, got {other:?}"),
     }
-
-    match &objects[1].result {
-        Some(get_object_result::Result::Object(object)) => {
-            assert_eq!(object.object_id, Some(id.to_string()));
-            assert!(object.version.is_some());
-        }
-        other => panic!("expected an object, got {other:?}"),
-    }
+    assert_at_checkpoint(batch_outcome(&objects[1]), id, pruned_to, Some(at_end));
 }
 
 /// A request for `id` as of the end of `checkpoint`, reading its id and version.

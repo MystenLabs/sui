@@ -426,11 +426,22 @@ impl WriteStore for RocksDbStore {
 pub struct RestReadStore {
     state: Arc<AuthorityState>,
     rocks: RocksDbStore,
+    retains_object_version_history: bool,
 }
 
 impl RestReadStore {
-    pub fn new(state: Arc<AuthorityState>, rocks: RocksDbStore) -> Self {
-        Self { state, rocks }
+    /// `retains_object_version_history` is `false` on nodes that run the objects compactor; see
+    /// [`RpcStateReader::retains_object_version_history`].
+    pub fn new(
+        state: Arc<AuthorityState>,
+        rocks: RocksDbStore,
+        retains_object_version_history: bool,
+    ) -> Self {
+        Self {
+            state,
+            rocks,
+            retains_object_version_history,
+        }
     }
 }
 
@@ -624,6 +635,10 @@ impl RpcStateReader for RestReadStore {
             .unwrap_or(0))
     }
 
+    fn retains_object_version_history(&self) -> bool {
+        self.retains_object_version_history
+    }
+
     fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
         Ok(self.state.get_chain_identifier())
     }
@@ -680,14 +695,23 @@ pub struct RpcStoreReadStore {
     state: Arc<AuthorityState>,
     rocks: RocksDbStore,
     reader: RpcStoreReader,
+    retains_object_version_history: bool,
 }
 
 impl RpcStoreReadStore {
-    pub fn new(state: Arc<AuthorityState>, rocks: RocksDbStore, reader: RpcStoreReader) -> Self {
+    /// `retains_object_version_history` is `false` on nodes that run the objects compactor; see
+    /// [`RpcStateReader::retains_object_version_history`].
+    pub fn new(
+        state: Arc<AuthorityState>,
+        rocks: RocksDbStore,
+        reader: RpcStoreReader,
+        retains_object_version_history: bool,
+    ) -> Self {
         Self {
             state,
             rocks,
             reader,
+            retains_object_version_history,
         }
     }
 }
@@ -903,6 +927,10 @@ impl RpcStateReader for RpcStoreReadStore {
             .unwrap_or(0);
         let rpc_store = self.reader.get_lowest_available_checkpoint_objects()?;
         Ok(perpetual.max(rpc_store))
+    }
+
+    fn retains_object_version_history(&self) -> bool {
+        self.retains_object_version_history
     }
 
     fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {

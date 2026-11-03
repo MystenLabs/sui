@@ -607,12 +607,11 @@ fn prune_chunk(
 /// structure, and the cost is one entry per deleted row and a bounded prefix
 /// scan on the delete path.
 ///
-/// Once the floor advances past `cp`, the entry at `cp` (or a newer one) is the
-/// floor a checkpoint-pinned read resolves to, so the older entries can never
-/// be the answer again. Because the chunk only prunes checkpoints below the new
-/// floor, `cp` is itself below the floor, so the kept entry is never the answer
-/// to an in-range read either; it survives only until its own superseding
-/// transaction is pruned in a later chunk.
+/// Once the floor advances past `cp`, the entry at `cp` (or a newer one) is what
+/// a checkpoint-pinned read at or above `cp` resolves to, so the older entries
+/// can never be the answer again. The kept entry answers reads from `cp`, whose
+/// end state pruning through `cp` leaves intact, until the object next changes,
+/// and survives until that change is pruned in a later chunk.
 ///
 /// The entry *at* `cp` is kept for a supersession (it is the object's final
 /// live version in `cp`). When `removed` is set, the object was deleted or
@@ -2027,25 +2026,35 @@ mod tests {
             &effects,
         )
         .unwrap();
-        // obj0 was superseded in cp1: its cp0 row is retracted, the cp1
-        // anchor survives to resolve reads at or above the floor.
+        // obj0 was superseded in cp1: its cp0 row is retracted.
         assert_eq!(
             schema.get_object_version_at_checkpoint(obj0, 0).unwrap(),
             None,
             "a superseded object's pre-anchor row must be retracted",
         );
-        assert_eq!(
-            schema.get_object_version_at_checkpoint(obj0, 2).unwrap(),
-            Some(ver(2)),
-            "the anchor a read at the floor resolves to must survive",
-        );
+        // Its cp1 anchor survives, so the state at the end of the last pruned
+        // checkpoint, and above it, still resolves.
+        for checkpoint in [1, 2] {
+            assert_eq!(
+                schema
+                    .get_object_version_at_checkpoint(obj0, checkpoint)
+                    .unwrap(),
+                Some(ver(2)),
+                "obj0's anchor must resolve reads at checkpoint {checkpoint}",
+            );
+        }
 
-        // obj1 was removed in cp1: all its sub-floor rows are dropped.
-        assert_eq!(
-            schema.get_object_version_at_checkpoint(obj1, 2).unwrap(),
-            None,
-            "a removed object's rows must be dropped entirely",
-        );
+        // obj1 was removed in cp1: all its rows are dropped, so it reads as
+        // absent at and after its removal.
+        for checkpoint in [1, 2] {
+            assert_eq!(
+                schema
+                    .get_object_version_at_checkpoint(obj1, checkpoint)
+                    .unwrap(),
+                None,
+                "a removed object's rows must be dropped entirely",
+            );
+        }
 
         // The floor advanced to the new lowest-available checkpoint.
         assert_eq!(

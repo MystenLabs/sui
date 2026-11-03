@@ -248,3 +248,53 @@ fn assert_above_latest_available(
     let first_unavailable: u64 = metadata["firstUnavailableCheckpoint"].parse().unwrap();
     assert!(first_unavailable <= requested_checkpoint, "{metadata:?}");
 }
+
+fn fullnode_highest_executed(cluster: &test_cluster::TestCluster) -> u64 {
+    cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap_or(0)
+    })
+}
+
+/// Stop every validator once the fullnode has executed a few checkpoints, wait for its rpc
+/// indexes to catch up, and return its highest executed checkpoint, which no longer moves.
+async fn halt_chain(cluster: &test_cluster::TestCluster) -> u64 {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    while fullnode_highest_executed(cluster) < 3 {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for the fullnode to execute checkpoint 3"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    cluster.stop_all_validators().await;
+    cluster.wait_for_rpc_index_ready().await;
+    fullnode_highest_executed(cluster)
+}
+
+/// Prune the fullnode's object versions with zero retention, which stops one below its highest
+/// executed checkpoint, and return the last pruned checkpoint. The fullnode must run with
+/// background pruning off, so that this is the only prune, after [`halt_chain`], so that the
+/// checkpoint is known in advance.
+async fn prune_objects_below_tip(cluster: &test_cluster::TestCluster) -> u64 {
+    let tip = fullnode_highest_executed(cluster);
+    let pruned = cluster
+        .fullnode_handle
+        .sui_node
+        .with_async(|node| async move {
+            let state = node.state();
+            state
+                .database_for_testing()
+                .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+                .await;
+            state
+                .get_object_cache_reader()
+                .get_highest_pruned_checkpoint()
+        })
+        .await;
+    assert_eq!(pruned, Some(tip - 1));
+    tip - 1
+}
