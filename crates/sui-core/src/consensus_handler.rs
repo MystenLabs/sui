@@ -610,6 +610,7 @@ impl CheckpointQueue {
         &mut self,
         chunk: Chunk,
         assigned_versions: &HashMap<TransactionKey, AssignedVersions>,
+        timestamp_expired_txns: &HashSet<TransactionKey>,
         timestamp: CheckpointTimestamp,
         consensus_commit_ref: CommitRef,
         rejected_transactions_digest: Digest,
@@ -623,11 +624,16 @@ impl CheckpointQueue {
             .schedulables
             .into_iter()
             .map(|s| {
+                let key = s.key();
                 let versions = assigned_versions
-                    .get(&s.key())
+                    .get(&key)
                     .cloned()
                     .unwrap_or_else(AssignedVersions::empty);
-                (s, versions)
+                let mut env = ExecutionEnv::new().with_assigned_versions(versions);
+                if timestamp_expired_txns.contains(&key) {
+                    env = env.with_timestamp_expired();
+                }
+                (s, env)
             })
             .collect();
 
@@ -978,6 +984,8 @@ struct CommitHandlerState {
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
+    // Transactions scheduled in this commit after their `max_timestamp`. Execution aborts them.
+    timestamp_expired_txns: HashSet<TransactionKey>,
 }
 
 impl CommitHandlerState {
@@ -991,6 +999,7 @@ impl CommitHandlerState {
             occurrence_counts: HashMap::new(),
             staggering_counts: StaggeringCommitCounts::default(),
             contested_transaction_digests: HashMap::new(),
+            timestamp_expired_txns: HashSet::new(),
         }
     }
 
@@ -1763,6 +1772,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             pending_checkpoints.extend(checkpoint_queue.push_chunk(
                 chunk.into(),
                 &assigned_versions,
+                &state.timestamp_expired_txns,
                 commit_info.timestamp,
                 commit_info.consensus_commit_ref,
                 commit_info.rejected_transactions_digest,
@@ -1780,6 +1790,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 pending_checkpoints.extend(checkpoint_queue.push_chunk(
                     chunk.into(),
                     &assigned_versions,
+                    &state.timestamp_expired_txns,
                     commit_info.timestamp,
                     commit_info.consensus_commit_ref,
                     commit_info.rejected_transactions_digest,
@@ -2135,7 +2146,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .expiration()
                     .is_expired_at(commit_info.timestamp)
             {
-                // Execution aborts these, since the Clock assigned to them has this timestamp.
+                state
+                    .timestamp_expired_txns
+                    .insert(TransactionKey::Digest(tx_digest));
                 if previously_deferred_tx_digests.contains_key(&tx_digest) {
                     assert_reachable!("deferred transaction scheduled after its max_timestamp");
                 } else {
@@ -3427,7 +3440,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 /// Sends transactions to the execution scheduler in a separate task,
 /// to avoid blocking consensus handler.
 pub(crate) type SchedulerMessage = (
-    Vec<(Schedulable, AssignedVersions)>,
+    Vec<(Schedulable, ExecutionEnv)>,
     Option<SettlementBatchInfo>,
 );
 
@@ -3454,7 +3467,7 @@ impl ExecutionSchedulerSender {
 
     fn send(
         &self,
-        transactions: Vec<(Schedulable, AssignedVersions)>,
+        transactions: Vec<(Schedulable, ExecutionEnv)>,
         settlement: Option<SettlementBatchInfo>,
     ) {
         let _ = self.sender.send((transactions, settlement));
@@ -3467,14 +3480,10 @@ impl ExecutionSchedulerSender {
     ) {
         while let Some((transactions, settlement)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            let txns = transactions
-                .into_iter()
-                .map(|(txn, versions)| (txn, ExecutionEnv::new().with_assigned_versions(versions)))
-                .collect();
             if let Some(settlement) = settlement {
-                settlement_scheduler.enqueue_v2(txns, settlement, &epoch_store);
+                settlement_scheduler.enqueue_v2(transactions, settlement, &epoch_store);
             } else {
-                settlement_scheduler.enqueue(txns, &epoch_store);
+                settlement_scheduler.enqueue(transactions, &epoch_store);
             }
         }
     }
@@ -4658,6 +4667,25 @@ mod tests {
             1
         );
 
+        // The handler, not execution, decides that the transaction is past its `max_timestamp`.
+        let timestamp_expired = |digest: TransactionDigest| {
+            let captured = setup.captured_transactions.lock();
+            captured
+                .iter()
+                .flat_map(|(txns, _)| txns.iter())
+                .find(|(s, _)| s.key() == TransactionKey::Digest(digest))
+                .map(|(_, env)| env.timestamp_expired)
+        };
+        for _ in 0..100 {
+            if timestamp_expired(valid_digest).is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(timestamp_expired(expired_digest), Some(true));
+        assert_eq!(timestamp_expired(valid_digest), Some(false));
+        assert_eq!(timestamp_expired(early_digest), None);
+
         // The dropped transaction takes no lock and is not marked processed.
         let locks = epoch_store.get_owned_object_locks_map(&owned_refs);
         assert_eq!(locks.get(&owned_refs[0]), Some(&expired_digest));
@@ -5487,6 +5515,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(5, 1),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5494,6 +5523,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(3, 2),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5514,6 +5544,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(5, 1),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5537,6 +5568,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 1),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5545,6 +5577,7 @@ mod tests {
             let flushed = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 2),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5562,6 +5595,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 1),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5569,6 +5603,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 2),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5576,6 +5611,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 3),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
@@ -5595,6 +5631,7 @@ mod tests {
             let flushed1 = queue.push_chunk(
                 make_chunk(max_tx / 2, 1),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5604,6 +5641,7 @@ mod tests {
             let flushed2 = queue.push_chunk(
                 make_chunk(max_tx / 2, 2),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5613,6 +5651,7 @@ mod tests {
             let flushed3 = queue.push_chunk(
                 make_chunk(max_tx / 2, 3),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
@@ -5635,6 +5674,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 100),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5642,6 +5682,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 200),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5660,6 +5701,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 1),
                 &versions,
+                &HashSet::new(),
                 5000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5699,6 +5741,7 @@ mod tests {
             queue.push_chunk(
                 chunk1,
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5706,6 +5749,7 @@ mod tests {
             queue.push_chunk(
                 chunk2,
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5732,6 +5776,7 @@ mod tests {
             queue.push_chunk(
                 chunk1,
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5753,6 +5798,7 @@ mod tests {
             let flushed = queue.push_chunk(
                 chunk2,
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5780,6 +5826,7 @@ mod tests {
             queue.push_chunk(
                 make_chunk(5, 1),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5800,6 +5847,7 @@ mod tests {
             let flushed1 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 1),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5807,6 +5855,7 @@ mod tests {
             let flushed2 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 2),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5814,6 +5863,7 @@ mod tests {
             let flushed3 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 3),
                 &versions,
+                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),

@@ -343,7 +343,7 @@ async fn test_congestion_control_execution_cancellation() {
     let assigned_versions = scheduled_txns
         .iter()
         .find(|(s, _)| s.key() == tx_key)
-        .map(|(_, v)| v.clone())
+        .map(|(_, env)| env.assigned_versions.clone())
         .expect("Transaction should have assigned versions");
 
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);

@@ -307,6 +307,7 @@ impl SuiTxValidator {
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
         inner_tx.validity_check(&epoch_store.tx_validity_check_context())?;
+        epoch_store.check_timestamp_expiration_for_vote(inner_tx.data().transaction_data())?;
 
         self.authority_state.check_system_overload(
             inner_tx.data(),
@@ -600,7 +601,8 @@ mod tests {
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::{
-            test_gas_objects, test_user_transaction, test_user_transactions,
+            test_gas_objects, test_user_transaction, test_user_transaction_with_expiration,
+            test_user_transactions,
         },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
@@ -1269,6 +1271,97 @@ mod tests {
         }
         let res = validator.verify_batch(&block_from(2), &[&serialized_tx]);
         assert!(res.is_ok(), "{res:?}");
+    }
+
+    /// Validators vote against a transaction before its `min_timestamp`, so that it is not
+    /// sequenced and can be submitted again. A transaction after its `max_timestamp` gets an
+    /// accept vote, because execution aborts it.
+    #[sim_test]
+    async fn test_vote_on_timestamp_window() {
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_objects: Vec<Object> = (0..2)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(1).unwrap())
+                .with_objects(gas_objects.clone())
+                .build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        assert!(
+            epoch_store
+                .protocol_config()
+                .enable_timestamp_transaction_expiration()
+        );
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let expiration = |min_timestamp, max_timestamp| TransactionExpiration::ValidDuring {
+            min_epoch: Some(epoch_store.epoch()),
+            max_epoch: Some(epoch_store.epoch()),
+            min_timestamp,
+            max_timestamp,
+            chain: state.get_chain_identifier(),
+            nonce: 0,
+        };
+
+        let expired = test_user_transaction_with_expiration(
+            &state,
+            sender,
+            &keypair,
+            gas_objects[0].clone(),
+            vec![],
+            expiration(None, Some(now_ms - 60_000)),
+        )
+        .await;
+        let early = test_user_transaction_with_expiration(
+            &state,
+            sender,
+            &keypair,
+            gas_objects[1].clone(),
+            vec![],
+            expiration(Some(now_ms + 3_600_000), None),
+        )
+        .await;
+        let serialized: Vec<_> = [expired, early]
+            .into_iter()
+            .map(|t| {
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+                    &state.name,
+                    t.into(),
+                ))
+                .unwrap()
+            })
+            .collect();
+        let batch: Vec<_> = serialized.iter().map(|t| t.as_slice()).collect();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            epoch_store.clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+        let rejected = validator
+            .verify_and_vote_batch(&BlockRef::MAX, &batch)
+            .unwrap();
+        assert_eq!(rejected, vec![1]);
+        assert!(matches!(
+            epoch_store
+                .get_rejection_vote_reason(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
+                    block: BlockRef::MAX,
+                    index: 1,
+                })
+                .map(|e| e.into_inner()),
+            Some(SuiErrorKind::UserInputError {
+                error: UserInputError::InvalidExpiration { .. }
+            })
+        ));
     }
 
     /// Deny-config updates are applied as a side effect of `verify_and_vote_batch`:

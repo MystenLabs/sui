@@ -1381,6 +1381,30 @@ impl AuthorityPerEpochStore {
         self.check_allowed_proposer(tx, own_index)
     }
 
+    fn wall_clock_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time is before the Unix epoch")
+            .as_millis() as u64
+    }
+
+    /// Votes to reject a transaction that is before its `min_timestamp` by the local wall-clock
+    /// time. A transaction after its `max_timestamp` is not rejected, because execution aborts it.
+    pub fn check_timestamp_expiration_for_vote(&self, tx: &TransactionData) -> SuiResult {
+        if !self
+            .protocol_config()
+            .enable_timestamp_transaction_expiration()
+        {
+            return Ok(());
+        }
+        let now_ms = Self::wall_clock_ms();
+        if tx.expiration().is_not_yet_valid_at(now_ms) {
+            assert_reachable!("voted to reject a transaction before its min_timestamp");
+            return Err(SuiError::not_yet_valid(now_ms));
+        }
+        Ok(())
+    }
+
     /// Rejects a transaction whose timestamp window does not contain the local wall-clock time.
     /// This check is advisory, because the local clock can differ from consensus commit
     /// timestamps. The consensus handler makes the binding decision with the commit timestamp.
@@ -1391,10 +1415,7 @@ impl AuthorityPerEpochStore {
         {
             return Ok(());
         }
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time is before the Unix epoch")
-            .as_millis() as u64;
+        let now_ms = Self::wall_clock_ms();
         let expiration = tx.expiration();
         if expiration.is_not_yet_valid_at(now_ms) {
             assert_reachable!("transaction before its min_timestamp rejected at submission");
