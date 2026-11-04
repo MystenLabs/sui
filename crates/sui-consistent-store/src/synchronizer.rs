@@ -1017,12 +1017,11 @@ mod tests {
         let (mut joinset, mut queue) = sync.run().unwrap();
         wait_for_snapshot(&db, 5).await;
 
-        // Close b's channel and let it leave the cohort before "a"
-        // reaches the next frontier.
+        // Close b's channel and wait for it to leave the cohort before
+        // "a" reaches the next frontier. "a" is blocked on its open
+        // channel, so the first task to finish is b's.
         drop(queue.remove("b"));
-        for _ in 0..1_000 {
-            tokio::task::yield_now().await;
-        }
+        joinset.join_next().await.unwrap().unwrap().unwrap();
 
         queue
             .get("a")
