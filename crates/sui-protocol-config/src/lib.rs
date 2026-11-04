@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 141;
+const MAX_PROTOCOL_VERSION: u64 = 142;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -426,7 +426,9 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
 //              Disable effects transaction dependencies on mainnet.
 //              Add the staggered-submission duplication signal thresholds.
-// Version 141: Abort with EInvalidVerifyingKey in groth16::verify_groth16_proof when the
+// Version 141: Refine the transaction effects size estimate.
+//              Limit the number of accumulator events per transaction.
+// Version 142: Abort with EInvalidVerifyingKey in groth16::verify_groth16_proof when the
 //              prepared verifying key length does not match the number of public inputs.
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 //              Add the `object::is_shared_input_impl` native and its cost.
@@ -833,6 +835,10 @@ struct FeatureFlags {
     // Reject an overflowing x-coordinate r + n in `secp256r1_ecrecover` instead of wrapping it.
     #[serde(skip_serializing_if = "is_false")]
     secp256r1_ecrecover_checks_x_below_p: bool,
+
+    // Use the refined transaction effects size estimate.
+    #[serde(skip_serializing_if = "is_false")]
+    complete_effects_size_estimate: bool,
 
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
@@ -1673,6 +1679,11 @@ pub struct ProtocolConfig {
 
     /// Maximum number of Move events that a single transaction can emit. Enforced by the VM during execution.
     max_num_event_emit: Option<u64>,
+
+    /// Maximum number of accumulator events that a single transaction can emit. Enforced by the
+    /// adapter during execution. Each emitted event counts, before events on the same accumulator
+    /// are merged. There is no limit when unset.
+    max_num_accumulator_events: Option<u64>,
 
     /// Maximum number of new IDs that a single transaction can create. Enforced by the VM during execution.
     max_num_new_move_object_ids: Option<u64>,
@@ -2782,6 +2793,7 @@ impl ProtocolConfig {
             max_fields_in_struct: Some(32),
             max_dependency_depth: Some(100),
             max_num_event_emit: Some(256),
+            max_num_accumulator_events: None,
             max_num_new_move_object_ids: Some(2048),
             max_num_new_move_object_ids_system_tx: Some(2048 * 16),
             max_num_deleted_move_object_ids: Some(2048),
@@ -4974,6 +4986,10 @@ impl ProtocolConfig {
                     cfg.feature_flags.disable_effects_tx_dependencies = true;
                 }
                 141 => {
+                    cfg.feature_flags.complete_effects_size_estimate = true;
+                    cfg.max_num_accumulator_events = Some(1024);
+                }
+                142 => {
                     cfg.clock_borrow_cost_base = Some(52);
                     cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.object_is_shared_input_cost_base = Some(52);
@@ -5443,15 +5459,15 @@ mod test {
 
     #[test]
     fn binary_format_limits_profile_matches_protocol_version() {
-        let v140 = ProtocolConfig::get_for_version(ProtocolVersion::new(140), Chain::Unknown);
-        assert_eq!(
-            v140.binary_format_limits(),
-            BinaryFormatLimitsProfile::LEGACY.limits()
-        );
-
         let v141 = ProtocolConfig::get_for_version(ProtocolVersion::new(141), Chain::Unknown);
         assert_eq!(
             v141.binary_format_limits(),
+            BinaryFormatLimitsProfile::LEGACY.limits()
+        );
+
+        let v142 = ProtocolConfig::get_for_version(ProtocolVersion::new(142), Chain::Unknown);
+        assert_eq!(
+            v142.binary_format_limits(),
             BinaryFormatLimitsProfile::V1.limits()
         );
     }

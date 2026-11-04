@@ -874,6 +874,7 @@ pub enum VMMemoryLimitExceededSubStatusCode {
     OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED = 6,
     TOTAL_EVENT_SIZE_LIMIT_EXCEEDED = 7,
     SCRATCH_SIZE_LIMIT_EXCEEDED = 8,
+    ACCUMULATOR_EVENT_COUNT_LIMIT_EXCEEDED = 9,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

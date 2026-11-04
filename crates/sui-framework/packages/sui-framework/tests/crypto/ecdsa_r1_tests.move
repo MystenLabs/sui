@@ -35,7 +35,7 @@ fun test_ecrecover_pubkey_invalid_sig() {
 }
 
 // The Sha256 signature above with r shifted up by 2^256 - n and marked x-reduced, so r + n
-// overflows. Before protocol version 141 the sum wrapped and recovery returned a key.
+// overflows. Before protocol version 142 the sum wrapped and recovery returned a key.
 #[test]
 #[expected_failure(abort_code = ecdsa_r1::EFailToRecoverPubKey)]
 fun test_ecrecover_rejects_overflowing_x() {

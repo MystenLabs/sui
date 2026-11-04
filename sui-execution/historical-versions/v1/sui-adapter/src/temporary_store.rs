@@ -522,6 +522,10 @@ impl<'backing> TemporaryStore<'backing> {
                 self.execution_results.written_objects.len(),
                 self.execution_results.modified_objects.len(),
                 self.input_objects.len(),
+                0,
+                0,
+                &[],
+                false,
             )
         } else {
             let num_deletes = self.execution_results.deleted_object_ids.len()
