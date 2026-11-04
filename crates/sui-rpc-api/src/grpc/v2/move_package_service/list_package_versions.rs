@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::load_package;
+use super::{load_package_by_id, parse_package_id};
 use crate::{ErrorReason, Result, RpcError, RpcService};
 use bytes::Bytes;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
@@ -45,8 +45,46 @@ pub fn list_package_versions(
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = load_package(service, package_id_str)?;
-    let original_package_id = package.original_package_id();
+    let package_id = parse_package_id(package_id_str)?;
+
+    // While a restore is still backfilling history, a lineage upgraded inside the backfill window,
+    // such as a system package's, lacks the versions published in the part of the window the
+    // backfill has not reached, and its restored latest version has no recorded publish
+    // checkpoint yet, so a listing could come back partial or include versions published after
+    // `at_checkpoint`. Every listing waits for the backfill, with or without `at_checkpoint`, as
+    // the listing of every package does: `at_checkpoint_upper_bound` is `Unavailable` until it
+    // finishes. The bound only grows, so reading it before the rows keeps it valid for them.
+    let upper_bound = service.reader.at_checkpoint_upper_bound()?;
+
+    if let Some(at_checkpoint) = request.at_checkpoint {
+        // Both bounds are checked before the package is loaded: a package published above the
+        // highest indexed checkpoint may not exist on this node yet, and answering `NotFound`
+        // for it would hide that the bound is not served yet.
+        //
+        // Above the highest indexed checkpoint the index may be missing versions, so a bound
+        // there could include versions published after it. It is rejected before the read, like
+        // `GetPackage`.
+        upper_bound.check(at_checkpoint)?;
+
+        // A version with no recorded publish checkpoint was published before the history the
+        // index holds begins. On a node that backfilled after restoring from a snapshot, that is
+        // by the end of the checkpoint below the lowest one available at restore time, and the
+        // rpc-store floor the restore stamped there keeps the shared lower bound at or above it.
+        // A store that never backfills, such as a fork, reports where its history begins through
+        // `get_lowest_checkpoint_with_index_history`. So such a version belongs under any bound the
+        // shared lower bound accepts, and a bound below it is rejected.
+        //
+        // `StateReader::at_checkpoint_lower_bound` is meant to be read after the reads it bounds,
+        // as `GetPackage`'s `at_checkpoint` does (see `get_package.rs`), but this check can run
+        // before the read: pruning never deletes `package_versions` rows, and the bound only
+        // rises, so a bound that passes stays correct for rows read afterwards.
+        service
+            .reader
+            .at_checkpoint_lower_bound()?
+            .check(at_checkpoint)?;
+    }
+
+    let original_package_id = load_package_by_id(service, package_id)?.original_package_id();
 
     let page_size = request
         .page_size
@@ -72,34 +110,6 @@ pub fn list_package_versions(
         .inner()
         .indexes()
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
-
-    if let Some(at_checkpoint) = request.at_checkpoint {
-        // Above the highest indexed checkpoint the index may be missing versions, and while a
-        // restore is still backfilling history, versions published in the part of its window it
-        // has not reached still have no recorded checkpoint, so a bound anywhere could include
-        // versions published after it. Both are rejected before the read, like `GetPackage`.
-        service
-            .reader
-            .at_checkpoint_upper_bound()?
-            .check(at_checkpoint)?;
-
-        // A version with no recorded publish checkpoint was published before the history the
-        // index holds begins. On a node that backfilled after restoring from a snapshot, that is
-        // by the end of the checkpoint below the lowest one available at restore time, and the
-        // rpc-store floor the restore stamped there keeps the shared lower bound at or above it.
-        // A store that never backfills, such as a fork, reports where its history begins through
-        // `get_lowest_checkpoint_with_index_history`. So such a version belongs under any bound the
-        // shared lower bound accepts, and a bound below it is rejected.
-        //
-        // `StateReader::at_checkpoint_lower_bound` is meant to be read after the reads it bounds,
-        // as `GetPackage`'s `at_checkpoint` does (see `get_package.rs`), but this check can run
-        // before the read: pruning never deletes `package_versions` rows, and the bound only
-        // rises, so a bound that passes stays correct for rows read afterwards.
-        service
-            .reader
-            .at_checkpoint_lower_bound()?
-            .check(at_checkpoint)?;
-    }
 
     let mut versions = vec![];
     let iter = indexes

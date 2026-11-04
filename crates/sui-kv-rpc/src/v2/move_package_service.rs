@@ -235,8 +235,16 @@ async fn list_package_versions(
             .with_description("missing package_id")
             .with_reason(ErrorReason::FieldMissing)
     })?;
-    let original_package_id =
-        resolve_original_package_id(client.clone(), parse_package_id(package_id_str)?).await?;
+    let package_id = parse_package_id(package_id_str)?;
+
+    // The bound is checked before the package is resolved: a package published above the
+    // served height may have no rows yet, and answering `NotFound` for it would hide that the
+    // bound is not served yet. BigTable holds full history, so there is no lower bound to check.
+    if let Some(at_checkpoint) = request.at_checkpoint {
+        AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
+    }
+
+    let original_package_id = resolve_original_package_id(client.clone(), package_id).await?;
 
     let page_size = request
         .page_size
@@ -257,10 +265,6 @@ async fn list_package_versions(
             .into());
     }
 
-    // BigTable holds full history, so there is no lower bound to check.
-    if let Some(at_checkpoint) = request.at_checkpoint {
-        AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
-    }
     let cp_bound = request.at_checkpoint.unwrap_or(served_height.checkpoint);
 
     // The token's version is the first version of the next page (inclusive); the reader's
@@ -1000,6 +1004,37 @@ mod tests {
                 fixture.client.clone(),
                 FIXTURE_SERVED_HEIGHT,
                 list_req(fixture.original_id, Some(at_checkpoint)),
+            )
+            .await
+            .expect_err("bound above the served height")
+            .into();
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{at_checkpoint}");
+            assert_eq!(
+                status.message(),
+                format!(
+                    "requested data above latest available; at_checkpoint is {at_checkpoint}, \
+                     and only checkpoints below 26 are available"
+                ),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_bound_above_served_height_is_checked_before_lookup() {
+        let fixture = setup_lineage_fixture().await;
+        // Stands in for a package published at checkpoint 30, above the served height of 25,
+        // whose rows this replica has not written yet.
+        let published_above_served_height = ObjectID::from_single_byte(0xDD);
+        let never_published = ObjectID::from_single_byte(0xEE);
+
+        for (package_id, at_checkpoint) in [
+            (published_above_served_height, 30u64),
+            (never_published, u64::MAX),
+        ] {
+            let status: tonic::Status = list_package_versions(
+                fixture.client.clone(),
+                FIXTURE_SERVED_HEIGHT,
+                list_req(package_id, Some(at_checkpoint)),
             )
             .await
             .expect_err("bound above the served height")

@@ -6479,6 +6479,14 @@ async fn test_list_package_versions_at_checkpoint() {
         vec![entry_1.clone(), entry_2.clone(), entry_3.clone()]
     );
 
+    // The bound is checked before the package is looked up, so a package with no rows gets the
+    // same answer.
+    let never_published = ObjectID::from_single_byte(0x99);
+    let error = list_package_versions(&mut client, never_published, Some(u64::MAX), None, None)
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
+
     // Pages stay within the bound: the token points at the next version under it, and a page
     // whose next version is above the bound carries no token.
     let first = list_package_versions(&mut client, v1, Some(cp3), Some(2), None)
