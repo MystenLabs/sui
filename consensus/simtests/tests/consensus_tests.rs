@@ -1214,39 +1214,48 @@ mod consensus_tests {
         );
 
         // Phase 2: kill the streaming peer and keep the network busy from the remaining
-        // validators, well beyond the failure budget so the observer has time to rotate.
+        // validators until the observer tracks them again. The observer rotates once its
+        // failure budget elapses and then has to catch up, so poll with a deadline instead
+        // of sleeping a fixed time.
         tracing::info!("Phase 2: stopping validator 0 (the observer's streaming peer)");
         authorities[0].stop().await;
 
-        for i in 0..300u16 {
-            let txn = vec![i as u8; 16];
-            let client = &transaction_clients[1 + (i as usize % (transaction_clients.len() - 1))];
-            client.submit(vec![txn], Priority::Normal).await.unwrap();
-            if i % 10 == 0 {
-                sleep(Duration::from_millis(500)).await;
+        const FAILOVER_DEADLINE: Duration = Duration::from_secs(240);
+        let failover_start = tokio::time::Instant::now();
+        let mut i = 0u16;
+        loop {
+            for _ in 0..10 {
+                let txn = vec![i as u8; 16];
+                let client =
+                    &transaction_clients[1 + (i as usize % (transaction_clients.len() - 1))];
+                client.submit(vec![txn], Priority::Normal).await.unwrap();
+                i = i.wrapping_add(1);
             }
-        }
-        sleep(Duration::from_secs(60)).await;
+            sleep(Duration::from_secs(1)).await;
 
-        let validator_commits = authorities[1]
-            .commit_consumer_monitor()
-            .highest_handled_commit();
-        let observer_commits = observer_monitor.highest_handled_commit();
-        tracing::info!(
-            "Commits after failover — validator 1: {}, observer: {} (was {} at kill time)",
-            validator_commits,
-            observer_commits,
-            commits_before_kill,
-        );
-        assert!(
-            observer_commits > commits_before_kill,
-            "Observer should keep processing commits after its streaming peer died"
-        );
-        assert!(
-            validator_commits - observer_commits <= MAX_COMMIT_DIFFERENCE,
-            "Observer should track live validators by streaming from the second configured peer \
-             (validator 1: {validator_commits}, observer: {observer_commits})"
-        );
+            let validator_commits = authorities[1]
+                .commit_consumer_monitor()
+                .highest_handled_commit();
+            let observer_commits = observer_monitor.highest_handled_commit();
+            if observer_commits > commits_before_kill
+                && validator_commits.abs_diff(observer_commits) <= MAX_COMMIT_DIFFERENCE
+            {
+                tracing::info!(
+                    "Observer tracks validator 1 again {:?} after the kill: validator 1 at {}, observer at {} (was {} at kill time)",
+                    failover_start.elapsed(),
+                    validator_commits,
+                    observer_commits,
+                    commits_before_kill,
+                );
+                break;
+            }
+            assert!(
+                failover_start.elapsed() < FAILOVER_DEADLINE,
+                "Observer should keep processing commits by streaming from the second configured \
+                 peer within {FAILOVER_DEADLINE:?} of its streaming peer dying (validator 1: \
+                 {validator_commits}, observer: {observer_commits}, at kill time: {commits_before_kill})"
+            );
+        }
 
         // Clean up (validator 0 is already stopped).
         observer.stop().await;
