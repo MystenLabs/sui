@@ -453,7 +453,7 @@ async fn publish_package(
         gas,
         all_module_bytes,
         dependencies,
-        1000000000,
+        2000000000,
         1000,
     );
     let signature = keystore

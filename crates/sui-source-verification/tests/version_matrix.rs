@@ -244,7 +244,7 @@ fn publish_fixture(
         .args(["publish", "."]);
     if !modern {
         // Legacy releases require an explicit budget.
-        publish.args(["--gas-budget", "500000000"]);
+        publish.args(["--gas-budget", "2000000000"]);
     }
     match publish.current_dir(sandbox).output() {
         Ok(out) if out.status.success() => Ok(()),

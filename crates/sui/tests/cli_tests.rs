@@ -699,7 +699,7 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
          --publish {}
          --assign upgrade_cap
          --transfer-objects "[upgrade_cap]" sender
-         --gas-budget 50000000
+         --gas-budget 2000000000
         "#,
         pkg_path.display()
     );

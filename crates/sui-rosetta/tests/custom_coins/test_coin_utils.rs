@@ -20,6 +20,8 @@ use sui_types::transaction::{
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag};
 
 const DEFAULT_GAS_BUDGET: u64 = 900_000_000;
+// Covers the publish charge of 1 SUI plus 0.01 SUI per module and per dependency.
+const PUBLISH_GAS_BUDGET: u64 = 2_000_000_000;
 pub const TEST_COIN_DECIMALS: u64 = 6;
 
 #[derive(Debug, Clone)]
@@ -57,7 +59,7 @@ pub async fn init_package(
     };
 
     let price = client.get_reference_gas_price().await?;
-    let budget = DEFAULT_GAS_BUDGET;
+    let budget = PUBLISH_GAS_BUDGET;
     let (_, gas_object_data) = test_cluster
         .wallet
         .gas_for_owner_budget(sender, budget, Default::default())

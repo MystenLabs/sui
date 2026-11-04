@@ -14,7 +14,7 @@ fork_env
 fork_point=$FORK_CHECKPOINT
 add_env_to_toml counter fork on_fork
 gas=$(gas_coin on_fork)
-run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 100000000
+run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 2000000000
 package=$(published_package_id publish.json)
 fork_cmd advance-checkpoint > /dev/null
 tip=$(fork_status_field checkpoint_sequence_number)

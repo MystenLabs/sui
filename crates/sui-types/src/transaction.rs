@@ -82,7 +82,10 @@ mod transaction_serialization_tests;
 
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 70_000;
+// Multiplied by the reference gas price, this must cover the MIST-denominated publish charge on
+// top of the execution and storage costs of the fixture packages. At a reference gas price of 100
+// the budget is 2 SUI, and at 1000 it is 20 SUI, under the maximum budget.
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 20_000_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 10_000;

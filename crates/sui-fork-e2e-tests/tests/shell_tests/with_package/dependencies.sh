@@ -17,12 +17,12 @@ counter_value() {
 echo "=== localnet: publish a package and its dependency ==="
 add_env_to_toml counter localnet on_localnet
 add_env_to_toml counter_app localnet on_localnet
-run_json dependency_publish.json on_localnet publish counter --gas-budget 100000000
+run_json dependency_publish.json on_localnet publish counter --gas-budget 2000000000
 dependency_package=$(published_package_id dependency_publish.json)
 run_json create.json on_localnet call --package "$dependency_package" --module counter \
   --function create --gas-budget 50000000
 counter=$(created_object_id create.json "::counter::Counter")
-run_json app_publish.json on_localnet publish counter_app --gas-budget 100000000
+run_json app_publish.json on_localnet publish counter_app --gas-budget 2000000000
 app_package=$(published_package_id app_publish.json)
 fork_point=$(wait_for_graphql_tx "$(tx_digest_of app_publish.json)")
 gas=$(gas_coin on_localnet)

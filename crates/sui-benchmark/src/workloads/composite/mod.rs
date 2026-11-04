@@ -94,8 +94,9 @@ const MAX_BATCH_SIZE: usize = 6;
 /// idempotent: if an earlier submission was finalized, the response carries its effects.
 const ALLOWANCE_ISSUANCE_MAX_SUBMISSIONS: usize = 3;
 
-/// The SUI that each lifecycle gas account's address balance receives at init.
-const LIFECYCLE_GAS_FUNDING: u64 = 50_000_000_000;
+/// The SUI that each lifecycle gas account's address balance receives at init. Each package
+/// upgrade pays a publish charge of about 1.1 SUI, so the account is sized for long runs.
+const LIFECYCLE_GAS_FUNDING: u64 = 200_000_000_000;
 
 /// The gas budget of a multisig tx, in gas units.
 const MULTISIG_GAS_UNITS: u64 = 100_000;

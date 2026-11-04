@@ -118,7 +118,6 @@ struct TestRunner {
     pub authority_state: Arc<AuthorityState>,
     pub package: ObjectRef,
     pub upgrade_cap: ObjectRef,
-    pub rgp: u64,
     pub aggressive_pruning_enabled: bool,
 }
 
@@ -137,7 +136,6 @@ impl TestRunner {
             .build()
             .await;
 
-        let rgp = authority_state.reference_gas_price_for_testing().unwrap();
         let mut gas_object_ids = vec![];
         for _ in 0..num {
             let gas_object_id = ObjectID::random();
@@ -163,7 +161,6 @@ impl TestRunner {
             authority_state,
             package,
             upgrade_cap,
-            rgp,
             aggressive_pruning_enabled,
         }
     }
@@ -175,7 +172,7 @@ impl TestRunner {
             &self.sender,
             &self.sender_key,
             pt,
-            self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+            TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         )
         .await
         .map(|_| ())
@@ -193,7 +190,7 @@ impl TestRunner {
             &self.sender,
             &self.sender_key,
             pt,
-            self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+            TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         )
         .await
         .unwrap();
@@ -228,7 +225,7 @@ impl TestRunner {
             &self.sender,
             &self.sender_key,
             pt,
-            self.rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+            TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         )
         .await
         .unwrap();
