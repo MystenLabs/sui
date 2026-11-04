@@ -2183,6 +2183,12 @@ mod test {
             config
         });
 
+        // Validators sometimes admit a transaction outside its timestamp window, as a proposer
+        // with a skewed clock would, so that voting and consensus reject it instead.
+        register_fail_point_if("skip-timestamp-expiration-check-at-submission", || {
+            thread_rng().gen_bool(0.2)
+        });
+
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
