@@ -977,7 +977,7 @@ async fn persisted_bucket_start_cp(mock: &MockBigtableServer) -> Option<u64> {
 }
 
 /// When a commit advances `tx_hi` across a bucket-seal boundary, the generation
-/// task records that commit's `checkpoint_hi_inclusive` as the new
+/// task records the commit's first checkpoint that added a bit as the new
 /// `bitmap_bucket_start_cp` and writes it alongside the watermark.
 #[tokio::test]
 async fn bucket_start_cp_written_on_transition() {
@@ -1330,6 +1330,73 @@ async fn mid_bucket_restart_with_replay_preserves_pre_restart_bits() {
     let bm = wait_for_bitmap(&mock, row_key).await;
     assert!(bm.contains(pre_bit), "replayed pre-restart bit lost");
     assert!(bm.contains(new_bit), "post-restart bit missing");
+    assert_eq!(bm.len(), 2);
+}
+
+/// A commit can cover several checkpoints, and the bucket it starts can take bits from any of
+/// them, not only the last. A restart must replay the first checkpoint that added a bit to the
+/// active bucket; otherwise the rebuilt bucket lacks that bit, and the row's next snapshot
+/// replaces the stored one without it.
+#[tokio::test]
+async fn restart_replays_bucket_started_mid_commit() {
+    let (mock, store, client) = setup_without_init_watermark().await;
+    store
+        .connect()
+        .await
+        .unwrap()
+        .init_watermark(PIPELINE, None)
+        .await
+        .unwrap();
+    let service = register_test_committer(&store);
+    let handler = Arc::new(BitmapIndexHandler::new(TestProcessor));
+
+    // One commit covers checkpoints 1 to 3. Bucket 1's first bit is at checkpoint 2.
+    let row_key: &[u8] = b"dim#0000000001";
+    let checkpoints_1_to_3 = || {
+        vec![
+            value(b"dim#0000000000", 0, &[0], 1, 1000),
+            value(row_key, 1, &[0], 2, 1000),
+        ]
+    };
+    let through_cp3 = watermark(3, BUCKET_SIZE + 5, 1000);
+    commit_batch(
+        &store,
+        &handler,
+        make_batch(checkpoints_1_to_3()),
+        through_cp3,
+    )
+    .await;
+    wait_for_watermark_at_least(&store, 3).await;
+    drop(service);
+
+    // Restart, and replay the checkpoints the framework resumes from.
+    let restarted = BigTableStore::new(client, u64::MAX);
+    let init = restarted
+        .connect()
+        .await
+        .unwrap()
+        .init_watermark(PIPELINE, None)
+        .await
+        .unwrap()
+        .unwrap();
+    let resume_from = init.checkpoint_hi_inclusive.map_or(0, |cp| cp + 1);
+    let _service = register_test_committer(&restarted);
+    let replay = checkpoints_1_to_3()
+        .into_iter()
+        .filter(|value| value.max_cp >= resume_from)
+        .collect();
+    commit_batch(&restarted, &handler, make_batch(replay), through_cp3).await;
+    commit_batch(
+        &restarted,
+        &handler,
+        make_batch(vec![value(row_key, 1, &[1], 4, 1000)]),
+        watermark(4, BUCKET_SIZE + 6, 1000),
+    )
+    .await;
+    wait_for_watermark_at_least(&restarted, 4).await;
+
+    let bm = wait_for_bitmap(&mock, row_key).await;
+    assert!(bm.contains(0), "restart dropped checkpoint 2's bit");
     assert_eq!(bm.len(), 2);
 }
 

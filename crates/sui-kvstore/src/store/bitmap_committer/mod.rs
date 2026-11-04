@@ -70,7 +70,8 @@
 //! normal `tx_hi` tells the committer which buckets were already sealed before
 //! startup, so replayed rows for older buckets are ignored. The bitmap-only
 //! `bucket_start_cp` tells `init_watermark` how far to rewind the framework so
-//! the active bucket is rebuilt from replay.
+//! the active bucket is rebuilt from replay: it is at or before the first
+//! checkpoint that added a bit to the active bucket.
 
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -182,6 +183,7 @@ impl Handle {
             .generation_tx
             .send(generation::Event::GenerationStarted {
                 watermark,
+                first_checkpoint_with_bits: checkpoint_span.map(CheckpointSpan::lower_bound),
                 framework_commit_time,
             })
             .await
