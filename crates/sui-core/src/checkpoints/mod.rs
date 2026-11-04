@@ -1047,6 +1047,25 @@ impl CheckpointStore {
         batch.write()
     }
 
+    /// Like [`Self::insert_verified_checkpoint_contents`], but does not store full contents.
+    pub fn insert_checkpoint_contents_digests(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: &CheckpointContents,
+    ) -> Result<(), TypedStoreError> {
+        assert_eq!(&checkpoint.content_digest, contents.digest());
+        let mut batch = self.tables.checkpoint_content.batch();
+        batch.insert_batch(
+            &self.tables.checkpoint_sequence_by_contents_digest,
+            [(&checkpoint.content_digest, checkpoint.sequence_number())],
+        )?;
+        batch.insert_batch(
+            &self.tables.checkpoint_content,
+            [(contents.digest(), contents)],
+        )?;
+        batch.write()
+    }
+
     pub fn delete_full_checkpoint_contents(
         &self,
         seq: CheckpointSequenceNumber,

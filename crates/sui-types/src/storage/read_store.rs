@@ -4,7 +4,9 @@
 use super::ObjectStore;
 use super::error::Result;
 use crate::balance_change::{BalanceChange, derive_balance_changes};
-use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
+use crate::base_types::{
+    EpochId, ExecutionData, ExecutionDigests, ObjectID, ObjectType, SequenceNumber, SuiAddress,
+};
 use crate::committee::Committee;
 use crate::digests::{
     ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
@@ -12,6 +14,7 @@ use crate::digests::{
 use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::full_checkpoint_content::{Checkpoint, ExecutedTransaction, ObjectSet};
+use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
     VersionedFullCheckpointContents,
@@ -136,6 +139,20 @@ pub trait ReadStore: ObjectStore {
             .iter()
             .map(|digest| self.get_transaction_effects(digest))
             .collect()
+    }
+
+    /// Loads the transaction and effects for `digests`. Returns `None` if either is missing or the
+    /// stored effects do not have the expected digest. Implementations should look up effects by
+    /// effects digest, so that checkpoints that are synced but not yet executed can be served.
+    fn get_execution_data(&self, digests: &ExecutionDigests) -> Option<ExecutionData> {
+        let transaction = self.get_transaction(&digests.transaction)?;
+        let effects = self
+            .get_transaction_effects(&digests.transaction)
+            .filter(|effects| effects.digest() == digests.effects)?;
+        Some(ExecutionData::new(
+            (*transaction).clone().into_inner(),
+            effects,
+        ))
     }
 
     fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents>;
@@ -400,6 +417,10 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).get_transaction_checkpoint(digest)
     }
 
+    fn get_execution_data(&self, digests: &ExecutionDigests) -> Option<ExecutionData> {
+        (*self).get_execution_data(digests)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -532,6 +553,10 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).get_transaction_checkpoint(digest)
     }
 
+    fn get_execution_data(&self, digests: &ExecutionDigests) -> Option<ExecutionData> {
+        (**self).get_execution_data(digests)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -662,6 +687,10 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
         (**self).get_transaction_checkpoint(digest)
+    }
+
+    fn get_execution_data(&self, digests: &ExecutionDigests) -> Option<ExecutionData> {
+        (**self).get_execution_data(digests)
     }
 
     fn get_full_checkpoint_contents(

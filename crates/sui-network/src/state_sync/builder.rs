@@ -4,7 +4,7 @@
 use super::{
     Handle, PeerHeights, StateSyncEventLoop, StateSyncMessage, StateSyncServer,
     metrics::Metrics,
-    server::{CheckpointContentsDownloadLimitLayer, Server, SizeLimitLayer},
+    server::{self, CheckpointContentsDownloadLimitLayer, Server, SizeLimitLayer},
 };
 use crate::discovery;
 use anemo::codegen::InboundRequestLayer;
@@ -179,6 +179,9 @@ where
             peer_heights: peer_heights.clone(),
             sender: weak_sender,
             max_checkpoint_lookahead: config.max_checkpoint_lookahead(),
+            max_full_contents_response_size: server::MAX_FULL_CHECKPOINT_CONTENTS_RESPONSE_SIZE,
+            checkpoint_transactions_response_budget:
+                server::CHECKPOINT_TRANSACTIONS_RESPONSE_BUDGET,
         };
 
         (
