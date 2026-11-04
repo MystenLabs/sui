@@ -18,7 +18,7 @@
 //! [`TransactionPoolContext`], and closes it before stopping consensus.
 
 use crate::admission_queue::{
-    AdmissionQueueEntry, AdmissionQueueMetrics, PopAction, PriorityAdmissionQueue,
+    AdmissionQueueEntry, AdmissionQueueMetrics, DedupKey, PopAction, PriorityAdmissionQueue,
 };
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::{
@@ -260,8 +260,10 @@ impl AdmissionQueueEntry for PoolEntry {
         self.ack.keys.iter().cloned()
     }
 
-    fn dedup_keys(&self) -> impl Iterator<Item = ObjectRef> {
-        self.gas_payment_objects.iter().copied()
+    fn dedup_keys(&self) -> impl Iterator<Item = DedupKey> {
+        self.gas_payment_objects
+            .iter()
+            .map(|object_ref| (object_ref.0, object_ref.1))
     }
 
     fn notify_evicted(self, min_gas_price: u64) {
