@@ -92,6 +92,10 @@ where
         commands,
         unified_linkage,
     } = ast;
+    assert_invariant!(
+        Rc::ptr_eq(&env.unified_linkage.0, &unified_linkage.0),
+        "typed transaction and execution environment must share linkage"
+    );
     let mut context = Context::new(
         env,
         metrics,
@@ -103,7 +107,6 @@ where
         withdrawals,
         pure,
         receiving,
-        unified_linkage,
     )?;
 
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;

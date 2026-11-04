@@ -9,6 +9,7 @@ use crate::{
     static_programmable_transactions::{
         env,
         linkage::{
+            config::NATIVE_PACKAGE_IDS,
             resolution::get_package,
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
             single_linkage::upgrade_introduces_new_init,
@@ -24,28 +25,31 @@ use sui_types::{base_types::ObjectID, error::ExecutionErrorTrait};
 pub fn verify<Mode: ExecutionMode>(
     env: &env::Env<Mode>,
     tt: &T::Transaction,
-    unified_linkage: &ExecutableLinkage,
 ) -> Result<(), Mode::Error> {
-    // Every package selected by the transaction linkage must be resolved to a version id,
-    // and that version id must resolve back to the same original id in the resolution table.
-    for (original_id, version_id) in &unified_linkage.0.linkage {
-        let Some(resolution) = unified_linkage.0.linkage_resolution.get(version_id) else {
-            invariant_violation!(
-                "transaction linkage selects {version_id} for package {original_id}, which has no \
-                 resolution entry"
-            )
-        };
-        let resolved_original_id = resolution.original_id;
-        assert_invariant!(
-            resolved_original_id == *original_id,
-            "transaction linkage selects {version_id} for package {original_id}, but that version \
-             resolves to {resolved_original_id}"
-        );
+    let unified_linkage = &tt.unified_linkage;
+    assert_invariant!(
+        Rc::ptr_eq(&env.unified_linkage.0, &unified_linkage.0),
+        "environment and typed transaction must share linkage"
+    );
+    unified_linkage.validate_runtime_linkage_consistency::<Mode::Error>()?;
+    // Native packages are implicitly available and update in place. Predefined-package
+    // execution (system/genesis) may not have published them yet, so honor its inclusion policy.
+    if env
+        .resolution_config
+        .linkage_config()
+        .always_include_system_packages
+    {
+        for id in NATIVE_PACKAGE_IDS {
+            let selected = unified_linkage.0.linkage.get(id);
+            assert_invariant!(
+                selected == Some(id),
+                "transaction linkage must resolve native package {id} to itself, but selects {selected:?}"
+            );
+        }
     }
 
     for (i, sp!(_, c)) in tt.commands.iter().enumerate() {
-        verify_command::<Mode>(env, &c.command, unified_linkage)
-            .map_err(|e| e.with_command_index(i))?;
+        verify_command::<Mode>(env, &c.command).map_err(|e| e.with_command_index(i))?;
     }
 
     Ok(())
@@ -54,8 +58,8 @@ pub fn verify<Mode: ExecutionMode>(
 fn verify_command<Mode: ExecutionMode>(
     env: &env::Env<Mode>,
     command: &T::Command__,
-    unified_linkage: &ExecutableLinkage,
 ) -> Result<(), Mode::Error> {
+    let unified_linkage = env.unified_linkage;
     let verify_package_init_linkage = |declared_linkage: &ResolvedLinkage, err_context| {
         for (original_id, version_id) in &declared_linkage.linkage {
             let unified_version_id = unified_linkage.0.linkage.get(original_id);
@@ -69,9 +73,7 @@ fn verify_command<Mode: ExecutionMode>(
     };
 
     match command {
-        T::Command__::MoveCall(move_call) => {
-            verify_move_call::<Mode>(env, &move_call.function, unified_linkage)
-        }
+        T::Command__::MoveCall(move_call) => verify_move_call::<Mode>(env, &move_call.function),
         T::Command__::Publish(PackagePayload::Deserialized(pkg), _, resolved_linkage) => {
             if pkg.has_potential_init() {
                 verify_package_init_linkage(resolved_linkage, "publish")
@@ -110,16 +112,15 @@ fn verify_command<Mode: ExecutionMode>(
 /// Verify that the  `MoveCall`'s root call's version is unchanged in the unified linkage, and that
 /// the versions of all its dependencies in the unified linkage satisfy what the callee's
 /// visibility demanded of its dependencies -- exact for non-`public` and no older for `public`.
-fn verify_move_call<Mode: ExecutionMode>(
+pub(crate) fn verify_move_call<Mode: ExecutionMode>(
     env: &env::Env<Mode>,
     function: &LoadedFunction,
-    unified_linkage: &ExecutableLinkage,
 ) -> Result<(), Mode::Error> {
-    // Every `MoveCall` must have been rewritten to the transaction-wide linkage itself, not
-    // merely to an equal copy of it.
+    let unified_linkage = env.unified_linkage;
+    // Loading must use the canonical linkage, not merely an equal copy of it.
     assert_invariant!(
         Rc::ptr_eq(&function.linkage.0, &unified_linkage.0),
-        "MoveCall was not rewritten to the transaction-wide linkage"
+        "MoveCall was not loaded with the transaction-wide linkage"
     );
 
     let original_id = ObjectID::from(*function.original_mid.address());
@@ -136,7 +137,7 @@ fn verify_move_call<Mode: ExecutionMode>(
         Visibility::Public => false,
     };
     let pkg = get_package::<Mode::Error, _>(&version_id, env.linkable_store)?;
-    for (dep_original_id, dep_version_id) in env.linkage_analysis.config().linkage_table(&pkg) {
+    for (dep_original_id, dep_version_id) in env.resolution_config.linkage_table(&pkg) {
         let dep_original_id = ObjectID::from(dep_original_id);
         let dep_version_id = ObjectID::from(dep_version_id);
         let selected = unified_linkage.0.linkage.get(&dep_original_id);
@@ -180,7 +181,7 @@ fn verify_move_call<Mode: ExecutionMode>(
 
 /// Packages named by a type are pinned `at_least` at their defining ID and can resolve upwards. So
 /// the unified linkage must contain a version of that package >= the defining ID.
-fn verify_type_linkage<'a, Mode: ExecutionMode>(
+pub(crate) fn verify_type_linkage<'a, Mode: ExecutionMode>(
     types: impl IntoIterator<Item = &'a Type>,
     unified_linkage: &ExecutableLinkage,
 ) -> Result<(), Mode::Error> {

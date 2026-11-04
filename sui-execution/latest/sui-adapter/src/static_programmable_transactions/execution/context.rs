@@ -160,7 +160,7 @@ macro_rules! with_vm {
         let mut vm = if let Some(vm) = $context.executable_vm.take() {
             vm
         } else {
-            let linkage = &$context.unified_linkage;
+            let linkage = $context.env.unified_linkage;
             let link_context = linkage.linkage_context::<$error>()?;
             let data_store = &$context.env.linkable_store.package_store;
             $context
@@ -262,7 +262,6 @@ where
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<ExecutionMetrics>,
     pub native_extensions: NativeExtensions<'env>,
-    unified_linkage: ExecutableLinkage,
     executable_vm: Option<MoveVM<'env>>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
@@ -339,7 +338,6 @@ where
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
         pure_input_metadata: Vec<T::PureInput>,
         receiving_input_metadata: Vec<T::ReceivingInput>,
-        unified_linkage: ExecutableLinkage,
     ) -> Result<Self, Mode::Error>
     where
         'pc: 'state,
@@ -437,7 +435,6 @@ where
             env,
             metrics,
             native_extensions,
-            unified_linkage,
             executable_vm: None,
             tx_context,
             gas_charger,
@@ -741,8 +738,8 @@ where
             .map(ObjectID::from)
             .collect::<BTreeSet<_>>();
 
-        let ty_linkage = ExecutableLinkage::type_linkage::<_, Mode::Error>(
-            env.linkage_analysis.config().clone(),
+        let ty_linkage = ExecutableLinkage::type_linkage_unmetered::<_, Mode::Error>(
+            env.resolution_config.clone(),
             &tys_addrs,
             env.linkable_store,
         )?;
