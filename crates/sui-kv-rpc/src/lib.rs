@@ -11,14 +11,13 @@ use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
 use prometheus::register_int_gauge_with_registry;
-use sui_kvstore::BITMAP_INDEX_PIPELINE;
 use sui_kvstore::BigTableClient;
+use sui_kvstore::BitmapSchema;
 use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
 pub use sui_kvstore::ChannelHealthConfig;
 use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
-use sui_kvstore::EVENT_BITMAP_INDEX_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::OBJECTS_PIPELINE;
 use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
@@ -75,28 +74,6 @@ pub use config::StageConfig;
 pub use config::StagesConfig;
 pub use indexer_streams::WatermarkSource;
 use package_store::BigTablePackageStore;
-
-/// Pipelines whose watermarks always bound the `GetServiceInfo` checkpoint
-/// height, because every instance serves the point-lookup APIs that read them.
-pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 8] = [
-    CHECKPOINTS_PIPELINE,
-    CHECKPOINTS_BY_DIGEST_PIPELINE,
-    TRANSACTIONS_PIPELINE,
-    OBJECTS_PIPELINE,
-    EPOCH_START_PIPELINE,
-    EPOCH_END_PIPELINE,
-    PACKAGES_PIPELINE,
-    PACKAGES_BY_ID_PIPELINE,
-];
-
-/// Pipelines that only back the List APIs. Part of the `GetServiceInfo`
-/// watermark set, so an instance whose indexer has not caught up on them does
-/// not advertise a height it cannot serve.
-pub const LIST_API_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 3] = [
-    TX_SEQ_DIGEST_PIPELINE,
-    BITMAP_INDEX_PIPELINE,
-    EVENT_BITMAP_INDEX_PIPELINE,
-];
 
 pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 
@@ -503,25 +480,6 @@ impl KvRpcServer {
         )
     }
 
-    /// Construct a KvRpcServer backed by a local BigTable emulator.
-    pub async fn new_local(
-        host: String,
-        instance_id: String,
-        server_version: Option<ServerVersion>,
-    ) -> anyhow::Result<Self> {
-        Self::new_local_with_config(
-            host,
-            instance_id,
-            server_version,
-            LedgerHistoryConfig::default(),
-            KvRpcConfig::default().request_bigtable_concurrency(),
-            KvRpcConfig::default().monotonic_read_wait_timeout(),
-            StagesConfig::default(),
-            WatermarkSource::Bigtable,
-        )
-        .await
-    }
-
     /// Construct a KvRpcServer backed by a local BigTable emulator with explicit
     /// ledger-history and per-stage configuration. Tests use this to exercise
     /// scan-budget / read-size behaviour (e.g. small `tx_seq_digest` reads)
@@ -577,7 +535,9 @@ impl KvRpcServer {
             chain_id,
             client,
             server_version,
-            service_info_watermark_pipelines: service_info_watermark_pipelines(),
+            service_info_watermark_pipelines: service_info_watermark_pipelines(
+                ledger_history.bitmap_schema(),
+            ),
             cache,
             watermark_source,
             package_resolver,
@@ -712,12 +672,25 @@ impl KvRpcServer {
     }
 }
 
-/// Pipelines whose watermarks bound the checkpoint height reported by
-/// `GetServiceInfo`: the always-served set, plus the List API pipelines.
-pub fn service_info_watermark_pipelines() -> Vec<&'static str> {
-    let mut pipelines = DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec();
-    pipelines.extend_from_slice(&LIST_API_SERVICE_INFO_WATERMARK_PIPELINES);
-    pipelines
+/// Pipelines whose watermarks bound the checkpoint height reported by `GetServiceInfo`, so an
+/// instance does not advertise a height it cannot serve.
+pub fn service_info_watermark_pipelines(bitmap_schema: BitmapSchema) -> Vec<&'static str> {
+    let [transaction_bitmap, event_bitmap] = sui_kvstore::bitmap_index_pipelines(bitmap_schema);
+    vec![
+        // Point lookups.
+        CHECKPOINTS_PIPELINE,
+        CHECKPOINTS_BY_DIGEST_PIPELINE,
+        TRANSACTIONS_PIPELINE,
+        OBJECTS_PIPELINE,
+        EPOCH_START_PIPELINE,
+        EPOCH_END_PIPELINE,
+        PACKAGES_PIPELINE,
+        PACKAGES_BY_ID_PIPELINE,
+        // List APIs, which read the bitmap tables of `bitmap_schema`.
+        TX_SEQ_DIGEST_PIPELINE,
+        transaction_bitmap,
+        event_bitmap,
+    ]
 }
 
 #[cfg(test)]
@@ -746,6 +719,14 @@ mod tests {
             .count()
     }
 
+    /// List-API configuration that reads the v2 bitmap tables.
+    pub(crate) fn v2_ledger_history() -> LedgerHistoryConfig {
+        LedgerHistoryConfig {
+            bitmap_schema: Some(BitmapSchema::V2),
+            ..Default::default()
+        }
+    }
+
     async fn wait_for_served_checkpoint(server: &KvRpcServer, checkpoint: i64) {
         timeout(WAIT, async {
             while server.metrics.served_checkpoint.get() != checkpoint {
@@ -756,10 +737,29 @@ mod tests {
         .unwrap_or_else(|_| panic!("served checkpoint never reached {checkpoint}"));
     }
 
-    /// Write a watermark row for every served pipeline, at the checkpoint `checkpoint_of` names
-    /// for it.
-    async fn seed_watermarks(client: &mut BigTableClient, checkpoint_of: impl Fn(&str) -> u64) {
-        for pipeline in service_info_watermark_pipelines() {
+    /// Start a replica that polls Bigtable for watermarks and reads the v2 bitmap tables.
+    async fn start_v2_server(bigtable: SocketAddr) -> KvRpcServer {
+        KvRpcServer::new_local_with_config(
+            bigtable.to_string(),
+            "test".to_string(),
+            None,
+            v2_ledger_history(),
+            KvRpcConfig::default().request_bigtable_concurrency(),
+            KvRpcConfig::default().monotonic_read_wait_timeout(),
+            StagesConfig::default(),
+            WatermarkSource::Bigtable,
+        )
+        .await
+        .expect("start kv-rpc server")
+    }
+
+    /// Write a watermark row for every pipeline a v2 replica serves, at the checkpoint
+    /// `checkpoint_of` names for it.
+    pub(crate) async fn seed_watermarks(
+        client: &mut BigTableClient,
+        checkpoint_of: impl Fn(&str) -> u64,
+    ) {
+        for pipeline in service_info_watermark_pipelines(BitmapSchema::V2) {
             let checkpoint = checkpoint_of(pipeline);
             client
                 .create_pipeline_watermark_if_absent(
@@ -798,9 +798,7 @@ mod tests {
         let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
             .await
             .expect("connect to mock BigTable");
-        let server = KvRpcServer::new_local(addr.to_string(), "test".to_string(), None)
-            .await
-            .expect("start kv-rpc server");
+        let server = start_v2_server(addr).await;
 
         // Without watermark rows no refresh succeeds, so the served checkpoint stays unknown.
         sleep(Duration::from_millis(50)).await;
@@ -833,9 +831,7 @@ mod tests {
         })
         .await;
 
-        let server = KvRpcServer::new_local(addr.to_string(), "test".to_string(), None)
-            .await
-            .expect("start kv-rpc server");
+        let server = start_v2_server(addr).await;
         timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
             .await
             .expect("service info never refreshed")

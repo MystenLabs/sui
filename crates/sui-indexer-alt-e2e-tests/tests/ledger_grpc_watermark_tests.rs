@@ -14,7 +14,6 @@ use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use sui_indexer_alt_reader::monotonic_read::CheckpointFloor;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::X_SUI_MIN_CHECKPOINT;
-use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::ConcurrentLayer;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::SequentialLayer;
@@ -185,17 +184,17 @@ async fn cluster_at_tip(
     )
     .await
     .expect("Failed to create cluster");
-    // kv-rpc serves the lowest of its per-pipeline watermarks, so every pipeline has to reach this
-    // checkpoint before it counts as the tip. `create_checkpoint` would additionally wait on the
-    // indexer, consistent store and GraphQL, which no assertion here reads.
+    // kv-rpc serves the lowest of its per-pipeline watermarks, so it serves this checkpoint only
+    // once every pipeline it reads has reached it. `create_checkpoint` would additionally wait on
+    // the indexer, consistent store and GraphQL, which no assertion here reads.
     let tip = cluster
         .create_checkpoint_before_list_apis_sync()
         .await
         .sequence_number;
     cluster
-        .wait_for_bigtable(&ALL_PIPELINE_NAMES, tip, Duration::from_secs(60))
+        .wait_for_kv_rpc(tip, Duration::from_secs(60))
         .await
-        .expect("Timed out waiting for BigTable pipelines");
+        .expect("Timed out waiting for kv-rpc to serve the tip");
 
     let client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await

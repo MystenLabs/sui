@@ -33,6 +33,7 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::BitmapQuery;
+use sui_kvstore::BitmapSchema;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
@@ -931,7 +932,7 @@ async fn test_indexer_e2e() -> Result<()> {
             harness.bigtable_client(),
             BitmapQuery::scan(sender_dim_key.clone())?,
             tx_range.clone(),
-            BitmapIndexSpec::tx(),
+            BitmapIndexSpec::tx(BitmapSchema::V2),
             ScanDirection::Ascending,
         )
         .try_collect::<Vec<_>>()
@@ -957,7 +958,7 @@ async fn test_indexer_e2e() -> Result<()> {
             harness.bigtable_client(),
             BitmapQuery::scan(sender_dim_key)?,
             event_range,
-            BitmapIndexSpec::event(),
+            BitmapIndexSpec::event(BitmapSchema::V2),
             ScanDirection::Ascending,
         )
         .try_collect::<Vec<_>>()

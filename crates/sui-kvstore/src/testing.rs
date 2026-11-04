@@ -28,7 +28,9 @@ pub const INSTANCE_ID: &str = "bigtable_test_instance";
 /// tables, so test failures will signal when this list needs updating.
 pub const TABLES: &[&str] = &[
     crate::tables::transaction_bitmap_index::NAME,
+    crate::tables::transaction_bitmap_index::NAME_V2,
     crate::tables::event_bitmap_index::NAME,
+    crate::tables::event_bitmap_index::NAME_V2,
     crate::tables::objects::NAME,
     crate::tables::object_versions_by_checkpoint::NAME,
     crate::tables::transactions::NAME,

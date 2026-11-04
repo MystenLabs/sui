@@ -389,7 +389,9 @@ pub struct PipelineLayer {
     pub packages_by_checkpoint: ConcurrentLayer,
     pub system_packages: ConcurrentLayer,
     pub tx_seq_digest: ConcurrentLayer,
+    /// Configures `kvstore_transaction_dimensions` and `kvstore_transaction_dimensions_v2`.
     pub transaction_bitmap_index: SequentialLayer,
+    /// Configures `kvstore_event_dimensions` and `kvstore_event_dimensions_v2`.
     pub event_bitmap_index: SequentialLayer,
     pub object_versions_by_checkpoint: ConcurrentLayer,
     pub object_tombstones: ConcurrentLayer,

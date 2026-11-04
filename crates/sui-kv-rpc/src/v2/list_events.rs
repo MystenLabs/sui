@@ -12,7 +12,6 @@ use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_inverted_index::event_seq;
-use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
@@ -152,7 +151,8 @@ pub(crate) async fn list_events(
         .boxed());
     }
 
-    let scan_budget = ctx.scan_budget(BitmapIndexSpec::event());
+    let spec = ctx.event_bitmap_spec();
+    let scan_budget = ctx.ledger_history().bitmap_bucket_budget_event();
     let frontier_to_position: fn(u64) -> IntraTxCoordinate = if filtered {
         |seq| IntraTxCoordinate::from(event_seq::decode_event_seq(seq))
     } else {
@@ -170,7 +170,7 @@ pub(crate) async fn list_events(
             .eval_bitmap_query_stream(
                 query,
                 event_seq::packed_range(event_bounds.lo, event_bounds.hi),
-                BitmapIndexSpec::event(),
+                spec,
                 options.scan_direction(),
                 scan_budget,
                 ctx.bitmap_skip_policy(),

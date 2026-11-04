@@ -83,7 +83,7 @@ where
             .for_each_indexed_bit(checkpoint, |bucket_id, bit_position, dim, value| {
                 crate::tables::encode_bitmap_row_key_parts_into(
                     &mut row_key,
-                    P::SCHEMA_VERSION,
+                    P::SCHEMA,
                     P::BUCKET_ID_WIDTH,
                     dim.tag_byte(),
                     value,

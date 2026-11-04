@@ -92,6 +92,7 @@ use crate::bigtable::client::CheckpointSpan;
 use crate::handlers::BitmapIndexValue;
 use crate::rate_limiter::CompositeRateLimiter;
 use crate::store::BitmapInitialWatermarks;
+use crate::tables::BitmapSchema;
 
 pub(crate) use metrics::BitmapIndexMetrics;
 
@@ -224,6 +225,7 @@ pub(crate) struct BitmapCommitter {
     pub pipeline: &'static str,
     pub table: &'static str,
     pub column: &'static str,
+    pub schema: BitmapSchema,
     pub is_sealed: fn(u64, CommitterWatermark) -> bool,
     pub initial_watermarks: BitmapInitialWatermarks,
     pub client: BigTableClient,
@@ -251,6 +253,7 @@ impl BitmapCommitter {
             pipeline,
             table,
             column,
+            schema,
             is_sealed,
             initial_watermarks,
             client,
@@ -338,6 +341,7 @@ impl BitmapCommitter {
                 pipeline,
                 table,
                 column,
+                schema,
                 client,
                 rate_limiter,
                 write_rx,
