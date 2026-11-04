@@ -2044,15 +2044,19 @@ impl AuthorityState {
             .assigned_versions
             .system_object_versions
             .clone();
-        let mut execution_params = match early_execution_error {
+        // Expiry replaces every other early error, because an expired transaction is never
+        // checked for congestion or funds.
+        let early_execution_error = if execution_env.timestamp_expired {
+            Some(nonempty::NonEmpty::new(
+                ExecutionErrorKind::TransactionExpired,
+            ))
+        } else {
+            early_execution_error
+        };
+        let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
         };
-        // Another early error takes precedence, so that nodes that derive the expiration from
-        // effects compute the same error list.
-        if execution_env.timestamp_expired {
-            execution_params.fail_if_ok(ExecutionErrorKind::TransactionExpired);
-        }
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
         // was deleted.

@@ -1490,7 +1490,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         for transaction in ordered_randomness_txns {
-            if state.dkg_failed {
+            let expired = protocol_config.enable_timestamp_transaction_expiration()
+                && transaction
+                    .tx()
+                    .transaction_data()
+                    .expiration()
+                    .is_expired_at(commit_info.timestamp);
+            if state.dkg_failed && !expired {
                 debug!(
                     "Canceling randomness-using transaction {:?} because DKG failed",
                     transaction.tx().digest(),
@@ -1944,6 +1950,44 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let tx_digest = *transaction.tx().digest();
 
+        // An expired transaction aborts before reading its inputs, so it is scheduled without the
+        // deferral and cancellation checks below. A randomness-using transaction still waits for
+        // a commit that generates randomness, since only such a commit schedules it.
+        if protocol_config.enable_timestamp_transaction_expiration()
+            && transaction
+                .tx()
+                .transaction_data()
+                .expiration()
+                .is_expired_at(commit_info.timestamp)
+        {
+            if transaction.tx().transaction_data().uses_randomness()
+                && state.randomness_round.is_none()
+                && !state.dkg_failed
+                && self.epoch_store.randomness_state_enabled()
+            {
+                assert_reachable!("expired transaction deferred until randomness is generated");
+                let deferred_from_round = previously_deferred_tx_digests
+                    .get(&tx_digest)
+                    .map(|k| k.deferred_from_round())
+                    .unwrap_or(commit_info.round);
+                deferred_txns
+                    .entry(DeferralKey::new_for_randomness(deferred_from_round))
+                    .or_default()
+                    .push(transaction);
+                return;
+            }
+            if previously_deferred_tx_digests.contains_key(&tx_digest) {
+                assert_reachable!("deferred transaction scheduled after its max_timestamp");
+            } else {
+                assert_reachable!("new transaction scheduled after its max_timestamp");
+            }
+            state
+                .timestamp_expired_txns
+                .insert(TransactionKey::Digest(tx_digest));
+            scheduled_txns.push(transaction);
+            return;
+        }
+
         // Check for unpaid amplification before other deferral checks.
         // SIP-45: the gas price pays for `paid_proposer_count` submissions.
         // Transactions with more duplicates than paid for are deferred.
@@ -2139,22 +2183,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 }
             }
         } else {
-            if protocol_config.enable_timestamp_transaction_expiration()
-                && transaction
-                    .tx()
-                    .transaction_data()
-                    .expiration()
-                    .is_expired_at(commit_info.timestamp)
-            {
-                state
-                    .timestamp_expired_txns
-                    .insert(TransactionKey::Digest(tx_digest));
-                if previously_deferred_tx_digests.contains_key(&tx_digest) {
-                    assert_reachable!("deferred transaction scheduled after its max_timestamp");
-                } else {
-                    assert_reachable!("new transaction scheduled after its max_timestamp");
-                }
-            }
             // Update object execution cost for all scheduled transactions
             shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
             scheduled_txns.push(transaction);
