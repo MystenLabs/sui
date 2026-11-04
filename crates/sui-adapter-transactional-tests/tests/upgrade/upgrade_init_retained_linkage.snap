@@ -1,0 +1,57 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+// An upgrade retaining an initializer in an existing module must neither rerun it nor add
+// its declared dependencies to runtime linkage. An aborting retained initializer and an
+// ordinary exact-v2 call establish both properties; the capability records a successful upgrade.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-12:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-16:
+//# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 18-21:
+//# publish --upgradeable --dependencies DepV1 --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6741200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 29-34:
+//# programmable --sender A --inputs object(3,1) 0u8 digest(U2) 2u64
+// There is no new-module init, so an exact v2 call does not conflict with the upgrade's v1 deps.
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: Upgrade(U2, [DepV1,sui,std], U1, Result(0));
+//> DepV2::m::check(Input(3));
+//> sui::package::commit_upgrade(Input(0), Result(1));
+created: object(5,0)
+mutated: object(0,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 6726000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 36-37:
+//# view-object 3,1
+Owner: Account Address ( A )
+Version: 5
+Contents: sui::package::UpgradeCap {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,1),
+        },
+    },
+    package: sui::object::ID {
+        bytes: fake(5,0),
+    },
+    version: 2u64,
+    policy: 0u8,
+}

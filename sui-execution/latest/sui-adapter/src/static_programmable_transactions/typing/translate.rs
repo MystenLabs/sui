@@ -350,9 +350,6 @@ pub fn transaction<Mode: ExecutionMode>(
         mut commands,
         unified_linkage,
     } = lt;
-    let Some(unified_linkage) = unified_linkage else {
-        invariant_violation!("unified linkage was not recorded on the loaded transaction")
-    };
     let withdrawal_compatability_inputs =
         determine_withdrawal_compatibility_inputs(env, &mut inputs)?;
     let mut context = Context::new(gas_payment, original_command_len, inputs, unified_linkage)?;
@@ -1042,7 +1039,6 @@ fn convert_withdrawal_to_coin<Mode: ExecutionMode>(
             COIN_MODULE_NAME,
             REDEEM_FUNDS_FUNC_NAME,
             vec![inner_ty.clone()],
-            &context.unified_linkage,
         )?,
         arguments: vec![withdrawal_arg, ctx_arg],
     }));

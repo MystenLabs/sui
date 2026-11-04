@@ -23,7 +23,9 @@ impl ExecutableLinkage {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
-    pub fn type_linkage<I, E>(
+    /// External layout queries have no transaction gas budget, and writeout intentionally
+    /// retains its existing unmetered linkage accounting.
+    pub fn type_linkage_unmetered<I, E>(
         config: ResolutionConfig,
         ids: I,
         store: &VerifiedPackageStore<'_>,
@@ -34,10 +36,36 @@ impl ExecutableLinkage {
         I::Item: Borrow<ObjectID>,
     {
         let mut resolution_table = ResolutionTable::empty(config);
-        resolution_table.add_type_linkages_to_table(ids, store)?;
+        resolution_table.add_type_linkages_to_table(ids, store, &mut || Ok(()))?;
         Ok(Self::new(ResolvedLinkage::from_resolution_table(
             resolution_table,
         )))
+    }
+
+    /// Runtime linkage cannot contain the late-bound self entries used for publication.
+    pub(crate) fn validate_runtime_linkage_consistency<E: ExecutionErrorTrait>(
+        &self,
+    ) -> Result<(), E> {
+        assert_invariant!(
+            self.0
+                .linkage_resolution
+                .values()
+                .all(|r| r.version.is_some()),
+            "runtime linkage contains a late-bound publication version"
+        );
+        for (original_id, version_id) in &self.0.linkage {
+            let Some(resolution) = self.0.linkage_resolution.get(version_id) else {
+                invariant_violation!(
+                    "transaction linkage selects {version_id} for package {original_id}, which has no resolution entry"
+                );
+            };
+            assert_invariant!(
+                resolution.original_id == *original_id,
+                "transaction linkage selects {version_id} for package {original_id}, but that version resolves to {}",
+                resolution.original_id
+            );
+        }
+        Ok(())
     }
 
     pub fn linkage_context<E: ExecutionErrorTrait>(&self) -> Result<LinkageContext, E> {
