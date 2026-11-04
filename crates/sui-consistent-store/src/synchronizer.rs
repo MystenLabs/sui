@@ -44,9 +44,12 @@
 //! pipelines' commits), the caught-up members park at the frontier
 //! while it commits its backlog. Every snapshot taken during a run
 //! therefore includes every required pipeline's writes through the
-//! snapshot's checkpoint. Once a required pipeline leaves the cohort
-//! (its input channel closes on shutdown), no further snapshots are
-//! taken. Pipelines that are not required keep dynamic membership.
+//! snapshot's checkpoint. Pipelines that are not required keep
+//! dynamic membership.
+//!
+//! Once any member leaves the cohort (its input channel closes on
+//! shutdown), no further snapshots are taken: they would miss the
+//! departed pipeline's writes.
 //!
 //! # Pipelines must commit exactly one checkpoint per batch
 //!
@@ -285,7 +288,6 @@ impl Synchronizer {
                 first_checkpoint,
                 *last_watermark,
                 is_member(pipeline_task, last_watermark),
-                self.required_members.contains(pipeline_task),
             ));
         }
 
@@ -301,9 +303,7 @@ impl Synchronizer {
 /// `is_member` records whether this pipeline starts inside the
 /// snapshot cohort (caught up to the frontier, or required) or
 /// lagging behind it; a lagging pipeline flips it to `true` when it
-/// climbs to the frontier and joins. `is_required` marks a required
-/// member (see [`Synchronizer::require_member`]).
-#[allow(clippy::too_many_arguments)]
+/// climbs to the frontier and joins.
 async fn synchronizer_task(
     coordinator: Arc<SnapshotCoordinator>,
     mut rx: mpsc::Receiver<(Watermark, Batch)>,
@@ -312,7 +312,6 @@ async fn synchronizer_task(
     first_checkpoint: u64,
     mut current_watermark: Option<Watermark>,
     mut is_member: bool,
-    is_required: bool,
 ) -> anyhow::Result<()> {
     loop {
         let next_checkpoint = current_watermark
@@ -362,7 +361,7 @@ async fn synchronizer_task(
 
         let Some((watermark, batch)) = rx.recv().await else {
             info!(pipeline = %pipeline_task, "Synchronizer channel closed");
-            coordinator.depart(pipeline_task, is_member, is_required);
+            coordinator.depart(pipeline_task, is_member);
             break;
         };
 
@@ -437,9 +436,9 @@ struct Cohort {
     /// Members that have reached the current frontier this round.
     /// Reset to zero each time the frontier advances.
     arrived: usize,
-    /// Set when a required member departs. Later snapshots would not
-    /// include its writes, so the frontier still advances but no
-    /// snapshot is taken for the rest of the run.
+    /// Set when a member departs. Later snapshots would not include
+    /// its writes, so the frontier still advances but no snapshot is
+    /// taken for the rest of the run.
     snapshots_halted: bool,
 }
 
@@ -522,7 +521,7 @@ impl SnapshotCoordinator {
             if cohort.arrived == cohort.members {
                 // Last to arrive: every member has committed through
                 // `at_checkpoint - 1`, so take the snapshot (unless a
-                // required member has departed) and release the cohort.
+                // member has departed) and release the cohort.
                 if !cohort.snapshots_halted {
                     self.db.take_snapshot(watermark);
                     debug!(
@@ -556,18 +555,16 @@ impl SnapshotCoordinator {
     /// awaiting its next checkpoint, below the frontier), so no
     /// snapshot is taken here: a snapshot at this frontier would be
     /// inconsistent for the departed pipeline. Departure only happens
-    /// on shutdown, so skipping this final snapshot is harmless. A
-    /// departing required member also halts every later snapshot, which
-    /// would otherwise miss its writes.
-    fn depart(&self, pipeline_task: &str, is_member: bool, is_required: bool) {
+    /// on shutdown, so skipping this final snapshot is harmless.
+    /// Departure also halts every later snapshot, which would miss the
+    /// departed pipeline's writes.
+    fn depart(&self, pipeline_task: &str, is_member: bool) {
         if !is_member {
             return;
         }
         let mut cohort = self.cohort.lock().expect("snapshot cohort mutex poisoned");
         cohort.members -= 1;
-        if is_required {
-            cohort.snapshots_halted = true;
-        }
+        cohort.snapshots_halted = true;
         debug!(
             pipeline = %pipeline_task,
             members = cohort.members,
@@ -1001,18 +998,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn required_member_departure_halts_snapshots() {
-        // Two required pipelines snapshot 5 together. "b" then shuts
-        // down without committing 6 while "a" commits 6 and arrives at
-        // the next frontier alone, so snapshot 6 would miss b's writes
-        // and must not be taken.
+    async fn member_departure_halts_snapshots() {
+        // Two members snapshot 5 together. "b" then shuts down without
+        // committing 6 while "a" commits 6 and arrives at the next
+        // frontier alone, so snapshot 6 would miss b's writes and must
+        // not be taken.
         let (_dir, db) = open();
         seed_watermarks(&db, &[("a", 5), ("b", 5)]);
 
         let mut sync = Synchronizer::new(db.clone(), 8, None);
         for pipeline in ["a", "b"] {
             sync.register_pipeline(pipeline).unwrap();
-            sync.require_member(pipeline).unwrap();
         }
         let (mut joinset, mut queue) = sync.run().unwrap();
         wait_for_snapshot(&db, 5).await;
