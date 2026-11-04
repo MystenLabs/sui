@@ -183,9 +183,7 @@ mod tests {
     use sui_kvstore::rpc::proto::v1alpha::watermark_service_server::WatermarkServiceServer;
     use sui_kvstore::rpc::watermark_service::WatermarkService;
     use sui_kvstore::testing::MockBigtableServer;
-    use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
     use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
-    use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
     use sui_rpc_api::proto::timestamp_ms_to_proto;
     use tokio::time::sleep;
     use tokio::time::timeout;
@@ -197,6 +195,7 @@ mod tests {
     use crate::StagesConfig;
     use crate::served_height::ServedHeight;
     use crate::service_info_watermark_pipelines;
+    use crate::tests::get_service_info;
     use crate::tests::watermark_reads;
 
     /// Covers subscribing to an indexer that restarted, which waits out the follower's 2 s
@@ -340,17 +339,6 @@ mod tests {
             .borrow()
             .as_ref()
             .and_then(|info| info.checkpoint_height)
-    }
-
-    async fn get_service_info(
-        server: &KvRpcServer,
-    ) -> Result<GetServiceInfoResponse, tonic::Status> {
-        LedgerService::get_service_info(
-            server,
-            server.admitted_request(GetServiceInfoRequest::default()),
-        )
-        .await
-        .map(tonic::Response::into_inner)
     }
 
     #[test]

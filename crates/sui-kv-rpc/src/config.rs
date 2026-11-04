@@ -662,9 +662,9 @@ pub struct KvRpcConfig {
     /// every pipeline it runs that had a readable stored watermark row when it started or has
     /// advanced since, so the first response from an indexer that runs every served pipeline is
     /// enough, even during a chain halt. A served pipeline that no listed indexer runs keeps this
-    /// instance unavailable, and is named in a warning. In this mode `/health` reports readiness:
-    /// use it for a readiness probe, not a liveness probe, which would restart an instance that is
-    /// still waiting for watermarks.
+    /// instance unavailable, and is named in a warning. In either mode `/health` reports readiness,
+    /// answering 503 until the instance knows its served checkpoint: use it for a readiness probe,
+    /// not a liveness probe, which would restart an instance that is still waiting for watermarks.
     ///
     /// Streamed watermarks carry no `reader_lo`, so this mode assumes no pipeline has pruned past
     /// its watermark; the kvstore does not prune.

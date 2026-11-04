@@ -179,7 +179,7 @@ async fn test_plaintext_kv_rpc_listener_serves_get_service_info() {
         .expect("connect to KV RPC's plaintext listener");
 
     // `GetServiceInfo` is served from a cache that kv-rpc populates asynchronously after start-up
-    // (see `wait_for_kv_checkpoint`), so retry past the initial `NotFound` while it warms up.
+    // (see `wait_for_kv_checkpoint`), so retry past the initial `Unavailable` while it warms up.
     tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             if client

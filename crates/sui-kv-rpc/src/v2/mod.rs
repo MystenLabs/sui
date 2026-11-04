@@ -16,7 +16,6 @@ use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 use tonic::codegen::BoxStream;
 
 use crate::KvRpcServer;
-use crate::WatermarkSource;
 use crate::admission::AdmittedServiceInfo;
 use crate::operation::OperationSpec;
 use crate::served_height::ServedHeight;
@@ -38,30 +37,11 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
-        if let Some(info) = AdmittedServiceInfo::of(&request)? {
-            return Ok(tonic::Response::new(info.clone()));
-        }
-        // For a request admitted before the cache is first filled, a replica that polls Bigtable
-        // reads the watermark rows directly. A replica that follows indexer streams has no answer
-        // until they report every served pipeline. An indexer's first response already holds
-        // every pipeline it runs, starting from the stored watermark rows it read at startup, so
-        // this lasts until the first response arrives, and the replica's `/health` reports it not
-        // ready until then.
-        match &self.watermark_source {
-            WatermarkSource::Bigtable => get_service_info(
-                self.client.clone(),
-                self.chain_id,
-                self.server_version.clone(),
-                &self.service_info_watermark_pipelines,
-            )
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into),
-            WatermarkSource::IndexerStreams(_) => Err(tonic::Status::unavailable(
-                "served checkpoint not known yet: the indexer watermark streams have not reported \
-                 every served pipeline",
-            )),
-        }
+        // Unavailable only before the replica's first served checkpoint, while `/health` reports
+        // it not ready.
+        let info = AdmittedServiceInfo::of(&request)?
+            .ok_or_else(|| tonic::Status::unavailable("served checkpoint not known yet"))?;
+        Ok(tonic::Response::new(info.clone()))
     }
 
     async fn get_object(
@@ -598,6 +578,7 @@ mod tests {
     use crate::KvRpcConfig;
     use crate::LedgerHistoryConfig;
     use crate::StagesConfig;
+    use crate::WatermarkSource;
 
     /// A replica over checkpoints 0 to 2 whose served height moves only when the test publishes
     /// one.
