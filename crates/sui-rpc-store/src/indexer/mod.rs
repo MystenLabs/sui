@@ -215,7 +215,10 @@ pub fn checkpoint_output_objects(
 /// [`PipelineLayer`]. Disabled pipelines are skipped entirely —
 /// the [`Synchronizer`] only barriers across pipelines that were
 /// actually registered, so leaving the raw-chain-data pipelines
-/// off does not stall snapshots.
+/// off does not stall snapshots. The layer is the only pipeline
+/// selector: the framework's `IndexerArgs::pipeline` filter is
+/// refused, because a pipeline it skipped would still be registered
+/// with the [`Synchronizer`] and hold snapshots back forever.
 ///
 /// Every registered [`LIVE_COHORT`] pipeline is a required snapshot
 /// member ([`Synchronizer::require_member`]): each snapshot includes
@@ -233,12 +236,6 @@ pub struct Indexer {
     /// cross-pipeline snapshots. Owned here until [`Self::run`]
     /// hands it to [`sui_consistent_store::Store::install_sync`].
     sync: Synchronizer,
-
-    /// The `IndexerArgs::pipeline` filter, `None` when every pipeline
-    /// is enabled. The framework skips filtered-out pipelines; they
-    /// must not be registered with [`Self::sync`] either, since they
-    /// never send a batch.
-    enabled_pipelines: Option<HashSet<String>>,
 
     /// Pruning policy and its metrics, present when pruning is
     /// enabled. [`Self::run`] starts the background pruner from
@@ -302,6 +299,10 @@ impl Indexer {
     /// a fullnode that reads through [`RpcStoreSchema`] directly,
     /// or writes to the raw-chain-data CFs through a separate
     /// path).
+    ///
+    /// Fails if `indexer_args.pipeline` is non-empty; select
+    /// pipelines through the [`PipelineLayer`] passed to
+    /// [`Self::add_pipelines`] instead.
     #[allow(clippy::too_many_arguments)]
     pub async fn from_store(
         store: Store,
@@ -316,13 +317,18 @@ impl Indexer {
     ) -> anyhow::Result<Self> {
         let metrics_prefix = Some(METRICS_PREFIX);
 
+        anyhow::ensure!(
+            indexer_args.pipeline.is_empty(),
+            "The rpc-store indexer selects pipelines through its pipeline layer; \
+             IndexerArgs::pipeline must be empty, got {:?}",
+            indexer_args.pipeline,
+        );
+
         let sync = Synchronizer::new(
             store.db().clone(),
             consistency_config.buffer_size,
             indexer_args.first_checkpoint,
         );
-        let enabled_pipelines = (!indexer_args.pipeline.is_empty())
-            .then(|| indexer_args.pipeline.iter().cloned().collect());
 
         let indexer = framework::Indexer::with_ingestion_clients(
             store,
@@ -344,7 +350,6 @@ impl Indexer {
         Ok(Self {
             indexer,
             sync,
-            enabled_pipelines,
             pruner,
         })
     }
@@ -497,14 +502,12 @@ impl Indexer {
         .await
     }
 
-    /// Register a single sequential pipeline with the framework
-    /// indexer and, if the framework accepts it, with the
-    /// synchronizer. A pipeline the framework skips (filtered out by
-    /// `IndexerArgs::pipeline`) never sends a batch, so registering it
-    /// with the synchronizer would let it hold snapshots back forever.
-    /// A [`LIVE_COHORT`] pipeline is also marked as a required
-    /// snapshot member. Synchronizer tasks only start in
-    /// [`Self::run`], so the registration order is not observable.
+    /// Register a single sequential pipeline. The pipeline is
+    /// announced to the synchronizer before being handed to the
+    /// framework indexer so that, by the time the first batch
+    /// flows through, the synchronizer task is already waiting on
+    /// the pipeline's queue. A [`LIVE_COHORT`] pipeline is
+    /// registered as a required snapshot member.
     ///
     /// Refuses to register a pipeline whose persisted [`RestoreState`]
     /// is still `InProgress`: tip-mode indexing of a pipeline that
@@ -541,18 +544,6 @@ impl Indexer {
             }
         }
 
-        self.indexer
-            .sequential_pipeline(handler, config)
-            .await
-            .with_context(|| format!("Failed to add pipeline {:?} to indexer", H::NAME))?;
-        if self
-            .enabled_pipelines
-            .as_ref()
-            .is_some_and(|enabled| !enabled.contains(H::NAME))
-        {
-            return Ok(());
-        }
-
         self.sync
             .register_pipeline(H::NAME)
             .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
@@ -561,6 +552,11 @@ impl Indexer {
                 format!("Failed to require pipeline {:?} in snapshots", H::NAME)
             })?;
         }
+
+        self.indexer
+            .sequential_pipeline(handler, config)
+            .await
+            .with_context(|| format!("Failed to add pipeline {:?} to indexer", H::NAME))?;
 
         Ok(())
     }
@@ -573,7 +569,6 @@ impl Indexer {
             indexer,
             sync,
             pruner: pruner_setup,
-            enabled_pipelines: _,
         } = self;
 
         // Capture the store for the pruner before `indexer.run`
@@ -859,13 +854,12 @@ mod tests {
     const TIP: u64 = 13;
 
     /// Seed `watermarks` into a fresh store at `path`, then run an
-    /// indexer over it with `indexer_args` and the live cohort plus the
+    /// indexer over it with the live cohort plus the
     /// `tx_seq_by_digest` history pipeline, fed checkpoints
     /// `RESTART..=TIP` only. Returns once snapshot `TIP` exists.
     async fn run_until_tip_snapshot(
         path: &std::path::Path,
         watermarks: &[(&str, u64)],
-        indexer_args: IndexerArgs,
     ) -> (Db, Service) {
         let options = DbOptions {
             snapshot_capacity: 16,
@@ -906,7 +900,7 @@ mod tests {
         };
         let mut indexer = Indexer::from_store(
             store,
-            indexer_args,
+            IndexerArgs::default(),
             ingestion_client,
             None,
             None,
@@ -970,7 +964,6 @@ mod tests {
                 ("balance", RESTART - 1),
                 ("tx_seq_by_digest", 0),
             ],
-            IndexerArgs::default(),
         )
         .await;
 
@@ -991,28 +984,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn live_pipeline_filtered_out_by_indexer_args_does_not_block_snapshots() {
-        // `balance` lags but is excluded by the `pipeline` filter, so it
-        // never runs. It must not be required in snapshots, or the
-        // running live pipelines would wait for it forever.
+    async fn from_store_refuses_pipeline_filter() {
+        // A pipeline the framework's filter skips would never send a
+        // batch yet still be registered with the synchronizer, so the
+        // filter is refused up front.
         let dir = tempfile::tempdir().unwrap();
-        let (db, service) = run_until_tip_snapshot(
-            dir.path(),
-            &[
-                ("object_by_owner", RESTART),
-                ("object_by_type", RESTART),
-                ("balance", RESTART - 1),
-            ],
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let registry = Registry::new();
+        let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
+        let ingestion_client =
+            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
+        let Err(err) = Indexer::from_store(
+            sui_consistent_store::Store::new(db, Arc::new(schema)),
             IndexerArgs {
-                pipeline: vec!["object_by_owner".to_owned(), "object_by_type".to_owned()],
+                pipeline: vec!["object_by_owner".to_owned()],
                 ..IndexerArgs::default()
             },
+            ingestion_client,
+            None,
+            None,
+            crate::config::ConsistencyConfig::default(),
+            None,
+            IngestionConfig::default(),
+            &registry,
         )
-        .await;
-
-        assert_eq!(snapshot_watermark(&db, TIP, "object_by_owner"), Some(TIP));
-        assert_eq!(snapshot_watermark(&db, TIP, "balance"), Some(RESTART - 1));
-
-        drop(service);
+        .await
+        else {
+            panic!("a pipeline filter must be refused");
+        };
+        assert!(
+            format!("{err:#}").contains("IndexerArgs::pipeline must be empty"),
+            "unexpected error: {err:#}",
+        );
     }
 }
