@@ -813,11 +813,58 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
+        let complete_effects_size_estimate = self.protocol_config.complete_effects_size_estimate();
+
+        let (num_id_only_changes, num_unchanged_consensus_objects) =
+            if complete_effects_size_estimate {
+                (
+                    self.count_id_only_changes(),
+                    self.count_unchanged_consensus_objects_upperbound(),
+                )
+            } else {
+                (0, 0)
+            };
+
         TransactionEffects::estimate_effects_size_upperbound_v2(
             self.execution_results.written_objects.len(),
             self.execution_results.modified_objects.len(),
             self.input_objects.len(),
+            num_id_only_changes,
+            num_unchanged_consensus_objects,
+            &self.execution_results.accumulator_events,
+            complete_effects_size_estimate,
         )
+    }
+
+    /// Counts the IDs that `get_object_changes` records without a written or modified object:
+    /// objects created then wrapped, and objects unwrapped then deleted.
+    fn count_id_only_changes(&self) -> usize {
+        let results = &self.execution_results;
+        results
+            .created_object_ids
+            .iter()
+            .chain(&results.deleted_object_ids)
+            .filter(|id| {
+                !results.written_objects.contains_key(id) && !results.modified_objects.contains(id)
+            })
+            .count()
+    }
+
+    /// Upper bound on the entries that `compute_unchanged_consensus_objects` records: read-only
+    /// consensus inputs, inputs whose consensus stream ended, per-epoch config objects and system
+    /// objects loaded during execution. Cancelled inputs are left out because a cancelled
+    /// transaction runs no commands, so its effects stay small.
+    fn count_unchanged_consensus_objects_upperbound(&self) -> usize {
+        let results = &self.execution_results;
+        let read_only_consensus_inputs = self
+            .input_objects
+            .iter()
+            .filter(|(id, obj)| obj.owner.is_consensus() && !results.modified_objects.contains(id))
+            .count();
+        read_only_consensus_inputs
+            .saturating_add(self.stream_ended_consensus_objects.len())
+            .saturating_add(self.loaded_per_epoch_config_objects.read().len())
+            .saturating_add(self.loaded_system_objects.borrow().len())
     }
 
     pub fn written_objects_size(&self) -> usize {

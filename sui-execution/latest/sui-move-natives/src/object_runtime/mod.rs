@@ -506,6 +506,19 @@ impl<'a> ObjectRuntime<'a> {
         target_ty: TypeTag,
         value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
+        if let Some(max) = self.protocol_config.max_num_accumulator_events_as_option()
+            && self.state.accumulator_events.len() >= max as usize
+        {
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
+                    "Emitting more than {max} accumulator events is not allowed"
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::ACCUMULATOR_EVENT_COUNT_LIMIT_EXCEEDED
+                        as u64,
+                ));
+        }
+
         if let MoveAccumulatorValue::U64(amount) = value {
             let key = (target_addr, target_ty.clone());
 

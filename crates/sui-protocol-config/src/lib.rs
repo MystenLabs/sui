@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 140;
+const MAX_PROTOCOL_VERSION: u64 = 141;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -426,6 +426,8 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
 //              Disable effects transaction dependencies on mainnet.
 //              Add the staggered-submission duplication signal thresholds.
+// Version 141: Refine the transaction effects size estimate.
+//              Limit the number of accumulator events per transaction.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -823,6 +825,10 @@ struct FeatureFlags {
     // multisig members.
     #[serde(skip_serializing_if = "is_false")]
     mldsa65_auth: bool,
+
+    // Use the refined transaction effects size estimate.
+    #[serde(skip_serializing_if = "is_false")]
+    complete_effects_size_estimate: bool,
 
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
@@ -1653,6 +1659,11 @@ pub struct ProtocolConfig {
 
     /// Maximum number of Move events that a single transaction can emit. Enforced by the VM during execution.
     max_num_event_emit: Option<u64>,
+
+    /// Maximum number of accumulator events that a single transaction can emit. Enforced by the
+    /// adapter during execution. Each emitted event counts, before events on the same accumulator
+    /// are merged. There is no limit when unset.
+    max_num_accumulator_events: Option<u64>,
 
     /// Maximum number of new IDs that a single transaction can create. Enforced by the VM during execution.
     max_num_new_move_object_ids: Option<u64>,
@@ -2755,6 +2766,7 @@ impl ProtocolConfig {
             max_fields_in_struct: Some(32),
             max_dependency_depth: Some(100),
             max_num_event_emit: Some(256),
+            max_num_accumulator_events: None,
             max_num_new_move_object_ids: Some(2048),
             max_num_new_move_object_ids_system_tx: Some(2048 * 16),
             max_num_deleted_move_object_ids: Some(2048),
@@ -4939,6 +4951,10 @@ impl ProtocolConfig {
                     cfg.feature_flags.disable_id_leak_verifier = true;
                     cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     cfg.feature_flags.disable_effects_tx_dependencies = true;
+                }
+                141 => {
+                    cfg.feature_flags.complete_effects_size_estimate = true;
+                    cfg.max_num_accumulator_events = Some(1024);
                 }
                 // Use this template when making changes:
                 //
