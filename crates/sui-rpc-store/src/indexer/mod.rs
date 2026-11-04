@@ -841,11 +841,7 @@ mod tests {
         path: &std::path::Path,
         watermarks: &[(&str, u64)],
     ) -> (Db, Service) {
-        let options = DbOptions {
-            snapshot_capacity: 16,
-            ..DbOptions::default()
-        };
-        let (db, schema) = Db::open::<RpcStoreSchema>(path, options).unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(path, DbOptions::default()).unwrap();
         let framework = sui_consistent_store::FrameworkSchema::new(db.clone());
         let mut batch = db.batch();
         for &(pipeline, checkpoint) in watermarks {
