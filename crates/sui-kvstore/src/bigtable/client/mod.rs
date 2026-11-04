@@ -913,25 +913,36 @@ impl BigTableClient {
         tables::objects::table_name(self.object_schema)
     }
 
-    /// Under [`ObjectSchema::V1`], object reads read only the live-object column, so rows that
-    /// hold only a tombstone status come back empty and BigTable drops them. Under
-    /// [`ObjectSchema::V2`] they read every column, and tombstones decode as such.
-    fn object_read_filter(&self) -> Option<RowFilter> {
-        match self.object_schema {
+    /// The filter of an object read. Under [`ObjectSchema::V1`], object reads read only the
+    /// live-object column, so rows that hold only a tombstone status come back empty and BigTable
+    /// drops them. Under [`ObjectSchema::V2`] they read every column, and tombstones decode as
+    /// such. A `keys_only` read also empties every cell's value.
+    fn object_read_filter(&self, keys_only: bool) -> Option<RowFilter> {
+        let live_only = match self.object_schema {
             ObjectSchema::V1 => Some(Self::column_filter(&[tables::objects::col::OBJECT])),
             ObjectSchema::V2 => None,
+        };
+        match (live_only, keys_only.then(Self::keys_only_filter)) {
+            (Some(live_only), Some(keys_only)) => Some(RowFilter {
+                filter: Some(Filter::Chain(Chain {
+                    filters: vec![live_only, keys_only],
+                })),
+            }),
+            (live_only, keys_only) => live_only.or(keys_only),
         }
     }
 
-    /// The newest row of `object_id` at or below `version`, as one single-row read: forward from
-    /// `(object_id, version)` under [`ObjectSchema::V2`], whose keys sort versions newest first,
-    /// and reversed down to `(object_id, version)` under [`ObjectSchema::V1`]. The far end of the
-    /// range is the object's key bound, so no version falls outside it.
+    /// The newest row of `object_id` at or below `version`, and its key, as one single-row read:
+    /// forward from `(object_id, version)` under [`ObjectSchema::V2`], whose keys sort versions
+    /// newest first, and reversed down to `(object_id, version)` under [`ObjectSchema::V1`]. The
+    /// far end of the range is the object's key bound, so no version falls outside it. A
+    /// `keys_only` read empties the row's cell values.
     async fn newest_object_row(
         &mut self,
         object_id: ObjectID,
         version: u64,
-    ) -> Result<Option<Vec<(Bytes, Bytes)>>> {
+        keys_only: bool,
+    ) -> Result<Option<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let (lowest, highest) = tables::objects::object_key_bounds(&object_id);
         let at_version =
             self.object_row_key(&ObjectKey(object_id, SequenceNumber::from_u64(version)));
@@ -939,7 +950,7 @@ impl BigTableClient {
             ObjectSchema::V1 => (lowest, at_version, true),
             ObjectSchema::V2 => (at_version, highest, false),
         };
-        let (table, filter) = (self.objects_table(), self.object_read_filter());
+        let (table, filter) = (self.objects_table(), self.object_read_filter(keys_only));
         Ok(self
             .range_scan(
                 table,
@@ -950,8 +961,7 @@ impl BigTableClient {
                 filter,
             )
             .await?
-            .pop()
-            .map(|(_, row)| row))
+            .pop())
     }
 
     pub async fn read_rows(
@@ -1216,6 +1226,15 @@ impl BigTableClient {
         let pattern = format!("^({})$", columns.join("|"));
         RowFilter {
             filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+        }
+    }
+
+    /// A `RowFilter` that keeps every cell but empties its value, for reads that need only row
+    /// keys. A filter that dropped the cells instead would drop the rows with them: Bigtable
+    /// leaves a row with no cells out of the response.
+    fn keys_only_filter() -> RowFilter {
+        RowFilter {
+            filter: Some(Filter::StripValueTransformer(true)),
         }
     }
 }
@@ -1750,7 +1769,7 @@ impl BigTableClient {
             .iter()
             .map(|key| self.object_row_key(key))
             .collect();
-        let (table, filter) = (self.objects_table(), self.object_read_filter());
+        let (table, filter) = (self.objects_table(), self.object_read_filter(false));
         let rows = self.multi_get_stream(table, keys, filter).await?;
 
         Ok(async_stream::try_stream! {
@@ -2074,12 +2093,34 @@ impl KeyValueStoreReader for BigTableClient {
             .iter()
             .map(|key| self.object_row_key(key))
             .collect();
-        let (table, filter) = (self.objects_table(), self.object_read_filter());
+        let (table, filter) = (self.objects_table(), self.object_read_filter(false));
         let mut objects = vec![];
         for (_, row) in self.multi_get(table, keys, filter).await? {
             objects.extend(tables::objects::decode(&row)?.into_live());
         }
         Ok(objects)
+    }
+
+    async fn get_existing_object_keys(
+        &mut self,
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<ObjectKey>> {
+        let keys: Vec<Vec<u8>> = object_keys
+            .iter()
+            .map(|key| self.object_row_key(key))
+            .collect();
+        let (schema, table, filter) = (
+            self.object_schema,
+            self.objects_table(),
+            self.object_read_filter(true),
+        );
+        let mut existing = vec![];
+        for (row_key, row) in self.multi_get(table, keys, filter).await? {
+            if tables::objects::is_live(&row)? {
+                existing.push(tables::objects::decode_key(schema, &row_key)?);
+            }
+        }
+        Ok(existing)
     }
 
     async fn get_transactions(
@@ -2136,7 +2177,7 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
-        let Some(row) = self.newest_object_row(*object_id, u64::MAX).await? else {
+        let Some((_, row)) = self.newest_object_row(*object_id, u64::MAX, false).await? else {
             return Ok(None);
         };
         Ok(tables::objects::decode(&row)?.into_live())
@@ -2147,7 +2188,10 @@ impl KeyValueStoreReader for BigTableClient {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Result<Option<Object>> {
-        let Some(row) = self.newest_object_row(object_id, version.value()).await? else {
+        let Some((_, row)) = self
+            .newest_object_row(object_id, version.value(), false)
+            .await?
+        else {
             return Ok(None);
         };
         Ok(tables::objects::decode(&row)?.into_live())
@@ -2207,6 +2251,23 @@ impl KeyValueStoreReader for BigTableClient {
                 ObjectRow::Tombstone(_) => bail!("live-only object scan returned a tombstone"),
             })
             .collect()
+    }
+
+    async fn get_latest_object_version(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> Result<Option<SequenceNumber>> {
+        // The newest row is the object's state. Under V2 it can be a tombstone, which the row's
+        // column tells apart from a live row even with its value stripped.
+        let Some((row_key, row)) = self.newest_object_row(*object_id, u64::MAX, true).await? else {
+            return Ok(None);
+        };
+        if !tables::objects::is_live(&row)? {
+            return Ok(None);
+        }
+        Ok(Some(
+            tables::objects::decode_key(self.object_schema, &row_key)?.1,
+        ))
     }
 
     async fn get_object_version_at_checkpoint(
@@ -3829,6 +3890,97 @@ mod tests {
             .collect();
         assert_eq!(page, vec![4, 2, 1]);
         assert!(single_read(&mock).await.reversed);
+    }
+
+    /// The contents-free reads agree with the reads they stand in for: a key at which the object
+    /// was deleted or wrapped is not an existing key, and under V2 an object deleted or wrapped
+    /// at its newest version has no latest version, even though older live versions remain.
+    /// Under V1 the reads ignore tombstones, so the latest version is the last live one.
+    #[tokio::test]
+    async fn contents_free_object_reads_skip_tombstones() {
+        // `wrapped` is live at 1 and wrapped at 2. `deleted` is live at 1, wrapped at 2,
+        // unwrapped at 3 and deleted at 4. `live` is live at 1 and 2.
+        let v = SequenceNumber::from_u64;
+        let wrapped = ObjectID::from_single_byte(1);
+        let deleted = ObjectID::from_single_byte(2);
+        let live = ObjectID::from_single_byte(3);
+        let rows = [
+            (wrapped, 1, None),
+            (wrapped, 2, Some(ObjectStatus::Wrapped)),
+            (deleted, 1, None),
+            (deleted, 2, Some(ObjectStatus::Wrapped)),
+            (deleted, 3, None),
+            (deleted, 4, Some(ObjectStatus::Deleted)),
+            (live, 1, None),
+            (live, 2, None),
+        ];
+        for (schema, latest_versions) in [
+            (
+                ObjectSchema::V2,
+                [(wrapped, None), (deleted, None), (live, Some(v(2)))],
+            ),
+            (
+                ObjectSchema::V1,
+                [
+                    (wrapped, Some(v(1))),
+                    (deleted, Some(v(3))),
+                    (live, Some(v(2))),
+                ],
+            ),
+        ] {
+            let (mock, mut client) = mock_client(schema).await;
+            for (id, version, tombstone) in rows {
+                let cells = match tombstone {
+                    None => tables::objects::encode(&test_object(id, version)).unwrap(),
+                    Some(status) => tables::objects::encode_tombstone(status).unwrap(),
+                };
+                let key = tables::objects::encode_key(schema, &ObjectKey(id, v(version)));
+                mock.insert_row(tables::objects::table_name(schema), key, cells)
+                    .await;
+            }
+
+            for (id, expected) in latest_versions {
+                mock.clear_read_rows_calls().await;
+                assert_eq!(
+                    client.get_latest_object_version(&id).await.unwrap(),
+                    expected,
+                    "{schema:?}: latest version of {id}",
+                );
+                let call = single_read(&mock).await;
+                assert!(
+                    call.values_stripped,
+                    "latest version is read without contents"
+                );
+                assert_eq!(call.reversed, schema == ObjectSchema::V1);
+                assert_eq!(call.rows_limit, 1);
+                let latest = client.get_latest_object(&id).await.unwrap();
+                assert_eq!(
+                    latest.map(|o| o.version()),
+                    expected,
+                    "{schema:?}: latest object {id}",
+                );
+            }
+
+            // Every stored row, plus a version that was never written.
+            let mut keys: Vec<_> = rows
+                .iter()
+                .map(|&(id, version, _)| ObjectKey(id, v(version)))
+                .collect();
+            keys.push(ObjectKey(deleted, v(5)));
+            mock.clear_read_rows_calls().await;
+            let mut existing = client.get_existing_object_keys(&keys).await.unwrap();
+            existing.sort();
+            let live_keys: Vec<_> = rows
+                .iter()
+                .filter(|(_, _, tombstone)| tombstone.is_none())
+                .map(|&(id, version, _)| ObjectKey(id, v(version)))
+                .collect();
+            assert_eq!(existing, live_keys, "{schema:?}");
+            assert!(
+                single_read(&mock).await.values_stripped,
+                "existing keys are read without contents"
+            );
+        }
     }
 
     #[tokio::test]
