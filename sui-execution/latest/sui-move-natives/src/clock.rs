@@ -71,7 +71,7 @@ pub fn set_timestamp_ms_for_testing(
     let store: &&InMemoryTestStore = get_extension!(context)?;
     store.set_clock_timestamp_ms(timestamp_ms);
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
-    object_runtime.set_clock_timestamp_ms_for_testing(timestamp_ms)?;
+    object_runtime.write_clock_timestamp_ms_for_testing(timestamp_ms)?;
 
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
 }

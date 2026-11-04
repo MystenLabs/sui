@@ -284,8 +284,13 @@ impl<'a> ObjectRuntime<'a> {
             .and_then(|clock| clock.borrow_global())
     }
 
-    /// Writes `timestamp_ms` into the loaded Clock, if any, so live references see it.
-    pub fn set_clock_timestamp_ms_for_testing(&mut self, timestamp_ms: u64) -> PartialVMResult<()> {
+    /// If the clock is loaded, we write `timestamp_ms` into the loaded Clock `Value` so any and all
+    /// live references see it. This means that they will observe the updated time, even without
+    /// calling `clock::borrow` again to get a "fresh" reference.
+    pub fn write_clock_timestamp_ms_for_testing(
+        &mut self,
+        timestamp_ms: u64,
+    ) -> PartialVMResult<()> {
         let Some(clock) = &self.clock else {
             return Ok(());
         };

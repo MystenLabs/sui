@@ -20,7 +20,6 @@ const START_BACK: u64 = 900_000;
 const VESTING_DURATION: u64 = 1_000_000;
 const BACK_PERCENTAGE: u8 = 80;
 
-#[allow(deprecated_usage)]
 fun test_setup(
     start_front: u64,
     start_back: u64,
@@ -29,10 +28,10 @@ fun test_setup(
 ): ts::Scenario {
     let mut ts = ts::begin(CONTROLLER_ADDR);
     let coins = coin::mint_for_testing<SUI>(FULLY_VESTED_AMOUNT, ts.ctx());
-    let now = clock::create_for_testing(ts.ctx());
+    let now = clock::borrow();
     let wallet = new_wallet(
         coins,
-        &now,
+        now,
         start_front,
         start_back,
         duration,
@@ -40,7 +39,6 @@ fun test_setup(
         ts.ctx(),
     );
     transfer::public_transfer(wallet, OWNER_ADDR);
-    now.destroy_for_testing();
     ts
 }
 
@@ -58,87 +56,93 @@ fun test_invalid_percentage_range() {
     ts::end(ts);
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_backloaded_vesting() {
     let mut ts = test_setup(START_FRONT, START_BACK, VESTING_DURATION, BACK_PERCENTAGE);
     ts.next_tx(OWNER_ADDR);
-    let mut now = clock::create_for_testing(ts.ctx());
+    let now = clock::borrow();
     let mut wallet = ts.take_from_sender<Wallet<SUI>>();
 
     // check zero vested
-    now.set_for_testing(START_FRONT);
-    assert!(wallet.claimable(&now) == 0);
+    let builder = ts.ctx_builder().set_clock_timestamp(START_FRONT);
+    ts.next_with_context(builder);
+    assert!(wallet.claimable(now) == 0);
     assert!(wallet.balance() == FULLY_VESTED_AMOUNT);
 
     // vest first half of the first duration
     let front_duration = START_BACK - START_FRONT;
-    now.increment_for_testing(front_duration / 2);
+    let builder = ts.ctx_builder().increment_clock_timestamp(front_duration / 2);
+    ts.next_with_context(builder);
     let front_duration_claimable = FULLY_VESTED_AMOUNT * (100 - BACK_PERCENTAGE as u64) / 100;
-    assert!(wallet.claimable(&now) == front_duration_claimable / 2);
+    assert!(wallet.claimable(now) == front_duration_claimable / 2);
     assert!(wallet.balance() == FULLY_VESTED_AMOUNT);
-    let mut coins = wallet.claim(&now, ts.ctx());
+    let mut coins = wallet.claim(now, ts.ctx());
     transfer::public_transfer(coins, OWNER_ADDR);
-    assert!(wallet.claimable(&now) == 0);
+    assert!(wallet.claimable(now) == 0);
     assert!(wallet.balance() == FULLY_VESTED_AMOUNT - (front_duration_claimable / 2));
 
     // vest the rest of the first duration
-    now.increment_for_testing(front_duration / 2);
-    assert!(wallet.claimable(&now) == front_duration_claimable / 2);
-    coins = wallet.claim(&now, ts.ctx());
+    let builder = ts.ctx_builder().increment_clock_timestamp(front_duration / 2);
+    ts.next_with_context(builder);
+    assert!(wallet.claimable(now) == front_duration_claimable / 2);
+    coins = wallet.claim(now, ts.ctx());
     transfer::public_transfer(coins, OWNER_ADDR);
-    assert!(wallet.claimable(&now) == 0);
+    assert!(wallet.claimable(now) == 0);
     assert!(wallet.balance() == FULLY_VESTED_AMOUNT - front_duration_claimable);
 
     // vest first half of the last duration
     let back_duration = VESTING_DURATION - front_duration;
-    now.increment_for_testing(back_duration / 2);
+    let builder = ts.ctx_builder().increment_clock_timestamp(back_duration / 2);
+    ts.next_with_context(builder);
     let back_duration_claimable = FULLY_VESTED_AMOUNT * (BACK_PERCENTAGE as u64) / 100;
-    assert!(wallet.claimable(&now) == back_duration_claimable / 2);
-    coins = wallet.claim(&now, ts.ctx());
+    assert!(wallet.claimable(now) == back_duration_claimable / 2);
+    coins = wallet.claim(now, ts.ctx());
     transfer::public_transfer(coins, OWNER_ADDR);
-    assert!(wallet.claimable(&now) == 0);
+    assert!(wallet.claimable(now) == 0);
     assert!(
         wallet.balance() == FULLY_VESTED_AMOUNT - front_duration_claimable - (back_duration_claimable / 2),
     );
 
     // vest all the remaining coins
-    now.increment_for_testing(back_duration / 2);
-    assert!(wallet.claimable(&now) == back_duration_claimable / 2);
-    coins = wallet.claim(&now, ts.ctx());
+    let builder = ts.ctx_builder().increment_clock_timestamp(back_duration / 2);
+    ts.next_with_context(builder);
+    assert!(wallet.claimable(now) == back_duration_claimable / 2);
+    coins = wallet.claim(now, ts.ctx());
     transfer::public_transfer(coins, OWNER_ADDR);
-    assert!(wallet.claimable(&now) == 0);
+    assert!(wallet.claimable(now) == 0);
     assert!(wallet.balance() == 0);
 
     ts.return_to_sender(wallet);
-    now.destroy_for_testing();
     let _end = ts::end(ts);
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_backloaded_claimable() {
     let mut ts = test_setup(START_FRONT, START_FRONT + 100, 200, BACK_PERCENTAGE);
     ts.next_tx(OWNER_ADDR);
-    let mut now = clock::create_for_testing(ts.ctx());
+    let now = clock::borrow();
     let mut wallet = ts.take_from_sender<Wallet<SUI>>();
     let first_duration_claimable = FULLY_VESTED_AMOUNT * (100 - BACK_PERCENTAGE as u64) / 100;
     let last_duration_claimable = FULLY_VESTED_AMOUNT * (BACK_PERCENTAGE as u64) / 100;
 
     // check zero vested
-    now.set_for_testing(START_FRONT);
-    assert!(wallet.claimable(&now) == 0);
+    let builder = ts.ctx_builder().set_clock_timestamp(START_FRONT);
+    ts.next_with_context(builder);
+    assert!(wallet.claimable(now) == 0);
     assert!(wallet.balance() == FULLY_VESTED_AMOUNT);
 
     // fully vest first_duration_claimable and a quarter of the last_duration_claimable
-    now.increment_for_testing(125);
-    let coin = wallet.claim(&now, ts.ctx());
+    let builder = ts.ctx_builder().increment_clock_timestamp(125);
+    ts.next_with_context(builder);
+    let coin = wallet.claim(now, ts.ctx());
     assert!(coin.value() == first_duration_claimable + last_duration_claimable / 4);
 
     // vest remaining
-    now.increment_for_testing(100);
-    assert!(wallet.claimable(&now) == FULLY_VESTED_AMOUNT - coin.value());
+    let builder = ts.ctx_builder().increment_clock_timestamp(100);
+    ts.next_with_context(builder);
+    assert!(wallet.claimable(now) == FULLY_VESTED_AMOUNT - coin.value());
 
     std::unit_test::destroy(coin);
     ts.return_to_sender(wallet);
-    now.destroy_for_testing();
     let _end = ts::end(ts);
 }

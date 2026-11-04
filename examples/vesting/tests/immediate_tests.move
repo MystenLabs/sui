@@ -16,36 +16,34 @@ const OWNER_ADDR: address = @0xAAAA;
 const CONTROLLER_ADDR: address = @0xBBBB;
 const FULLY_VESTED_AMOUNT: u64 = 10_000;
 const VESTING_DURATION: u64 = 0;
-const START_TIME: u64 = 1;
+const START_TIME: u64 = 1_000;
 
-#[allow(deprecated_usage)]
 fun test_setup(): ts::Scenario {
     let mut ts = ts::begin(CONTROLLER_ADDR);
     let coins = coin::mint_for_testing<SUI>(FULLY_VESTED_AMOUNT, ts.ctx());
-    let now = clock::create_for_testing(ts.ctx());
-    let wallet = new_wallet(coins, &now, START_TIME, VESTING_DURATION, ts.ctx());
+    let now = clock::borrow();
+    let wallet = new_wallet(coins, now, START_TIME, VESTING_DURATION, ts.ctx());
     transfer::public_transfer(wallet, OWNER_ADDR);
-    now.destroy_for_testing();
     ts
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_immediate_vesting() {
     let mut ts = test_setup();
     ts.next_tx(OWNER_ADDR);
-    let mut now = clock::create_for_testing(ts.ctx());
+    let now = clock::borrow();
     let mut wallet = ts.take_from_sender<Wallet<SUI>>();
 
     // vest immediately
-    now.set_for_testing(START_TIME);
-    assert!(wallet.claimable(&now) == FULLY_VESTED_AMOUNT);
+    let builder = ts.ctx_builder().set_clock_timestamp(START_TIME);
+    ts.next_with_context(builder);
+    assert!(wallet.claimable(now) == FULLY_VESTED_AMOUNT);
     assert!(wallet.balance() == FULLY_VESTED_AMOUNT);
-    let coins = wallet.claim(&now, ts.ctx());
+    let coins = wallet.claim(now, ts.ctx());
     transfer::public_transfer(coins, OWNER_ADDR);
-    assert!(wallet.claimable(&now) == 0);
+    assert!(wallet.claimable(now) == 0);
     assert!(wallet.balance() == 0);
 
     ts.return_to_sender(wallet);
-    now.destroy_for_testing();
     let _end = ts::end(ts);
 }

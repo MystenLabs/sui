@@ -17,7 +17,7 @@ fun mint(addr: address, amount: u64, scenario: &mut ts::Scenario) {
     scenario.next_tx(addr);
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_example1() {
     let user1 = @0x0;
     let user2 = @0x1;
@@ -47,47 +47,46 @@ fun test_example1() {
     assert!(game.winner() == option::none(), 1);
     assert!(game.balance() == 0, 1);
 
-    let mut clock = clock::create_for_testing(ts.ctx());
-    clock.set_for_testing(10);
-
+    let clock = clock::borrow();
     // Play with 4 users (everything here is deterministic)
-    ts.next_tx(user1);
+    let builder = ts.ctx_builder().set_clock_timestamp(10);
+    ts.next_with_context(builder);
     mint(user1, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    let t1 = game.buy_ticket(coin, &clock, ts.ctx());
+    let t1 = game.buy_ticket(coin, clock, ts.ctx());
     assert!(game.participants() == 1, 1);
-    t1.destroy(); // loser
+    // this is the winner
 
     ts.next_tx(user2);
     mint(user2, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    let t2 = game.buy_ticket(coin, &clock, ts.ctx());
+    let t2 = game.buy_ticket(coin, clock, ts.ctx());
     assert!(game.participants() == 2, 1);
     t2.destroy(); // loser
 
     ts.next_tx(user3);
     mint(user3, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    let t3 = game.buy_ticket(coin, &clock, ts.ctx());
+    let t3 = game.buy_ticket(coin, clock, ts.ctx());
     assert!(game.participants() == 3, 1);
     t3.destroy(); // loser
 
     ts.next_tx(user4);
     mint(user4, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    let t4 = game.buy_ticket(coin, &clock, ts.ctx());
+    let t4 = game.buy_ticket(coin, clock, ts.ctx());
     assert!(game.participants() == 4, 1);
-    // this is the winner
+    t4.destroy(); // loser
 
-    // Determine the winner (-> user3)
-    clock.set_for_testing(101);
-    game.determine_winner(&random_state, &clock, ts.ctx());
-    assert!(game.winner() == option::some(4), 1);
+    // Determine the winner (-> user1)
+    let builder = ts.ctx_builder().set_clock_timestamp(101);
+    ts.next_with_context(builder);
+    game.determine_winner(&random_state, clock, ts.ctx());
+    assert!(game.winner() == option::some(1), 1);
     assert!(game.balance() == 40, 1);
-    clock.destroy_for_testing();
 
     // Take the reward
-    let coin = t4.redeem(game, ts.ctx());
+    let coin = t1.redeem(game, ts.ctx());
     assert!(coin.value() == 40, 1);
     coin.burn_for_testing();
 
@@ -95,7 +94,7 @@ fun test_example1() {
     ts.end();
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_example2() {
     let user1 = @0x0;
     let user2 = @0x1;
@@ -125,41 +124,40 @@ fun test_example2() {
     assert!(game.end_time() == end_time, 1);
     assert!(game.balance() == 0, 1);
 
-    let mut clock = clock::create_for_testing(ts.ctx());
-    clock.set_for_testing(10);
-
+    let clock = clock::borrow();
     // Play with 4 users (everything here is deterministic)
-    ts.next_tx(user1);
+    let builder = ts.ctx_builder().set_clock_timestamp(10);
+    ts.next_with_context(builder);
     mint(user1, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    game.play(coin, &clock, ts.ctx());
+    game.play(coin, clock, ts.ctx());
     assert!(game.participants() == 1, 1);
 
     ts.next_tx(user2);
     mint(user2, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    game.play(coin, &clock, ts.ctx());
+    game.play(coin, clock, ts.ctx());
     assert!(game.participants() == 2, 1);
 
     ts.next_tx(user3);
     mint(user3, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    game.play(coin, &clock, ts.ctx());
+    game.play(coin, clock, ts.ctx());
     assert!(game.participants() == 3, 1);
 
     ts.next_tx(user4);
     mint(user4, 10, &mut ts);
     let coin: Coin<SUI> = ts.take_from_sender();
-    game.play(coin, &clock, ts.ctx());
+    game.play(coin, clock, ts.ctx());
     assert!(game.participants() == 4, 1);
 
-    // Determine the winner (-> user4)
-    clock.set_for_testing(101);
-    game.close(&random_state, &clock, ts.ctx());
-    clock.destroy_for_testing();
+    // Determine the winner (-> user3)
+    let builder = ts.ctx_builder().set_clock_timestamp(101);
+    ts.next_with_context(builder);
+    game.close(&random_state, clock, ts.ctx());
 
     // Check that received the reward
-    ts.next_tx(user4);
+    ts.next_tx(user3);
     let coin: Coin<SUI> = ts.take_from_sender();
     assert!(coin.value() == 40, 1);
     coin.burn_for_testing();

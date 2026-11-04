@@ -5,7 +5,7 @@ module nft_rental::tests;
 
 use kiosk::kiosk_lock_rule as lock_rule;
 use nft_rental::rentables_ext::{Self, Promise, ProtectedTP, RentalPolicy, Listed};
-use sui::clock::{Self, Clock};
+use sui::clock;
 use sui::kiosk::{Kiosk, KioskOwnerCap};
 use sui::kiosk_test_utils;
 use sui::package::{Self, Publisher};
@@ -175,14 +175,12 @@ fun test_delist_placed() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EObjectNotExist), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::EObjectNotExist)]
 fun test_delist_rented() {
     let mut ts = ts::begin(RENTER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
-
-    let clock = clock::create_for_testing(ts.ctx());
 
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
@@ -196,7 +194,7 @@ fun test_delist_rented() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
     ts.delist_from_rent(BORROWER, borrower_kiosk_id, item_id);
     abort 0xbad
 }
@@ -230,15 +228,13 @@ fun test_delist_with_wrong_cap() {
     abort 0xbad
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_rent_with_extension() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -250,23 +246,20 @@ fun test_rent_with_extension() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
 
-    clock.destroy_for_testing();
     publisher.burn_publisher();
     ts.end();
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled)]
 fun test_rent_without_extension() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -277,19 +270,17 @@ fun test_rent_without_extension() {
     ts.place_in_kiosk(RENTER, renter_kiosk_id, item);
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
     abort 0xbad
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ENotEnoughCoins), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::ENotEnoughCoins)]
 fun test_rent_with_not_enough_coins() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
-
-    let clock = clock::create_for_testing(ts.ctx());
 
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
@@ -302,19 +293,17 @@ fun test_rent_with_not_enough_coins() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 10, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 10);
     abort 0xbad
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ETotalPriceOverflow), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::ETotalPriceOverflow)]
 fun test_rent_with_overflow() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
-
-    let clock = clock::create_for_testing(ts.ctx());
 
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
@@ -327,19 +316,17 @@ fun test_rent_with_overflow() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 100, 1844674407370955160);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
     abort 0xbad
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_borrow() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -352,24 +339,21 @@ fun test_borrow() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
     ts.borrow(BORROWER, borrower_kiosk_id, item_id);
 
-    clock.destroy_for_testing();
     publisher.burn_publisher();
     ts.end();
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ENotOwner), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::ENotOwner)]
 fun test_borrow_with_wrong_cap() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -381,7 +365,7 @@ fun test_borrow_with_wrong_cap() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
 
     ts.next_tx(BORROWER);
     let mut kiosk: Kiosk = ts.take_shared_by_id(borrower_kiosk_id);
@@ -391,15 +375,13 @@ fun test_borrow_with_wrong_cap() {
     abort 0xbad
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_borrow_val() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -411,26 +393,23 @@ fun test_borrow_val() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
 
     let promise = ts.borrow_val(BORROWER, borrower_kiosk_id, item_id);
     ts.return_val(promise, BORROWER, borrower_kiosk_id);
 
-    clock.destroy_for_testing();
     publisher.burn_publisher();
     ts.end();
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ENotOwner), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::ENotOwner)]
 fun test_borrow_val_with_wrong_cap() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -442,7 +421,7 @@ fun test_borrow_val_with_wrong_cap() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
 
     ts.next_tx(BORROWER);
     let mut kiosk: Kiosk = ts.take_shared_by_id(borrower_kiosk_id);
@@ -458,15 +437,13 @@ fun test_borrow_val_with_wrong_cap() {
     abort 0xbad
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_return_val() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -478,27 +455,24 @@ fun test_return_val() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
 
     let promise = ts.borrow_val(BORROWER, borrower_kiosk_id, item_id);
 
     ts.return_val(promise, BORROWER, borrower_kiosk_id);
 
-    clock.destroy_for_testing();
     publisher.burn_publisher();
     ts.end();
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled)]
 fun test_return_val_without_extension() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -510,7 +484,7 @@ fun test_return_val_without_extension() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
 
     let promise = ts.borrow_val(BORROWER, borrower_kiosk_id, item_id);
     ts.remove_ext(BORROWER, borrower_kiosk_id);
@@ -519,14 +493,12 @@ fun test_return_val_without_extension() {
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EInvalidKiosk), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::EInvalidKiosk)]
 fun test_return_val_wrong_kiosk() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
-
-    let clock = clock::create_for_testing(ts.ctx());
 
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
@@ -539,21 +511,19 @@ fun test_return_val_wrong_kiosk() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
 
     let promise = ts.borrow_val(BORROWER, borrower_kiosk_id, item_id);
     ts.return_val(promise, BORROWER, renter_kiosk_id);
     abort 0xbad
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_reclaim() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
-
-    let mut clock = clock::create_for_testing(ts.ctx());
 
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
@@ -567,22 +537,19 @@ fun test_reclaim() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
-    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 432000000, &mut clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
+    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 432000000);
 
-    clock.destroy_for_testing();
     publisher.burn_publisher();
     ts.end();
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_reclaim_locked() {
     let mut ts = ts::begin(RENTER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
-
-    let mut clock = clock::create_for_testing(ts.ctx());
 
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
@@ -597,23 +564,20 @@ fun test_reclaim_locked() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
-    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 432000000, &mut clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
+    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 432000000);
 
-    clock.destroy_for_testing();
     publisher.burn_publisher();
     ts.end();
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EInvalidKiosk), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::EInvalidKiosk)]
 fun test_reclaim_wrong_kiosk() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
-
-    let mut clock = clock::create_for_testing(ts.ctx());
 
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
@@ -628,22 +592,20 @@ fun test_reclaim_wrong_kiosk() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
     ts.install_ext(THIEF, thief_kiosk_id);
-    ts.reclaim(RENTER, thief_kiosk_id, borrower_kiosk_id, item_id, 432000000, &mut clock);
+    ts.reclaim(RENTER, thief_kiosk_id, borrower_kiosk_id, item_id, 432000000);
     abort 0xbad
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::ERentingPeriodNotOver), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::ERentingPeriodNotOver)]
 fun test_reclaim_renting_period_not_over() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let mut clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -656,21 +618,19 @@ fun test_reclaim_renting_period_not_over() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
-    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 20000, &mut clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
+    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 20000);
     abort 0xbad
 }
 
 #[test]
-#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled), allow(deprecated_usage)]
+#[expected_failure(abort_code = rentables_ext::EExtensionNotInstalled)]
 fun test_reclaim_without_extension() {
     let mut ts = ts::begin(BORROWER);
 
     let item = T { id: object::new(ts.ctx()) };
     let item_id = object::id(&item);
 
-    let mut clock = clock::create_for_testing(ts.ctx());
-
     let witness = WITNESS {};
     let publisher = package::test_claim(witness, ts.ctx());
 
@@ -683,9 +643,9 @@ fun test_reclaim_without_extension() {
     ts.install_ext(RENTER, renter_kiosk_id);
     ts.list_for_rent(RENTER, renter_kiosk_id, item_id, 10, 10);
     ts.install_ext(BORROWER, borrower_kiosk_id);
-    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100, &clock);
+    ts.rent(BORROWER, renter_kiosk_id, borrower_kiosk_id, item_id, 100);
     ts.remove_ext(RENTER, renter_kiosk_id);
-    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 432000000, &mut clock);
+    ts.reclaim(RENTER, renter_kiosk_id, borrower_kiosk_id, item_id, 432000000);
     abort 0xbad
 }
 
@@ -842,7 +802,6 @@ fun rent(
     borrower_kiosk_id: ID,
     item_id: ID,
     coin_amount: u64,
-    clock: &Clock,
 ) {
     ts.next_tx(sender);
 
@@ -858,7 +817,7 @@ fun rent(
         &mut rental_policy,
         item_id,
         coin,
-        clock,
+        clock::borrow(),
         ts.ctx(),
     );
 
@@ -913,7 +872,6 @@ fun return_val(ts: &mut Scenario, promise: Promise, sender: address, kiosk_id: I
 
 use fun reclaim as Scenario.reclaim;
 
-#[allow(deprecated_usage)]
 fun reclaim(
     ts: &mut Scenario,
     sender: address,
@@ -921,19 +879,19 @@ fun reclaim(
     borrower_kiosk_id: ID,
     item_id: ID,
     tick: u64,
-    clock: &mut Clock,
 ) {
+    let builder = ts.ctx_builder().increment_clock_timestamp(tick);
+    ts.next_with_context(builder);
     ts.next_tx(sender);
     let mut borrower_kiosk: Kiosk = ts.take_shared_by_id(borrower_kiosk_id);
     let mut renter_kiosk: Kiosk = ts.take_shared_by_id(renter_kiosk_id);
     let policy: TransferPolicy<T> = ts.take_shared();
 
-    clock.increment_for_testing(tick);
     rentables_ext::reclaim(
         &mut renter_kiosk,
         &mut borrower_kiosk,
         &policy,
-        clock,
+        clock::borrow(),
         item_id,
         ts.ctx(),
     );

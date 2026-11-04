@@ -18,31 +18,32 @@ const BAD_PROOF: vector<u8> =
     x"0101010180032cf35709e1301d02b40a0dbe3dadfe6ec1eeba8fb8060a1decd0c7a126ea3f27fadcad81435601b0e0abca5c89173ef639e5a88043aa29801e6799e430b509e479b57af981f9ddd48d3a8d5919f99258081557a08270bb441233c78030a01e03ec199b5e3eef5ccc9b1a3d4841cbe4ff529c22a8cd1b1b0075338d864e3890942df6b007d2c3e3a8ef1ce7490c6bbec5372adfcbf8704a1ffc9a69db8d9cdc54762f019036e450e457325eef74b794f3f16ff327d68079a5b9de49163d7323937374f8a785a8f9afe84d6a71b336e4de00f239ee3af1d7604a3985e610e1603bd0e1a4998e19fa0c8920ffd8d61b0a87eeee50ac7c03ff7c4708a34f3bc92fd0103758c954ee34032cee2c78ad8cdc79a35dbc810196b7bf6833e1c45c83b09c0d1b78bc6f8753e10770e7045b08d50b4aa16a75b27a096d5ec1331f1fd0a44e95a8737c20240c90307b5497d3470393c2a00da0649e86d13e820591296c644fc1eef9e7c6ca4967c5e19df3153cd7fbd598c271e11c10397349ddc8cc8452ec";
 
 #[test]
-#[expected_failure(abort_code = vdf::lottery::ESubmissionPhaseInProgress), allow(deprecated_usage)]
+#[expected_failure(abort_code = vdf::lottery::ESubmissionPhaseInProgress)]
 fun test_complete_too_early() {
     let user1 = @0x0;
 
     let mut ts = ts::begin(user1);
-    let mut clock = clock::create_for_testing(ts.ctx());
+    let clock = clock::borrow();
 
-    lottery::create(1000, 1000, &clock, ts.ctx());
+    lottery::create(1000, 1000, clock, ts.ctx());
     ts.next_tx(user1);
     let mut game: Game = ts.take_shared();
 
     // User 1 buys a ticket.
     ts.next_tx(user1);
-    let _t1 = game.participate(b"user1 randomness", &clock, ts.ctx());
+    let _t1 = game.participate(b"user1 randomness", clock, ts.ctx());
 
     // Increment time but still in submission phase
-    clock.increment_for_testing(500);
+    let builder = ts.ctx_builder().increment_clock_timestamp(500);
+    ts.next_with_context(builder);
 
     // User1 tries to complete the lottery too early.
     ts.next_tx(user1);
-    game.complete(OUTPUT, PROOF, &clock);
+    game.complete(OUTPUT, PROOF, clock);
     abort 0
 }
 
-#[test, allow(deprecated_usage)]
+#[test]
 fun test_play_vdf_lottery() {
     let user1 = @0x0;
     let user2 = @0x1;
@@ -50,34 +51,35 @@ fun test_play_vdf_lottery() {
     let user4 = @0x3;
 
     let mut ts = ts::begin(user1);
-    let mut clock = clock::create_for_testing(ts.ctx());
+    let clock = clock::borrow();
 
-    lottery::create(1000, 1000, &clock, ts.ctx());
+    lottery::create(1000, 1000, clock, ts.ctx());
     ts.next_tx(user1);
     let mut game: Game = ts.take_shared();
 
     // User 1 buys a ticket.
     ts.next_tx(user1);
-    let t1 = game.participate(b"user1 randomness", &clock, ts.ctx());
+    let t1 = game.participate(b"user1 randomness", clock, ts.ctx());
 
     // User 2 buys a ticket.
     ts.next_tx(user2);
-    let t2 = game.participate(b"user2 randomness", &clock, ts.ctx());
+    let t2 = game.participate(b"user2 randomness", clock, ts.ctx());
 
     // User 3 buys a ticket
     ts.next_tx(user3);
-    let t3 = game.participate(b"user3 randomness", &clock, ts.ctx());
+    let t3 = game.participate(b"user3 randomness", clock, ts.ctx());
 
     // User 4 buys a ticket
     ts.next_tx(user4);
-    let t4 = game.participate(b"user4 randomness", &clock, ts.ctx());
+    let t4 = game.participate(b"user4 randomness", clock, ts.ctx());
 
     // Increment time to after submission phase has ended
-    clock.increment_for_testing(1000);
+    let builder = ts.ctx_builder().increment_clock_timestamp(1000);
+    ts.next_with_context(builder);
 
     // User 3 completes by submitting output and proof of the VDF
     ts.next_tx(user3);
-    game.complete(OUTPUT, PROOF, &clock);
+    game.complete(OUTPUT, PROOF, clock);
 
     // User 2 is the winner since the mod of the hash results in 1.
     ts.next_tx(user2);
@@ -94,13 +96,12 @@ fun test_play_vdf_lottery() {
     t4.delete();
     winner.delete();
 
-    clock.destroy_for_testing();
     ts::return_shared(game);
     ts.end();
 }
 
 #[test]
-#[expected_failure(abort_code = vdf::lottery::EInvalidVdfProof), allow(deprecated_usage)]
+#[expected_failure(abort_code = vdf::lottery::EInvalidVdfProof)]
 fun test_invalid_vdf_output() {
     let user1 = @0x0;
     let user2 = @0x1;
@@ -108,48 +109,49 @@ fun test_invalid_vdf_output() {
     let user4 = @0x3;
 
     let mut ts = ts::begin(user1);
-    let mut clock = clock::create_for_testing(ts.ctx());
+    let clock = clock::borrow();
 
-    lottery::create(1000, 1000, &clock, ts.ctx());
+    lottery::create(1000, 1000, clock, ts.ctx());
     ts.next_tx(user1);
     let mut game: Game = ts.take_shared();
 
     // User1 buys a ticket.
     ts.next_tx(user1);
-    let _t1 = game.participate(b"user1 randomness", &clock, ts.ctx());
+    let _t1 = game.participate(b"user1 randomness", clock, ts.ctx());
     // User2 buys a ticket.
     ts.next_tx(user2);
-    let _t2 = game.participate(b"user2 randomness", &clock, ts.ctx());
+    let _t2 = game.participate(b"user2 randomness", clock, ts.ctx());
     // User3 buys a ticket
     ts.next_tx(user3);
-    let _t3 = game.participate(b"user3 randomness", &clock, ts.ctx());
+    let _t3 = game.participate(b"user3 randomness", clock, ts.ctx());
     // User4 buys a ticket
     ts.next_tx(user4);
-    let _t4 = game.participate(b"user4 randomness", &clock, ts.ctx());
+    let _t4 = game.participate(b"user4 randomness", clock, ts.ctx());
 
     // Increment time to after submission phase has ended
-    clock.increment_for_testing(1000);
+    let builder = ts.ctx_builder().increment_clock_timestamp(1000);
+    ts.next_with_context(builder);
 
     // User3 completes by submitting output and proof of the VDF
     ts.next_tx(user3);
-    game.complete(OUTPUT, BAD_PROOF, &clock);
+    game.complete(OUTPUT, BAD_PROOF, clock);
     abort 0
 }
 
 #[test]
-#[expected_failure(abort_code = vdf::lottery::EInvalidRandomness), allow(deprecated_usage)]
+#[expected_failure(abort_code = vdf::lottery::EInvalidRandomness)]
 fun test_empty_randomness() {
     let user1 = @0x0;
 
     let mut ts = ts::begin(user1);
-    let clock = clock::create_for_testing(ts.ctx());
+    let clock = clock::borrow();
 
-    lottery::create(1000, 1000, &clock, ts.ctx());
+    lottery::create(1000, 1000, clock, ts.ctx());
     ts.next_tx(user1);
     let mut game: Game = ts.take_shared();
 
     // User1 buys a ticket, but with wrong randomness length.
     ts.next_tx(user1);
-    let _t = game.participate(b"abcd", &clock, ts.ctx());
+    let _t = game.participate(b"abcd", clock, ts.ctx());
     abort 0
 }
