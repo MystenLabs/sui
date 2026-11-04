@@ -522,7 +522,7 @@ async fn test_client_pruned_checkpoint_error() {
 
     // Two outcomes are valid for resuming at a checkpoint that didn't emit
     // any events on this stream:
-    //   * `RpcError` (NotFound) — the checkpoint was actually pruned before
+    //   * `RpcError` (OutOfRange) — the checkpoint was actually pruned before
     //     the resume request landed.
     //   * `InternalError` carrying "EventStreamHead was not updated" — the
     //     checkpoint is still retained but never modified the head, so the
@@ -534,10 +534,10 @@ async fn test_client_pruned_checkpoint_error() {
     // no committed head update.
     use sui_light_client::authenticated_events::ClientError;
     match &e {
-        ClientError::RpcError(status) if status.code() == tonic::Code::NotFound => {}
+        ClientError::RpcError(status) if status.code() == tonic::Code::OutOfRange => {}
         ClientError::InternalError(msg) if msg.contains("EventStreamHead was not updated") => {}
         other => panic!(
-            "Expected RpcError(NotFound) or InternalError(\"...not updated...\"), got: {:?}",
+            "Expected RpcError(OutOfRange) or InternalError(\"...not updated...\"), got: {:?}",
             other
         ),
     }

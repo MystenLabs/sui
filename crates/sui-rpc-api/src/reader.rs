@@ -13,6 +13,8 @@ use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
 use tap::Pipe;
 
+use crate::ledger_history::query_options::{above_latest_available, below_serving_floor};
+
 #[derive(Clone)]
 pub struct StateReader {
     inner: Arc<dyn RpcStateReader>,
@@ -279,6 +281,131 @@ impl StateReader {
         // Return the higher of the two for our lower watermark
         Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
     }
+
+    /// The upper bound for checkpoint-pinned reads (`GetPackage`'s `at_checkpoint`): the highest
+    /// checkpoint every rpc index has committed.
+    ///
+    /// Read it before the reads. It only grows, and the indexes only add data above it, so it
+    /// stays valid for reads made after it was read. The lower bound is the opposite; see
+    /// [`Self::at_checkpoint_lower_bound`].
+    ///
+    /// `Unavailable` if the rpc indexes are disabled, have not committed a checkpoint yet, or are
+    /// still backfilling history after a restore: until that backfill reaches the restore
+    /// checkpoint, a checkpoint-pinned read can be wrong at any checkpoint the indexes cover.
+    pub fn at_checkpoint_upper_bound(&self) -> Result<AtCheckpointUpperBound, crate::RpcError> {
+        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
+        if indexes.is_history_backfill_pending().map_err(index_error)? {
+            return Err(crate::RpcError::new(
+                tonic::Code::Unavailable,
+                "rpc index history is still backfilling after a restore",
+            ));
+        }
+        let highest_indexed = indexes
+            .get_highest_indexed_checkpoint_seq_number()
+            .map_err(index_error)?
+            .ok_or_else(|| crate::RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
+        Ok(AtCheckpointUpperBound { highest_indexed })
+    }
+
+    /// `Unavailable` if this node does not keep object versions once they are replaced (see
+    /// [`RpcStateReader::retains_object_version_history`]): reads that depend on an object's
+    /// replaced versions would find them gone and answer `NotFound`.
+    pub fn require_object_version_history(&self) -> Result<(), crate::RpcError> {
+        if self.inner().retains_object_version_history() {
+            return Ok(());
+        }
+        Err(crate::RpcError::new(
+            tonic::Code::Unavailable,
+            "this node keeps only the latest version of each object, so it cannot answer reads \
+             that depend on earlier versions",
+        ))
+    }
+
+    /// The lower bound for checkpoint-pinned reads: the checkpoint just below
+    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`], or the lowest checkpoint at
+    /// which the rpc indexes' history is exact if that is higher (see
+    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`]). The lowest available
+    /// checkpoint's input objects are available, and they are the object state at the end of the
+    /// checkpoint before: pruning through a checkpoint deletes only the object versions and index
+    /// rows replaced at or before it.
+    ///
+    /// Read it after the reads, and answer every read at a checkpoint below it as pruned,
+    /// whatever the read returned. Pruning can raise the floor while the reads run, and a read
+    /// below the new floor may have seen pruned data. Pruning raises the floor no later than it
+    /// deletes data (the rpc-store commits its retractions and floor before the object versions
+    /// are deleted), only deletes data that reads below the new floor need, and never lowers the
+    /// floor, so a read at a checkpoint this bound accepts saw no pruned data.
+    pub fn at_checkpoint_lower_bound(&self) -> Result<AtCheckpointLowerBound, crate::RpcError> {
+        let lowest_available_objects = self.inner().get_lowest_available_checkpoint_objects()?;
+        let pinned_read_floor = self.inner().get_lowest_checkpoint_for_pinned_reads()?;
+        Ok(AtCheckpointLowerBound {
+            lowest_intact: lowest_available_objects
+                .saturating_sub(1)
+                .max(pinned_read_floor),
+        })
+    }
+}
+
+/// See [`StateReader::at_checkpoint_upper_bound`]. Read once per request so that a batch checks
+/// every item against the same bound.
+#[derive(Clone, Copy, Debug)]
+pub struct AtCheckpointUpperBound {
+    /// The highest checkpoint every rpc index has committed.
+    highest_indexed: u64,
+}
+
+impl AtCheckpointUpperBound {
+    /// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`, for the request field `at_checkpoint`) if
+    /// `checkpoint` is above the bound: the indexes may not have caught up to it, so an answer
+    /// could be wrong.
+    pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
+        if checkpoint > self.highest_indexed {
+            return Err(checkpoint_not_yet_indexed_error(
+                checkpoint,
+                self.highest_indexed,
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// The error for an `at_checkpoint` read above the highest indexed checkpoint: `OutOfRange` with
+/// an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo). Shared with
+/// other implementors of the rpc services (e.g. sui-kv-rpc, which passes its served height) so
+/// every backend fails identically.
+pub fn checkpoint_not_yet_indexed_error(checkpoint: u64, highest_indexed: u64) -> crate::RpcError {
+    above_latest_available(
+        "at_checkpoint",
+        checkpoint,
+        highest_indexed.saturating_add(1),
+    )
+}
+
+/// See [`StateReader::at_checkpoint_lower_bound`].
+#[derive(Clone, Copy, Debug)]
+pub struct AtCheckpointLowerBound {
+    /// The lowest checkpoint whose object state is intact, raised to
+    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`].
+    lowest_intact: u64,
+}
+
+impl AtCheckpointLowerBound {
+    /// `OutOfRange` (`BELOW_EARLIEST_AVAILABLE`) if `checkpoint` is below the bound: its history
+    /// may have been pruned, so an answer could be wrong.
+    pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
+        if checkpoint < self.lowest_intact {
+            return Err(below_serving_floor(self.lowest_intact));
+        }
+        Ok(())
+    }
+}
+
+fn indexes_disabled() -> crate::RpcError {
+    crate::RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled")
+}
+
+fn index_error(error: StorageError) -> crate::RpcError {
+    crate::RpcError::new(tonic::Code::Internal, error.to_string())
 }
 
 fn dedup_checkpoint_timestamps(
