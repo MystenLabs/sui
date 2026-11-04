@@ -97,6 +97,11 @@ impl<E: AdmissionQueueEntry> InsertOutcome<E> {
         }
     }
 
+    /// Whether the entry was admitted to the queue, as opposed to being refused.
+    pub fn was_inserted(&self) -> bool {
+        matches!(self.outcome, Some(Outcome::Inserted { .. }))
+    }
+
     /// Notifies the displaced entry, if any, then reports the insert result.
     /// `try_insert(e).notify()` is equivalent to `insert(e)`.
     pub fn notify(mut self) -> SuiResult<bool> {
@@ -546,7 +551,9 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             // A recorded object always has its holder queued at the recorded price, so the
             // level exists while the record does; its absence means the bookkeeping drifted.
             let Some(deque) = self.map.get_mut(&gas_price) else {
-                debug_fatal!("owned object recorded at gas price {gas_price} has no queued entries");
+                debug_fatal!(
+                    "owned object recorded at gas price {gas_price} has no queued entries"
+                );
                 continue;
             };
             let mut source = std::mem::take(deque);
@@ -647,9 +654,46 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.total_len == 0
     }
 
-    pub fn reinsert_front(&mut self, entry: E) {
+    /// Reinserts an entry that was taken for a proposal whose block was dropped, at the
+    /// front of its price level so it reclaims the position it held before being drained.
+    /// Capacity is bypassed because the entry was already admitted. While it was out with
+    /// the proposer a conflicting entry may have been queued on one of its owned objects:
+    /// the higher gas price wins, and a tie is kept for this returning entry since it held
+    /// the object first. The outcome carries any displaced entry, or this entry when it is
+    /// outbid, for the caller to notify outside the lock.
+    #[track_caller]
+    pub fn reinsert_front(&mut self, entry: E) -> InsertOutcome<E> {
         let keys: Vec<_> = entry.transaction_keys().collect();
+        let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
+        let gas_price = entry.gas_price();
+        let owned: Vec<ObjectRef> = entry.dedup_keys().collect();
+        let incumbent_gas = owned
+            .iter()
+            .filter_map(|object_ref| self.queued_dedup_objects.get(object_ref))
+            .copied()
+            .max();
+        let replaced = match incumbent_gas {
+            None => Vec::new(),
+            Some(incumbent_gas) if gas_price >= incumbent_gas => {
+                self.remove_owned_conflicts(&owned)
+            }
+            Some(_) => {
+                let object_id = owned
+                    .iter()
+                    .find(|object_ref| self.queued_dedup_objects.contains_key(object_ref))
+                    .map(|object_ref| object_ref.0)
+                    .expect("a colliding owned object exists");
+                self.metrics.owned_object_conflicts.inc();
+                return InsertOutcome::new(Outcome::OwnedObjectConflict { entry, object_id });
+            }
+        };
         self.push_entry(entry, keys, true);
+        InsertOutcome::new(Outcome::Inserted {
+            newly_inserted,
+            evicted: None,
+            replaced,
+            gas_price,
+        })
     }
 
     fn push_entry(&mut self, entry: E, keys: Vec<ConsensusTransactionKey>, front: bool) {
@@ -1139,6 +1183,80 @@ mod tests {
     }
 
     #[test]
+    fn reinsert_front_reclaims_object_from_lower_priced_newcomer() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        let gas = owned_ref(1, 6);
+        let (first, _) = mock_entry(200, vec![gas]);
+
+        assert!(q.insert(first).unwrap());
+        // The entry is drained into a proposal, freeing its object.
+        let taken = q.pop_batch(1).pop().unwrap();
+        assert_eq!(q.len(), 0);
+
+        // A lower-priced entry claims the now-free object while the first is out with the
+        // proposer.
+        let (newcomer, newcomer_outcome) = mock_entry(100, vec![gas]);
+        assert!(q.insert(newcomer).unwrap());
+
+        // The block was dropped, so the first entry is requeued and reclaims its object.
+        let outcome = q.reinsert_front(taken);
+        assert!(outcome.was_inserted());
+        outcome.notify().unwrap();
+        assert_eq!(q.len(), 1);
+        assert_eq!(q.pop_batch(10).first().map(|e| e.gas_price), Some(200));
+        assert_eq!(*newcomer_outcome.lock().unwrap(), Some("evicted"));
+    }
+
+    #[test]
+    fn reinsert_front_reclaims_object_on_tie() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        let gas = owned_ref(1, 6);
+        let (first, _) = mock_entry(100, vec![gas]);
+
+        assert!(q.insert(first).unwrap());
+        let taken = q.pop_batch(1).pop().unwrap();
+
+        // An equal-priced entry takes the free object; the requeued entry held it first,
+        // so the tie is resolved in its favour.
+        let (newcomer, newcomer_outcome) = mock_entry(100, vec![gas]);
+        assert!(q.insert(newcomer).unwrap());
+
+        let outcome = q.reinsert_front(taken);
+        assert!(outcome.was_inserted());
+        outcome.notify().unwrap();
+        assert_eq!(q.len(), 1);
+        assert_eq!(*newcomer_outcome.lock().unwrap(), Some("evicted"));
+    }
+
+    #[test]
+    fn reinsert_front_outbid_is_rejected() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        let gas = owned_ref(1, 6);
+        let (first, first_outcome) = mock_entry(100, vec![gas]);
+
+        assert!(q.insert(first).unwrap());
+        let taken = q.pop_batch(1).pop().unwrap();
+
+        // A higher-priced entry claims the free object; the requeued entry is outbid and
+        // refused rather than reinserted.
+        let (newcomer, _) = mock_entry(200, vec![gas]);
+        assert!(q.insert(newcomer).unwrap());
+
+        let outcome = q.reinsert_front(taken);
+        assert!(!outcome.was_inserted());
+        assert!(matches!(
+            outcome.notify().unwrap_err().as_inner(),
+            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+        ));
+        assert_eq!(q.len(), 1);
+        assert_eq!(q.pop_batch(10).first().map(|e| e.gas_price), Some(200));
+        assert_eq!(*first_outcome.lock().unwrap(), Some("conflict"));
+    }
+
+    #[test]
     fn owned_object_equal_gas_resubmission_rejected() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
@@ -1599,7 +1717,7 @@ mod tests {
         // Popping removes the key; reinserting the popped entry (the dropped-proposal
         // requeue path) must restore it, so a copy of `tx` is flagged as a duplicate.
         let popped = q.pop_batch(1).pop().unwrap();
-        q.reinsert_front(popped);
+        q.reinsert_front(popped).notify().unwrap();
         assert_eq!(q.len(), 1);
         let (entry2, _rx2) = make_dup_entry(100, tx.clone());
         assert!(!q.insert(entry2).unwrap());
