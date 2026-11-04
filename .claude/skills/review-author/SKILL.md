@@ -38,6 +38,8 @@ Eligible:
 
 ```
 crates/
+docker/
+scripts/
 ```
 
 Excluded:
