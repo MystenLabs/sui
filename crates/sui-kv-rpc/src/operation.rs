@@ -262,19 +262,15 @@ impl KvRpcServer {
         Fut: Future<Output = Result<BoxStream<'static, Result<T, RpcError>>, RpcError>> + Send,
     {
         let deadline = Instant::now() + spec.timeout;
-        let served_height = ServedHeight::of(&request)?;
-        let request = request.into_inner();
+        let ctx = self.query_context(spec.name, ServedHeight::of(&request)?)?;
 
-        let stream = tokio::time::timeout_at(deadline, async move {
-            let ctx = self.query_context(spec.name, served_height)?;
-            handler(ctx, request).await
-        })
-        .await
-        .map_err(|_| {
-            tracing::warn!(operation = spec.name, "construction phase timed out");
-            tonic::Status::deadline_exceeded(format!("{} request deadline exceeded", spec.name))
-        })?
-        .map_err(tonic::Status::from)?;
+        let stream = tokio::time::timeout_at(deadline, handler(ctx, request.into_inner()))
+            .await
+            .map_err(|_| {
+                tracing::warn!(operation = spec.name, "construction phase timed out");
+                tonic::Status::deadline_exceeded(format!("{} request deadline exceeded", spec.name))
+            })?
+            .map_err(tonic::Status::from)?;
 
         let stream = stream.map_err(tonic::Status::from);
         Ok(tonic::Response::new(
