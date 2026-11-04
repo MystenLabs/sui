@@ -399,11 +399,6 @@ async fn synchronizer_task(
 /// Required pipelines are members from the start, so a lagging
 /// required pipeline gates the snapshot until it arrives.
 ///
-/// This replaces a fixed-size [`tokio::sync::Barrier`], which would
-/// stall the caught-up cohort at the frontier waiting for a lagging
-/// pipeline to climb all the way up — exactly the situation a history
-/// cohort backfilling from a low watermark creates.
-///
 /// # Concurrency
 ///
 /// Membership and arrival bookkeeping live behind a
