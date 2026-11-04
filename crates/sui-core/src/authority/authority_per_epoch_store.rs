@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use sui_config::NodeConfig;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_execution::{self, Executor};
-use sui_macros::fail_point;
+use sui_macros::{fail_point, fail_point_if};
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::authenticator_state::{ActiveJwk, get_authenticator_state};
@@ -1413,6 +1413,16 @@ impl AuthorityPerEpochStore {
             .protocol_config()
             .enable_timestamp_transaction_expiration()
         {
+            return Ok(());
+        }
+        // Simulates a proposer whose clock is behind, so that voting sees transactions before
+        // their `min_timestamp`.
+        #[allow(unused_mut)]
+        let mut skip = false;
+        fail_point_if!("skip-timestamp-expiration-check-at-submission", || {
+            skip = true;
+        });
+        if skip {
             return Ok(());
         }
         let now_ms = Self::wall_clock_ms();
