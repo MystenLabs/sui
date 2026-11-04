@@ -1012,6 +1012,7 @@ impl Drop for TakenTransactionsGuard {
 
         let mut requeued = 0;
         let mut halted = Vec::new();
+        let mut reinsert_outcomes = Vec::new();
         // Capacity is bypassed because these entries were already admitted. Concurrent
         // inserts can put us over capacity, which we accept transiently.
         for mut taken in entries.into_iter().rev() {
@@ -1034,19 +1035,29 @@ impl Drop for TakenTransactionsGuard {
                 }
                 TakenLane::User => match &mut pool.user {
                     UserLane::Open(user) => {
-                        requeued += 1;
-                        self.metrics.pool_depth.with_label_values(&["user"]).inc();
-                        self.metrics
-                            .pool_bytes
-                            .with_label_values(&["user"])
-                            .add(taken.entry.total_bytes as i64);
                         if let Some(slot) = &mut taken.entry.staggered_slot {
                             slot.rearm();
                         }
+                        // The drained entry consumed drain budget, so refund it whether or
+                        // not it is requeued below.
                         if let Some(budget) = &mut pool.user_byte_budget {
                             budget.refund(taken.entry.total_bytes);
                         }
-                        user.reinsert_front(taken.entry);
+                        let total_bytes = taken.entry.total_bytes;
+                        // A conflicting entry may have been queued on this entry's owned
+                        // object while it was out with the proposer; the pool depth and
+                        // bytes count it only when it actually reclaims its place, and the
+                        // outcome notifies whichever entry is displaced once the lock drops.
+                        let outcome = user.reinsert_front(taken.entry);
+                        if outcome.was_inserted() {
+                            requeued += 1;
+                            self.metrics.pool_depth.with_label_values(&["user"]).inc();
+                            self.metrics
+                                .pool_bytes
+                                .with_label_values(&["user"])
+                                .add(total_bytes as i64);
+                        }
+                        reinsert_outcomes.push(outcome);
                     }
                     UserLane::Closed => halted.push(taken.entry),
                 },
@@ -1061,6 +1072,9 @@ impl Drop for TakenTransactionsGuard {
             .inc_by(requeued as u64);
         drop(inner);
 
+        for outcome in reinsert_outcomes {
+            let _ = outcome.notify();
+        }
         for entry in halted {
             entry
                 .ack
