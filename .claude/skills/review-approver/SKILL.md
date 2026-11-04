@@ -83,7 +83,9 @@ finding. Do not repeat a review that the tag records, and do not look for its fi
   full `<base>...<head>` diff.
 
 When you run a review, apply the tier focus from the `review-author` skill (test coverage and
-unintended consequences for Tier 2, the MDD questions for Tier 3). Post each finding as an inline
+unintended consequences for Tier 2, the MDD questions for Tier 3). For Tier 3, pass the full text
+of the `## Mini design doc` section from the PR description to the reviewer, because the reviewer
+does not read the PR description. Post each finding as an inline
 review comment with `/code-review --comment`. The author must accept or reject each finding.
 While any of your findings has no reply from the author and no fix, the outcome is **Blocked**.
 

@@ -155,6 +155,9 @@ For Tier 3, tell the reviewer to focus on these questions in addition to correct
 - Is the test coverage adequate, and what kinds of bugs could pass the tests?
 - What is the ecosystem impact? Does the change break other features? What rollout does it need?
 
+Pass the full text of the MDD to the reviewer along with these questions. The MDD is in the PR
+description, not in the code, so the reviewer cannot find it on its own.
+
 For Tier 2, tell the reviewer to check that the new code is tested appropriately, and to look for
 unintended consequences of the change.
 
