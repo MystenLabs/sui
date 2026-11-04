@@ -52,12 +52,20 @@ async fn test_get_package_not_found() {
         .await
         .unwrap();
 
+    let unknown_id = "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF";
     let mut request = GetPackageRequest::default();
-    request.package_id =
-        Some("0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF".to_string());
+    request.package_id = Some(unknown_id.to_string());
 
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
+
+    // A bound above the indexed ceiling is out of range whether or not the package exists, as on
+    // kv-rpc.
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some(unknown_id.to_string());
+    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
+    let error = service.get_package(request).await.unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
 }
 
 #[sim_test]
@@ -354,18 +362,24 @@ async fn test_get_package_at_checkpoint_below_available_floor() {
     halt_chain(&cluster).await;
     let pruned_to = prune_objects_below_tip(&cluster).await;
 
-    let request = |at_checkpoint| {
+    let request = |package_id: &str, at_checkpoint| {
         let mut request = GetPackageRequest::default();
-        request.package_id = Some("0x3".to_string());
+        request.package_id = Some(package_id.to_string());
         request.selector = Some(Selector::AtCheckpoint(at_checkpoint));
         request
     };
-    for checkpoint in [0, pruned_to - 1] {
-        let error = service.get_package(request(checkpoint)).await.unwrap_err();
-        assert_below_earliest_available(&error, pruned_to);
+    // A pruned checkpoint is out of range whether or not the package exists.
+    for package_id in ["0x3", "0xdeadbeef"] {
+        for checkpoint in [0, pruned_to - 1] {
+            let error = service
+                .get_package(request(package_id, checkpoint))
+                .await
+                .unwrap_err();
+            assert_below_earliest_available(&error, pruned_to);
+        }
     }
     let package = service
-        .get_package(request(pruned_to))
+        .get_package(request("0x3", pruned_to))
         .await
         .unwrap()
         .into_inner()

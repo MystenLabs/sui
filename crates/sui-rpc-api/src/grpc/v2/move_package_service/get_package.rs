@@ -5,7 +5,7 @@ use crate::{
     ErrorReason, Result, RpcError, RpcService,
     grpc::v2::move_package_service::{
         conversions::{convert_error, convert_module},
-        load_package, load_package_by_id,
+        load_package, load_package_by_id, parse_package_id,
     },
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
@@ -76,15 +76,17 @@ fn load_package_at_version(
 /// `at_checkpoint` is checked against the shared checkpoint-pinned read
 /// bounds, the upper bound before the package read and the lower bound after
 /// it (see `StateReader::at_checkpoint_upper_bound`), so a successful answer
-/// is exact as of `at_checkpoint`. Nodes without object version history
-/// refuse: system packages are upgraded in place, so their earlier versions
-/// are gone there.
+/// is exact as of `at_checkpoint`. Both bounds apply to every outcome of the
+/// read, `NotFound` included, so an out-of-range checkpoint is `OutOfRange`
+/// whether or not the package exists, as on kv-rpc. Nodes without object
+/// version history refuse: system packages are upgraded in place, so their
+/// earlier versions are gone there.
 fn load_package_at_checkpoint(
     service: &RpcService,
     package_id_str: &str,
     at_checkpoint: u64,
 ) -> Result<MovePackage> {
-    let original_id = load_package(service, package_id_str)?.original_package_id();
+    let package_id = parse_package_id(package_id_str)?;
 
     service.reader.require_object_version_history()?;
     service
@@ -98,11 +100,13 @@ fn load_package_at_checkpoint(
         .indexes()
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
 
-    let package = indexes
-        .get_package_at_checkpoint(original_id, at_checkpoint)
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))
-        .and_then(|found| found.ok_or_else(RpcError::not_found))
-        .and_then(|(_, storage_id)| load_package_by_id(service, storage_id));
+    let package = load_package_by_id(service, package_id).and_then(|package| {
+        indexes
+            .get_package_at_checkpoint(package.original_package_id(), at_checkpoint)
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+            .ok_or_else(RpcError::not_found)
+            .and_then(|(_, storage_id)| load_package_by_id(service, storage_id))
+    });
 
     service
         .reader

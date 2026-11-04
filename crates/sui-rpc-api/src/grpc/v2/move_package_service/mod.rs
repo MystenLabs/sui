@@ -66,7 +66,7 @@ pub(crate) fn load_package(service: &RpcService, package_id_str: &str) -> Result
 }
 
 /// Parse and validate a package ID string.
-fn parse_package_id(package_id_str: &str) -> Result<ObjectID> {
+pub(crate) fn parse_package_id(package_id_str: &str) -> Result<ObjectID> {
     package_id_str.parse::<ObjectID>().map_err(|e| {
         FieldViolation::new("package_id")
             .with_description(format!("invalid package_id: {e}"))
