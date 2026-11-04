@@ -807,8 +807,7 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn loaded_runtime_objects(&self) -> BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata> {
-        // The loaded child objects, and the received objects, should be disjoint. If they are not,
-        // this is an error since it could lead to incorrect transaction dependency computations.
+        // The loaded child objects and received objects must be disjoint.
         debug_assert!(
             self.child_object_store
                 .cached_objects()
