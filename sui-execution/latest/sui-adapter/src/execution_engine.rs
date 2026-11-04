@@ -37,9 +37,7 @@ pub(crate) mod checked {
         RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME,
         RANDOMNESS_STATE_UPDATE_FUNCTION_NAME,
     };
-    use sui_types::{
-        BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
-    };
+    use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
     use crate::static_programmable_transactions as SPT;
@@ -62,7 +60,7 @@ pub(crate) mod checked {
         BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME, BRIDGE_MODULE_NAME,
         BridgeChainId,
     };
-    use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME, Clock};
+    use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::digests::{
@@ -94,43 +92,6 @@ pub(crate) mod checked {
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
-
-    /// Fails a transaction whose `max_timestamp` is before the Clock version assigned to it,
-    /// whether it executes in the commit that first sequenced it or after deferral. Reading the
-    /// Clock records it in effects, which lets nodes that execute from checkpoints read the same
-    /// version.
-    ///
-    /// `min_timestamp` is never checked here. Aborting would consume the transaction, but the
-    /// signer must be able to submit it again once `min_timestamp` is reached. Commit timestamps
-    /// do not decrease, so a transaction that met `min_timestamp` when sequenced still meets it.
-    fn check_timestamp_expiration(
-        temporary_store: &TemporaryStore<'_>,
-        protocol_config: &ProtocolConfig,
-        mut execution_params: ExecutionOrEarlyError,
-    ) -> ExecutionOrEarlyError {
-        if !protocol_config.enable_timestamp_transaction_expiration() || !execution_params.is_ok() {
-            return execution_params;
-        }
-        let Some(expiration) = execution_params.timestamp_expiration() else {
-            return execution_params;
-        };
-        // A missing or malformed Clock is an invariant violation that the load reports.
-        let Some(timestamp_ms) = temporary_store
-            .load_implicitly_read_system_object(&SUI_CLOCK_OBJECT_ID)
-            .and_then(|clock| {
-                let contents = clock.data.try_as_move()?.contents();
-                bcs::from_bytes::<Clock>(contents).ok()
-            })
-            .map(|clock| clock.timestamp_ms())
-        else {
-            return execution_params;
-        };
-        if expiration.is_expired_at(timestamp_ms) {
-            assert_reachable!("transaction aborted after its max_timestamp");
-            execution_params.fail_if_ok(ExecutionErrorKind::TransactionExpired);
-        }
-        execution_params
-    }
 
     /// Whether the *head* early error is `InsufficientFundsForWithdraw`.
     fn head_error_is_insufficient_funds_for_withdraw(
@@ -309,8 +270,6 @@ pub(crate) mod checked {
             (&transaction_kind, &gas_data, transaction_signer),
             unsettled_object_funds,
         );
-        let execution_params =
-            check_timestamp_expiration(&temporary_store, protocol_config, execution_params);
 
         if bump_only_enabled(protocol_config.gas_model_version()) {
             let Finalized {

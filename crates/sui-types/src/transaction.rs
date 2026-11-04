@@ -2533,44 +2533,6 @@ impl TransactionExpiration {
         )
     }
 
-    /// Whether the expiration sets `min_timestamp` or `max_timestamp`.
-    pub fn has_timestamp_bounds(&self) -> bool {
-        match self {
-            TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
-            TransactionExpiration::ValidDuring {
-                min_timestamp,
-                max_timestamp,
-                ..
-            }
-            | TransactionExpiration::Validity {
-                min_timestamp,
-                max_timestamp,
-                ..
-            } => min_timestamp.is_some() || max_timestamp.is_some(),
-        }
-    }
-
-    /// Whether `timestamp_ms` lies within the inclusive `[min_timestamp, max_timestamp]` window.
-    /// An absent bound does not restrict the window.
-    pub fn is_valid_at_timestamp(&self, timestamp_ms: u64) -> bool {
-        match self {
-            TransactionExpiration::None | TransactionExpiration::Epoch(_) => true,
-            TransactionExpiration::ValidDuring {
-                min_timestamp,
-                max_timestamp,
-                ..
-            }
-            | TransactionExpiration::Validity {
-                min_timestamp,
-                max_timestamp,
-                ..
-            } => {
-                min_timestamp.is_none_or(|min| timestamp_ms >= min)
-                    && max_timestamp.is_none_or(|max| timestamp_ms <= max)
-            }
-        }
-    }
-
     /// Whether `timestamp_ms` is before `min_timestamp`. The transaction can become valid later,
     /// so it must not be executed to abort for this.
     pub fn is_not_yet_valid_at(&self, timestamp_ms: u64) -> bool {

@@ -3104,13 +3104,12 @@ async fn test_implicit_clock_read_uses_pinned_version() {
 }
 
 #[tokio::test]
-async fn test_timestamp_expiration_checked_against_pinned_clock() {
-    // A deferred transaction can execute in a commit after its window closes. Execution must
-    // abort it based on the Clock version pinned for it, and record that read in effects so
-    // checkpoint executors read the same version. Execution must never abort a transaction for
-    // being before its `min_timestamp`, because the signer must be able to retry it later.
+async fn test_timestamp_expiration_decided_outside_execution() {
+    // The consensus handler decides whether a transaction is past its `max_timestamp` and passes
+    // the decision in `ExecutionEnv`. Execution never reads the Clock for this, and never aborts a
+    // transaction for being before its `min_timestamp`.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_ids = [ObjectID::random(), ObjectID::random(), ObjectID::random()];
+    let gas_object_ids = [ObjectID::random(), ObjectID::random()];
     let (authority_state, package_object_ref) = init_state_with_ids_and_object_basics(
         gas_object_ids
             .iter()
@@ -3125,41 +3124,10 @@ async fn test_timestamp_expiration_checked_against_pinned_clock() {
             .enable_timestamp_transaction_expiration()
     );
 
-    let genesis_clock = authority_state.get_object(&SUI_CLOCK_OBJECT_ID).unwrap();
-    let clock_at = |version: u64, timestamp_ms: u64| {
-        let move_object = genesis_clock.data.try_as_move().unwrap();
-        let mut clock: Clock = move_object.to_rust().unwrap();
-        clock.timestamp_ms = timestamp_ms;
-        let move_object = unsafe {
-            MoveObject::new_from_execution_with_limit(
-                move_object.type_().clone(),
-                false,
-                SequenceNumber::from_u64(version),
-                bcs::to_bytes(&clock).unwrap(),
-                u64::MAX,
-            )
-        }
-        .unwrap();
-        Object::new_move(
-            move_object,
-            genesis_clock.owner().clone(),
-            TransactionDigest::genesis_marker(),
-        )
-    };
-    let in_window_version = SequenceNumber::from_u64(2);
-    let expired_version = SequenceNumber::from_u64(3);
-    let not_started_version = SequenceNumber::from_u64(4);
-    authority_state
-        .insert_objects_unsafe_for_testing_only(&[
-            clock_at(in_window_version.value(), 200),
-            clock_at(expired_version.value(), 300),
-            clock_at(not_started_version.value(), 50),
-        ])
-        .await
-        .unwrap();
-
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let execute_with_clock = async |gas_object_id: ObjectID, clock_version: SequenceNumber| {
+    // The window is far in the future, so the transaction is before its `min_timestamp` by any
+    // clock.
+    let execute = async |gas_object_id: ObjectID, env: ExecutionEnv| {
         let gas_ref =
             Object::with_id_owner_for_testing(gas_object_id, sender).compute_object_reference();
         let mut tx_data = TransactionData::new_move_call(
@@ -3180,8 +3148,8 @@ async fn test_timestamp_expiration_checked_against_pinned_clock() {
         *tx_data.expiration_mut_for_testing() = TransactionExpiration::ValidDuring {
             min_epoch: Some(epoch_store.epoch()),
             max_epoch: Some(epoch_store.epoch()),
-            min_timestamp: Some(100),
-            max_timestamp: Some(250),
+            min_timestamp: Some(u64::MAX - 1),
+            max_timestamp: Some(u64::MAX),
             chain: epoch_store.get_chain_identifier(),
             nonce: 0,
         };
@@ -3194,39 +3162,32 @@ async fn test_timestamp_expiration_checked_against_pinned_clock() {
             .into_tx();
         let executable =
             VerifiedExecutableTransaction::new_from_consensus(transaction, epoch_store.epoch());
-        let env = ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
-            vec![],
-            SystemObjectVersions::from_map(BTreeMap::from([(
-                SUI_CLOCK_OBJECT_ID,
-                ConsensusObjectVersion {
-                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    version: clock_version,
-                },
-            )])),
-        ));
         let (effects, _) = authority_state
             .try_execute_executable_for_test(&executable, env)
             .await;
         effects.inner().data().clone()
     };
-    let assert_clock_read = |effects: &TransactionEffects, version: SequenceNumber| {
+    let assert_no_clock_read = |effects: &TransactionEffects| {
         assert!(
             effects
                 .unchanged_consensus_objects()
                 .iter()
-                .any(|(id, kind)| *id == SUI_CLOCK_OBJECT_ID
-                    && matches!(kind, UnchangedConsensusKind::ReadOnlyRoot((v, _)) if *v == version)),
+                .all(|(id, _)| *id != SUI_CLOCK_OBJECT_ID),
             "{:?}",
             effects.unchanged_consensus_objects()
         );
     };
 
-    let effects = execute_with_clock(gas_object_ids[0], in_window_version).await;
+    let effects = execute(gas_object_ids[0], ExecutionEnv::new()).await;
     assert!(effects.status().is_ok(), "{:?}", effects.status());
     assert_eq!(effects.created().len(), 1);
-    assert_clock_read(&effects, in_window_version);
+    assert_no_clock_read(&effects);
 
-    let effects = execute_with_clock(gas_object_ids[1], expired_version).await;
+    let effects = execute(
+        gas_object_ids[1],
+        ExecutionEnv::new().with_timestamp_expired(),
+    )
+    .await;
     assert!(
         matches!(
             effects.status(),
@@ -3241,17 +3202,7 @@ async fn test_timestamp_expiration_checked_against_pinned_clock() {
     assert!(effects.created().is_empty());
     // The gas object is still charged and bumped, consuming the owned-object lock.
     assert!(effects.gas_cost_summary().net_gas_usage() > 0);
-    assert_clock_read(&effects, expired_version);
-    assert_eq!(
-        SystemObjectVersions::from_effects(&effects, authority_state.get_object_store().as_ref())
-            .get(&SUI_CLOCK_OBJECT_ID)
-            .map(|v| v.version),
-        Some(expired_version)
-    );
-
-    let effects = execute_with_clock(gas_object_ids[2], not_started_version).await;
-    assert!(effects.status().is_ok(), "{:?}", effects.status());
-    assert_eq!(effects.created().len(), 1);
+    assert_no_clock_read(&effects);
 }
 
 #[sim_test]
@@ -6188,7 +6139,7 @@ where
         let assigned_versions = schedulables
             .iter()
             .map(|s| s.key())
-            .zip_debug_eq(versions)
+            .zip_debug_eq(versions.into_iter().map(|env| env.assigned_versions))
             .collect();
         (schedulables, assigned_versions)
     }

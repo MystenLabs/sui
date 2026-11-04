@@ -8,11 +8,8 @@ use nonempty::NonEmpty;
 use once_cell::sync::Lazy;
 
 use crate::{
-    base_types::SequenceNumber,
-    digests::TransactionDigest,
-    execution_status::CongestedObjects,
-    execution_status::ExecutionErrorKind,
-    transaction::{CheckedInputObjects, TransactionExpiration},
+    base_types::SequenceNumber, digests::TransactionDigest, execution_status::CongestedObjects,
+    execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
 };
 
 /// Execution inputs computed before running a transaction: whether to fail it early (and with
@@ -25,9 +22,6 @@ pub struct ExecutionOrEarlyError {
     /// address-balance gas-smash short-circuit. Populated only for mainnet committed execution;
     /// `None` elsewhere, leaving that gate inert.
     accumulator_version: Option<SequenceNumber>,
-    /// The transaction's expiration, set only when it bounds the commit timestamp. Execution
-    /// compares it against the Clock version assigned to the transaction.
-    timestamp_expiration: Option<TransactionExpiration>,
 }
 
 impl ExecutionOrEarlyError {
@@ -36,7 +30,6 @@ impl ExecutionOrEarlyError {
         Self {
             early_errors: None,
             accumulator_version,
-            timestamp_expiration: None,
         }
     }
 
@@ -48,7 +41,6 @@ impl ExecutionOrEarlyError {
         Self {
             early_errors: Some(errors),
             accumulator_version,
-            timestamp_expiration: None,
         }
     }
 
@@ -68,18 +60,6 @@ impl ExecutionOrEarlyError {
 
     pub fn accumulator_version(&self) -> Option<SequenceNumber> {
         self.accumulator_version
-    }
-
-    /// Records `expiration` for execution to check against the Clock, if it has timestamp bounds.
-    pub fn with_timestamp_expiration(mut self, expiration: &TransactionExpiration) -> Self {
-        if expiration.has_timestamp_bounds() {
-            self.timestamp_expiration = Some(expiration.clone());
-        }
-        self
-    }
-
-    pub fn timestamp_expiration(&self) -> Option<&TransactionExpiration> {
-        self.timestamp_expiration.as_ref()
     }
 
     /// Fails the transaction with `error` if it has no early error yet.

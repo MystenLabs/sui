@@ -464,7 +464,7 @@ where
         let assigned_versions = schedulables
             .iter()
             .map(|s| s.key())
-            .zip_debug_eq(versions)
+            .zip_debug_eq(versions.into_iter().map(|env| env.assigned_versions))
             .collect();
         (schedulables, assigned_versions)
     };

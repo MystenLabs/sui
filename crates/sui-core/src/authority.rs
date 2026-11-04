@@ -122,7 +122,7 @@ use sui_types::effects::{
 };
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::ExecutionStatus;
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::message_envelope::Message;
@@ -911,6 +911,9 @@ pub struct ExecutionEnv {
     /// unconditionally (settlement transactions - see
     /// `execution_scheduler::causal_admission`).
     pub(crate) causal_index: Option<u64>,
+    /// Whether the consensus commit that scheduled the transaction is after its
+    /// `max_timestamp`. Execution never reads the timestamp itself.
+    pub timestamp_expired: bool,
 }
 
 impl Default for ExecutionEnv {
@@ -921,6 +924,7 @@ impl Default for ExecutionEnv {
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
             causal_index: None,
+            timestamp_expired: false,
         }
     }
 }
@@ -942,6 +946,11 @@ impl ExecutionEnv {
 
     pub fn with_insufficient_funds(mut self) -> Self {
         self.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+        self
+    }
+
+    pub fn with_timestamp_expired(mut self) -> Self {
+        self.timestamp_expired = true;
         self
     }
 
@@ -2035,11 +2044,15 @@ impl AuthorityState {
             .assigned_versions
             .system_object_versions
             .clone();
-        let execution_params = match early_execution_error {
+        let mut execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
+        };
+        // Another early error takes precedence, so that nodes that derive the expiration from
+        // effects compute the same error list.
+        if execution_env.timestamp_expired {
+            execution_params.fail_if_ok(ExecutionErrorKind::TransactionExpired);
         }
-        .with_timestamp_expiration(transaction_data.expiration());
 
         // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
         // was deleted.
