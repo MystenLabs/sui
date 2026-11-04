@@ -26,7 +26,8 @@ This skill tells an authoring agent how to prepare a PR for the tiered review po
 ## Eligible paths
 
 A PR is eligible only if every file it changes matches an entry in the eligible list and no entry
-in the excluded list. Entries are path prefixes relative to the repository root. An excluded entry
+in the excluded list. Entries are string prefixes of paths relative to the repository root, so
+`crates/sui-bridge` matches `crates/sui-bridge/` and `crates/sui-bridge-cli/`. An excluded entry
 wins over an eligible entry. A team opts its code in by adding its paths here, and opts a subpath
 out by adding it to the excluded list.
 
@@ -36,7 +37,7 @@ change its own eligibility.
 Eligible:
 
 ```
-(no paths yet)
+crates/
 ```
 
 Excluded:
@@ -45,6 +46,9 @@ Excluded:
 .claude/skills/review-author/
 .claude/skills/review-approver/
 .github/CODEOWNERS
+crates/sui-framework
+crates/sui-bridge
+crates/sui-package-
 ```
 
 If any changed file is not eligible, the PR cannot opt in. Do not write a tier tag. Tell the user
