@@ -221,11 +221,11 @@ pub fn checkpoint_output_objects(
 /// with the [`Synchronizer`] and hold snapshots back forever.
 ///
 /// Every registered [`LIVE_COHORT`] pipeline is a required snapshot
-/// member ([`Synchronizer::require_member`]): each snapshot includes
-/// every live index's writes through its checkpoint, even when a
-/// crash left their watermarks uneven, so the newest snapshot is
-/// always a valid point for live-index reads. Lagging history
-/// pipelines do not hold snapshots back.
+/// member ([`Synchronizer::register_required_pipeline`]): each
+/// snapshot includes every live index's writes through its
+/// checkpoint, even when a crash left their watermarks uneven, so
+/// the newest snapshot is always a valid point for live-index reads.
+/// Lagging history pipelines do not hold snapshots back.
 ///
 /// After pipelines are registered, [`Self::run`] installs the
 /// synchronizer onto the store and starts the framework indexer.
@@ -544,14 +544,12 @@ impl Indexer {
             }
         }
 
-        self.sync
-            .register_pipeline(H::NAME)
-            .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
         if LIVE_COHORT.contains(&H::NAME) {
-            self.sync.require_member(H::NAME).with_context(|| {
-                format!("Failed to require pipeline {:?} in snapshots", H::NAME)
-            })?;
+            self.sync.register_required_pipeline(H::NAME)
+        } else {
+            self.sync.register_pipeline(H::NAME)
         }
+        .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
 
         self.indexer
             .sequential_pipeline(handler, config)

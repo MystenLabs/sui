@@ -36,10 +36,10 @@
 //! # Required members
 //!
 //! A caller that needs every snapshot to be consistent for a fixed
-//! set of pipelines marks them with
-//! [`require_member`](Synchronizer::require_member). A required
-//! pipeline is a cohort member from startup whatever its watermark,
-//! so no snapshot is taken until it reaches the frontier: if it
+//! set of pipelines registers them with
+//! [`register_required_pipeline`](Synchronizer::register_required_pipeline).
+//! A required pipeline is a cohort member from startup whatever its
+//! watermark, so no snapshot is taken until it reaches the frontier: if it
 //! resumes behind the others (for example after a crash between two
 //! pipelines' commits), the caught-up members park at the frontier
 //! while it commits its backlog. Every snapshot taken during a run
@@ -70,8 +70,8 @@
 //! 2. [`register_pipeline`](Synchronizer::register_pipeline) reads
 //!    the pipeline's existing watermark (if any) from the
 //!    framework schema and records it as that pipeline's resume
-//!    point. [`require_member`](Synchronizer::require_member)
-//!    optionally marks a registered pipeline as a required member.
+//!    point. [`register_required_pipeline`](Synchronizer::register_required_pipeline)
+//!    does the same for a required member.
 //! 3. [`Synchronizer::run`] consumes the synchronizer, spawns one
 //!    task per registered pipeline, and returns the per-pipeline
 //!    write queues plus a [`tokio::task::JoinSet`] whose tasks
@@ -133,7 +133,7 @@ pub struct Synchronizer {
     db: Db,
     last_watermarks: HashMap<&'static str, Option<Watermark>>,
     /// Pipelines that must be members of every snapshot (see
-    /// [`require_member`](Self::require_member)).
+    /// [`register_required_pipeline`](Self::register_required_pipeline)).
     required_members: HashSet<&'static str>,
     first_checkpoint: u64,
     buffer_size: usize,
@@ -198,23 +198,20 @@ impl Synchronizer {
         Ok(())
     }
 
-    /// Require the registered pipeline `pipeline_task` to be a member
-    /// of every snapshot.
+    /// Register a pipeline, like
+    /// [`register_pipeline`](Self::register_pipeline), that must be a
+    /// member of every snapshot.
     ///
     /// The pipeline counts toward the snapshot cohort from startup,
     /// even when its watermark is behind the frontier, so no snapshot
     /// is taken until it has committed through `frontier - 1`. The
-    /// caught-up members park at the frontier in the meantime. If the
-    /// pipeline leaves the cohort on shutdown, no further snapshots
-    /// are taken. See the module docs on required members.
-    ///
-    /// Fails if `pipeline_task` has not been registered through
-    /// [`register_pipeline`](Self::register_pipeline).
-    pub fn require_member(&mut self, pipeline_task: &'static str) -> anyhow::Result<()> {
-        ensure!(
-            self.last_watermarks.contains_key(pipeline_task),
-            "{pipeline_task} must be registered with the synchronizer before it is required",
-        );
+    /// caught-up members park at the frontier in the meantime. See the
+    /// module docs on required members.
+    pub fn register_required_pipeline(
+        &mut self,
+        pipeline_task: &'static str,
+    ) -> anyhow::Result<()> {
+        self.register_pipeline(pipeline_task)?;
         self.required_members.insert(pipeline_task);
         Ok(())
     }
@@ -955,12 +952,10 @@ mod tests {
         );
 
         let mut sync = Synchronizer::new(db.clone(), 8, None);
-        for pipeline in ["owner", "type", "balance", "history"] {
-            sync.register_pipeline(pipeline).unwrap();
-        }
         for pipeline in ["owner", "type", "balance"] {
-            sync.require_member(pipeline).unwrap();
+            sync.register_required_pipeline(pipeline).unwrap();
         }
+        sync.register_pipeline("history").unwrap();
         let (mut joinset, queue) = sync.run().unwrap();
 
         // Let "owner" and "type" reach the frontier and park there.
@@ -1031,13 +1026,5 @@ mod tests {
         }
 
         assert!(db.at_snapshot(6).is_none());
-    }
-
-    #[test]
-    fn require_member_refuses_unregistered_pipeline() {
-        let (_dir, db) = open();
-        let mut sync = Synchronizer::new(db, 4, None);
-        let err = sync.require_member("p").unwrap_err();
-        assert!(format!("{err:#}").contains("must be registered"));
     }
 }
