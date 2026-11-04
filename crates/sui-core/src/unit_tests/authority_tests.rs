@@ -964,6 +964,42 @@ async fn test_dev_inspect_uses_unbound_object() {
 }
 
 #[sim_test]
+async fn test_dev_inspect_rejects_private_system_package_calls() {
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (_validator, fullnode, _object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let tx_hash = builder.pure(vec![0u8; 32]).unwrap();
+    let ids_created = builder.pure(0u64).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("tx_context").to_owned(),
+        ident_str!("derive_id").to_owned(),
+        vec![],
+        vec![tx_hash, ids_created],
+    );
+    let sim = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        TransactionKind::programmable(builder.finish()),
+        None,
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap();
+    let err = sim.execution_result.unwrap_err();
+    assert_eq!(
+        err.kind(),
+        &ExecutionErrorKind::NonEntryFunctionInvoked,
+        "unexpected error: {err}"
+    );
+}
+
+#[sim_test]
 async fn test_dev_inspect_on_validator() {
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();

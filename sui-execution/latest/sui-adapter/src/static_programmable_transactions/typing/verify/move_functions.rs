@@ -10,6 +10,7 @@ use move_core_types::language_storage::ModuleId;
 use sui_types::base_types::TxContextKind;
 use sui_types::error::ExecutionErrorTrait;
 use sui_types::execution_status::{CommandArgumentError, ExecutionErrorKind};
+use sui_types::is_system_package;
 use sui_verifier::private_generics_verifier_v2;
 
 /// Checks the following
@@ -171,6 +172,14 @@ fn check_visibility<Mode: ExecutionMode>(
                 return Err(Mode::Error::new_with_source(
                     ExecutionErrorKind::NonEntryFunctionInvoked,
                     "Can only call `entry` or `public` functions",
+                ));
+            }
+            if !Mode::allow_private_system_package_calls()
+                && is_system_package(*function.original_mid.address())
+            {
+                return Err(Mode::Error::new_with_source(
+                    ExecutionErrorKind::NonEntryFunctionInvoked,
+                    "Can only call `entry` or `public` functions of system packages",
                 ));
             }
         }
