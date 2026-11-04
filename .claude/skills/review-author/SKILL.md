@@ -95,6 +95,10 @@ If such a test is infeasible or unnecessary, write a short explanation of why. A
 deterministic simulation test reaches, or an optimization with no observable behavior change, are
 examples of acceptable explanations.
 
+Add a few bullets to the `## Test plan` section of the PR description. They name the regression
+test and the bug it reproduces, and say that the test failed with the fix reverted. If there is
+no regression test, they give the explanation instead.
+
 ### Tier 2
 
 New code must have tests that cover its main behavior and its error paths. Name the tests in the
@@ -143,7 +147,8 @@ For Tier 3, tell the reviewer to focus on these questions in addition to correct
 - Is the test coverage adequate, and what kinds of bugs could pass the tests?
 - What is the ecosystem impact? Does the change break other features? What rollout does it need?
 
-For Tier 2, tell the reviewer to check that the new code is tested appropriately.
+For Tier 2, tell the reviewer to check that the new code is tested appropriately, and to look for
+unintended consequences of the change.
 
 ## Step 4 — Write the tags
 
@@ -165,13 +170,6 @@ finding:
 
 `<sha>` is the full hash of the PR head commit that the review covered, after the push. If commits
 are added after the tag, review the new commits and update the tag to the new head.
-
-A Tier 1 PR also states its regression test anywhere in the description, in one of these forms:
-
-```
-Regression test: `<path to test>::<test name>`
-Regression test not feasible: <one or two sentences>
-```
 
 Refresh the tags whenever the diff changes. If the new diff fits a higher tier, raise the tier and
 meet the new tier's requirements. If the PR becomes ineligible, remove the tier tag and tell the

@@ -78,10 +78,10 @@ finding. Do not repeat a review that the tag records, and do not look for its fi
 - If there is no tag, or `<sha>` is not an ancestor of the head, run `/code-review max` on the
   full `<base>...<head>` diff.
 
-When you run a review, apply the tier focus from the `review-author` skill (test coverage for
-Tier 2, the MDD questions for Tier 3). Post each finding as an inline review comment with
-`/code-review --comment`. The author must accept or reject each finding. While any of your
-findings has no reply from the author and no fix, the outcome is **Blocked**.
+When you run a review, apply the tier focus from the `review-author` skill (test coverage and
+unintended consequences for Tier 2, the MDD questions for Tier 3). Post each finding as an inline
+review comment with `/code-review --comment`. The author must accept or reject each finding.
+While any of your findings has no reply from the author and no fix, the outcome is **Blocked**.
 
 ## Step 5 — Check the tier requirements
 
@@ -92,12 +92,12 @@ moved files are unchanged apart from the module paths that the move requires.
 
 ### Tier 1
 
-Confirm one of these:
+Read the bullets in `## Test plan` and confirm one of these:
 
-- The `Regression test:` line names a test that the PR adds or changes, and the test exercises the
-  bug that the PR fixes. Running the test with the fix reverted is optional and is at your
-  discretion.
-- The `Regression test not feasible:` line gives a reason that holds for this change.
+- They name a regression test that the PR adds or changes, and the test exercises the bug that
+  the PR fixes. Running the test with the fix reverted is optional and is at your discretion.
+- They explain why a regression test is infeasible or unnecessary, and the reason holds for this
+  change.
 
 ### Tier 2
 
