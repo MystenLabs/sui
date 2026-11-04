@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
-use bytes::Bytes;
 use prost_types::FieldMask;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
@@ -20,21 +19,15 @@ use sui_types::event::Event as NativeEvent;
 use tokio::sync::OnceCell;
 
 use crate::api::scalars::base64::Base64;
-use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::event::filter::EventFilter;
-use crate::api::types::ledger_cursor::Envelope;
-use crate::api::types::ledger_cursor::EnvelopeRef;
 use crate::api::types::ledger_cursor::EventKey;
-use crate::api::types::ledger_cursor::OwnedCursor;
-use crate::api::types::ledger_cursor::Point;
+use crate::api::types::ledger_cursor::LedgerToken;
 use crate::api::types::ledger_cursor::scan::LedgerPage;
-use crate::api::types::ledger_cursor::scan::RequestBound;
-use crate::api::types::ledger_cursor::scan::ScanCursor;
 use crate::api::types::ledger_cursor::scan::scan;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::move_module::MoveModule;
@@ -51,8 +44,7 @@ use crate::scope::Scope;
 pub(crate) mod filter;
 
 /// A decoded event cursor.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EventToken(OwnedCursor<EventKey>);
+pub type EventToken = LedgerToken<EventKey>;
 
 pub type CEvent = OpaqueCursor<EventToken>;
 
@@ -231,12 +223,12 @@ impl Event {
                 "transaction_index",
                 "checkpoint",
             ]));
-            request.start_checkpoint = Some(scan.start_checkpoint);
-            request.end_checkpoint = Some(scan.end_checkpoint);
-            request.start_transaction_index = scan.start_position.map(|k| k.transaction_index);
-            request.start_event_index = scan.start_position.map(|k| k.event_index);
-            request.end_transaction_index = scan.end_position.map(|k| k.transaction_index);
-            request.end_event_index = scan.end_position.map(|k| k.event_index);
+            request.start_checkpoint = Some(scan.start.checkpoint);
+            request.start_transaction_index = scan.start.transaction_index;
+            request.start_event_index = scan.start.event_index;
+            request.end_checkpoint = Some(scan.end.checkpoint);
+            request.end_transaction_index = scan.end.transaction_index;
+            request.end_event_index = scan.end.event_index;
             request.filter = filter;
             request.options = Some(scan.options);
 
@@ -246,67 +238,6 @@ impl Event {
                 .context("Failed to list events")
         })
         .await
-    }
-}
-
-impl EventToken {
-    /// The cursor of the event at `key`, minted from data GraphQL holds.
-    pub(crate) fn at(key: EventKey) -> CEvent {
-        OpaqueCursor::new(Self(OwnedCursor::Point(Point::At(key))))
-    }
-
-    /// The cursor at the start of `checkpoint`: a page after it starts with the checkpoint's first
-    /// event.
-    pub(crate) fn checkpoint_start(checkpoint: u64) -> CEvent {
-        OpaqueCursor::new(Self(OwnedCursor::Point(Point::checkpoint_start(
-            checkpoint,
-        ))))
-    }
-
-    /// Where GraphQL places this cursor: `None` for a ledger page boundary that nothing GraphQL saw
-    /// bounds.
-    pub fn point(&self) -> Option<Point<EventKey>> {
-        self.0.point()
-    }
-
-    /// The last checkpoint this cursor shows the client has seen any of: the one its place has
-    /// reached, or `None` if it shows none.
-    pub(crate) fn last_checkpoint(&self) -> Option<u64> {
-        self.point().and_then(|point| point.last_checkpoint())
-    }
-}
-
-impl ByteCursor for EventToken {
-    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let Envelope::Event(cursor) = Envelope::decode(bytes)? else {
-            anyhow::bail!("Not an event cursor");
-        };
-
-        Ok(Self(cursor))
-    }
-
-    fn encode_cursor(&self) -> Bytes {
-        EnvelopeRef::Event(&self.0).encode()
-    }
-}
-
-impl ScanCursor for CEvent {
-    type Key = EventKey;
-
-    fn bound(&self) -> RequestBound<EventKey> {
-        let EventToken(cursor) = &**self;
-        RequestBound {
-            ledger: cursor.ledger_bytes().cloned(),
-            point: cursor.point(),
-        }
-    }
-
-    fn from_ledger(bytes: Bytes, point: Option<Point<EventKey>>) -> Self {
-        OpaqueCursor::new(EventToken(OwnedCursor::Ledger { bytes, point }))
-    }
-
-    fn from_point(point: Point<EventKey>) -> Self {
-        OpaqueCursor::new(EventToken(OwnedCursor::Point(point)))
     }
 }
 
@@ -373,15 +304,19 @@ fn build_grpc_connection(
 #[cfg(test)]
 mod tests {
     use async_graphql::connection::CursorType;
+    use bytes::Bytes;
     use fastcrypto::encoding::Base58;
     use fastcrypto::encoding::Base64 as B64;
     use fastcrypto::encoding::Encoding;
+    use sui_indexer_alt_reader::ledger_grpc_reader::PageBoundary;
     use sui_indexer_alt_reader::ledger_grpc_reader::PageItem;
     use sui_indexer_alt_reader::ledger_grpc_reader::StreamPage;
     use sui_rpc::proto::sui::rpc::v2::QueryEndReason as End;
     use sui_types::base_types::ObjectID;
     use sui_types::parse_sui_struct_tag;
 
+    use crate::api::types::ledger_cursor::Point;
+    use crate::api::types::ledger_cursor::scan::PositionFields;
     use crate::api::types::ledger_cursor::scan::ScanPlan;
     use crate::api::types::ledger_cursor::scan::ScanRequest;
     use crate::api::types::transaction::TransactionToken;
@@ -416,6 +351,10 @@ mod tests {
         PageItem {
             payload,
             cursor: Bytes::from_static(cursor),
+            position: v2::LedgerPosition::default()
+                .with_checkpoint(key.checkpoint)
+                .with_transaction_index(key.transaction_index)
+                .with_event_index(key.event_index + 1),
         }
     }
 
@@ -443,7 +382,7 @@ mod tests {
     }
 
     /// The request `page` sends over checkpoints 0 to 100.
-    fn scan_request(page: &Page<CEvent>) -> ScanRequest<EventKey> {
+    fn scan_request(page: &Page<CEvent>) -> ScanRequest {
         ScanPlan::new(page, 0..=100)
             .request(page.limit_with_lookahead())
             .expect("non-empty range")
@@ -458,7 +397,7 @@ mod tests {
                     .expect("valid cursor")
                     .point()
                 {
-                    Some(Point::At(key)) => key,
+                    Point::At(key) => key,
                     point => panic!("expected an item cursor, got {point:?}"),
                 }
             })
@@ -469,7 +408,7 @@ mod tests {
     fn owned_cursor_roundtrips() {
         let cursor = EventToken::at(key(1, 2, 3));
         let decoded = CEvent::decode_cursor(&cursor.encode_cursor()).expect("valid cursor");
-        assert_eq!(decoded.point(), Some(Point::At(key(1, 2, 3))));
+        assert_eq!(decoded.point(), Point::At(key(1, 2, 3)));
     }
 
     /// A cursor for another type, or in the protobuf format earlier releases issued, must not
@@ -556,29 +495,66 @@ mod tests {
         );
     }
 
-    /// A live cursor with no ledger bytes places events within a transaction: the scan starts at
-    /// the next event of its transaction, and ends before the cursor's own event when it is the
-    /// `before` cursor. A ledger server that predates positions starts at the checkpoint, so the
-    /// events at or before the cursor are also dropped.
+    /// An event cursor sends its place within its transaction: the scan starts at the next event
+    /// of its transaction, and ends before the cursor's own event when it is the `before` cursor.
     #[test]
-    fn point_cursor_drops_earlier_events() {
+    fn point_cursor_sets_event_positions() {
         let after = page(Some(10), Some(EventToken::at(key(3, 2, 1))), None, None);
         let request = scan_request(&after);
-        assert_eq!(request.start_checkpoint, 3);
-        assert_eq!(request.start_position, Some(key(3, 2, 2)));
-
-        let items = vec![
-            ev_item(b"a", key(3, 1, 5)),
-            ev_item(b"b", key(3, 2, 1)),
-            ev_item(b"c", key(3, 2, 2)),
-            ev_item(b"d", key(3, 3, 0)),
-        ];
-        let conn = connection(&after, items, End::CheckpointBound).expect("connection built");
-        assert_eq!(edge_keys(&conn), [key(3, 2, 2), key(3, 3, 0)]);
+        assert_eq!(
+            request.start,
+            PositionFields {
+                checkpoint: 3,
+                transaction_index: Some(2),
+                event_index: Some(2),
+            }
+        );
 
         let before = page(None, None, Some(10), Some(EventToken::at(key(3, 2, 1))));
         let request = scan_request(&before);
-        assert_eq!(request.end_checkpoint, 4);
-        assert_eq!(request.end_position, Some(key(3, 2, 1)));
+        assert_eq!(
+            request.end,
+            PositionFields {
+                checkpoint: 4,
+                transaction_index: Some(2),
+                event_index: Some(1),
+            }
+        );
+    }
+
+    /// A page that ends on a frame without an item, partway through a transaction's events, ends
+    /// at the reported position, and the next page starts there.
+    #[test]
+    fn boundary_within_a_transaction_resumes_at_its_position() {
+        let first = page(Some(10), None, None, None);
+        let boundary = PageBoundary {
+            cursor: Bytes::from_static(b"w"),
+            position: v2::LedgerPosition::default()
+                .with_checkpoint(3)
+                .with_transaction_index(2)
+                .with_event_index(4),
+        };
+        let stream = StreamPage::for_test(
+            vec![ev_item(b"e", key(3, 2, 1))],
+            None,
+            Some(boundary),
+            Some(End::ScanLimit),
+        );
+        let result = ScanPlan::new(&first, 0..=100)
+            .page(stream, event_key)
+            .expect("page minted");
+        let end = result.last_cursor.expect("resume cursor");
+        assert_eq!(end.point(), Point::Before(key(3, 2, 4)));
+
+        let next = scan_request(&page(Some(10), Some(end), None, None));
+        assert_eq!(next.options.after.as_deref(), Some(&b"w"[..]));
+        assert_eq!(
+            next.start,
+            PositionFields {
+                checkpoint: 3,
+                transaction_index: Some(2),
+                event_index: Some(4),
+            }
+        );
     }
 }

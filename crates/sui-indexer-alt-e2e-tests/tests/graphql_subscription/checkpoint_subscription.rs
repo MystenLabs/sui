@@ -493,9 +493,9 @@ async fn test_subscription_resume_with_after_cursor() {
 }
 
 /// Resume with an `after` cursor ahead of the ledger's indexed tip, as a client does when it
-/// reconnects with the cursor of a live edge before the ledger has caught up. The ledger ends its
-/// empty page at its own tip, behind the cursor, and the backfill must not resume from there:
-/// delivery starts right after the cursor, with no repeats.
+/// reconnects with the cursor of a live edge before the ledger has caught up. The subscription
+/// waits for every pipeline, the ledger's included, to reach the cursor's checkpoint before it
+/// scans, and delivery starts right after the cursor, with no repeats.
 #[tokio::test]
 async fn test_subscription_resume_with_after_cursor_ahead_of_ledger() {
     let cluster = SubscriptionTestCluster::new().await;

@@ -12,9 +12,6 @@ use std::time::Duration;
 
 use serde_json::Value;
 use serde_json::json;
-use sui_indexer_alt_e2e_tests::graphql::unplaced_event_cursor;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
 use tokio_stream::StreamExt;
 
@@ -708,57 +705,6 @@ async fn test_event_subscription_resume_with_after_cursor() {
         Some(first_value.as_str()),
         "resume-by-cursor re-delivered the event at the cursor",
     );
-}
-
-/// Resume with an `after` cursor GraphQL cannot place, whose ledger bytes are ahead of the ledger's
-/// indexed tip in both checkpoint and transaction sequence number. GraphQL sends the bytes as they
-/// are. Until the ledger catches up, its pages end where the cursor resumes, and the backfill waits
-/// there rather than resuming from the ledger's tip: an event emitted before the cursor must not be
-/// delivered.
-#[tokio::test]
-async fn test_event_subscription_resume_with_after_cursor_ahead_of_ledger() {
-    tokio::time::timeout(Duration::from_secs(180), async {
-        let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
-        let package_id = emit_event_harness::publish(&mut cluster.validator).await;
-
-        // The ledger can't have indexed past the validator's tip, so it is behind this cursor.
-        // The margin leaves room for the transaction that emits the event before the cursor.
-        let (tip, total) = cluster.validator_tip_and_total_transactions();
-        let resume_tx = total + 100;
-        let ledger = CursorToken::item(Position::Events {
-            checkpoint: tip + 1,
-            tx_seq: resume_tx,
-            event_index: 0,
-        });
-        let cursor = unplaced_event_cursor(&ledger.encode());
-        let query = r#"subscription($after: String!, $filter: EventFilter!) {
-            events(after: $after, filter: $filter) {
-                node { contents { json } }
-            }
-        }"#;
-        let mut vars = type_filter_var(&package_id, None).unwrap();
-        vars["after"] = json!(cursor);
-        let mut stream = cluster.subscribe_with_variables(query, Some(vars)).await;
-
-        // Emitted after the ledger's tip but before the cursor's transaction.
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
-        assert!(cluster.validator_tip_and_total_transactions().1 <= resume_tx);
-
-        // Every checkpoint carries at least one transaction, so the chain passes the cursor.
-        cluster
-            .wait_for_total_transactions_past(resume_tx, Duration::from_secs(120))
-            .await;
-        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 2000).await;
-
-        let first = stream.next().await.unwrap();
-        assert_eq!(
-            event_value(&first),
-            Some("2000"),
-            "delivered an event before the cursor: {first}",
-        );
-    })
-    .await
-    .expect("test timed out");
 }
 
 #[tokio::test]

@@ -266,7 +266,7 @@ Response: {
   "data": {
     "eventsAfterTransaction2AndEvent0": {
       "pageInfo": {
-        "startCursor": "AAEAAQEAAAAAAAAAAQAAAAAAAAABAAAA",
+        "startCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": true
@@ -315,7 +315,7 @@ Response: {
     "eventsBeforeTransaction3AndEvent1FromBack": {
       "pageInfo": {
         "startCursor": "AAEBDCgCQgYIABAAGABKAAEBAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        "endCursor": "AAEAAQEAAAAAAAAAAgAAAAAAAAABAAAA",
+        "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
