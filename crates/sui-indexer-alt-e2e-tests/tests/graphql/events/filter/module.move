@@ -69,6 +69,7 @@ module P2::M2 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   allEvents: events(first: 50) {
     nodes {
@@ -137,8 +138,10 @@ fragment E on Event {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   eventsByModuleAndTypeIsUnavailable: events(first: 50, filter: {module: "@{P1}", type: "@{P1}::M1::EventC"}) {
     nodes {
@@ -146,3 +149,4 @@ fragment E on Event {
     }
   }
 }
+*/

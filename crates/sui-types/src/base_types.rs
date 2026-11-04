@@ -77,6 +77,7 @@ use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
 use std::borrow::Cow;
 use std::cmp::max;
+use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
@@ -233,49 +234,38 @@ pub struct ConsensusObjectVersion {
     pub version: SequenceNumber,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SystemObjectVersions {
-    accumulator_version: Option<ConsensusObjectVersion>,
-    forwarding_address_registry_version: Option<ConsensusObjectVersion>,
-}
+/// Versions of the implicitly read system objects pinned for one transaction, keyed by object
+/// ID. Only members of `IMPLICITLY_READ_SYSTEM_OBJECTS` may appear.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SystemObjectVersions(BTreeMap<ObjectID, ConsensusObjectVersion>);
 
 impl SystemObjectVersions {
-    pub fn new(
-        accumulator_version: Option<ConsensusObjectVersion>,
-        forwarding_address_registry_version: Option<ConsensusObjectVersion>,
-    ) -> Self {
-        Self {
-            accumulator_version,
-            forwarding_address_registry_version,
-        }
-    }
-
     pub fn empty() -> Self {
-        Self::new(None, None)
+        Self::default()
     }
 
-    pub fn from_map(
-        mut versions: std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>,
-    ) -> Self {
-        let accumulator_version = versions.remove(&crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID);
-        let forwarding_address_registry_version =
-            versions.remove(&crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
-        assert!(
-            versions.is_empty(),
-            "{:?} are not implicitly read system objects",
-            versions.keys().collect::<Vec<_>>()
-        );
-        Self::new(accumulator_version, forwarding_address_registry_version)
+    pub fn from_map(versions: BTreeMap<ObjectID, ConsensusObjectVersion>) -> Self {
+        for object_id in versions.keys() {
+            Self::assert_implicitly_read(object_id);
+        }
+        Self(versions)
     }
 
     pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
-        match *object_id {
-            crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID => self.accumulator_version,
-            crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID => {
-                self.forwarding_address_registry_version
-            }
-            _ => panic!("{object_id} is not an implicitly read system object"),
-        }
+        Self::assert_implicitly_read(object_id);
+        self.0.get(object_id).copied()
+    }
+
+    pub fn insert_for_testing(&mut self, object_id: ObjectID, version: ConsensusObjectVersion) {
+        Self::assert_implicitly_read(&object_id);
+        self.0.insert(object_id, version);
+    }
+
+    fn assert_implicitly_read(object_id: &ObjectID) {
+        assert!(
+            object_id.is_implicitly_read_system_object(),
+            "{object_id} is not an implicitly read system object"
+        );
     }
 }
 

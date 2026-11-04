@@ -52,8 +52,9 @@ pub fn emit(
     // Deriving event value size can be expensive due to recursion overhead
     native_charge_gas_early_exit!(
         context,
-        event_emit_cost_params.event_emit_value_size_derivation_cost_per_byte
-            * u64::from(event_value_size).into()
+        event_emit_cost_params
+            .event_emit_value_size_derivation_cost_per_byte
+            .saturating_mul(u64::from(event_value_size))
     );
 
     let tag = match context.type_to_type_tag(&ty)? {
@@ -70,8 +71,9 @@ pub fn emit(
     // Converting type to typetag be expensive due to recursion overhead
     native_charge_gas_early_exit!(
         context,
-        event_emit_cost_params.event_emit_tag_size_derivation_cost_per_byte
-            * u64::from(tag_size).into()
+        event_emit_cost_params
+            .event_emit_tag_size_derivation_cost_per_byte
+            .saturating_mul(u64::from(tag_size))
     );
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
@@ -90,7 +92,9 @@ pub fn emit(
     // Emitting an event is cheap since its a vector push
     native_charge_gas_early_exit!(
         context,
-        event_emit_cost_params.event_emit_output_cost_per_byte * ev_size.into()
+        event_emit_cost_params
+            .event_emit_output_cost_per_byte
+            .saturating_mul(ev_size)
     );
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();

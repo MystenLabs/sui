@@ -6,6 +6,7 @@ use crate::authority::authority_tests::{init_state_with_committee, submit_and_ex
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_macros::sim_test;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
@@ -18,7 +19,7 @@ use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{base_types::dbg_addr, crypto::get_key_pair, error::SuiError};
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_sui_failure_empty_recipients() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let coin_id = ObjectID::random();
@@ -35,7 +36,7 @@ async fn test_pay_sui_failure_empty_recipients() {
     assert!(effects.created().is_empty());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 2000);
@@ -61,7 +62,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 500100);
@@ -87,7 +88,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 800);
@@ -114,7 +115,7 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 204000);
@@ -140,7 +141,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id = ObjectID::random();
@@ -205,7 +206,7 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id1 = ObjectID::random();
@@ -268,7 +269,7 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1800);
@@ -285,7 +286,7 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let coin1 = Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, 1000);
@@ -303,7 +304,7 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id = ObjectID::random();
@@ -329,7 +330,7 @@ async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id1 = ObjectID::random();

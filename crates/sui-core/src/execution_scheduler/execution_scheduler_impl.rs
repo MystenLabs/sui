@@ -750,6 +750,7 @@ mod test {
     use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
     use std::collections::BTreeSet;
     use std::{time::Duration, vec};
+    use sui_macros::sim_test;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{SuiAddress, random_object_ref};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -938,7 +939,7 @@ mod test {
     //     r      r     w      r
     // And when shared_object is available, tx_0, tx_1, and tx_2 can be executed. And when
     // shared_object_2 becomes available, tx_3 can be executed.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn execution_scheduler_object_dependency() {
         telemetry_subscribers::init_for_testing();
         // Initialize an authority state, with gas objects and a shared object.
@@ -1141,7 +1142,7 @@ mod test {
         execution_scheduler.check_empty_for_testing().await;
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn execution_scheduler_receiving_notify_commit() {
         telemetry_subscribers::init_for_testing();
         // Initialize an authority state.
@@ -1230,7 +1231,7 @@ mod test {
         execution_scheduler.check_empty_for_testing().await;
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn execution_scheduler_receiving_object_ready_notifications() {
         telemetry_subscribers::init_for_testing();
         // Initialize an authority state.
@@ -1316,7 +1317,7 @@ mod test {
         rx_ready_certificates.recv().await.unwrap();
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn execution_scheduler_receiving_object_ready_notifications_multiple_of_same_receiving() {
         telemetry_subscribers::init_for_testing();
         // Initialize an authority state.
@@ -1430,7 +1431,7 @@ mod test {
         rx_ready_certificates.recv().await.unwrap();
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn execution_scheduler_receiving_object_ready_if_current_version_greater() {
         telemetry_subscribers::init_for_testing();
         // Initialize an authority state.
@@ -1508,7 +1509,7 @@ mod test {
 
     // Tests transaction cancellation logic in execution scheduler. Mainly tests that for cancelled transaction,
     // execution scheduler only waits for all non-shared objects to be available before outputting the transaction.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn execution_scheduler_with_cancelled_transactions() {
         // Initialize an authority state, with gas objects and 3 shared objects.
         let (owner, _keypair) = deterministic_random_account_key();

@@ -182,17 +182,18 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         committee.verifySignatures(signatures, message);
     }
 
-    function testFailUpdateBlocklistWithSignaturesInvalidNonce() public {
+    function testRevertUpdateBlocklistWithSignaturesInvalidNonce() public {
         // create payload
         address[] memory _blocklist = new address[](1);
         _blocklist[0] = committeeMemberA;
-        bytes memory payload = abi.encode(uint8(0), _blocklist);
+        bytes memory payload = hex"0001";
+        payload = abi.encodePacked(payload, committeeMemberA);
 
         // Create a message with wrong nonce
         BridgeUtils.Message memory messageWrongNonce = BridgeUtils.Message({
             messageType: BridgeUtils.BLOCKLIST,
             version: 1,
-            nonce: 0,
+            nonce: 1,
             chainID: chainID,
             payload: payload
         });
@@ -205,7 +206,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         signatures[1] = getSignature(messageHash, committeeMemberPkB);
         signatures[2] = getSignature(messageHash, committeeMemberPkC);
         signatures[3] = getSignature(messageHash, committeeMemberPkD);
-        vm.expectRevert(bytes("BridgeCommittee: Invalid nonce"));
+        vm.expectRevert(bytes("MessageVerifier: Invalid nonce"));
         committee.updateBlocklistWithSignatures(signatures, messageWrongNonce);
     }
 
@@ -236,11 +237,12 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         committee.updateBlocklistWithSignatures(signatures, messageWrongMessageType);
     }
 
-    function testFailUpdateBlocklistWithSignaturesInvalidSignatures() public {
+    function testRevertUpdateBlocklistWithSignaturesInvalidSignatures() public {
         // create payload
         address[] memory _blocklist = new address[](1);
         _blocklist[0] = committeeMemberA;
-        bytes memory payload = abi.encode(uint8(0), _blocklist);
+        bytes memory payload = hex"0001";
+        payload = abi.encodePacked(payload, committeeMemberA);
 
         // Create a message
         BridgeUtils.Message memory message = BridgeUtils.Message({
@@ -252,11 +254,11 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         });
         bytes memory messageBytes = BridgeUtils.encodeMessage(message);
         bytes32 messageHash = keccak256(messageBytes);
-        bytes[] memory signatures = new bytes[](4);
+        bytes[] memory signatures = new bytes[](1);
 
         // Create signatures from A
         signatures[0] = getSignature(messageHash, committeeMemberPkA);
-        vm.expectRevert(bytes("BridgeCommittee: Invalid signatures"));
+        vm.expectRevert(bytes("BridgeCommittee: Insufficient stake amount"));
         committee.updateBlocklistWithSignatures(signatures, message);
     }
 

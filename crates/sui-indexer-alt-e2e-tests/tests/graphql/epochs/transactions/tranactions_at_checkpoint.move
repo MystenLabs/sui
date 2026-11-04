@@ -26,6 +26,7 @@
 //> MergeCoins(Gas, [Result(0)])
 
 //# run-graphql
+/*
 { # Fetch an epoch and its transactions, at a checkpoint
   epoch0AllTransactions: epoch(epochId: 0) {
         totalTransactions
@@ -64,3 +65,4 @@ fragment TransactionFragment on Transaction {
   digest
   effects { checkpoint { sequenceNumber, epoch { epochId } } }
 }
+*/

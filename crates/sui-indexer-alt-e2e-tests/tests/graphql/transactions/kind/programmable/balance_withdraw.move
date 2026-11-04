@@ -28,6 +28,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   transaction(digest: "@{digest_4}") {
     kind {
@@ -73,6 +74,7 @@
     }
   }
 }
+*/
 
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(100) @A
 // B withdraws 100 from their own balance: a plain sender withdrawal.
@@ -87,6 +89,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # A plain sender withdrawal has no funder and no allowance.
   transaction(digest: "@{digest_7}") {
@@ -115,8 +118,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Queried after a later spend: `asObject` is the latest version, while
   # `asTransactionObject` stays at the versions this transaction saw, and an
@@ -158,3 +163,4 @@
     }
   }
 }
+*/

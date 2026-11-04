@@ -53,7 +53,7 @@ use sui_types::{
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
         InputObjectKind, PlainTransactionWithClaims, SenderSignedData, TransactionDataAPI,
-        TransactionKey, VerifiedTransaction, WithAliases,
+        TransactionKey, VerifiedTransaction, WithAliases, paid_proposer_count,
     },
 };
 use tokio::task::JoinSet;
@@ -735,8 +735,11 @@ pub struct ConsensusHandler<C> {
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
-    /// Lru cache to quickly discard transactions processed by consensus
-    processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
+    /// LRU cache of processed messages. Deduplication only checks whether a key is
+    /// present. The value counts how many copies of the message this validator has
+    /// seen, which feeds the local staggering signal. A count is lost on eviction or
+    /// restart. The next copy then starts a fresh count, so it is not charged as excess.
+    processed_cache: LruCache<SequencedConsensusTransactionKey, u64>,
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
 
@@ -934,14 +937,44 @@ struct CommitHandlerInput {
     transaction_deny_config_updates: Vec<(AuthorityName, SharedTransactionDenyConfig)>,
 }
 
+/// Copy counts from one commit for the staggered-submission duplication signal. They
+/// are counted before deduplication, so duplicates that get discarded still count.
+#[derive(Default)]
+struct StaggeringCommitCounts {
+    /// Copies beyond the number of proposers the transaction paid for. Only
+    /// transactions that do not restrict their proposers are counted. This is the
+    /// signal's numerator.
+    excess_copies: u64,
+    /// The number of distinct user transactions. This is the signal's denominator.
+    unique_user_txns: u64,
+    /// Duplicates the transaction paid for. The signal ignores them.
+    paid_duplicate_copies: u64,
+    /// Duplicates of transactions that restrict their proposers. The signal ignores them.
+    restricted_duplicate_copies: u64,
+}
+
+impl StaggeringCommitCounts {
+    /// Returns the counts keyed by their `staggered_submission_commit_copies` label.
+    fn by_kind(&self) -> [(&'static str, u64); 4] {
+        [
+            ("unique", self.unique_user_txns),
+            ("excess", self.excess_copies),
+            ("paid_duplicate", self.paid_duplicate_copies),
+            ("restricted_duplicate", self.restricted_duplicate_copies),
+        ]
+    }
+}
+
 struct CommitHandlerState {
     dkg_failed: bool,
     randomness_round: Option<RandomnessRound>,
     output: ConsensusCommitOutput,
     indirect_state_observer: Option<IndirectStateObserver>,
     initial_reconfig_state: ReconfigState,
-    // Occurrence counts for user transactions, used for unpaid amplification detection.
+    // Occurrence counts within this commit. Amplification deferral uses them, so they
+    // must be identical on every validator.
     occurrence_counts: HashMap<TransactionDigest, u32>,
+    staggering_counts: StaggeringCommitCounts,
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
@@ -956,6 +989,7 @@ impl CommitHandlerState {
             indirect_state_observer: Some(IndirectStateObserver::new()),
             initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
             occurrence_counts: HashMap::new(),
+            staggering_counts: StaggeringCommitCounts::default(),
             contested_transaction_digests: HashMap::new(),
         }
     }
@@ -1429,6 +1463,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_txns = BTreeMap::new();
         let mut cancelled_txns = BTreeMap::new();
 
+        self.record_duplication_signal(state);
+
         for transaction in ordered_txns {
             self.handle_deferral_and_cancellation(
                 state,
@@ -1829,6 +1865,59 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         ))
     }
 
+    /// Passes this commit's copy counts to the staggered-submission signal and updates
+    /// the signal metrics.
+    ///
+    /// The signal measures copies, not transactions, because copies are what waste
+    /// bandwidth. A copy counts as excess when the transaction has already reached
+    /// the number of proposers it paid for, or the free minimum if that is larger.
+    /// This count carries across commits while the transaction stays in the processed
+    /// cache. Copies are counted on arrival, so a deferred transaction counts as unique
+    /// only once.
+    ///
+    /// The signal always runs. It changes staggering only when both the protocol flag
+    /// and the node config enable it. Otherwise the metrics still show what it would do.
+    fn record_duplication_signal(&self, state: &CommitHandlerState) {
+        self.metrics
+            .staggered_submission_excess_copies
+            .observe(state.staggering_counts.excess_copies as f64);
+        // These counters let dashboards recompute the ratio over any time window.
+        for (kind, copies) in state.staggering_counts.by_kind() {
+            self.metrics
+                .staggered_submission_commit_copies
+                .with_label_values(&[kind])
+                .inc_by(copies);
+        }
+        let staggered = self.epoch_store.staggered_submission();
+        let outcome = staggered.record_commit(
+            state.staggering_counts.excess_copies,
+            state.staggering_counts.unique_user_txns,
+        );
+        let transition = outcome.transition;
+        self.metrics
+            .staggered_submission_duplication_ratio
+            .set(outcome.duplication_ratio);
+        // The gauges are set on every commit so they reset when a new epoch starts.
+        self.metrics
+            .staggered_submission_signal_band
+            .set(staggered.signal_band() as i64);
+        self.metrics
+            .staggered_submission_active
+            .set(staggered.is_active() as i64);
+        if let Some(band) = transition {
+            self.metrics
+                .staggered_submission_signal_transitions
+                .with_label_values(&[crate::staggered_submission::signal_band_label(band)])
+                .inc();
+            self.metrics
+                .staggered_submission_band_duration_commits
+                .with_label_values(&[crate::staggered_submission::signal_band_label(
+                    outcome.previous_band,
+                )])
+                .observe(outcome.commits_in_previous_band as f64);
+        }
+    }
+
     fn handle_deferral_and_cancellation(
         &self,
         state: &mut CommitHandlerState,
@@ -1845,29 +1934,32 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let tx_digest = *transaction.tx().digest();
 
         // Check for unpaid amplification before other deferral checks.
-        // SIP-45: Paid amplification allows (gas_price / RGP + 1) submissions.
+        // SIP-45: the gas price pays for `paid_proposer_count` submissions.
         // Transactions with more duplicates than paid for are deferred.
         //
         // A transaction that names its proposers has already had its amplification bounded by
         // validity_check, which sizes the proposer set against the gas price, so there is nothing
         // left to charge for here. A set recorded for another epoch is ignored and so bounds
         // nothing, leaving the transaction subject to deferral like any other.
-        if protocol_config.defer_unpaid_amplification()
-            && !transaction
-                .tx()
-                .transaction_data()
-                .expiration()
-                .restricts_proposers(self.epoch_store.epoch())
-        {
+        let restricts_proposers = transaction
+            .tx()
+            .transaction_data()
+            .expiration()
+            .restricts_proposers(self.epoch_store.epoch());
+        if restricts_proposers {
+            assert_reachable!("committed a proposer-restricted transaction");
+        }
+        if protocol_config.defer_unpaid_amplification() && !restricts_proposers {
             let occurrence_count = state
                 .occurrence_counts
                 .get(&tx_digest)
                 .copied()
                 .unwrap_or(0);
 
-            let rgp = self.epoch_store.reference_gas_price();
-            let gas_price = transaction.tx().transaction_data().gas_price();
-            let allowed_count = (gas_price / rgp.max(1)) + 1;
+            let allowed_count = paid_proposer_count(
+                transaction.tx().transaction_data().gas_price(),
+                self.epoch_store.reference_gas_price(),
+            );
 
             if occurrence_count as u64 > allowed_count {
                 self.metrics
@@ -3017,6 +3109,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     ) -> Vec<VerifiedSequencedConsensusTransaction> {
         let _scope = monitored_scope("ConsensusCommitHandler::deduplicate_consensus_txns");
+        let epoch = self.epoch_store.epoch();
+        let rgp = self.epoch_store.reference_gas_price().max(1);
         let mut all_transactions = Vec::new();
 
         // Track occurrence counts for each transaction key within this commit.
@@ -3070,7 +3164,38 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             *count += 1;
             let in_commit = *count > 1;
 
-            let in_cache = self.processed_cache.put(key.clone(), ()).is_some();
+            let (total_occurrences, in_cache) = match self.processed_cache.get_mut(&key) {
+                Some(total) => {
+                    *total = total.saturating_add(1);
+                    (*total, true)
+                }
+                None => {
+                    // If the key was evicted during this commit, the commit's own count
+                    // is still correct. Only counts from earlier commits are lost.
+                    let total = u64::from(*count);
+                    self.processed_cache.put(key.clone(), total);
+                    (total, false)
+                }
+            };
+            let user_transaction = match &verified_transaction.0.transaction {
+                SequencedConsensusTransactionKind::External(transaction) => {
+                    transaction.kind.as_user_transaction()
+                }
+                SequencedConsensusTransactionKind::System(_) => None,
+            };
+            if let Some(transaction) = user_transaction {
+                let tx_data = transaction.data().transaction_data();
+                if !tx_data.expiration().restricts_proposers(epoch) {
+                    let allowance = paid_proposer_count(tx_data.gas_price(), rgp);
+                    if total_occurrences > allowance {
+                        state.staggering_counts.excess_copies += 1;
+                    } else if total_occurrences > 1 {
+                        state.staggering_counts.paid_duplicate_copies += 1;
+                    }
+                } else if total_occurrences > 1 {
+                    state.staggering_counts.restricted_duplicate_copies += 1;
+                }
+            }
             if in_commit || in_cache {
                 self.metrics.skipped_consensus_txns_cache_hit.inc();
                 continue;
@@ -3084,6 +3209,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 continue;
             }
 
+            state.staggering_counts.unique_user_txns += u64::from(user_transaction.is_some());
             first_commit_keys.insert(key.clone());
 
             state.output.record_consensus_message_processed(key);
@@ -3708,12 +3834,17 @@ impl CommitIntervalObserver {
 }
 
 #[cfg(test)]
+#[path = "unit_tests/staggered_submission_signal_tests.rs"]
+mod staggering_signal_tests;
+
+#[cfg(test)]
 mod tests {
     use consensus_core::{
         BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
     };
     use futures::pin_mut;
     use prometheus::Registry;
+    use sui_macros::sim_test;
     use sui_protocol_config::{ConsensusTransactionOrdering, ProtocolConfig};
     use sui_types::{
         base_types::ExecutionDigests,
@@ -3794,7 +3925,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_preserves_pre_deadline_blocking() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -3837,7 +3968,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_none_preserves_indefinite_blocking() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(None))
@@ -3865,7 +3996,7 @@ mod tests {
         assert!(!reconfig_state.is_reject_all_tx());
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_is_inert_without_deferred_transactions() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -3901,7 +4032,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_counts_abandoned_transactions_and_closes_first() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -3932,7 +4063,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_does_not_report_transactions_drained_in_commit() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -4026,7 +4157,7 @@ mod tests {
             .await;
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn test_consensus_commit_handler() {
         telemetry_subscribers::init_for_testing();
 
@@ -4217,7 +4348,7 @@ mod tests {
         state.execution_scheduler().check_empty_for_testing().await;
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_dropped_owned_object_lock_conflict_is_marked_processed() {
         telemetry_subscribers::init_for_testing();
 
@@ -4339,7 +4470,7 @@ mod tests {
         .expect("processed notification for dropped transaction should resolve");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_rejected_transaction_sets_status_and_is_not_marked_processed() {
         telemetry_subscribers::init_for_testing();
 
@@ -4391,7 +4522,7 @@ mod tests {
         assert!(!epoch_store.is_consensus_message_processed(&key).unwrap());
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_user_transaction_ignored_at_epoch_close_sets_dropped_status() {
         telemetry_subscribers::init_for_testing();
 
@@ -4460,7 +4591,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_user_transaction_after_end_of_publish_sets_dropped_status() {
         telemetry_subscribers::init_for_testing();
 
@@ -4570,7 +4701,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_checkpoint_signature_dedup() {
         telemetry_subscribers::init_for_testing();
 
@@ -4685,7 +4816,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_verify_consensus_transaction_filters_mismatched_authorities() {
         telemetry_subscribers::init_for_testing();
 
@@ -4842,7 +4973,7 @@ mod tests {
     /// catching up can process commits without verifying every block. Updates are
     /// attributed to the consensus block author, so spoofed authority claims are
     /// still dropped.
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_deny_config_updates_applied_at_commit() {
         telemetry_subscribers::init_for_testing();
 
@@ -4998,7 +5129,7 @@ mod tests {
 
     /// With merge_colliding_deferrals enabled (current protocol version), the round 2
     /// re-deferral merges into Randomness{1} instead of displacing its transactions.
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_deferral_key_collision_merges_entries() {
         let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing();

@@ -110,7 +110,8 @@ async fn unthrottled_backfill_is_fast() {
 }
 
 /// Cost tracks the payload: a rich checkpoint (cost 18) paces slower than a lean one (cost 10) at the
-/// same rate, 0.9s vs 0.5s per gap at 20 nodes/sec.
+/// same rate, 0.9s vs 0.5s per gap at 20 nodes/sec. The gaps are measured from the first arrival,
+/// whose delay depends on the subscription's startup rather than on the payload.
 #[tokio::test]
 async fn richer_payload_paces_slower() {
     const RICH_QUERY: &str = "subscription($after: UInt53) { \
@@ -124,22 +125,17 @@ async fn richer_payload_paces_slower() {
     let mut lean = cluster
         .subscribe_with_variables(LEAN_QUERY, Some(json!({ "after": 0 })))
         .await;
-    let lean_total = collect_next_n_arrivals(&mut lean, 4)
-        .await
-        .last()
-        .unwrap()
-        .0;
+    let lean_arrivals = collect_next_n_arrivals(&mut lean, 4).await;
+    let lean_total = lean_arrivals[3].0 - lean_arrivals[0].0;
     drop(lean);
 
     let mut rich = cluster
         .subscribe_with_variables(RICH_QUERY, Some(json!({ "after": 0 })))
         .await;
-    let rich_total = collect_next_n_arrivals(&mut rich, 4)
-        .await
-        .last()
-        .unwrap()
-        .0;
+    let rich_arrivals = collect_next_n_arrivals(&mut rich, 4).await;
+    let rich_total = rich_arrivals[3].0 - rich_arrivals[0].0;
 
+    // Three gaps: 2.7s vs 1.5s.
     assert!(
         rich_total > lean_total + Duration::from_secs(1),
         "richer payload should pace slower: lean={lean_total:?} rich={rich_total:?}"

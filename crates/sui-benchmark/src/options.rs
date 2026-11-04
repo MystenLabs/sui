@@ -95,6 +95,13 @@ pub struct Opts {
     // transaction conflicts between clients.
     #[clap(long, default_value = "0", global = true)]
     pub staggered_start_max_multiplier: u32,
+    /// Gas price for the benchmark's own setup transactions (gas coin splits, package
+    /// publishing, shared object creation) as a multiple of the reference gas price. Setup
+    /// transactions must commit ahead of the workload they bootstrap, so that a client that
+    /// starts while other clients already load the network does not time out on its first
+    /// transaction and restart. Must be at least 1.0.
+    #[clap(long, default_value = "2.0", global = true, value_parser = parse_gas_price_multiplier)]
+    pub setup_gas_price_multiplier: f64,
 
     /// Start the stress test at a given protocol version. (Usually unnecessary if stress test is
     /// built at the same commit as the validators.
@@ -193,9 +200,6 @@ pub enum RunSpec {
         // relative weight of slow transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         slow: Vec<u32>,
-        // relative weight of party transactions in the benchmark workload
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
-        party: Vec<u32>,
         // relative weight of conflicting transfer transactions in the benchmark workload
         // DEPRECATED: use composite instead (not deleting yet to avoid breaking stress docker)
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
@@ -329,6 +333,19 @@ mod tests {
             ..
         } = opts.run_spec;
         Ok(shared_counter_gas_price_multiplier)
+    }
+
+    #[test]
+    fn setup_gas_price_multiplier_defaults_to_two_and_requires_at_least_one() {
+        let opts = Opts::try_parse_from(["stress", "bench"]).unwrap();
+        assert_eq!(opts.setup_gas_price_multiplier, 2.0);
+        let opts = Opts::try_parse_from(["stress", "--setup-gas-price-multiplier", "3.5", "bench"])
+            .unwrap();
+        assert_eq!(opts.setup_gas_price_multiplier, 3.5);
+        assert!(
+            Opts::try_parse_from(["stress", "--setup-gas-price-multiplier", "0.5", "bench"])
+                .is_err()
+        );
     }
 
     #[test]

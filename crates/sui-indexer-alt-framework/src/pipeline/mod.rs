@@ -10,6 +10,7 @@ use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
 
+mod batch_floor;
 pub mod concurrent;
 mod logging;
 mod processor;
@@ -26,14 +27,26 @@ pub struct CommitterConfig {
     /// Number of concurrent writers per pipeline.
     pub write_concurrency: usize,
 
-    /// The collector will check for pending data at least this often, in milliseconds.
-    pub collect_interval_ms: u64,
-
-    /// Watermark task will check for pending watermarks this often, in milliseconds.
+    /// Minimum time between two watermark writes of a concurrent pipeline, in milliseconds. A
+    /// watermark that advances once this much time has passed since the previous write is written
+    /// immediately; one that advances sooner is written when the gap has passed.
     pub watermark_interval_ms: u64,
 
     /// Maximum random jitter to add to the watermark interval, in milliseconds.
     pub watermark_interval_jitter_ms: u64,
+
+    /// How many rows the collector waits for before it cuts them into a batch. With the default
+    /// of 0, pending rows are cut into a batch as soon as the committer has room for one, so
+    /// batches only grow while the committer is busy. Stores that prefer fewer, larger writes can
+    /// raise this; rows then wait until this many are pending, or until the oldest has waited
+    /// `max_batch_delay_ms`.
+    #[serde(default)]
+    pub min_batch_rows: usize,
+
+    /// Longest time, in milliseconds, that pending rows wait for `min_batch_rows` to be reached
+    /// before they are written anyway. Not used while `min_batch_rows` is 0.
+    #[serde(default = "default_max_batch_delay_ms")]
+    pub max_batch_delay_ms: u64,
 }
 
 /// Per-pipeline ingestion settings.
@@ -79,16 +92,16 @@ struct WatermarkPart {
 }
 
 impl CommitterConfig {
-    pub fn collect_interval(&self) -> Duration {
-        Duration::from_millis(self.collect_interval_ms)
+    pub fn max_batch_delay(&self) -> Duration {
+        Duration::from_millis(self.max_batch_delay_ms)
     }
 
     pub fn watermark_interval(&self) -> Duration {
         Duration::from_millis(self.watermark_interval_ms)
     }
 
-    /// Returns the next watermark update instant with a random jitter added. The jitter is a
-    /// random value between 0 and `watermark_interval_jitter_ms`.
+    /// Returns the earliest instant at which the next watermark write may start: now plus the
+    /// watermark interval plus a random jitter between 0 and `watermark_interval_jitter_ms`.
     pub fn watermark_interval_with_jitter(&self) -> tokio::time::Instant {
         let jitter = if self.watermark_interval_jitter_ms == 0 {
             0
@@ -175,11 +188,16 @@ impl Default for CommitterConfig {
     fn default() -> Self {
         Self {
             write_concurrency: 5,
-            collect_interval_ms: 500,
             watermark_interval_ms: 500,
             watermark_interval_jitter_ms: 0,
+            min_batch_rows: 0,
+            max_batch_delay_ms: default_max_batch_delay_ms(),
         }
     }
+}
+
+fn default_max_batch_delay_ms() -> u64 {
+    500
 }
 
 #[cfg(test)]

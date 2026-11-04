@@ -591,7 +591,6 @@ mod tests {
     use std::sync::Arc;
 
     use bytes::Bytes;
-    use consensus_config::PeerRecord;
     use consensus_types::block::Round;
     use futures::{StreamExt as _, stream};
     use parking_lot::Mutex;
@@ -737,11 +736,13 @@ mod tests {
     }
 
     /// End-to-end test using TonicManager to set up a proper observer server and client.
-    #[cfg_attr(not(msim), tokio::test(flavor = "multi_thread"))]
+    #[cfg(not(msim))]
+    #[tokio::test(flavor = "multi_thread")]
     async fn observer_client_server_e2e() {
         use crate::network::{
             NetworkManager, ObserverNetworkClient, PeerId, tonic_network::TonicManager,
         };
+        use consensus_config::PeerRecord;
         use mysten_network::Multiaddr;
         use std::str::FromStr;
         use std::time::Duration;

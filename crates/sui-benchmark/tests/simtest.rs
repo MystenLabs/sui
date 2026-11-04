@@ -290,12 +290,34 @@ mod test {
     async fn test_simulated_load_reconfig_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 10_000, 1).await;
+        // Graceful stops let async tasks run briefly after blocking work is cancelled, which
+        // hard kills cannot exercise.
         let node_restarter = test_cluster
             .random_node_restarter()
-            .with_kill_interval_secs(5, 15)
-            .with_restart_delay_secs(1, 10);
+            .with_kill_interval_secs(2, 6)
+            .with_restart_delay_secs(1, 5)
+            .with_graceful_shutdown();
         node_restarter.run();
-        test_simulated_load(test_cluster, 120).await;
+
+        // Conflicting transactions get reject votes, which sends them through the commit
+        // finalizer's indirect finalization.
+        let mut composite_config = CompositeWorkloadConfig::balanced();
+        composite_config.conflicting_transaction_probability = 0.5;
+        let simulated_load_config = SimulatedLoadConfig {
+            composite_config: Some(composite_config),
+            gas_double_spend_weight: 3,
+            ..Default::default()
+        };
+        test_simulated_load_with_test_config(
+            test_cluster,
+            120,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -1256,7 +1278,6 @@ mod test {
         shared_counter_gas_price_multiplier: f64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
-        party_weight: u32,
         conflicting_transfer_weight: u32,
         num_contested_objects: u64,
         composite_weight: u32,
@@ -1293,8 +1314,6 @@ mod test {
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
                 },
-                // TODO: Set this to 1 once party object is enabled in mainnet protocol config.
-                party_weight: 0,
                 conflicting_transfer_weight: 0,
                 num_contested_objects: 2,
                 composite_weight: 2,
@@ -1518,7 +1537,6 @@ mod test {
             expected_failure: config.expected_failure_weight,
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
-            party: config.party_weight,
             conflicting_transfer: config.conflicting_transfer_weight,
             composite: config.composite_weight,
             gas_double_spend: config.gas_double_spend_weight,
@@ -2156,6 +2174,14 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        // Gasless txs in the workload send SUI, which no chain allows by default.
+        let _gasless_guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_gasless_allowed_token_types_for_testing(vec![(
+                "0x2::sui::SUI".to_string(),
+                0,
+            )]);
+            config
+        });
 
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
@@ -2167,6 +2193,7 @@ mod test {
         let address_aliases_enabled = protocol_config.address_aliases();
         let auth_events_enabled = protocol_config.enable_authenticated_event_streams();
         let allowances_enabled = protocol_config.enable_allowances();
+        let allowed_proposers_enabled = protocol_config.allowed_proposers();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -2182,11 +2209,25 @@ mod test {
             address_balance_amount: 1000,
             address_balance_gas_probability: 0.2,
             conflicting_transaction_probability,
-            alias_tx_probability: if address_aliases_enabled { 0.3 } else { 0.0 },
+            // A payload removes its alias after 3 successful alias txs. Batches of 6 txs leave
+            // each payload only about 8 batches, so alias txs must be frequent.
+            alias_tx_probability: if address_aliases_enabled { 0.5 } else { 0.0 },
+            // The party lifecycle has the longest path to its version collisions, so it starts
+            // more often than the others.
+            party_object_probability: 0.8,
+            shared_deletion_probability: 0.3,
+            receive_probability: 0.3,
+            upgrade_probability: 0.3,
+            owned_object_probability: 0.3,
+            gasless_probability: 0.2,
+            sponsored_probability: 0.15,
+            deny_probability: 0.2,
+            multisig_probability: 0.2,
+            allowed_proposers_probability: 0.2,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::NAME, 0.2)
+        .with_probability(SharedCounterIncrement::NAME, 0.35)
         .with_probability(SharedCounterRead::NAME, 0.1)
         .with_probability(RandomnessRead::NAME, 0.1)
         .with_probability(AddressBalanceDeposit::NAME, 0.1)
@@ -2200,7 +2241,7 @@ mod test {
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
-        .with_probability(CoinReservationWithdraw::NAME, 0.3)
+        .with_probability(CoinReservationWithdraw::NAME, 0.1)
         .with_probability(AllowanceWithdraw::NAME, 0.1)
         .with_probability(AllowanceSelfWithdraw::NAME, 0.1);
 
@@ -2231,15 +2272,15 @@ mod test {
             // insufficient_funds_count requires AddressBalanceOverdraw operations
             assert!(metrics_sum.insufficient_funds_count > 2);
 
-            let accum_read_stats = metrics
-                .get_stats(&OperationSet::new().with(AccumulatorBalanceRead::NAME))
-                .expect("expected accumulator balance read stats");
-            info!(
-                "accumulator balance read metrics: success={}",
-                accum_read_stats.success_count
-            );
+            // Lifecycle ops share txs with sampled ops, so count every op set with a read.
+            let accum_read_success_count: u64 = metrics
+                .iter_stats()
+                .filter(|(op_set, _)| op_set.contains(AccumulatorBalanceRead::NAME))
+                .map(|(_, stats)| stats.success_count)
+                .sum();
+            info!("accumulator balance read metrics: success={accum_read_success_count}");
             assert!(
-                accum_read_stats.success_count > 0,
+                accum_read_success_count > 0,
                 "expected at least one accumulator balance read"
             );
 
@@ -2272,6 +2313,23 @@ mod test {
             "cancellation_count too low: {}",
             metrics_sum.cancellation_count
         );
+
+        if allowed_proposers_enabled {
+            let mut restricted_successes = 0u64;
+            for (op_set, stats) in metrics.iter_stats() {
+                if op_set.contains(ALLOWED_PROPOSERS_TX) {
+                    restricted_successes += stats.success_count;
+                }
+            }
+            info!(
+                "proposer-restricted transaction successes: {}",
+                restricted_successes
+            );
+            assert!(
+                restricted_successes > 0,
+                "expected at least one proposer-restricted transaction to commit"
+            );
+        }
 
         if address_aliases_enabled {
             let alias_add_stats = metrics
@@ -2308,6 +2366,34 @@ mod test {
                 auth_event_success_count > 0,
                 "expected at least one authenticated event emit"
             );
+        }
+
+        // Each group needs at least one success among its ops. Every seed starts lifecycles,
+        // but some seeds do not reach their later steps in time, so reachability assertions
+        // cover those steps instead.
+        let groups: &[&[&str]] = &[
+            &[PARTY_CREATE],
+            &[SHARED_DELETE_CREATE],
+            &[RECEIVE_CREATE_PARENT],
+            &[OWNED_CREATE],
+            &[GASLESS_TRANSFER],
+            &[SPONSORED_TX],
+            &[MULTISIG_TX],
+        ];
+        let success_counts: Vec<u64> = groups
+            .iter()
+            .map(|names| {
+                let success_count = metrics
+                    .iter_stats()
+                    .filter(|(op_set, _)| names.iter().any(|name| op_set.contains(name)))
+                    .map(|(_, stats)| stats.success_count)
+                    .sum();
+                info!("{names:?} success count: {success_count}");
+                success_count
+            })
+            .collect();
+        for (names, success_count) in groups.iter().zip(success_counts) {
+            assert!(success_count > 0, "expected at least one {names:?} success");
         }
 
         if allowances_enabled {

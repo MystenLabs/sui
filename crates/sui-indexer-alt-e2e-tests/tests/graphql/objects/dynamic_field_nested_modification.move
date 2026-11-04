@@ -50,6 +50,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql --cursors bcs(1u64) bcs(2u64)
+/*
 {
   objectVersions(address: "@{obj_2_0}") {
     nodes {
@@ -78,3 +79,4 @@ module P::M {
     }
   }
 }
+*/

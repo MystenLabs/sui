@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod alpha_ledger_grpc_reader;
 pub mod checkpoints;
 pub mod consistent_reader;
 pub mod cp_sequence_numbers;
@@ -14,6 +13,7 @@ pub mod governance;
 pub mod kv_loader;
 pub mod ledger_grpc_reader;
 pub(crate) mod metrics;
+pub mod monotonic_read;
 pub mod object_versions;
 pub mod objects;
 pub mod package_resolver;

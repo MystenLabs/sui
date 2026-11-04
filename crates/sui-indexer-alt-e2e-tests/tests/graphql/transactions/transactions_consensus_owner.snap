@@ -29,20 +29,20 @@ task 3, line 17:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 19-36:
+task 4, lines 19-38:
 //# run-graphql
 Response: {
   "data": {
     "sentByA": {
       "edges": [
         {
-          "cursor": "KAE6BAgAEAE=",
+          "cursor": "AAABDCgBOgQIARABSgIIAQEAAQAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
         },
         {
-          "cursor": "KAE6BAgAEAI=",
+          "cursor": "AAABDigBOgQIARACSgQIARABAQABAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }
@@ -52,7 +52,7 @@ Response: {
     "affectedB": {
       "edges": [
         {
-          "cursor": "KAE6BAgAEAE=",
+          "cursor": "AAABDCgBOgQIARABSgIIAQEAAQAAAAAAAAAAAAAAAAAAAA==",
           "node": {
             "digest": "BRt87zhiL5c9dFr38gjvhF3gmRh7iUYZUcfokRzVYSxo"
           }
@@ -62,7 +62,7 @@ Response: {
     "affectedC": {
       "edges": [
         {
-          "cursor": "KAE6BAgAEAI=",
+          "cursor": "AAABDigBOgQIARACSgQIARABAQABAAAAAAAAAAEAAAAAAAAA",
           "node": {
             "digest": "7425XHh77rijYLf2ZktyFTcFn9ThZbLPcrenkGokkM6Q"
           }

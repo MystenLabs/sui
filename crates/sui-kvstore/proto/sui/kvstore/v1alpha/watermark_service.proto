@@ -1,0 +1,32 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.kvstore.v1alpha;
+
+// Streams how far each of a kvstore indexer's pipelines has durable data rows.
+service WatermarkService {
+  // The first response holds every pipeline that had a readable stored watermark row when the
+  // indexer started or has made durable progress since, each at the higher of the two, and may be
+  // empty. Each later response holds only the pipelines that advanced since the previous response.
+  // The stream ends when the server shuts down.
+  rpc SubscribeWatermarks(SubscribeWatermarksRequest) returns (stream SubscribeWatermarksResponse);
+}
+
+message SubscribeWatermarksRequest {}
+
+message SubscribeWatermarksResponse {
+  repeated PipelineWatermark watermarks = 1;
+}
+
+// The highest committer watermark through which a pipeline's data rows are durable. Durable progress
+// is reported before the pipeline's stored watermark row is written, so it can be ahead of that row.
+message PipelineWatermark {
+  // The pipeline's watermark key, as used for its stored watermark row.
+  optional string pipeline = 1;
+  optional uint64 epoch_hi_inclusive = 2;
+  optional uint64 checkpoint_hi_inclusive = 3;
+  optional uint64 tx_hi = 4;
+  optional uint64 timestamp_ms_hi_inclusive = 5;
+}

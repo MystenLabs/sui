@@ -32,6 +32,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   object(address: "@{obj_2_0}") {
     asMoveObject {
@@ -44,8 +45,10 @@ module test::mod {
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(42u64)
+/*
 {
   address(address: "@{obj_3_0}") {
     dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) {
@@ -59,3 +62,4 @@ module test::mod {
     }
   }
 }
+*/

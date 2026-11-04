@@ -47,7 +47,8 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::package_resolver::DbPackageStore;
+use sui_indexer_alt_reader::monotonic_read::CheckpointFloor;
+use sui_indexer_alt_reader::package_resolver::GrpcPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
@@ -95,7 +96,7 @@ pub use crate::api::scalars::cursor::JsonCursor;
 pub use crate::api::types::checkpoint::CCheckpoint;
 pub use crate::api::types::checkpoint::CheckpointToken;
 pub use crate::api::types::event::CEvent;
-pub use crate::api::types::event::EventCursor;
+pub use crate::api::types::ledger_cursor::Point;
 pub use crate::api::types::transaction::CTransaction;
 pub mod args;
 pub mod config;
@@ -350,6 +351,11 @@ pub async fn start_rpc(
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
+    // The highest ledger checkpoint the watermark task has published. The ledger reader stamps it
+    // on its requests, so a load-balanced kv-rpc replica never answers from an older view than
+    // the one the rest of GraphQL is working from.
+    let ledger_grpc_floor = CheckpointFloor::default();
+
     let ledger_grpc_reader = kv_args
         .ledger_grpc_reader(
             Some("graphql_ledger_grpc"),
@@ -357,33 +363,27 @@ pub async fn start_rpc(
             Some(config.limits.max_batch_get_transactions as usize),
             Some(config.limits.max_batch_get_objects as usize),
             config.limits.ledger_grpc_num_connections,
+            Some(ledger_grpc_floor.clone()),
         )
-        .await?;
-
-    let alpha_ledger_grpc_reader = kv_args
-        .alpha_ledger_grpc_reader(
-            Some("graphql_alpha_ledger_grpc"),
-            registry,
-            config.limits.ledger_grpc_num_connections,
-        )
-        .await?;
+        .await?
+        .context("--ledger-grpc-url must be configured")?;
 
     let pg_reader =
         PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-    let kv_loader = KvLoader::new(
-        ledger_grpc_reader
-            .clone()
-            .context("--ledger-grpc-url must be configured")?,
-    );
+    let kv_loader = KvLoader::new(ledger_grpc_reader.clone());
 
-    let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
+    // Package resolution reads packages from the ledger gRPC service (kv-rpc or fullnode).
+    let package_store = Arc::new(PackageCache::new(GrpcPackageStore::new(
+        &ledger_grpc_reader,
+    )));
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
-        pg_reader.clone(),
+        ledger_grpc_reader.clone(),
+        ledger_grpc_floor.clone(),
         package_store.clone(),
     );
 
@@ -397,8 +397,9 @@ pub async fn start_rpc(
         config.watermark,
         pg_pipelines,
         pg_reader.clone(),
-        ledger_grpc_reader.clone(),
+        Some(ledger_grpc_reader.clone()),
         consistent_reader.clone(),
+        ledger_grpc_floor,
         metrics.clone(),
     );
 
@@ -406,14 +407,6 @@ pub async fn start_rpc(
 
     let streaming_setup = match subscription_args.checkpoint_stream_url {
         Some(uri) => {
-            let ledger_grpc = ledger_grpc_reader
-                .clone()
-                .context("Ledger gRPC reader is required when streaming is enabled")?;
-
-            alpha_ledger_grpc_reader
-                .as_ref()
-                .context("Alpha ledger gRPC reader is required when streaming is enabled")?;
-
             let streaming_packages = Arc::new(StreamingPackageStore::new(package_store.clone()));
             let streaming_transactions = Arc::new(StreamedTransactionStore::new());
             let streaming_objects = Arc::new(StreamedObjectStore::new());
@@ -425,7 +418,7 @@ pub async fn start_rpc(
                 streaming_transactions.clone(),
                 streaming_objects.clone(),
                 readiness.clone(),
-                ledger_grpc.clone(),
+                ledger_grpc_reader.clone(),
                 watermark_task.watermarks_rx(),
                 subscription_metrics.clone(),
             );
@@ -468,18 +461,11 @@ pub async fn start_rpc(
         .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
+        .data(ledger_grpc_reader)
         .data(package_store);
-
-    if let Some(reader) = alpha_ledger_grpc_reader {
-        rpc = rpc.data(reader);
-    }
 
     if let Some(fullnode_client) = fullnode_client {
         rpc = rpc.layer(fullnode_client);
-    }
-
-    if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
-        rpc = rpc.data(ledger_grpc_reader);
     }
 
     let subscriptions_enabled = streaming_setup.is_some();
@@ -499,7 +485,7 @@ pub async fn start_rpc(
     let s_watermark = watermark_task.run();
 
     // Spawn the streaming tasks and wait for subscriptions to be ready before
-    // binding the listener, so the schema is only advertised once `kv_packages`
+    // binding the listener, so the schema is only advertised once `ledger_grpc`
     // has caught up to the first streamed checkpoint.
     let streaming_handles = if let Some((
         stream_task,

@@ -192,6 +192,10 @@ impl From<ProofError> for ClientError {
 }
 
 impl ClientError {
+    /// Whether the event stream stops on this error instead of retrying. The ledger-stream
+    /// facade that lists events and settlements retries every code
+    /// `is_retriable_grpc_code` accepts before yielding an error, so an `RpcError` from
+    /// those listings is always terminal.
     pub(crate) fn is_terminal(&self) -> bool {
         match self {
             ClientError::RpcError(status) => !Self::is_retriable_grpc_code(status.code()),
@@ -212,6 +216,9 @@ impl ClientError {
 }
 
 pub struct AuthenticatedEventsClient {
+    /// Client for the ledger-stream facade, which lists events and settlement
+    /// transactions.
+    rpc_client: sui_rpc::Client,
     proof_service: ProofServiceClient<Channel>,
     ledger_service: LedgerServiceClient<Channel>,
     epoch_cache: Arc<tokio::sync::Mutex<EpochCache>>,
@@ -228,6 +235,9 @@ impl AuthenticatedEventsClient {
         genesis_committee: Committee,
         config: ClientConfig,
     ) -> Result<Self, ClientError> {
+        let rpc_client = sui_rpc::Client::new(rpc_url)
+            .map_err(|e| ClientError::InternalError(format!("Invalid RPC URL: {}", e)))?
+            .with_response_headers_timeout(config.rpc_timeout);
         let endpoint = Channel::from_shared(rpc_url.to_string())
             .map_err(|e| ClientError::InternalError(format!("Invalid RPC URL: {}", e)))?
             .connect_timeout(Duration::from_secs(5))
@@ -243,6 +253,7 @@ impl AuthenticatedEventsClient {
                     let epoch_cache = EpochCache::new(genesis_committee);
 
                     return Ok(Self {
+                        rpc_client,
                         proof_service,
                         ledger_service,
                         epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
@@ -290,14 +301,24 @@ impl AuthenticatedEventsClient {
     ///
     /// # Error Handling
     ///
+    /// Events are released only once the server reports every event of their checkpoint
+    /// delivered and the EventStreamHead at the last released checkpoint verifies.
+    ///
     /// The stream automatically handles transient errors by retrying:
-    /// - Network failures (`TransportError`)
-    /// - Temporary RPC errors (e.g., `Unavailable`, `DeadlineExceeded`)
+    /// - Listing events and settlement transactions retries transient RPC errors (e.g.,
+    ///   `Unavailable`, `DeadlineExceeded`, reset streams, a replica that lags the ledger)
+    ///   with exponential backoff and resumes where it stopped
+    /// - Proof, epoch, and checkpoint reads that fail with a network error (`TransportError`)
+    ///   or a temporary RPC error (e.g., `Unavailable`, `DeadlineExceeded`) are retried after
+    ///   the poll interval, with unverified events kept buffered
     ///
     /// The stream terminates on terminal errors:
     /// - `VerificationError`: Cryptographic verification failed (malicious or corrupted data)
     /// - `InternalError`: Invalid state or deserialization failures
-    /// - Non-retriable RPC errors (e.g., `InvalidArgument`, `NotFound`)
+    /// - `RpcError` from listing events or settlement transactions: an error that is not
+    ///   transient (e.g., `InvalidArgument`, `DataLoss`)
+    /// - Non-retriable RPC errors from proof, epoch, and checkpoint reads (e.g.,
+    ///   `InvalidArgument`, `NotFound`)
     ///
     /// When the stream yields an `Err`, it's a terminal error and no more events will be produced.
     /// The client should stop consuming the stream when an error is received.
@@ -343,15 +364,14 @@ impl AuthenticatedEventsClient {
             None => (None, 0),
         };
 
-        stream::create_event_stream_with_head(
+        Ok(stream::create_event_stream_with_head(
             self,
             stream_id,
             stream_object_id,
             start_checkpoint,
             verified_head,
             config,
-        )
-        .await
+        ))
     }
 
     /// Creates a stream of verified events resuming from after a specific checkpoint where
@@ -377,14 +397,24 @@ impl AuthenticatedEventsClient {
     ///
     /// # Error Handling
     ///
+    /// Events are released only once the server reports every event of their checkpoint
+    /// delivered and the EventStreamHead at the last released checkpoint verifies.
+    ///
     /// Once started, the stream automatically handles transient errors by retrying:
-    /// - Network failures (`TransportError`)
-    /// - Temporary RPC errors (e.g., `Unavailable`, `DeadlineExceeded`)
+    /// - Listing events and settlement transactions retries transient RPC errors (e.g.,
+    ///   `Unavailable`, `DeadlineExceeded`, reset streams, a replica that lags the ledger)
+    ///   with exponential backoff and resumes where it stopped
+    /// - Proof, epoch, and checkpoint reads that fail with a network error (`TransportError`)
+    ///   or a temporary RPC error (e.g., `Unavailable`, `DeadlineExceeded`) are retried after
+    ///   the poll interval, with unverified events kept buffered
     ///
     /// The stream terminates on terminal errors:
     /// - `VerificationError`: Cryptographic verification failed (malicious or corrupted data)
     /// - `InternalError`: Invalid state or deserialization failures
-    /// - Non-retriable RPC errors (e.g., `InvalidArgument`, `NotFound`)
+    /// - `RpcError` from listing events or settlement transactions: an error that is not
+    ///   transient (e.g., `InvalidArgument`, `DataLoss`)
+    /// - Non-retriable RPC errors from proof, epoch, and checkpoint reads (e.g.,
+    ///   `InvalidArgument`, `NotFound`)
     ///
     /// When the stream yields an `Err`, it's a terminal error and no more events will be produced.
     /// The client should stop consuming the stream when an error is received.
@@ -436,15 +466,14 @@ impl AuthenticatedEventsClient {
         };
 
         let config = self.config.clone();
-        stream::create_event_stream_with_head(
+        Ok(stream::create_event_stream_with_head(
             self,
             stream_id,
             stream_object_id,
             start_checkpoint,
             verified_head,
             config,
-        )
-        .await
+        ))
     }
 
     async fn get_committee_for_checkpoint(
@@ -505,8 +534,8 @@ impl AuthenticatedEventsClient {
         }
     }
 
-    pub(crate) fn ledger_service(&self) -> LedgerServiceClient<Channel> {
-        self.ledger_service.clone()
+    pub(crate) fn rpc_client(&self) -> &sui_rpc::Client {
+        &self.rpc_client
     }
 
     pub(crate) async fn fetch_and_verify_stream_head(

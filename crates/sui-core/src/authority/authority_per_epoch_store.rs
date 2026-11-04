@@ -28,6 +28,7 @@ use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
+use sui_config::NodeConfig;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
@@ -123,6 +124,7 @@ use crate::execution_cache::cache_types::CacheResult;
 use crate::fallback_fetch::do_fallback_lookup;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
+use crate::staggered_submission::{SignalConfig, StaggeredSubmission};
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
 use sui_types::execution::ExecutionTimeObservationChunkKey;
 
@@ -421,6 +423,15 @@ pub struct AuthorityPerEpochStore {
 
     /// A cache which tracks recently finalized transactions.
     pub(crate) finalized_transactions_cache: FinalizedTransactionsCache,
+
+    /// Delays consensus submission of transactions without allowed proposers when
+    /// duplication is detected on the network. Shared by both submission paths (the
+    /// consensus adapter and the consensus transaction pool); per-epoch so the mode
+    /// resets across epoch boundaries along with the committee and ranks. Constructed
+    /// inactive: whatever drives activation (the commit-derived duplication signal,
+    /// once wired) must re-arm it after each reconfiguration — activation does not
+    /// survive an epoch change.
+    staggered_submission: StaggeredSubmission,
 
     /// The node's role for this epoch, derived from committee membership and
     /// the configured sync mode. Computed once at construction.
@@ -857,6 +868,7 @@ impl AuthorityPerEpochStore {
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        node_config: &NodeConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
@@ -915,6 +927,11 @@ impl AuthorityPerEpochStore {
         // Tell antithesis which flag-gated reachability assertions are live under the config
         // this epoch actually runs with. See sui_protocol_config::reachability.
         sui_protocol_config::reachability::register_reachability_for_config(&protocol_config);
+        let staggered_submission = StaggeredSubmission::new(
+            SignalConfig::from_protocol_config(&protocol_config),
+            node_config.enable_staggered_submission_signal
+                && protocol_config.staggered_submission_signal(),
+        );
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
@@ -1070,6 +1087,7 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
+            staggered_submission,
             node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
@@ -1242,6 +1260,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        node_config: &NodeConfig,
         epoch_last_checkpoint: CheckpointSequenceNumber,
         fullnode_sync_mode: Option<FullNodeSyncMode>,
     ) -> SuiResult<Arc<Self>> {
@@ -1260,6 +1279,7 @@ impl AuthorityPerEpochStore {
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
+            node_config,
             self.chain,
             // At epoch boundary, highest_executed_checkpoint == epoch_last_checkpoint because
             // all checkpoints must be executed before epoch transition.
@@ -1275,6 +1295,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        node_config: &NodeConfig,
         epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> Arc<Self> {
         let next_epoch = self.epoch() + 1;
@@ -1290,6 +1311,7 @@ impl AuthorityPerEpochStore {
             backing_package_store,
             object_store,
             expensive_safety_check_config,
+            node_config,
             epoch_last_checkpoint,
             None,
         )
@@ -1321,6 +1343,10 @@ impl AuthorityPerEpochStore {
     /// This validator's index in the current epoch's committee, if it is a member.
     pub fn own_committee_index(&self) -> Option<u32> {
         self.own_committee_index
+    }
+
+    pub fn staggered_submission(&self) -> &StaggeredSubmission {
+        &self.staggered_submission
     }
 
     /// Checks that the validator at committee index `proposer` is allowed to propose `tx` in
@@ -3177,17 +3203,25 @@ impl AuthorityPerEpochStore {
         // between calls. Claiming a root version would make every later call a
         // duplicate of the first version group and get it dropped by enqueue
         // deduplication (see `execution_scheduler::causal_admission`); versionless units
-        // bypass it. Tests that need a root version attach one explicitly.
+        // bypass it. Tests that need a root version attach one explicitly. The other
+        // implicitly read system objects keep their pins.
         Ok(AssignedTxAndVersions::new(
             assigned_versions
                 .0
                 .into_iter()
                 .map(|(key, versions)| {
+                    let system_object_versions = sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS
+                        .iter()
+                        .filter(|id| **id != sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                        .filter_map(|id| Some((*id, versions.system_object_versions.get(id)?)))
+                        .collect();
                     (
                         key,
                         AssignedVersions::new(
                             versions.shared_object_versions,
-                            sui_types::base_types::SystemObjectVersions::empty(),
+                            sui_types::base_types::SystemObjectVersions::from_map(
+                                system_object_versions,
+                            ),
                         ),
                     )
                 })

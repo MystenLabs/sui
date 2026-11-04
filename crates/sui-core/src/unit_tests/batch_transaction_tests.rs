@@ -5,6 +5,7 @@ use super::*;
 use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use bcs;
 use mysten_common::ZipDebugEqIteratorExt;
+use sui_macros::sim_test;
 use sui_types::{
     base_types::FullObjectRef, execution_status::ExecutionStatus,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -18,7 +19,7 @@ use sui_types::{
     object::Owner,
 };
 
-#[tokio::test]
+#[sim_test]
 async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     // This test tests a sucecssful normal batch transaction.
     // This batch transaction contains 5 transfers, and 5 Move calls.
@@ -102,7 +103,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     // This test tests the case where the last transaction in a batch transaction would fail to execute.
     // We make sure that the entire batch is rolled back, and only gas is charged.
@@ -167,7 +168,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     // This test creates 10 Move call transactions batch, each with a budget of 5000.
     // However we provide a gas coin with only 49999 balance.

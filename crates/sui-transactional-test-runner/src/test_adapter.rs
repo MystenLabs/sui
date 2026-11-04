@@ -247,7 +247,7 @@ struct TxnSummary {
 }
 
 impl AdapterInitConfig {
-    fn from_args(init_cmd: InitCommand, sui_args: SuiInitArgs) -> Self {
+    fn from_args(init_cmd: InitCommand, sui_args: SuiInitArgs, is_graphql: bool) -> Self {
         let InitCommand { named_addresses } = init_cmd;
         let SuiInitArgs {
             accounts,
@@ -284,12 +284,16 @@ impl AdapterInitConfig {
                 ProtocolVersion::max().as_u64(),
             );
             assert!(
-                protocol_version != ProtocolVersion::max().as_u64(),
+                is_graphql || protocol_version != ProtocolVersion::max().as_u64(),
                 "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
                 protocol_version,
             );
             ProtocolConfig::get_for_version(protocol_version.into(), chain)
         } else {
+            assert!(
+                !is_graphql,
+                "GraphQL tests must set --protocol-version, so that their output does not change with the framework once that version is released.",
+            );
             ProtocolConfig::get_for_version(ProtocolVersion::MAX, chain)
         };
         if enable_gasless {
@@ -449,7 +453,17 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             offchain_config,
             file_format_version,
         } = match task_opt.map(|t| t.command) {
-            Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
+            Some((init_cmd, sui_args)) => {
+                // GraphQL tests must pin a version, and may pin the max, to keep a fixed framework
+                // snapshot once that version is released.
+                let is_graphql = tasks.iter().any(|t| {
+                    matches!(
+                        t.command,
+                        TaskCommand::Subcommand(SuiSubcommand::RunGraphql(_))
+                    )
+                });
+                AdapterInitConfig::from_args(init_cmd, sui_args, is_graphql)
+            }
             None => AdapterInitConfig::default(),
         };
 
@@ -763,7 +777,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 cursors,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
-                let contents = std::fs::read_to_string(file.path())?;
+                let text = std::fs::read_to_string(file.path())?;
+                let contents = unwrap_graphql_query(&text)?;
                 let offchain_reader = self
                     .offchain_reader
                     .as_ref()
@@ -780,7 +795,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 }
 
                 let interpolated =
-                    self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
+                    self.interpolate_query(contents, &cursors, highest_checkpoint)?;
                 let resp = offchain_reader
                     .execute_graphql(interpolated.trim().to_owned(), show_usage)
                     .await?;
@@ -1608,6 +1623,32 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
     )> {
         unimplemented!()
     }
+}
+
+/// Returns the query inside a `/* ... */` block comment, whose delimiters may carry a
+/// ```` ```graphql ```` fence.
+fn unwrap_graphql_query(text: &str) -> anyhow::Result<&str> {
+    let Some(rest) = text.trim().strip_prefix("/*") else {
+        bail!("GraphQL queries must be wrapped in a /* ... */ block comment");
+    };
+    let (opening, rest) = rest.split_once('\n').unwrap_or((rest, ""));
+    let fenced = match opening.trim() {
+        "" => false,
+        "```graphql" => true,
+        o => bail!("Unexpected text after /* in a GraphQL query: {o}"),
+    };
+    let Some(rest) = rest.strip_suffix("*/") else {
+        bail!("GraphQL queries must end with */ on its own line");
+    };
+    let (query, closing) = rest.rsplit_once('\n').unwrap_or(("", rest));
+    match (fenced, closing.trim()) {
+        (false, "") | (true, "```") => (),
+        (_, c) => bail!("Unexpected text before */ in a GraphQL query: {c}"),
+    }
+    if query.contains("/*") || query.contains("*/") {
+        bail!("GraphQL queries cannot contain /* or */");
+    }
+    Ok(query)
 }
 
 fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {

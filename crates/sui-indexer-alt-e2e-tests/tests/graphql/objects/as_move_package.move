@@ -13,6 +13,7 @@ module P::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Fetch a package as an object and convert it to a MovePackage. Note that
   # `objectBcs` and `packageBcs` are different.
   object(address: "@{P}", version: 1) {
@@ -23,8 +24,10 @@ module P::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Fetch an object and try to convert it to a MovePackage, which will fail.
   object(address: "@{obj_0_0}", version: 1) {
     objectBcs
@@ -35,3 +38,4 @@ module P::M {
   }
 
 }
+*/

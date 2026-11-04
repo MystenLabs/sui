@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::object_runtime::ObjectRuntime;
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::FastCryptoError;
 use fastcrypto::hash::{Keccak256, Sha256};
@@ -116,8 +117,8 @@ pub fn ecrecover(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
+        cost_per_byte.saturating_mul(msg_ref.len() as u64)
+            + cost_per_block.saturating_mul(msg_ref.len().div_ceil(block_size) as u64)
     );
 
     let cost = context.gas_used();
@@ -126,9 +127,15 @@ pub fn ecrecover(
         return Ok(NativeResult::err(cost, INVALID_SIGNATURE));
     };
 
-    let pk = match hash {
-        KECCAK256 => sig.recover_with_hash::<Keccak256>(&msg_ref),
-        SHA256 => sig.recover_with_hash::<Sha256>(&msg_ref),
+    // Older protocol versions keep the wrapped result so their transactions replay unchanged.
+    let strict = get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .secp256r1_ecrecover_checks_x_below_p();
+    let pk = match (hash, strict) {
+        (KECCAK256, true) => sig.recover_with_hash::<Keccak256>(&msg_ref),
+        (SHA256, true) => sig.recover_with_hash::<Sha256>(&msg_ref),
+        (KECCAK256, false) => sig.recover_with_hash_legacy::<Keccak256>(&msg_ref),
+        (SHA256, false) => sig.recover_with_hash_legacy::<Sha256>(&msg_ref),
         _ => Err(FastCryptoError::InvalidInput),
     };
 
@@ -225,8 +232,8 @@ pub fn secp256r1_verify(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
+        cost_per_byte.saturating_mul(msg_ref.len() as u64)
+            + cost_per_block.saturating_mul(msg_ref.len().div_ceil(block_size) as u64)
     );
 
     let cost = context.gas_used();

@@ -10,8 +10,12 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::time::Duration;
 
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
 use tokio_stream::StreamExt;
 
@@ -44,6 +48,26 @@ fn event_cursor(item: &Value) -> String {
         .as_str()
         .expect("edge missing cursor")
         .to_string()
+}
+
+/// Read event payloads until a progress edge (a `null` node with no `errors`) and return its cursor.
+/// Match payloads before it are skipped. Panics if none arrives within a generous window.
+async fn next_event_progress_cursor(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+) -> String {
+    loop {
+        let item = tokio::time::timeout(Duration::from_secs(60), stream.next())
+            .await
+            .expect("timed out waiting for a progress edge")
+            .expect("stream ended before a progress edge");
+        let edge = &item["data"]["events"];
+        if edge["node"].is_null() && item["errors"].is_null() {
+            return edge["cursor"]
+                .as_str()
+                .expect("progress edge missing cursor")
+                .to_string();
+        }
+    }
 }
 
 /// The `{ "filter": <filter> }` variables wrapping an `EventFilter` input for a subscription query.
@@ -546,6 +570,45 @@ async fn test_event_subscription_empty_backfill_hands_off_to_live() {
     wait_for_matching_item(&mut stream, &["1000".to_string()], event_values).await;
 }
 
+/// Live delivers progress for a sparse event filter during a quiet stretch, and resuming `after`
+/// that cursor delivers a later event without skipping or repeating. Pins the event feed's
+/// live-minted boundary cursor as a resume point.
+#[tokio::test]
+async fn test_event_subscription_live_progress_then_resume() {
+    let mut cluster =
+        SubscriptionTestCluster::new_with_ledger_history_and_progress_threshold(2).await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    // Live-only subscription on the package's events. The chain's own checkpoints carry none, so
+    // they form a quiet run and progress fires.
+    let query = r#"subscription($filter: EventFilter!) {
+        events(filter: $filter, progress: true) {
+            cursor
+            node { contents { json } }
+        }
+    }"#;
+    let mut stream = cluster
+        .subscribe_with_variables(query, type_filter_var(&package_id, None))
+        .await;
+
+    let progress = next_event_progress_cursor(&mut stream).await;
+    drop(stream);
+
+    // A matching event after the live progress cursor must arrive when resuming from it.
+    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 2000).await;
+    let resume_query = r#"subscription($after: String!, $filter: EventFilter!) {
+        events(after: $after, filter: $filter) {
+            node { contents { json } }
+        }
+    }"#;
+    let mut vars = type_filter_var(&package_id, None).expect("filter vars");
+    vars["after"] = json!(progress);
+    let mut stream = cluster
+        .subscribe_with_variables(resume_query, Some(vars))
+        .await;
+    wait_for_matching_item(&mut stream, &["2000".to_string()], event_values).await;
+}
+
 #[tokio::test]
 async fn test_event_subscription_exactly_once_across_handoff() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -646,6 +709,58 @@ async fn test_event_subscription_resume_with_after_cursor() {
         Some(first_value.as_str()),
         "resume-by-cursor re-delivered the event at the cursor",
     );
+}
+
+/// Resume with an `after` cursor ahead of the ledger's indexed tip in both checkpoint and
+/// transaction sequence number, as a client's cursor from a live edge can be. Until the ledger
+/// catches up, its pages end where the cursor resumes, and the backfill waits there rather than
+/// resuming from the ledger's tip: an event emitted before the cursor must not be delivered.
+#[tokio::test]
+async fn test_event_subscription_resume_with_after_cursor_ahead_of_ledger() {
+    tokio::time::timeout(Duration::from_secs(180), async {
+        let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+        let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+        // The ledger can't have indexed past the validator's tip, so it is behind this cursor.
+        // The margin leaves room for the transaction that emits the event before the cursor.
+        let (tip, total) = cluster.validator_tip_and_total_transactions();
+        let resume_tx = total + 100;
+        let cursor = Base64::encode(
+            CursorToken::item(Position::Events {
+                checkpoint: tip + 1,
+                tx_seq: resume_tx,
+                event_index: 0,
+            })
+            .encode(),
+        );
+        let query = r#"subscription($after: String!, $filter: EventFilter!) {
+            events(after: $after, filter: $filter) {
+                node { contents { json } }
+            }
+        }"#;
+        let mut vars = type_filter_var(&package_id, None).unwrap();
+        vars["after"] = json!(cursor);
+        let mut stream = cluster.subscribe_with_variables(query, Some(vars)).await;
+
+        // Emitted after the ledger's tip but before the cursor's transaction.
+        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
+        assert!(cluster.validator_tip_and_total_transactions().1 <= resume_tx);
+
+        // Every checkpoint carries at least one transaction, so the chain passes the cursor.
+        cluster
+            .wait_for_total_transactions_past(resume_tx, Duration::from_secs(120))
+            .await;
+        emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 2000).await;
+
+        let first = stream.next().await.unwrap();
+        assert_eq!(
+            event_value(&first),
+            Some("2000"),
+            "delivered an event before the cursor: {first}",
+        );
+    })
+    .await
+    .expect("test timed out");
 }
 
 #[tokio::test]

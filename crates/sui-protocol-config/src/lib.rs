@@ -14,8 +14,8 @@ use std::sync::Mutex;
 use clap::*;
 use fastcrypto::encoding::{Base58, Encoding, Hex};
 use move_binary_format::{
-    binary_config::{BinaryConfig, TableConfig},
-    file_format_common::VERSION_1,
+    binary_config::{BinaryConfig, BinaryFormatLimitsProfile, TableConfig},
+    file_format_common::*,
 };
 use move_core_types::account_address::AccountAddress;
 use move_vm_config::verifier::VerifierConfig;
@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 140;
+const MAX_PROTOCOL_VERSION: u64 = 141;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -423,6 +423,15 @@ const MAINNET_USDB: &str =
 //              and reverse) and their gas costs.
 //              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
+//              Enable check_object_funds_withdraw_in_execution on mainnet.
+//              Disable effects transaction dependencies on mainnet.
+//              Add the staggered-submission duplication signal thresholds.
+// Version 141: Abort with EInvalidVerifyingKey in groth16::verify_groth16_proof when the
+//              prepared verifying key length does not match the number of public inputs.
+//              Add `sui::clock::borrow`, which references the Clock without a Clock input.
+//              Add the `object::is_shared_input_impl` native and its cost.
+//              Reject an overflowing x-coordinate in `secp256r1_ecrecover`.
+//              Configure explicit Move binary format encoding limits.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -817,12 +826,13 @@ struct FeatureFlags {
     passkey_auth: bool,
 
     // Enable ML-DSA-65 (FIPS 204) account signatures, standalone and as
-    // multisig members. Kept out of the generated accessors, and with them out
-    // of the protocol-config listings, until the scheme's RPC surface lands;
-    // `mldsa65_auth()` and its test setter are hand-written.
+    // multisig members.
     #[serde(skip_serializing_if = "is_false")]
-    #[skip_accessor]
     mldsa65_auth: bool,
+
+    // Reject an overflowing x-coordinate r + n in `secp256r1_ecrecover` instead of wrapping it.
+    #[serde(skip_serializing_if = "is_false")]
+    secp256r1_ecrecover_checks_x_below_p: bool,
 
     // Use AuthorityCapabilitiesV2
     #[serde(skip_serializing_if = "is_false")]
@@ -1243,6 +1253,15 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     allowed_proposers: bool,
 
+    // If true, validators turn on staggered submission when commits show too many
+    // duplicate copies of transactions without allowed proposers. Requires
+    // `allowed_proposers`. This flag coordinates the rollout across validators.
+    // `NodeConfig::enable_staggered_submission_signal` lets an operator disable it on
+    // one node. Staggering runs only when both are enabled.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    staggered_submission_signal: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
 
@@ -1283,6 +1302,12 @@ struct FeatureFlags {
     // MAX_PUBLIC_INPUTS public inputs.
     #[serde(skip_serializing_if = "is_false")]
     limit_groth16_pvk_inputs: bool,
+
+    // If true, groth16::verify_groth16_proof checks that the prepared verifying key has the
+    // length implied by the number of public inputs, and aborts with EInvalidVerifyingKey if it
+    // does not.
+    #[serde(skip_serializing_if = "is_false")]
+    check_groth16_pvk_length: bool,
 
     // If true, the funds-accumulator address-balance change invariant
     // (`TemporaryStore::check_address_balance_changes`) is enforced as a consensus check —
@@ -1573,6 +1598,10 @@ pub struct ProtocolConfig {
     binary_enum_def_instantiations: Option<u16>,
     binary_variant_handles: Option<u16>,
     binary_variant_instantiation_handles: Option<u16>,
+
+    /// Move binary format limits profile.
+    #[skip_accessor]
+    binary_format_limits_profile: Option<BinaryFormatLimitsProfile>,
 
     /// Maximum size of the `contents` part of an object, in bytes. Enforced by the Sui adapter when effects are produced.
     max_move_object_size: Option<u64>,
@@ -1896,6 +1925,8 @@ pub struct ProtocolConfig {
     // Cost params for the Move native function
     // `record_new_uid_from_hash(parent: address, bytes: address)`
     object_record_new_uid_from_hash_cost_base: Option<u64>,
+    // Cost params for the Move native function `is_shared_input_impl(id: address): bool`
+    object_is_shared_input_cost_base: Option<u64>,
 
     // Transfer
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -1925,6 +1956,10 @@ pub struct ProtocolConfig {
     tx_context_gas_budget_cost_base: Option<u64>,
     tx_context_ids_created_cost_base: Option<u64>,
     tx_context_replace_cost_base: Option<u64>,
+
+    // `clock` module
+    // Cost params for the Move native function `native_borrow(): &Clock`
+    clock_borrow_cost_base: Option<u64>,
 
     // Types
     // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -2247,6 +2282,21 @@ pub struct ProtocolConfig {
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
 
+    /// Number of recent commits the staggered-submission signal looks at. It compares
+    /// excess copies of transactions without allowed proposers to unique user transactions.
+    staggered_submission_signal_window_commits: Option<u64>,
+    /// Average excess copies per commit in the window needed before the signal turns on.
+    staggered_submission_signal_min_excess_copies_per_commit: Option<u64>,
+    /// Number of commits the ratio must stay below a band's exit ratio before the
+    /// signal drops to a lower band.
+    staggered_submission_signal_exit_dwell_commits: Option<u64>,
+    /// Ratios to enter and exit each band, in basis points (bps) of the window's unique
+    /// user transactions. Band 1 delays submissions up to 1.6s and band 2 up to 4.8s.
+    staggered_submission_signal_band1_enter_ratio_bps: Option<u64>,
+    staggered_submission_signal_band1_exit_ratio_bps: Option<u64>,
+    staggered_submission_signal_band2_enter_ratio_bps: Option<u64>,
+    staggered_submission_signal_band2_exit_ratio_bps: Option<u64>,
+
     /// DEPRECATED: this was an ephemeral feature flag only used in per-epoch tables, which has now
     /// been deployed everywhere.
     use_object_per_epoch_marker_table_v2: Option<bool>,
@@ -2385,20 +2435,21 @@ impl ProtocolConfig {
         self.feature_flags.consensus_transaction_ordering
     }
 
-    // Hand-written because the field is `#[skip_accessor]`; see FeatureFlags.
-    pub fn mldsa65_auth(&self) -> bool {
-        self.feature_flags.mldsa65_auth
-    }
-
-    pub fn set_mldsa65_auth_for_testing(&mut self, val: bool) {
-        self.feature_flags.mldsa65_auth = val;
-    }
-
     pub fn enable_jwk_consensus_updates(&self) -> bool {
         let ret = self.feature_flags.enable_jwk_consensus_updates;
         if ret {
             // jwk updates required end-of-epoch transactions
             assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
+    }
+
+    pub fn staggered_submission_signal(&self) -> bool {
+        let ret = self.feature_flags.staggered_submission_signal;
+        if ret {
+            // The signal staggers transactions without allowed proposers. That
+            // distinction only exists when allowed_proposers is enabled.
+            assert!(self.feature_flags.allowed_proposers);
         }
         ret
     }
@@ -2708,6 +2759,7 @@ impl ProtocolConfig {
             binary_enum_def_instantiations: None,
             binary_variant_handles: None,
             binary_variant_instantiation_handles: None,
+            binary_format_limits_profile: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
             max_publish_or_upgrade_per_ptb: None,
@@ -2850,6 +2902,9 @@ impl ProtocolConfig {
             // Cost params for the Move native function
             // `record_new_uid_from_hash(parent: address, bytes: address)`. Introduced in v131.
             object_record_new_uid_from_hash_cost_base: None,
+            // Cost params for the Move native function `is_shared_input_impl(id: address): bool`.
+            // Introduced in v141.
+            object_is_shared_input_cost_base: None,
 
             // `transfer` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -2877,6 +2932,9 @@ impl ProtocolConfig {
             tx_context_gas_budget_cost_base: None,
             tx_context_ids_created_cost_base: None,
             tx_context_replace_cost_base: None,
+
+            // `clock` module
+            clock_borrow_cost_base: None,
 
             // `types` module
             // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -3153,6 +3211,13 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
 
             sip_45_consensus_amplification_threshold: None,
+            staggered_submission_signal_window_commits: None,
+            staggered_submission_signal_min_excess_copies_per_commit: None,
+            staggered_submission_signal_exit_dwell_commits: None,
+            staggered_submission_signal_band1_enter_ratio_bps: None,
+            staggered_submission_signal_band1_exit_ratio_bps: None,
+            staggered_submission_signal_band2_enter_ratio_bps: None,
+            staggered_submission_signal_band2_exit_ratio_bps: None,
 
             use_object_per_epoch_marker_table_v2: None,
 
@@ -4880,6 +4945,16 @@ impl ProtocolConfig {
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
                 }
                 140 => {
+                    // Signal thresholds are set on every chain. They take effect only
+                    // where `staggered_submission_signal` is enabled.
+                    cfg.staggered_submission_signal_window_commits = Some(300);
+                    cfg.staggered_submission_signal_min_excess_copies_per_commit = Some(2);
+                    cfg.staggered_submission_signal_exit_dwell_commits = Some(6000);
+                    cfg.staggered_submission_signal_band1_enter_ratio_bps = Some(1000);
+                    cfg.staggered_submission_signal_band1_exit_ratio_bps = Some(500);
+                    cfg.staggered_submission_signal_band2_enter_ratio_bps = Some(5000);
+                    cfg.staggered_submission_signal_band2_exit_ratio_bps = Some(2500);
+
                     cfg.vector_reverse_base_cost = Some(52);
                     cfg.vector_reverse_per_elem_cost = Some(8);
                     cfg.vector_keep_range_base_cost = Some(52);
@@ -4895,6 +4970,15 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.allow_references_in_ptbs = true;
                     cfg.feature_flags.disable_id_leak_verifier = true;
+                    cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    cfg.feature_flags.disable_effects_tx_dependencies = true;
+                }
+                141 => {
+                    cfg.clock_borrow_cost_base = Some(52);
+                    cfg.feature_flags.check_groth16_pvk_length = true;
+                    cfg.object_is_shared_input_cost_base = Some(52);
+                    cfg.feature_flags.secp256r1_ecrecover_checks_x_below_p = true;
+                    cfg.binary_format_limits_profile = Some(BinaryFormatLimitsProfile::V1);
                 }
                 // Use this template when making changes:
                 //
@@ -5059,7 +5143,16 @@ impl ProtocolConfig {
                     .binary_variant_instantiation_handles_as_option()
                     .unwrap_or(u16::MAX),
             },
+            self.binary_format_limits(),
         )
+    }
+
+    pub fn binary_format_limits(
+        &self,
+    ) -> &'static move_binary_format::binary_config::BinaryFormatLimits {
+        self.binary_format_limits_profile
+            .unwrap_or(BinaryFormatLimitsProfile::LEGACY)
+            .limits()
     }
 
     /// Override one or more settings in the config, for testing.
@@ -5346,6 +5439,21 @@ mod test {
                 );
             }
         }
+    }
+
+    #[test]
+    fn binary_format_limits_profile_matches_protocol_version() {
+        let v140 = ProtocolConfig::get_for_version(ProtocolVersion::new(140), Chain::Unknown);
+        assert_eq!(
+            v140.binary_format_limits(),
+            BinaryFormatLimitsProfile::LEGACY.limits()
+        );
+
+        let v141 = ProtocolConfig::get_for_version(ProtocolVersion::new(141), Chain::Unknown);
+        assert_eq!(
+            v141.binary_format_limits(),
+            BinaryFormatLimitsProfile::V1.limits()
+        );
     }
 
     #[test]

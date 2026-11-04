@@ -263,6 +263,6 @@ datatest_stable::harness!(shell_tests, TEST_DIR, TEST_PATTERN);
 // msim would only cost time. Expose an empty harness so nextest still sees a well-formed binary.
 #[cfg(msim)]
 fn main() {
-    let _ = shell_tests;
+    let _ = (shell_tests, TEST_DIR, TEST_PATTERN);
     datatest_stable::runner(&[]);
 }

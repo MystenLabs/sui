@@ -1807,6 +1807,12 @@ Clock
 timestamp_ms
 	public fun
 	0x2::clock
+borrow
+	public fun
+	0x2::clock
+native_borrow
+	fun
+	0x2::clock
 create
 	fun
 	0x2::clock
@@ -2294,6 +2300,9 @@ ClaimedStatus
 	public enum
 	0x2::derived_object
 claim
+	public fun
+	0x2::derived_object
+release
 	public fun
 	0x2::derived_object
 exists
@@ -3157,10 +3166,16 @@ borrow_uid
 new_uid_from_hash
 	public(package) fun
 	0x2::object
+is_shared_input
+	public(package) fun
+	0x2::object
 delete_impl
 	fun
 	0x2::object
 record_new_uid_from_hash
+	fun
+	0x2::object
+is_shared_input_impl
 	fun
 	0x2::object
 ObjectBag

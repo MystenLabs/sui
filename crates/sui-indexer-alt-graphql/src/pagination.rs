@@ -5,7 +5,6 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-use anyhow::Context as _;
 use async_graphql::Object;
 use async_graphql::OutputType;
 use async_graphql::TypeName;
@@ -15,12 +14,10 @@ use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use async_graphql::connection::PageInfo;
 use async_graphql::registry::MetaField;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
-use sui_pg_db::query::Query;
-use sui_rpc_cursor::CursorToken;
-use sui_sql_macro::query;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::types::ledger_cursor::scan::LedgerPage;
 use crate::error::RpcError;
 
 /// Configuration for page size limits, specifying a max multi-get size, as well as a default and
@@ -82,6 +79,9 @@ pub(crate) enum Error {
 
     #[error("Page size of {limit} exceeds max of {max} for connection")]
     TooLarge { limit: u64, max: u32 },
+
+    #[error("This cursor cannot be used here; restart pagination without a cursor")]
+    UnsupportedCursor,
 }
 
 impl PaginationConfig {
@@ -180,17 +180,15 @@ impl<C> Page<C> {
         self.limit() + 2
     }
 
-    pub(crate) fn is_from_front(&self) -> bool {
-        matches!(self.end, End::Front)
+    /// Returns the limit + 1 to request from a gRPC List stream, so that
+    /// [`Page::paginate_stream_results`] can tell a full page that exhausted its range from one with
+    /// more items behind it.
+    pub(crate) fn limit_with_lookahead(&self) -> usize {
+        self.limit() + 1
     }
 
-    /// Direction for sorting SQL queries.
-    pub(crate) fn order_by_direction(&self) -> Query<'_> {
-        if self.is_from_front() {
-            query!("ASC")
-        } else {
-            query!("DESC")
-        }
+    pub(crate) fn is_from_front(&self) -> bool {
+        matches!(self.end, End::Front)
     }
 }
 
@@ -346,24 +344,53 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
     }
 }
 
-impl<C> Page<C>
-where
-    C: CursorType + TryFrom<CursorToken, Error = anyhow::Error>,
-{
-    /// Translate a `StreamPage` into a `StreamConnection`. The server is expected to have already
-    /// applied page bounds and limit.
+impl<C: CursorType + Clone> Page<C> {
+    /// Translate a [`LedgerPage`] into a `StreamConnection`. The server is expected to have already
+    /// applied page bounds, and the request to have asked for [`Page::limit_with_lookahead`] items.
     ///
-    /// `node` converts one stream payload into the connection's node type; cursors are minted
-    /// here, from the server's per-item tokens. Edges are returned in ascending order (the stream
-    /// emits descending order when paginating from the back).
+    /// If the lookahead item came back, it is dropped and the page reports more data in the
+    /// direction of pagination. Otherwise the stream's end reason decides. A stream that returned
+    /// at most `limit` items only ends at `ItemLimit` when the server capped the requested limit at
+    /// its own maximum, so more data may still exist.
+    ///
+    /// `node` converts one stream payload into the connection's node type. Edges are returned in
+    /// ascending order (the stream emits descending order when paginating from the back).
     pub(crate) fn paginate_stream_results<T, N: OutputType>(
         &self,
-        result: StreamPage<T>,
+        mut result: LedgerPage<T, C>,
         node: impl Fn(&T) -> Result<N, RpcError>,
     ) -> Result<StreamConnection<N>, RpcError> {
-        let more = result.has_more();
-        let start = result.first_cursor().cloned();
-        let end = result.last_cursor().cloned();
+        // Between two cursors, an empty page that reached the far one has exhausted the window.
+        if self.after().is_some()
+            && self.before().is_some()
+            && result.items.is_empty()
+            && result.end_reason == Some(QueryEndReason::CursorBound)
+        {
+            return Ok(StreamConnection::empty());
+        }
+
+        let lookahead_returned = result.items.len() > self.limit();
+        result.items.truncate(self.limit());
+
+        // The page ends on its last item when the lookahead item came back, or when the stream
+        // stopped at the request's opposite cursor:
+        // - The lookahead item's cursor, or a watermark after it, would resume past the dropped
+        //   item and skip it.
+        // - A stream that stopped at the request's opposite cursor closes with a boundary at the
+        //   edge of that cursor's bound: at a `before` cursor's position, or at the first position
+        //   an `after` cursor admits. The last item's cursor resumes at or before that boundary in
+        //   scan order, so resuming from it skips nothing.
+        let ends_on_last_item =
+            lookahead_returned || result.end_reason == Some(QueryEndReason::CursorBound);
+        let more = lookahead_returned || result.has_more();
+        let start = result.first_cursor;
+        let end = match result.items.last() {
+            Some(item) if ends_on_last_item => Some(item.cursor.clone()),
+            // A page with nothing to resume from scanned nothing, as when its cursors' places
+            // leave its range empty and the ledger is not asked. It resumes where it started, so a
+            // client polling with its end cursor waits there until the range reaches it.
+            _ => result.last_cursor.or_else(|| start.clone()),
+        };
         let mut items = result.items;
 
         let (has_previous_page, has_next_page, start, end) = if self.is_from_front() {
@@ -375,10 +402,7 @@ where
 
         let mut edges = Vec::with_capacity(items.len());
         for item in items {
-            edges.push(Edge::new(
-                Self::encode_stream_cursor(&item.cursor)?,
-                node(&item.payload)?,
-            ));
+            edges.push(Edge::new(item.cursor.encode_cursor(), node(&item.payload)?));
         }
 
         Ok(StreamConnection {
@@ -386,18 +410,10 @@ where
             page_info: PageInfo {
                 has_previous_page,
                 has_next_page,
-                start_cursor: start.map(|b| Self::encode_stream_cursor(&b)).transpose()?,
-                end_cursor: end.map(|b| Self::encode_stream_cursor(&b)).transpose()?,
+                start_cursor: start.map(|c| c.encode_cursor()),
+                end_cursor: end.map(|c| c.encode_cursor()),
             },
         })
-    }
-
-    /// Re-encode a server-minted cursor (raw encoded `CursorToken` bytes from the gRPC stream) as a
-    /// GraphQL cursor string in this page's cursor format.
-    fn encode_stream_cursor(bytes: &[u8]) -> Result<String, RpcError> {
-        let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
-        let cursor = C::try_from(token).context("Unexpected position in stream cursor")?;
-        Ok(cursor.encode_cursor())
     }
 }
 

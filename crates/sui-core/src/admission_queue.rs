@@ -3,6 +3,7 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
+use crate::staggered_submission::proposers_metric_label;
 use arc_swap::ArcSwap;
 use mysten_common::debug_fatal;
 use mysten_metrics::{COUNT_BUCKETS, spawn_monitored_task};
@@ -41,6 +42,8 @@ pub enum PopAction {
     Include,
     /// Pop the entry into the excluded partition.
     Exclude,
+    /// Leave the entry queued and continue with the next entry.
+    Skip,
     /// Leave the entry queued and stop iterating.
     Stop,
 }
@@ -180,13 +183,21 @@ pub struct AdmissionQueueMetrics {
 
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
+    pub pool_staggered_held: IntGauge,
+    pub pool_staggered_rejected: IntCounter,
+    pub pool_staggered_delay: Histogram,
+    pub pool_stagger_shadow_decisions: IntCounterVec,
+    pub pool_stagger_shadow_delay: Histogram,
     pub pool_taken_per_proposal: Histogram,
     pub pool_requeued_on_dropped_ack: IntCounter,
     pub pool_gc_notified: IntCounter,
     pub pool_waiting_inserts: IntGauge,
     pub pool_already_processed: IntCounterVec,
+    pub pool_rejected_at_proposal: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
+    pub pool_byte_budget_bytes: IntGauge,
+    pub pool_byte_budget_exhausted: IntCounter,
 }
 
 impl AdmissionQueueMetrics {
@@ -201,7 +212,7 @@ impl AdmissionQueueMetrics {
             queue_wait_latency: register_histogram_vec_with_registry!(
                 "admission_queue_wait_latency",
                 "Time a submission spends waiting in the admission queue or transaction pool before being drained or proposed",
-                &["lane"],
+                &["lane", "proposers"],
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -238,6 +249,39 @@ impl AdmissionQueueMetrics {
                 registry,
             )
             .unwrap(),
+            pool_staggered_held: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_staggered_held",
+                "User-lane entries in the pool stamped with a staggered-submission hold, whether or not the hold has elapsed",
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_rejected: register_int_counter_with_registry!(
+                "consensus_transaction_pool_staggered_rejected",
+                "User submissions rejected because this validator is outside the transaction's staggered-submission proposer set",
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_delay: register_histogram_with_registry!(
+                "consensus_transaction_pool_staggered_delay",
+                "The staggered-submission hold applied to a user-lane entry without allowed proposers before it may be proposed",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            pool_stagger_shadow_decisions: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_stagger_shadow_decisions",
+                "Decision (free, hold or reject) staggering would have made per user-lane submission while inactive",
+                &["decision"],
+                registry,
+            )
+            .unwrap(),
+            pool_stagger_shadow_delay: register_histogram_with_registry!(
+                "consensus_transaction_pool_stagger_shadow_delay",
+                "Hold staggering would have applied to a user-lane submission while inactive",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             pool_taken_per_proposal: register_histogram_with_registry!(
                 "consensus_transaction_pool_taken_per_proposal",
                 "Transactions taken from the consensus transaction pool per proposal",
@@ -270,10 +314,17 @@ impl AdmissionQueueMetrics {
                 registry,
             )
             .unwrap(),
+            pool_rejected_at_proposal: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_rejected_at_proposal",
+                "User submissions dropped at proposal time because their owned input objects no longer match live state, by error",
+                &["error"],
+                registry,
+            )
+            .unwrap(),
             pool_commit_latency: register_histogram_vec_with_registry!(
                 "consensus_transaction_pool_commit_latency",
                 "Time from insert into the transaction pool to commit of the block that proposed the entry",
-                &["lane"],
+                &["lane", "proposers"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -282,6 +333,18 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_abandoned",
                 "Pool entries dropped at proposal time because their submitter stopped waiting",
                 &["lane"],
+                registry,
+            )
+            .unwrap(),
+            pool_byte_budget_bytes: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_byte_budget_bytes",
+                "User-lane bytes the rate limiter allows the next proposal to take",
+                registry,
+            )
+            .unwrap(),
+            pool_byte_budget_exhausted: register_int_counter_with_registry!(
+                "consensus_transaction_pool_byte_budget_exhausted",
+                "Proposals in which the user-lane byte rate limit stopped the take",
                 registry,
             )
             .unwrap(),
@@ -392,32 +455,49 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     }
 
     /// Pop entries highest gas price first (FIFO within a price level) until
-    /// `action` returns `Stop` or the queue is empty. The entry that stopped
-    /// iteration stays queued. Popped entries are returned partitioned into
-    /// those the callback chose to `Include` and those to `Exclude`.
+    /// `action` returns `Stop` or the queue is exhausted. `Skip`ped entries and
+    /// the entry that stopped iteration stay queued. Popped entries are returned
+    /// partitioned into those the callback chose to `Include` and those to
+    /// `Exclude`.
     pub fn pop_batch_while(
         &mut self,
         mut action: impl FnMut(&mut E) -> PopAction,
     ) -> (Vec<E>, Vec<E>) {
         let mut included = Vec::new();
         let mut excluded = Vec::new();
-        'levels: while let Some(mut last) = self.map.last_entry() {
-            let deque = last.get_mut();
-            while let Some(entry) = deque.front_mut() {
-                let action = action(entry);
-                if matches!(action, PopAction::Stop) {
-                    break 'levels;
+        let mut stopped = false;
+        for deque in self.map.values_mut().rev() {
+            if stopped {
+                break;
+            }
+            // Drain the level once, writing retained entries back in order: a batch with
+            // removals costs one pass over the level rather than a shift per removal.
+            // This runs on every block proposal, so it must stay linear even when most
+            // entries are skipped (e.g. held by staggered submission).
+            let mut source = std::mem::take(deque);
+            while let Some(mut entry) = source.pop_front() {
+                if stopped {
+                    deque.push_back(entry);
+                    continue;
                 }
-                let entry = deque.pop_front().expect("front entry must exist");
-                self.total_len -= 1;
-                match action {
-                    PopAction::Include => included.push(entry),
-                    PopAction::Exclude => excluded.push(entry),
-                    PopAction::Stop => unreachable!("Stop breaks out above"),
+                match action(&mut entry) {
+                    PopAction::Stop => {
+                        stopped = true;
+                        deque.push_back(entry);
+                    }
+                    PopAction::Skip => deque.push_back(entry),
+                    PopAction::Include => {
+                        self.total_len -= 1;
+                        included.push(entry);
+                    }
+                    PopAction::Exclude => {
+                        self.total_len -= 1;
+                        excluded.push(entry);
+                    }
                 }
             }
-            last.remove();
         }
+        self.map.retain(|_, deque| !deque.is_empty());
         for entry in included.iter().chain(&excluded) {
             self.remove_keys(entry);
         }
@@ -762,10 +842,11 @@ impl AdmissionQueueEventLoop {
             return;
         }
         for entry in entries {
+            let proposers = proposers_metric_label(&entry.transactions, &self.epoch_store);
             self.queue
                 .metrics
                 .queue_wait_latency
-                .with_label_values(&["user"])
+                .with_label_values(&["user", proposers])
                 .observe(entry.enqueue_time.elapsed().as_secs_f64());
             let adapter = self.consensus_adapter.clone();
             let es = self.epoch_store.clone();
@@ -799,6 +880,7 @@ async fn submit_queue_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sui_macros::sim_test;
 
     fn make_test_entry(
         gas_price: u64,
@@ -884,6 +966,84 @@ mod tests {
         assert_eq!(q.min_gas_price(), Some(50));
         let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
         assert_eq!(rest.len(), 2);
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn test_pop_batch_while_skips_and_retains() {
+        let mut q = build_queue(10, &[100, 200, 200, 50, 75]);
+
+        // Skipping continues past the entry — both within a price level (only one of
+        // the two 200s is skipped) and into lower levels.
+        let mut seen_200 = false;
+        let (included, excluded) = q.pop_batch_while(|entry| match entry.gas_price {
+            200 if !seen_200 => {
+                seen_200 = true;
+                PopAction::Skip
+            }
+            100 => PopAction::Skip,
+            75 => PopAction::Exclude,
+            _ => PopAction::Include,
+        });
+        assert_eq!(
+            included.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 50]
+        );
+        assert_eq!(
+            excluded.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![75]
+        );
+        // Skipped entries stay queued in order and are visible to later pops.
+        assert_eq!(q.len(), 2);
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(
+            rest.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 100]
+        );
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn test_pop_batch_while_skip_then_stop() {
+        // A skipped entry ahead of the stopping one: both stay queued, in order,
+        // with bookkeeping intact.
+        let mut q = build_queue(10, &[300, 200, 100]);
+
+        let (included, excluded) = q.pop_batch_while(|entry| match entry.gas_price {
+            300 => PopAction::Skip,
+            200 => PopAction::Include,
+            _ => PopAction::Stop,
+        });
+        assert_eq!(
+            included.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200]
+        );
+        assert!(excluded.is_empty());
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.min_gas_price(), Some(100));
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(
+            rest.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![300, 100]
+        );
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn test_pop_batch_while_fully_skipped_level_retained() {
+        let mut q = build_queue(10, &[200, 200]);
+
+        let (included, excluded) = q.pop_batch_while(|_| PopAction::Skip);
+        assert!(included.is_empty() && excluded.is_empty());
+        // The untouched level survives with its invariants: length, min price, and
+        // eviction of a full queue still work on it.
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.min_gas_price(), Some(200));
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(
+            rest.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 200]
+        );
         assert!(q.is_empty());
     }
 
@@ -1111,7 +1271,7 @@ mod tests {
         assert!(q.insert(entry3).unwrap());
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_actor_shuts_down_when_handle_dropped() {
         use crate::authority::test_authority_builder::TestAuthorityBuilder;
         use crate::checkpoints::CheckpointStore;
@@ -1205,7 +1365,7 @@ mod tests {
         assert!(!handle.failover_tripped());
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_idle_actor_does_not_trip_failover() {
         // A healthy actor with an empty queue must never trip failover, even
         // after long idle periods while blocked on `receiver.recv()`.
@@ -1230,7 +1390,7 @@ mod tests {
     /// `has_consensus_capacity` check and the read inside `drain_batch`), no
     /// entries are popped and `last_drain` must NOT advance — otherwise a
     /// truly stuck drainer would be hidden from the failover check.
-    #[tokio::test]
+    #[sim_test]
     async fn test_drain_batch_does_not_bump_last_drain_when_no_slots() {
         let (adapter, epoch_store, notify) = build_consensus_adapter(0).await;
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());

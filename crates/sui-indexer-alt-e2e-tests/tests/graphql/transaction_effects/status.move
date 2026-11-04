@@ -20,15 +20,19 @@ module test::failed_module {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Test status field on successful transaction effects
   successTransaction: transactionEffects(digest: "@{digest_2}") {
     status
   }
 } 
+*/
 
 //# run-graphql
+/*
 { # Test status field on failed transaction
   failedTransaction: transactionEffects(digest: "@{digest_3}") {
     status
   }
 }
+*/

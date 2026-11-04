@@ -1,7 +1,6 @@
 module a::example {
     fun examples(): u64 {
         let `abort` = 0;
-        let `acquires` = 0;
         let `as` = 0;
         let `break` = 0;
         let `const` = 0;
@@ -27,7 +26,6 @@ module a::example {
         let `use` = 0;
         let `while` = 0;
         `abort` +
-        `acquires` +
         `as` +
         `break` +
         `const` +

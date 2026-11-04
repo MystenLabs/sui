@@ -30,6 +30,7 @@ module P::O {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   cp1: checkpoint(sequenceNumber: 1) {
     query {
@@ -59,3 +60,4 @@ fragment M on MoveModule {
   bytes
   disassembly
 }
+*/

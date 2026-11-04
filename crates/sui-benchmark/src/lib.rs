@@ -29,6 +29,7 @@ use sui_rpc_api::{Client, client::ExecutedTransaction};
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
+use sui_types::transaction::TransactionDataAPI as _;
 use sui_types::transaction_driver_types::EffectsFinalityInfo;
 use sui_types::transaction_driver_types::FinalizedEffects;
 use sui_types::{
@@ -139,6 +140,22 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn unwrapped(&self) -> Vec<(ObjectRef, Owner)> {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                effects.data().unwrapped()
+            }
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.unwrapped(),
+        }
+    }
+
+    pub fn wrapped(&self) -> Vec<ObjectRef> {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().wrapped(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.wrapped(),
+        }
+    }
+
     pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
@@ -224,6 +241,35 @@ impl ExecutionEffects {
                 _ => false,
             },
         }
+    }
+
+    /// True if the tx executed against a deleted shared object or an ended consensus stream.
+    pub fn is_input_object_deleted(&self) -> bool {
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InputObjectDeleted,
+                ..
+            })
+        )
+    }
+
+    pub fn is_address_denied(&self) -> bool {
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::AddressDeniedForCoin { .. },
+                ..
+            })
+        )
     }
 
     pub fn is_insufficient_funds(&self) -> bool {
@@ -724,10 +770,38 @@ async fn execute_soft_bundle_with_retries(
         // Get a validator client - use grpc client directly for soft bundle
         // Re-select on each retry in case the previous validator is halting
         let auth_agg = td.authority_aggregator().load();
+
+        // A transaction that restricts its proposers is only admitted by one of them, and a
+        // single disallowed transaction rejects the whole soft bundle, so the target must
+        // satisfy every restriction in the bundle. If no validator does, fall back to any
+        // validator and let admission reject the bundle.
+        let epoch = auth_agg.committee.epoch;
+        let mut allowed_indices: Option<std::collections::HashSet<u32>> = None;
+        for tx in txs {
+            if let Some(allowed) = tx.transaction_data().expiration().allowed_proposers(epoch) {
+                let proposers: std::collections::HashSet<u32> =
+                    allowed.proposers.iter().copied().collect();
+                allowed_indices = Some(match allowed_indices {
+                    Some(current) => current.intersection(&proposers).copied().collect(),
+                    None => proposers,
+                });
+            }
+        }
+
         let safe_client = auth_agg
             .authority_clients
-            .values()
+            .iter()
+            .filter(|(name, _)| {
+                allowed_indices.as_ref().is_none_or(|allowed| {
+                    auth_agg
+                        .committee
+                        .authority_index(name)
+                        .is_some_and(|index| allowed.contains(&index))
+                })
+            })
+            .map(|(_, client)| client)
             .choose(&mut get_rng())
+            .or_else(|| auth_agg.authority_clients.values().choose(&mut get_rng()))
             .unwrap();
 
         let mut validator_client = match safe_client.authority_client().get_client_for_testing() {

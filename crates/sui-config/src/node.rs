@@ -202,6 +202,13 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_simulate_allowed_proposers: bool,
 
+    /// Lets an operator disable staggered submission on this node. The
+    /// `staggered_submission_signal` protocol flag controls the network-wide rollout.
+    /// Staggering runs only when both are enabled. When this is false, the signal is
+    /// still computed and logged but never turns staggering on.
+    #[serde(default = "bool_true")]
+    pub enable_staggered_submission_signal: bool,
+
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 
@@ -301,6 +308,17 @@ pub struct ConsensusTransactionPoolConfig {
     /// matching the existing admission queue. Defaults to the consensus
     /// `max_pending_transactions` setting.
     pub max_pending_transactions: Option<usize>,
+
+    /// Set false to disable the rate limit on proposed user transaction bytes.
+    #[serde(default = "bool_true")]
+    pub rate_limit_user_bytes: bool,
+
+    /// Rate limit on serialized user transaction bytes this validator proposes,
+    /// as a token bucket that holds one second of budget or one full block,
+    /// whichever is larger. System transactions are not limited. Defaults to
+    /// two maximum-size blocks per second (`max_transactions_in_block_bytes`).
+    /// Must be greater than zero.
+    pub max_user_bytes_per_second: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -308,6 +326,8 @@ impl Default for ConsensusTransactionPoolConfig {
         Self {
             enabled: true,
             max_pending_transactions: None,
+            rate_limit_user_bytes: true,
+            max_user_bytes_per_second: None,
         }
     }
 }
@@ -316,6 +336,13 @@ impl ConsensusTransactionPoolConfig {
     pub fn max_pending_transactions(&self, consensus_config: &ConsensusConfig) -> usize {
         self.max_pending_transactions
             .unwrap_or_else(|| consensus_config.max_pending_transactions())
+    }
+
+    pub fn max_user_bytes_per_second(&self, max_transactions_in_block_bytes: u64) -> Option<u64> {
+        self.rate_limit_user_bytes.then(|| {
+            self.max_user_bytes_per_second
+                .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
+        })
     }
 }
 
@@ -939,6 +966,10 @@ fn is_true(value: &bool) -> bool {
     *value
 }
 
+fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
 impl Config for NodeConfig {}
 
 impl NodeConfig {
@@ -1287,6 +1318,23 @@ pub struct AuthorityStorePruningConfig {
     /// wall-clock deletion SLA.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rpc_store_bitmap_periodic_compaction_days: Option<u64>,
+    /// Number of per-checkpoint RocksDB snapshots the embedded RPC store
+    /// retains in memory. The store's synchronizer takes a snapshot each
+    /// time every pipeline in its cohort has committed a checkpoint; once
+    /// this many are retained, each new one evicts the oldest. Zero (the
+    /// default) disables snapshotting.
+    ///
+    /// Nothing reads these snapshots yet; they are intended to back
+    /// consistent pagination for the RPC store's live-index reads.
+    /// Retaining them prevents compaction from dropping keys overwritten
+    /// or deleted after the oldest retained snapshot, and from combining
+    /// merge operands that a snapshot separates, so a key merged in many
+    /// checkpoints (a balance, the current bitmap bucket) keeps up to one
+    /// operand per checkpoint in the window for reads to fold. Larger
+    /// values therefore cost disk space, compaction work, and read latency.
+    /// At ~4 checkpoints per second, 15,000 snapshots span about an hour.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub rpc_store_num_checkpoint_snapshots_to_retain: usize,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
@@ -1332,6 +1380,7 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: default_max_transactions_in_batch(),
             periodic_compaction_threshold_days: None,
             rpc_store_bitmap_periodic_compaction_days: None,
+            rpc_store_num_checkpoint_snapshots_to_retain: 0,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,

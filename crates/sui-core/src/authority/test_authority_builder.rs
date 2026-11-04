@@ -305,6 +305,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
+            &config,
             (chain_id, chain),
             checkpoint_store
                 .get_highest_executed_checkpoint_seq_number()

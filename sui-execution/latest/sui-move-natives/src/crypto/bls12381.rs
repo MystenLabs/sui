@@ -68,10 +68,10 @@ pub fn bls12381_min_sig_verify(
         context,
         bls12381_bls12381_min_sig_verify_cost_params
             .bls12381_bls12381_min_sig_verify_msg_cost_per_byte
-            * (msg_ref.len() as u64).into()
+            .saturating_mul(msg_ref.len() as u64)
             + bls12381_bls12381_min_sig_verify_cost_params
                 .bls12381_bls12381_min_sig_verify_msg_cost_per_block
-                * (msg_ref.len().div_ceil(BLS12381_BLOCK_SIZE) as u64).into()
+                .saturating_mul(msg_ref.len().div_ceil(BLS12381_BLOCK_SIZE) as u64)
     );
 
     let cost = context.gas_used();
@@ -147,10 +147,10 @@ pub fn bls12381_min_pk_verify(
         context,
         bls12381_bls12381_min_pk_verify_cost_params
             .bls12381_bls12381_min_pk_verify_msg_cost_per_byte
-            * (msg_ref.len() as u64).into()
+            .saturating_mul(msg_ref.len() as u64)
             + bls12381_bls12381_min_pk_verify_cost_params
                 .bls12381_bls12381_min_pk_verify_msg_cost_per_block
-                * (msg_ref.len().div_ceil(BLS12381_BLOCK_SIZE) as u64).into()
+                .saturating_mul(msg_ref.len().div_ceil(BLS12381_BLOCK_SIZE) as u64)
     );
 
     let cost = context.gas_used();

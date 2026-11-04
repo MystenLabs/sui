@@ -14,6 +14,22 @@ use proto::sui::rpc::cursor::v1 as grpc;
 pub struct CursorToken {
     pub kind: CursorKind,
     pub position: Position,
+    /// The boundary immediately before the item at `position`'s coordinate, in public ledger
+    /// coordinates, independent of `kind`: an item cursor's item key, or the boundary a boundary
+    /// cursor names. `None` on cursors whose issuer did not know it, including every cursor minted
+    /// before the field existed, and on checkpoint cursors, whose checkpoint is already exact.
+    /// It only labels the cursor: scans are bounded by `position` alone.
+    pub public_position: Option<PublicPosition>,
+}
+
+/// A boundary in public ledger coordinates (`sui.rpc.v2.LedgerPosition`): just before the item
+/// keyed `(checkpoint, transaction_index, event_index)`. Transaction cursors carry
+/// `event_index` 0.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PublicPosition {
+    pub checkpoint: u64,
+    pub transaction_index: u64,
+    pub event_index: u32,
 }
 
 /// Endpoint-specific cursor position.
@@ -56,6 +72,7 @@ impl CursorToken {
         Self {
             kind: CursorKind::Item,
             position,
+            public_position: None,
         }
     }
 
@@ -63,6 +80,15 @@ impl CursorToken {
         Self {
             kind: CursorKind::Boundary,
             position,
+            public_position: None,
+        }
+    }
+
+    /// This cursor labeled with `public_position` (see [`Self::public_position`]).
+    pub fn with_public_position(self, public_position: Option<PublicPosition>) -> Self {
+        Self {
+            public_position,
+            ..self
         }
     }
 
@@ -120,7 +146,11 @@ impl CursorToken {
             },
             q => anyhow::bail!("unknown legacy cursor query_type: {q}"),
         };
-        Ok(Self { kind, position })
+        Ok(Self {
+            kind,
+            position,
+            public_position: None,
+        })
     }
 }
 
@@ -168,6 +198,9 @@ impl From<Position> for grpc::cursor_token::Position {
     }
 }
 
+/// A transaction or event cursor without a checkpoint decodes with checkpoint 0, the value cursors
+/// minted without a known checkpoint already carry. Their checkpoint only labels the cursor: ledger
+/// servers never let it decide which positions a scan returns.
 impl TryFrom<grpc::cursor_token::Position> for Position {
     type Error = anyhow::Error;
 
@@ -177,14 +210,34 @@ impl TryFrom<grpc::cursor_token::Position> for Position {
                 checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
             }),
             grpc::cursor_token::Position::Transactions(position) => Ok(Position::Transactions {
-                checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
+                checkpoint: position.checkpoint.unwrap_or(0),
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
             }),
             grpc::cursor_token::Position::Events(position) => Ok(Position::Events {
-                checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
+                checkpoint: position.checkpoint.unwrap_or(0),
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
                 event_index: position.event_index.context("cursor missing event_index")?,
             }),
+        }
+    }
+}
+
+impl From<PublicPosition> for grpc::PublicPosition {
+    fn from(position: PublicPosition) -> Self {
+        Self {
+            checkpoint: position.checkpoint,
+            transaction_index: position.transaction_index,
+            event_index: position.event_index,
+        }
+    }
+}
+
+impl From<grpc::PublicPosition> for PublicPosition {
+    fn from(position: grpc::PublicPosition) -> Self {
+        Self {
+            checkpoint: position.checkpoint,
+            transaction_index: position.transaction_index,
+            event_index: position.event_index,
         }
     }
 }
@@ -193,11 +246,13 @@ impl From<&CursorToken> for grpc::CursorToken {
     fn from(cursor: &CursorToken) -> Self {
         Self {
             kind: cursor.kind.to_proto() as i32,
+            public_position: cursor.public_position.map(Into::into),
             position: Some(cursor.position.into()),
         }
     }
 }
 
+/// A cursor without `public_position` is valid: it bounds a scan exactly as one with it does.
 impl TryFrom<grpc::CursorToken> for CursorToken {
     type Error = anyhow::Error;
 
@@ -210,12 +265,16 @@ impl TryFrom<grpc::CursorToken> for CursorToken {
             .position
             .context("cursor missing position")?
             .try_into()?;
-        Ok(Self { kind, position })
+        Ok(Self {
+            kind,
+            position,
+            public_position: proto.public_position.map(Into::into),
+        })
     }
 }
 
 /// Wire mirror of the previous `CursorToken` schema (tags 1-4, reserved in the
-/// current message; disjoint from the current fields 5-8, which is what makes
+/// current message; disjoint from the current fields 5-9, which is what makes
 /// the decode fallback unambiguous in both directions). Private and
 /// decode-only: deliberately absent from `cursor.proto`, which stays the spec
 /// for third-party implementations.
@@ -239,19 +298,49 @@ mod tests {
 
     #[test]
     fn roundtrips_all_position_variants() {
+        let public_position = PublicPosition {
+            checkpoint: 11,
+            transaction_index: 2,
+            event_index: 13,
+        };
         for token in [
             CursorToken::item(Position::Checkpoints { checkpoint: 7 }),
             CursorToken::boundary(Position::Transactions {
                 checkpoint: 9,
                 tx_seq: 10,
             }),
+            CursorToken::boundary(Position::Transactions {
+                checkpoint: 9,
+                tx_seq: 10,
+            })
+            .with_public_position(Some(PublicPosition {
+                checkpoint: 9,
+                transaction_index: 4,
+                event_index: 0,
+            })),
             CursorToken::item(Position::Events {
                 checkpoint: 11,
                 tx_seq: 12,
                 event_index: 13,
             }),
+            CursorToken::item(Position::Events {
+                checkpoint: 11,
+                tx_seq: 12,
+                event_index: 13,
+            })
+            .with_public_position(Some(public_position)),
+            // A position at genesis encodes as an empty message, still present.
+            CursorToken::boundary(Position::Events {
+                checkpoint: 0,
+                tx_seq: 0,
+                event_index: 0,
+            })
+            .with_public_position(Some(PublicPosition::default())),
         ] {
-            assert_eq!(CursorToken::decode(&token.encode()).unwrap(), token);
+            let bytes = token.encode();
+            let decoded = CursorToken::decode(&bytes).unwrap();
+            assert_eq!(decoded, token);
+            assert_eq!(decoded.encode(), bytes, "re-encoding keeps the bytes");
         }
     }
 
@@ -264,6 +353,7 @@ mod tests {
     fn rejects_unspecified_kind() {
         let bytes = grpc::CursorToken {
             kind: grpc::CursorKind::Unspecified as i32,
+            public_position: None,
             position: Some(grpc::cursor_token::Position::Transactions(
                 grpc::TransactionsPosition {
                     checkpoint: Some(1),
@@ -280,6 +370,7 @@ mod tests {
     fn rejects_missing_position() {
         let bytes = grpc::CursorToken {
             kind: grpc::CursorKind::Item as i32,
+            public_position: Some(grpc::PublicPosition::default()),
             position: None,
         }
         .encode_to_vec();
@@ -291,6 +382,7 @@ mod tests {
     fn rejects_missing_inner_fields() {
         let bytes = grpc::CursorToken {
             kind: grpc::CursorKind::Item as i32,
+            public_position: None,
             position: Some(grpc::cursor_token::Position::Events(grpc::EventsPosition {
                 checkpoint: Some(1),
                 tx_seq: Some(2),
@@ -300,6 +392,53 @@ mod tests {
         .encode_to_vec();
 
         assert!(CursorToken::decode(&bytes).is_err());
+    }
+
+    /// Transaction and event cursors minted without a checkpoint decode with checkpoint 0. A
+    /// checkpoint cursor's checkpoint is its position, so it stays required.
+    #[test]
+    fn decodes_cursors_without_a_checkpoint() {
+        let token = |position| {
+            grpc::CursorToken {
+                kind: grpc::CursorKind::Boundary as i32,
+                public_position: None,
+                position: Some(position),
+            }
+            .encode_to_vec()
+        };
+
+        let transactions = token(grpc::cursor_token::Position::Transactions(
+            grpc::TransactionsPosition {
+                checkpoint: None,
+                tx_seq: Some(10),
+            },
+        ));
+        assert_eq!(
+            CursorToken::decode(&transactions).unwrap(),
+            CursorToken::boundary(Position::Transactions {
+                checkpoint: 0,
+                tx_seq: 10,
+            })
+        );
+
+        let events = token(grpc::cursor_token::Position::Events(grpc::EventsPosition {
+            checkpoint: None,
+            tx_seq: Some(10),
+            event_index: Some(3),
+        }));
+        assert_eq!(
+            CursorToken::decode(&events).unwrap(),
+            CursorToken::boundary(Position::Events {
+                checkpoint: 0,
+                tx_seq: 10,
+                event_index: 3,
+            })
+        );
+
+        let checkpoints = token(grpc::cursor_token::Position::Checkpoints(
+            grpc::CheckpointsPosition { checkpoint: None },
+        ));
+        assert!(CursorToken::decode(&checkpoints).is_err());
     }
 
     #[test]

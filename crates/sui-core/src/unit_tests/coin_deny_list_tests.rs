@@ -9,6 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::sync::Arc;
+use sui_macros::sim_test;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr};
@@ -29,7 +30,7 @@ use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 
 // Test that a regulated coin can be created and all the necessary objects are created with the right types.
 // Make sure that these types can be converted to Rust types.
-#[tokio::test]
+#[sim_test]
 async fn test_regulated_coin_v1_creation() {
     let env = new_authority_and_publish("coin_deny_list_v1").await;
 
@@ -79,7 +80,7 @@ async fn test_regulated_coin_v1_creation() {
 
 // Test that a v2 regulated coin can be created and all the necessary objects are created with the right types.
 // Also test that we could create the deny list config for the coin and all types can be loaded in Rust.
-#[tokio::test]
+#[sim_test]
 async fn test_regulated_coin_v2_types() {
     let env = new_authority_and_publish("coin_deny_list_v2").await;
 
@@ -212,7 +213,7 @@ async fn test_regulated_coin_v2_types() {
 
 // Test that a denied address cannot sign a transaction that withdraws regulated coin funds
 // using the funds withdrawal argument in programmable transactions.
-#[tokio::test]
+#[sim_test]
 async fn test_regulated_coin_v2_funds_withdraw_deny() {
     telemetry_subscribers::init_for_testing();
     let env = new_authority_and_publish("coin_deny_list_v2").await;

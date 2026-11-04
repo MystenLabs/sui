@@ -6,6 +6,7 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 pub(crate) mod checked {
 
+    use crate::accumulator_settlement;
     use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
     use crate::gas_charger::{PaymentKind, PaymentMethod};
@@ -1691,19 +1692,13 @@ pub(crate) mod checked {
                 trace_builder_opt,
             ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
-                SPT::execute::<execution_mode::System<Mode::Error>>(
+                accumulator_settlement::execute::<Mode::Error>(
                     protocol_config,
-                    metrics,
-                    move_vm,
                     temporary_store,
-                    store,
-                    tx_ctx,
-                    gas_charger,
-                    None,
+                    &tx_ctx.borrow(),
                     pt,
-                    trace_builder_opt,
                 )
-                .map_err(|(e, _)| (e, vec![]))?;
+                .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {

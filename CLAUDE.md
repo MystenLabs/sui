@@ -141,6 +141,12 @@ Note in the PR description which downstream consumers were updated.
 
 When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
 
+### Prose (including code comments)
+
+1. Prose should almost always be sentances that have a noun and a verb.
+2. Adjectives should be used only when they are necessary for correct meaning.
+3. Do not use analogies or metaphors.
+
 ### Comment Writing Guidelines
 
 **Do NOT comment the obvious** - comments should not simply repeat what the code does.

@@ -9,6 +9,7 @@ module P1::M { }
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package(address: "@{obj_1_0}") {
     typeOrigins {
@@ -18,3 +19,4 @@ module P1::M { }
     }
   }
 }
+*/

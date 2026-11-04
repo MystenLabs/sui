@@ -104,12 +104,11 @@ pub enum KeyToolCommand {
         #[clap(long, default_value = "0")]
         cur_epoch: u64,
     },
-    // TODO: document mldsa65 for generate/import once its key derivation lands.
-    /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1 | mldsa65}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
-    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word
-    /// length can be { word12 | word15 | word18 | word21 | word24} default to word12
-    /// if not specified.
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1 or
+    /// m/94'/784'/0'/0'/0' for mldsa65. Word length can be { word12 | word15 | word18 |
+    /// word21 | word24} default to word12 if not specified.
     ///
     /// The keypair file is output to the current directory. The content of the file is
     /// a Base64 encoded string of 33-byte `flag || privkey`.
@@ -122,11 +121,11 @@ pub enum KeyToolCommand {
     },
 
     /// Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32 encoded 33-byte
-    /// `flag || privkey` starting with "suiprivkey", the key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// `flag || privkey` starting with "suiprivkey", the key scheme flag {ed25519 | secp256k1 | secp256r1 | mldsa65}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0
-    /// for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15,
-    /// 18, 21, 24. Set an alias for the key with the --alias flag. If no alias is provided, the tool will
-    /// automatically generate one.
+    /// for secp256k1 or m/74'/784'/0'/0/0 for secp256r1 or m/94'/784'/0'/0'/0' for mldsa65. Supports
+    /// mnemonic phrase of word length 12, 15, 18, 21, 24. Set an alias for the key with the --alias flag.
+    /// If no alias is provided, the tool will automatically generate one.
     Import {
         /// Sets an alias for this address. The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
         #[clap(long)]
@@ -169,9 +168,7 @@ pub enum KeyToolCommand {
     /// result can be used as signature field for `sui client execute-signed-tx`. The sum
     /// of weights of all signatures must be >= the threshold.
     ///
-    /// The order of `sigs` must be the same as the order of `pks`.
-    /// e.g. for [pk1, pk2, pk3, pk4, pk5], [sig1, sig2, sig5] is valid, but
-    /// [sig2, sig1, sig5] is invalid.
+    /// The `sigs` may be given in any order.
     MultiSigCombinePartialSig {
         #[clap(long, num_args(1..))]
         sigs: Vec<GenericSignature>,
@@ -1447,7 +1444,8 @@ impl Display for CommandOutput {
                 write!(formatter, "{}", table)
             }
             _ => {
-                let json_obj = json![self];
+                let mut json_obj = json![self];
+                abbreviate_mldsa65_keys(&mut json_obj);
                 let mut table = json_to_table(&json_obj);
                 let style = tabled::settings::Style::rounded().horizontals([]);
                 table.with(style);
@@ -1455,6 +1453,38 @@ impl Display for CommandOutput {
                 write!(formatter, "{}", table)
             }
         }
+    }
+}
+
+// A base64 ML-DSA-65 public key is 2,604 chars vs. 44 for Ed25519. In the table the
+// cell wraps into 17 lines and every other cell in the row is padded to match, so for that
+// scheme only the pretty view shows the ends of the key so we abbreviate mldsa key with a
+// left that --json flag can show the whole key if needed
+const ABBREVIATED_KEY_EDGE: usize = 16;
+
+fn abbreviate_mldsa65_keys(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            let is_mldsa65 = map.get("keyScheme").and_then(|v| v.as_str()) == Some("mldsa65");
+            for (key, inner) in map.iter_mut() {
+                if is_mldsa65 && key == "publicBase64Key" {
+                    if let serde_json::Value::String(encoded) = inner
+                        && encoded.len() > 2 * ABBREVIATED_KEY_EDGE
+                    {
+                        *encoded = format!(
+                            "{}...{} ({} chars, add --json for the full key)",
+                            &encoded[..ABBREVIATED_KEY_EDGE],
+                            &encoded[encoded.len() - ABBREVIATED_KEY_EDGE..],
+                            encoded.len()
+                        );
+                    }
+                } else {
+                    abbreviate_mldsa65_keys(inner);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(abbreviate_mldsa65_keys),
+        _ => {}
     }
 }
 

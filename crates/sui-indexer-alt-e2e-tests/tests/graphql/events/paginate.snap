@@ -46,14 +46,14 @@ task 6, line 66:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 7, lines 68-103:
+task 7, lines 68-105:
 //# run-graphql
 Response: {
   "data": {
     "allEvents": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAQYCQ==",
+        "startCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
+        "endCursor": "AAEBDigCQgYIAhAHGABKAggCAQECAAAAAAAAAAAAAAAAAAAAAAAAAA==",
         "hasNextPage": false,
         "hasPreviousPage": false
       },
@@ -153,8 +153,8 @@ Response: {
     },
     "eventsHasNext": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
+        "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -177,8 +177,8 @@ Response: {
     },
     "eventsHasPrevious": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAQYCA==",
-        "endCursor": "KAFCBggAEAQYCQ==",
+        "startCursor": "AAEBEigBQgYIARAEGAhKBggBEAMYCAEAAQAAAAAAAAADAAAAAAAAAAgAAAA=",
+        "endCursor": "AAEBEigBQgYIARAEGAlKBggBEAMYCQEAAQAAAAAAAAADAAAAAAAAAAkAAAA=",
         "hasNextPage": false,
         "hasPreviousPage": true
       },
@@ -202,8 +202,8 @@ Response: {
   }
 }
 
-task 8, lines 105-113:
-//# run-graphql --cursors {"t":2,"e":0}
+task 8, lines 107-117:
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8)
 Response: {
   "data": {
     "eventsAfterT2E0HasPreviousPage": {
@@ -215,8 +215,8 @@ Response: {
   }
 }
 
-task 9, lines 115-123:
-//# run-graphql --cursors {"t":4,"e":9}
+task 9, lines 119-129:
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,4u8,24u8,9u8)
 Response: {
   "data": {
     "eventsBeforeT3E9HasNextPage": {
@@ -228,8 +228,8 @@ Response: {
   }
 }
 
-task 10, lines 125-150:
-//# run-graphql --cursors {"t":2,"e":0} {"t":4,"e":9}
+task 10, lines 131-158:
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8) bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,4u8,24u8,9u8)
 Response: {
   "data": {
     "firstEventBetweenT2E0AndT4E9": {
@@ -260,14 +260,14 @@ Response: {
   }
 }
 
-task 11, lines 153-168:
-//# run-graphql --cursors {"t":2,"e":0}
+task 11, lines 161-178:
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,2u8,24u8,0u8)
 Response: {
   "data": {
     "eventsAfterTransaction2AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAMYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
+        "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": true
       },
@@ -284,14 +284,14 @@ Response: {
   }
 }
 
-task 12, lines 170-185:
-//# run-graphql --cursors {"t":3,"e":0}
+task 12, lines 180-197:
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,3u8,24u8,0u8)
 Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAIYAA==",
+        "startCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
+        "endCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -308,14 +308,14 @@ Response: {
   }
 }
 
-task 13, lines 187-202:
-//# run-graphql --cursors {"t":3,"e":1}
+task 13, lines 199-216:
+//# run-graphql --cursors bcs(40u8,1u8,66u8,6u8,8u8,0u8,16u8,3u8,24u8,1u8)
 Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent1FromBack": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "AAEBDCgCQgYIABAAGABKAAEBAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
         "hasNextPage": true,
         "hasPreviousPage": false
       },

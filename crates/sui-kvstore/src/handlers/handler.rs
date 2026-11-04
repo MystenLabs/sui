@@ -28,9 +28,6 @@ pub trait BigTableProcessor: Processor<Value = Entry> {
     /// The BigTable table to write rows to.
     const TABLE: &'static str;
 
-    /// Minimum rows before eager commit (default: 50).
-    const MIN_EAGER_ROWS: usize = 50;
-
     /// Maximum pending rows before back-pressure kicks in (default: 1000).
     const MAX_PENDING_ROWS: usize = 1000;
 }
@@ -116,7 +113,6 @@ where
     type Store = BigTableStore;
     type Batch = BigTableBatch;
 
-    const MIN_EAGER_ROWS: usize = P::MIN_EAGER_ROWS;
     const MAX_PENDING_ROWS: usize = P::MAX_PENDING_ROWS;
 
     fn batch(

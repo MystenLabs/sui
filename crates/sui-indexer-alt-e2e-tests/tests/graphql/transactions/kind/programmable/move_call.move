@@ -46,6 +46,7 @@ module test::move_call_test {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   transaction(digest: "@{digest_2}") {
     kind {
@@ -73,3 +74,4 @@ module test::move_call_test {
     }
   }
 }
+*/

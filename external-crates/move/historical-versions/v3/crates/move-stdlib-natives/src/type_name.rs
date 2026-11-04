@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{
-    gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
-    language_storage::TypeTag,
-};
+use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag};
 use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
@@ -26,7 +23,7 @@ const E_NON_MODULE_TYPE: u64 = 0;
 #[derive(Debug, Clone)]
 pub struct GetGasParameters {
     pub base: InternalGas,
-    pub per_byte: InternalGasPerByte,
+    pub per_byte: InternalGas,
 }
 
 #[derive(Debug, Clone)]
@@ -67,7 +64,7 @@ fn native_get(
     // Charge base fee
     native_charge_gas_early_exit!(
         context,
-        gas_params.per_byte * NumBytes::new(type_name.len() as u64)
+        gas_params.per_byte.saturating_mul(type_name.len() as u64)
     );
 
     // make a std::string::String

@@ -36,10 +36,11 @@ use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
 use parking_lot::Mutex;
 use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+    Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_gauge_with_registry, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 use serde::{Deserialize, Serialize};
 use shared_object_version_manager::AssignedVersions;
@@ -292,6 +293,13 @@ pub struct AuthorityMetrics {
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
     pub(crate) consensus_handler_duplicate_tx_count: Histogram,
+    pub(crate) staggered_submission_excess_copies: Histogram,
+    pub(crate) staggered_submission_signal_band: IntGauge,
+    pub(crate) staggered_submission_active: IntGauge,
+    pub(crate) staggered_submission_signal_transitions: IntCounterVec,
+    pub(crate) staggered_submission_commit_copies: IntCounterVec,
+    pub(crate) staggered_submission_band_duration_commits: HistogramVec,
+    pub(crate) staggered_submission_duplication_ratio: Gauge,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -601,6 +609,53 @@ impl AuthorityMetrics {
                 "consensus_handler_duplicate_tx_count",
                 "Number of times each transaction appears in its first consensus commit",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_excess_copies: register_histogram_with_registry!(
+                "staggered_submission_excess_copies",
+                "Excess copies per commit of transactions without allowed proposers. Copies seen in earlier commits count while the transaction is cached.",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_signal_band: register_int_gauge_with_registry!(
+                "staggered_submission_signal_band",
+                "Current band of the duplication signal. 0 is off and higher bands hold submissions longer. Staggering follows the band only when both the protocol flag and the node config enable it.",
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_active: register_int_gauge_with_registry!(
+                "staggered_submission_active",
+                "1 if this validator staggers submissions of transactions without allowed proposers, else 0. It stays 0 while the signal runs in dry run.",
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_signal_transitions: register_int_counter_vec_with_registry!(
+                "staggered_submission_signal_transitions",
+                "Number of duplication-signal transitions, labeled by the band entered",
+                &["state"],
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_commit_copies: register_int_counter_vec_with_registry!(
+                "staggered_submission_commit_copies",
+                "User transaction copies in commits, by kind. unique counts first copies. excess counts copies past the paid allowance. paid_duplicate counts copies within the allowance. restricted_duplicate counts copies of transactions with allowed proposers.",
+                &["kind"],
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_band_duration_commits: register_histogram_vec_with_registry!(
+                "staggered_submission_band_duration_commits",
+                "Commits the duplication signal spent in a band before leaving it, by band left",
+                &["band"],
+                prometheus::exponential_buckets(1.0, 2.0, 18).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_duplication_ratio: register_gauge_with_registry!(
+                "staggered_submission_duplication_ratio",
+                "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window, compared against the band enter/exit ratios",
                 registry,
             )
             .unwrap(),
@@ -1164,11 +1219,9 @@ impl AuthorityState {
     /// or sees a transaction from consensus. Performs the same types of checks as
     /// transaction signing, but does not explicitly sign the transaction.
     /// Note that if the transaction has been executed, we still go through the
-    /// same checks. If the transaction has only been executed through mysticeti fastpath,
-    /// but not yet finalized, the signing will still work since the objects are still available.
-    /// But if the transaction has been finalized, the signing will fail.
-    /// TODO(mysticeti-fastpath): Assess whether we want to optimize the case when the transaction
-    /// has already been finalized executed.
+    /// same checks, which fail if the transaction consumed owned input versions.
+    /// TODO: Assess whether we want to optimize the case when the transaction
+    /// has already been executed.
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
     pub fn handle_vote_transaction(
         &self,
@@ -1977,8 +2030,11 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        let system_object_versions = execution_env.assigned_versions.system_object_versions;
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
+        let system_object_versions = execution_env
+            .assigned_versions
+            .system_object_versions
+            .clone();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
@@ -3154,6 +3210,7 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             &self.config.expensive_safety_check_config,
+            &self.config,
             self.checkpoint_store
                 .get_epoch_last_checkpoint(epoch_store.epoch())
                 .unwrap()
@@ -4833,6 +4890,7 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             expensive_safety_check_config,
+            &self.config,
             epoch_last_checkpoint,
             self.config.fullnode_sync_mode,
         )?;

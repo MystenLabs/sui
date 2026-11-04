@@ -301,6 +301,28 @@ async fn wait_for_watermark_at_least(store: &BigTableStore, checkpoint: u64) -> 
     }
 }
 
+/// Waits until the store's durable progress for [`PIPELINE`] reaches `checkpoint`. The
+/// generation worker records progress on its own task, so it can trail the row writes that
+/// tests observe through the mock.
+async fn wait_for_durable_progress_at_least(
+    store: &BigTableStore,
+    checkpoint: u64,
+) -> CommitterWatermark {
+    let mut progress = store.durable_progress().subscribe();
+    let watermarks = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        progress.wait_for(|watermarks| {
+            watermarks
+                .get(PIPELINE)
+                .is_some_and(|w| w.checkpoint_hi_inclusive >= checkpoint)
+        }),
+    )
+    .await
+    .unwrap_or_else(|_| panic!("timed out waiting for durable progress checkpoint {checkpoint}"))
+    .unwrap();
+    watermarks[PIPELINE]
+}
+
 async fn wait_for_bitmap(mock: &MockBigtableServer, row_key: &[u8]) -> RoaringBitmap {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
@@ -363,6 +385,7 @@ async fn writes_partial_bucket_and_advances_watermark() {
     assert!(bm.contains(0));
     assert!(bm.contains(5));
     assert_eq!(persisted.checkpoint_hi_inclusive, 0);
+    assert_eq!(wait_for_durable_progress_at_least(&store, 0).await, w);
 }
 
 /// `Handler::commit` returns a *lagging* count of rows BigTable accepted since
@@ -873,6 +896,11 @@ async fn watermark_writer_retries_after_cas_failure() {
     assert_eq!(persisted.checkpoint_hi_inclusive, 1);
     let bm = wait_for_bitmap(&mock, row_key).await;
     assert!(bm.contains(1));
+    // Promotion records the watermark as durable progress, independent of the failed CAS.
+    assert_eq!(
+        wait_for_durable_progress_at_least(&store, 1).await,
+        watermark(1, 10, 1000),
+    );
 }
 
 async fn persisted_bucket_start_cp(mock: &MockBigtableServer) -> Option<u64> {
@@ -1454,4 +1482,149 @@ async fn commit_bitmap_batch_panics_when_committer_not_registered() {
             .scope_boxed()
         })
         .await;
+}
+
+/// Non-bitmap sequential pipeline: its staged watermark is flushed synchronously by
+/// `SequentialStore::transaction` rather than by a bitmap committer.
+const SEQUENTIAL_PIPELINE: &str = "test_sequential";
+
+/// `SequentialStore::transaction` records the staged watermark as durable progress once the
+/// closure succeeds, before the watermark row is written: the closure's rows are durable whether
+/// that write succeeds, fails, or loses its CAS to another writer.
+#[tokio::test]
+async fn transaction_records_durable_progress_once_closure_succeeds() {
+    let (mock, store, mut client) = setup_without_init_watermark().await;
+    store
+        .connect()
+        .await
+        .unwrap()
+        .init_watermark(SEQUENTIAL_PIPELINE, None)
+        .await
+        .unwrap();
+    let mut progress = store.durable_progress().subscribe();
+
+    // Closure fails: the staged watermark is discarded and nothing is recorded.
+    let err = store
+        .transaction(move |conn| {
+            async move {
+                conn.set_committer_watermark(SEQUENTIAL_PIPELINE, watermark(1, 10, 1000))
+                    .await?;
+                Err::<(), _>(anyhow::anyhow!("closure failed"))
+            }
+            .scope_boxed()
+        })
+        .await
+        .expect_err("closure error must propagate");
+    assert!(err.to_string().contains("closure failed"), "{err}");
+    assert!(!progress.has_changed().unwrap());
+    assert!(progress.borrow().get(SEQUENTIAL_PIPELINE).is_none());
+
+    // Closure succeeds but the watermark write fails: the error propagates, and the staged
+    // watermark is still recorded because the closure's rows are durable.
+    mock.fail_next_n_check_and_mutate(1);
+    let unwritten = watermark(1, 10, 1000);
+    store
+        .transaction(move |conn| {
+            async move {
+                conn.set_committer_watermark(SEQUENTIAL_PIPELINE, unwritten)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .expect_err("watermark write failure must propagate");
+    assert!(progress.has_changed().unwrap());
+    assert_eq!(progress.borrow_and_update()[SEQUENTIAL_PIPELINE], unwritten);
+
+    // Closure and write succeed: the staged watermark is recorded.
+    let advanced = watermark(2, 20, 2000);
+    store
+        .transaction(move |conn| {
+            async move {
+                conn.set_committer_watermark(SEQUENTIAL_PIPELINE, advanced)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .unwrap();
+    assert!(progress.has_changed().unwrap());
+    assert_eq!(progress.borrow_and_update()[SEQUENTIAL_PIPELINE], advanced);
+
+    // Another writer advances the stored row past this process. The flush's CAS loses and
+    // writes nothing, but the closure's rows are durable, so the staged watermark is still
+    // recorded.
+    let other_writer = watermark(10, 100, 10_000);
+    assert!(
+        client
+            .set_committer_watermark_cells(SEQUENTIAL_PIPELINE, &other_writer, None)
+            .await
+            .unwrap()
+    );
+    let behind = watermark(3, 30, 3000);
+    store
+        .transaction(move |conn| {
+            async move {
+                conn.set_committer_watermark(SEQUENTIAL_PIPELINE, behind)
+                    .await?;
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
+        .unwrap();
+    assert!(progress.has_changed().unwrap());
+    assert_eq!(progress.borrow_and_update()[SEQUENTIAL_PIPELINE], behind);
+    let stored = store
+        .connect()
+        .await
+        .unwrap()
+        .committer_watermark(SEQUENTIAL_PIPELINE)
+        .await
+        .unwrap();
+    assert_eq!(stored, Some(other_writer));
+}
+
+/// Outside a transaction, `set_committer_watermark` records its watermark before writing it, so
+/// the watermark is recorded whether the write succeeds, fails, or loses its CAS.
+#[tokio::test]
+async fn set_committer_watermark_records_durable_progress_before_writing() {
+    let (mock, store, mut client) = setup_without_init_watermark().await;
+    let mut conn = store.connect().await.unwrap();
+    conn.init_watermark(SEQUENTIAL_PIPELINE, None)
+        .await
+        .unwrap();
+    let mut progress = store.durable_progress().subscribe();
+
+    let first = watermark(5, 50, 5000);
+    assert!(
+        conn.set_committer_watermark(SEQUENTIAL_PIPELINE, first)
+            .await
+            .unwrap()
+    );
+    assert_eq!(progress.borrow_and_update()[SEQUENTIAL_PIPELINE], first);
+
+    // The write fails: the error propagates, and the watermark is still recorded because the
+    // framework only hands over watermarks whose data rows are durable.
+    mock.fail_next_n_check_and_mutate(1);
+    let unwritten = watermark(6, 60, 6000);
+    conn.set_committer_watermark(SEQUENTIAL_PIPELINE, unwritten)
+        .await
+        .expect_err("watermark write failure must propagate");
+    assert_eq!(progress.borrow_and_update()[SEQUENTIAL_PIPELINE], unwritten);
+
+    client
+        .set_committer_watermark_cells(SEQUENTIAL_PIPELINE, &watermark(10, 100, 10_000), None)
+        .await
+        .unwrap();
+    let behind = watermark(7, 70, 7000);
+    assert!(
+        !conn
+            .set_committer_watermark(SEQUENTIAL_PIPELINE, behind)
+            .await
+            .unwrap()
+    );
+    assert_eq!(progress.borrow()[SEQUENTIAL_PIPELINE], behind);
 }

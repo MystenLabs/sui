@@ -2496,6 +2496,14 @@ pub struct AllowedProposers {
 /// offline, so this is a floor as much as it is an allowance.
 pub const MAX_UNPAID_ALLOWED_PROPOSERS: u64 = 3;
 
+/// SIP-45: the number of consensus submissions a gas price pays for. Every transaction may
+/// be proposed by `MAX_UNPAID_ALLOWED_PROPOSERS` validators; a gas price of `n` times the
+/// reference price buys `n`. The single definition behind sizing an explicit proposer set,
+/// the immediate slots of staggered submission, and the deferral of unpaid duplicates.
+pub fn paid_proposer_count(gas_price: u64, reference_gas_price: u64) -> u64 {
+    MAX_UNPAID_ALLOWED_PROPOSERS.max(gas_price / reference_gas_price.max(1))
+}
+
 impl TransactionExpiration {
     /// Validators remember all executed transaction digests from the current and previous
     /// epoch. Therefore, a one or two epoch validity window provides replay protection.
@@ -3468,9 +3476,9 @@ impl TransactionDataAPI for TransactionDataV1 {
                     // No gas price buys more proposers than there are validators.
                     //
                     // Checked first, so that everything below walks a bounded list.
-                    let max_proposers = MAX_UNPAID_ALLOWED_PROPOSERS
-                        .max(self.gas_data.price / context.reference_gas_price.max(1))
-                        .min(context.committee_size as u64);
+                    let max_proposers =
+                        paid_proposer_count(self.gas_data.price, context.reference_gas_price)
+                            .min(context.committee_size as u64);
                     fp_ensure!(
                         proposers.len() as u64 <= max_proposers,
                         UserInputError::InvalidExpiration {

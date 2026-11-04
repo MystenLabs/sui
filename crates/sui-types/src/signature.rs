@@ -76,8 +76,8 @@ impl VerifyParams {
         }
     }
 
-    /// Whether an ML-DSA-65 member's signature inside a multisig is accepted.
-    /// Off by default: only the validator path turns it on, from the
+    /// Whether ML-DSA-65 signatures are accepted, standalone or as a multisig
+    /// member. Off by default: only the validator path turns it on, from the
     /// `mldsa65_auth` protocol flag, so client-side verifiers match validators
     /// until the scheme is enabled.
     pub fn with_mldsa65_in_multisig(mut self, accept: bool) -> Self {
@@ -361,12 +361,20 @@ impl AuthenticatorTrait for Signature {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
+        verify_params: &VerifyParams,
         _zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> SuiResult
     where
         T: Serialize,
     {
+        // Same gate as the multisig member check, so the ML-DSA verifier never runs on a
+        // network that has not enabled the scheme. Fullnodes verify before `validity_check`.
+        if self.scheme() == SignatureScheme::MLDSA65 && !verify_params.accept_mldsa65_in_multisig {
+            return Err(SuiErrorKind::InvalidSignature {
+                error: "ML-DSA-65 signatures not supported".to_string(),
+            }
+            .into());
+        }
         self.verify_secure(value, author, self.scheme())
     }
 }

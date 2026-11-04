@@ -15,7 +15,7 @@ fn serialize_and_deserialize_nested_types_max() {
     let mut ty = SignatureToken::Datatype(DatatypeHandleIndex::new(0));
     for _ in 1..SIGNATURE_TOKEN_DEPTH_MAX {
         ty = SignatureToken::Vector(Box::new(ty));
-        let mut binary = BinaryData::new();
+        let mut binary = BinaryData::new_for_test();
         serialize_signature_token(&mut binary, &ty).expect("serialization should succeed");
 
         let cursor = Cursor::new(binary.as_inner());
@@ -33,10 +33,10 @@ fn serialize_nested_types_too_deep() {
     for _ in 0..10 {
         ty = SignatureToken::Vector(Box::new(ty));
 
-        let mut binary = BinaryData::new();
+        let mut binary = BinaryData::new_for_test();
         serialize_signature_token(&mut binary, &ty).expect_err("serialization should fail");
 
-        let mut binary = BinaryData::new();
+        let mut binary = BinaryData::new_for_test();
         serialize_signature_token_unchecked(&mut binary, &ty)
             .expect("serialization (unchecked) should succeed");
 

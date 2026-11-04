@@ -1,0 +1,68 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+// `clock::borrow` reads the Clock without it being a transaction input: the
+// timestamp follows the clock as it advances, agrees with an explicitly passed
+// Clock, and is readable from a function written against `&Clock`.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-37:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 39:
+//# run test::m::record --sender A
+created: object(2,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, line 41:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::Stamp {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    timestamp_ms: 0u64,
+}
+
+task 5, line 45:
+//# run test::m::record --sender A
+created: object(5,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, line 47:
+//# view-object 5,0
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::Stamp {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    timestamp_ms: 1500u64,
+}
+
+task 7, line 49:
+//# run test::m::assert_matches --args immshared(6) --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 8, line 51:
+//# run test::m::read_then_abort --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::read_then_abort (function index 3) at offset 4, Abort Code: 42
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 4, function_name: Some("read_then_abort") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("test::m::read_then_abort at offset 4"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 4)] }), command: Some(0) } }

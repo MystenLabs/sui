@@ -24,6 +24,7 @@
 //! can be sliced by call-site type. Per-request peak permits and successful
 //! acquisition count are recorded once on `BigTableClientContext` drop.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -52,8 +53,10 @@ use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
+use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::ledger_point::RowPlacement;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -61,6 +64,8 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
+
+use crate::pipeline::PlacedFrontier;
 
 /// Stage label values for the permit timing metrics. `&'static str` so they
 /// satisfy `with_label_values` zero-allocation.
@@ -311,19 +316,47 @@ impl BigTableClient {
         .await
     }
 
-    pub(crate) async fn resolve_tx_checkpoints(
+    /// Read the tx_sequence_number of each of `checkpoints`' first transaction in one call, and
+    /// return a lookup over them, as `CheckpointPositions` windows take it. Looking up a
+    /// checkpoint outside `checkpoints` is `Internal`.
+    pub(crate) async fn checkpoint_tx_boundaries(
         &self,
-        tx_sequence_numbers: &[u64],
-    ) -> Result<Vec<(u64, CheckpointSequenceNumber)>, RpcError> {
+        checkpoints: Vec<u64>,
+    ) -> Result<impl Fn(u64) -> Result<u64, RpcError> + use<>, RpcError> {
+        let mut inner = self.inner.clone();
+        let boundaries: HashMap<u64, u64> = self
+            .call_gated(
+                stage::CHECKPOINTS,
+                inner.checkpoint_tx_boundaries(&checkpoints),
+            )
+            .await?;
+        Ok(move |checkpoint| {
+            boundaries.get(&checkpoint).copied().ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("tx boundary of checkpoint {checkpoint} was not read"),
+                )
+            })
+        })
+    }
+
+    /// Read one transaction's checkpoint and offset within it from
+    /// `tx_seq_digest` (only those two columns) under a `tx_cp_resolve`
+    /// permit, `None` when it has no row.
+    pub(crate) async fn tx_checkpoint_position(
+        &self,
+        tx_seq: u64,
+    ) -> Result<Option<TxCheckpointPosition>, RpcError> {
         let mut inner = self.inner.clone();
         self.call_gated(
             stage::TX_CP_RESOLVE,
-            inner.resolve_tx_checkpoints(tx_sequence_numbers),
+            inner.resolve_tx_checkpoint_position(tx_seq),
         )
         .await
     }
 
-    /// Streaming variant of `resolve_tx_checkpoints`. The permit is held for the
+    /// Stream the checkpoint of each of `tx_sequence_numbers`, reading only the
+    /// checkpoint-number column of `tx_seq_digest`. The permit is held for the
     /// stream's lifetime (see `gate_stream`); rows arrive in BigTable order.
     pub(crate) async fn resolve_tx_checkpoints_stream(
         &self,
@@ -339,9 +372,21 @@ impl BigTableClient {
     }
 
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
-    /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
-    /// during filter validation. `pacing` decides which scan watermarks reach
-    /// the stream (see [`crate::operation::QueryContext::watermark_pacing`]).
+    /// semaphore; each unique stored dimension key in the query is one
+    /// concurrent Bigtable scan. Filter validation caps a request at
+    /// `max_bitmap_filter_literals` literals, and a transaction filter's
+    /// `AffectedAddress` literal also scans the `Sender` dimension, so one
+    /// request runs at most twice `max_bitmap_filter_literals` concurrent
+    /// Bigtable scans. The synthetic tx universe key is generated in memory
+    /// and never read from Bigtable. `pacing` decides which scan watermarks
+    /// reach the stream (see [`crate::operation::QueryContext::watermark_pacing`]).
+    ///
+    /// `budget` is raised to the query's unique leaf count when it is lower,
+    /// so every leaf stream can report its first bucket before `SCAN_LIMIT`.
+    /// Config validation keeps `budget >= max_bitmap_filter_literals`, but a
+    /// query can have more leaves than literals: a transaction filter's
+    /// `AffectedAddress` literal also scans the `Sender` dimension, and an
+    /// exclude-only term adds a synthetic universe include.
     pub(crate) fn eval_bitmap_query_stream<F>(
         &self,
         query: BitmapQuery,
@@ -356,6 +401,7 @@ impl BigTableClient {
     where
         F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
     {
+        let budget = budget.max(query.unique_leaf_count() as u64);
         let source = BigTableBitmapSource::new(self.inner.clone(), spec);
         eval_bitmap_query_stream(
             source,
@@ -413,18 +459,36 @@ impl BigTableClient {
         result.map_err(RpcError::from)
     }
 
-    async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<u64, RpcError> {
-        self.resolve_tx_checkpoints(&[tx_seq])
+    /// Place a scan frontier by the one `tx_seq_digest` row `placement` names
+    /// (see [`RowPlacement::transaction_boundary`] and
+    /// [`RowPlacement::event_boundary`]): `None`, without a read, for the
+    /// ascending genesis frontier, which covers no checkpoint and lies at
+    /// [`LedgerPoint::GENESIS`]. A missing row is `Internal`.
+    ///
+    /// [`LedgerPoint::GENESIS`]: sui_rpc_api::ledger_history::ledger_point::LedgerPoint::GENESIS
+    pub(crate) async fn place_frontier(
+        &self,
+        placement: Option<RowPlacement>,
+    ) -> Result<Option<PlacedFrontier>, RpcError> {
+        let Some(placement) = placement else {
+            return Ok(None);
+        };
+        let position = self
+            .tx_checkpoint_position(placement.tx_seq)
             .await?
-            .into_iter()
-            .next()
-            .map(|(_, cp)| cp)
             .ok_or_else(|| {
                 RpcError::new(
                     tonic::Code::Internal,
-                    format!("missing checkpoint mapping for transaction sequence number {tx_seq}"),
+                    format!(
+                        "missing checkpoint mapping for transaction sequence number {}",
+                        placement.tx_seq
+                    ),
                 )
-            })
+            })?;
+        Ok(Some(PlacedFrontier {
+            checkpoint: position.checkpoint_number,
+            point: placement.point(position.checkpoint_number, position.tx_offset as u64),
+        }))
     }
 
     /// Build a resolver closure for tx-bitmap watermarks (identity
@@ -437,18 +501,9 @@ impl BigTableClient {
         move |position| {
             let client = client.clone();
             Box::pin(async move {
-                let lookup_tx_seq = if direction.is_ascending() {
-                    match position.checked_sub(1) {
-                        Some(tx_seq) => tx_seq,
-                        None => return Ok(None),
-                    }
-                } else {
-                    position
-                };
                 client
-                    .tx_seq_checkpoint(lookup_tx_seq)
+                    .place_frontier(RowPlacement::transaction_boundary(position, direction))
                     .await
-                    .map(Some)
                     .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
@@ -464,22 +519,9 @@ impl BigTableClient {
         move |position| {
             let client = client.clone();
             Box::pin(async move {
-                let lookup_tx_seq = if direction.is_ascending() {
-                    if position.index > 0 {
-                        position.tx_seq
-                    } else {
-                        match position.tx_seq.checked_sub(1) {
-                            Some(tx_seq) => tx_seq,
-                            None => return Ok(None),
-                        }
-                    }
-                } else {
-                    position.tx_seq
-                };
                 client
-                    .tx_seq_checkpoint(lookup_tx_seq)
+                    .place_frontier(RowPlacement::event_boundary(position, direction))
                     .await
-                    .map(Some)
                     .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
@@ -489,7 +531,7 @@ impl BigTableClient {
 /// Future returned by resolver closures from
 /// [`BigTableClient::tx_wm_resolver`] and [`BigTableClient::event_wm_resolver`].
 pub(crate) type WmResolverFut =
-    std::pin::Pin<Box<dyn Future<Output = Result<Option<u64>, ScanStop>> + Send>>;
+    std::pin::Pin<Box<dyn Future<Output = Result<Option<PlacedFrontier>, ScanStop>> + Send>>;
 
 /// How a gated read ended, recorded once when its permit is released.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -627,6 +669,8 @@ mod tests {
     use prometheus::proto::MetricFamily;
 
     use super::*;
+    use sui_kvstore::tables::tx_seq_digest;
+    use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
 
     /// A `tx_cp_resolve` permit, plus the registry its metrics are recorded in.
     async fn test_permit(limiter: &Arc<Semaphore>) -> (LimitedPermit, Registry) {
@@ -755,20 +799,19 @@ mod tests {
         sui_kvstore::testing::insert_checkpoint_rows(&mock, &checkpoint).await;
         let client = ctx.client();
 
-        assert_eq!(
-            client.resolve_tx_checkpoints(&[0]).await.unwrap(),
-            vec![(0, 0)]
-        );
+        let position = client
+            .tx_checkpoint_position(0)
+            .await
+            .unwrap()
+            .expect("transaction 0 has a row");
+        assert_eq!((position.checkpoint_number, position.tx_offset), (0, 0));
         assert_eq!(reads_finished(&registry, "completed"), 1);
 
         // The mock holds its response far longer than the timeout, so the
         // read is still in flight when the timeout drops it.
         mock.set_read_rows_latency(Duration::from_secs(60)).await;
-        let in_flight = tokio::time::timeout(
-            Duration::from_millis(50),
-            client.resolve_tx_checkpoints(&[0]),
-        )
-        .await;
+        let in_flight =
+            tokio::time::timeout(Duration::from_millis(50), client.tx_checkpoint_position(0)).await;
         assert!(in_flight.is_err(), "the read should still be in flight");
         assert_eq!(reads_finished(&registry, "cancelled"), 1);
 
@@ -779,6 +822,92 @@ mod tests {
             .map(|m| m.get_counter().value())
             .sum();
         assert_eq!(started, 2.0);
+        server.abort();
+    }
+
+    /// Frontiers are placed by the one `tx_seq_digest` row their
+    /// [`RowPlacement`] names: ascending by the transaction before the boundary,
+    /// descending by the one after it. A frontier's row is always indexed.
+    /// Each read restricts the row to its `tx_offset` and checkpoint-number
+    /// columns.
+    #[tokio::test]
+    async fn places_frontiers_by_one_row() {
+        let (ctx, _registry, mock, server) =
+            crate::v2::test_utils::query_context_with_mock_and_registry("list_events", 2).await;
+        // Checkpoint 0 holds transactions 0 and 1, checkpoint 1 transaction 2.
+        let mut builder = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .finish_transaction()
+            .start_transaction(1)
+            .finish_transaction();
+        let first = builder.build_checkpoint();
+        let second = builder
+            .start_transaction(2)
+            .finish_transaction()
+            .build_checkpoint();
+        for checkpoint in [&first, &second] {
+            sui_kvstore::testing::insert_checkpoint_rows(&mock, checkpoint).await;
+        }
+        let client = ctx.client();
+        mock.clear_read_rows_calls().await;
+        let ascending = ScanDirection::Ascending;
+        let descending = ScanDirection::Descending;
+        let placed = |checkpoint, point| Some(PlacedFrontier { checkpoint, point });
+
+        for (placement, expected) in [
+            // After transaction 1, the last of checkpoint 0: an index past its end.
+            (
+                RowPlacement::transaction_boundary(2, ascending),
+                placed(0, LedgerPoint::transaction(0, 2)),
+            ),
+            (
+                RowPlacement::transaction_boundary(2, descending),
+                placed(1, LedgerPoint::transaction(1, 0)),
+            ),
+            (RowPlacement::transaction_boundary(0, ascending), None),
+            (
+                RowPlacement::event_boundary(
+                    IntraTxCoordinate {
+                        tx_seq: 1,
+                        index: 3,
+                    },
+                    ascending,
+                ),
+                placed(0, LedgerPoint::event(0, 1, 3)),
+            ),
+        ] {
+            assert_eq!(
+                client.place_frontier(placement).await.unwrap(),
+                expected,
+                "{placement:?}"
+            );
+        }
+        let missing = client
+            .place_frontier(RowPlacement::transaction_boundary(9, descending))
+            .await
+            .expect_err("a frontier's row is always indexed");
+        assert_eq!(
+            missing.into_status_proto().code,
+            tonic::Code::Internal as i32
+        );
+        let frontier_reads: Vec<_> = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == tx_seq_digest::NAME)
+            .collect();
+        // One read per non-genesis placement, the missing row included.
+        assert_eq!(frontier_reads.len(), 4, "{frontier_reads:?}");
+        for call in frontier_reads {
+            assert_eq!(
+                call.column_qualifiers
+                    .expect("frontier reads filter tx_seq_digest columns"),
+                [
+                    tx_seq_digest::col::CHECKPOINT_NUMBER.as_bytes(),
+                    tx_seq_digest::col::TX_OFFSET.as_bytes(),
+                ],
+            );
+        }
         server.abort();
     }
 

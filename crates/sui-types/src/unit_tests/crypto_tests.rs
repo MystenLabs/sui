@@ -222,6 +222,52 @@ fn mldsa65_verify_secure_intent_message() {
 }
 
 #[test]
+fn mldsa65_standalone_gated_by_verify_params() {
+    use crate::signature::VerifyParams;
+    use crate::signature_verification::VerifiedDigestCache;
+    use std::sync::Arc;
+
+    let kp = mldsa65_random_keypair();
+    let address: SuiAddress = (&kp.public()).into();
+    let msg = IntentMessage::new(Intent::sui_transaction(), Foo("mldsa65".to_string()));
+    let sig = GenericSignature::Signature(Signature::new_secure(&msg, &kp));
+    let verify = |params: &VerifyParams| {
+        sig.verify_authenticator(
+            &msg,
+            address,
+            0,
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+    };
+
+    // Default params match a network without the flag: rejected before the verifier runs.
+    let err = verify(&VerifyParams::default()).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("ML-DSA-65 signatures not supported"),
+        "{err}"
+    );
+    assert!(verify(&VerifyParams::default().with_mldsa65_in_multisig(true)).is_ok());
+
+    // Classical schemes are untouched by the gate.
+    let ed = SuiKeyPair::Ed25519(get_key_pair().1);
+    let ed_address: SuiAddress = (&ed.public()).into();
+    let ed_sig = GenericSignature::Signature(Signature::new_secure(&msg, &ed));
+    assert!(
+        ed_sig
+            .verify_authenticator(
+                &msg,
+                ed_address,
+                0,
+                &VerifyParams::default(),
+                Arc::new(VerifiedDigestCache::new_empty()),
+            )
+            .is_ok()
+    );
+}
+
+#[test]
 fn mldsa65_parses_as_generic_signature() {
     // Network acceptance is decided separately, by the `mldsa65_auth` gate in
     // `check_user_signature_protocol_compatibility`.

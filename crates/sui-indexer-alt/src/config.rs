@@ -6,6 +6,7 @@ use std::num::NonZeroUsize;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
+use sui_indexer_alt_framework::config::warn_ignored_config_key;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
@@ -70,6 +71,8 @@ pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
     pub fanout: Option<ConcurrencyConfig>,
+    /// Deprecated and ignored: batch size is controlled by the committer's `min-batch-rows` and
+    /// `max-batch-delay-ms`.
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
@@ -84,6 +87,8 @@ pub struct ConcurrentLayer {
     pub ingestion: Option<PipelineIngestionLayer>,
     pub pruner: Option<PrunerLayer>,
     pub fanout: Option<ConcurrencyConfig>,
+    /// Deprecated and ignored: batch size is controlled by the committer's `min-batch-rows` and
+    /// `max-batch-delay-ms`.
     pub min_eager_rows: Option<usize>,
     pub max_pending_rows: Option<usize>,
     pub max_watermark_updates: Option<usize>,
@@ -102,8 +107,19 @@ pub struct PipelineIngestionLayer {
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
-    pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
+
+    /// Minimum number of pending rows the collector waits for before cutting a batch. `0` cuts a
+    /// batch as soon as the committer has room for it.
+    pub min_batch_rows: Option<usize>,
+
+    /// Longest time, in milliseconds, the oldest pending row waits for `min-batch-rows` to
+    /// accumulate before a batch is cut anyway.
+    pub max_batch_delay_ms: Option<u64>,
+
+    /// Deprecated and ignored: batches are cut as soon as the committer has room; see
+    /// `min-batch-rows` and `max-batch-delay-ms`.
+    pub collect_interval_ms: Option<u64>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
@@ -172,9 +188,9 @@ impl IndexerConfig {
                     ..Default::default()
                 },
                 committer: CommitterLayer {
-                    collect_interval_ms: Some(50),
                     watermark_interval_ms: Some(50),
                     write_concurrency: Some(1),
+                    ..Default::default()
                 },
                 pruner: PrunerLayer {
                     interval_ms: Some(50),
@@ -219,6 +235,10 @@ impl IngestionLayer {
 
 impl SequentialLayer {
     pub fn finish(self, base: SequentialConfig) -> anyhow::Result<SequentialConfig> {
+        if self.min_eager_rows.is_some() {
+            warn_ignored_config_key("min-eager-rows");
+        }
+
         Ok(SequentialConfig {
             committer: if let Some(committer) = self.committer {
                 committer.finish(base.committer)?
@@ -231,7 +251,6 @@ impl SequentialLayer {
                 base.ingestion
             },
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
@@ -244,6 +263,10 @@ impl ConcurrentLayer {
     /// Unlike other parameters, `pruner` will appear in the finished configuration only if they
     /// appear in the layer *and* in the base.
     pub fn finish(self, base: ConcurrentConfig) -> anyhow::Result<ConcurrentConfig> {
+        if self.min_eager_rows.is_some() {
+            warn_ignored_config_key("min-eager-rows");
+        }
+
         Ok(ConcurrentConfig {
             committer: if let Some(committer) = self.committer {
                 committer.finish(base.committer)?
@@ -260,7 +283,6 @@ impl ConcurrentLayer {
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)?),
             },
             fanout: self.fanout.or(base.fanout),
-            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
             max_watermark_updates: self.max_watermark_updates.or(base.max_watermark_updates),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
@@ -282,13 +304,18 @@ impl PipelineIngestionLayer {
 
 impl CommitterLayer {
     pub fn finish(self, base: CommitterConfig) -> anyhow::Result<CommitterConfig> {
+        if self.collect_interval_ms.is_some() {
+            warn_ignored_config_key("collect-interval-ms");
+        }
+
         Ok(CommitterConfig {
             write_concurrency: self.write_concurrency.unwrap_or(base.write_concurrency),
-            collect_interval_ms: self.collect_interval_ms.unwrap_or(base.collect_interval_ms),
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
             watermark_interval_jitter_ms: 0,
+            min_batch_rows: self.min_batch_rows.unwrap_or(base.min_batch_rows),
+            max_batch_delay_ms: self.max_batch_delay_ms.unwrap_or(base.max_batch_delay_ms),
         })
     }
 }
@@ -416,8 +443,10 @@ impl Merge for CommitterLayer {
     fn merge(self, other: CommitterLayer) -> anyhow::Result<CommitterLayer> {
         Ok(CommitterLayer {
             write_concurrency: other.write_concurrency.or(self.write_concurrency),
-            collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
             watermark_interval_ms: other.watermark_interval_ms.or(self.watermark_interval_ms),
+            min_batch_rows: other.min_batch_rows.or(self.min_batch_rows),
+            max_batch_delay_ms: other.max_batch_delay_ms.or(self.max_batch_delay_ms),
+            collect_interval_ms: other.collect_interval_ms.or(self.collect_interval_ms),
         })
     }
 }
@@ -502,7 +531,7 @@ impl From<SequentialConfig> for SequentialLayer {
             committer: Some(config.committer.into()),
             ingestion: Some(config.ingestion.into()),
             fanout: config.fanout,
-            min_eager_rows: config.min_eager_rows,
+            min_eager_rows: None,
             max_pending_rows: config.max_pending_rows,
             max_batch_checkpoints: config.max_batch_checkpoints,
             processor_channel_size: config.processor_channel_size,
@@ -518,7 +547,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
             ingestion: Some(config.ingestion.into()),
             pruner: config.pruner.map(Into::into),
             fanout: config.fanout,
-            min_eager_rows: config.min_eager_rows,
+            min_eager_rows: None,
             max_pending_rows: config.max_pending_rows,
             max_watermark_updates: config.max_watermark_updates,
             processor_channel_size: config.processor_channel_size,
@@ -540,8 +569,10 @@ impl From<CommitterConfig> for CommitterLayer {
     fn from(config: CommitterConfig) -> Self {
         Self {
             write_concurrency: Some(config.write_concurrency),
-            collect_interval_ms: Some(config.collect_interval_ms),
             watermark_interval_ms: Some(config.watermark_interval_ms),
+            min_batch_rows: Some(config.min_batch_rows),
+            max_batch_delay_ms: Some(config.max_batch_delay_ms),
+            collect_interval_ms: None,
         }
     }
 }
@@ -579,17 +610,17 @@ mod tests {
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(10),
-                    collect_interval_ms: Some(1000),
-                    watermark_interval_ms: None,
+                    min_batch_rows: Some(1000),
+                    ..Default::default()
                 }),
-                min_eager_rows: Some(100),
+                max_pending_rows: Some(100),
                 ..Default::default()
             }),
             ev_emit_mod: Some(ConcurrentLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
-                    collect_interval_ms: Some(500),
-                    watermark_interval_ms: None,
+                    min_batch_rows: Some(500),
+                    ..Default::default()
                 }),
                 ..Default::default()
             }),
@@ -600,10 +631,10 @@ mod tests {
             sum_displays: Some(SequentialLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
-                    collect_interval_ms: None,
                     watermark_interval_ms: Some(500),
+                    ..Default::default()
                 }),
-                min_eager_rows: Some(200),
+                max_pending_rows: Some(200),
                 ..Default::default()
             }),
             ev_emit_mod: None,
@@ -619,17 +650,17 @@ mod tests {
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
-                        collect_interval_ms: Some(1000),
+                        min_batch_rows: Some(1000),
                         watermark_interval_ms: Some(500),
                         ..
                     }),
-                    min_eager_rows: Some(200),
+                    max_pending_rows: Some(200),
                     ..
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
-                        collect_interval_ms: Some(500),
+                        min_batch_rows: Some(500),
                         watermark_interval_ms: None,
                         ..
                     }),
@@ -646,17 +677,17 @@ mod tests {
                 sum_displays: Some(SequentialLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(10),
-                        collect_interval_ms: Some(1000),
+                        min_batch_rows: Some(1000),
                         watermark_interval_ms: Some(500),
                         ..
                     }),
-                    min_eager_rows: Some(100),
+                    max_pending_rows: Some(100),
                     ..
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
                     committer: Some(CommitterLayer {
                         write_concurrency: Some(5),
-                        collect_interval_ms: Some(500),
+                        min_batch_rows: Some(500),
                         watermark_interval_ms: None,
                         ..
                     }),
@@ -723,7 +754,7 @@ mod tests {
         let base = ConcurrentConfig {
             committer: CommitterConfig {
                 write_concurrency: 5,
-                collect_interval_ms: 50,
+                max_batch_delay_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
             },
@@ -736,7 +767,7 @@ mod tests {
             ConcurrentConfig {
                 committer: CommitterConfig {
                     write_concurrency: 5,
-                    collect_interval_ms: 50,
+                    max_batch_delay_ms: 50,
                     watermark_interval_ms: 500,
                     ..
                 },
@@ -757,7 +788,7 @@ mod tests {
         let base = ConcurrentConfig {
             committer: CommitterConfig {
                 write_concurrency: 5,
-                collect_interval_ms: 50,
+                max_batch_delay_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
             },
@@ -770,7 +801,7 @@ mod tests {
             ConcurrentConfig {
                 committer: CommitterConfig {
                     write_concurrency: 5,
-                    collect_interval_ms: 50,
+                    max_batch_delay_ms: 50,
                     watermark_interval_ms: 500,
                     ..
                 },
@@ -794,7 +825,7 @@ mod tests {
         let base = ConcurrentConfig {
             committer: CommitterConfig {
                 write_concurrency: 5,
-                collect_interval_ms: 50,
+                max_batch_delay_ms: 50,
                 watermark_interval_ms: 500,
                 ..Default::default()
             },
@@ -813,7 +844,7 @@ mod tests {
             ConcurrentConfig {
                 committer: CommitterConfig {
                     write_concurrency: 5,
-                    collect_interval_ms: 50,
+                    max_batch_delay_ms: 50,
                     watermark_interval_ms: 500,
                     ..
                 },
@@ -855,5 +886,33 @@ mod tests {
         .expect("deprecated `checkpoint-buffer-size` must deserialize without error");
 
         assert_eq!(config.ingestion.checkpoint_buffer_size, Some(5000));
+    }
+
+    #[test]
+    fn deprecated_batching_keys_parse_and_are_ignored() {
+        let config: IndexerConfig = toml::from_str(
+            r#"
+            [committer]
+            collect-interval-ms = 500
+
+            [pipeline.ev_emit_mod]
+            min-eager-rows = 100
+            "#,
+        )
+        .expect("deprecated batching keys must deserialize without error");
+
+        assert_eq!(config.committer.collect_interval_ms, Some(500));
+        let ev_emit_mod = config.pipeline.ev_emit_mod.expect("ev_emit_mod layer");
+        assert_eq!(ev_emit_mod.min_eager_rows, Some(100));
+
+        let committer = config.committer.finish(CommitterConfig::default()).unwrap();
+        assert_eq!(
+            committer.min_batch_rows,
+            CommitterConfig::default().min_batch_rows
+        );
+        assert_eq!(
+            committer.max_batch_delay_ms,
+            CommitterConfig::default().max_batch_delay_ms
+        );
     }
 }

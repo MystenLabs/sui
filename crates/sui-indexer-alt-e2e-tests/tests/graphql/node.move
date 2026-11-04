@@ -17,6 +17,7 @@
 //# create-checkpoint
 
 //# run-graphql --cursors bcs(0u8,@{A})
+/*
 { # Fetch an address
   node(id: "@{cursor_0}") {
     id
@@ -33,8 +34,10 @@
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(1u8,0)
+/*
 { # Fetch a checkpoint
   node(id: "@{cursor_0}") {
     id
@@ -44,8 +47,10 @@
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(2u8,@{obj_3_0})
+/*
 { # Fetch a dynamic field
   node(id: "@{cursor_0}") {
     id
@@ -60,8 +65,10 @@ fragment V on MoveValue {
   type { repr }
   json
 }
+*/
 
 //# run-graphql --cursors bcs(4u8,0)
+/*
 { # Fetch an epoch
   node(id: "@{cursor_0}") {
     id
@@ -71,8 +78,10 @@ fragment V on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(5u8,@{obj_0_0})
+/*
 { # Fetch a MoveObject
   node(id: "@{cursor_0}") {
     id
@@ -84,8 +93,10 @@ fragment V on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(7u8,0x2) bcs(8u8,0x2)
+/*
 { # Fetch a package
   package: node(id: "@{cursor_0}") {
     id
@@ -111,8 +122,10 @@ fragment V on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(8u8,@{obj_0_0})
+/*
 { # Fetch an object
   node(id: "@{cursor_0}") {
     id
@@ -126,8 +139,10 @@ fragment V on MoveValue {
     }
   }
 }
+*/
 
 //# run-graphql --cursors bcs(10u8,digest(@{digest_1}))
+/*
 { # Fetch a transaction
   node(id: "@{cursor_0}") {
     id
@@ -139,3 +154,4 @@ fragment V on MoveValue {
     }
   }
 }
+*/

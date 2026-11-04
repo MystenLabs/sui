@@ -73,15 +73,17 @@ pub fn is_one_time_witness(
 
     native_charge_gas_early_exit!(
         context,
-        type_is_one_time_witness_cost_params.types_is_one_time_witness_type_cost_per_byte
-            * u64::from(ty.size()).into()
+        type_is_one_time_witness_cost_params
+            .types_is_one_time_witness_type_cost_per_byte
+            .saturating_mul(u64::from(ty.size()))
     );
 
     let type_tag = context.type_to_type_tag(&ty)?;
     native_charge_gas_early_exit!(
         context,
-        type_is_one_time_witness_cost_params.types_is_one_time_witness_type_tag_cost_per_byte
-            * u64::from(type_tag.abstract_size_for_gas_metering()).into()
+        type_is_one_time_witness_cost_params
+            .types_is_one_time_witness_type_tag_cost_per_byte
+            .saturating_mul(u64::from(type_tag.abstract_size_for_gas_metering()))
     );
 
     let type_layout = context.type_to_type_layout(&ty)?;

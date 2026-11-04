@@ -1,0 +1,113 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Run simtest phases on the simtest host
+description: >
+  Starts scripts/simtest/simtest-run.sh detached on simtest-01 for the given
+  SIMTEST_PHASES, polls until it writes its exit marker, prints the tail of its
+  output and exits with the remote exit code. Expects ~/sui to be cloned and
+  cargo-simtest installed on the host.
+
+  Host files for a phase: ~/simtest_<phase>_stdout.log and
+  ~/simtest_<phase>_exit_code. ~/simtest_active_run describes the run in
+  flight; the caller clears it when the whole run is done.
+
+inputs:
+  identity-file:
+    description: Teleport identity file to pass to `tsh -i`.
+    required: true
+  phase:
+    description: Name used for the host-side stdout log and exit marker.
+    required: true
+  phases:
+    description: Comma-separated SIMTEST_PHASES value for simtest-run.sh.
+    required: true
+  run-id:
+    description: SIMTEST_RUN_ID shared by all phases of one nightly run.
+    required: true
+  log-dir:
+    description: Log directory on the host for this run id.
+    required: true
+  protocol-config-override:
+    description: SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE value, empty for latest.
+    required: false
+    default: ""
+  test-num:
+    description: Number of seed-search iterations per test.
+    required: true
+  min-free-gb:
+    description: Free disk floor recorded in ~/simtest_active_run.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Run simulator tests via detached execution to survive SSH session drops.
+    # The test script runs independently on the remote machine; we poll for completion
+    # with short-lived SSH calls instead of holding a single long-lived session.
+    #
+    # The background shell is started in its own session (setsid) with
+    # stdin, stdout and stderr redirected, and the setup commands before it
+    # are terminated with `|| exit 1;` rather than `&&`. With `a && b &&
+    # nohup ... &` the trailing `&` applies to the whole AND-list, so bash
+    # forks a subshell that runs nohup in the foreground and waits for it
+    # while still holding the SSH session's stdout and stderr; this step
+    # then blocks for the entire run and the polling step below never runs.
+    # The exit marker is written to a temporary file and moved into place so
+    # the poller never reads a partially written marker.
+    #
+    # The protocol config override is passed on the remote command line: tsh
+    # does not forward the runner's environment to the host.
+    - name: Start simtest (detached)
+      shell: bash
+      run: |
+        tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_${{ inputs.phase }}_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\nlog_dir=%s\nphase=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ inputs.min-free-gb }}' '${{ inputs.log-dir }}' '${{ inputs.phase }}' > ~/simtest_active_run"
+        tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui || exit 1; nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ inputs.test-num }} SIMTEST_RUN_ID=${{ inputs.run-id }} SIMTEST_PHASES=${{ inputs.phases }} SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ inputs.protocol-config-override }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ inputs.phase }}_exit_code.tmp && mv ~/simtest_${{ inputs.phase }}_exit_code.tmp ~/simtest_${{ inputs.phase }}_exit_code' < /dev/null > ~/simtest_${{ inputs.phase }}_stdout.log 2>&1 &"
+
+    - name: Wait for simtest completion
+      shell: bash
+      run: |
+        ssh_failures=0
+        max_ssh_failures=3
+        while true; do
+          sleep 120
+          # Use echo-based check so we can distinguish "SSH failed" from "file not found".
+          # If SSH succeeds, we get DONE or RUNNING. If SSH fails, output is empty.
+          result=$(tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 \
+            "if test -s ~/simtest_${{ inputs.phase }}_exit_code; then if grep -Eq '^[0-9]+$' ~/simtest_${{ inputs.phase }}_exit_code; then echo DONE; else echo BAD_EXIT_MARKER; fi; elif test -e ~/simtest_${{ inputs.phase }}_exit_code; then echo BAD_EXIT_MARKER; else echo RUNNING; fi" 2>/dev/null) || true
+          if [ "$result" = "DONE" ]; then
+            echo "Simtest completed."
+            break
+          elif [ "$result" = "RUNNING" ]; then
+            ssh_failures=0
+            echo "$(date): simtest still running..."
+            tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "tail -5 ~/simtest_${{ inputs.phase }}_stdout.log" 2>/dev/null || true
+          elif [ "$result" = "BAD_EXIT_MARKER" ]; then
+            echo "::error::Remote simtest exit marker is missing, empty, or non-integer. Treating this as infrastructure failure."
+            tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_${{ inputs.phase }}_exit_code ~/simtest_${{ inputs.phase }}_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_${{ inputs.phase }}_stdout.log 2>/dev/null || true" || true
+            exit 1
+          else
+            # No output: the SSH call itself failed.
+            ssh_failures=$((ssh_failures + 1))
+            echo "$(date): SSH connection failed (attempt $ssh_failures/$max_ssh_failures)"
+            if [ $ssh_failures -ge $max_ssh_failures ]; then
+              echo "Too many consecutive SSH failures. The test may still be running on the remote machine."
+              exit 1
+            fi
+          fi
+        done
+
+    - name: Check simtest results
+      shell: bash
+      run: |
+        exit_code=$(tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "cat ~/simtest_${{ inputs.phase }}_exit_code")
+        if ! [[ "$exit_code" =~ ^[0-9]+$ ]]; then
+          echo "::error::Remote simtest exit marker is missing, empty, or non-integer: '$exit_code'"
+          echo "--- Remote disk and output state ---"
+          tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_${{ inputs.phase }}_exit_code ~/simtest_${{ inputs.phase }}_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_${{ inputs.phase }}_stdout.log 2>/dev/null || true" || true
+          exit 1
+        fi
+        echo "Remote simtest exited with code: $exit_code"
+        echo "--- Last 200 lines of simtest output ---"
+        tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "tail -200 ~/simtest_${{ inputs.phase }}_stdout.log" || true
+        exit "$exit_code"

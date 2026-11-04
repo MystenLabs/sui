@@ -40,6 +40,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   allCheckpoints: checkpoints(first: 10) {
     edges {
@@ -106,3 +107,4 @@ fragment CheckpointFields on Checkpoint {
   digest
   epoch {epochId}
 }
+*/

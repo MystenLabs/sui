@@ -89,6 +89,10 @@ impl Container {
         Some(SuiNodeHandle::new(self.node_watch.borrow().upgrade()?))
     }
 
+    pub fn sim_node_id(&self) -> Option<sui_simulator::task::NodeId> {
+        self.handle.as_ref().map(|h| h.node_id)
+    }
+
     /// Check to see that the Node is still alive by checking if the receiving side of the
     /// `cancel_sender` has been dropped.
     ///

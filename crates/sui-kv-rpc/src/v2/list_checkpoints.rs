@@ -27,11 +27,14 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
+use sui_rpc_api::ledger_history::query_options::LedgerWindow;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
-use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
+use sui_rpc_api::ledger_history::query_options::ScanWindow;
 use sui_rpc_api::ledger_history::query_options::validate_checkpoint_bounds;
+use sui_rpc_api::ledger_history::watermark::RangeEnd;
 use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
@@ -123,6 +126,13 @@ pub(crate) async fn list_checkpoints(
         endpoint.default_limit_items,
         endpoint.max_limit_items,
     )?;
+    // Compiled before the range resolves, so an invalid filter is `InvalidArgument` even for a
+    // request that leaves nothing to scan.
+    let filter_query = request
+        .filter
+        .as_ref()
+        .map(|filter| ctx.transaction_filter_query(filter))
+        .transpose()?;
     let checkpoint_range = ResolvedCheckpointRange::from_request(
         request.start_checkpoint,
         request.end_checkpoint,
@@ -133,16 +143,13 @@ pub(crate) async fn list_checkpoints(
     let ordering = options.ordering;
     let direction = options.scan_direction();
 
-    let cp_range = async { resolve_cp_range(checkpoint_range, &options) }
-        .instrument(debug_span!("resolve_cp_range"))
-        .await?;
+    let (start_checkpoint, end_checkpoint) = (request.start_checkpoint, request.end_checkpoint);
+    let (cp_range, range_end) =
+        async { resolve_cp_range(checkpoint_range, start_checkpoint, end_checkpoint, &options) }
+            .instrument(debug_span!("resolve_cp_range"))
+            .await?;
     let exhaustion = cp_range.exhaustion;
-    let range_end_position = cp_range.end_position;
-    let entry_checkpoint = if direction.is_ascending() {
-        cp_range.range().start
-    } else {
-        cp_range.range().end.saturating_sub(1)
-    };
+    let entry_checkpoint = cp_range.entry_checkpoint;
     let cp_range = cp_range.range();
 
     if cp_range.is_empty() {
@@ -154,18 +161,10 @@ pub(crate) async fn list_checkpoints(
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but
-        // natural completion claims no checkpoint coverage.
-        let response = range_end_response(
-            &options,
-            exhaustion,
-            Position::Checkpoints {
-                checkpoint: range_end_position,
-            },
-            None,
-            true,
-        )
-        .0;
+        // An empty scan still surfaces its terminal cursor. Its natural end claims the window's
+        // edge, which the cursor that left nothing to scan vouches for, unless the window itself
+        // is empty.
+        let response = range_end_response(range_end, None)?.0;
         return Ok(async_stream::try_stream! {
             ctx.inc_stream_watermark_frames();
             ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -183,10 +182,9 @@ pub(crate) async fn list_checkpoints(
     // deduped checkpoint rows. Unfiltered requests scan the dense checkpoint
     // keyspace directly, bounded by limit_items.
     let cp_data_stream: BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, ScanStop>> =
-        if let Some(filter) = &request.filter {
+        if let Some(query) = filter_query {
             let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
             let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
-            let query = ctx.transaction_filter_query(filter)?;
             let tx_seq_stream = client.eval_bitmap_query_stream(
                 query,
                 tx_range,
@@ -317,8 +315,7 @@ pub(crate) async fn list_checkpoints(
         rendered_stream,
         resolution,
         options,
-        exhaustion,
-        range_end_position,
+        range_end,
         entry_checkpoint,
         direction,
         filtered,
@@ -331,8 +328,7 @@ fn drive_rendered_checkpoints(
     mut rendered_stream: RenderedCheckpointStream,
     resolution: &'static str,
     options: QueryOptions,
-    exhaustion: RangeExhaustion,
-    range_end_position: u64,
+    range_end: RangeEnd,
     entry_checkpoint: u64,
     direction: ScanDirection,
     filtered: bool,
@@ -346,15 +342,7 @@ fn drive_rendered_checkpoints(
         let mut covered_checkpoint_bound: Option<u64> = None;
         let terminal_reason = loop {
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
-                let (response, reason) = range_end_response(
-                    &options,
-                    exhaustion,
-                    Position::Checkpoints {
-                        checkpoint: range_end_position,
-                    },
-                    covered_checkpoint_bound,
-                    false,
-                );
+                let (response, reason) = range_end_response(range_end, covered_checkpoint_bound)?;
                 ctx.inc_stream_watermark_frames();
                 if !first_frame_emitted {
                     ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -377,6 +365,8 @@ fn drive_rendered_checkpoints(
                         Position::Checkpoints {
                             checkpoint: item_checkpoint,
                         },
+                        LedgerPoint::checkpoint_start(item_checkpoint),
+                        direction,
                         covered_checkpoint_bound,
                     );
                     ctx.observe_response_render(resolution, render_duration);
@@ -402,10 +392,10 @@ fn drive_rendered_checkpoints(
                 }
                 Ok(ResolvedWatermarked::Watermark {
                     position: _,
-                    cp: checkpoint_at_frontier,
+                    frontier,
                 }) => {
                     let watermark = checkpoint_frontier_watermark(
-                        checkpoint_at_frontier,
+                        frontier.checkpoint,
                         entry_checkpoint,
                         direction,
                         &options,
@@ -455,10 +445,10 @@ fn drive_rendered_checkpoints(
 }
 
 /// Convert the checkpoint containing a transaction-space scan frontier into a
-/// safe checkpoint-space resume cursor. The containing checkpoint is not fully
-/// covered. A coverage candidate before the interval's entry checkpoint proves
-/// nothing and is suppressed, so the wire checkpoint stays unset until the
-/// scan's first checkpoint is fully covered.
+/// safe checkpoint-space resume cursor, whose checkpoint is its own ledger
+/// point. The containing checkpoint is not fully covered. A coverage candidate
+/// before the window's entry checkpoint lies outside the window and is
+/// suppressed.
 fn checkpoint_frontier_watermark(
     checkpoint_at_frontier: u64,
     entry_checkpoint: u64,
@@ -483,6 +473,7 @@ fn checkpoint_frontier_watermark(
         Position::Checkpoints {
             checkpoint: resume_checkpoint,
         },
+        LedgerPoint::checkpoint_start(resume_checkpoint),
         *covered_checkpoint_bound,
     )
 }
@@ -494,8 +485,9 @@ fn terminal_response_from_scan_stop(
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
-    let (position, checkpoint) = stop.into_scan_limit()?;
-    let checkpoint_at_frontier = checkpoint
+    let (position, frontier) = stop.into_scan_limit()?;
+    let checkpoint_at_frontier = frontier
+        .map(|frontier| frontier.checkpoint)
         .or_else(|| {
             ((direction.is_ascending() && position == 0)
                 || (!direction.is_ascending() && position == u64::MAX))
@@ -518,9 +510,9 @@ fn terminal_response_from_scan_stop(
             covered_checkpoint_bound,
         ),
     };
-    let reason = terminal.reason();
+    let reason = terminal.reason()?;
     Ok(end_response(
-        terminal.into_watermark(options, *covered_checkpoint_bound),
+        terminal.into_watermark(*covered_checkpoint_bound),
         reason,
     ))
 }
@@ -645,38 +637,44 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
     response
 }
 
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree; natural completion of an
-/// empty interval retains its cursor but claims no checkpoint coverage.
+/// Trailing terminal frame for range exhaustion at `range_end`. Reason and
+/// watermark derive from one `ScanTerminal`, so they cannot disagree. Natural
+/// completion claims the range end's natural end claim, which is `None` when
+/// the window has no checkpoint; the cursor is retained either way. Fails only
+/// for a terminal that ends with no `QueryEnd` (a serving floor), which this
+/// backend never resolves.
 fn range_end_response(
-    options: &QueryOptions,
-    exhaustion: RangeExhaustion,
-    position: Position,
+    range_end: RangeEnd,
     covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
-) -> (ListCheckpointsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
-    let reason = terminal.reason();
-    (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
+) -> Result<(ListCheckpointsResponse, QueryEndReason), RpcError> {
+    let terminal = range_end.terminal();
+    let reason = terminal.reason()?;
+    Ok((
+        end_response(terminal.into_watermark(covered_checkpoint_bound), reason),
         reason,
-    )
+    ))
 }
 
 /// Determine the checkpoint_sequence_number scan window from the logical
-/// checkpoint bounds, indexed history, and cursor bounds. Filtered scans
-/// are additionally bounded at runtime by the per-request bitmap bucket
-/// budget; that limit surfaces as SCAN_LIMIT, not as an up-front cp-range
-/// clamp.
+/// checkpoint bounds, indexed history, and cursor bounds, along with where
+/// the scan ends (see [`ResolvedScan::range_end`]), placed in the window the
+/// request's `start_checkpoint` and `end_checkpoint` name. Filtered scans are
+/// additionally bounded at runtime by the per-request bitmap bucket budget;
+/// that limit surfaces as SCAN_LIMIT, not as an up-front cp-range clamp.
 fn resolve_cp_range(
     cp_range: ResolvedCheckpointRange,
+    start_checkpoint: Option<u64>,
+    end_checkpoint: Option<u64>,
     options: &QueryOptions,
-) -> Result<ResolvedScan<u64>, RpcError> {
+) -> Result<(ResolvedScan<u64>, RangeEnd), RpcError> {
     let range = cp_range.range.clone();
-    ResolvedScan::<u64>::resolve(cp_range, range, options)
+    let ledger = LedgerWindow::checkpoints(&range, start_checkpoint, end_checkpoint);
+    let window = ScanWindow::whole_checkpoints(range, ledger);
+    let resolved = ResolvedScan::<u64>::resolve(cp_range, window.clone(), options)?;
+    let range_end = resolved.range_end(&window, options, |_, checkpoint| Position::Checkpoints {
+        checkpoint,
+    });
+    Ok((resolved, range_end))
 }
 
 fn decode_checkpoint_row_key(key: &Bytes) -> Result<u64, RpcError> {
@@ -717,12 +715,43 @@ fn clamp_cp_frontier_past_last(
 mod tests {
     use super::*;
     use mysten_common::ZipDebugEqIteratorExt;
+    use sui_rpc_api::ledger_history::ledger_point::TerminalLedgerPosition;
+    use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
     use sui_rpc_cursor::CursorToken;
 
+    use crate::pipeline::PlacedFrontier;
     use crate::v2::test_utils::{
         LIST_PIPELINE_METRICS, ascending_options, assert_list_metric_absent, list_counter,
-        list_histogram, query_context, query_context_with_registry,
+        list_histogram, query_context, query_context_with_registry, unparseable_transaction_filter,
     };
+
+    /// A filter that does not compile is `InvalidArgument` even when the request leaves nothing
+    /// to scan: a window starting past the tip, or an `after` cursor past it.
+    #[tokio::test]
+    async fn unparseable_filter_is_invalid_with_nothing_to_scan() {
+        let (ctx, server) = query_context("list_checkpoints", 10).await;
+        let after_past_tip =
+            CursorToken::boundary(Position::Checkpoints { checkpoint: 1_000 }).encode();
+        for (start_checkpoint, after) in [(Some(1_000), None), (None, Some(after_past_tip))] {
+            let mut options = ascending_options();
+            options.after = after;
+            let mut request = ListCheckpointsRequest::default();
+            request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+            request.start_checkpoint = start_checkpoint;
+            request.options = Some(options);
+            request.filter = Some(unparseable_transaction_filter());
+            let status = match list_checkpoints(ctx.clone(), request).await {
+                Ok(_) => panic!("accepted with start_checkpoint {start_checkpoint:?}"),
+                Err(error) => tonic::Status::from(error),
+            };
+            assert_eq!(
+                status.code(),
+                tonic::Code::InvalidArgument,
+                "start_checkpoint {start_checkpoint:?}: {status:?}"
+            );
+        }
+        server.abort();
+    }
 
     #[test]
     fn resolution_uses_validated_read_mask_predicates() {
@@ -767,8 +796,12 @@ mod tests {
             rendered_stream,
             checkpoint_resolution(true, true),
             options,
-            RangeExhaustion::CheckpointBound,
-            10,
+            RangeEnd {
+                exhaustion: RangeExhaustion::CheckpointBound,
+                position: Position::Checkpoints { checkpoint: 10 },
+                ledger: TerminalLedgerPosition::known(LedgerPoint::checkpoint_start(10)),
+                natural_end_claim: Some(9),
+            },
             7,
             ScanDirection::Ascending,
             false,
@@ -796,6 +829,14 @@ mod tests {
                 Some(&CursorToken::item(Position::Checkpoints { checkpoint }).encode())
             );
             assert_eq!(watermark.checkpoint, Some(checkpoint));
+            // Ascending, an item frame resumes right after its checkpoint.
+            assert_eq!(
+                watermark.cursor_position,
+                Some(
+                    LedgerPoint::checkpoint_start(checkpoint + 1)
+                        .to_proto(&Position::Checkpoints { checkpoint })
+                )
+            );
             if index < 2 {
                 assert!(response.end.is_none(), "response {index} is not terminal");
             } else {
@@ -866,6 +907,12 @@ mod tests {
             CursorToken::boundary(Position::Checkpoints { checkpoint: 0 }).encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
+        // The empty window echoes the request's start.
+        let start = Position::Checkpoints { checkpoint: 0 };
+        assert_eq!(
+            watermark.cursor_position,
+            Some(LedgerPoint::checkpoint_start(0).to_proto(&start))
+        );
         let families = registry.gather();
         for name in LIST_PIPELINE_METRICS {
             match name {
@@ -921,6 +968,12 @@ mod tests {
         assert_eq!(
             watermark.checkpoint, None,
             "cursor truncation must not claim natural checkpoint completion"
+        );
+        // The bound at the window's start places the terminal there, without a read.
+        let start = Position::Checkpoints { checkpoint: 0 };
+        assert_eq!(
+            watermark.cursor_position,
+            Some(LedgerPoint::checkpoint_start(0).to_proto(&start))
         );
         assert_eq!(
             response.end.as_ref().and_then(|end| end.reason),
@@ -996,11 +1049,13 @@ mod tests {
             let options =
                 QueryOptions::checkpoints_from_proto(Some(&proto_options), 10, 100).unwrap();
             let mut covered = initial_proof;
+            // A transaction-lane point, which the checkpoint cursor never uses.
+            let frontier = checkpoint.map(|checkpoint| PlacedFrontier {
+                checkpoint,
+                point: LedgerPoint::transaction(checkpoint, 7),
+            });
             let response = terminal_response_from_scan_stop(
-                ResolvedScanStop::ScanLimit {
-                    position,
-                    checkpoint,
-                },
+                ResolvedScanStop::ScanLimit { position, frontier },
                 &options,
                 direction,
                 entry_checkpoint,
@@ -1014,11 +1069,17 @@ mod tests {
                 Some(QueryEndReason::ScanLimit)
             );
             let watermark = response.watermark.expect("terminal watermark");
+            let cursor = Position::Checkpoints {
+                checkpoint: expected_cursor,
+            };
             assert_eq!(
                 CursorToken::decode(watermark.cursor.as_deref().expect("cursor")).unwrap(),
-                CursorToken::boundary(Position::Checkpoints {
-                    checkpoint: expected_cursor,
-                })
+                CursorToken::boundary(cursor)
+            );
+            assert_eq!(
+                watermark.cursor_position,
+                Some(LedgerPoint::checkpoint_start(expected_cursor).to_proto(&cursor)),
+                "a checkpoint cursor's coordinate is its own ledger point"
             );
             assert_eq!(
                 watermark.checkpoint, expected_proof,
@@ -1053,7 +1114,7 @@ mod tests {
             let error = terminal_response_from_scan_stop(
                 ResolvedScanStop::ScanLimit {
                     position,
-                    checkpoint: None,
+                    frontier: None,
                 },
                 &options,
                 direction,

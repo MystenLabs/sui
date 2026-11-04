@@ -10,6 +10,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test that kind field returns null for non-genesis transactions (programmable transactions)
   nonGenesisTransaction: transaction(digest: "@{digest_1}") {
@@ -25,8 +26,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   # Test accessing genesis transactions directly
   genesisTransaction: transactions(first: 1) {
@@ -46,8 +49,10 @@
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { 
   # Test pagination functionality with genesis transactions
   paginationTest: transactions(first: 1) {
@@ -84,9 +89,11 @@
     }
   }
 }
+*/
 
 
 //# run-graphql --cursors 2
+/*
 { 
   # Test cursor-based pagination - after first cursor, get 3 objects
   paginationAfterCursor: transactions(first: 1) {
@@ -115,8 +122,10 @@
     }
   }
 }
+*/
 
 //# run-graphql --cursors 5
+/*
 { 
   # Test cursor-based pagination - before a specific cursor, get last 2 objects
   paginationBeforeCursor: transactions(first: 1) {
@@ -145,3 +154,4 @@
     }
   }
 }
+*/

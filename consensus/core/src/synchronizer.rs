@@ -1577,7 +1577,7 @@ mod tests {
             unimplemented!("get_latest_rounds not implemented in mock")
         }
 
-        #[cfg(test)]
+        #[cfg(all(test, not(msim)))]
         async fn send_block(
             &self,
             _peer: AuthorityIndex,

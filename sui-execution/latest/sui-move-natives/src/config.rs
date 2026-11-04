@@ -103,7 +103,7 @@ pub fn read_setting_impl(
 
     native_charge_gas_early_exit!(
         context,
-        config_read_setting_impl_cost_per_byte * u64::from(size).into()
+        config_read_setting_impl_cost_per_byte.saturating_mul(u64::from(size))
     );
 
     Ok(NativeResult::ok(

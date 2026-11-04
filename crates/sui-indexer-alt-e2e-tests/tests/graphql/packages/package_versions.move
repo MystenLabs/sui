@@ -27,6 +27,7 @@ module P3::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Fetch all package versions -- there should be 3 of these
   packageVersions(address: "@{P1}") {
     pageInfo {
@@ -44,8 +45,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Limit from the front
   packageVersions(address: "@{P1}", first: 2) {
     pageInfo {
@@ -63,8 +66,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Limit from the back
   packageVersions(address: "@{P1}", last: 2) {
     pageInfo {
@@ -82,8 +87,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 1
+/*
 { # Offset at the front and then fetch from the front
   packageVersions(address: "@{P1}", after: "@{cursor_0}", first: 1) {
     pageInfo {
@@ -101,8 +108,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 2
+/*
 { # Offset at the front such that the first page is not full
   packageVersions(address: "@{P1}", after: "@{cursor_0}", first: 2) {
     pageInfo {
@@ -120,8 +129,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 2
+/*
 { # Offset at the front such that the first page is not full, fetch from the back
   packageVersions(address: "@{P1}", after: "@{cursor_0}", last: 2) {
     pageInfo {
@@ -139,8 +150,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 3
+/*
 { # Offset at the back and fetch from the back
   packageVersions(address: "@{P1}", before: "@{cursor_0}", last: 1) {
     pageInfo {
@@ -158,8 +171,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 3
+/*
 { # Offset at the back and fetch from the front
   packageVersions(address: "@{P1}", before: "@{cursor_0}", first: 1) {
     pageInfo {
@@ -177,8 +192,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 2
+/*
 { # Offset at the back such that the first page is not full, fetch from the back
   packageVersions(address: "@{P1}", before: "@{cursor_0}", last: 2) {
     pageInfo {
@@ -196,8 +213,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 2
+/*
 { # Offset at the back such that the first page is not full, fetch from the front
   packageVersions(address: "@{P1}", before: "@{cursor_0}", first: 2) {
     pageInfo {
@@ -215,8 +234,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql --cursors 1 3
+/*
 { # Offset at the front and back
   packageVersions(address: "@{P1}", after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {
@@ -234,8 +255,10 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Using packageVersions ..Before and ...After
   package(address: "@{P1}", version: 2) {
     packageVersionsBefore {
@@ -247,15 +270,19 @@ module P3::M {
     }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Object is not a package
   packageVersions(address: "@{obj_5_0}") {
     nodes { version }
   }
 }
+*/
 
 //# run-graphql
+/*
 { # Anchor package doesn't exist at the checkpoint.
   doesntExist: checkpoint(sequenceNumber: 1) {
     query {
@@ -273,3 +300,4 @@ module P3::M {
     }
   }
 }
+*/

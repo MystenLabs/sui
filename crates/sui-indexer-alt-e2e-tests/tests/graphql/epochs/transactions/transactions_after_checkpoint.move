@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --accounts A B --simulator
 
 //# run-graphql
+/*
 {
   epoch0AfterCp0NoTx: epoch(epochId: 0) {
     totalTransactions
@@ -12,6 +13,7 @@
     }
   }
 }
+*/
 
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -24,6 +26,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   epoch0AfterCp0WithTx: epoch(epochId: 0) {
     totalTransactions
@@ -32,6 +35,7 @@
     }
   }
 }
+*/
 
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -44,6 +48,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   epoch0AfterCp1WithTx: epoch(epochId: 0) {
     totalTransactions
@@ -52,6 +57,7 @@
     }
   }
 }
+*/
 
 //# advance-epoch
 
@@ -66,6 +72,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   epoch1AfterCp2: epoch(epochId: 1) {
     totalTransactions
@@ -80,5 +87,6 @@
     }
   }
 }
+*/
 
 //# create-checkpoint

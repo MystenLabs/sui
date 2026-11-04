@@ -44,8 +44,9 @@ pub fn validate_metadata_bcs(
 
     native_charge_gas_early_exit!(
         context,
-        validator_validate_metadata_bcs_cost_params.validator_validate_metadata_data_cost_per_byte
-            * (metadata_bytes.len() as u64).into()
+        validator_validate_metadata_bcs_cost_params
+            .validator_validate_metadata_data_cost_per_byte
+            .saturating_mul(metadata_bytes.len() as u64)
     );
 
     let validator_metadata =

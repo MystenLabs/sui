@@ -170,34 +170,19 @@ where
     let mut acc = GlobalStateHash::default();
 
     // process insertions to the set
-    acc.insert_all(
-        effects
-            .iter()
-            .flat_map(|fx| {
-                fx.all_changed_objects()
-                    .into_iter()
-                    .map(|(oref, _, _)| oref.2)
-            })
-            .collect::<Vec<ObjectDigest>>(),
-    );
+    acc.insert_all(effects.iter().flat_map(|fx| {
+        fx.all_changed_objects()
+            .into_iter()
+            .map(|(oref, _, _)| oref.2)
+    }));
 
     // insert wrapped tombstones. We use a custom struct in order to contain the tombstone
     // against the object id and sequence number, as the tombstone by itself is not unique.
-    acc.insert_all(
-        effects
-            .iter()
-            .flat_map(|fx| {
-                fx.wrapped()
-                    .iter()
-                    .map(|oref| {
-                        bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
-                            .unwrap()
-                            .to_vec()
-                    })
-                    .collect::<Vec<Vec<u8>>>()
-            })
-            .collect::<Vec<Vec<u8>>>(),
-    );
+    acc.insert_all(effects.iter().flat_map(|fx| {
+        fx.wrapped()
+            .into_iter()
+            .map(|oref| bcs::to_bytes(&WrappedObject::new(oref.0, oref.1)).unwrap())
+    }));
 
     let all_unwrapped = effects
         .iter()
@@ -244,7 +229,7 @@ where
         })
         .collect();
 
-    let modified_at_digests: Vec<_> = store
+    let modified_at_digests = store
         .multi_get_objects_by_key(&modified_at_version_keys.clone())
         .into_iter()
         .zip_debug_eq(modified_at_version_keys)
@@ -252,8 +237,7 @@ where
             obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
                 .compute_object_reference()
                 .2
-        })
-        .collect();
+        });
     acc.remove_all(modified_at_digests);
 
     // Process unwrapped and unwrapped_then_deleted effects, which need to be
@@ -263,7 +247,7 @@ where
     // seek the version prior to the unwrapped version from the objects table directly.
     // If the tombstone is not found, then assume this is a newly created wrapped object hence
     // we don't expect to find it in the table.
-    let wrapped_objects_to_remove: Vec<WrappedObject> = all_unwrapped
+    let wrapped_objects_to_remove = all_unwrapped
         .iter()
         .filter_map(|(_tx_digest, id, seq_num)| {
             let objref = store
@@ -278,15 +262,9 @@ where
                 );
                 WrappedObject::new(id, version)
             })
-        })
-        .collect();
+        });
 
-    acc.remove_all(
-        wrapped_objects_to_remove
-            .iter()
-            .map(|wrapped| bcs::to_bytes(wrapped).unwrap().to_vec())
-            .collect::<Vec<Vec<u8>>>(),
-    );
+    acc.remove_all(wrapped_objects_to_remove.map(|wrapped| bcs::to_bytes(&wrapped).unwrap()));
 
     acc
 }
@@ -299,16 +277,11 @@ where
     let mut acc = GlobalStateHash::default();
 
     // process insertions to the set
-    acc.insert_all(
-        effects
-            .iter()
-            .flat_map(|fx| {
-                fx.all_changed_objects()
-                    .into_iter()
-                    .map(|(oref, _, _)| oref.2)
-            })
-            .collect::<Vec<ObjectDigest>>(),
-    );
+    acc.insert_all(effects.iter().flat_map(|fx| {
+        fx.all_changed_objects()
+            .into_iter()
+            .map(|(oref, _, _)| oref.2)
+    }));
 
     // Collect keys from modified_at_versions to remove from the hasher.
     let modified_at_version_keys: Vec<_> = effects
@@ -320,7 +293,7 @@ where
         })
         .collect();
 
-    let modified_at_digests: Vec<_> = store
+    let modified_at_digests = store
         .multi_get_objects_by_key(&modified_at_version_keys.clone())
         .into_iter()
         .zip_debug_eq(modified_at_version_keys)
@@ -328,8 +301,7 @@ where
             obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
                 .compute_object_reference()
                 .2
-        })
-        .collect();
+        });
     acc.remove_all(modified_at_digests);
 
     acc
@@ -337,31 +309,16 @@ where
 
 fn accumulate_effects_v3(effects: &[TransactionEffects]) -> GlobalStateHash {
     let mut acc = GlobalStateHash::default();
-
-    // process insertions to the set
-    acc.insert_all(
-        effects
-            .iter()
-            .flat_map(|fx| {
-                fx.all_changed_objects()
-                    .into_iter()
-                    .map(|(object_ref, _, _)| object_ref.2)
-            })
-            .collect::<Vec<ObjectDigest>>(),
-    );
-
-    // process modified objects to the set
-    acc.remove_all(
-        effects
-            .iter()
-            .flat_map(|fx| {
-                fx.old_object_metadata()
-                    .into_iter()
-                    .map(|(object_ref, _owner)| object_ref.2)
-            })
-            .collect::<Vec<ObjectDigest>>(),
-    );
-
+    acc.insert_all(effects.iter().flat_map(|fx| {
+        fx.all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _, _)| object_ref.2)
+    }));
+    acc.remove_all(effects.iter().flat_map(|fx| {
+        fx.old_object_metadata()
+            .into_iter()
+            .map(|(object_ref, _owner)| object_ref.2)
+    }));
     acc
 }
 

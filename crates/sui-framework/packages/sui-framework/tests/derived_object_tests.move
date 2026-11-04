@@ -6,10 +6,13 @@ module sui::derived_object_tests;
 
 use std::unit_test::{assert_eq, destroy};
 use sui::derived_object;
+use sui::test_scenario;
 
 use fun object::new as TxContext.new;
 
 public struct Registry has key { id: UID }
+
+public struct Derived has key { id: UID }
 
 public struct DemoStruct has copy, drop, store {
     value: u64,
@@ -163,4 +166,104 @@ fun try_to_claim_id_twice() {
     let _another_uid = derived_object::claim(&mut registry.id, key);
 
     abort
+}
+
+#[test]
+fun release_and_claim_again() {
+    let mut ctx = tx_context::dummy();
+    let mut registry = Registry { id: ctx.new() };
+    let key = b"demo".to_string();
+
+    let uid = derived_object::claim(&mut registry.id, key);
+    let addr = uid.to_address();
+    derived_object::release(&mut registry.id, uid);
+    assert!(!derived_object::exists(&registry.id, key));
+
+    let uid = derived_object::claim(&mut registry.id, key);
+    assert_eq!(uid.to_address(), addr);
+    assert!(derived_object::exists(&registry.id, key));
+
+    derived_object::release(&mut registry.id, uid);
+    let uid = derived_object::claim(&mut registry.id, key);
+    assert_eq!(uid.to_address(), addr);
+
+    destroy(registry);
+    uid.delete();
+}
+
+#[test, expected_failure(abort_code = derived_object::EObjectNotClaimed)]
+fun release_with_wrong_parent() {
+    let mut ctx = tx_context::dummy();
+    let mut registry = Registry { id: ctx.new() };
+    let mut other = Registry { id: ctx.new() };
+    let uid = derived_object::claim(&mut registry.id, b"demo".to_string());
+    derived_object::release(&mut other.id, uid);
+    abort
+}
+
+#[test, expected_failure(abort_code = derived_object::EObjectNotClaimed)]
+fun release_non_derived_uid() {
+    let mut ctx = tx_context::dummy();
+    let mut registry = Registry { id: ctx.new() };
+    derived_object::release(&mut registry.id, ctx.new());
+    abort
+}
+
+#[test, expected_failure(abort_code = derived_object::EObjectNotClaimed)]
+fun release_twice() {
+    let mut ctx = tx_context::dummy();
+    let mut registry = Registry { id: ctx.new() };
+    let key = b"demo".to_string();
+    let uid = derived_object::claim(&mut registry.id, key);
+    let addr = uid.to_address();
+    derived_object::release(&mut registry.id, uid);
+    // Unreachable outside the framework: only the package-private `new_uid_from_hash` can forge a
+    // second UID for a released address.
+    let forged = object::new_uid_from_hash(@0x0, addr);
+    assert_eq!(forged.to_address(), addr);
+    derived_object::release(&mut registry.id, forged);
+    abort
+}
+
+#[test, expected_failure(abort_code = derived_object::ESharedObjectRelease)]
+fun release_shared_object() {
+    let sender = @0xA;
+    let mut scenario = test_scenario::begin(sender);
+    let mut registry = Registry { id: object::new(scenario.ctx()) };
+    transfer::share_object(Derived { id: derived_object::claim(&mut registry.id, 0u64) });
+    transfer::transfer(registry, sender);
+
+    scenario.next_tx(sender);
+    let mut registry = scenario.take_from_sender<Registry>();
+    let Derived { id } = scenario.take_shared<Derived>();
+    derived_object::release(&mut registry.id, id);
+    abort
+}
+
+#[test]
+fun release_owned_object_and_claim_again() {
+    let sender = @0xA;
+    let mut scenario = test_scenario::begin(sender);
+    let mut registry = Registry { id: object::new(scenario.ctx()) };
+    let derived = Derived { id: derived_object::claim(&mut registry.id, 0u64) };
+    let id = object::id(&derived);
+    transfer::transfer(derived, sender);
+    transfer::transfer(registry, sender);
+
+    scenario.next_tx(sender);
+    let mut registry = scenario.take_from_sender<Registry>();
+    let Derived { id: uid } = scenario.take_from_sender<Derived>();
+    derived_object::release(&mut registry.id, uid);
+    scenario.return_to_sender(registry);
+
+    let effects = scenario.next_tx(sender);
+    assert!(effects.deleted().contains(&id));
+    let mut registry = scenario.take_from_sender<Registry>();
+    assert!(!derived_object::exists(&registry.id, 0u64));
+    transfer::transfer(Derived { id: derived_object::claim(&mut registry.id, 0u64) }, sender);
+    scenario.return_to_sender(registry);
+
+    let effects = scenario.next_tx(sender);
+    assert!(effects.created().contains(&id));
+    scenario.end();
 }

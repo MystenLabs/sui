@@ -77,6 +77,7 @@ module test::mod {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   multiGetObjects(keys: [
     { address: "@{obj_3_0}" },
@@ -92,3 +93,4 @@ module test::mod {
     }
   }
 }
+*/

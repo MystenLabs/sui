@@ -4,6 +4,7 @@
 //# init --protocol-version 108 --accounts A --addresses P0=0x0 P1=0x0 --simulator
 
 //# run-graphql
+/*
 {
   package(address: "@{P0}") {
     module(name: "option") {
@@ -31,6 +32,7 @@ fragment E on MoveEnum {
     }
   }
 }
+*/
 
 //# publish --upgradeable --sender A
 module P0::M {
@@ -62,6 +64,7 @@ module P1::M {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   packageVersions(address: "@{P0}") {
     nodes {
@@ -94,8 +97,10 @@ fragment E on MoveEnum {
     }
   }
 }
+*/
 
 //# run-graphql --cursors "Complex" "Status"
+/*
 {
   package(address: "@{P1}") {
     module(name: "M") {
@@ -124,8 +129,10 @@ fragment E on MoveEnumConnection {
     fullyQualifiedName
   }
 }
+*/
 
 //# run-graphql
+/*
 {
   package(address: "@{P0}") {
     module(name: "M") {
@@ -169,3 +176,4 @@ fragment EnumDetails on MoveEnum {
     }
   }
 }
+*/

@@ -16,7 +16,6 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use std::ops::Mul;
 
 pub const NON_CANONICAL_INPUT: u64 = 0;
 pub const NOT_SUPPORTED_ERROR: u64 = 1;
@@ -93,7 +92,7 @@ pub fn poseidon_bn254_internal(
                 || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Gas cost for poseidon_bn254 not available".to_string())
             )?
-            .mul(length.into())
+            .saturating_mul(length)
     );
 
     // Read the input vector

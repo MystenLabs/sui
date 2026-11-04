@@ -30,6 +30,7 @@ pub const TABLES: &[&str] = &[
     crate::tables::transaction_bitmap_index::NAME,
     crate::tables::event_bitmap_index::NAME,
     crate::tables::objects::NAME,
+    crate::tables::object_versions_by_checkpoint::NAME,
     crate::tables::transactions::NAME,
     crate::tables::checkpoints::NAME,
     crate::tables::checkpoints_by_digest::NAME,
@@ -79,7 +80,7 @@ impl Drop for BigTableEmulator {
 
 /// Bind to an ephemeral port and return it. The port is moved into TIME_WAIT so the OS
 /// reserves it briefly, allowing the caller to reuse it with SO_REUSEADDR.
-fn get_available_port() -> u16 {
+pub(crate) fn get_available_port() -> u16 {
     let listener =
         std::net::TcpListener::bind(("127.0.0.1", 0)).expect("Failed to bind to ephemeral port");
     let addr = listener.local_addr().expect("Failed to get local address");

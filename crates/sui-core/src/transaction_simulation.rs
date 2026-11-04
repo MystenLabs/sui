@@ -220,7 +220,7 @@ pub fn simulate_transaction(
         &execution_epoch_id,
         epoch_timestamp_ms,
         checked_input_objects,
-        system_object_versions,
+        system_object_versions.clone(),
         gas_data,
         gas_status,
         kind,

@@ -124,8 +124,8 @@ pub fn ecrecover(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
+        cost_per_byte.saturating_mul(msg_ref.len() as u64)
+            + cost_per_block.saturating_mul(msg_ref.len().div_ceil(block_size) as u64)
     );
 
     let cost = context.gas_used();
@@ -275,8 +275,8 @@ pub fn secp256k1_verify(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
+        cost_per_byte.saturating_mul(msg_ref.len() as u64)
+            + cost_per_block.saturating_mul(msg_ref.len().div_ceil(block_size) as u64)
     );
 
     let cost = context.gas_used();

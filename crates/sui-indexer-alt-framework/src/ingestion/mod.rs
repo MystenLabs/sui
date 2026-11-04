@@ -94,6 +94,7 @@ pub struct IngestionService {
     config: IngestionConfig,
     ingestion_client: IngestionClient,
     streaming_client: Option<ArcStreamingClient>,
+    gap_fill_client: Option<IngestionClient>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
 }
 
@@ -114,6 +115,9 @@ pub(crate) struct IngestionFactory {
 
     /// Cloned into every service created, and used by [Self::latest_checkpoint_number].
     streaming_client: Option<ArcStreamingClient>,
+
+    /// Rebound to each service's cohort, like the ingestion client.
+    gap_fill_client: Option<IngestionClient>,
 }
 
 impl IngestionConfig {
@@ -141,17 +145,19 @@ impl IngestionService {
     /// After initialization, subscribers can be added using [Self::subscribe_bounded], and the
     /// service is started with [Self::run], given a range of checkpoints to fetch (potentially
     /// unbounded).
-    pub fn new(
+    pub async fn new(
         args: ClientArgs,
         config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> Result<Self> {
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
-        let (ingestion_client, streaming_client) = clients_from_args(args, &config, metrics)?;
+        let (ingestion_client, streaming_client, gap_fill_client) =
+            clients_from_args(args, &config, metrics).await?;
         Ok(Self::with_clients(
             ingestion_client,
             streaming_client,
+            gap_fill_client,
             config,
         ))
     }
@@ -163,16 +169,21 @@ impl IngestionService {
     /// implementations — for example, when embedding the indexer in a fullnode that already has
     /// checkpoint data on hand — use this constructor instead of [`Self::new`].
     ///
+    /// If `gap_fill_client` is provided, it fetches the checkpoints between the service's
+    /// position and the start of a newly connected stream, instead of `ingestion_client`.
+    ///
     /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
     pub fn with_clients(
         ingestion_client: IngestionClient,
         streaming_client: Option<ArcStreamingClient>,
+        gap_fill_client: Option<IngestionClient>,
         config: IngestionConfig,
     ) -> Self {
         Self {
             config,
             ingestion_client,
             streaming_client,
+            gap_fill_client,
             subscribers: Vec::new(),
         }
     }
@@ -214,6 +225,7 @@ impl IngestionService {
             config,
             ingestion_client,
             streaming_client,
+            gap_fill_client,
             subscribers,
         } = self;
 
@@ -226,6 +238,7 @@ impl IngestionService {
             streaming_client,
             config,
             ingestion_client,
+            gap_fill_client,
             subscribers,
         ))
     }
@@ -234,17 +247,19 @@ impl IngestionService {
 impl IngestionFactory {
     /// Create a factory whose services fetch checkpoints as specified by `args`, reporting
     /// metrics registered under `metrics_prefix` in `registry`.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         args: ClientArgs,
         config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> Result<Self> {
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
-        let (ingestion_client, streaming_client) = clients_from_args(args, &config, metrics)?;
+        let (ingestion_client, streaming_client, gap_fill_client) =
+            clients_from_args(args, &config, metrics).await?;
         Ok(Self::with_clients(
             ingestion_client,
             streaming_client,
+            gap_fill_client,
             config,
         ))
     }
@@ -258,12 +273,14 @@ impl IngestionFactory {
     pub(crate) fn with_clients(
         ingestion_client: IngestionClient,
         streaming_client: Option<ArcStreamingClient>,
+        gap_fill_client: Option<IngestionClient>,
         config: IngestionConfig,
     ) -> Self {
         Self {
             config,
             ingestion_client,
             streaming_client,
+            gap_fill_client,
         }
     }
 
@@ -294,6 +311,9 @@ impl IngestionFactory {
         IngestionService::with_clients(
             self.ingestion_client.for_cohort(cohort),
             self.streaming_client.clone(),
+            self.gap_fill_client
+                .as_ref()
+                .map(|client| client.for_cohort(cohort)),
             self.config.clone(),
         )
     }
@@ -319,12 +339,21 @@ impl Default for IngestionConfig {
     }
 }
 
-/// Build the ingestion client (and optional streaming client) described by `args`.
-fn clients_from_args(
+/// Build the ingestion client, and the optional streaming and gap-fill clients, described by
+/// `args`.
+async fn clients_from_args(
     args: ClientArgs,
     config: &IngestionConfig,
     metrics: Arc<IngestionMetrics>,
-) -> Result<(IngestionClient, Option<ArcStreamingClient>)> {
+) -> Result<(
+    IngestionClient,
+    Option<ArcStreamingClient>,
+    Option<IngestionClient>,
+)> {
+    let gap_fill_client = args
+        .streaming
+        .gap_fill_client(config.streaming_connection_timeout(), metrics.clone())
+        .await?;
     let ingestion_client = IngestionClient::new(args.ingestion, metrics)?;
     let streaming_client = args.streaming.streaming_url.map(|uri| {
         Arc::new(GrpcStreamingClient::new(
@@ -333,7 +362,7 @@ fn clients_from_args(
             config.streaming_statement_timeout(),
         )) as ArcStreamingClient
     });
-    Ok((ingestion_client, streaming_client))
+    Ok((ingestion_client, streaming_client, gap_fill_client))
 }
 
 /// Return the latest checkpoint number known to the underlying checkpoint source, preferably
@@ -428,6 +457,7 @@ mod tests {
             None,
             &registry,
         )
+        .await
         .unwrap()
     }
 
@@ -657,8 +687,8 @@ mod tests {
 
     /// Every service an args-driven factory creates shares the factory's metrics; no additional
     /// metrics are registered.
-    #[test]
-    fn factory_from_args_shares_metrics() {
+    #[tokio::test]
+    async fn factory_from_args_shares_metrics() {
         let registry = Registry::new();
         let dir = tempfile::tempdir().unwrap();
         let args = ClientArgs {
@@ -669,8 +699,9 @@ mod tests {
             ..Default::default()
         };
 
-        let factory =
-            IngestionFactory::new(args, IngestionConfig::default(), None, &registry).unwrap();
+        let factory = IngestionFactory::new(args, IngestionConfig::default(), None, &registry)
+            .await
+            .unwrap();
 
         let first = factory.create(0);
         let second = factory.create(1);
@@ -709,6 +740,7 @@ mod tests {
         let factory = IngestionFactory::with_clients(
             client,
             Some(Arc::new(MockStreamingClient::new([42], None))),
+            None,
             IngestionConfig::default(),
         );
 

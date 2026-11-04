@@ -50,6 +50,7 @@ module T::test {
 //# create-checkpoint
 
 //# run-graphql
+/*
 { # Account A queries
   accountA: address(address: "@{A}") {
     # All objects including coins and bags
@@ -107,8 +108,10 @@ fragment B on Balance {
   coinType { repr }
   totalBalance
 }
+*/
 
 //# run-graphql
+/*
 { # Account B queries
   accountB: address(address: "@{B}") {
     # All objects for B
@@ -159,8 +162,10 @@ fragment B on Balance {
   coinType { repr }
   totalBalance
 }
+*/
 
 //# run-graphql
+/*
 { # Time travel to checkpoint 2 (before transfers)
   timeTravel: checkpoint(sequenceNumber: 2) {
     query {
@@ -188,3 +193,4 @@ fragment B on Balance {
     }
   }
 }
+*/

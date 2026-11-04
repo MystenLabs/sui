@@ -4,7 +4,7 @@
 use std::ops::DerefMut;
 
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes};
+use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas};
 use move_vm_runtime::{
     execution::Type,
     shared::{
@@ -168,7 +168,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     fn charge_call(
         &mut self,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         // We will have to perform this many pops for the call.
         let pops = args.len() as u64;
@@ -184,7 +184,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     fn charge_call_generic(
         &mut self,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         // We have to perform this many pops from the operand stack for this function call.
         let pops = args.len() as u64;
@@ -198,9 +198,9 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
     }
 
-    fn charge_ld_const(&mut self, size: NumBytes) -> PartialVMResult<()> {
+    fn charge_ld_const(&mut self, size: u64) -> PartialVMResult<()> {
         // Charge for the load from the locals onto the stack.
-        self.0.charge(1, 1, 0, u64::from(size), 0)
+        self.0.charge(1, 1, 0, size, 0)
     }
 
     fn charge_ld_const_after_deserialization(
@@ -357,11 +357,11 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_vec_unpack(
         &mut self,
-        expect_num_elements: NumArgs,
+        expect_num_elements: u64,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         // Charge for the pushes
-        let pushes = u64::from(expect_num_elements);
+        let pushes = expect_num_elements;
         // The stack size stays pretty much the same modulo the additional vector size
         self.0.charge(1, pushes, 1, 0, VEC_SIZE.into())
     }

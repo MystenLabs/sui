@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 23 tasks
+processed 24 tasks
 
 init:
 A: object(0,0)
@@ -73,14 +73,14 @@ task 12, line 40:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 13, lines 43-89:
+task 13, lines 43-91:
 //# run-graphql
 Response: {
   "data": {
     "allCheckpoints": {
       "pageInfo": {
-        "startCursor": "KAEyAggA",
-        "endCursor": "KAEyAggG",
+        "startCursor": "AAIAAAAAAAAAAA==",
+        "endCursor": "AAIGAAAAAAAAAA==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -152,8 +152,8 @@ Response: {
     },
     "paginatedCheckpointsAtEpochHasNextPage": {
       "pageInfo": {
-        "startCursor": "KAEyAggE",
-        "endCursor": "KAEyAggF",
+        "startCursor": "AAIEAAAAAAAAAA==",
+        "endCursor": "AAIFAAAAAAAAAA==",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -180,8 +180,8 @@ Response: {
     },
     "paginatedCheckpointsAtEpochHasPreviousPage": {
       "pageInfo": {
-        "startCursor": "KAEyAggF",
-        "endCursor": "KAEyAggG",
+        "startCursor": "AAIFAAAAAAAAAA==",
+        "endCursor": "AAIGAAAAAAAAAA==",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
@@ -218,14 +218,14 @@ Response: {
   }
 }
 
-task 14, lines 91-108:
-//# run-graphql --cursors 6
+task 14, lines 93-112:
+//# run-graphql --cursors bcs(0u8,2u8,6)
 Response: {
   "data": {
     "checkpointsAtEpoch1BeforeCp6FromBackHasNextPage": {
       "pageInfo": {
-        "startCursor": "KAEyAggF",
-        "endCursor": "KAEyAggF",
+        "startCursor": "AAIFAAAAAAAAAA==",
+        "endCursor": "AAIFAAAAAAAAAA==",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -244,14 +244,14 @@ Response: {
   }
 }
 
-task 15, lines 110-127:
-//# run-graphql --cursors 0
+task 15, lines 114-133:
+//# run-graphql --cursors bcs(0u8,2u8,0)
 Response: {
   "data": {
     "checkpointsAfterCp0HasPreviousPreviousPage": {
       "pageInfo": {
-        "startCursor": "KAEyAggB",
-        "endCursor": "KAEyAggB",
+        "startCursor": "AAIBAAAAAAAAAA==",
+        "endCursor": "AAIBAAAAAAAAAA==",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -270,14 +270,14 @@ Response: {
   }
 }
 
-task 16, lines 129-146:
-//# run-graphql --cursors 4
+task 16, lines 135-154:
+//# run-graphql --cursors bcs(0u8,2u8,4)
 Response: {
   "data": {
     "checkpointsBeforeCp4FromBack": {
       "pageInfo": {
-        "startCursor": "KAEyAggC",
-        "endCursor": "KAEyAggD",
+        "startCursor": "AAICAAAAAAAAAA==",
+        "endCursor": "AAIDAAAAAAAAAA==",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -305,14 +305,14 @@ Response: {
   }
 }
 
-task 17, lines 148-165:
-//# run-graphql --cursors 0
+task 17, lines 156-175:
+//# run-graphql --cursors bcs(0u8,2u8,0)
 Response: {
   "data": {
     "checkpointsAtEpoch0AfterCp0": {
       "pageInfo": {
-        "startCursor": "KAEyAggB",
-        "endCursor": "KAEyAggD",
+        "startCursor": "AAIBAAAAAAAAAA==",
+        "endCursor": "AAIDAAAAAAAAAA==",
         "hasPreviousPage": true,
         "hasNextPage": false
       },
@@ -349,14 +349,14 @@ Response: {
   }
 }
 
-task 18, lines 167-184:
-//# run-graphql  --cursors 3
+task 18, lines 177-196:
+//# run-graphql  --cursors bcs(0u8,2u8,3)
 Response: {
   "data": {
     "checkpointsAtEpoch0BeforeCp3": {
       "pageInfo": {
-        "startCursor": "KAEyAggA",
-        "endCursor": "KAEyAggC",
+        "startCursor": "AAIAAAAAAAAAAA==",
+        "endCursor": "AAICAAAAAAAAAA==",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -393,14 +393,14 @@ Response: {
   }
 }
 
-task 19, lines 186-218:
-//# run-graphql  --cursors 0 3
+task 19, lines 198-232:
+//# run-graphql  --cursors bcs(0u8,2u8,0) bcs(0u8,2u8,3)
 Response: {
   "data": {
     "checkpointsAtEpoch0BetweenCp03FromFront": {
       "pageInfo": {
-        "startCursor": "KAEyAggB",
-        "endCursor": "KAEyAggB",
+        "startCursor": "AAIBAAAAAAAAAA==",
+        "endCursor": "AAIBAAAAAAAAAA==",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -418,8 +418,8 @@ Response: {
     },
     "checkpointsAtEpoch0BetweenCp03FromBack": {
       "pageInfo": {
-        "startCursor": "KAEyAggC",
-        "endCursor": "KAEyAggC",
+        "startCursor": "AAICAAAAAAAAAA==",
+        "endCursor": "AAICAAAAAAAAAA==",
         "hasPreviousPage": true,
         "hasNextPage": true
       },
@@ -438,14 +438,14 @@ Response: {
   }
 }
 
-task 20, lines 220-237:
-//# run-graphql  --cursors 6
+task 20, lines 234-253:
+//# run-graphql  --cursors bcs(0u8,2u8,6)
 Response: {
   "data": {
     "checkpointsAtEpoch1BeforeCp6FromBack": {
       "pageInfo": {
-        "startCursor": "KAEyAggE",
-        "endCursor": "KAEyAggF",
+        "startCursor": "AAIEAAAAAAAAAA==",
+        "endCursor": "AAIFAAAAAAAAAA==",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -473,14 +473,14 @@ Response: {
   }
 }
 
-task 21, lines 239-255:
-//# run-graphql --cursors 1
+task 21, lines 255-273:
+//# run-graphql --cursors bcs(0u8,2u8,1)
 Response: {
   "data": {
     "checkpointsBeforeCp1": {
       "pageInfo": {
-        "startCursor": "KAEyAggA",
-        "endCursor": "KAEyAggA",
+        "startCursor": "AAIAAAAAAAAAAA==",
+        "endCursor": "AAIAAAAAAAAAAA==",
         "hasPreviousPage": false,
         "hasNextPage": true
       },
@@ -495,8 +495,8 @@ Response: {
   }
 }
 
-task 22, lines 257-273:
-//# run-graphql --cursors 0
+task 22, lines 275-293:
+//# run-graphql --cursors bcs(0u8,2u8,0)
 Response: {
   "data": {
     "checkpointsBeforeCp0": {
@@ -507,6 +507,69 @@ Response: {
         "hasNextPage": false
       },
       "edges": []
+    }
+  }
+}
+
+task 23, lines 294-318:
+//# run-graphql --cursors bcs(0u8,2u8,2) bcs(0u8,2u8,5)
+Response: {
+  "data": {
+    "checkpointsAfterCp2AfterCheckpoint2": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 3
+        },
+        {
+          "sequenceNumber": 4
+        }
+      ]
+    },
+    "checkpointsAfterCp2AfterCheckpoint3": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 4
+        },
+        {
+          "sequenceNumber": 5
+        }
+      ]
+    },
+    "checkpointsBeforeCp5BeforeCheckpoint5": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 3
+        },
+        {
+          "sequenceNumber": 4
+        }
+      ]
+    },
+    "checkpointsBeforeCp5BeforeCheckpoint4": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 2
+        },
+        {
+          "sequenceNumber": 3
+        }
+      ]
     }
   }
 }

@@ -1,0 +1,106 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+// Release and re-claim a derived object that is stored as a dynamic object field.
+
+init:
+A: object(0,0)
+
+task 1, lines 8-37:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7607600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 39:
+//# run ex::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 41-43:
+//# programmable --sender A --inputs object(2,0)
+//> 0: ex::m::claim(Input(0));
+//> ex::m::add_dof(Input(0), Result(0))
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 8367600,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 4, line 45:
+//# view-object 3,0
+Owner: Object ID: ( fake(3,2) )
+Version: 3
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 5, lines 47-50:
+// Remove the dynamic object field and release: X and its field are deleted.
+//# programmable --sender A --inputs object(2,0)
+//> 0: ex::m::remove_dof(Input(0));
+//> ex::m::release(Input(0), Result(0))
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1), object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 8366763, non_refundable_storage_fee: 837
+
+task 6, lines 52-55:
+// Claim X again as a dynamic object field: X and its field are created.
+//# programmable --sender A --inputs object(2,0)
+//> 0: ex::m::claim(Input(0));
+//> ex::m::add_dof(Input(0), Result(0))
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 8367600,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 7, lines 57-63:
+// Remove, release, claim, add back in one transaction: X ends unchanged, so it is not in the
+// effects.
+//# programmable --sender A --inputs object(2,0)
+//> 0: ex::m::remove_dof(Input(0));
+//> ex::m::release(Input(0), Result(0));
+//> 2: ex::m::claim(Input(0));
+//> ex::m::add_dof(Input(0), Result(2))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 8, line 65:
+//# view-object 3,0
+Owner: Object ID: ( fake(3,2) )
+Version: 5
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 9, lines 67-73:
+// Remove, release, claim, transfer to A in one transaction: X is mutated with a new owner and its
+// field is deleted.
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::remove_dof(Input(0));
+//> ex::m::release(Input(0), Result(0));
+//> 2: ex::m::claim(Input(0));
+//> TransferObjects([Result(2)], Input(1))
+mutated: object(0,0), object(2,0), object(3,0)
+deleted: object(3,2)
+gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 5874213, non_refundable_storage_fee: 587
+
+task 10, line 75:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 7
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}

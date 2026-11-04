@@ -651,6 +651,7 @@ impl SuiNode {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
+            &config,
             (chain_id, chain),
             highest_executed_checkpoint,
             previous_epoch_last_checkpoint,
@@ -937,6 +938,7 @@ impl SuiNode {
                         ConsensusAdapterMetrics::new(&registry_service.default_registry())
                     })
                     .clone(),
+                state.get_cache_writer().clone(),
             ))
         });
         let node_role = epoch_store.node_role();
@@ -1613,6 +1615,10 @@ impl SuiNode {
 
         info!("Starting consensus manager asynchronously");
 
+        // Subscribe before starting consensus so that the replay waiter cannot miss the
+        // one-shot consumer monitor broadcast if consensus starts immediately.
+        let replay_waiter = consensus_manager.replay_waiter();
+
         // Spawn consensus startup asynchronously to avoid blocking other components
         tokio::spawn({
             let config = config.clone();
@@ -1636,8 +1642,6 @@ impl SuiNode {
                     .await;
             }
         });
-        let replay_waiter = consensus_manager.replay_waiter();
-
         info!("Spawning checkpoint service");
         let replay_waiter = if std::env::var("DISABLE_REPLAY_WAITER").is_ok() {
             None

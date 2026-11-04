@@ -69,8 +69,8 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
 /// use only by the recipient(s), in this case the `party`. This means that only the members
 /// can use the object as an input to a transaction. It is similar to `share_object` two ways. One
 /// in that the object can potentially be used by anyone, as defined by the `default` permissions of
-/// the `Party` value. The other in that the object must be used in consensus and cannot be
-/// used in the fast path.
+/// the `Party` value. The other in that consensus assigns the object's version when a
+/// transaction uses it.
 /// This function has custom rules performed by the Sui Move bytecode verifier that ensures that `T`
 /// is an object defined in the module where `transfer` is invoked. Use `public_party_transfer`
 /// to transfer an object with `store` outside of its module.
@@ -85,8 +85,8 @@ public fun party_transfer<T: key>(obj: T, party: sui::party::Party) {
 /// use only by the recipient(s), in this case the `party`. This means that only the members
 /// can use the object as an input to a transaction. It is similar to `share_object` two ways. One
 /// in that the object can potentially be used by anyone, as defined by the `default` permissions of
-/// the `Party` value. The other in that the object must be used in consensus and cannot be
-/// used in the fast path.
+/// the `Party` value. The other in that consensus assigns the object's version when a
+/// transaction uses it.
 /// The object must have `store` to be transferred outside of its module.
 public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Party) {
     assert!(party.is_single_owner(), EInvalidPartyPermissions);

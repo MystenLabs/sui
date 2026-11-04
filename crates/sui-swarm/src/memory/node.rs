@@ -76,6 +76,32 @@ impl Node {
         info!(name =% self.name().concise(), "node stopped");
     }
 
+    /// Stop this Node the way a SIGTERM stops a production node: the tokio runtime is dropped,
+    /// so for up to `poll_budget` polls (or `max_duration`) async tasks keep running while
+    /// `spawn_blocking` returns cancelled handles. Returns after the node is stopped.
+    #[cfg(msim)]
+    pub async fn graceful_stop(&self, poll_budget: usize, max_duration: std::time::Duration) {
+        let Some(node_id) = self
+            .container
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|c| c.sim_node_id())
+        else {
+            return;
+        };
+        info!(name =% self.name().concise(), poll_budget, "gracefully stopping in-memory node");
+        sui_simulator::runtime::Handle::current().begin_graceful_shutdown(
+            node_id,
+            None,
+            poll_budget,
+            max_duration,
+        );
+        // The simulator kills the node by the deadline.
+        tokio::time::sleep(max_duration).await;
+        self.stop();
+    }
+
     /// If this Node is currently running
     pub fn is_running(&self) -> bool {
         self.container

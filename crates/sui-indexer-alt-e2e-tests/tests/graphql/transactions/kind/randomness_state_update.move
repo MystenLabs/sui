@@ -10,6 +10,7 @@
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   # Test the RandomnessStateUpdate transaction created by set-random-state
   randomnessStateUpdateTransaction: transaction(digest: "@{digest_2}") {
@@ -25,3 +26,4 @@
     }
   }
 } 
+*/

@@ -9,8 +9,6 @@ use std::sync::atomic::Ordering;
 use sui_futures::service::Service;
 use tokio::sync::SetOnce;
 use tokio::sync::mpsc;
-use tokio::time::MissedTickBehavior;
-use tokio::time::interval;
 use tracing::debug;
 use tracing::info;
 
@@ -19,6 +17,7 @@ use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
 use crate::pipeline::IndexedCheckpoint;
 use crate::pipeline::WatermarkPart;
+use crate::pipeline::batch_floor::BatchFloor;
 use crate::pipeline::concurrent::BatchStatus;
 use crate::pipeline::concurrent::BatchedRows;
 use crate::pipeline::concurrent::Handler;
@@ -56,16 +55,18 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 }
 
 /// The collector task is responsible for gathering rows into batches which it then sends to a
-/// committer task to write to the database. The task publishes batches in the following
-/// circumstances:
+/// committer task to write to the database:
 ///
-/// - If `H::BATCH_SIZE` rows are pending, it will immediately schedule a batch to be gathered.
+/// - Whenever rows are pending and the committer has room for another batch (its input channel
+///   has a free slot), the collector cuts the pending rows into a batch and sends it. While the
+///   committer is busy, rows keep accumulating, so batches grow under back-pressure. A batch also
+///   ends when the handler reports it as ready, or when it holds `max_watermark_updates`
+///   checkpoints; whatever is left goes into the next batch.
 ///
-/// - If after sending one batch there is more data to be sent, it will immediately schedule the
-///   next batch to be gathered (Each batch will contain at most `H::CHUNK_SIZE` rows).
+/// - If `config.min_batch_rows` is set, rows are only cut into a batch once that many are pending,
+///   or once rows have been pending for `config.max_batch_delay()`.
 ///
-/// - Otherwise, it will check for any data to write out at a regular interval (controlled by
-///   `config.collect_interval()`).
+/// - When the processor closes its channel, everything still pending is written out.
 ///
 /// The `main_reader_lo` tracks the lowest checkpoint that can be committed by this pipeline.
 ///
@@ -77,16 +78,10 @@ pub(super) fn collector<H: Handler>(
     tx: mpsc::Sender<BatchedRows<H>>,
     main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
-    min_eager_rows: usize,
     max_pending_rows: usize,
     max_watermark_updates: usize,
 ) -> Service {
     Service::new().spawn_aborting(async move {
-        // The `poll` interval controls the maximum time to wait between collecting batches,
-        // regardless of number of rows pending.
-        let mut poll = interval(config.collect_interval());
-        poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
             &metrics.collected_checkpoint_timestamp_lag,
             &metrics.latest_collected_checkpoint_timestamp_lag_ms,
@@ -96,6 +91,7 @@ pub(super) fn collector<H: Handler>(
         // Data for checkpoints that are ready to be sent but haven't been written yet.
         let mut pending: BTreeMap<u64, PendingCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
+        let mut floor = BatchFloor::new(&config);
 
         info!(pipeline = H::NAME, "Starting collector");
 
@@ -103,12 +99,39 @@ pub(super) fn collector<H: Handler>(
         let reader_lo_atomic = main_reader_lo.wait().await;
 
         loop {
-            // === IDLE: block until timer fires or enough data accumulates ===
+            let batch_due = floor.is_reached(pending_rows);
+
             tokio::select! {
                 biased;
 
+                permit = tx.reserve(), if batch_due => {
+                    let Ok(permit) = permit else {
+                        info!(
+                            pipeline = H::NAME,
+                            "Committer closed channel, stopping collector"
+                        );
+                        return Ok(());
+                    };
+
+                    let batched_rows = gather_batch(
+                        &*handler,
+                        &mut pending,
+                        &mut pending_rows,
+                        max_watermark_updates,
+                        &checkpoint_lag_reporter,
+                        &metrics,
+                    );
+                    permit.send(batched_rows);
+                    floor.set_pending(!pending.is_empty());
+                }
+
                 // docs::#collector (see https://docs.sui.io/develop/accessing-data/custom-indexer/custom-indexers)
-                Some(mut indexed) = rx.recv(), if pending_rows < max_pending_rows => {
+                received = rx.recv(), if pending_rows < max_pending_rows => {
+                    // The processor has stopped, so write out everything that is left.
+                    let Some(mut indexed) = received else {
+                        break;
+                    };
+
                     let reader_lo = reader_lo_atomic.load(Ordering::Relaxed);
 
                     metrics
@@ -151,104 +174,110 @@ pub(super) fn collector<H: Handler>(
                         .with_label_values(&[H::NAME])
                         .inc_by(recv_cps as u64);
 
-                    if pending_rows < min_eager_rows {
-                        continue;
-                    }
+                    floor.set_pending(true);
                 }
                 // docs::/#collector
 
-                // Timer: always flush (even if empty, for watermark progress)
-                _ = poll.tick() => {}
-            }
-
-            // === FLUSHING: send batches until pending is drained ===
-            //
-            // Always executes at least once — on timer ticks this sends an empty
-            // heartbeat batch so watermarks make progress.
-            loop {
-                let guard = metrics
-                    .collector_gather_latency
-                    .with_label_values(&[H::NAME])
-                    .start_timer();
-
-                let mut batch = H::Batch::default();
-                let mut watermark = Vec::new();
-                let mut batch_len = 0;
-
-                while let Some(mut entry) = pending.first_entry() {
-                    if watermark.len() >= max_watermark_updates {
-                        break;
-                    }
-
-                    let indexed = entry.get_mut();
-                    let before = indexed.values.len();
-                    let status = handler.batch(&mut batch, &mut indexed.values);
-                    let taken = before - indexed.values.len();
-
-                    batch_len += taken;
-                    watermark.push(indexed.watermark.take(taken));
-                    if indexed.is_empty() {
-                        checkpoint_lag_reporter.report_lag(
-                            indexed.watermark.checkpoint(),
-                            indexed.watermark.timestamp_ms(),
-                        );
-                        entry.remove();
-                    }
-
-                    if status == BatchStatus::Ready {
-                        break;
-                    }
-                }
-
-                let elapsed = guard.stop_and_record();
-                debug!(
-                    pipeline = H::NAME,
-                    elapsed_ms = elapsed * 1000.0,
-                    rows = batch_len,
-                    "Gathered batch",
-                );
-
-                metrics
-                    .total_collector_batches_created
-                    .with_label_values(&[H::NAME])
-                    .inc();
-
-                metrics
-                    .collector_batch_size
-                    .with_label_values(&[H::NAME])
-                    .observe(batch_len as f64);
-
-                pending_rows -= batch_len;
-
-                let batched_rows = BatchedRows {
-                    batch,
-                    batch_len,
-                    watermark,
-                };
-                if tx.send(batched_rows).await.is_err() {
-                    info!(
-                        pipeline = H::NAME,
-                        "Committer closed channel, stopping collector"
-                    );
-                    return Ok(());
-                }
-
-                if pending.is_empty() {
-                    break;
-                }
-            }
-
-            if rx.is_closed() && rx.is_empty() && pending_rows == 0 {
-                info!(
-                    pipeline = H::NAME,
-                    "Processor closed channel, pending rows empty, stopping collector",
-                );
-                break;
+                () = floor.delay_elapsed(), if !batch_due => {}
             }
         }
 
+        while !pending.is_empty() {
+            let batched_rows = gather_batch(
+                &*handler,
+                &mut pending,
+                &mut pending_rows,
+                max_watermark_updates,
+                &checkpoint_lag_reporter,
+                &metrics,
+            );
+            if tx.send(batched_rows).await.is_err() {
+                info!(
+                    pipeline = H::NAME,
+                    "Committer closed channel, stopping collector"
+                );
+                return Ok(());
+            }
+        }
+
+        info!(
+            pipeline = H::NAME,
+            "Processor closed channel, pending rows empty, stopping collector",
+        );
+
         Ok(())
     })
+}
+
+/// Cut the next batch out of `pending`, taking checkpoints in order until the handler reports the
+/// batch as ready or it holds `max_watermark_updates` watermarks.
+fn gather_batch<H: Handler>(
+    handler: &H,
+    pending: &mut BTreeMap<u64, PendingCheckpoint<H>>,
+    pending_rows: &mut usize,
+    max_watermark_updates: usize,
+    checkpoint_lag_reporter: &CheckpointLagMetricReporter,
+    metrics: &IndexerMetrics,
+) -> BatchedRows<H> {
+    let guard = metrics
+        .collector_gather_latency
+        .with_label_values(&[H::NAME])
+        .start_timer();
+
+    let mut batch = H::Batch::default();
+    let mut watermark = Vec::new();
+    let mut batch_len = 0;
+
+    while let Some(mut entry) = pending.first_entry() {
+        if watermark.len() >= max_watermark_updates {
+            break;
+        }
+
+        let indexed = entry.get_mut();
+        let before = indexed.values.len();
+        let status = handler.batch(&mut batch, &mut indexed.values);
+        let taken = before - indexed.values.len();
+
+        batch_len += taken;
+        watermark.push(indexed.watermark.take(taken));
+        if indexed.is_empty() {
+            checkpoint_lag_reporter.report_lag(
+                indexed.watermark.checkpoint(),
+                indexed.watermark.timestamp_ms(),
+            );
+            entry.remove();
+        }
+
+        if status == BatchStatus::Ready {
+            break;
+        }
+    }
+
+    let elapsed = guard.stop_and_record();
+    debug!(
+        pipeline = H::NAME,
+        elapsed_ms = elapsed * 1000.0,
+        rows = batch_len,
+        "Gathered batch",
+    );
+
+    metrics
+        .total_collector_batches_created
+        .with_label_values(&[H::NAME])
+        .inc();
+
+    metrics
+        .collector_batch_size
+        .with_label_values(&[H::NAME])
+        .observe(batch_len as f64);
+
+    *pending_rows -= batch_len;
+
+    BatchedRows {
+        batch,
+        batch_len,
+        watermark,
+    }
 }
 
 #[cfg(test)]
@@ -290,7 +319,6 @@ mod tests {
         type Store = FallibleMockStore;
         type Batch = Vec<Entry>;
 
-        const MIN_EAGER_ROWS: usize = 10;
         const MAX_PENDING_ROWS: usize = 10000;
 
         fn batch(
@@ -320,6 +348,43 @@ mod tests {
         }
     }
 
+    /// Start a collector whose committer channel holds `collector_channel_size` batches.
+    fn spawn_collector(
+        config: CommitterConfig,
+        collector_channel_size: usize,
+    ) -> (
+        mpsc::Sender<IndexedCheckpoint<TestHandler>>,
+        mpsc::Receiver<BatchedRows<TestHandler>>,
+        Service,
+    ) {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, collector_rx) = mpsc::channel(collector_channel_size);
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
+
+        let service = collector::<TestHandler>(
+            Arc::new(TestHandler),
+            config,
+            processor_rx,
+            collector_tx,
+            main_reader_lo,
+            test_metrics(),
+            TestHandler::MAX_PENDING_ROWS,
+            TestHandler::MAX_WATERMARK_UPDATES,
+        );
+
+        (processor_tx, collector_rx, service)
+    }
+
+    /// Configuration that holds rows until `min_batch_rows` are pending, or for at most
+    /// `max_batch_delay_ms`.
+    fn min_batch_config(min_batch_rows: usize, max_batch_delay_ms: u64) -> CommitterConfig {
+        CommitterConfig {
+            min_batch_rows,
+            max_batch_delay_ms,
+            ..CommitterConfig::default()
+        }
+    }
+
     /// Wait for a timeout on the channel, expecting this operation to timeout.
     async fn expect_timeout<H: Handler>(
         rx: &mut mpsc::Receiver<BatchedRows<H>>,
@@ -346,22 +411,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_collector_batches_data() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
-
-        let handler = Arc::new(TestHandler);
-        let _collector = collector::<TestHandler>(
-            handler,
-            CommitterConfig::default(),
-            processor_rx,
-            collector_tx,
-            main_reader_lo.clone(),
-            test_metrics(),
-            TestHandler::MIN_EAGER_ROWS,
-            TestHandler::MAX_PENDING_ROWS,
-            TestHandler::MAX_WATERMARK_UPDATES,
-        );
+        let (processor_tx, mut collector_rx, _collector) =
+            spawn_collector(CommitterConfig::default(), 10);
 
         let part1_length = TEST_MAX_CHUNK_ROWS / 2;
         let part2_length = TEST_MAX_CHUNK_ROWS - part1_length - 1;
@@ -386,22 +437,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_collector_shutdown() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
-
-        let handler = Arc::new(TestHandler);
-        let mut collector = collector::<TestHandler>(
-            handler,
-            CommitterConfig::default(),
-            processor_rx,
-            collector_tx,
-            main_reader_lo,
-            test_metrics(),
-            TestHandler::MIN_EAGER_ROWS,
-            TestHandler::MAX_PENDING_ROWS,
-            TestHandler::MAX_WATERMARK_UPDATES,
-        );
+        let (processor_tx, mut collector_rx, mut collector) =
+            spawn_collector(CommitterConfig::default(), 10);
 
         processor_tx
             .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry, Entry]))
@@ -441,7 +478,6 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
-            TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
             TestHandler::MAX_WATERMARK_UPDATES,
         );
@@ -479,148 +515,107 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
-    async fn test_collector_accumulates_across_checkpoints_until_eager_threshold() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
+    /// A checkpoint is cut into a batch as soon as the committer has room, and checkpoints that
+    /// arrive while it has none are gathered into the next batch together.
+    #[tokio::test(start_paused = true)]
+    async fn test_collector_writes_as_soon_as_the_committer_has_room() {
+        let (processor_tx, mut collector_rx, _collector) =
+            spawn_collector(CommitterConfig::default(), 1);
 
-        // Set a very long collect interval (60 seconds) to ensure timing doesn't trigger batching
-        let config = CommitterConfig {
-            collect_interval_ms: 60_000,
-            ..CommitterConfig::default()
-        };
-        let handler = Arc::new(TestHandler);
-        let _collector = collector::<TestHandler>(
-            handler,
-            config,
-            processor_rx,
-            collector_tx,
-            main_reader_lo.clone(),
-            test_metrics(),
-            TestHandler::MIN_EAGER_ROWS,
-            TestHandler::MAX_PENDING_ROWS,
-            TestHandler::MAX_WATERMARK_UPDATES,
-        );
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry]))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
 
-        let start_time = std::time::Instant::now();
+        // The first batch now fills the committer's channel, so these have to wait.
+        for cp in 2..=4 {
+            processor_tx
+                .send(IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry]))
+                .await
+                .unwrap();
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
 
-        // The collector starts with an immediate poll tick, creating an empty batch
-        let initial_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(initial_batch.batch_len, 0);
-
-        // Send data that's just below MIN_EAGER_ROWS threshold.
-        let below_threshold =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS - 1]);
-        processor_tx.send(below_threshold).await.unwrap();
-
-        // Try to receive with timeout - should timeout since we're below threshold
-        expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-
-        // Now send one more entry to cross the MIN_EAGER_ROWS threshold
-        let threshold_trigger = IndexedCheckpoint::new(
-            0,
-            2,
-            20,
-            2000,
-            vec![Entry; 1], // Just 1 more entry to reach 10 total
-        );
-        processor_tx.send(threshold_trigger).await.unwrap();
-
-        // Should immediately get a batch without waiting for the long interval
-        let eager_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(eager_batch.batch_len, TestHandler::MIN_EAGER_ROWS);
-
-        // Verify batch was created quickly (much less than 60 seconds)
-        let elapsed = start_time.elapsed();
-        assert!(elapsed < Duration::from_secs(10));
-    }
-
-    #[tokio::test]
-    async fn test_immediate_batch_on_min_eager_rows() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
-
-        // Set a very long collect interval (60 seconds) to ensure timing doesn't trigger batching
-        let config = CommitterConfig {
-            collect_interval_ms: 60_000,
-            ..CommitterConfig::default()
-        };
-        let handler = Arc::new(TestHandler);
-        let _collector = collector::<TestHandler>(
-            handler,
-            config,
-            processor_rx,
-            collector_tx,
-            main_reader_lo.clone(),
-            test_metrics(),
-            TestHandler::MIN_EAGER_ROWS,
-            TestHandler::MAX_PENDING_ROWS,
-            TestHandler::MAX_WATERMARK_UPDATES,
-        );
-
-        // The collector starts with an immediate poll tick, creating an empty batch
-        let initial_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(initial_batch.batch_len, 0);
-        // The collector will then just wait for the next poll as there is no new data yet.
-        expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-
-        let start_time = std::time::Instant::now();
-
-        // Send exactly MIN_EAGER_ROWS in one checkpoint
-        let exact_threshold =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS]);
-        processor_tx.send(exact_threshold).await.unwrap();
-
-        // Should trigger immediately since pending_rows >= MIN_EAGER_ROWS.
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(batch.batch_len, TestHandler::MIN_EAGER_ROWS);
+        assert_eq!(batch.batch_len, 1);
+        assert_eq!(batch.watermark.len(), 1);
 
-        // Verify batch was created quickly (much less than 60 seconds)
-        let elapsed = start_time.elapsed();
-        assert!(elapsed < Duration::from_secs(10));
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+        assert_eq!(batch.batch_len, 3);
+        assert_eq!(batch.watermark.len(), 3);
     }
 
-    #[tokio::test]
-    async fn test_collector_waits_for_timer_when_below_eager_threshold() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
+    /// Checkpoints without rows still reach the committer, so the watermark can advance past them.
+    #[tokio::test(start_paused = true)]
+    async fn test_collector_writes_checkpoints_without_rows() {
+        let (processor_tx, mut collector_rx, _collector) =
+            spawn_collector(CommitterConfig::default(), 10);
 
-        // Set a reasonable collect interval for this test (3 seconds).
-        let config = CommitterConfig {
-            collect_interval_ms: 3000,
-            ..CommitterConfig::default()
-        };
-        let handler = Arc::new(TestHandler);
-        let _collector = collector::<TestHandler>(
-            handler,
-            config,
-            processor_rx,
-            collector_tx,
-            main_reader_lo.clone(),
-            test_metrics(),
-            TestHandler::MIN_EAGER_ROWS,
-            TestHandler::MAX_PENDING_ROWS,
-            TestHandler::MAX_WATERMARK_UPDATES,
-        );
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![]))
+            .await
+            .unwrap();
 
-        // Consume initial empty batch
-        let initial_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(initial_batch.batch_len, 0);
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+        assert_eq!(batch.batch_len, 0);
+        assert_eq!(batch.watermark.len(), 1);
+    }
 
-        // Send MIN_EAGER_ROWS - 1 entries (below threshold)
-        let below_threshold =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS - 1]);
-        processor_tx.send(below_threshold).await.unwrap();
+    #[tokio::test(start_paused = true)]
+    async fn test_collector_holds_rows_until_min_batch_rows() {
+        let (processor_tx, mut collector_rx, _collector) =
+            spawn_collector(min_batch_config(10, 60_000), 10);
 
-        // Try to receive with timeout - should timeout since we're below threshold
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; 9]))
+            .await
+            .unwrap();
         expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
 
-        // Should eventually get batch when timer triggers
-        let timer_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(4)).await;
-        assert_eq!(timer_batch.batch_len, TestHandler::MIN_EAGER_ROWS - 1);
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 2, 20, 2000, vec![Entry]))
+            .await
+            .unwrap();
+
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_millis(100)).await;
+        assert_eq!(batch.batch_len, 10);
+        assert_eq!(batch.watermark.len(), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_collector_writes_rows_below_min_batch_rows_after_max_batch_delay() {
+        let (processor_tx, mut collector_rx, _collector) =
+            spawn_collector(min_batch_config(10, 3000), 10);
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; 9]))
+            .await
+            .unwrap();
+        expect_timeout(&mut collector_rx, Duration::from_secs(2)).await;
+
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
+        assert_eq!(batch.batch_len, 9);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_collector_writes_rows_below_min_batch_rows_on_shutdown() {
+        let (processor_tx, mut collector_rx, mut collector) =
+            spawn_collector(min_batch_config(100, 60_000), 10);
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; 5]))
+            .await
+            .unwrap();
+        drop(processor_tx);
+
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+        assert_eq!(batch.batch_len, 5);
+
+        tokio::time::timeout(Duration::from_secs(1), collector.join())
+            .await
+            .expect("collector shutdown timeout")
+            .expect("collector shutdown failed");
     }
 
     /// The collector must wait for `main_reader_lo` to be initialized before attempting to prepare
@@ -634,24 +629,16 @@ mod tests {
         let handler = Arc::new(TestHandler);
         let collector = collector(
             handler,
-            CommitterConfig {
-                // Collect interval longer than time to advance to ensure timing doesn't trigger
-                // batching.
-                collect_interval_ms: 200_000,
-                ..CommitterConfig::default()
-            },
+            CommitterConfig::default(),
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
             test_metrics(),
-            TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
             TestHandler::MAX_WATERMARK_UPDATES,
         );
 
-        // Send enough data to trigger batching.
-        let test_data =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS + 1]);
+        let test_data = IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; 11]);
         processor_tx.send(test_data).await.unwrap();
 
         // Advance time significantly - collector should still be blocked waiting for
@@ -667,7 +654,7 @@ mod tests {
 
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
 
-        assert_eq!(batch.batch_len, TestHandler::MIN_EAGER_ROWS + 1);
+        assert_eq!(batch.batch_len, 11);
 
         collector.shutdown().await.unwrap();
     }
@@ -683,26 +670,20 @@ mod tests {
 
         let collector = collector(
             Arc::new(TestHandler),
-            CommitterConfig {
-                // Collect interval longer than time to advance to ensure timing doesn't trigger
-                // batching.
-                collect_interval_ms: 200_000,
-                ..CommitterConfig::default()
-            },
+            CommitterConfig::default(),
             processor_rx,
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
-            TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
             TestHandler::MAX_WATERMARK_UPDATES,
         );
 
-        let eager_rows_plus_one = TestHandler::MIN_EAGER_ROWS + 1;
+        let rows_per_checkpoint = 11;
 
         let test_data: Vec<_> = [1, 5, 2, 6, 4, 3]
             .into_iter()
-            .map(|cp| IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry; eager_rows_plus_one]))
+            .map(|cp| IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry; rows_per_checkpoint]))
             .collect();
         for data in test_data {
             processor_tx.send(data).await.unwrap();
@@ -728,7 +709,7 @@ mod tests {
             4
         );
         // And that we only have values from two checkpoints (5, 6)
-        assert_eq!(batch.batch_len, eager_rows_plus_one * 2);
+        assert_eq!(batch.batch_len, rows_per_checkpoint * 2);
 
         collector.shutdown().await.unwrap();
     }
@@ -752,7 +733,6 @@ mod tests {
             collector_tx,
             main_reader_lo.clone(),
             metrics.clone(),
-            TestHandler::MIN_EAGER_ROWS,
             TestHandler::MAX_PENDING_ROWS,
             TestHandler::MAX_WATERMARK_UPDATES,
         );
@@ -770,15 +750,7 @@ mod tests {
 
         // Send indexed checkpoints 2 through 5 inclusive, but also bump the main reader lo to 4.
         let test_data: Vec<_> = (2..=5)
-            .map(|cp| {
-                IndexedCheckpoint::new(
-                    0,
-                    cp,
-                    10,
-                    1000,
-                    vec![Entry; TestHandler::MIN_EAGER_ROWS + 1],
-                )
-            })
+            .map(|cp| IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry; 11]))
             .collect();
         for data in test_data {
             processor_tx.send(data).await.unwrap();

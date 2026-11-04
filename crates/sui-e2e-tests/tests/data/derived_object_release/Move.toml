@@ -1,0 +1,10 @@
+[package]
+name = "derived_object_release"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+derived_object_release = "0x0"

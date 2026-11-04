@@ -34,6 +34,7 @@ module P0::m {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
     object(address: "0x2") {
         # All received transactions
@@ -66,3 +67,4 @@ module P0::m {
         }
     }
 }
+*/

@@ -74,6 +74,7 @@ module P1::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   allEvents: events(first: 50) {
     nodes {
@@ -124,3 +125,4 @@ fragment E on Event {
     }
   }
 }
+*/

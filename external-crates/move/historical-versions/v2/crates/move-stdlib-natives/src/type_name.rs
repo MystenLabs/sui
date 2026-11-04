@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
+use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
@@ -19,7 +19,7 @@ use std::{collections::VecDeque, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct GetGasParameters {
     pub base: InternalGas,
-    pub per_byte: InternalGasPerByte,
+    pub per_byte: InternalGas,
 }
 
 fn native_get(
@@ -46,7 +46,7 @@ fn native_get(
     // Charge base fee
     native_charge_gas_early_exit!(
         context,
-        gas_params.per_byte * NumBytes::new(type_name.len() as u64)
+        gas_params.per_byte.saturating_mul(type_name.len() as u64)
     );
 
     // make a std::string::String

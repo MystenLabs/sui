@@ -22,7 +22,7 @@ fn check_vector(buf: &[u8]) {
 }
 
 fn uleb128_test_u64(value: u64, expected_bytes: usize) {
-    let mut buf = BinaryData::new();
+    let mut buf = BinaryData::new_for_test();
     write_u64_as_uleb128(&mut buf, value).expect("serialization should work");
     assert_eq!(buf.len(), expected_bytes);
     let buf = buf.into_inner();
@@ -76,7 +76,7 @@ fn uleb128_canonicity_test() {
 proptest! {
     #[test]
     fn uleb128_roundtrip(input in any::<u64>()) {
-        let mut serialized = BinaryData::new();
+        let mut serialized = BinaryData::new_for_test();
         write_u64_as_uleb128(&mut serialized, input).expect("serialization should work");
         let serialized = serialized.into_inner();
         let mut cursor = Cursor::new(&serialized[..]);
@@ -86,7 +86,7 @@ proptest! {
 
     #[test]
     fn u16_roundtrip(input in any::<u16>()) {
-        let mut serialized = BinaryData::new();
+        let mut serialized = BinaryData::new_for_test();
         write_u16(&mut serialized, input).expect("serialization should work");
         let serialized = serialized.into_inner();
         let mut cursor = Cursor::new(&serialized[..]);
@@ -98,7 +98,7 @@ proptest! {
 
     #[test]
     fn u32_roundtrip(input in any::<u32>()) {
-        let mut serialized = BinaryData::new();
+        let mut serialized = BinaryData::new_for_test();
         write_u32(&mut serialized, input).expect("serialization should work");
         let serialized = serialized.into_inner();
         let mut cursor = Cursor::new(&serialized[..]);
@@ -110,7 +110,7 @@ proptest! {
 
     #[test]
     fn u64_roundtrip(input in any::<u64>()) {
-        let mut serialized = BinaryData::new();
+        let mut serialized = BinaryData::new_for_test();
         write_u64(&mut serialized, input).expect("serialization should work");
         let serialized = serialized.into_inner();
         let mut cursor = Cursor::new(&serialized[..]);

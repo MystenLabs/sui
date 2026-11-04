@@ -95,6 +95,13 @@ pub async fn start_indexer(
     // ingestion service, avoiding double registration against
     // `registry`.
     let ingestion_metrics = IngestionMetrics::new(metrics_prefix, registry);
+    let gap_fill_client = client_args
+        .streaming
+        .gap_fill_client(
+            ingestion_config.streaming_connection_timeout(),
+            ingestion_metrics.clone(),
+        )
+        .await?;
     let ingestion_client = IngestionClient::new(client_args.ingestion, ingestion_metrics)?;
     let streaming_client: Option<ArcStreamingClient> =
         client_args.streaming.streaming_url.map(|uri| {
@@ -110,6 +117,7 @@ pub async fn start_indexer(
         indexer_args,
         ingestion_client,
         streaming_client,
+        gap_fill_client,
         config.consistency,
         config.pruner,
         ingestion_config,

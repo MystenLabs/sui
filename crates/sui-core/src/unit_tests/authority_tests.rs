@@ -55,7 +55,9 @@ use sui_types::{
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION, Owner},
     transaction::PlainTransactionWithClaims,
 };
-use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
+use sui_types::{
+    SUI_CLOCK_OBJECT_SHARED_VERSION, clock::Clock, digests::Digest, effects::UnchangedConsensusKind,
+};
 
 use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
@@ -252,7 +254,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
     )
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dry_run_transaction_block() {
     let (validator, fullnode, transaction, gas_object_id, shared_object_id) =
         construct_shared_object_transaction_with_sequence_number(None).await;
@@ -290,7 +292,7 @@ async fn test_dry_run_transaction_block() {
     assert_eq!(gas_usage, gas_usage_no_gas);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dry_run_no_gas_big_transfer() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -322,7 +324,7 @@ async fn test_dry_run_no_gas_big_transfer() {
     assert_eq!(*sim.effects.status(), ExecutionStatus::Success);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_object_by_bytes() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -453,7 +455,7 @@ async fn test_dev_inspect_object_by_bytes() {
     assert_eq!(updated_object_bytes, updated_reference_bytes)
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_unowned_object() {
     let (alice, alice_key): (_, AccountKeyPair) = get_key_pair();
     let alice_gas_id = ObjectID::random();
@@ -517,7 +519,7 @@ async fn test_dev_inspect_unowned_object() {
     assert!(return_values.is_empty());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_dynamic_field() {
     let (test_object1_bytes, test_object2_bytes) = {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -630,7 +632,7 @@ async fn test_dev_inspect_dynamic_field() {
     assert!(return_values.is_empty());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_return_values() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -796,7 +798,7 @@ async fn test_dev_inspect_return_values() {
     assert_eq!(return_type, expected_type);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_gas_coin_argument() {
     let (validator, fullnode, _object_basics) =
         init_state_with_ids_and_object_basics_with_fullnode(vec![]).await;
@@ -848,7 +850,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     assert!(return_values.is_empty());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_gas_price() {
     let (_, fullnode, _object_basics) =
         init_state_with_ids_and_object_basics_with_fullnode(vec![]).await;
@@ -918,7 +920,7 @@ fn check_coin_value(actual_value: &[u8], actual_type: &TypeTag, expected_value: 
     assert_eq!(actual_coin.value(), expected_value);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_uses_unbound_object() {
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -961,7 +963,7 @@ async fn test_dev_inspect_uses_unbound_object() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dev_inspect_on_validator() {
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -985,7 +987,7 @@ async fn test_dev_inspect_on_validator() {
     assert!(result.is_err())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dry_run_on_validator() {
     let (validator, _fullnode, transaction, _gas_object_id, _shared_object_id) =
         construct_shared_object_transaction_with_sequence_number(None).await;
@@ -1122,7 +1124,7 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
 }
 
 // tests using a gas coin with version MAX - 1
-#[tokio::test]
+#[sim_test]
 async fn test_dry_run_dev_inspect_max_gas_version() {
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -1180,7 +1182,7 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
     assert_eq!(sim.effects.status(), &ExecutionStatus::Success);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_bad_signature() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1231,7 +1233,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_with_max_sequence_number() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
@@ -1263,7 +1265,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_shared_object_with_max_sequence_number() {
     let (authority, _fullnode, transaction, _, _) =
         construct_shared_object_transaction_with_sequence_number(Some(SequenceNumber::MAX)).await;
@@ -1275,7 +1277,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_unknown_sender() {
     let sender = dbg_addr(1);
     let (unknown_address, unknown_key) = get_key_pair();
@@ -1318,7 +1320,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 }
 
 /// Tests that a transfer transaction can be successfully validated and executed.
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_ok() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1362,7 +1364,7 @@ async fn test_handle_transfer_transaction_ok() {
     assert_eq!(transferred_object.owner, Owner::AddressOwner(recipient));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_sponsored_transaction() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (sponsor, sponsor_key): (_, AccountKeyPair) = get_key_pair();
@@ -1492,7 +1494,7 @@ async fn test_handle_sponsored_transaction() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_transfer_package() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1517,7 +1519,7 @@ async fn test_transfer_package() {
 
 // This test attempts to use an immutable gas object to pay for gas.
 // We expect it to fail early during transaction handle phase.
-#[tokio::test]
+#[sim_test]
 async fn test_immutable_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1548,7 +1550,7 @@ async fn test_immutable_gas() {
 
 // This test attempts to use an immutable gas object to pay for gas.
 // We expect it to fail early during transaction handle phase.
-#[tokio::test]
+#[sim_test]
 async fn test_objected_owned_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1597,7 +1599,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 }
 
 // Test that publishing a module that depends on an existing one works
-#[tokio::test]
+#[sim_test]
 async fn test_publish_dependent_module_ok() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
@@ -1664,7 +1666,7 @@ async fn test_publish_dependent_module_ok() {
 }
 
 // Test that publishing a module with no dependencies works
-#[tokio::test]
+#[sim_test]
 async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let authority = init_state_with_objects(vec![]).await;
@@ -1712,7 +1714,7 @@ async fn test_publish_module_no_dependencies_ok() {
     signed_effects.into_data().status().unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_publish_non_existing_dependent_module() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
@@ -1783,7 +1785,7 @@ async fn test_publish_non_existing_dependent_module() {
 }
 
 // make sure that publishing a package above the size limit fails
-#[tokio::test]
+#[sim_test]
 async fn test_package_size_limit() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
@@ -1834,7 +1836,7 @@ async fn test_package_size_limit() {
 }
 
 // Test that publishing a module with "unpublishable" magic fails
-#[tokio::test]
+#[sim_test]
 async fn test_publish_module_with_unpublishable_magic() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let authority = init_state_with_objects(vec![]).await;
@@ -1878,7 +1880,7 @@ async fn test_publish_module_with_unpublishable_magic() {
 }
 
 // Test that publishing a module with "unpublishable" magic fails
-#[tokio::test]
+#[sim_test]
 async fn test_publish_module_with_unpublishable_magic_swapped() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let authority = init_state_with_objects(vec![]).await;
@@ -1921,7 +1923,7 @@ async fn test_publish_module_with_unpublishable_magic_swapped() {
     };
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_move_transaction() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
@@ -1952,7 +1954,7 @@ async fn test_handle_move_transaction() {
     assert_eq!(created_obj.id(), created_object_id);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_double_spend() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1980,7 +1982,7 @@ async fn test_handle_transfer_transaction_double_spend() {
     handle_transaction_for_test(&authority_state, transfer_transaction).unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -2010,7 +2012,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     assert_eq!(error, &ExecutionErrorKind::InsufficientCoinBalance)
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_missing_package() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -2045,7 +2047,7 @@ async fn test_missing_package() {
     ));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_type_argument_dependencies() {
     let (s1, s1_key): (_, AccountKeyPair) = get_key_pair();
     let (s2, s2_key): (_, AccountKeyPair) = get_key_pair();
@@ -2143,7 +2145,7 @@ async fn test_type_argument_dependencies() {
     ));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_confirmation_transaction_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
@@ -2170,7 +2172,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
     effects.into_data().status().unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_confirmation_transaction_ok() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -2237,7 +2239,7 @@ async fn test_handle_confirmation_transaction_ok() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_confirmation_transaction_idempotent() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -2287,7 +2289,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
     assert_eq!(info.status.into_effects_for_testing().data(), &effects);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_move_call_mutable_object_not_mutated() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -2362,7 +2364,7 @@ async fn test_move_call_mutable_object_not_mutated() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_move_call_insufficient_gas() {
     // This test attempts to trigger a transaction execution that would fail due to insufficient gas.
     // We want to ensure that even though the transaction failed to execute, all objects
@@ -2450,7 +2452,7 @@ async fn test_move_call_insufficient_gas() {
     assert_eq!(obj.owner.get_address_owner_address().unwrap(), recipient);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_move_call_delete() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -2521,7 +2523,7 @@ async fn test_move_call_delete() {
     assert_eq!((effects.deleted().len(), effects.mutated().len()), (1, 1));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_latest_parent_entry_genesis() {
     let authority_state = TestAuthorityBuilder::new().build().await;
     // There should not be any object with ID zero
@@ -2532,7 +2534,7 @@ async fn test_get_latest_parent_entry_genesis() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_latest_parent_entry() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -2635,7 +2637,7 @@ async fn test_get_latest_parent_entry() {
     assert_eq!(obj_ref.2, ObjectDigest::OBJECT_DIGEST_DELETED);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_account_state_ok() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
@@ -2644,7 +2646,7 @@ async fn test_account_state_ok() {
     authority_state.get_object(&object_id).unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_account_state_unknown_account() {
     let sender = dbg_addr(1);
     let unknown_address = dbg_object_id(99);
@@ -2652,7 +2654,7 @@ async fn test_account_state_unknown_account() {
     assert!(authority_state.get_object(&unknown_address).is_none());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_authority_persist() {
     async fn init_state(
         genesis: &Genesis,
@@ -2720,7 +2722,7 @@ async fn test_authority_persist() {
 /// Tests that handling a transaction after it has been executed is idempotent.
 /// In MFP, validators vote on transactions without signing, so this test verifies
 /// that validation still succeeds for already-executed transactions.
-#[tokio::test]
+#[sim_test]
 async fn test_idempotent_reversed_confirmation() {
     // In this test we exercise the case where an authority first receive the certificate,
     // and then receive the raw transaction latter. We should still ensure idempotent
@@ -2762,7 +2764,7 @@ async fn test_idempotent_reversed_confirmation() {
     assert!(effects1.data().status().is_ok());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_forwarding_registry_input_requires_feature() {
     for (version, enabled) in [(138, false), (139, false), (139, true)] {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -2818,7 +2820,7 @@ async fn test_forwarding_registry_input_requires_feature() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_invalid_mutable_clock_parameter() {
     // User transactions that take the singleton Clock object at `0x6` by mutable reference will
     // fail to sign, to prevent transactions bottlenecking on it.
@@ -2862,7 +2864,7 @@ async fn test_invalid_mutable_clock_parameter() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_invalid_randomness_parameter() {
     // User transactions that take the singleton Randomness object at `0x8` by mutable
     // reference will fail to sign, to prevent transactions bottlenecking on it.
@@ -2915,7 +2917,7 @@ async fn test_invalid_randomness_parameter() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_invalid_object_ownership() {
     // User transaction that attempts to mutate an object it does not own will fail to sign.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -2961,7 +2963,7 @@ async fn test_invalid_object_ownership() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_valid_immutable_clock_parameter() {
     // User transactions can take an immutable reference of the singleton Clock.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -2995,6 +2997,113 @@ async fn test_valid_immutable_clock_parameter() {
 }
 
 #[tokio::test]
+async fn test_implicit_clock_read_uses_pinned_version() {
+    // `clock::borrow` reads the Clock at the version pinned for the transaction,
+    // not the latest version in the store.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, package_object_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+
+    let genesis_clock = authority_state.get_object(&SUI_CLOCK_OBJECT_ID).unwrap();
+    let clock_at = |version: u64, timestamp_ms: u64| {
+        let move_object = genesis_clock.data.try_as_move().unwrap();
+        let mut clock: Clock = move_object.to_rust().unwrap();
+        clock.timestamp_ms = timestamp_ms;
+        let move_object = unsafe {
+            MoveObject::new_from_execution_with_limit(
+                move_object.type_().clone(),
+                false,
+                SequenceNumber::from_u64(version),
+                bcs::to_bytes(&clock).unwrap(),
+                u64::MAX,
+            )
+        }
+        .unwrap();
+        Object::new_move(
+            move_object,
+            genesis_clock.owner().clone(),
+            TransactionDigest::genesis_marker(),
+        )
+    };
+    let pinned_version = SequenceNumber::from_u64(2);
+    let latest_version = SequenceNumber::from_u64(3);
+    authority_state
+        .insert_objects_unsafe_for_testing_only(&[clock_at(pinned_version.value(), 200)])
+        .await
+        .unwrap();
+    authority_state
+        .insert_objects_unsafe_for_testing_only(&[clock_at(latest_version.value(), 300)])
+        .await
+        .unwrap();
+    assert_eq!(
+        authority_state
+            .get_object(&SUI_CLOCK_OBJECT_ID)
+            .unwrap()
+            .version(),
+        latest_version
+    );
+
+    let gas_ref =
+        Object::with_id_owner_for_testing(gas_object_id, sender).compute_object_reference();
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let tx_data = TransactionData::new_move_call(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("create_with_clock_timestamp").to_owned(),
+        /* type_args */ vec![],
+        gas_ref,
+        vec![CallArg::Pure(bcs::to_bytes(&sender).unwrap())],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
+    let executable =
+        VerifiedExecutableTransaction::new_from_consensus(transaction, epoch_store.epoch());
+    let env = ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+        vec![],
+        SystemObjectVersions::from_map(BTreeMap::from([(
+            SUI_CLOCK_OBJECT_ID,
+            ConsensusObjectVersion {
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                version: pinned_version,
+            },
+        )])),
+    ));
+    let (effects, execution_error) = authority_state
+        .try_execute_executable_for_test(&executable, env)
+        .await;
+    let effects = effects.inner().data().clone();
+    assert!(
+        execution_error.is_none() && effects.status().is_ok(),
+        "{:?}",
+        effects.status()
+    );
+    assert!(
+        effects
+            .unchanged_consensus_objects()
+            .iter()
+            .any(|(id, kind)| *id == SUI_CLOCK_OBJECT_ID
+                && matches!(kind, UnchangedConsensusKind::ReadOnlyRoot((v, _)) if *v == pinned_version)),
+        "{:?}",
+        effects.unchanged_consensus_objects()
+    );
+    let ((created_id, _, _), _) = effects.created()[0];
+    let created = authority_state.get_object(&created_id).unwrap();
+    let contents = created.data.try_as_move().unwrap().contents();
+    // `object_basics::Object` is a UID followed by the u64 value.
+    let value = u64::from_le_bytes(contents[contents.len() - 8..].try_into().unwrap());
+    assert_eq!(value, 200);
+}
+
+#[sim_test]
 async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).
@@ -3022,7 +3131,7 @@ async fn test_genesis_sui_system_state_object() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_transfer_sui_no_amount() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -3068,7 +3177,7 @@ async fn test_transfer_sui_no_amount() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_transfer_sui_with_amount() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -3113,7 +3222,7 @@ async fn test_transfer_sui_with_amount() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_clear_cache_reverts_transfer_sui() {
     // This test checks that transfers are reverted after cache is cleared
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -3167,7 +3276,7 @@ fn build_and_commit(
     cache_commit.commit_transaction_outputs(epoch, batch, txs);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_clear_cache_reverts_wrap_move_call() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3241,7 +3350,7 @@ async fn test_clear_cache_reverts_wrap_move_call() {
     assert_eq!(gas.version(), create_effects.gas_object().unwrap().0.1);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_clear_cache_reverts_unwrap_move_call() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3336,7 +3445,7 @@ async fn test_clear_cache_reverts_unwrap_move_call() {
     assert_eq!(gas.version(), wrap_effects.gas_object().unwrap().0.1);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_clear_cache_removes_added_ofield() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3438,7 +3547,7 @@ async fn test_clear_cache_removes_added_ofield() {
     assert_eq!(inner.owner, Owner::AddressOwner(sender));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_clear_cache_reverts_removed_ofield() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3553,7 +3662,7 @@ async fn test_clear_cache_reverts_removed_ofield() {
     assert_eq!(inner.version(), inner_v1.1);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_iter_live_object_set() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (receiver, _): (_, AccountKeyPair) = get_key_pair();
@@ -3731,7 +3840,7 @@ async fn test_iter_live_object_set() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_clever_abort_error() {
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -4507,7 +4616,7 @@ async fn test_shared_object_transaction_no_shared_version_assignments() {
         .await;
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_shared_object_transaction_ok() {
     let (authority, executable, shared_object_id, shared_object_initial_version) =
         prepare_authority_and_shared_object_executable().await;
@@ -4550,7 +4659,7 @@ async fn test_shared_object_transaction_ok() {
 
 // Tests that the clock version is assigned correctly when generating and processing the consensus commit
 // prologue transaction.
-#[tokio::test]
+#[sim_test]
 async fn test_consensus_commit_prologue_generation() {
     telemetry_subscribers::init_for_testing();
 
@@ -4660,7 +4769,7 @@ async fn test_consensus_commit_prologue_generation() {
     assert!(clock_v1 < clock_v2);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_checkpoint_order_uses_consensus_schedule_without_effect_dependencies() {
     telemetry_subscribers::init_for_testing();
 
@@ -5223,7 +5332,7 @@ fn test_choose_next_system_packages() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_gas_smashing() {
     // run a create move object transaction with a given set o gas coins and a budget
     async fn create_obj(
@@ -5421,7 +5530,7 @@ async fn test_for_inc_201_dry_run() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_function_not_found() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -5469,7 +5578,7 @@ async fn test_function_not_found() {
     assert_eq!(execution_error_source, Some("Could not resolve function 'bad_function' in module '0x0000000000000000000000000000000000000000000000000000000000000001::option'".to_string()),)
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_arity_mismatch() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
@@ -6542,7 +6651,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_single_authority_reconfigure() {
     let state = TestAuthorityBuilder::new().build().await;
     assert_eq!(state.epoch_store_for_testing().epoch(), 0);
@@ -6550,7 +6659,7 @@ async fn test_single_authority_reconfigure() {
     assert_eq!(state.epoch_store_for_testing().epoch(), 1);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_insufficient_balance_for_withdraw_early_error() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let mut gas_object = Object::with_owner_for_testing(sender);
@@ -6602,7 +6711,7 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_should_wait_for_dependency_object() {
     let (sender, _keypair): (_, AccountKeyPair) = get_key_pair();
     let authority_state = TestAuthorityBuilder::new().build().await;
@@ -6675,7 +6784,7 @@ async fn test_should_wait_for_dependency_object() {
     assert!(result.is_none(), "Should not wait for deleted object");
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_effects_equivocation_prevented_at_signing_not_execution() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);

@@ -100,7 +100,8 @@ async fn main() -> Result<()> {
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for system state observer")?
                 .clone(),
-        );
+        )
+        .with_setup_gas_price_multiplier(opts.setup_gas_price_multiplier);
         system_state_observer.state.changed().await?;
         eprintln!(
             "Found new state (reference gas price and/or protocol config) from system state object = {:?}",

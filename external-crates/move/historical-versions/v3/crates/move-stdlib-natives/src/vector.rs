@@ -4,10 +4,7 @@
 
 use crate::helpers::make_module_natives;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
-    vm_status::StatusCode,
-};
+use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
@@ -100,7 +97,7 @@ pub fn make_native_length(gas_params: LengthGasParameters) -> NativeFunction {
 #[derive(Debug, Clone)]
 pub struct PushBackGasParameters {
     pub base: InternalGas,
-    pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
+    pub legacy_per_abstract_memory_unit: InternalGas,
 }
 
 pub fn native_push_back(
@@ -123,7 +120,9 @@ pub fn native_push_back(
             include_vector_size: false,
             fine_grained_value_size: false,
         })?;
-        let cost = gas_params.legacy_per_abstract_memory_unit * std::cmp::max(size, 1.into());
+        let cost = gas_params
+            .legacy_per_abstract_memory_unit
+            .saturating_mul(std::cmp::max(u64::from(size), 1));
         native_charge_gas_early_exit!(context, cost);
     }
 

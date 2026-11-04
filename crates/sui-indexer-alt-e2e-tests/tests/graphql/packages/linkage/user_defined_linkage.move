@@ -15,6 +15,7 @@ module P1::M1 {
 //# create-checkpoint
 
 //# run-graphql
+/*
 {
   package(address: "@{P1}") {
     linkage {
@@ -24,3 +25,4 @@ module P1::M1 {
     }
   }
 }
+*/

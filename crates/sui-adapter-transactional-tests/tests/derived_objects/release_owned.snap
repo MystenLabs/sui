@@ -1,0 +1,195 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+// Release and re-claim an address-owned derived object, across transactions and within one
+// transaction.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-44:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8238400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 46:
+//# run ex::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 48-51:
+// Claim, release, claim, release, claim across transactions.
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 4, line 53:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 3
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 5, lines 55-56:
+//# programmable --sender A --inputs object(2,0) object(3,0)
+//> ex::m::release(Input(0), Input(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 5950205, non_refundable_storage_fee: 595
+
+task 6, line 58:
+//# run ex::m::assert_claimed --sender A --args object(2,0) false
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 7, lines 60-62:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 8, line 64:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 6
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 9, lines 66-67:
+//# programmable --sender A --inputs object(2,0) object(3,0)
+//> ex::m::release(Input(0), Input(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 5950205, non_refundable_storage_fee: 595
+
+task 10, lines 69-71:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 11, line 73:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 8
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 12, lines 75-79:
+// Release then claim an input in one transaction: X is mutated.
+//# programmable --sender A --inputs object(2,0) object(3,0) @A
+//> ex::m::release(Input(0), Input(1));
+//> 1: ex::m::claim(Input(0));
+//> TransferObjects([Result(1)], Input(2))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 3457654, non_refundable_storage_fee: 346
+
+task 13, line 81:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 9
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 14, lines 83-87:
+// The same, re-claimed as a different type.
+//# programmable --sender A --inputs object(2,0) object(3,0) @A
+//> ex::m::release(Input(0), Input(1));
+//> 1: ex::m::claim2(Input(0));
+//> TransferObjects([Result(1)], Input(2))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 3457654, non_refundable_storage_fee: 346
+
+task 15, line 89:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 10
+Contents: ex::m::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 16, lines 91-95:
+// Release, claim, release an input in one transaction: X is deleted.
+//# programmable --sender A --inputs object(2,0) object(3,0)
+//> ex::m::release2(Input(0), Input(1));
+//> 1: ex::m::claim(Input(0));
+//> ex::m::release(Input(0), Result(1))
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 5957804, non_refundable_storage_fee: 596
+
+task 17, line 97:
+//# run ex::m::assert_claimed --sender A --args object(2,0) false
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 18, lines 99-102:
+// Claim then release in one transaction: no effect on X.
+//# programmable --sender A --inputs object(2,0)
+//> 0: ex::m::claim(Input(0));
+//> ex::m::release(Input(0), Result(0))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 19, lines 104-109:
+// Claim, release, claim in one transaction: X is created.
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: ex::m::claim(Input(0));
+//> ex::m::release(Input(0), Result(0));
+//> 2: ex::m::claim(Input(0));
+//> TransferObjects([Result(2)], Input(1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 20, line 111:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 14
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 21, line 113:
+//# run ex::m::assert_claimed --sender A --args object(2,0) true
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223

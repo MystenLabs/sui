@@ -9,6 +9,7 @@ use move_binary_format::{
     file_format_common::VERSION_MAX,
 };
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
+use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::{
@@ -422,7 +423,7 @@ fn empty_module_with_dependencies(
 // A' => [C] | {C, B, A}
 // Test 1: Upgrade A to A' which depends on C. But only include `C` in the transitive deps.
 // Failure: `PublishUpgradeMissingDependency`
-#[tokio::test]
+#[sim_test]
 async fn publish_package_cyclic_indirect_cross_package1() {
     let addr = |s| AccountAddress::from_str(s).unwrap();
 
@@ -513,7 +514,7 @@ async fn publish_package_cyclic_indirect_cross_package1() {
 // A' => [C] | {C, B, A}
 // Test 2: Upgrade A to A' which depends on C. But only include `C` and `B` in the transitive deps.
 // Failure: `PublishUpgradeMissingDependency`
-#[tokio::test]
+#[sim_test]
 async fn publish_package_cyclic_indirect_cross_package2() {
     let addr = |s| AccountAddress::from_str(s).unwrap();
 
@@ -610,7 +611,7 @@ async fn publish_package_cyclic_indirect_cross_package2() {
 // Test 3: Upgrade A to A' which depends on C. But include `C`, `B`, and `A` in the transitive deps.
 // Failure: `VerificationOrDeserializationError` due to cyclic dependency (it will look for `A` at
 // `A'`s version ID but that will not be present yet).
-#[tokio::test]
+#[sim_test]
 async fn publish_package_cyclic_indirect_cross_package3() {
     let addr = |s| AccountAddress::from_str(s).unwrap();
 
@@ -701,7 +702,7 @@ async fn publish_package_cyclic_indirect_cross_package3() {
 // Test 4: Upgrade A to A' which depends on B. Include `B` and `A` in the transitive deps.
 // Failure: `VerificationOrDeserializationError` due to cyclic dependency (it will look for `A` at
 // `A'`s version ID but that will not be present yet).
-#[tokio::test]
+#[sim_test]
 async fn publish_package_cyclic_direct_cross_package1() {
     let addr = |s| AccountAddress::from_str(s).unwrap();
 
@@ -779,7 +780,7 @@ async fn publish_package_cyclic_direct_cross_package1() {
 // Test 4: Upgrade A to A' which depends on B. Include `B` and `A` in the transitive deps.
 // Failure: `VerificationOrDeserializationError` due to cyclic dependency (it will look for `A` at
 // `A'`s version ID but that will not be present yet).
-#[tokio::test]
+#[sim_test]
 async fn publish_package_cyclic_direct_cross_package2() {
     let addr = |s| AccountAddress::from_str(s).unwrap();
 
@@ -852,7 +853,7 @@ async fn publish_package_cyclic_direct_cross_package2() {
 }
 
 // Within the same package: A <=> B
-#[tokio::test]
+#[sim_test]
 async fn publish_package_cyclic_direct_within_package() {
     let addr = |s| AccountAddress::from_str(s).unwrap();
 
@@ -894,7 +895,7 @@ async fn publish_package_cyclic_direct_within_package() {
 }
 
 // Within the same package: A -> B -> C -> A
-#[tokio::test]
+#[sim_test]
 async fn publish_package_cyclic_indirect_within_package() {
     let addr = |s| AccountAddress::from_str(s).unwrap();
 
