@@ -70,6 +70,7 @@ use crate::RpcStoreSchema;
 use crate::config::PipelineLayer;
 use crate::config::PrunerConfig;
 use crate::indexer::pruner::PrunerMetrics;
+use crate::indexer::restore::LIVE_COHORT;
 
 /// Metrics prefix used for both the framework indexer and the
 /// underlying ingestion service. Surfaced as a constant so the
@@ -214,7 +215,17 @@ pub fn checkpoint_output_objects(
 /// [`PipelineLayer`]. Disabled pipelines are skipped entirely —
 /// the [`Synchronizer`] only barriers across pipelines that were
 /// actually registered, so leaving the raw-chain-data pipelines
-/// off does not stall snapshots.
+/// off does not stall snapshots. The layer is the only pipeline
+/// selector: the framework's `IndexerArgs::pipeline` filter is
+/// refused, because a pipeline it skipped would still be registered
+/// with the [`Synchronizer`] and hold snapshots back forever.
+///
+/// Every registered [`LIVE_COHORT`] pipeline is a required snapshot
+/// member ([`Synchronizer::register_required_pipeline`]): each
+/// snapshot includes every live index's writes through its
+/// checkpoint, even when a crash left their watermarks uneven, so
+/// the newest snapshot is always a valid point for live-index reads.
+/// Lagging history pipelines do not hold snapshots back.
 ///
 /// After pipelines are registered, [`Self::run`] installs the
 /// synchronizer onto the store and starts the framework indexer.
@@ -288,6 +299,10 @@ impl Indexer {
     /// a fullnode that reads through [`RpcStoreSchema`] directly,
     /// or writes to the raw-chain-data CFs through a separate
     /// path).
+    ///
+    /// Fails if `indexer_args.pipeline` is non-empty; select
+    /// pipelines through the [`PipelineLayer`] passed to
+    /// [`Self::add_pipelines`] instead.
     #[allow(clippy::too_many_arguments)]
     pub async fn from_store(
         store: Store,
@@ -301,6 +316,13 @@ impl Indexer {
         registry: &Registry,
     ) -> anyhow::Result<Self> {
         let metrics_prefix = Some(METRICS_PREFIX);
+
+        anyhow::ensure!(
+            indexer_args.pipeline.is_empty(),
+            "The rpc-store indexer selects pipelines through its pipeline layer; \
+             IndexerArgs::pipeline must be empty, got {:?}",
+            indexer_args.pipeline,
+        );
 
         let sync = Synchronizer::new(
             store.db().clone(),
@@ -484,7 +506,8 @@ impl Indexer {
     /// announced to the synchronizer before being handed to the
     /// framework indexer so that, by the time the first batch
     /// flows through, the synchronizer task is already waiting on
-    /// the pipeline's queue.
+    /// the pipeline's queue. A [`LIVE_COHORT`] pipeline is
+    /// registered as a required snapshot member.
     ///
     /// Refuses to register a pipeline whose persisted [`RestoreState`]
     /// is still `InProgress`: tip-mode indexing of a pipeline that
@@ -521,9 +544,12 @@ impl Indexer {
             }
         }
 
-        self.sync
-            .register_pipeline(H::NAME)
-            .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
+        if LIVE_COHORT.contains(&H::NAME) {
+            self.sync.register_required_pipeline(H::NAME)
+        } else {
+            self.sync.register_pipeline(H::NAME)
+        }
+        .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
 
         self.indexer
             .sequential_pipeline(handler, config)
@@ -591,28 +617,32 @@ mod tests {
 
     use super::*;
 
-    /// Stub [`IngestionClientTrait`] for orchestrator wiring
-    /// tests. Reports a fixed chain id and latest checkpoint and
-    /// fails any actual fetch; suitable for tests that only need
-    /// `Indexer::from_store` to construct (which probes
-    /// `latest_checkpoint_number` once) and never run the
-    /// ingestion loop.
-    struct StubIngestionClient;
+    /// Serves a fixed set of checkpoints and reports the highest as the
+    /// network tip (0 when empty); every other checkpoint is not found.
+    /// The empty default suits tests that only construct the indexer
+    /// and never run its ingestion loop.
+    #[derive(Default)]
+    struct FixedIngestionClient {
+        checkpoints: BTreeMap<u64, Checkpoint>,
+    }
 
     #[async_trait]
-    impl IngestionClientTrait for StubIngestionClient {
+    impl IngestionClientTrait for FixedIngestionClient {
         async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
             Ok(ChainIdentifier::from(
                 sui_types::digests::CheckpointDigest::new([0u8; 32]),
             ))
         }
 
-        async fn checkpoint(&self, _checkpoint: u64) -> CheckpointResult {
-            Err(CheckpointError::NotFound)
+        async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
+            self.checkpoints
+                .get(&checkpoint)
+                .cloned()
+                .ok_or(CheckpointError::NotFound)
         }
 
         async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(0)
+            Ok(self.checkpoints.keys().next_back().copied().unwrap_or(0))
         }
     }
 
@@ -620,8 +650,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let registry = Registry::new();
         let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
-        let ingestion_client =
-            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient::default()),
+            ingestion_metrics,
+        );
         let mut indexer = Indexer::new(
             dir.path().join("db"),
             IndexerArgs::default(),
@@ -726,8 +758,10 @@ mod tests {
     async fn build_indexer_with_store(store: Store) -> anyhow::Result<Indexer> {
         let registry = Registry::new();
         let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
-        let ingestion_client =
-            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient::default()),
+            ingestion_metrics,
+        );
         Indexer::from_store(
             store,
             IndexerArgs::default(),
@@ -792,5 +826,173 @@ mod tests {
             .unwrap();
         let names: std::collections::BTreeSet<_> = indexer.pipelines().collect();
         assert_eq!(names, std::collections::BTreeSet::from(["balance"]));
+    }
+
+    /// The checkpoint the live pipelines resume from in the restart
+    /// tests, and the network tip they index up to.
+    const RESTART: u64 = 10;
+    const TIP: u64 = 13;
+
+    /// Seed `watermarks` into a fresh store at `path`, then run an
+    /// indexer over it with the live cohort plus the
+    /// `tx_seq_by_digest` history pipeline, fed checkpoints
+    /// `RESTART..=TIP` only. Returns once snapshot `TIP` exists.
+    async fn run_until_tip_snapshot(
+        path: &std::path::Path,
+        watermarks: &[(&str, u64)],
+    ) -> (Db, Service) {
+        let (db, schema) = Db::open::<RpcStoreSchema>(path, DbOptions::default()).unwrap();
+        let framework = sui_consistent_store::FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        for &(pipeline, checkpoint) in watermarks {
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(pipeline),
+                    &sui_consistent_store::Watermark::for_checkpoint(checkpoint),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+        let store = sui_consistent_store::Store::new(db.clone(), Arc::new(schema));
+
+        let mut builder =
+            sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(RESTART);
+        let checkpoints = (RESTART..=TIP)
+            .map(|checkpoint| (checkpoint, builder.build_checkpoint()))
+            .collect();
+
+        let registry = Registry::new();
+        let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient { checkpoints }),
+            ingestion_metrics,
+        );
+        // Keep a stuck history pipeline on its own ingestion service so
+        // its missing checkpoints do not stall the live pipelines' feed.
+        let ingestion_config = IngestionConfig {
+            min_cohort_boundary: 1,
+            ..IngestionConfig::default()
+        };
+        let mut indexer = Indexer::from_store(
+            store,
+            IndexerArgs::default(),
+            ingestion_client,
+            None,
+            None,
+            crate::config::ConsistencyConfig::default(),
+            None,
+            ingestion_config,
+            &registry,
+        )
+        .await
+        .unwrap();
+        indexer
+            .add_pipelines(
+                PipelineLayer {
+                    object_by_owner: Some(crate::config::CommitterLayer::default()),
+                    object_by_type: Some(crate::config::CommitterLayer::default()),
+                    balance: Some(crate::config::CommitterLayer::default()),
+                    tx_seq_by_digest: Some(crate::config::CommitterLayer::default()),
+                    ..PipelineLayer::default()
+                },
+                CommitterConfig::default(),
+            )
+            .await
+            .unwrap();
+        let service = indexer.run().await.unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            while db.at_snapshot(TIP).is_none() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("live snapshots should reach the tip");
+
+        (db, service)
+    }
+
+    /// `pipeline`'s committed checkpoint as captured by snapshot
+    /// `checkpoint`.
+    fn snapshot_watermark(db: &Db, checkpoint: u64, pipeline: &str) -> Option<u64> {
+        db.at_snapshot(checkpoint)
+            .unwrap()
+            .framework()
+            .watermarks
+            .get(&PipelineTaskKey::new(pipeline))
+            .unwrap()
+            .map(|w| w.checkpoint_hi_inclusive)
+    }
+
+    #[tokio::test]
+    async fn restart_with_uneven_live_watermarks_snapshots_only_complete_live_state() {
+        // A crash left `object_by_owner` and `object_by_type` at 10 but
+        // `balance` at 9. The history pipeline `tx_seq_by_digest` sits at
+        // 0 and checkpoints below 10 are unavailable, so it cannot make
+        // progress and must not hold live snapshots back.
+        let dir = tempfile::tempdir().unwrap();
+        let (db, service) = run_until_tip_snapshot(
+            dir.path(),
+            &[
+                ("object_by_owner", RESTART),
+                ("object_by_type", RESTART),
+                ("balance", RESTART - 1),
+                ("tx_seq_by_digest", 0),
+            ],
+        )
+        .await;
+
+        // Every snapshot, starting at the restart checkpoint, holds every
+        // live pipeline committed through that snapshot's checkpoint.
+        assert_eq!(db.snapshot_range(), Some(RESTART..=TIP));
+        for checkpoint in RESTART..=TIP {
+            for pipeline in LIVE_COHORT {
+                assert_eq!(
+                    snapshot_watermark(&db, checkpoint, pipeline),
+                    Some(checkpoint),
+                    "snapshot {checkpoint} is missing {pipeline}'s writes",
+                );
+            }
+        }
+
+        drop(service);
+    }
+
+    #[tokio::test]
+    async fn from_store_refuses_pipeline_filter() {
+        // A pipeline the framework's filter skips would never send a
+        // batch yet still be registered with the synchronizer, so the
+        // filter is refused up front.
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let registry = Registry::new();
+        let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient::default()),
+            ingestion_metrics,
+        );
+        let Err(err) = Indexer::from_store(
+            sui_consistent_store::Store::new(db, Arc::new(schema)),
+            IndexerArgs {
+                pipeline: vec!["object_by_owner".to_owned()],
+                ..IndexerArgs::default()
+            },
+            ingestion_client,
+            None,
+            None,
+            crate::config::ConsistencyConfig::default(),
+            None,
+            IngestionConfig::default(),
+            &registry,
+        )
+        .await
+        else {
+            panic!("a pipeline filter must be refused");
+        };
+        assert!(
+            format!("{err:#}").contains("IndexerArgs::pipeline must be empty"),
+            "unexpected error: {err:#}",
+        );
     }
 }
