@@ -16,7 +16,7 @@ use mysten_common::debug_fatal;
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     BlockAPI as _, CommitConsumerArgs, RandomnessSignatureHandler,
@@ -677,23 +677,20 @@ where
 
         // Re-subscribe to the peer to force reconnection with new address
         if peer != self.context.own_index {
-            info!("Re-subscribing to peer {} after address update", peer);
             match &self.subscriber {
-                SubscriberType::Validator(s) => s.subscribe(peer),
-                SubscriberType::Observer(s) => {
-                    // Re-subscribe with the configured peer list so any live stream to the
-                    // updated peer's old address is dropped. A peer outside the configured
-                    // list cannot be streamed from anyway (connections to unconfigured peers
-                    // are rejected), so leave the current subscription undisturbed.
-                    let peer_ids = observer_peer_ids(&self.context);
-                    if peer_ids.contains(&PeerId::Validator(peer)) {
-                        s.subscribe(peer_ids);
-                    } else {
-                        info!(
-                            "Peer {} is not a configured observer peer, skipping re-subscription",
-                            peer
-                        );
-                    }
+                SubscriberType::Validator(s) => {
+                    info!("Re-subscribing to peer {} after address update", peer);
+                    s.subscribe(peer);
+                }
+                SubscriberType::Observer(_) => {
+                    // The observer block stream connects to the addresses of the configured
+                    // observer peer records, not to committee addresses, so the update does
+                    // not affect the stream. Re-subscribing would only drop a healthy stream
+                    // and restart from the first configured peer, losing the failover position.
+                    debug!(
+                        "Ignoring address update of peer {} for the observer block stream subscription",
+                        peer
+                    );
                 }
             }
         }
