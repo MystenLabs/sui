@@ -617,28 +617,32 @@ mod tests {
 
     use super::*;
 
-    /// Stub [`IngestionClientTrait`] for orchestrator wiring
-    /// tests. Reports a fixed chain id and latest checkpoint and
-    /// fails any actual fetch; suitable for tests that only need
-    /// `Indexer::from_store` to construct (which probes
-    /// `latest_checkpoint_number` once) and never run the
-    /// ingestion loop.
-    struct StubIngestionClient;
+    /// Serves a fixed set of checkpoints and reports the highest as the
+    /// network tip (0 when empty); every other checkpoint is not found.
+    /// The empty default suits tests that only construct the indexer
+    /// and never run its ingestion loop.
+    #[derive(Default)]
+    struct FixedIngestionClient {
+        checkpoints: BTreeMap<u64, Checkpoint>,
+    }
 
     #[async_trait]
-    impl IngestionClientTrait for StubIngestionClient {
+    impl IngestionClientTrait for FixedIngestionClient {
         async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
             Ok(ChainIdentifier::from(
                 sui_types::digests::CheckpointDigest::new([0u8; 32]),
             ))
         }
 
-        async fn checkpoint(&self, _checkpoint: u64) -> CheckpointResult {
-            Err(CheckpointError::NotFound)
+        async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
+            self.checkpoints
+                .get(&checkpoint)
+                .cloned()
+                .ok_or(CheckpointError::NotFound)
         }
 
         async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(0)
+            Ok(self.checkpoints.keys().next_back().copied().unwrap_or(0))
         }
     }
 
@@ -646,8 +650,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let registry = Registry::new();
         let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
-        let ingestion_client =
-            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient::default()),
+            ingestion_metrics,
+        );
         let mut indexer = Indexer::new(
             dir.path().join("db"),
             IndexerArgs::default(),
@@ -752,8 +758,10 @@ mod tests {
     async fn build_indexer_with_store(store: Store) -> anyhow::Result<Indexer> {
         let registry = Registry::new();
         let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
-        let ingestion_client =
-            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient::default()),
+            ingestion_metrics,
+        );
         Indexer::from_store(
             store,
             IndexerArgs::default(),
@@ -818,32 +826,6 @@ mod tests {
             .unwrap();
         let names: std::collections::BTreeSet<_> = indexer.pipelines().collect();
         assert_eq!(names, std::collections::BTreeSet::from(["balance"]));
-    }
-
-    /// Serves a fixed set of checkpoints and reports the highest as the
-    /// network tip; every other checkpoint is not found.
-    struct FixedIngestionClient {
-        checkpoints: BTreeMap<u64, Checkpoint>,
-    }
-
-    #[async_trait]
-    impl IngestionClientTrait for FixedIngestionClient {
-        async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
-            Ok(ChainIdentifier::from(
-                sui_types::digests::CheckpointDigest::new([0u8; 32]),
-            ))
-        }
-
-        async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
-            self.checkpoints
-                .get(&checkpoint)
-                .cloned()
-                .ok_or(CheckpointError::NotFound)
-        }
-
-        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(*self.checkpoints.keys().next_back().unwrap())
-        }
     }
 
     /// The checkpoint the live pipelines resume from in the restart
@@ -990,8 +972,10 @@ mod tests {
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         let registry = Registry::new();
         let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
-        let ingestion_client =
-            IngestionClient::from_trait(Arc::new(StubIngestionClient), ingestion_metrics);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient::default()),
+            ingestion_metrics,
+        );
         let Err(err) = Indexer::from_store(
             sui_consistent_store::Store::new(db, Arc::new(schema)),
             IndexerArgs {
