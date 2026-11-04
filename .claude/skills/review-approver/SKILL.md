@@ -6,7 +6,7 @@ description: Check a PR against its claimed tier under the tiered review policy,
 # Tiered review: approver side
 
 This skill tells an agent how to check a PR against the tiered review policy and when to approve
-it. The tier definitions, eligible paths, and annotation formats are in the `review-author` skill.
+it. The tier definitions, eligible paths, and tag formats are in the `review-author` skill.
 Read that skill from the PR's base branch before starting:
 
 ```bash
@@ -44,7 +44,7 @@ The outcome is **Not applicable** if any of these hold:
 - The PR is closed, merged, or a draft.
 - The author is not a member of the MystenLabs organization. Check with
   `gh api orgs/MystenLabs/members/<login>`, which succeeds only for members.
-- The description has no `## Review tier` section.
+- The description has no `[review-tier: ...]` tag.
 
 ## Step 2 — Check eligibility
 
@@ -54,8 +54,7 @@ in the comment and say that the PR needs normal human code review.
 
 ## Step 3 — Verify the tier
 
-Classify the PR yourself from the diff and the tier definitions. Do not rely on the author's
-rationale.
+Classify the PR yourself from the diff and the tier definitions. Do not rely on the claimed tier.
 
 - If your tier is higher than the claimed tier, the outcome is **Blocked**. State the tier you
   found and the parts of the diff that put it there.
@@ -64,18 +63,19 @@ rationale.
 
 ## Step 4 — Verify the AI review
 
-Find the stamp line in `## Test plan`:
+Find the review tag in the description:
 
 ```
-Reviewed with `/code-review max` at <sha>: <outcome>.
+[ai-review: /code-review max <sha>]
 ```
 
-Trust the stamp. Do not repeat a review that the stamp records.
+Trust the tag. It means that the authoring agent ran the review and the author decided every
+finding. Do not repeat a review that the tag records, and do not look for its findings in the PR.
 
 - If `<sha>` is the PR head, the review requirement is met.
 - If `<sha>` is an ancestor of the PR head, run `/code-review max` on the commits after it
   (`<sha>..<head>`) only.
-- If there is no stamp, or `<sha>` is not an ancestor of the head, run `/code-review max` on the
+- If there is no tag, or `<sha>` is not an ancestor of the head, run `/code-review max` on the
   full `<base>...<head>` diff.
 
 When you run a review, apply the tier focus from the `review-author` skill (test coverage for
@@ -107,7 +107,7 @@ Confirm one of these:
 
 ### Tier 3
 
-- Confirm that `## Mini design doc` exists with the subsections listed in `review-author`.
+- Confirm that the description has a `## Mini design doc` section.
 - Confirm that the implementation matches the MDD in its important details. Report each mismatch.
 - Confirm that at least two humans other than the author have `APPROVED` reviews in
   `latestReviews`. Where `.github/CODEOWNERS` has entries for the changed paths, the approvers
@@ -138,17 +138,21 @@ the description, not the diff. The system that runs this skill posts the summary
 
 ## Revert requests
 
-Any member of the MystenLabs organization can ask for a PR that merged under this policy to be
-reverted. Do not ask for a reason, and do not judge whether the revert is warranted.
+Anyone can request a revert of a PR that merged under this policy. A revert happens without
+discussion only if it is an emergency or the author is unavailable. Do not judge whether the
+requester's claim of an emergency is warranted.
 
-1. Confirm that the requester is a member of the MystenLabs organization, and that the PR merged
-   with an approval from this skill.
-2. Create a branch from the base branch, run `git revert <merge commit>`, and open a PR titled
-   `Revert "<original title>"`. Its description links the original PR and names the requester.
-   Add a `## Review tier` section with `Tier: revert`.
-3. Comment on the original PR to notify its author that it was reverted, by whom, and where to
+1. Confirm that the PR merged with an approval from this skill.
+2. If the requester says it is an emergency or that the author is unavailable, go to step 3.
+   Otherwise, comment on the original PR to tell its author about the request and who made it,
+   and stop. Continue with step 3 when the author agrees to the revert, or when the requester
+   reports that the author is unavailable.
+3. Create a branch from the base branch, run `git revert <merge commit>`, and open a PR titled
+   `Revert "<original title>"`. Its description links the original PR, names the requester, and
+   contains the tag `[review-tier: revert]`.
+4. Comment on the original PR to notify its author that it was reverted, by whom, and where to
    discuss it.
 
-A PR marked `Tier: revert` skips Steps 1 to 5. Approve it and enable auto-merge if its diff is
-the exact inverse of the original PR's merge commit. If the revert has conflicts, do not resolve
-them. Report the conflict to the requester and the original author instead.
+A PR tagged `[review-tier: revert]` skips Steps 1 to 5. Approve it and enable auto-merge if its
+diff is the exact inverse of the original PR's merge commit. If the revert has conflicts, do not
+resolve them. Report the conflict to the requester and the original author instead.

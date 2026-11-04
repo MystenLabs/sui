@@ -1,6 +1,6 @@
 ---
 name: review-author
-description: Classify a PR under the tiered review policy, meet the requirements of its tier, and write the tier and review annotations in the PR description.
+description: Classify a PR under the tiered review policy, meet the requirements of its tier, and write the tier and review tags in the PR description.
 ---
 
 # Tiered review: author side
@@ -8,17 +8,20 @@ description: Classify a PR under the tiered review policy, meet the requirements
 This skill tells an authoring agent how to prepare a PR for the tiered review policy. The
 `review-approver` skill checks the result and approves the PR when the tier allows it.
 
-`/send-pr` invokes this skill. Invoke it directly to classify a PR or to refresh its annotations.
+`/send-pr` invokes this skill. Invoke it directly to classify a PR or to refresh its tags.
 
 ## Policy summary
 
 - The policy applies only to PRs whose author is a member of the MystenLabs GitHub organization.
-- The policy is opt in. A PR opts in when its description contains a `## Review tier` section.
-  A PR without that section goes through normal human code review.
+- The policy is opt in. A PR opts in when its description contains a tier tag (see Step 4).
+  A PR without a tier tag goes through normal human code review.
 - Every PR under the policy gets an AI review, and the human author accepts or rejects each
-  finding before the PR merges.
-- A PR that merged under the policy can be reverted on request by any MystenLabs member, with no
-  discussion required first. The author is notified so the issue can be discussed afterwards.
+  finding before the PR merges. The authoring agent enforces this locally: it runs the review,
+  and it does not finish until the author has decided each finding. The findings and their
+  resolution are not posted or recorded in the PR. The PR only gets a tag that says the review
+  was done.
+- Anyone can request a revert of a PR that merged under the policy. A PR can be reverted without
+  discussion if it is an emergency or the author is unavailable.
 
 ## Eligible paths
 
@@ -44,8 +47,8 @@ Excluded:
 .github/CODEOWNERS
 ```
 
-If any changed file is not eligible, the PR cannot opt in. Do not write a `## Review tier`
-section. Tell the user which files are ineligible, and suggest splitting them into a separate PR
+If any changed file is not eligible, the PR cannot opt in. Do not write a tier tag. Tell the user
+which files are ineligible, and suggest splitting them into a separate PR
 if the rest of the change could use the policy.
 
 ## Step 1 — Classify the tier
@@ -104,30 +107,22 @@ sign-off from someone who knows the motivation for the feature.
 ### Tier 3
 
 Tier 3 requires a mini design doc (MDD) in the PR description, in a `## Mini design doc` section
-directly after `## Description`. The MDD states what the change does and why, at the level of
-detail a coding agent needs to reproduce the important decisions. It does not need to describe
-every detail, because reimplementation is cheap. It has these subsections:
-
-- `### Motivation`: the problem and why it matters now.
-- `### Design`: the important decisions, the alternatives that were rejected and why, and the
-  non-goals.
-- `### Ecosystem impact and rollout`: the users, services, and SDKs that the change affects, the
-  rollout plan, and any protocol config or two-PR sequencing (see the root `CLAUDE.md`).
-- `### Test strategy`: how the tests show that the design works, and which bugs they cannot catch.
-- `### Implementation notes`: decisions made during implementation and surprises that came up.
+directly after `## Description`. The MDD is a bullet list of design decisions, requirements,
+caveats, and similar points. It states what the change does and why, at the level of detail a
+coding agent needs to reproduce the important decisions. It does not need to describe every
+detail, because reimplementation is cheap.
 
 Collaboration matters most before implementation starts. When the author starts a Tier 3 change,
 recommend opening a draft PR with only the MDD so that reviewers can comment before code exists.
 
 Rules for the agent:
 
-- Do not mark a PR Tier 3 unless the code matches the MDD. Before writing the annotation, compare
-  the diff to each statement in `### Design` and `### Ecosystem impact and rollout`. Fix the code
-  or stop and report each mismatch to the author.
-- Do not edit `### Motivation`, `### Design`, or `### Ecosystem impact and rollout` to match the
-  code without the author's approval. These sections are what the human reviewers approve.
-- Add to `### Implementation notes` whenever implementation forces a decision that the MDD does
-  not cover, or reveals something the MDD did not expect.
+- Do not mark a PR Tier 3 unless the code matches the MDD. Before writing the tier tag, compare
+  the diff to each bullet. Fix the code or stop and report each mismatch to the author.
+- Do not edit or remove a bullet to match the code without the author's approval. The bullets are
+  what the human reviewers approve.
+- Add a bullet whenever implementation forces a decision that the MDD does not cover, or reveals
+  something the MDD did not expect. Start each such bullet with `Implementation note:`.
 
 Two humans other than the author, who are experts on the affected systems, must approve the PR.
 Use the `.github/CODEOWNERS` owners of the changed paths as the expert reviewers where entries
@@ -137,9 +132,10 @@ discards the implementation. When a reviewer changes the MDD, update the code to
 
 ## Step 3 — AI review
 
-Every tier requires an AI review of the full `$BASE...HEAD` diff by `/code-review max`. The author
-must accept or reject each finding. A local review satisfies this requirement when it is recorded
-as described below. `/send-pr` Step 4 performs this review.
+Every tier requires an AI review of the full `$BASE...HEAD` diff by `/code-review max`. Run it
+locally, report each finding to the author, and wait until the author has accepted or rejected
+each one. Apply the accepted fixes. Do not post the findings to the PR. `/send-pr` Step 4 performs
+this review.
 
 For Tier 3, tell the reviewer to focus on these questions in addition to correctness:
 
@@ -149,42 +145,34 @@ For Tier 3, tell the reviewer to focus on these questions in addition to correct
 
 For Tier 2, tell the reviewer to check that the new code is tested appropriately.
 
-## Step 4 — Write the annotations
+## Step 4 — Write the tags
 
-### Review stamp
+The policy uses two tags in the PR description. A tag is a single line and can go anywhere in the
+description, except after the last release-notes checkbox, where nothing may follow.
 
-The last line of `## Test plan` records the AI review:
-
-```
-Reviewed with `/code-review max` at <sha>: <outcome>.
-```
-
-`<sha>` is the full hash of the PR head commit that the review covered, after the push. `<outcome>`
-states the number of findings and how the author resolved them, for example "no meaningful
-findings" or "3 findings, 2 fixed, 1 rejected as a false positive". Every finding must be resolved
-by the author before the stamp is written.
-
-If commits are added after the stamp, review the new commits and update the stamp to the new head.
-
-### Tier section
-
-Add a `## Review tier` section after `## Test plan` and before `## Release notes`. Nothing may
-follow the last release-notes checkbox in a PR body, so this section must not go at the end.
+The tier tag opts the PR in and states its tier:
 
 ```
-## Review tier
-
-Tier: <0|1|2|3>
-Rationale: <one sentence on why the change fits this tier>
+[review-tier: <0|1|2|3>]
 ```
 
-Tier 1 adds one of these lines:
+The review tag records that the AI review in Step 3 ran and that the author decided every
+finding:
+
+```
+[ai-review: /code-review max <sha>]
+```
+
+`<sha>` is the full hash of the PR head commit that the review covered, after the push. If commits
+are added after the tag, review the new commits and update the tag to the new head.
+
+A Tier 1 PR also states its regression test anywhere in the description, in one of these forms:
 
 ```
 Regression test: `<path to test>::<test name>`
 Regression test not feasible: <one or two sentences>
 ```
 
-Refresh the section whenever the diff changes. If the new diff fits a higher tier, raise the tier
-and meet the new tier's requirements. If the PR becomes ineligible, remove the section and tell
-the author.
+Refresh the tags whenever the diff changes. If the new diff fits a higher tier, raise the tier and
+meet the new tier's requirements. If the PR becomes ineligible, remove the tier tag and tell the
+author.

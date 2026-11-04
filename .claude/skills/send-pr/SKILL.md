@@ -81,13 +81,13 @@ Invoke `/review-author` and follow its Steps 1 and 2: check eligibility, classif
 
 ### AI review gate
 
-Skip this gate if the diff changes no code: every changed file is prose, such as Markdown, plain text, or a skill file under `.claude/skills/`. Comment-only edits inside source files still count as code changes. Otherwise, the diff must go through `/code-review max` before it is pushed. Run it against `$BASE` so it reviews the same `$BASE...HEAD` range as above, not the default upstream diff. For a Tier 2 or Tier 3 PR, give it the tier focus from `/review-author` Step 3. If `/code-review max` already ran in this session on the current changes and nothing but fixes for its own findings has changed since, that is sufficient — do not run it again. On a run that updates an existing PR with new commits, run it again. If `/code-review` is unavailable, does not complete, or a `--max-findings` cap is in effect, STOP and report; never substitute another review or write the Step 13 stamp without a completed run.
+Skip this gate if the diff changes no code: every changed file is prose, such as Markdown, plain text, or a skill file under `.claude/skills/`. Comment-only edits inside source files still count as code changes. Otherwise, the diff must go through `/code-review max` before it is pushed. Run it against `$BASE` so it reviews the same `$BASE...HEAD` range as above, not the default upstream diff. For a Tier 2 or Tier 3 PR, give it the tier focus from `/review-author` Step 3. If `/code-review max` already ran in this session on the current changes and nothing but fixes for its own findings has changed since, that is sufficient — do not run it again. On a run that updates an existing PR with new commits, run it again. If `/code-review` is unavailable, does not complete, or a `--max-findings` cap is in effect, STOP and report; never substitute another review or write the Step 13 review tag without a completed run.
 
 Triage the findings:
 - Trivial findings (a local rename, a small simplification) inside hunks of this diff, not touching public, serialized, or RPC-facing identifiers: fix them and stage as above. Dismiss a trivial finding that conflicts with CLAUDE.md conventions.
 - Everything else — correctness bugs, security issues, anything from the bugs & security list above, behavior changes, and any finding you cannot confidently dismiss as a false positive — is meaningful: STOP. Do not push and do not open or update the PR. Report each finding to the author and ask how to proceed. Resume only once the author has decided each one: confirmed it as a false positive, deferred it explicitly, or supplied or approved a fix. Apply approved fixes yourself and stage them, then confirm `git status` shows only staged changes before moving on.
 
-Keep a short note of the outcome (how many findings, how each was resolved) — it goes into the test plan in Step 13.
+Do not post the findings or their resolution to the PR. Once the author has decided every finding, Step 13 records the review with a tag.
 
 ## Step 5 — Run relevant tests
 
@@ -133,12 +133,12 @@ If the remote branch exists and has diverged (due to rebase), force-push with `g
 ## Step 12 — Open or update PR
 
 Check if a PR already exists for this branch (`gh pr view`).
-- If a PR is open: refresh the AI review stamp line in its test plan and the `## Review tier` section (see Step 13) without touching the rest of the body — fetch the body with `gh pr view --json body`, replace or append only those parts, and write it back with `gh pr edit --body`. For a Tier 3 PR, also add any new `### Implementation notes` to the MDD. Print the PR URL.
+- If a PR is open: refresh the review tag and the tier tag (see Step 13) without touching the rest of the body — fetch the body with `gh pr view --json body`, replace or append only those tags, and write it back with `gh pr edit --body`. For a Tier 3 PR, also add any new `Implementation note:` bullets to the MDD. Print the PR URL.
 - If no PR exists: open one in **draft** mode with `gh pr create --draft`. Write a title and body following the description guidelines below. Print the PR URL.
 
 ## Step 13 — Write the PR description
 
-Follow the repo template (`.github/PULL_REQUEST_TEMPLATE.md`): `## Description`, `## Test plan`, `## Release notes`. A PR under the tiered review policy also has a `## Review tier` section between `## Test plan` and `## Release notes`, and a Tier 3 PR has a `## Mini design doc` section after `## Description`. `/review-author` Step 4 defines both.
+Follow the repo template (`.github/PULL_REQUEST_TEMPLATE.md`): `## Description`, `## Test plan`, `## Release notes`. A PR under the tiered review policy also has a tier tag, and a Tier 3 PR has a `## Mini design doc` section after `## Description`. `/review-author` Steps 2 and 4 define both.
 
 ### Description
 
@@ -166,7 +166,7 @@ Only state what a reviewer genuinely needs in order to trust the change. Do NOT 
 - If new tests were added, say which behavior they cover (one line).
 - If you verified something manually or by a non-obvious command, give the steps so a reviewer could repeat them.
 - If the change is covered entirely by existing automated tests and there is nothing else to convey, write a single short line saying so (e.g. "Covered by existing tests in `<area>`.") rather than a paragraph of boilerplate.
-- Always end the test plan with one line recording the AI review gate from Step 4, in the form "Reviewed with `/code-review max` at <sha>: <outcome>.", where `<sha>` is the full hash of the head commit pushed in Step 11. Examples of `<outcome>` are "no meaningful findings", "2 findings, both fixed", and "1 finding, deferred to a follow-up". This is the one check-style line that must always be present, because it records a check CI does not run. If Step 4 skipped the gate because the diff changes no code, write "Not reviewed with `/code-review max`: the change contains no code." instead. The `/review-approver` skill relies on the hash to skip a second review.
+- End the test plan with the review tag `[ai-review: /code-review max <sha>]`, where `<sha>` is the full hash of the head commit pushed in Step 11. The tag records a check CI does not run, and `/review-approver` relies on the hash to skip a second review. If Step 4 skipped the gate because the diff changes no code, omit the tag.
 
 ### Release notes
 
