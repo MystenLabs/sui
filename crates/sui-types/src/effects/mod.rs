@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use self::effects_v2::TransactionEffectsV2;
+use crate::TypeTag;
 use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::EpochId;
@@ -24,7 +25,7 @@ pub use object_change::{
 };
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 pub use test_effects_builder::TestEffectsBuilder;
 
 mod effects_v1;
@@ -48,6 +49,16 @@ pub const APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST: usize = 40;
 pub const APPROX_SIZE_OF_TX_DIGEST: usize = 40;
 // Approximate size of `Owner` type in bytes
 pub const APPROX_SIZE_OF_OWNER: usize = 48;
+// Approximate size of an accumulator write's `changed_objects` entry, excluding its type tag
+// and event digests.
+pub const APPROX_SIZE_OF_ACCUMULATOR_WRITE: usize = 96;
+// Approximate size of one `(u64, Digest)` entry in `AccumulatorValue::EventDigest`.
+pub const APPROX_SIZE_OF_ACCUMULATOR_EVENT_DIGEST: usize = 48;
+// A `changed_objects` entry for an ID that was created or deleted, with no object read or
+// written, takes about this many bytes.
+pub const APPROX_SIZE_OF_ID_ONLY_CHANGE: usize = 40;
+// Approximate size of an `unchanged_consensus_objects` entry.
+pub const APPROX_SIZE_OF_UNCHANGED_CONSENSUS_OBJECT: usize = 80;
 
 /// The response from processing a transaction or a certified transaction
 #[enum_dispatch(TransactionEffectsAPI)]
@@ -177,10 +188,16 @@ impl TransactionEffects {
         fixed_sizes + approx_change_entry_size + deps_size
     }
 
+    /// When `complete_effects_size_estimate` is false, the ID-only change, unchanged
+    /// consensus object and accumulator event arguments are ignored.
     pub fn estimate_effects_size_upperbound_v2(
         num_writes: usize,
         num_modifies: usize,
         num_deps: usize,
+        num_id_only_changes: usize,
+        num_unchanged_consensus_objects: usize,
+        accumulator_events: &[AccumulatorEvent],
+        complete_effects_size_estimate: bool,
     ) -> usize {
         let fixed_sizes = APPROX_SIZE_OF_EXECUTION_STATUS
             + APPROX_SIZE_OF_EPOCH_ID
@@ -194,7 +211,54 @@ impl TransactionEffects {
 
         let deps_size = 1_000 + APPROX_SIZE_OF_TX_DIGEST * num_deps;
 
-        fixed_sizes + approx_change_entry_size + deps_size
+        let mut size = fixed_sizes + approx_change_entry_size + deps_size;
+
+        if complete_effects_size_estimate {
+            let id_only_changes_size =
+                num_id_only_changes.saturating_mul(APPROX_SIZE_OF_ID_ONLY_CHANGE);
+            let unchanged_consensus_objects_size = num_unchanged_consensus_objects
+                .saturating_mul(APPROX_SIZE_OF_UNCHANGED_CONSENSUS_OBJECT);
+            let accumulator_writes_size =
+                Self::estimate_accumulator_effects_size_upperbound(accumulator_events);
+
+            size = size
+                .saturating_add(id_only_changes_size)
+                .saturating_add(unchanged_consensus_objects_size)
+                .saturating_add(accumulator_writes_size);
+        }
+
+        size
+    }
+
+    /// Upper bound on the effects size of the accumulator writes after they are merged into one
+    /// write per accumulator object.
+    fn estimate_accumulator_effects_size_upperbound(
+        accumulator_events: &[AccumulatorEvent],
+    ) -> usize {
+        let mut seen = BTreeSet::new();
+        let mut size: usize = 0;
+        for event in accumulator_events {
+            if seen.insert(event.accumulator_obj) {
+                size = size.saturating_add(Self::estimate_accumulator_write_size_upperbound(
+                    &event.write.address.ty,
+                ));
+            }
+            let digests_size = match &event.write.value {
+                AccumulatorValue::Integer(_) | AccumulatorValue::IntegerTuple(_, _) => 0,
+                AccumulatorValue::EventDigest(digests) => digests
+                    .len()
+                    .saturating_mul(APPROX_SIZE_OF_ACCUMULATOR_EVENT_DIGEST),
+            };
+            size = size.saturating_add(digests_size);
+        }
+        size
+    }
+
+    /// Upper bound on the effects size of one accumulator object's write, excluding event digests.
+    pub fn estimate_accumulator_write_size_upperbound(ty: &TypeTag) -> usize {
+        bcs::serialized_size(ty)
+            .unwrap_or(usize::MAX)
+            .saturating_add(APPROX_SIZE_OF_ACCUMULATOR_WRITE)
     }
 
     /// Return an iterator that iterates through all changed objects, including mutated,
