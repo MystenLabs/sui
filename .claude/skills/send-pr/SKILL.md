@@ -75,6 +75,16 @@ Obvious code quality issues:
 
 Fix anything found. Stage changes but do not commit yet — they will be amended in Step 9. If something looks intentional but questionable, note it to the user but continue.
 
+### AI review gate
+
+The diff must go through `/code-review max` before it is pushed. Run it against `$BASE` so it reviews the same `$BASE...HEAD` range as above, not the default upstream diff. If `/code-review max` already ran in this session on the current changes and nothing but fixes for its own findings has changed since, that is sufficient — do not run it again. On a run that updates an existing PR with new commits, run it again. If `/code-review` is unavailable, does not complete, or a `--max-findings` cap is in effect, STOP and report; never substitute another review or write the Step 13 stamp without a completed run.
+
+Triage the findings:
+- Trivial findings (a local rename, a small simplification) inside hunks of this diff, not touching public, serialized, or RPC-facing identifiers: fix them and stage as above. Dismiss a trivial finding that conflicts with CLAUDE.md conventions.
+- Everything else — correctness bugs, security issues, anything from the bugs & security list above, behavior changes, and any finding you cannot confidently dismiss as a false positive — is meaningful: STOP. Do not push and do not open or update the PR. Report each finding to the author and ask how to proceed. Resume only once the author has decided each one: confirmed it as a false positive, deferred it explicitly, or supplied or approved a fix. Apply approved fixes yourself and stage them, then confirm `git status` shows only staged changes before moving on.
+
+Keep a short note of the outcome (how many findings, how each was resolved) — it goes into the test plan in Step 13.
+
 ## Step 5 — Run relevant tests
 
 Determine which packages were changed on this branch (compare against `$BASE`).
@@ -119,7 +129,7 @@ If the remote branch exists and has diverged (due to rebase), force-push with `g
 ## Step 12 — Open or update PR
 
 Check if a PR already exists for this branch (`gh pr view`).
-- If a PR is open: done. Print the PR URL.
+- If a PR is open: refresh the AI review stamp line in its test plan (see Step 13) without touching the rest of the body — fetch the body with `gh pr view --json body`, replace or append only that line, and write it back with `gh pr edit --body`. Print the PR URL.
 - If no PR exists: open one in **draft** mode with `gh pr create --draft`. Write a title and body following the description guidelines below. Print the PR URL.
 
 ## Step 13 — Write the PR description
@@ -152,6 +162,7 @@ Only state what a reviewer genuinely needs in order to trust the change. Do NOT 
 - If new tests were added, say which behavior they cover (one line).
 - If you verified something manually or by a non-obvious command, give the steps so a reviewer could repeat them.
 - If the change is covered entirely by existing automated tests and there is nothing else to convey, write a single short line saying so (e.g. "Covered by existing tests in `<area>`.") rather than a paragraph of boilerplate.
+- Always end the test plan with one line recording the AI review gate from Step 4, e.g. "Reviewed with `/code-review max`: no meaningful findings.", "Reviewed with `/code-review max`: 2 findings, both fixed.", or "Reviewed with `/code-review max`: 1 finding, deferred to a follow-up." This is the one check-style line that must always be present, because it records a check CI does not run.
 
 ### Release notes
 
