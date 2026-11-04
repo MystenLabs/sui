@@ -70,10 +70,11 @@ Classify the PR yourself from the diff and the tier definitions. Do not rely on 
 Find the review tag in the description:
 
 ```
-[ai-review: /code-review max <sha>]
+[ai-review: /code-review max <model> <sha>]
 ```
 
-Trust the tag. It means that the authoring agent ran the review and the author decided every
+If `<model>` is not in the allowed model list in the base-branch copy of `review-author`, treat
+the PR as if it had no tag. Otherwise, trust the tag. It means that the authoring agent ran the review and the author decided every
 finding. Do not repeat a review that the tag records, and do not look for its findings in the PR.
 
 - If `<sha>` is the PR head, the review requirement is met.
@@ -82,11 +83,13 @@ finding. Do not repeat a review that the tag records, and do not look for its fi
 - If there is no tag, or `<sha>` is not an ancestor of the head, run `/code-review max` on the
   full `<base>...<head>` diff.
 
-When you run a review, apply the tier focus from the `review-author` skill (test coverage and
+When you run a review, run it on a model in the allowed model list. If you run on any other model,
+the outcome is **Blocked**, and the comment says that the PR needs a review by an allowed model.
+Apply the tier focus from the `review-author` skill (test coverage and
 unintended consequences for Tier 2, the MDD questions for Tier 3). For Tier 3, pass the full text
 of the `## Mini design doc` section from the PR description to the reviewer, because the reviewer
-does not read the PR description. Post each finding as an inline
-review comment with `/code-review --comment`. The author must accept or reject each finding.
+does not read the PR description. Post each finding as an inline review comment with
+`/code-review --comment`. The author must accept or reject each finding.
 While any of your findings has no reply from the author and no fix, the outcome is **Blocked**.
 
 ## Step 5 — Check the tier requirements

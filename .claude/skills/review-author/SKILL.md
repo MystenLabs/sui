@@ -149,6 +149,15 @@ locally, report each finding to the author, and wait until the author has accept
 each one. Apply the accepted fixes. Do not post the findings to the PR. `/send-pr` Step 4 performs
 this review.
 
+The review must run on a model in this list, identified by model ID:
+
+```
+claude-opus-5-5
+```
+
+If the review would run on any other model, stop and tell the author. Do not write the review tag
+for a review that ran on a model outside the list.
+
 For Tier 3, tell the reviewer to focus on these questions in addition to correctness:
 
 - Does the implementation match the MDD in the important details?
@@ -176,10 +185,11 @@ The review tag records that the AI review in Step 3 ran and that the author deci
 finding:
 
 ```
-[ai-review: /code-review max <sha>]
+[ai-review: /code-review max <model> <sha>]
 ```
 
-`<sha>` is the full hash of the PR head commit that the review covered, after the push. If commits
+`<model>` is the model ID that ran the review. `<sha>` is the full hash of the PR head commit that
+the review covered, after the push. If commits
 are added after the tag, review the new commits and update the tag to the new head.
 
 Refresh the tags whenever the diff changes. If the new diff fits a higher tier, raise the tier and
