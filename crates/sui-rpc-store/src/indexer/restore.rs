@@ -76,6 +76,10 @@ use crate::schema::pruning_watermark;
 /// bounded by the live object set, so a snapshot restore reproduces
 /// them exactly.
 ///
+/// The [`Indexer`](crate::Indexer) registers each of these as a
+/// required snapshot member, so every snapshot includes all of them
+/// through its checkpoint.
+///
 /// Matches the live half of
 /// [`PipelineLayer::embedded`](crate::config::PipelineLayer::embedded);
 /// the `embedded_registers_only_cohort_pipelines` test pins the two

@@ -264,10 +264,12 @@ impl PipelineLayer {
     /// already holds that data and serves it directly, so this indexer
     /// must not double-write it.
     ///
-    /// The enabled pipelines form two cohorts. The
-    /// [`Synchronizer`](sui_consistent_store::Synchronizer)
-    /// distinguishes them by their persisted watermark at startup,
-    /// not by this layer, so both are simply registered here:
+    /// The enabled pipelines form two cohorts, both simply registered
+    /// here. The [`Indexer`](crate::Indexer) makes every live-cohort
+    /// pipeline a required member of each snapshot; the
+    /// [`Synchronizer`](sui_consistent_store::Synchronizer) admits
+    /// history-cohort pipelines to snapshots by their persisted
+    /// watermark, once they catch up:
     ///
     /// - **Live cohort** — restored to the fullnode's tip and
     ///   following live from there: `object_by_owner`,

@@ -33,6 +33,21 @@
 //! backfill has reached, which is why a snapshot is consistent only
 //! for the pipelines that were members when it was taken.
 //!
+//! # Required members
+//!
+//! A caller that needs every snapshot to be consistent for a fixed
+//! set of pipelines marks them with
+//! [`require_member`](Synchronizer::require_member). A required
+//! pipeline is a cohort member from startup whatever its watermark,
+//! so no snapshot is taken until it reaches the frontier: if it
+//! resumes behind the others (for example after a crash between two
+//! pipelines' commits), the caught-up members park at the frontier
+//! while it commits its backlog. Every snapshot taken during a run
+//! therefore includes every required pipeline's writes through the
+//! snapshot's checkpoint. Once a required pipeline leaves the cohort
+//! (its input channel closes on shutdown), no further snapshots are
+//! taken. Pipelines that are not required keep dynamic membership.
+//!
 //! # Pipelines must commit exactly one checkpoint per batch
 //!
 //! The synchronizer assumes each `(Watermark, Batch)` it receives
@@ -52,7 +67,8 @@
 //! 2. [`register_pipeline`](Synchronizer::register_pipeline) reads
 //!    the pipeline's existing watermark (if any) from the
 //!    framework schema and records it as that pipeline's resume
-//!    point.
+//!    point. [`require_member`](Synchronizer::require_member)
+//!    optionally marks a registered pipeline as a required member.
 //! 3. [`Synchronizer::run`] consumes the synchronizer, spawns one
 //!    task per registered pipeline, and returns the per-pipeline
 //!    write queues plus a [`tokio::task::JoinSet`] whose tasks
@@ -64,6 +80,7 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -112,6 +129,9 @@ pub(crate) type Queue = HashMap<&'static str, mpsc::Sender<(Watermark, Batch)>>;
 pub struct Synchronizer {
     db: Db,
     last_watermarks: HashMap<&'static str, Option<Watermark>>,
+    /// Pipelines that must be members of every snapshot (see
+    /// [`require_member`](Self::require_member)).
+    required_members: HashSet<&'static str>,
     first_checkpoint: u64,
     buffer_size: usize,
 }
@@ -139,6 +159,7 @@ impl Synchronizer {
         Self {
             db,
             last_watermarks: HashMap::new(),
+            required_members: HashSet::new(),
             first_checkpoint: first_checkpoint.unwrap_or(0),
             buffer_size,
         }
@@ -171,6 +192,27 @@ impl Synchronizer {
             .get(&key)
             .with_context(|| format!("reading initial watermark for {pipeline_task}"))?;
         self.last_watermarks.insert(pipeline_task, watermark);
+        Ok(())
+    }
+
+    /// Require the registered pipeline `pipeline_task` to be a member
+    /// of every snapshot.
+    ///
+    /// The pipeline counts toward the snapshot cohort from startup,
+    /// even when its watermark is behind the frontier, so no snapshot
+    /// is taken until it has committed through `frontier - 1`. The
+    /// caught-up members park at the frontier in the meantime. If the
+    /// pipeline leaves the cohort on shutdown, no further snapshots
+    /// are taken. See the module docs on required members.
+    ///
+    /// Fails if `pipeline_task` has not been registered through
+    /// [`register_pipeline`](Self::register_pipeline).
+    pub fn require_member(&mut self, pipeline_task: &'static str) -> anyhow::Result<()> {
+        ensure!(
+            self.last_watermarks.contains_key(pipeline_task),
+            "{pipeline_task} must be registered with the synchronizer before it is required",
+        );
+        self.required_members.insert(pipeline_task);
         Ok(())
     }
 
@@ -208,16 +250,20 @@ impl Synchronizer {
         // watermark is `init_checkpoint`, the checkpoint the next
         // snapshot captures) reaches `next_snapshot_checkpoint` as its
         // first snapshot boundary, so it joins the cohort immediately.
-        // A pipeline lagging behind (e.g. a history cohort backfilling
-        // from a low watermark) commits freely without gating snapshots
-        // and joins the cohort once it climbs to the frontier.
-        let is_member = |w: &Option<Watermark>| {
-            w.map_or(first_checkpoint, |w| w.checkpoint_hi_inclusive) >= init_checkpoint
+        // A required pipeline is a member regardless, so the snapshot
+        // waits for it to climb to the frontier. Any other lagging
+        // pipeline (e.g. a history cohort backfilling from a low
+        // watermark) commits freely without gating snapshots and joins
+        // the cohort once it climbs to the frontier.
+        let required_members = &self.required_members;
+        let is_member = |pipeline_task: &'static str, w: &Option<Watermark>| {
+            required_members.contains(pipeline_task)
+                || w.map_or(first_checkpoint, |w| w.checkpoint_hi_inclusive) >= init_checkpoint
         };
         let initial_members = self
             .last_watermarks
-            .values()
-            .filter(|&w| is_member(w))
+            .iter()
+            .filter(|&(&pipeline_task, w)| is_member(pipeline_task, w))
             .count();
 
         let coordinator = Arc::new(SnapshotCoordinator::new(
@@ -228,18 +274,18 @@ impl Synchronizer {
 
         let mut queue: Queue = HashMap::new();
         let mut join_set = JoinSet::new();
-        for (pipeline_task, last_watermark) in self.last_watermarks {
+        for (&pipeline_task, last_watermark) in &self.last_watermarks {
             let (tx, rx) = mpsc::channel(buffer_size);
             queue.insert(pipeline_task, tx);
-            let member = is_member(&last_watermark);
             join_set.spawn(synchronizer_task(
                 coordinator.clone(),
                 rx,
                 coordinator.subscribe(),
                 pipeline_task,
                 first_checkpoint,
-                last_watermark,
-                member,
+                *last_watermark,
+                is_member(pipeline_task, last_watermark),
+                self.required_members.contains(pipeline_task),
             ));
         }
 
@@ -253,9 +299,11 @@ impl Synchronizer {
 /// [`SnapshotCoordinator`].
 ///
 /// `is_member` records whether this pipeline starts inside the
-/// snapshot cohort (caught up to the frontier) or lagging behind it;
-/// a lagging pipeline flips it to `true` when it climbs to the
-/// frontier and joins.
+/// snapshot cohort (caught up to the frontier, or required) or
+/// lagging behind it; a lagging pipeline flips it to `true` when it
+/// climbs to the frontier and joins. `is_required` marks a required
+/// member (see [`Synchronizer::require_member`]).
+#[allow(clippy::too_many_arguments)]
 async fn synchronizer_task(
     coordinator: Arc<SnapshotCoordinator>,
     mut rx: mpsc::Receiver<(Watermark, Batch)>,
@@ -264,6 +312,7 @@ async fn synchronizer_task(
     first_checkpoint: u64,
     mut current_watermark: Option<Watermark>,
     mut is_member: bool,
+    is_required: bool,
 ) -> anyhow::Result<()> {
     loop {
         let next_checkpoint = current_watermark
@@ -277,7 +326,9 @@ async fn synchronizer_task(
             // without coordinating. This is the steady state for
             // lagging pipelines backfilling toward the frontier (and
             // fires once for a fresh pipeline's first checkpoint, before
-            // it reaches the opening frontier).
+            // it reaches the opening frontier). A required member below
+            // the frontier also commits here while the rest of the
+            // cohort parks at the frontier waiting for it.
             Ordering::Greater => {}
 
             // Next checkpoint is past the frontier. A member advances
@@ -311,7 +362,7 @@ async fn synchronizer_task(
 
         let Some((watermark, batch)) = rx.recv().await else {
             info!(pipeline = %pipeline_task, "Synchronizer channel closed");
-            coordinator.depart(pipeline_task, is_member);
+            coordinator.depart(pipeline_task, is_member, is_required);
             break;
         };
 
@@ -349,6 +400,8 @@ async fn synchronizer_task(
 /// without gating the snapshot and join the cohort when they climb to
 /// it — a late join is consistent because the joiner, like every
 /// member, has committed through `frontier - 1` when it arrives.
+/// Required pipelines are members from the start, so a lagging
+/// required pipeline gates the snapshot until it arrives.
 ///
 /// This replaces a fixed-size [`tokio::sync::Barrier`], which would
 /// stall the caught-up cohort at the frontier waiting for a lagging
@@ -384,6 +437,10 @@ struct Cohort {
     /// Members that have reached the current frontier this round.
     /// Reset to zero each time the frontier advances.
     arrived: usize,
+    /// Set when a required member departs. Later snapshots would not
+    /// include its writes, so the frontier still advances but no
+    /// snapshot is taken for the rest of the run.
+    snapshots_halted: bool,
 }
 
 impl SnapshotCoordinator {
@@ -395,6 +452,7 @@ impl SnapshotCoordinator {
             cohort: Mutex::new(Cohort {
                 members,
                 arrived: 0,
+                snapshots_halted: false,
             }),
         }
     }
@@ -463,15 +521,17 @@ impl SnapshotCoordinator {
             cohort.arrived += 1;
             if cohort.arrived == cohort.members {
                 // Last to arrive: every member has committed through
-                // `at_checkpoint - 1`, so take the snapshot and release
-                // the cohort.
-                self.db.take_snapshot(watermark);
+                // `at_checkpoint - 1`, so take the snapshot (unless a
+                // required member has departed) and release the cohort.
+                if !cohort.snapshots_halted {
+                    self.db.take_snapshot(watermark);
+                    debug!(
+                        pipeline = %pipeline_task,
+                        checkpoint = watermark.checkpoint_hi_inclusive,
+                        "Took snapshot",
+                    );
+                }
                 self.advance(&mut cohort, at_checkpoint);
-                debug!(
-                    pipeline = %pipeline_task,
-                    checkpoint = watermark.checkpoint_hi_inclusive,
-                    "Took snapshot",
-                );
                 return;
             }
         }
@@ -496,13 +556,18 @@ impl SnapshotCoordinator {
     /// awaiting its next checkpoint, below the frontier), so no
     /// snapshot is taken here: a snapshot at this frontier would be
     /// inconsistent for the departed pipeline. Departure only happens
-    /// on shutdown, so skipping this final snapshot is harmless.
-    fn depart(&self, pipeline_task: &str, is_member: bool) {
+    /// on shutdown, so skipping this final snapshot is harmless. A
+    /// departing required member also halts every later snapshot, which
+    /// would otherwise miss its writes.
+    fn depart(&self, pipeline_task: &str, is_member: bool, is_required: bool) {
         if !is_member {
             return;
         }
         let mut cohort = self.cohort.lock().expect("snapshot cohort mutex poisoned");
         cohort.members -= 1;
+        if is_required {
+            cohort.snapshots_halted = true;
+        }
         debug!(
             pipeline = %pipeline_task,
             members = cohort.members,
@@ -565,6 +630,38 @@ mod tests {
             tokio::task::yield_now().await;
         }
         panic!("snapshot at checkpoint {checkpoint} was never taken");
+    }
+
+    /// Persist each `(pipeline, checkpoint)` committer watermark, as a
+    /// previous run would have left them.
+    fn seed_watermarks(db: &Db, watermarks: &[(&str, u64)]) {
+        let framework = FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        for &(pipeline, checkpoint) in watermarks {
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(pipeline),
+                    &wm(checkpoint),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+    }
+
+    /// A `(Watermark, Batch)` for `pipeline` at `checkpoint` whose batch
+    /// stages the watermark write, as `Store::transaction` does.
+    fn watermarked_batch(db: &Db, pipeline: &str, checkpoint: u64) -> (Watermark, Batch) {
+        let framework = FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        batch
+            .put(
+                &framework.watermarks,
+                &PipelineTaskKey::new(pipeline),
+                &wm(checkpoint),
+            )
+            .unwrap();
+        (wm(checkpoint), batch)
     }
 
     #[test]
@@ -845,5 +942,107 @@ mod tests {
         );
         assert!(db.at_snapshot(12).is_some());
         assert_eq!(coordinator.frontier(), 14);
+    }
+
+    #[tokio::test]
+    async fn required_lagging_member_gates_snapshots_until_it_catches_up() {
+        // A crash left the required "balance" one checkpoint behind the
+        // other required pipelines, and the unrequired "history" far
+        // behind. The frontier opens at 11; "owner" and "type" arrive at
+        // once, but snapshot 10 must wait for "balance" to commit 10.
+        // "history" is never fed and must not block it.
+        let (_dir, db) = open();
+        seed_watermarks(
+            &db,
+            &[("owner", 10), ("type", 10), ("balance", 9), ("history", 0)],
+        );
+
+        let mut sync = Synchronizer::new(db.clone(), 8, None);
+        for pipeline in ["owner", "type", "balance", "history"] {
+            sync.register_pipeline(pipeline).unwrap();
+        }
+        for pipeline in ["owner", "type", "balance"] {
+            sync.require_member(pipeline).unwrap();
+        }
+        let (mut joinset, queue) = sync.run().unwrap();
+
+        // Let "owner" and "type" reach the frontier and park there.
+        for _ in 0..1_000 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            db.snapshot_range(),
+            None,
+            "no snapshot may be taken before balance catches up",
+        );
+
+        queue
+            .get("balance")
+            .unwrap()
+            .send(watermarked_batch(&db, "balance", 10))
+            .await
+            .unwrap();
+        wait_for_snapshot(&db, 10).await;
+
+        let snap = db.at_snapshot(10).unwrap();
+        assert_eq!(
+            snap.framework()
+                .watermarks
+                .get(&PipelineTaskKey::new("balance"))
+                .unwrap(),
+            Some(wm(10)),
+            "snapshot 10 must include balance's checkpoint-10 writes",
+        );
+
+        drop(queue);
+        while let Some(joined) = joinset.join_next().await {
+            joined.unwrap().unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn required_member_departure_halts_snapshots() {
+        // Two required pipelines snapshot 5 together. "b" then shuts
+        // down without committing 6 while "a" commits 6 and arrives at
+        // the next frontier alone, so snapshot 6 would miss b's writes
+        // and must not be taken.
+        let (_dir, db) = open();
+        seed_watermarks(&db, &[("a", 5), ("b", 5)]);
+
+        let mut sync = Synchronizer::new(db.clone(), 8, None);
+        for pipeline in ["a", "b"] {
+            sync.register_pipeline(pipeline).unwrap();
+            sync.require_member(pipeline).unwrap();
+        }
+        let (mut joinset, mut queue) = sync.run().unwrap();
+        wait_for_snapshot(&db, 5).await;
+
+        // Close b's channel and let it leave the cohort before "a"
+        // reaches the next frontier.
+        drop(queue.remove("b"));
+        for _ in 0..1_000 {
+            tokio::task::yield_now().await;
+        }
+
+        queue
+            .get("a")
+            .unwrap()
+            .send(watermarked_batch(&db, "a", 6))
+            .await
+            .unwrap();
+        drop(queue);
+        while let Some(joined) = joinset.join_next().await {
+            joined.unwrap().unwrap();
+        }
+
+        assert!(db.at_snapshot(6).is_none());
+    }
+
+    #[test]
+    fn require_member_refuses_unregistered_pipeline() {
+        let (_dir, db) = open();
+        let mut sync = Synchronizer::new(db, 4, None);
+        let err = sync.require_member("p").unwrap_err();
+        assert!(format!("{err:#}").contains("must be registered"));
     }
 }

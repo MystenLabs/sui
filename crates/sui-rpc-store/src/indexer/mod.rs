@@ -70,6 +70,7 @@ use crate::RpcStoreSchema;
 use crate::config::PipelineLayer;
 use crate::config::PrunerConfig;
 use crate::indexer::pruner::PrunerMetrics;
+use crate::indexer::restore::LIVE_COHORT;
 
 /// Metrics prefix used for both the framework indexer and the
 /// underlying ingestion service. Surfaced as a constant so the
@@ -215,6 +216,13 @@ pub fn checkpoint_output_objects(
 /// the [`Synchronizer`] only barriers across pipelines that were
 /// actually registered, so leaving the raw-chain-data pipelines
 /// off does not stall snapshots.
+///
+/// Every registered [`LIVE_COHORT`] pipeline is a required snapshot
+/// member ([`Synchronizer::require_member`]): each snapshot includes
+/// every live index's writes through its checkpoint, even when a
+/// crash left their watermarks uneven, so the newest snapshot is
+/// always a valid point for live-index reads. Lagging history
+/// pipelines do not hold snapshots back.
 ///
 /// After pipelines are registered, [`Self::run`] installs the
 /// synchronizer onto the store and starts the framework indexer.
@@ -484,7 +492,8 @@ impl Indexer {
     /// announced to the synchronizer before being handed to the
     /// framework indexer so that, by the time the first batch
     /// flows through, the synchronizer task is already waiting on
-    /// the pipeline's queue.
+    /// the pipeline's queue. A [`LIVE_COHORT`] pipeline is also
+    /// marked as a required snapshot member.
     ///
     /// Refuses to register a pipeline whose persisted [`RestoreState`]
     /// is still `InProgress`: tip-mode indexing of a pipeline that
@@ -524,6 +533,11 @@ impl Indexer {
         self.sync
             .register_pipeline(H::NAME)
             .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
+        if LIVE_COHORT.contains(&H::NAME) {
+            self.sync.require_member(H::NAME).with_context(|| {
+                format!("Failed to require pipeline {:?} in snapshots", H::NAME)
+            })?;
+        }
 
         self.indexer
             .sequential_pipeline(handler, config)
@@ -792,5 +806,141 @@ mod tests {
             .unwrap();
         let names: std::collections::BTreeSet<_> = indexer.pipelines().collect();
         assert_eq!(names, std::collections::BTreeSet::from(["balance"]));
+    }
+
+    /// Serves a fixed set of checkpoints and reports the highest as the
+    /// network tip; every other checkpoint is not found.
+    struct FixedIngestionClient {
+        checkpoints: BTreeMap<u64, Checkpoint>,
+    }
+
+    #[async_trait]
+    impl IngestionClientTrait for FixedIngestionClient {
+        async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+            Ok(ChainIdentifier::from(
+                sui_types::digests::CheckpointDigest::new([0u8; 32]),
+            ))
+        }
+
+        async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
+            self.checkpoints
+                .get(&checkpoint)
+                .cloned()
+                .ok_or(CheckpointError::NotFound)
+        }
+
+        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+            Ok(*self.checkpoints.keys().next_back().unwrap())
+        }
+    }
+
+    #[tokio::test]
+    async fn restart_with_uneven_live_watermarks_snapshots_only_complete_live_state() {
+        // A crash left `object_by_owner` and `object_by_type` at 10 but
+        // `balance` at 9. The history pipeline `tx_seq_by_digest` sits at
+        // 0 and checkpoints below 10 are unavailable, so it cannot make
+        // progress and must not hold live snapshots back.
+        const RESTART: u64 = 10;
+        const TIP: u64 = 13;
+
+        let dir = tempfile::tempdir().unwrap();
+        let options = DbOptions {
+            snapshot_capacity: 16,
+            ..DbOptions::default()
+        };
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), options).unwrap();
+        let framework = sui_consistent_store::FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        for (pipeline, checkpoint) in [
+            ("object_by_owner", RESTART),
+            ("object_by_type", RESTART),
+            ("balance", RESTART - 1),
+            ("tx_seq_by_digest", 0),
+        ] {
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(pipeline),
+                    &sui_consistent_store::Watermark::for_checkpoint(checkpoint),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+        let store = sui_consistent_store::Store::new(db.clone(), Arc::new(schema));
+
+        let mut builder =
+            sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(RESTART);
+        let checkpoints = (RESTART..=TIP)
+            .map(|checkpoint| (checkpoint, builder.build_checkpoint()))
+            .collect();
+
+        let registry = Registry::new();
+        let ingestion_metrics = IngestionMetrics::new(Some(METRICS_PREFIX), &registry);
+        let ingestion_client = IngestionClient::from_trait(
+            Arc::new(FixedIngestionClient { checkpoints }),
+            ingestion_metrics,
+        );
+        // Keep the stuck history pipeline on its own ingestion service so
+        // its missing checkpoints do not stall the live pipelines' feed.
+        let ingestion_config = IngestionConfig {
+            min_cohort_boundary: 1,
+            ..IngestionConfig::default()
+        };
+        let mut indexer = Indexer::from_store(
+            store,
+            IndexerArgs::default(),
+            ingestion_client,
+            None,
+            None,
+            crate::config::ConsistencyConfig::default(),
+            None,
+            ingestion_config,
+            &registry,
+        )
+        .await
+        .unwrap();
+        indexer
+            .add_pipelines(
+                PipelineLayer {
+                    object_by_owner: Some(crate::config::CommitterLayer::default()),
+                    object_by_type: Some(crate::config::CommitterLayer::default()),
+                    balance: Some(crate::config::CommitterLayer::default()),
+                    tx_seq_by_digest: Some(crate::config::CommitterLayer::default()),
+                    ..PipelineLayer::default()
+                },
+                CommitterConfig::default(),
+            )
+            .await
+            .unwrap();
+        let service = indexer.run().await.unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            while db.at_snapshot(TIP).is_none() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("live snapshots should reach the tip");
+
+        // Every snapshot, starting at the restart checkpoint, holds every
+        // live pipeline committed through that snapshot's checkpoint.
+        assert_eq!(db.snapshot_range(), Some(RESTART..=TIP));
+        for checkpoint in RESTART..=TIP {
+            let snapshot = db.at_snapshot(checkpoint).unwrap();
+            for pipeline in LIVE_COHORT {
+                assert_eq!(
+                    snapshot
+                        .framework()
+                        .watermarks
+                        .get(&PipelineTaskKey::new(*pipeline))
+                        .unwrap()
+                        .map(|w| w.checkpoint_hi_inclusive),
+                    Some(checkpoint),
+                    "snapshot {checkpoint} is missing {pipeline}'s writes",
+                );
+            }
+        }
+
+        drop(service);
     }
 }
