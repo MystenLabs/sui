@@ -208,7 +208,7 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         composite: Vec<u32>,
         // relative weight of transactions that race distinct transactions over the same gas object
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
         gas_double_spend: Vec<u32>,
         // Target address(es) for deposit load test. When set, runs the
         // addr_bal_deposit workload exclusively: every transaction withdraws
@@ -265,7 +265,7 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
         num_contested_objects: Vec<u64>,
         // Number of distinct transactions to submit concurrently with the same gas object.
-        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [3])]
         gas_double_spend_copies: Vec<usize>,
         // How the conflicting copies are submitted: "direct" submits each copy independently,
         // "soft-bundle" packs all copies into a single soft bundle.
