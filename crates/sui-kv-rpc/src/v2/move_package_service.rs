@@ -37,7 +37,7 @@ impl MovePackageService for KvRpcServer {
     ) -> Result<tonic::Response<GetPackageResponse>, tonic::Status> {
         get_package(
             self.client.clone(),
-            self.served_height()?,
+            ServedHeight::of(&request)?,
             request.into_inner(),
         )
         .await
@@ -71,7 +71,7 @@ impl MovePackageService for KvRpcServer {
     ) -> Result<tonic::Response<ListPackageVersionsResponse>, tonic::Status> {
         list_package_versions(
             self.client.clone(),
-            self.served_height()?,
+            ServedHeight::of(&request)?,
             request.into_inner(),
         )
         .await

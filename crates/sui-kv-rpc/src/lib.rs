@@ -47,11 +47,11 @@ use tonic::transport::ServerTlsConfig;
 use tonic::transport::server::TcpIncoming;
 use tracing::error;
 
+mod admission;
 mod bigtable_client;
 mod config;
 mod error_log;
 mod indexer_streams;
-mod monotonic_read;
 mod object_cache;
 mod operation;
 mod package_store;
@@ -62,6 +62,8 @@ mod resolve;
 mod served_height;
 mod v2;
 
+use admission::AdmissionLayer;
+pub use admission::X_SUI_MIN_CHECKPOINT;
 use bigtable_client::Metrics as BigTableLimiterMetrics;
 pub use config::KvRpcConfig;
 pub use config::LedgerHistoryConfig;
@@ -72,8 +74,6 @@ pub use config::ResolvedStageConfig;
 pub use config::StageConfig;
 pub use config::StagesConfig;
 pub use indexer_streams::WatermarkSource;
-use monotonic_read::MonotonicReadLayer;
-pub use monotonic_read::X_SUI_MIN_CHECKPOINT;
 use package_store::BigTablePackageStore;
 
 /// Pipelines whose watermarks always bound the `GetServiceInfo` checkpoint
@@ -308,8 +308,10 @@ pub struct KvRpcServer {
     /// Refreshed from Bigtable's watermark rows by the task spawned in
     /// [`KvRpcServer::init`], or from indexer watermark streams by the service started in
     /// [`KvRpcServer::start_service`], as `watermark_source` selects.
-    /// A `watch` channel so a monotonic read can await a refresh rather than poll for one.
-    cache: Arc<watch::Sender<Option<GetServiceInfoResponse>>>,
+    /// A `watch` channel so a monotonic read can await a refresh rather than poll for one, and
+    /// behind an `Arc` so admitting a request records the info it is served at without copying it
+    /// (see [`admission`]).
+    cache: Arc<watch::Sender<Option<Arc<GetServiceInfoResponse>>>>,
     watermark_source: WatermarkSource,
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
@@ -324,7 +326,7 @@ pub struct KvRpcServer {
 pub struct Health {
     /// The replica's service info when readiness waits for it, or `None` for a replica that
     /// polls Bigtable, which is ready from startup.
-    served: Option<watch::Receiver<Option<GetServiceInfoResponse>>>,
+    served: Option<watch::Receiver<Option<Arc<GetServiceInfoResponse>>>>,
 }
 
 impl Health {
@@ -394,13 +396,13 @@ fn spawn_listener(
                 grpc_method_allowlist,
             ),
         ))
-        // Logs each response that ends in a server-side error; outside the monotonic-read layer so
-        // its rejections are logged too.
+        // Logs each response that ends in a server-side error; outside the admission layer so its
+        // rejections are logged too.
         .layer(CallbackLayer::new(error_log::MakeServerErrorLog))
         .layer(request_log_layer)
         // Innermost, so a request held or rejected here is still counted by the metrics layer and
         // recorded by the request log above it.
-        .layer(MonotonicReadLayer::new(
+        .layer(AdmissionLayer::new(
             ledger.cache.subscribe(),
             ledger.monotonic_read_wait_timeout,
         ))
@@ -603,7 +605,7 @@ impl KvRpcServer {
                     {
                         Ok(info) => {
                             server_clone.metrics.observe_served_service_info(&info);
-                            server_clone.cache.send_replace(Some(info));
+                            server_clone.cache.send_replace(Some(Arc::new(info)));
                         }
                         Err(e) => error!("Failed to update service info cache: {:?}", e),
                     }

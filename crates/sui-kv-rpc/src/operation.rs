@@ -24,6 +24,7 @@ use crate::KvRpcServer;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
 use crate::config::{LedgerHistoryConfig, PipelineStage, ResolvedStageConfig, StagesConfig};
+use crate::served_height::ServedHeight;
 use sui_rpc_api::ledger_history::filter::event_filter_to_query;
 use sui_rpc_api::ledger_history::filter::transaction_filter_to_query;
 
@@ -226,25 +227,23 @@ impl KvRpcServer {
         )
     }
 
-    fn cached_checkpoint_hi_exclusive(&self) -> Result<u64, RpcError> {
-        self.served_height()?
-            .checkpoint
-            .checked_add(1)
-            .ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    "cached checkpoint height cannot be represented as an exclusive bound",
-                )
-            })
-    }
-
-    async fn query_context(&self, operation: &'static str) -> Result<QueryContext, RpcError> {
+    fn query_context(
+        &self,
+        operation: &'static str,
+        served_height: ServedHeight,
+    ) -> Result<QueryContext, RpcError> {
+        let checkpoint_hi_exclusive = served_height.checkpoint.checked_add(1).ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                "served checkpoint height cannot be represented as an exclusive bound",
+            )
+        })?;
         Ok(QueryContext::new(
             self.limited_client(operation),
             self.package_resolver.clone(),
             self.metrics.clone(),
             operation,
-            self.cached_checkpoint_hi_exclusive()?,
+            checkpoint_hi_exclusive,
             self.ledger_history.clone(),
             self.stages.clone(),
         ))
@@ -263,10 +262,11 @@ impl KvRpcServer {
         Fut: Future<Output = Result<BoxStream<'static, Result<T, RpcError>>, RpcError>> + Send,
     {
         let deadline = Instant::now() + spec.timeout;
+        let served_height = ServedHeight::of(&request)?;
         let request = request.into_inner();
 
         let stream = tokio::time::timeout_at(deadline, async move {
-            let ctx = self.query_context(spec.name).await?;
+            let ctx = self.query_context(spec.name, served_height)?;
             handler(ctx, request).await
         })
         .await

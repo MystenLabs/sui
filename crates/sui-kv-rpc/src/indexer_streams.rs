@@ -27,6 +27,7 @@
 //! answered `Unavailable`, and [`crate::Health`] reports the replica not ready.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -128,7 +129,7 @@ async fn publish_service_info(
                     watermark.timestamp_ms_hi_inclusive,
                 );
                 server.metrics.observe_served_service_info(&info);
-                server.cache.send_replace(Some(info));
+                server.cache.send_replace(Some(Arc::new(info)));
             }
             Some(_) => {}
             None if !missing.is_empty()
@@ -194,6 +195,7 @@ mod tests {
     use crate::LedgerHistoryConfig;
     use crate::ServerConfig;
     use crate::StagesConfig;
+    use crate::served_height::ServedHeight;
     use crate::service_info_watermark_pipelines;
     use crate::tests::watermark_reads;
 
@@ -329,7 +331,7 @@ mod tests {
         .await
         .unwrap_or_else(|_| panic!("served checkpoint never reached {checkpoint}"))
         .expect("service info sender dropped");
-        info.clone().unwrap()
+        GetServiceInfoResponse::clone(info.as_ref().unwrap())
     }
 
     fn cached_checkpoint(server: &KvRpcServer) -> Option<u64> {
@@ -345,7 +347,7 @@ mod tests {
     ) -> Result<GetServiceInfoResponse, tonic::Status> {
         LedgerService::get_service_info(
             server,
-            tonic::Request::new(GetServiceInfoRequest::default()),
+            server.admitted_request(GetServiceInfoRequest::default()),
         )
         .await
         .map(tonic::Response::into_inner)
@@ -425,7 +427,8 @@ mod tests {
 
         sleep(QUIET_PERIOD).await;
         assert_eq!(cached_checkpoint(&server), None);
-        let error = tonic::Status::from(server.served_height().unwrap_err());
+        let error =
+            tonic::Status::from(ServedHeight::of(&server.admitted_request(())).unwrap_err());
         assert_eq!(error.code(), tonic::Code::Unavailable);
         let error = get_service_info(&server).await.unwrap_err();
         assert_eq!(error.code(), tonic::Code::Unavailable);
