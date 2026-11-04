@@ -25,8 +25,11 @@ Every run ends in one of these outcomes:
 - **Not applicable.** The PR is outside the policy. Take no action on GitHub.
 - **Blocked.** The PR claims a tier but does not meet it yet. Post or update one comment that lists
   each unmet requirement.
-- **Approved.** The PR meets its tier. Approve it, enable auto-merge, and emit a notification
-  summary.
+- **Checked.** The PR meets its tier but changes ineligible files. Update the policy comment to
+  say that the PR meets its tier, list the ineligible files, and say that a human must review
+  those files and approve the PR. Do not approve the PR.
+- **Approved.** The PR meets its tier and changes only eligible files. Approve it, enable
+  auto-merge, and emit a notification summary.
 
 Keep one policy comment per PR. On later runs, edit that comment instead of adding a new one. Mark
 it with the first line `<!-- review-approver -->` so you can find it.
@@ -49,8 +52,9 @@ The outcome is **Not applicable** if any of these hold:
 ## Step 2 — Check eligibility
 
 Compare every changed file against the eligible and excluded lists from the base-branch copy of
-`review-author`. If any file is ineligible, the outcome is **Blocked**. List the ineligible files
-in the comment and say that the PR needs normal human code review.
+`review-author`. Record the ineligible files and continue with the remaining steps. Ineligible
+files are still checked against the tier. If any file is ineligible, the best outcome the PR can
+reach is **Checked**.
 
 ## Step 3 — Verify the tier
 
@@ -119,7 +123,7 @@ approvals that a tier requires.
 
 ## Step 6 — Approve
 
-If every check passed, approve the PR and enable auto-merge:
+If every check passed and every changed file is eligible, approve the PR and enable auto-merge:
 
 ```bash
 gh pr review <n> --approve --body "<body>"

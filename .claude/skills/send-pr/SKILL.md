@@ -77,7 +77,7 @@ Fix anything found. Stage changes but do not commit yet — they will be amended
 
 ### Review tier
 
-Invoke `/review-author` and follow its Steps 1 and 2: check eligibility, classify the tier, and meet the tier's requirements. If the PR is eligible, it opts in to the tiered review policy unless the author has said to use normal code review. If it is ineligible or the author opts out, skip the tier steps below. Keep the tier for the review focus below and for Step 13.
+Invoke `/review-author` and follow its Steps 1 and 2: check eligibility, classify the tier, and meet the tier's requirements. If any changed file is eligible, the PR opts in to the tiered review policy unless the author has said to use normal code review. If no file is eligible or the author opts out, skip the tier steps below. If some files are ineligible, tell the author that the approver agent will not approve the PR and that a human must review those files. Keep the tier for the review focus below and for Step 13.
 
 ### AI review gate
 

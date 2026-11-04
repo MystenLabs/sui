@@ -25,14 +25,14 @@ This skill tells an authoring agent how to prepare a PR for the tiered review po
 
 ## Eligible paths
 
-A PR is eligible only if every file it changes matches an entry in the eligible list and no entry
-in the excluded list. Entries are string prefixes of paths relative to the repository root, so
+A file is eligible if it matches an entry in the eligible list and no entry in the excluded list.
+Entries are string prefixes of paths relative to the repository root, so
 `crates/sui-bridge` matches `crates/sui-bridge/` and `crates/sui-bridge-cli/`. An excluded entry
 wins over an eligible entry. A team opts its code in by adding its paths here, and opts a subpath
 out by adding it to the excluded list.
 
 The approver reads these lists from the PR's base branch. A PR that edits these lists does not
-change its own eligibility.
+change the eligibility of its own files.
 
 Eligible:
 
@@ -53,9 +53,11 @@ crates/sui-bridge
 crates/sui-package-
 ```
 
-If any changed file is not eligible, the PR cannot opt in. Do not write a tier tag. Tell the user
-which files are ineligible, and suggest splitting them into a separate PR
-if the rest of the change could use the policy.
+A PR that changes ineligible files can still opt in and follow its tier. The approver agent does
+not approve such a PR. It runs its checks and reports the result, and a human must review the
+ineligible files and approve the PR. Tell the user which files are ineligible. If the eligible
+part of the change is large, suggest moving the ineligible files to a separate PR so that the rest
+can be approved automatically.
 
 ## Step 1 — Classify the tier
 
@@ -178,5 +180,4 @@ finding:
 are added after the tag, review the new commits and update the tag to the new head.
 
 Refresh the tags whenever the diff changes. If the new diff fits a higher tier, raise the tier and
-meet the new tier's requirements. If the PR becomes ineligible, remove the tier tag and tell the
-author.
+meet the new tier's requirements. If the PR gains ineligible files, tell the author.
