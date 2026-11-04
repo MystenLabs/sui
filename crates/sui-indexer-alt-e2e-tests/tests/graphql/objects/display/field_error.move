@@ -10,6 +10,7 @@
 // 4. Try to view its display, which will work, but selectively.
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::mod {
   use std::string::utf8;
   use sui::display;
