@@ -122,14 +122,17 @@ def update_progress():
 def collect_satisfied_assertions(log_dir):
     """Collect all satisfied assertions from log files in the directory.
 
-    Returns (reached_set, sometimes_set) where:
+    Returns (reached_set, sometimes_set, expected_set) where:
     - reached_set: locations of reachable assertions that were reached
     - sometimes_set: locations of sometimes assertions where condition was true
+    - expected_set: locations of gated reachable assertions that a protocol config
+      adopted during the run made live (see sui_protocol_config::reachability)
     """
     reached = set()
     sometimes = set()
+    expected = set()
     if not os.path.isdir(log_dir):
-        return reached, sometimes
+        return reached, sometimes, expected
     for filename in os.listdir(log_dir):
         filepath = os.path.join(log_dir, filename)
         if filename.endswith(".reached"):
@@ -144,9 +147,15 @@ def collect_satisfied_assertions(log_dir):
                     line = line.strip()
                     if line:
                         sometimes.add(line)
-    return reached, sometimes
+        elif filename.endswith(".expected"):
+            with open(filepath, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        expected.add(line)
+    return reached, sometimes, expected
 
-def print_reachability_summary(binary_path, reached_assertions, sometimes_assertions):
+def print_reachability_summary(binary_path, reached_assertions, sometimes_assertions, expected_assertions):
     """Print summary of reached vs unreached assertions."""
     try:
         # Import the reachpoints module
@@ -167,14 +176,21 @@ def print_reachability_summary(binary_path, reached_assertions, sometimes_assert
         # Separate by type and deduplicate by location
         reachable_points = {p.loc: p.msg for p in all_points if p.assertion_type == "reachable"}
         sometimes_points = {p.loc: p.msg for p in all_points if p.assertion_type == "sometimes"}
+        # Gated points are only expected if some protocol config adopted during the run made
+        # them live; the rest are dormant and neither counted nor reported as unreached.
+        gated_points = {p.loc: p.msg for p in all_points if p.assertion_type == "reachable_gated"}
+        live_gated_points = {loc: msg for loc, msg in gated_points.items() if loc in expected_assertions}
+        dormant_gated_points = {loc: msg for loc, msg in gated_points.items() if loc not in expected_assertions}
 
         reached_locs = reached_assertions & set(reachable_points.keys())
         unreached_locs = set(reachable_points.keys()) - reached_assertions
         satisfied_locs = sometimes_assertions & set(sometimes_points.keys())
         unsatisfied_locs = set(sometimes_points.keys()) - sometimes_assertions
 
-        total = len(reachable_points) + len(sometimes_points)
-        satisfied = len(reached_locs) + len(satisfied_locs)
+        reached_gated_locs = reached_assertions & set(live_gated_points.keys())
+
+        total = len(reachable_points) + len(sometimes_points) + len(live_gated_points)
+        satisfied = len(reached_locs) + len(satisfied_locs) + len(reached_gated_locs)
 
         # Build the full summary as a single string to avoid partial output
         lines = []
@@ -191,6 +207,14 @@ def print_reachability_summary(binary_path, reached_assertions, sometimes_assert
             msg = sometimes_points[loc]
             status = "\033[92m[+]\033[0m" if loc in satisfied_locs else "\033[93m[-]\033[0m"
             lines.append(f"{status} sometimes {loc}: {msg}")
+
+        for loc in sorted(live_gated_points.keys()):
+            msg = live_gated_points[loc]
+            status = "\033[92m[+]\033[0m" if loc in reached_gated_locs else "\033[93m[-]\033[0m"
+            lines.append(f"{status} gated {loc}: {msg}")
+
+        for loc in sorted(dormant_gated_points.keys()):
+            lines.append(f"\033[90m[ ]\033[0m gated {loc}: {dormant_gated_points[loc]} (not live under this run's protocol config)")
 
         # Print all at once and flush
         output = "\n".join(lines)
@@ -683,9 +707,9 @@ if __name__ == "__main__":
 
         # Collect and report reachability results
         if reach_log_dir:
-            reached, sometimes = collect_satisfied_assertions(reach_log_dir)
+            reached, sometimes, expected = collect_satisfied_assertions(reach_log_dir)
             # Reachability only runs in single-binary mode; safe to index.
-            print_reachability_summary(bin_tests[0][2], reached, sometimes)
+            print_reachability_summary(bin_tests[0][2], reached, sometimes, expected)
 
         if all_passed:
             print("\033[92mAll tests passed successfully!\033[0m")
