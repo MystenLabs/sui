@@ -19,6 +19,7 @@ pub use sui_kvstore::ChannelHealthConfig;
 use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::OBJECTS_PIPELINE;
 use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
 use sui_kvstore::PACKAGES_PIPELINE;
@@ -296,6 +297,11 @@ pub struct KvRpcServer {
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) monotonic_read_wait_timeout: Duration,
     pub(crate) stages: StagesConfig,
+    // `at_checkpoint` object reads need the alpha
+    // [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`], backfilled from genesis (see
+    // [`KvRpcConfig::enable_object_at_checkpoint`]). Instances without it
+    // reject those reads with `Unimplemented`.
+    object_at_checkpoint_enabled: bool,
 }
 
 /// Answers whether a replica is ready for traffic, for its `/health` endpoint.
@@ -442,6 +448,7 @@ impl KvRpcServer {
         monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         watermark_source: WatermarkSource,
+        enable_object_at_checkpoint: bool,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -471,6 +478,7 @@ impl KvRpcServer {
             client,
             chain_id,
             server_version,
+            enable_object_at_checkpoint,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -493,6 +501,7 @@ impl KvRpcServer {
         monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         watermark_source: WatermarkSource,
+        enable_object_at_checkpoint: bool,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
@@ -502,6 +511,7 @@ impl KvRpcServer {
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
+            enable_object_at_checkpoint,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -515,6 +525,7 @@ impl KvRpcServer {
         client: BigTableClient,
         chain_id: ChainIdentifier,
         server_version: Option<ServerVersion>,
+        enable_object_at_checkpoint: bool,
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
@@ -537,6 +548,7 @@ impl KvRpcServer {
             server_version,
             service_info_watermark_pipelines: service_info_watermark_pipelines(
                 ledger_history.bitmap_schema(),
+                enable_object_at_checkpoint,
             ),
             cache,
             watermark_source,
@@ -546,6 +558,7 @@ impl KvRpcServer {
             request_bigtable_concurrency,
             monotonic_read_wait_timeout,
             stages,
+            object_at_checkpoint_enabled: enable_object_at_checkpoint,
         };
 
         if server.watermark_source == WatermarkSource::Bigtable {
@@ -673,10 +686,14 @@ impl KvRpcServer {
 }
 
 /// Pipelines whose watermarks bound the checkpoint height reported by `GetServiceInfo`, so an
-/// instance does not advertise a height it cannot serve.
-pub fn service_info_watermark_pipelines(bitmap_schema: BitmapSchema) -> Vec<&'static str> {
+/// instance does not advertise a height it cannot serve. [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`]
+/// is among them when `at_checkpoint` object reads are enabled.
+pub fn service_info_watermark_pipelines(
+    bitmap_schema: BitmapSchema,
+    enable_object_at_checkpoint: bool,
+) -> Vec<&'static str> {
     let [transaction_bitmap, event_bitmap] = sui_kvstore::bitmap_index_pipelines(bitmap_schema);
-    vec![
+    let mut pipelines = vec![
         // Point lookups.
         CHECKPOINTS_PIPELINE,
         CHECKPOINTS_BY_DIGEST_PIPELINE,
@@ -690,7 +707,11 @@ pub fn service_info_watermark_pipelines(bitmap_schema: BitmapSchema) -> Vec<&'st
         TX_SEQ_DIGEST_PIPELINE,
         transaction_bitmap,
         event_bitmap,
-    ]
+    ];
+    if enable_object_at_checkpoint {
+        pipelines.push(OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE);
+    }
+    pipelines
 }
 
 #[cfg(test)]
@@ -748,6 +769,7 @@ mod tests {
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             WatermarkSource::Bigtable,
+            false,
         )
         .await
         .expect("start kv-rpc server")
@@ -759,7 +781,7 @@ mod tests {
         client: &mut BigTableClient,
         checkpoint_of: impl Fn(&str) -> u64,
     ) {
-        for pipeline in service_info_watermark_pipelines(BitmapSchema::V2) {
+        for pipeline in service_info_watermark_pipelines(BitmapSchema::V2, false) {
             let checkpoint = checkpoint_of(pipeline);
             client
                 .create_pipeline_watermark_if_absent(
