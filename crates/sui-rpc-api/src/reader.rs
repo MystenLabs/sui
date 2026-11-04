@@ -5,6 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use mysten_common::ZipDebugEqIteratorExt;
+use sui_package_resolver::{SyncPackageStore, SyncResolver};
 use sui_sdk_types::{EpochId, ValidatorCommittee};
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
@@ -329,18 +330,19 @@ impl From<TransactionNotFoundError> for crate::RpcError {
     }
 }
 
-pub struct DisplayStore<'s> {
+pub struct DisplayStore<'s, S> {
     state: &'s StateReader,
+    resolver: &'s SyncResolver<S>,
 }
 
-impl<'s> DisplayStore<'s> {
-    pub fn new(state: &'s StateReader) -> Self {
-        Self { state }
+impl<'s, S> DisplayStore<'s, S> {
+    pub fn new(state: &'s StateReader, resolver: &'s SyncResolver<S>) -> Self {
+        Self { state, resolver }
     }
 }
 
 #[async_trait::async_trait]
-impl sui_display::v2::Store for DisplayStore<'_> {
+impl<S: SyncPackageStore + Sync> sui_display::v2::Store for DisplayStore<'_, S> {
     async fn latest(
         &self,
         id: move_core_types::account_address::AccountAddress,
@@ -355,9 +357,7 @@ impl sui_display::v2::Store for DisplayStore<'_> {
 
         let object_type = move_object.type_().clone().into();
 
-        let Some(layout) = self.state.inner().get_struct_layout(&object_type)? else {
-            return Ok(None);
-        };
+        let layout = self.resolver.datatype_layout(&object_type)?.into_layout();
 
         Ok(Some((layout, move_object.contents().to_vec())))
     }

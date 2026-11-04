@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::error::ObjectNotFoundError;
+use crate::grpc::v2::render::RenderContext;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -16,7 +17,6 @@ use sui_rpc::proto::sui::rpc::v2::GetObjectResponse;
 use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
 use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_sdk_types::Address;
-use sui_types::full_checkpoint_content::ObjectSet;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
 pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::OBJECT;
@@ -73,7 +73,9 @@ pub fn get_object(
     let (requests, read_mask) =
         validate_get_object_requests(vec![(object_id, version)], read_mask)?;
     let (object_id, version) = requests[0];
-    get_object_impl(service, object_id, version, &read_mask).map(GetObjectResponse::new)
+    let render_context = RenderContext::empty(service.reader.inner());
+    get_object_impl(service, object_id, version, &read_mask, &render_context)
+        .map(GetObjectResponse::new)
 }
 
 #[tracing::instrument(skip(service))]
@@ -97,9 +99,12 @@ pub fn batch_get_objects(
         .map(|req| (req.object_id, req.version))
         .collect();
     let (requests, read_mask) = validate_get_object_requests(requests, read_mask)?;
+    let render_context = RenderContext::empty(service.reader.inner());
     let objects = requests
         .into_iter()
-        .map(|(object_id, version)| get_object_impl(service, object_id, version, &read_mask))
+        .map(|(object_id, version)| {
+            get_object_impl(service, object_id, version, &read_mask, &render_context)
+        })
         .map(|result| match result {
             Ok(object) => GetObjectResult::new_object(object),
             Err(error) => GetObjectResult::new_error(error.into_status_proto()),
@@ -108,12 +113,13 @@ pub fn batch_get_objects(
     Ok(BatchGetObjectsResponse::new(objects))
 }
 
-#[tracing::instrument(skip(service))]
+#[tracing::instrument(skip(service, render_context))]
 fn get_object_impl(
     service: &RpcService,
     object_id: Address,
     version: Option<u64>,
     read_mask: &FieldMaskTree,
+    render_context: &RenderContext,
 ) -> Result<Object, RpcError> {
     let object = if let Some(version) = version {
         service
@@ -129,5 +135,5 @@ fn get_object_impl(
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?
     };
 
-    Ok(service.render_object_to_proto(&object, read_mask, &ObjectSet::default()))
+    Ok(service.render_object_to_proto(&object, read_mask, render_context))
 }

@@ -1,86 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Move type-layout resolver.
+//! Package source for response-local layout resolution.
 //!
-//! [`RpcStateReader::get_struct_layout_with_overlay`] resolves the
-//! [`MoveTypeLayout`] of a [`StructTag`] using a Move type
-//! resolver. The validator's perpetual store pulls every piece
-//! from its [`AuthorityState`]; this adapter assembles them from
-//! the typed [`RpcStoreSchema`] CFs instead:
+//! [`RpcStateReader::layout_package_store`] supplies packages from the typed
+//! [`RpcStoreSchema`] CFs. RPC rendering adds its overlay and parsed-package cache.
 //!
-//! 1. A [`BackingPackageStore`] (here:
-//!    [`PackageStoreOverObjects`]) that returns package objects
-//!    by id, looking them up through a reverse scan of `objects`.
-//!    Packages are immutable, so a single lookup is enough.
-//! 2. An overlay wrapping the caller-supplied [`ObjectSet`] on top
-//!    of the backing store.
-//! 3. A [`SyncResolver`] over that overlay, which performs the
-//!    layout build.
-//!
-//! [`AuthorityState`]: https://docs.rs/sui-core/latest/sui_core/authority/struct.AuthorityState.html
-//! [`SyncResolver`]: sui_package_resolver::SyncResolver
-//! [`BackingPackageStore`]: sui_types::storage::BackingPackageStore
 //! [`RpcStateReader`]: sui_types::storage::RpcStateReader
 
-use move_core_types::annotated_value::MoveTypeLayout;
-use move_core_types::language_storage::StructTag;
 use sui_consistent_store::reader::Reader;
-use sui_package_resolver::SyncResolver;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiResult;
-use sui_types::full_checkpoint_content::ObjectSet;
-use sui_types::layout_resolver::LayoutResolver;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::ObjectStore;
-use sui_types::storage::OverlayBackingPackageStore;
 use sui_types::storage::PackageObject;
-use sui_types::storage::error::Error as StorageError;
-use sui_types::storage::error::Result as StorageResult;
 
 use crate::RpcStoreSchema;
-use crate::reader::RpcStoreReader;
-
-impl<R: Reader + Send + Sync> RpcStoreReader<R> {
-    /// Resolve the [`MoveTypeLayout`] for a given [`StructTag`],
-    /// optionally seeded with extra objects in `overlay`.
-    ///
-    /// Surfaces resolver failures as [`StorageError::custom`].
-    pub fn resolve_struct_layout(
-        &self,
-        struct_tag: &StructTag,
-        overlay: &ObjectSet,
-    ) -> StorageResult<Option<MoveTypeLayout>> {
-        let backing = PackageStoreOverObjects {
-            schema: self.schema(),
-        };
-        let overlay_store = OverlayBackingPackageStore::new(overlay, &backing);
-
-        // A caller can request a layout before its root package has been indexed. Treat that as
-        // unavailable layout data, but preserve resolver errors for missing transitive dependencies
-        // of a package that is present.
-        if overlay_store
-            .get_package_object(&ObjectID::from(struct_tag.address))
-            .map_err(StorageError::custom)?
-            .is_none()
-        {
-            return Ok(None);
-        }
-
-        let layout = SyncResolver::new(overlay_store)
-            .get_annotated_layout(struct_tag)
-            .map_err(StorageError::custom)?;
-        Ok(Some(layout.into_layout()))
-    }
-}
 
 /// [`BackingPackageStore`] backed by the typed
 /// [`RpcStoreSchema`] CFs. Looks each package up by its storage
 /// id through `get_object` (a reverse scan of `objects`); packages
 /// are immutable, so the latest live row IS the entirety of the
 /// package's on-chain state.
-struct PackageStoreOverObjects<'a, R: Reader> {
-    schema: &'a RpcStoreSchema<R>,
+pub(super) struct PackageStoreOverObjects<'a, R: Reader> {
+    pub(super) schema: &'a RpcStoreSchema<R>,
 }
 
 impl<R: Reader> BackingPackageStore for PackageStoreOverObjects<'_, R> {
@@ -135,31 +78,21 @@ mod tests {
 
     use sui_consistent_store::Db;
     use sui_consistent_store::DbOptions;
-    use sui_types::full_checkpoint_content::ObjectSet;
+    use sui_types::storage::RpcStateReader;
 
     use super::*;
     use crate::reader::RpcStoreReader;
 
-    /// On a fresh store there's no chain id and no epoch row, so
-    /// `resolve_struct_layout` falls through to `Ok(None)` rather
-    /// than failing or constructing an executor against bogus
-    /// state.
-    #[test]
-    fn resolve_returns_none_when_no_chain_id_or_epoch() {
+    #[tokio::test]
+    async fn package_source_returns_none_when_no_chain_id_or_epoch() {
         let dir = tempfile::tempdir().unwrap();
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         let reader = RpcStoreReader::new(db, Arc::new(schema));
 
-        let tag = StructTag {
-            address: move_core_types::account_address::AccountAddress::new([1u8; 32]),
-            module: move_core_types::identifier::Identifier::new("foo").unwrap(),
-            name: move_core_types::identifier::Identifier::new("Bar").unwrap(),
-            type_params: vec![],
-        };
-        let overlay = ObjectSet::default();
         assert!(
             reader
-                .resolve_struct_layout(&tag, &overlay)
+                .layout_package_store()
+                .get_package_object(&ObjectID::new([1u8; 32]))
                 .unwrap()
                 .is_none()
         );

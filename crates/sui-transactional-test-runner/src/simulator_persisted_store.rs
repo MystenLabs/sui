@@ -746,15 +746,6 @@ impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
     fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
         None
     }
-
-    fn get_struct_layout_with_overlay(
-        &self,
-        _: &move_core_types::language_storage::StructTag,
-        _overlay: &sui_types::full_checkpoint_content::ObjectSet,
-    ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
-    {
-        Ok(None)
-    }
 }
 
 impl PersistedStoreInnerReadOnlyWrapper {

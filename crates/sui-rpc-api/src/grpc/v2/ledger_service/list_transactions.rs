@@ -25,6 +25,7 @@ use tracing::info;
 use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_transaction::render_executed_transaction;
+use crate::grpc::v2::render::RenderContext;
 use crate::ledger_history::checkpoint_positions::CheckpointPositions;
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::ledger_point::LedgerPoint;
@@ -566,12 +567,14 @@ fn render_transaction_rows(
             let (transaction_read, object_set) = transaction_reads_and_objects
                 .next()
                 .expect("transaction reads and object sets match tx_seq rows");
+            let render_context = RenderContext::empty(service.reader.inner());
             let transaction = render_executed_transaction(
                 service,
                 transaction_read,
                 &object_set,
                 row.checkpoint_number,
                 read_mask,
+                &render_context,
             )?;
             transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
         } else {

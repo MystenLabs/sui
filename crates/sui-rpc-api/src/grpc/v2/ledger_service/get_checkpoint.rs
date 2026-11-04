@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::error::CheckpointNotFoundError;
+use crate::grpc::v2::render::RenderContext;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -123,6 +124,8 @@ pub fn get_checkpoint(
                 // multiplies one input checkpoint into thousands of per-event
                 // renders, each with its own `max_json_move_value_size` budget.
                 let mut json_budget = service.config.max_json_move_value_response_size();
+                let render_context =
+                    RenderContext::new(service.reader.inner(), Some(&checkpoint_data.object_set));
                 checkpoint.transactions = checkpoint_data
                     .transactions
                     .into_iter()
@@ -150,6 +153,7 @@ pub fn get_checkpoint(
                             &checkpoint_data.object_set,
                             &submask,
                             &mut json_budget,
+                            &render_context,
                         );
 
                         transaction

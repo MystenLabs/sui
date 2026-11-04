@@ -67,7 +67,7 @@ use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
-use sui_package_resolver::SyncResolver;
+use sui_package_resolver::{PackageStoreWithLruCache, SyncResolver};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_protocol_config::assert_reachable_gated;
 use sui_types::accumulator_root::AccumulatorObjId;
@@ -2507,8 +2507,10 @@ impl AuthorityState {
             (request.generate_layout, object.data.try_as_move())
         {
             Some(into_struct_layout(
-                SyncResolver::new(self.get_backing_package_store().as_ref())
-                    .get_annotated_layout(&move_obj.type_().clone().into())?,
+                SyncResolver::new(PackageStoreWithLruCache::new(
+                    self.get_backing_package_store().as_ref(),
+                ))
+                .get_annotated_layout(&move_obj.type_().clone().into())?,
             )?)
         } else {
             None
@@ -3535,10 +3537,11 @@ impl AuthorityState {
             .data
             .try_as_move()
             .map(|object| {
-                // TODO(cache) - must read through cache
                 into_struct_layout(
-                    SyncResolver::new(self.get_backing_package_store().as_ref())
-                        .get_annotated_layout(&object.type_().clone().into())?,
+                    SyncResolver::new(PackageStoreWithLruCache::new(
+                        self.get_backing_package_store().as_ref(),
+                    ))
+                    .get_annotated_layout(&object.type_().clone().into())?,
                 )
             })
             .transpose()?;

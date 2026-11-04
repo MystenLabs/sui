@@ -1,9 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::{Arc, OnceLock};
+
 use futures::FutureExt;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::Struct;
+use sui_package_resolver::{PackageStoreWithLruCache, SyncResolver};
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
@@ -12,28 +17,71 @@ use sui_rpc::{
     },
 };
 use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::storage::{BackingPackageStore, OverlayBackingPackageStore, RpcStateReader};
 
 use crate::{RpcService, reader::DisplayStore};
 
+type CachedLayoutResolver<'a> =
+    SyncResolver<PackageStoreWithLruCache<Box<dyn BackingPackageStore + Send + Sync + 'a>>>;
+
+/// Reuses parsed packages while rendering a response against a fixed object overlay.
+pub(crate) struct RenderContext<'a> {
+    reader: &'a dyn RpcStateReader,
+    overlay: Option<&'a ObjectSet>,
+    layout_resolver: OnceLock<CachedLayoutResolver<'a>>,
+}
+
+impl<'a> RenderContext<'a> {
+    pub(crate) fn empty(reader: &'a Arc<dyn RpcStateReader>) -> Self {
+        Self::new(reader, None)
+    }
+
+    pub(crate) fn new(reader: &'a Arc<dyn RpcStateReader>, overlay: Option<&'a ObjectSet>) -> Self {
+        Self {
+            reader: reader.as_ref(),
+            // An empty overlay can use the backing store directly.
+            overlay: overlay.filter(|objects| !objects.is_empty()),
+            layout_resolver: OnceLock::new(),
+        }
+    }
+
+    pub(crate) fn type_layout(
+        &self,
+        type_tag: TypeTag,
+    ) -> sui_package_resolver::Result<MoveTypeLayout> {
+        self.layout_resolver().type_layout(type_tag)
+    }
+
+    fn layout_resolver(&self) -> &CachedLayoutResolver<'a> {
+        self.layout_resolver.get_or_init(|| {
+            let mut store = self.reader.layout_package_store();
+            if let Some(overlay) = self.overlay {
+                store = Box::new(OverlayBackingPackageStore::new(overlay, store));
+            }
+            SyncResolver::new(PackageStoreWithLruCache::new(store))
+        })
+    }
+}
+
 impl RpcService {
-    pub fn render_object_to_proto(
+    pub(crate) fn render_object_to_proto(
         &self,
         object: &sui_types::object::Object,
         read_mask: &FieldMaskTree,
-        output_objects: &ObjectSet,
+        context: &RenderContext,
     ) -> Object {
         let mut message = Object::default();
 
         if read_mask.contains(Object::JSON_FIELD) {
             let move_object = object.data.try_as_move();
             message.json = move_object.and_then(|m| {
-                self.render_json(&m.type_().clone().into(), m.contents(), output_objects)
+                self.render_json(&m.type_().clone().into(), m.contents(), context)
                     .map(Box::new)
             });
         }
 
         if read_mask.contains(Object::DISPLAY_FIELD) {
-            message.display = self.render_object_display(object).map(Box::new);
+            message.display = self.render_object_display(object, context).map(Box::new);
         }
 
         message.merge(object, read_mask);
@@ -41,16 +89,15 @@ impl RpcService {
         message
     }
 
-    /// Render a Move value as JSON.
-    /// If output_objects is provided, packages from it will be checked first before the backing store.
-    pub fn render_json(
+    /// Render a Move value as JSON using the response's package cache and overlay.
+    fn render_json(
         &self,
-        struct_tag: &move_core_types::language_storage::StructTag,
+        struct_tag: &StructTag,
         contents: &[u8],
-        output_objects: &ObjectSet,
+        context: &RenderContext,
     ) -> Option<prost_types::Value> {
         let mut budget = self.config.max_json_move_value_size();
-        self.render_json_with_budget(struct_tag, contents, output_objects, &mut budget)
+        self.render_json_with_budget(struct_tag, contents, context, &mut budget)
     }
 
     /// Render a Move value as JSON, drawing the size budget from a caller-owned
@@ -60,19 +107,16 @@ impl RpcService {
     /// per-render limit by the number of items. The budget is updated in place
     /// to reflect bytes consumed; once it reaches zero subsequent calls fail
     /// fast and return `None`.
-    pub fn render_json_with_budget(
+    fn render_json_with_budget(
         &self,
-        struct_tag: &move_core_types::language_storage::StructTag,
+        struct_tag: &StructTag,
         contents: &[u8],
-        output_objects: &ObjectSet,
+        context: &RenderContext,
         size_budget: &mut usize,
     ) -> Option<prost_types::Value> {
-        let layout = self
-            .reader
-            .inner()
-            .get_struct_layout_with_overlay(struct_tag, output_objects)
-            .ok()
-            .flatten()?;
+        let layout = context
+            .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
+            .ok()?;
 
         sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_budget(
             contents,
@@ -83,7 +127,11 @@ impl RpcService {
         .ok()
     }
 
-    pub fn render_object_display(&self, object: &sui_types::object::Object) -> Option<Display> {
+    fn render_object_display(
+        &self,
+        object: &sui_types::object::Object,
+        context: &RenderContext,
+    ) -> Option<Display> {
         let move_object = object.data.try_as_move()?;
         let object_type = &move_object.type_().clone().into();
         let contents = move_object.contents();
@@ -97,15 +145,12 @@ impl RpcService {
         let display_template =
             sui_display::v2::Display::parse(limits, display_object.fields()).ok()?;
 
-        let layout = self
-            .reader
-            .inner()
-            .get_struct_layout(object_type)
-            .ok()
-            .flatten()?;
+        let resolver = context.layout_resolver();
+        let layout = resolver.datatype_layout(object_type).ok()?.into_layout();
 
         let root = sui_display::v2::OwnedSlice::new(layout, contents.to_owned());
-        let interpreter = sui_display::v2::Interpreter::new(root, DisplayStore::new(&self.reader));
+        let interpreter =
+            sui_display::v2::Interpreter::new(root, DisplayStore::new(&self.reader, resolver));
 
         let mut display = Display::default();
 
@@ -152,11 +197,11 @@ impl RpcService {
         Some(display)
     }
 
-    pub fn render_events_to_proto(
+    pub(crate) fn render_events_to_proto(
         &self,
         events: &sui_types::effects::TransactionEvents,
         mask: &FieldMaskTree,
-        output_objects: &ObjectSet,
+        context: &RenderContext,
     ) -> TransactionEvents {
         let mut message = TransactionEvents::default();
 
@@ -174,18 +219,18 @@ impl RpcService {
             message.events = events
                 .data
                 .iter()
-                .map(|event| self.render_event_to_proto(event, &event_mask, output_objects))
+                .map(|event| self.render_event_to_proto(event, &event_mask, context))
                 .collect();
         }
 
         message
     }
 
-    pub fn render_event_to_proto(
+    pub(crate) fn render_event_to_proto(
         &self,
         event: &sui_types::event::Event,
         mask: &FieldMaskTree,
-        output_objects: &ObjectSet,
+        context: &RenderContext,
     ) -> Event {
         let mut message = Event::default();
 
@@ -213,7 +258,7 @@ impl RpcService {
 
         if mask.contains(Event::JSON_FIELD) {
             message.json = self
-                .render_json(&event.type_, &event.contents, output_objects)
+                .render_json(&event.type_, &event.contents, context)
                 .map(Box::new);
         }
 
@@ -358,13 +403,14 @@ impl RpcService {
     /// [`Self::annotate_effects`]) and event JSON, which needs the package
     /// resolver. Event JSON draws from `json_budget`, which the caller shares
     /// across every event in one response.
-    pub fn annotate_checkpoint_transaction(
+    pub(crate) fn annotate_checkpoint_transaction(
         &self,
         message: &mut ExecutedTransaction,
         transaction: &sui_types::full_checkpoint_content::ExecutedTransaction,
         objects: &ObjectSet,
         mask: &FieldMaskTree,
         json_budget: &mut usize,
+        context: &RenderContext,
     ) {
         if let Some(effects_mask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD)
             && let Some(effects) = message.effects.as_mut()
@@ -380,7 +426,7 @@ impl RpcService {
         {
             for (event_message, event) in rendered.events.iter_mut().zip_debug_eq(&events.data) {
                 event_message.json = self
-                    .render_json_with_budget(&event.type_, &event.contents, objects, json_budget)
+                    .render_json_with_budget(&event.type_, &event.contents, context, json_budget)
                     .map(Box::new);
             }
         }

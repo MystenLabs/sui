@@ -6,7 +6,7 @@
 //! impl'd in sibling modules) into the top-level trait
 //! `sui-rpc-api` consumes.
 //!
-//! Adds three rpc-api-specific entry points:
+//! Adds rpc-api-specific entry points:
 //!
 //! - [`get_lowest_available_checkpoint_objects`]: returns the
 //!   pruning watermark's `tx_seq_lo`-derived checkpoint floor. We
@@ -18,15 +18,15 @@
 //!   records the same chain id on first contact).
 //! - [`indexes`]: returns `Some(self)` so callers reach the
 //!   [`RpcIndexes`] impl through the same handle.
-//! - [`get_struct_layout_with_overlay`]: delegates to the
-//!   [`resolve_struct_layout`] shim in `layout.rs`.
+//! - [`layout_package_store`]: supplies the package source in `layout.rs`
+//!   for response-local layout resolution.
 
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::reader::Reader;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
-use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::storage::BackingPackageStore;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::Error as StorageError;
@@ -70,11 +70,9 @@ impl<R: Reader + Send + Sync> RpcStateReader for RpcStoreReader<R> {
         Some(self)
     }
 
-    fn get_struct_layout_with_overlay(
-        &self,
-        struct_tag: &move_core_types::language_storage::StructTag,
-        overlay: &ObjectSet,
-    ) -> StorageResult<Option<move_core_types::annotated_value::MoveTypeLayout>> {
-        self.resolve_struct_layout(struct_tag, overlay)
+    fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
+        Box::new(super::layout::PackageStoreOverObjects {
+            schema: self.schema(),
+        })
     }
 }

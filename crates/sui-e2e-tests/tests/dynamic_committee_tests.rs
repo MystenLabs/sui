@@ -12,7 +12,7 @@ use std::{
 };
 use sui_core::authority::AuthorityState;
 use sui_macros::*;
-use sui_package_resolver::SyncResolver;
+use sui_package_resolver::{PackageStoreWithLruCache, SyncResolver};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::{
     SUI_SYSTEM_PACKAGE_ID,
@@ -174,7 +174,9 @@ impl StressTestRunner {
         let state = self.state();
 
         let backing_package_store = state.get_backing_package_store();
-        let mut layout_resolver = SyncResolver::new(backing_package_store.as_ref());
+        let mut layout_resolver = SyncResolver::new(PackageStoreWithLruCache::new(
+            backing_package_store.as_ref(),
+        ));
         for (obj_ref, _) in effects.created() {
             let object_opt = state
                 .get_object_store()
@@ -336,7 +338,8 @@ mod add_stake {
             {
                 let state = runner.state();
                 let cache = state.get_backing_package_store();
-                let mut layout_resolver = SyncResolver::new(cache.as_ref());
+                let mut layout_resolver =
+                    SyncResolver::new(PackageStoreWithLruCache::new(cache.as_ref()));
                 let staked_amount =
                     object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
                 assert_eq!(staked_amount, self.stake_amount);
