@@ -234,6 +234,12 @@ pub struct Indexer {
     /// hands it to [`sui_consistent_store::Store::install_sync`].
     sync: Synchronizer,
 
+    /// The `IndexerArgs::pipeline` filter, `None` when every pipeline
+    /// is enabled. The framework skips filtered-out pipelines; they
+    /// must not be registered with [`Self::sync`] either, since they
+    /// never send a batch.
+    enabled_pipelines: Option<HashSet<String>>,
+
     /// Pruning policy and its metrics, present when pruning is
     /// enabled. [`Self::run`] starts the background pruner from
     /// these and attaches it to the composed service. `None` leaves
@@ -315,6 +321,8 @@ impl Indexer {
             consistency_config.buffer_size,
             indexer_args.first_checkpoint,
         );
+        let enabled_pipelines = (!indexer_args.pipeline.is_empty())
+            .then(|| indexer_args.pipeline.iter().cloned().collect());
 
         let indexer = framework::Indexer::with_ingestion_clients(
             store,
@@ -336,6 +344,7 @@ impl Indexer {
         Ok(Self {
             indexer,
             sync,
+            enabled_pipelines,
             pruner,
         })
     }
@@ -488,12 +497,14 @@ impl Indexer {
         .await
     }
 
-    /// Register a single sequential pipeline. The pipeline is
-    /// announced to the synchronizer before being handed to the
-    /// framework indexer so that, by the time the first batch
-    /// flows through, the synchronizer task is already waiting on
-    /// the pipeline's queue. A [`LIVE_COHORT`] pipeline is also
-    /// marked as a required snapshot member.
+    /// Register a single sequential pipeline with the framework
+    /// indexer and, if the framework accepts it, with the
+    /// synchronizer. A pipeline the framework skips (filtered out by
+    /// `IndexerArgs::pipeline`) never sends a batch, so registering it
+    /// with the synchronizer would let it hold snapshots back forever.
+    /// A [`LIVE_COHORT`] pipeline is also marked as a required
+    /// snapshot member. Synchronizer tasks only start in
+    /// [`Self::run`], so the registration order is not observable.
     ///
     /// Refuses to register a pipeline whose persisted [`RestoreState`]
     /// is still `InProgress`: tip-mode indexing of a pipeline that
@@ -530,6 +541,18 @@ impl Indexer {
             }
         }
 
+        self.indexer
+            .sequential_pipeline(handler, config)
+            .await
+            .with_context(|| format!("Failed to add pipeline {:?} to indexer", H::NAME))?;
+        if self
+            .enabled_pipelines
+            .as_ref()
+            .is_some_and(|enabled| !enabled.contains(H::NAME))
+        {
+            return Ok(());
+        }
+
         self.sync
             .register_pipeline(H::NAME)
             .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;
@@ -538,11 +561,6 @@ impl Indexer {
                 format!("Failed to require pipeline {:?} in snapshots", H::NAME)
             })?;
         }
-
-        self.indexer
-            .sequential_pipeline(handler, config)
-            .await
-            .with_context(|| format!("Failed to add pipeline {:?} to indexer", H::NAME))?;
 
         Ok(())
     }
@@ -555,6 +573,7 @@ impl Indexer {
             indexer,
             sync,
             pruner: pruner_setup,
+            enabled_pipelines: _,
         } = self;
 
         // Capture the store for the pruner before `indexer.run`
@@ -834,29 +853,28 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn restart_with_uneven_live_watermarks_snapshots_only_complete_live_state() {
-        // A crash left `object_by_owner` and `object_by_type` at 10 but
-        // `balance` at 9. The history pipeline `tx_seq_by_digest` sits at
-        // 0 and checkpoints below 10 are unavailable, so it cannot make
-        // progress and must not hold live snapshots back.
-        const RESTART: u64 = 10;
-        const TIP: u64 = 13;
+    /// The checkpoint the live pipelines resume from in the restart
+    /// tests, and the network tip they index up to.
+    const RESTART: u64 = 10;
+    const TIP: u64 = 13;
 
-        let dir = tempfile::tempdir().unwrap();
+    /// Seed `watermarks` into a fresh store at `path`, then run an
+    /// indexer over it with `indexer_args` and the live cohort plus the
+    /// `tx_seq_by_digest` history pipeline, fed checkpoints
+    /// `RESTART..=TIP` only. Returns once snapshot `TIP` exists.
+    async fn run_until_tip_snapshot(
+        path: &std::path::Path,
+        watermarks: &[(&str, u64)],
+        indexer_args: IndexerArgs,
+    ) -> (Db, Service) {
         let options = DbOptions {
             snapshot_capacity: 16,
             ..DbOptions::default()
         };
-        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), options).unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(path, options).unwrap();
         let framework = sui_consistent_store::FrameworkSchema::new(db.clone());
         let mut batch = db.batch();
-        for (pipeline, checkpoint) in [
-            ("object_by_owner", RESTART),
-            ("object_by_type", RESTART),
-            ("balance", RESTART - 1),
-            ("tx_seq_by_digest", 0),
-        ] {
+        for &(pipeline, checkpoint) in watermarks {
             batch
                 .put(
                     &framework.watermarks,
@@ -880,7 +898,7 @@ mod tests {
             Arc::new(FixedIngestionClient { checkpoints }),
             ingestion_metrics,
         );
-        // Keep the stuck history pipeline on its own ingestion service so
+        // Keep a stuck history pipeline on its own ingestion service so
         // its missing checkpoints do not stall the live pipelines' feed.
         let ingestion_config = IngestionConfig {
             min_cohort_boundary: 1,
@@ -888,7 +906,7 @@ mod tests {
         };
         let mut indexer = Indexer::from_store(
             store,
-            IndexerArgs::default(),
+            indexer_args,
             ingestion_client,
             None,
             None,
@@ -922,24 +940,78 @@ mod tests {
         .await
         .expect("live snapshots should reach the tip");
 
+        (db, service)
+    }
+
+    /// `pipeline`'s committed checkpoint as captured by snapshot
+    /// `checkpoint`.
+    fn snapshot_watermark(db: &Db, checkpoint: u64, pipeline: &str) -> Option<u64> {
+        db.at_snapshot(checkpoint)
+            .unwrap()
+            .framework()
+            .watermarks
+            .get(&PipelineTaskKey::new(pipeline))
+            .unwrap()
+            .map(|w| w.checkpoint_hi_inclusive)
+    }
+
+    #[tokio::test]
+    async fn restart_with_uneven_live_watermarks_snapshots_only_complete_live_state() {
+        // A crash left `object_by_owner` and `object_by_type` at 10 but
+        // `balance` at 9. The history pipeline `tx_seq_by_digest` sits at
+        // 0 and checkpoints below 10 are unavailable, so it cannot make
+        // progress and must not hold live snapshots back.
+        let dir = tempfile::tempdir().unwrap();
+        let (db, service) = run_until_tip_snapshot(
+            dir.path(),
+            &[
+                ("object_by_owner", RESTART),
+                ("object_by_type", RESTART),
+                ("balance", RESTART - 1),
+                ("tx_seq_by_digest", 0),
+            ],
+            IndexerArgs::default(),
+        )
+        .await;
+
         // Every snapshot, starting at the restart checkpoint, holds every
         // live pipeline committed through that snapshot's checkpoint.
         assert_eq!(db.snapshot_range(), Some(RESTART..=TIP));
         for checkpoint in RESTART..=TIP {
-            let snapshot = db.at_snapshot(checkpoint).unwrap();
             for pipeline in LIVE_COHORT {
                 assert_eq!(
-                    snapshot
-                        .framework()
-                        .watermarks
-                        .get(&PipelineTaskKey::new(*pipeline))
-                        .unwrap()
-                        .map(|w| w.checkpoint_hi_inclusive),
+                    snapshot_watermark(&db, checkpoint, pipeline),
                     Some(checkpoint),
                     "snapshot {checkpoint} is missing {pipeline}'s writes",
                 );
             }
         }
+
+        drop(service);
+    }
+
+    #[tokio::test]
+    async fn live_pipeline_filtered_out_by_indexer_args_does_not_block_snapshots() {
+        // `balance` lags but is excluded by the `pipeline` filter, so it
+        // never runs. It must not be required in snapshots, or the
+        // running live pipelines would wait for it forever.
+        let dir = tempfile::tempdir().unwrap();
+        let (db, service) = run_until_tip_snapshot(
+            dir.path(),
+            &[
+                ("object_by_owner", RESTART),
+                ("object_by_type", RESTART),
+                ("balance", RESTART - 1),
+            ],
+            IndexerArgs {
+                pipeline: vec!["object_by_owner".to_owned(), "object_by_type".to_owned()],
+                ..IndexerArgs::default()
+            },
+        )
+        .await;
+
+        assert_eq!(snapshot_watermark(&db, TIP, "object_by_owner"), Some(TIP));
+        assert_eq!(snapshot_watermark(&db, TIP, "balance"), Some(RESTART - 1));
 
         drop(service);
     }
