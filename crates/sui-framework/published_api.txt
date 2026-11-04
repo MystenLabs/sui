@@ -2356,9 +2356,6 @@ fields
 destroy
 	public(package) fun
 	0x2::display
-create_internal
-	fun
-	0x2::display
 add_internal
 	fun
 	0x2::display

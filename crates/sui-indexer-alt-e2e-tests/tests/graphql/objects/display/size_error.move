@@ -11,6 +11,7 @@
 //    is too large.
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::mod {
   use std::string::utf8;
   use sui::display;

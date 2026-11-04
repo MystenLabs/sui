@@ -10,6 +10,7 @@
 // 5. View the updated Display format of the object.
 
 //# publish --sender A
+#[allow(deprecated_usage)]
 module test::mod {
   use std::string::{String, utf8};
   use sui::display;

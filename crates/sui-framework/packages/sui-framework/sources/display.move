@@ -15,14 +15,17 @@ module sui::display;
 use std::string::String;
 use sui::event;
 use sui::package::Publisher;
-use sui::vec_map::{Self, VecMap};
+use sui::vec_map::VecMap;
 
+#[allow(unused_const)]
 /// For when T does not belong to the package `Publisher`.
 const ENotOwner: u64 = 0;
-
 /// For when vectors passed into one of the multiple insert functions
 /// don't match in their lengths.
 const EVecLengthMismatch: u64 = 1;
+/// Creation of Display V1 is no longer available, see `display_registry` for
+/// options for creating Display V2.
+const ENoLongerSupported: u64 = 2;
 
 /// The Display<T> object. Defines the way a T instance should be
 /// displayed. Display object can only be created and modified with
@@ -54,6 +57,7 @@ public struct Display<phantom T: key> has key, store {
     version: u16,
 }
 
+#[allow(unused_field)]
 /// Event: emitted when a new Display object has been created for type T.
 /// Type signature of the event corresponds to the type while id serves for
 /// the discovery.
@@ -73,34 +77,33 @@ public struct VersionUpdated<phantom T: key> has copy, drop {
 
 // === Initializer Methods ===
 
+#[allow(unused_variable)]
+#[deprecated(note = b"Display V1 can no longer be created, use `display_registry` for Display V2")]
 /// Create an empty Display object. It can either be shared empty or filled
 /// with data right away via cheaper `set_owned` method.
 public fun new<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
-    assert!(is_authorized<T>(pub), ENotOwner);
-    create_internal(ctx)
+    abort ENoLongerSupported
 }
 
+#[allow(unused_variable)]
+#[deprecated(note = b"Display V1 can no longer be created, use `display_registry` for Display V2")]
 /// Create a new Display<T> object with a set of fields.
 public fun new_with_fields<T: key>(
-    pub: &Publisher,
-    fields: vector<String>,
-    values: vector<String>,
-    ctx: &mut TxContext,
+    _pub: &Publisher,
+    _fields: vector<String>,
+    _values: vector<String>,
+    _ctx: &mut TxContext,
 ): Display<T> {
-    let len = fields.length();
-    assert!(len == values.length(), EVecLengthMismatch);
-
-    let mut display = new<T>(pub, ctx);
-    fields.zip_do!(values, |field, value| display.add_internal(field, value));
-    display
+    abort ENoLongerSupported
 }
 
 // === Entry functions: Create ===
 
-#[allow(lint(self_transfer, public_entry))]
+#[allow(unused_variable, unused_type_parameter, lint(public_entry))]
+#[deprecated(note = b"Display V1 can no longer be created, use `display_registry` for Display V2")]
 /// Create a new empty Display<T> object and keep it.
 public entry fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
-    transfer::public_transfer(new<T>(pub, ctx), ctx.sender())
+    abort ENoLongerSupported
 }
 
 #[allow(lint(public_entry))]
@@ -173,22 +176,18 @@ public(package) fun destroy<T: key>(display: Display<T>) {
 
 // === Private functions ===
 
-/// Internal function to create a new `Display<T>`.
-fun create_internal<T: key>(ctx: &mut TxContext): Display<T> {
-    let uid = object::new(ctx);
-
-    event::emit(DisplayCreated<T> {
-        id: uid.to_inner(),
-    });
-
-    Display {
-        id: uid,
-        fields: vec_map::empty(),
-        version: 0,
-    }
-}
-
 /// Private method for inserting fields without security checks.
 fun add_internal<T: key>(display: &mut Display<T>, name: String, value: String) {
     display.fields.insert(name, value)
+}
+
+// === Tests Compatibility ===
+
+#[test_only]
+public fun new_for_testing<T: key>(_: &Publisher, ctx: &mut TxContext): Display<T> {
+    Display {
+        id: object::new(ctx),
+        version: 0,
+        fields: sui::vec_map::empty(),
+    }
 }
