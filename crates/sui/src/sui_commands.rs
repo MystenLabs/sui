@@ -3,7 +3,7 @@
 
 use std::io::{Write, stdout};
 use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -160,6 +160,12 @@ pub struct RpcArgs {
         value_name = "GRAPHQL_HOST_PORT"
     )]
     with_graphql: Option<String>,
+
+    /// Number of snapshots to retain in the Consistent Store.
+    ///
+    /// Defaults to the Consistent Store configuration default.
+    #[clap(long, value_name = "COUNT")]
+    consistent_store_snapshots: Option<NonZeroU64>,
 }
 
 impl RpcArgs {
@@ -168,6 +174,7 @@ impl RpcArgs {
             with_indexer: None,
             with_consistent_store: None,
             with_graphql: None,
+            consistent_store_snapshots: None,
         }
     }
 }
@@ -869,6 +876,14 @@ impl SuiCommand {
     }
 }
 
+fn consistent_store_config(snapshots: Option<NonZeroU64>) -> ConsistentConfig {
+    let mut config = ConsistentConfig::for_test();
+    if let Some(snapshots) = snapshots {
+        config.consistency.snapshots = snapshots.get();
+    }
+    config
+}
+
 /// Starts a local network with the given configuration.
 async fn start(
     config: Option<PathBuf>,
@@ -892,6 +907,7 @@ async fn start(
         with_indexer,
         mut with_consistent_store,
         with_graphql,
+        consistent_store_snapshots,
     } = rpc_args;
 
     // Automatically enable consistent store if GraphQL is enabled
@@ -1209,7 +1225,7 @@ async fn start(
                 client_args.clone(),
                 consistent_args,
                 "0.0.0",
-                ConsistentConfig::for_test(),
+                consistent_store_config(consistent_store_snapshots),
                 &prometheus_registry,
             )
             .await
@@ -1965,4 +1981,43 @@ fn update_wallet_config_rpc(
     wallet_context.config.save()?;
 
     Ok(wallet_context)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consistent_store_snapshot_count_overrides_default() {
+        let default = consistent_store_config(None);
+        let configured = consistent_store_config(NonZeroU64::new(250_000));
+
+        assert_eq!(
+            default.consistency.snapshots,
+            ConsistentConfig::for_test().consistency.snapshots
+        );
+        assert_eq!(configured.consistency.snapshots, 250_000);
+    }
+
+    #[test]
+    fn consistent_store_snapshot_count_cli_requires_nonzero_value() {
+        let command =
+            SuiCommand::try_parse_from(["sui", "start", "--consistent-store-snapshots", "250000"])
+                .unwrap();
+        assert!(matches!(
+            command,
+            SuiCommand::Start {
+                rpc_args: RpcArgs {
+                    consistent_store_snapshots: Some(count),
+                    ..
+                },
+                ..
+            } if count.get() == 250_000
+        ));
+
+        assert!(
+            SuiCommand::try_parse_from(["sui", "start", "--consistent-store-snapshots", "0",])
+                .is_err()
+        );
+    }
 }
