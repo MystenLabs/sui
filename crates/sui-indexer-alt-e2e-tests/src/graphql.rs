@@ -9,9 +9,23 @@
 //! helper local to that test's module over bending these to fit. Keeping them minimal is the point.
 
 use anyhow::Context;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 use url::Url;
+
+/// Leading byte of every cursor in GraphQL's own format.
+const FORMAT_MARKER: u8 = 0x00;
+
+/// Envelope variants, `OwnedCursor` variants, and `Point` variants of GraphQL's cursor format, by
+/// BCS variant index.
+const TRANSACTION: u8 = 0;
+const EVENT: u8 = 1;
+const OWNED_POINT: u8 = 0;
+const OWNED_LEDGER: u8 = 1;
+const POINT_AT: u8 = 0;
 
 /// Relay `PageInfo`.
 #[derive(Debug, Deserialize)]
@@ -62,4 +76,44 @@ pub async fn query(
         .pointer("/data")
         .cloned()
         .context("Missing data in GraphQL response")
+}
+
+/// A GraphQL transactions cursor at the transaction at `(checkpoint, transaction_index)`, with no
+/// ledger bytes, as GraphQL mints it for a transaction it holds.
+pub fn place_tx_cursor(checkpoint: u64, transaction_index: u64) -> String {
+    graphql_cursor((
+        TRANSACTION,
+        OWNED_POINT,
+        POINT_AT,
+        checkpoint,
+        transaction_index,
+    ))
+}
+
+/// The event counterpart of [`place_tx_cursor`].
+pub fn place_event_cursor(checkpoint: u64, transaction_index: u64, event_index: u32) -> String {
+    graphql_cursor((
+        EVENT,
+        OWNED_POINT,
+        POINT_AT,
+        checkpoint,
+        transaction_index,
+        event_index,
+    ))
+}
+
+/// A GraphQL transactions cursor carrying `ledger`, the ledger service's own cursor bytes, that
+/// GraphQL could not place (as for a page boundary nothing GraphQL saw bounds).
+pub fn unplaced_tx_cursor(ledger: &[u8]) -> String {
+    graphql_cursor((TRANSACTION, OWNED_LEDGER, ledger, None::<()>))
+}
+
+/// The event counterpart of [`unplaced_tx_cursor`].
+pub fn unplaced_event_cursor(ledger: &[u8]) -> String {
+    graphql_cursor((EVENT, OWNED_LEDGER, ledger, None::<()>))
+}
+
+/// [`FORMAT_MARKER`], then the BCS encoding of `envelope`, in Base64.
+fn graphql_cursor(envelope: impl Serialize) -> String {
+    Base64::encode(bcs::to_bytes(&(FORMAT_MARKER, envelope)).expect("cursor encodes"))
 }

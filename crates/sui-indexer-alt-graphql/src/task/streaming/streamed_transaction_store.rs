@@ -77,7 +77,6 @@ mod tests {
 
     fn processed(digest: TransactionDigest) -> ProcessedTransaction {
         ProcessedTransaction {
-            tx_sequence_number: 0,
             contents: Arc::new(TransactionContents::for_test(digest)),
         }
     }

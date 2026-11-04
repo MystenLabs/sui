@@ -32,9 +32,6 @@ use crate::api::types::ledger_cursor::EnvelopeRef;
 use crate::api::types::ledger_cursor::EventKey;
 use crate::api::types::ledger_cursor::OwnedCursor;
 use crate::api::types::ledger_cursor::Point;
-use crate::api::types::ledger_cursor::legacy::LegacyKind;
-use crate::api::types::ledger_cursor::legacy::LegacyPosition;
-use crate::api::types::ledger_cursor::legacy::LegacyToken;
 use crate::api::types::ledger_cursor::scan::LedgerPage;
 use crate::api::types::ledger_cursor::scan::RequestBound;
 use crate::api::types::ledger_cursor::scan::ScanCursor;
@@ -53,26 +50,10 @@ use crate::scope::Scope;
 
 pub(crate) mod filter;
 
-/// A decoded event cursor: in GraphQL's own format, or in the legacy format (see
-/// [`crate::api::types::ledger_cursor::legacy`]).
+/// A decoded event cursor.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EventToken {
-    Owned(OwnedCursor<EventKey>),
-    Legacy(LegacyEventToken),
-}
+pub struct EventToken(OwnedCursor<EventKey>);
 
-/// An event cursor in the legacy format: the bytes as received, and the coordinates they hold.
-/// Cursors at the same event are equal whatever their kind or checkpoint label.
-#[derive(Clone, Debug)]
-pub struct LegacyEventToken {
-    bytes: Bytes,
-    kind: LegacyKind,
-    checkpoint: u64,
-    tx_seq: u64,
-    event_index: u32,
-}
-
-/// Compatibility dispatch over the on-wire cursor formats.
 pub type CEvent = OpaqueCursor<EventToken>;
 
 #[derive(Clone)]
@@ -271,93 +252,41 @@ impl Event {
 impl EventToken {
     /// The cursor of the event at `key`, minted from data GraphQL holds.
     pub(crate) fn at(key: EventKey) -> CEvent {
-        OpaqueCursor::new(Self::Owned(OwnedCursor::Point(Point::At(key))))
+        OpaqueCursor::new(Self(OwnedCursor::Point(Point::At(key))))
     }
 
     /// The cursor at the start of `checkpoint`: a page after it starts with the checkpoint's first
     /// event.
     pub(crate) fn checkpoint_start(checkpoint: u64) -> CEvent {
-        OpaqueCursor::new(Self::Owned(OwnedCursor::Point(Point::checkpoint_start(
+        OpaqueCursor::new(Self(OwnedCursor::Point(Point::checkpoint_start(
             checkpoint,
         ))))
     }
 
-    /// Where GraphQL places this cursor: `None` for a legacy cursor, or a ledger page boundary
-    /// that nothing GraphQL saw bounds.
+    /// Where GraphQL places this cursor: `None` for a ledger page boundary that nothing GraphQL saw
+    /// bounds.
     pub fn point(&self) -> Option<Point<EventKey>> {
-        match self {
-            Self::Owned(cursor) => cursor.point(),
-            Self::Legacy(_) => None,
-        }
+        self.0.point()
     }
 
     /// The last checkpoint this cursor shows the client has seen any of: the one its place has
-    /// reached, or a legacy cursor's checkpoint label. `None` if it shows none, as for a legacy
-    /// cursor without a label.
+    /// reached, or `None` if it shows none.
     pub(crate) fn last_checkpoint(&self) -> Option<u64> {
-        match self {
-            Self::Owned(cursor) => cursor.point().and_then(|point| point.last_checkpoint()),
-            Self::Legacy(legacy) => (legacy.checkpoint != 0).then_some(legacy.checkpoint),
-        }
+        self.point().and_then(|point| point.last_checkpoint())
     }
 }
 
-impl LegacyEventToken {
-    /// The legacy token this cursor holds.
-    fn token(&self) -> LegacyToken {
-        LegacyToken {
-            kind: self.kind,
-            position: LegacyPosition::Events {
-                checkpoint: self.checkpoint,
-                tx_seq: self.tx_seq,
-                event_index: self.event_index,
-            },
-        }
-    }
-}
 impl ByteCursor for EventToken {
     fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let Some(envelope) = Envelope::decode(bytes) else {
-            return Ok(Self::Legacy(LegacyEventToken::decode_cursor(bytes)?));
-        };
-
-        match envelope? {
-            Envelope::Event(cursor) => Ok(Self::Owned(cursor)),
-            _ => anyhow::bail!("Not an event cursor"),
-        }
-    }
-
-    fn encode_cursor(&self) -> Bytes {
-        match self {
-            Self::Owned(cursor) => EnvelopeRef::Event(cursor).encode(),
-            Self::Legacy(legacy) => legacy.encode_cursor(),
-        }
-    }
-}
-
-impl ByteCursor for LegacyEventToken {
-    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
-        let token = LegacyToken::decode(bytes)?;
-        let LegacyPosition::Events {
-            checkpoint,
-            tx_seq,
-            event_index,
-        } = token.position
-        else {
+        let Envelope::Event(cursor) = Envelope::decode(bytes)? else {
             anyhow::bail!("Not an event cursor");
         };
 
-        Ok(Self {
-            bytes: Bytes::copy_from_slice(bytes),
-            kind: token.kind,
-            checkpoint,
-            tx_seq,
-            event_index,
-        })
+        Ok(Self(cursor))
     }
 
     fn encode_cursor(&self) -> Bytes {
-        self.bytes.clone()
+        EnvelopeRef::Event(&self.0).encode()
     }
 }
 
@@ -365,43 +294,19 @@ impl ScanCursor for CEvent {
     type Key = EventKey;
 
     fn bound(&self) -> RequestBound<EventKey> {
-        match &**self {
-            EventToken::Owned(cursor) => RequestBound {
-                ledger: cursor.ledger_bytes().cloned(),
-                point: cursor.point(),
-            },
-
-            EventToken::Legacy(legacy) => RequestBound {
-                ledger: Some(legacy.bytes.clone()),
-                point: None,
-            },
-        }
-    }
-
-    fn before_bound(&self) -> RequestBound<EventKey> {
-        match &**self {
-            EventToken::Owned(_) => self.bound(),
-
-            EventToken::Legacy(legacy) => RequestBound {
-                ledger: Some(legacy.token().before_bytes(&legacy.bytes)),
-                point: None,
-            },
+        let EventToken(cursor) = &**self;
+        RequestBound {
+            ledger: cursor.ledger_bytes().cloned(),
+            point: cursor.point(),
         }
     }
 
     fn from_ledger(bytes: Bytes, point: Option<Point<EventKey>>) -> Self {
-        OpaqueCursor::new(EventToken::Owned(OwnedCursor::Ledger { bytes, point }))
+        OpaqueCursor::new(EventToken(OwnedCursor::Ledger { bytes, point }))
     }
 
     fn from_point(point: Point<EventKey>) -> Self {
-        OpaqueCursor::new(EventToken::Owned(OwnedCursor::Point(point)))
-    }
-}
-
-impl Eq for LegacyEventToken {}
-impl PartialEq for LegacyEventToken {
-    fn eq(&self, other: &Self) -> bool {
-        (self.tx_seq, self.event_index) == (other.tx_seq, other.event_index)
+        OpaqueCursor::new(EventToken(OwnedCursor::Point(point)))
     }
 }
 
@@ -492,29 +397,6 @@ mod tests {
         }
     }
 
-    /// A legacy item cursor at event `event_index` of transaction `tx_seq`, labelled with
-    /// `checkpoint`.
-    fn legacy_token(checkpoint: u64, tx_seq: u64, event_index: u32) -> LegacyToken {
-        LegacyToken {
-            kind: LegacyKind::Item,
-            position: LegacyPosition::Events {
-                checkpoint,
-                tx_seq,
-                event_index,
-            },
-        }
-    }
-
-    /// A legacy protobuf event cursor.
-    fn legacy_bytes(checkpoint: u64, tx_seq: u64, event_index: u32) -> Bytes {
-        legacy_token(checkpoint, tx_seq, event_index).encode()
-    }
-
-    fn legacy_cursor(checkpoint: u64, tx_seq: u64, event_index: u32) -> CEvent {
-        CEvent::decode_cursor(&B64::encode(legacy_bytes(checkpoint, tx_seq, event_index)))
-            .expect("legacy cursor")
-    }
-
     /// A `ListEvents` item at `key`, from the zero-digest transaction, carrying `cursor` as its
     /// ledger cursor.
     fn ev_item(cursor: &'static [u8], key: EventKey) -> PageItem<v2::Event> {
@@ -590,55 +472,13 @@ mod tests {
         assert_eq!(decoded.point(), Some(Point::At(key(1, 2, 3))));
     }
 
-    /// Legacy cursors leave the scan's checkpoint range as it is. A cursor labelled checkpoint 0,
-    /// as Postgres-backed pagination issued them, is sent as received as `after`, and labelled
-    /// `u64::MAX` at the same place as `before`, because ledger servers before 1.83 read a `before`
-    /// label as the end of the range.
-    #[test]
-    fn legacy_cursors_are_forwarded() {
-        let unlabelled = legacy_cursor(0, 9, 1);
-        for (first, last) in [(Some(10), None), (None, Some(10))] {
-            let page = page(
-                first,
-                Some(unlabelled.clone()),
-                last,
-                Some(unlabelled.clone()),
-            );
-            let request = scan_request(&page);
-            assert_eq!(request.options.after, Some(legacy_bytes(0, 9, 1)));
-            let before = request.options.before.expect("before cursor");
-            assert_eq!(
-                LegacyToken::decode(&before).unwrap(),
-                legacy_token(u64::MAX, 9, 1)
-            );
-            assert_eq!(request.start_checkpoint, 0);
-            assert_eq!(request.end_checkpoint, 101);
-        }
-    }
-
-    /// A labelled legacy `before` cursor, and a `before` cursor carrying ledger bytes in GraphQL's
-    /// own format, are sent as received.
-    #[test]
-    fn labelled_and_owned_before_cursors_are_forwarded() {
-        let labelled = legacy_cursor(7, 9, 1);
-        let labelled = scan_request(&page(None, None, Some(10), Some(labelled)));
-        assert_eq!(labelled.options.before, Some(legacy_bytes(7, 9, 1)));
-
-        let owned = CEvent::from_ledger(Bytes::from_static(b"l"), Some(Point::At(key(1, 0, 0))));
-        let owned = scan_request(&page(None, None, Some(10), Some(owned)));
-        assert_eq!(owned.options.before.as_deref(), Some(&b"l"[..]));
-    }
-    /// A cursor for another type must not decode as an event cursor, in either format.
+    /// A cursor for another type, or in the protobuf format earlier releases issued, must not
+    /// decode as an event cursor.
     #[test]
     fn rejects_other_cursor_types() {
-        let legacy = LegacyToken {
-            kind: LegacyKind::Item,
-            position: LegacyPosition::Transactions {
-                checkpoint: 1,
-                tx_seq: 2,
-            },
-        };
-        assert!(CEvent::decode_cursor(&B64::encode(legacy.encode())).is_err());
+        // kind=ITEM, events { checkpoint: 11, tx_seq: 12, event_index: 13 }.
+        let protobuf = [0x28, 0x01, 0x42, 0x06, 0x08, 0x0b, 0x10, 0x0c, 0x18, 0x0d];
+        assert!(CEvent::decode_cursor(&B64::encode(protobuf)).is_err());
 
         let owned = TransactionToken::checkpoint_start(1).encode_cursor();
         assert!(CEvent::decode_cursor(&owned).is_err());
