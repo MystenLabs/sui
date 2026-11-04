@@ -21,7 +21,7 @@ use sui_types::{
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     execution_status::ExecutionErrorKind,
     full_checkpoint_content::ObjectSet,
-    gas::SuiGasStatus,
+    gas::{SuiGasStatus, get_gas_balance},
     messages_checkpoint::CheckpointTimestamp,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     object::{MoveObject, OBJECT_START_VERSION, Object, Owner},
@@ -29,10 +29,10 @@ use sui_types::{
         BackingPackageStore, BackingStore, TrackingBackingStore, get_transaction_object_set,
     },
     transaction::{
-        InputObjectKind, InputObjects, ObjectReadResult, ReceivingObjects, TransactionData,
-        TransactionDataAPI, TxValidityCheckContext,
+        GasPaymentMode, InputObjectKind, InputObjects, ObjectReadResult, ReceivingObjects,
+        TransactionData, TransactionDataAPI, TxValidityCheckContext,
     },
-    transaction_executor::{SimulateTransactionResult, TransactionChecks},
+    transaction_executor::{SimulateTransactionResult, SimulationGasPayment, TransactionChecks},
 };
 
 use crate::{
@@ -56,11 +56,45 @@ pub trait SimulationInputLoader {
     ) -> SuiResult<(InputObjects, ReceivingObjects)>;
 }
 
+fn new_mock_gas_object(owner: sui_types::base_types::SuiAddress, value: u64) -> Object {
+    Object::new_move(
+        MoveObject::new_gas_coin(OBJECT_START_VERSION, ObjectID::MAX, value),
+        Owner::AddressOwner(owner),
+        TransactionDigest::genesis_marker(),
+    )
+}
+
+fn supplemental_mock_gas_value(
+    transaction: &TransactionData,
+    input_objects: &InputObjects,
+) -> Option<u64> {
+    let payment_balance = transaction
+        .gas()
+        .iter()
+        .try_fold(0_u128, |total, payment| {
+            let balance = if let Ok(reservation) = ParsedDigest::try_from(payment.2) {
+                u128::from(reservation.reservation_amount())
+            } else {
+                let object = input_objects
+                    .iter()
+                    .find(|input| input.id() == payment.0)?
+                    .as_object()?;
+                u128::from(get_gas_balance(object).ok()?)
+            };
+            total.checked_add(balance)
+        })?;
+    let payment_balance = u64::try_from(payment_balance).ok()?;
+    let value = transaction
+        .gas_budget()
+        .min(u64::MAX.checked_sub(payment_balance)?);
+    (value != 0).then_some(value)
+}
+
 /// Simulate a transaction without committing its outputs.
 pub fn simulate_transaction(
     mut transaction: TransactionData,
     checks: TransactionChecks,
-    allow_mock_gas_coin: bool,
+    gas_payment: SimulationGasPayment,
     suggested_gas_price: Option<u64>,
     validity_check_context: TxValidityCheckContext<'_>,
     execution_epoch_id: EpochId,
@@ -109,18 +143,15 @@ pub fn simulate_transaction(
     // Also required before pre_object_load_checks so that funds-withdrawal
     // processing sees non-empty payment and doesn't create an address-balance
     // withdrawal for gas.
-    // Skip mock gas for gasless transactions — they don't use gas coins.
+    // Allowance authentication and charging must not be replaced by a mock gas coin.
     let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
-    let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() && !is_gasless {
-        let obj = Object::new_move(
-            MoveObject::new_gas_coin(
-                OBJECT_START_VERSION,
-                ObjectID::MAX,
-                DEV_INSPECT_GAS_COIN_VALUE,
-            ),
-            Owner::AddressOwner(transaction.gas_data().owner),
-            TransactionDigest::genesis_marker(),
-        );
+    let is_gas_allowance = matches!(transaction.gas_payment_mode(), GasPaymentMode::Allowance(_));
+    let mock_gas_object = if matches!(gas_payment, SimulationGasPayment::MockIfEmpty)
+        && transaction.gas().is_empty()
+        && !is_gasless
+        && !is_gas_allowance
+    {
+        let obj = new_mock_gas_object(transaction.gas_data().owner, DEV_INSPECT_GAS_COIN_VALUE);
         transaction.gas_data_mut().payment = vec![obj.compute_object_reference()];
         Some(obj)
     } else {
@@ -151,6 +182,27 @@ pub fn simulate_transaction(
         &receiving_object_refs,
         validity_check_context.epoch,
     )?;
+
+    // Supplementing a real payment happens after its objects are loaded, so the synthetic value
+    // cannot overflow the smashed gas balance. Keep the declared payment first: it remains the
+    // runtime GasCoin and retains any storage-rebate provenance.
+    let mock_gas_object = mock_gas_object.or_else(|| {
+        if matches!(gas_payment, SimulationGasPayment::SupplementRealPayment)
+            && !transaction.gas().is_empty()
+            && !is_gasless
+            && !is_gas_allowance
+        {
+            let value = supplemental_mock_gas_value(&transaction, &input_objects)?;
+            let obj = new_mock_gas_object(transaction.gas_data().owner, value);
+            transaction
+                .gas_data_mut()
+                .payment
+                .push(obj.compute_object_reference());
+            Some(obj)
+        } else {
+            None
+        }
+    });
 
     // Add mock gas to input objects after loading (it doesn't exist in the store).
     let mock_gas_id = mock_gas_object.map(|obj| {
@@ -188,9 +240,10 @@ pub fn simulate_transaction(
         None,
     )?;
     let early_execution_error = get_early_execution_error(
-        &transaction.digest(),
+        &transaction_digest,
         &checked_input_objects,
         certificate_deny_set,
+        None,
         &FundsWithdrawStatus::MaybeSufficient,
     );
     // Dev-inspect/simulation path (not committed): no assigned accumulator version here, so the
@@ -315,8 +368,8 @@ pub fn simulate_transaction(
     };
 
     Ok(SimulateTransactionResult {
-        objects: object_set,
         events: effects.events_digest().map(|_| inner_temp_store.events),
+        objects: object_set,
         effects,
         execution_result,
         mock_gas_id,

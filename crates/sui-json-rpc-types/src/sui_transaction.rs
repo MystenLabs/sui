@@ -1481,6 +1481,8 @@ fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
 #[serde(rename = "GasData", rename_all = "camelCase")]
 pub struct SuiGasData {
     pub payment: Vec<SuiObjectRef>,
+    /// Raw transaction gas-owner selector. For allowance gas, this is the allowance object ID
+    /// encoded as an address; it is not an address-based payer.
     pub owner: SuiAddress,
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]

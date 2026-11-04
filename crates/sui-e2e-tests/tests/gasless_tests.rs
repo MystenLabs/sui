@@ -143,7 +143,7 @@ async fn test_gasless_dryrun() {
         node.state().simulate_transaction(
             tx_data,
             sui_types::transaction_executor::TransactionChecks::Enabled,
-            true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         )
     });
     if let Err(e) = result {

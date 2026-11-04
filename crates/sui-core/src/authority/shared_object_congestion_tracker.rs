@@ -13,7 +13,7 @@ use sui_protocol_config::{
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::Round;
-use sui_types::transaction::SharedInputObject;
+use sui_types::transaction::{GasPaymentMode, SharedInputObject, TransactionDataAPI};
 use tracing::{debug, trace};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -120,11 +120,43 @@ impl SharedObjectCongestionTracker {
             .expect("There must be at least one object in shared_input_objects.")
     }
 
-    pub fn get_tx_cost(
+    pub(crate) fn get_tx_cost(
         &self,
         execution_time_estimator: &ExecutionTimeEstimator,
         cert: &VerifiedExecutableTransaction,
+        protocol_config: &ProtocolConfig,
         indirect_state_observer: &mut IndirectStateObserver,
+    ) -> (u64, Option<(ObjectID, u64)>) {
+        let estimate_us = Self::estimate_tx_cost(execution_time_estimator, cert);
+        let allowance_settlement = Self::gas_allowance_settlement_cost(protocol_config, cert);
+        let tx_cost = allowance_settlement
+            .as_ref()
+            .map(|(_, settlement_cost)| estimate_us.max(*settlement_cost))
+            .unwrap_or(estimate_us);
+        // Historically this was an Option<u64>, must keep it that way for consistency.
+        indirect_state_observer.observe_indirect_state(&Some(tx_cost));
+        (tx_cost, allowance_settlement)
+    }
+
+    pub(crate) fn gas_allowance_settlement_cost(
+        protocol_config: &ProtocolConfig,
+        cert: &VerifiedExecutableTransaction,
+    ) -> Option<(ObjectID, u64)> {
+        protocol_config
+            .enable_gas_allowances()
+            .then(|| cert.transaction_data().gas_payment_mode())
+            .and_then(|payment_mode| match payment_mode {
+                GasPaymentMode::Allowance(allowance_id) => Some((
+                    allowance_id,
+                    protocol_config.gas_allowance_congestion_control_cost(),
+                )),
+                _ => None,
+            })
+    }
+
+    fn estimate_tx_cost(
+        execution_time_estimator: &ExecutionTimeEstimator,
+        cert: &VerifiedExecutableTransaction,
     ) -> u64 {
         let estimate_us = execution_time_estimator
             .get_estimate(cert.transaction_data())
@@ -138,10 +170,6 @@ impl SharedObjectCongestionTracker {
                 "expensive tx cost estimate detected: {estimate_us}us"
             );
         }
-
-        // Historically this was an Option<u64>, must keep it that way for consistency.
-        indirect_state_observer.observe_indirect_state(&Some(estimate_us));
-
         estimate_us
     }
 
@@ -235,6 +263,28 @@ impl SharedObjectCongestionTracker {
         }
     }
 
+    /// Adds the cancellation settlement cost only to the retained allowance. Other shared inputs
+    /// use cancellation sentinels and never execute.
+    pub(crate) fn bump_gas_allowance_settlement_cost(
+        &mut self,
+        allowance_id: ObjectID,
+        settlement_cost: u64,
+        tx_digest: TransactionDigest,
+    ) {
+        let start_cost = *self.object_execution_cost.get(&allowance_id).unwrap_or(&0);
+        let end_cost = start_cost.saturating_add(settlement_cost);
+        let old_end_cost = self.object_execution_cost.insert(allowance_id, end_cost);
+        assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
+
+        if let Some(entries) = &mut self.log_entries {
+            entries.push(TransactionCostLogEntry {
+                tx_digest,
+                start_cost,
+                end_cost,
+            });
+        }
+    }
+
     // Returns end-of-commit data from congestion control:
     // - Accumulated debts for objects whose budgets have been exceeded over the course of
     //   the commit.
@@ -279,7 +329,6 @@ impl SharedObjectCongestionTracker {
 pub enum CongestionPerObjectDebt {
     V1(Round, u64),
 }
-
 impl CongestionPerObjectDebt {
     pub fn new(round: Round, debt: u64) -> Self {
         Self::V1(round, debt)
@@ -311,12 +360,18 @@ mod object_cost_tests {
     use super::*;
 
     use std::time::Duration;
-    use sui_protocol_config::ExecutionTimeEstimateParams;
+    use sui_protocol_config::{
+        Chain, ExecutionTimeEstimateParams, ProtocolConfig, ProtocolVersion,
+    };
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::Identifier;
     use sui_types::base_types::{SequenceNumber, random_object_ref};
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
-    use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, VerifiedTransaction};
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{
+        CallArg, GasData, ObjectArg, SharedObjectMutability, Transaction, TransactionData,
+        TransactionDataV1, TransactionExpiration, TransactionKind, VerifiedTransaction,
+    };
 
     fn default_params() -> ExecutionTimeEstimateParams {
         ExecutionTimeEstimateParams {
@@ -476,6 +531,126 @@ mod object_cost_tests {
             VerifiedTransaction::new_unchecked(tx_builder.build_and_sign(&keypair)),
             0,
         )
+    }
+
+    fn build_allowance_transaction(
+        allowance_id: ObjectID,
+        number_of_commands: u64,
+    ) -> VerifiedExecutableTransaction {
+        let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+        let mut ptb_builder = ProgrammableTransactionBuilder::new();
+        ptb_builder
+            .obj(ObjectArg::SharedObject {
+                id: allowance_id,
+                initial_shared_version: SequenceNumber::new(),
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+        for _ in 0..number_of_commands {
+            ptb_builder.programmable_move_call(
+                ObjectID::random(),
+                Identifier::new("unimportant_module").unwrap(),
+                Identifier::new("unimportant_function").unwrap(),
+                vec![],
+                vec![],
+            );
+        }
+        let transaction = Transaction::from_data_and_signer(
+            TransactionData::V1(TransactionDataV1 {
+                kind: TransactionKind::ProgrammableTransaction(ptb_builder.finish()),
+                sender,
+                gas_data: GasData {
+                    payment: vec![],
+                    owner: allowance_id.into(),
+                    price: 1_000,
+                    budget: 10,
+                },
+                expiration: TransactionExpiration::None,
+            }),
+            vec![&keypair],
+        );
+        VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_unchecked(transaction),
+            0,
+        )
+    }
+
+    #[test]
+    fn allowance_settlement_floor_only_applies_to_enabled_allowance_payments() {
+        let tracker = SharedObjectCongestionTracker::new([], default_params(), false, false);
+        let estimator = ExecutionTimeEstimator::new_for_testing();
+        let allowance_id = ObjectID::random();
+        let allowance_tx = build_allowance_transaction(allowance_id, 0);
+        let expensive_allowance_tx = build_allowance_transaction(allowance_id, 7);
+        let ordinary_tx = build_programmable_transaction(&[(allowance_id, true)], 0, 10);
+
+        let enabled = ProtocolConfig::get_for_version(ProtocolVersion::new(142), Chain::Unknown);
+        let disabled = ProtocolConfig::get_for_version(ProtocolVersion::new(142), Chain::Mainnet);
+
+        let mut floored_observer = IndirectStateObserver::new();
+        assert_eq!(
+            tracker
+                .get_tx_cost(&estimator, &allowance_tx, &enabled, &mut floored_observer,)
+                .0,
+            1_000
+        );
+        let mut expected_observer = IndirectStateObserver::new();
+        expected_observer.observe_indirect_state(&Some(1_000u64));
+        let additional_state = ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO)
+            .additional_state_digest();
+        assert_eq!(
+            floored_observer.fold_with(additional_state),
+            expected_observer.fold_with(additional_state)
+        );
+        assert_eq!(
+            SharedObjectCongestionTracker::gas_allowance_settlement_cost(&enabled, &allowance_tx),
+            Some((allowance_id, 1_000))
+        );
+        assert_eq!(
+            tracker
+                .get_tx_cost(
+                    &estimator,
+                    &allowance_tx,
+                    &disabled,
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
+            0
+        );
+        assert_eq!(
+            tracker
+                .get_tx_cost(
+                    &estimator,
+                    &ordinary_tx,
+                    &enabled,
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
+            0
+        );
+
+        let (estimated_cost, Some((allowance_id, settlement_cost))) = tracker.get_tx_cost(
+            &estimator,
+            &expensive_allowance_tx,
+            &enabled,
+            &mut IndirectStateObserver::new(),
+        ) else {
+            panic!("enabled allowance transaction must have settlement cost");
+        };
+        assert!(estimated_cost > settlement_cost);
+
+        let mut cancellation_tracker =
+            SharedObjectCongestionTracker::new([], default_params(), false, false);
+        cancellation_tracker.bump_gas_allowance_settlement_cost(
+            allowance_id,
+            settlement_cost,
+            *expensive_allowance_tx.digest(),
+        );
+        assert_eq!(
+            cancellation_tracker.max_cost(),
+            settlement_cost,
+            "cancellation does not account for unexecuted PTB commands"
+        );
     }
 
     #[test]
@@ -880,11 +1055,14 @@ mod object_cost_tests {
         // Read two objects should not change the object execution cost.
         let cert = build_transaction(&[(object_id_0, false), (object_id_1, false)], 10);
         shared_object_congestion_tracker.bump_object_execution_cost(
-            shared_object_congestion_tracker.get_tx_cost(
-                &execution_time_estimator,
-                &cert,
-                &mut IndirectStateObserver::new(),
-            ),
+            shared_object_congestion_tracker
+                .get_tx_cost(
+                    &execution_time_estimator,
+                    &cert,
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
             &cert,
         );
         assert_eq!(
@@ -901,11 +1079,14 @@ mod object_cost_tests {
         // Write to object 0 should only bump object 0's execution cost. The start cost should be object 1's cost.
         let cert = build_transaction(&[(object_id_0, true), (object_id_1, false)], 10);
         shared_object_congestion_tracker.bump_object_execution_cost(
-            shared_object_congestion_tracker.get_tx_cost(
-                &execution_time_estimator,
-                &cert,
-                &mut IndirectStateObserver::new(),
-            ),
+            shared_object_congestion_tracker
+                .get_tx_cost(
+                    &execution_time_estimator,
+                    &cert,
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
             &cert,
         );
         // start cost (10) + tx cost (~1000 for unknown command)
@@ -936,11 +1117,14 @@ mod object_cost_tests {
         // previous cost (1_010) + tx cost (~1000 for unknown command)
         let expected_object_cost = 2_010;
         shared_object_congestion_tracker.bump_object_execution_cost(
-            shared_object_congestion_tracker.get_tx_cost(
-                &execution_time_estimator,
-                &cert,
-                &mut IndirectStateObserver::new(),
-            ),
+            shared_object_congestion_tracker
+                .get_tx_cost(
+                    &execution_time_estimator,
+                    &cert,
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
             &cert,
         );
         assert_eq!(
@@ -974,11 +1158,14 @@ mod object_cost_tests {
         // previous cost 2_010 + (unknown-command default of 1000 * 7 commands)
         let expected_object_cost = 9_010;
         shared_object_congestion_tracker.bump_object_execution_cost(
-            shared_object_congestion_tracker.get_tx_cost(
-                &execution_time_estimator,
-                &cert,
-                &mut IndirectStateObserver::new(),
-            ),
+            shared_object_congestion_tracker
+                .get_tx_cost(
+                    &execution_time_estimator,
+                    &cert,
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
             &cert,
         );
         assert_eq!(
@@ -1050,11 +1237,14 @@ mod object_cost_tests {
 
         let tx = build_transaction(&[(shared_obj_0, true)], 100);
         tracker.bump_object_execution_cost(
-            tracker.get_tx_cost(
-                &execution_time_estimator,
-                &tx,
-                &mut IndirectStateObserver::new(),
-            ),
+            tracker
+                .get_tx_cost(
+                    &execution_time_estimator,
+                    &tx,
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
             &tx,
         );
 
@@ -1097,11 +1287,14 @@ mod object_cost_tests {
         let tx = build_transaction(&[(shared_obj_0, true), (shared_obj_1, true)], 100);
         let tx_digest = *tx.digest();
         tracker.bump_object_execution_cost(
-            tracker.get_tx_cost(
-                &execution_time_estimator,
-                &tx,
-                &mut IndirectStateObserver::new(),
-            ),
+            tracker
+                .get_tx_cost(
+                    &execution_time_estimator,
+                    &tx,
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    &mut IndirectStateObserver::new(),
+                )
+                .0,
             &tx,
         );
 

@@ -15,12 +15,17 @@
 
 use sui_macros::sim_test;
 use sui_types::{
-    base_types::SuiAddress,
+    base_types::{ObjectRef, SuiAddress},
     coin_reservation::ParsedDigest,
+    crypto::AccountKeyPair,
     effects::TransactionEffectsAPI,
     gas_coin::{GAS, MIST_PER_SUI},
+    object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Argument, TransactionData, TransactionDataAPI},
+    transaction::{
+        Argument, GasData, ObjectArg, SharedObjectMutability, Transaction as SignedTransaction,
+        TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
+    },
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
@@ -1404,4 +1409,777 @@ async fn test_simulate_without_gas_selection_falls_back_to_mock_gas_coin() {
         "Simulation without replay protection should succeed, got: {:?}",
         response.transaction.effects.status()
     );
+}
+
+async fn issue_allowance(
+    env: &mut TestEnv,
+    spender: SuiAddress,
+    amount: u64,
+) -> (
+    sui_types::base_types::ObjectID,
+    sui_types::base_types::SequenceNumber,
+) {
+    use move_core_types::identifier::Identifier;
+    use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, object::Owner};
+
+    let funder = env.get_sender(0);
+    let mut pt = ProgrammableTransactionBuilder::new();
+    let amount = pt.pure(amount).unwrap();
+    let payment = pt.command(sui_types::transaction::Command::SplitCoins(
+        Argument::GasCoin,
+        vec![amount],
+    ));
+    let spender = pt.pure(spender).unwrap();
+    pt.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("gas_allowance").unwrap(),
+        Identifier::new("new").unwrap(),
+        vec![],
+        vec![payment, spender],
+    );
+    let (_, effects) = env
+        .exec_tx_directly(TransactionData::new_programmable(
+            funder,
+            vec![env.get_gas_for_sender(funder)[0]],
+            pt.finish(),
+            20_000_000,
+            env.rgp,
+        ))
+        .await
+        .unwrap();
+    effects
+        .created()
+        .into_iter()
+        .find_map(|(object, owner)| match owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => Some((object.0, initial_shared_version)),
+            _ => None,
+        })
+        .unwrap()
+}
+
+async fn create_protected_gas_coin(
+    env: &mut TestEnv,
+    spender: SuiAddress,
+    key: &AccountKeyPair,
+    allowance: (
+        sui_types::base_types::ObjectID,
+        sui_types::base_types::SequenceNumber,
+    ),
+    amount: u64,
+    nonce: u32,
+) -> (SuiAddress, ObjectRef) {
+    let funder = env.get_sender(0);
+    let funding = env
+        .tx_builder_with_gas(funder, env.get_gas_for_sender(funder)[0])
+        .transfer_sui(Some(amount), spender)
+        .build();
+    let (_, funding_effects) = env.exec_tx_directly(funding).await.unwrap();
+    assert!(funding_effects.status().is_ok());
+    let source_coin = funding_effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| *owner == Owner::AddressOwner(spender))
+        .expect("funding transfer should create the source coin")
+        .0;
+    let mut pt = ProgrammableTransactionBuilder::new();
+    let source_coin = pt.obj(ObjectArg::ImmOrOwnedObject(source_coin)).unwrap();
+    let amount = pt.pure(amount).unwrap();
+    let coin = pt.command(sui_types::transaction::Command::SplitCoins(
+        source_coin,
+        vec![amount],
+    ));
+    pt.programmable_move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        move_core_types::identifier::Identifier::new("coin").unwrap(),
+        move_core_types::identifier::Identifier::new("destroy_zero").unwrap(),
+        vec![sui_types::gas_coin::GAS::type_tag()],
+        vec![source_coin],
+    );
+    let recipient = pt.pure(spender).unwrap();
+    pt.command(sui_types::transaction::Command::TransferObjects(
+        vec![coin],
+        recipient,
+    ));
+    pt.obj(ObjectArg::SharedObject {
+        id: allowance.0,
+        initial_shared_version: allowance.1,
+        mutability: SharedObjectMutability::Mutable,
+    })
+    .unwrap();
+    let allowance_paid = TransactionData::V1(TransactionDataV1 {
+        kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(pt.finish()),
+        sender: spender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: allowance.0.into(),
+            price: env.rgp,
+            budget: 20_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: env.chain_id,
+            nonce,
+        },
+    });
+    let (allowance_digest, allowance_effects) = env
+        .cluster
+        .execute_transaction_directly(&SignedTransaction::from_data_and_signer(
+            allowance_paid,
+            vec![key],
+        ))
+        .await
+        .unwrap();
+    env.cluster
+        .wait_for_tx_settlement(&[allowance_digest])
+        .await;
+    assert!(allowance_effects.status().is_ok());
+
+    let mut protected_gas_coin = None;
+    for (object_ref, owner) in allowance_effects.created() {
+        if owner != Owner::AddressOwner(spender) {
+            continue;
+        }
+        let object = env
+            .cluster
+            .get_object_from_fullnode_store(&object_ref.0)
+            .await
+            .expect("created gas coin should be available");
+        if sui_types::gas_coin::GasCoin::try_from(&object).is_ok() {
+            protected_gas_coin = Some(object_ref);
+            break;
+        }
+    }
+    let protected_gas_coin = protected_gas_coin.expect("allowance gas creates a protected coin");
+    (funder, protected_gas_coin)
+}
+
+#[sim_test]
+async fn test_simulate_resolves_omitted_budget_from_gas_allowance() {
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::{
+        GasPayment, Input, ProgrammableTransaction, SimulateTransactionRequest, Transaction,
+        TransactionKind,
+    };
+    use sui_types::crypto::{AccountKeyPair, get_key_pair};
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut env = TestEnvBuilder::new().build().await;
+    let (spender, _): (_, AccountKeyPair) = get_key_pair();
+    let (allowance_id, _) = issue_allowance(&mut env, spender, 100_000_000).await;
+
+    let mut transaction = Transaction::default();
+    transaction.kind = Some(TransactionKind::from({
+        let mut pt = ProgrammableTransaction::default();
+        let mut allowance = Input::default();
+        allowance.object_id = Some(allowance_id.to_canonical_string(true));
+        allowance.mutable = Some(true);
+        pt.inputs = vec![allowance];
+        pt
+    }));
+    transaction.sender = Some(spender.to_string());
+    transaction.gas_payment = Some({
+        let mut payment = GasPayment::default();
+        payment.owner = Some(allowance_id.to_canonical_string(true));
+        payment
+    });
+
+    let mut client = TransactionExecutionServiceClient::connect(env.cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    let response = client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+    let resolved: TransactionData = response
+        .transaction()
+        .transaction()
+        .bcs()
+        .deserialize()
+        .unwrap();
+
+    assert_eq!(resolved.gas_data().owner, allowance_id.into());
+    assert!(resolved.gas_data().payment.is_empty());
+    assert!(resolved.gas_data().budget <= 100_000_000);
+    assert!(response.transaction().effects().status().success());
+}
+
+// =============================================================================
+// Regression: an allowance-paid Coin<SUI> carries its funder's protected storage
+// deposit. At low RGP, mock-coin estimation must not omit the replacement deposit
+// when that coin is selected to pay ordinary gas.
+// =============================================================================
+
+#[sim_test]
+async fn test_omitted_budget_accounts_for_protected_selected_gas_coin() {
+    use rand::rngs::OsRng;
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::{
+        GasPayment, ProgrammableTransaction, SimulateTransactionRequest, Transaction,
+        TransactionKind,
+    };
+    use sui_swarm_config::genesis_config::ValidatorGenesisConfigBuilder;
+    use sui_types::{crypto::get_key_pair, gas_coin::GasCoin};
+
+    const LOW_REFERENCE_GAS_PRICE: u64 = 1;
+    const GAS_SAFE_OVERHEAD: u64 = 1_000;
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut env = TestEnvBuilder::new()
+        .with_test_cluster_builder_cb(Box::new(|builder| {
+            builder.with_validators(vec![
+                ValidatorGenesisConfigBuilder::new()
+                    .with_gas_price(LOW_REFERENCE_GAS_PRICE)
+                    .build(&mut OsRng),
+            ])
+        }))
+        .build()
+        .await;
+    assert_eq!(env.rgp, LOW_REFERENCE_GAS_PRICE);
+
+    let (spender, key): (_, AccountKeyPair) = get_key_pair();
+    let (allowance_id, initial_shared_version) =
+        issue_allowance(&mut env, spender, 100_000_000).await;
+    let mut client = TransactionExecutionServiceClient::connect(env.cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    for explicit_payment in [false, true] {
+        let (funder, protected_gas_coin) = create_protected_gas_coin(
+            &mut env,
+            spender,
+            &key,
+            (allowance_id, initial_shared_version),
+            5_000_000,
+            if explicit_payment { 1 } else { 0 },
+        )
+        .await;
+        let protected_coin = env
+            .cluster
+            .get_object_from_fullnode_store(&protected_gas_coin.0)
+            .await
+            .unwrap();
+        let initial_balance = GasCoin::try_from(&protected_coin).unwrap().value();
+        let marker = env
+            .cluster
+            .get_object_from_fullnode_store(&sui_types::gas_allowance::StorageRebate::child_id(
+                protected_gas_coin.0,
+            ))
+            .await
+            .expect("the allowance-paid coin must retain its protected deposit marker");
+        let protected_rebate: sui_types::gas_allowance::StorageRebate =
+            bcs::from_bytes(marker.data.try_as_move().unwrap().contents()).unwrap();
+        assert!(
+            protected_rebate.amount > GAS_SAFE_OVERHEAD,
+            "the protected replacement deposit must exceed the estimator's old safety buffer"
+        );
+
+        let mut transaction = Transaction::default();
+        transaction.kind = Some(TransactionKind::from(ProgrammableTransaction::default()));
+        transaction.sender = Some(spender.to_string());
+        transaction.gas_payment = Some({
+            let mut payment = GasPayment::default();
+            payment.owner = Some(spender.to_string());
+            if explicit_payment {
+                payment.objects = vec![object_ref_to_proto(&protected_gas_coin)];
+            }
+            payment
+        });
+        let response = client
+            .simulate_transaction(
+                SimulateTransactionRequest::new(transaction).with_do_gas_selection(true),
+            )
+            .await
+            .unwrap()
+            .into_inner();
+        let resolved: TransactionData = response
+            .transaction()
+            .transaction()
+            .bcs()
+            .deserialize()
+            .unwrap();
+        assert!(
+            response.transaction().effects().status().success(),
+            "simulation should complete with the returned budget (explicit_payment={explicit_payment})"
+        );
+        assert!(
+            resolved
+                .gas_data()
+                .payment
+                .iter()
+                .any(|payment| payment.0 == protected_gas_coin.0),
+            "gas selection must retain the protected payment coin"
+        );
+
+        let (execution_digest, effects) = env
+            .cluster
+            .execute_transaction_directly(&SignedTransaction::from_data_and_signer(
+                resolved.clone(),
+                vec![&key],
+            ))
+            .await
+            .unwrap();
+        env.cluster
+            .wait_for_tx_settlement(&[execution_digest])
+            .await;
+        assert!(effects.status().is_ok(), "{:?}", effects.status());
+        let final_balance = GasCoin::try_from(
+            &env.cluster
+                .get_object_from_fullnode_store(&protected_gas_coin.0)
+                .await
+                .unwrap(),
+        )
+        .unwrap()
+        .value();
+        let actual_payer_charge = initial_balance - final_balance;
+        assert!(
+            actual_payer_charge > GAS_SAFE_OVERHEAD,
+            "the selected protected coin should charge more than the old buffer"
+        );
+        assert!(
+            actual_payer_charge <= resolved.gas_data().budget,
+            "the returned budget must cover the payer's actual charge"
+        );
+        let claim_ref = effects
+            .created()
+            .into_iter()
+            .find(|(_, owner)| *owner == Owner::AddressOwner(funder))
+            .expect("the original funder must receive the protected refund claim")
+            .0;
+        let claim = env
+            .cluster
+            .get_object_from_fullnode_store(&claim_ref.0)
+            .await
+            .unwrap();
+        assert!(
+            claim
+                .data
+                .try_as_move()
+                .unwrap()
+                .type_()
+                .is(&sui_types::gas_allowance::StorageRebate::type_())
+        );
+        assert_eq!(
+            claim.storage_rebate,
+            protected_rebate.amount + marker.storage_rebate,
+            "the funder's claim must retain both protected deposits"
+        );
+    }
+}
+
+fn unresolved_split_gas_payment(
+    sender: SuiAddress,
+    payment: sui_types::base_types::ObjectRef,
+    price: u64,
+) -> sui_rpc::proto::sui::rpc::v2::Transaction {
+    const SPLIT_COUNT: u16 = 100;
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let amounts = (0..SPLIT_COUNT).map(|_| ptb.pure(1u64).unwrap()).collect();
+    let Argument::Result(split_index) = ptb.command(sui_types::transaction::Command::SplitCoins(
+        Argument::GasCoin,
+        amounts,
+    )) else {
+        panic!("SplitCoins should return a result");
+    };
+    let recipient = ptb.pure(SuiAddress::random_for_testing_only()).unwrap();
+    ptb.command(sui_types::transaction::Command::TransferObjects(
+        (0..SPLIT_COUNT)
+            .map(|result_index| Argument::NestedResult(split_index, result_index))
+            .collect(),
+        recipient,
+    ));
+
+    let mut unresolved = sui_rpc::proto::sui::rpc::v2::Transaction::from(
+        TransactionData::new_programmable(sender, vec![payment], ptb.finish(), MIST_PER_SUI, price),
+    );
+    unresolved.bcs = None;
+    unresolved.digest = None;
+    unresolved.expiration = None;
+    unresolved.gas_payment.as_mut().unwrap().budget = None;
+    unresolved
+}
+
+fn unresolved_noop_gas_payment(sender: SuiAddress) -> sui_rpc::proto::sui::rpc::v2::Transaction {
+    use sui_rpc::proto::sui::rpc::v2::{
+        GasPayment, ProgrammableTransaction, Transaction, TransactionKind,
+    };
+
+    let mut transaction = Transaction::default();
+    transaction.kind = Some(TransactionKind::from(ProgrammableTransaction::default()));
+    transaction.sender = Some(sender.to_string());
+    transaction.gas_payment = Some({
+        let mut payment = GasPayment::default();
+        payment.owner = Some(sender.to_string());
+        payment
+    });
+    transaction
+}
+
+async fn fund_explicit_gas_payment(
+    test_env: &mut TestEnv,
+    amount: u64,
+) -> (SuiAddress, sui_types::base_types::ObjectRef) {
+    let funder = test_env.get_sender(0);
+    let sender = test_env.get_sender(1);
+    let funding = test_env
+        .tx_builder_with_gas(funder, test_env.get_gas_for_sender(funder)[0])
+        .transfer_sui(Some(amount), sender)
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(funding).await.unwrap();
+    let payment = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| *owner == sui_types::object::Owner::AddressOwner(sender))
+        .expect("funding transfer should create the explicit payment coin")
+        .0;
+    (sender, payment)
+}
+
+#[sim_test]
+async fn test_omitted_budget_explicit_payment_preserves_gas_coin_spending() {
+    use sui_rpc::proto::sui::rpc::v2::{
+        SimulateTransactionRequest,
+        transaction_execution_service_client::TransactionExecutionServiceClient,
+    };
+
+    let mut test_env = TestEnvBuilder::new().build().await;
+    let (sender, payment) = fund_explicit_gas_payment(&mut test_env, MIST_PER_SUI).await;
+    let request = unresolved_split_gas_payment(sender, payment, test_env.rgp);
+
+    let mut client =
+        TransactionExecutionServiceClient::connect(test_env.cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+    let response = client
+        .simulate_transaction(SimulateTransactionRequest::new(request).with_do_gas_selection(true))
+        .await
+        .expect("estimation must complete the GasCoin split path")
+        .into_inner();
+    let resolved: TransactionData = response
+        .transaction()
+        .transaction()
+        .bcs()
+        .deserialize()
+        .unwrap();
+    assert!(response.transaction().effects().status().success());
+    assert_eq!(
+        resolved.gas_data().payment,
+        vec![payment],
+        "estimation-only funding must not appear in the resolved transaction"
+    );
+    assert!(
+        resolved.gas_data().budget < MIST_PER_SUI,
+        "the resolved budget must leave the selected coin spendable"
+    );
+
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(&resolved)
+        .await
+        .expect("resolved transaction should execute");
+    assert!(
+        effects.status().is_ok(),
+        "resolved transaction must retain enough GasCoin for its splits: {:?}",
+        effects.status()
+    );
+}
+
+#[sim_test]
+async fn test_underfunded_explicit_payment_quotes_complete_execution() {
+    use prost::Message;
+    use sui_rpc::proto::google::rpc::{ErrorInfo, Status};
+    use sui_rpc::proto::sui::rpc::v2::{
+        ErrorReason, SimulateTransactionRequest,
+        transaction_execution_service_client::TransactionExecutionServiceClient,
+    };
+
+    let mut test_env = TestEnvBuilder::new().build().await;
+    let (sender, payment) = fund_explicit_gas_payment(&mut test_env, MIST_PER_SUI).await;
+    let funded_request = unresolved_split_gas_payment(sender, payment, test_env.rgp);
+    let mut client =
+        TransactionExecutionServiceClient::connect(test_env.cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+    let funded = client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(funded_request).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(funded.transaction().effects().status().success());
+    let funded_transaction: TransactionData = funded
+        .transaction()
+        .transaction()
+        .bcs()
+        .deserialize()
+        .unwrap();
+
+    test_env.update_all_gas().await;
+    const AVAILABLE: u64 = 10_000_000;
+    let (sender, payment) = fund_explicit_gas_payment(&mut test_env, AVAILABLE).await;
+    let request = unresolved_split_gas_payment(sender, payment, test_env.rgp);
+    let error = client
+        .simulate_transaction(SimulateTransactionRequest::new(request).with_do_gas_selection(true))
+        .await
+        .expect_err("underfunded payment must quote the complete execution cost");
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+
+    let details = Status::decode(error.details()).unwrap().details;
+    let info = details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("expected an insufficient-funding quote: {error}"));
+    assert_eq!(
+        info.reason,
+        ErrorReason::InsufficientGasBalance.as_str_name()
+    );
+    assert_eq!(info.domain, ErrorReason::DOMAIN);
+    assert!(!info.metadata.contains_key("owner"));
+    assert!(!info.metadata.contains_key("coinBalance"));
+    assert!(!info.metadata.contains_key("addressBalance"));
+    let available: u64 = info.metadata["selectedPaymentBalance"].parse().unwrap();
+    let required: u64 = info.metadata["requiredBudget"].parse().unwrap();
+    assert_eq!(available, AVAILABLE);
+    assert!(required > AVAILABLE);
+    assert_eq!(
+        required,
+        funded_transaction.gas_budget(),
+        "the quote must include all split outputs, not just work before out-of-gas"
+    );
+}
+
+#[sim_test]
+async fn test_underfunded_protected_selected_payment_has_structured_quote() {
+    use prost::Message;
+    use sui_rpc::proto::google::rpc::{ErrorInfo, Status};
+    use sui_rpc::proto::sui::rpc::v2::{
+        ErrorReason, SimulateTransactionRequest,
+        transaction_execution_service_client::TransactionExecutionServiceClient,
+    };
+    use sui_types::crypto::get_key_pair;
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut env = TestEnvBuilder::new().build().await;
+    let (spender, key): (_, AccountKeyPair) = get_key_pair();
+    let mut client = TransactionExecutionServiceClient::connect(env.cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mock_quote = client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_noop_gas_payment(spender))
+                .with_do_gas_selection(true),
+        )
+        .await
+        .expect_err("an unfunded account should expose the mock-gas budget");
+    let mock_details = Status::decode(mock_quote.details()).unwrap().details;
+    let mock_info = mock_details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("expected an insufficient-funding quote: {mock_quote}"));
+    assert_eq!(
+        mock_info.reason,
+        ErrorReason::InsufficientGasBalance.as_str_name()
+    );
+    let mock_budget: u64 = mock_info.metadata["requiredBudget"].parse().unwrap();
+
+    let allowance = issue_allowance(&mut env, spender, 100_000_000).await;
+    create_protected_gas_coin(&mut env, spender, &key, allowance, mock_budget, 0).await;
+
+    let error = client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_noop_gas_payment(spender))
+                .with_do_gas_selection(true),
+        )
+        .await
+        .expect_err("the protected payment should be short after re-estimation");
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    let details = Status::decode(error.details()).unwrap().details;
+    let info = details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("expected an insufficient-funding quote: {error}"));
+    assert_eq!(
+        info.reason,
+        ErrorReason::InsufficientGasBalance.as_str_name()
+    );
+    assert_eq!(info.domain, ErrorReason::DOMAIN);
+    assert!(!info.metadata.contains_key("owner"));
+    assert!(!info.metadata.contains_key("coinBalance"));
+    assert!(!info.metadata.contains_key("addressBalance"));
+    let available: u64 = info.metadata["selectedPaymentBalance"].parse().unwrap();
+    let required: u64 = info.metadata["requiredBudget"].parse().unwrap();
+    assert_eq!(available, mock_budget);
+    assert!(
+        required > available,
+        "protected payment re-estimation must exceed the mock-gas estimate"
+    );
+}
+
+#[sim_test]
+async fn test_underfunded_explicit_payment_does_not_quote_a_semantic_failure() {
+    use prost::Message;
+    use sui_rpc::proto::google::rpc::{ErrorInfo, Status};
+    use sui_rpc::proto::sui::rpc::v2::{
+        ErrorReason, SimulateTransactionRequest,
+        execution_error::ExecutionErrorKind as ProtoExecutionErrorKind,
+        transaction_execution_service_client::TransactionExecutionServiceClient,
+    };
+
+    let mut env = TestEnvBuilder::new().build().await;
+    let (sender, payment) = fund_explicit_gas_payment(&mut env, 1).await;
+    let request = unresolved_split_gas_payment(sender, payment, env.rgp);
+    let mut client = TransactionExecutionServiceClient::connect(env.cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    let error = client
+        .simulate_transaction(SimulateTransactionRequest::new(request).with_do_gas_selection(true))
+        .await
+        .expect_err("the selected coin cannot fund the split commands");
+    let details = Status::decode(error.details()).unwrap().details;
+    let info = details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("expected execution failure, not a funding quote: {error}"));
+    assert_eq!(
+        info.reason,
+        ErrorReason::TransactionExecutionFailed.as_str_name()
+    );
+    assert_eq!(
+        info.metadata["kind"],
+        ProtoExecutionErrorKind::InsufficientCoinBalance.as_str_name()
+    );
+}
+
+#[sim_test]
+async fn test_storage_rebate_markers_are_hidden_from_dynamic_field_listing() {
+    use move_core_types::identifier::Identifier;
+    use std::path::PathBuf;
+    use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsRequest;
+    use sui_rpc::proto::sui::rpc::v2::state_service_client::StateServiceClient;
+    use sui_types::{
+        crypto::{AccountKeyPair, get_key_pair},
+        object::Owner,
+        transaction::{
+            CallArg, GasData, ObjectArg, ProgrammableTransaction, SharedObjectMutability,
+            TransactionDataV1, TransactionExpiration, TransactionKind,
+        },
+    };
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let mut env = TestEnvBuilder::new().build().await;
+    let (spender, key): (_, AccountKeyPair) = get_key_pair();
+    let (allowance_id, initial_shared_version) =
+        issue_allowance(&mut env, spender, 500_000_000).await;
+    let package = env
+        .setup_test_package(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/move_test_code"))
+        .await;
+
+    let mut pt = ProgrammableTransactionBuilder::new();
+    let value = pt.pure(1u64).unwrap();
+    let data = pt.pure(vec![7u8; 16]).unwrap();
+    pt.programmable_move_call(
+        package,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("create_object_with_large_storage").unwrap(),
+        vec![],
+        vec![value, data],
+    );
+    let mut pt: ProgrammableTransaction = pt.finish();
+    pt.inputs.push(CallArg::Object(ObjectArg::SharedObject {
+        id: allowance_id,
+        initial_shared_version,
+        mutability: SharedObjectMutability::Mutable,
+    }));
+    let transaction = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender: spender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: allowance_id.into(),
+            price: env.rgp,
+            budget: 20_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: env.chain_id,
+            nonce: 0,
+        },
+    });
+    let signed = sui_types::transaction::Transaction::from_data_and_signer(transaction, vec![&key]);
+    let (digest, effects) = env
+        .cluster
+        .execute_transaction_directly(&signed)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    let parent = effects
+        .created()
+        .into_iter()
+        .find_map(|(object, owner)| match owner {
+            Owner::AddressOwner(owner) if owner == spender => Some(object.0),
+            _ => None,
+        })
+        .unwrap();
+    let marker = sui_types::gas_allowance::StorageRebate::child_id(parent);
+    assert!(
+        env.cluster
+            .get_object_from_fullnode_store(&marker)
+            .await
+            .is_some()
+    );
+
+    let mut client = StateServiceClient::connect(env.cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    let full = client
+        .list_dynamic_fields(
+            ListDynamicFieldsRequest::default()
+                .with_parent(parent.to_canonical_string(true))
+                .with_page_size(1),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(full.dynamic_fields.is_empty());
+    assert!(full.next_page_token.is_none());
+
+    let id_only = client
+        .list_dynamic_fields(
+            ListDynamicFieldsRequest::default()
+                .with_parent(parent.to_canonical_string(true))
+                .with_read_mask(prost_types::FieldMask {
+                    paths: vec!["field_id".to_owned()],
+                }),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(id_only.dynamic_fields.is_empty());
+    assert!(id_only.next_page_token.is_none());
 }

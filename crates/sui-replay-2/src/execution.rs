@@ -34,7 +34,10 @@ use sui_types::{
     digests::{TransactionDigest, get_mainnet_chain_identifier, get_testnet_chain_identifier},
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiErrorKind, SuiResult},
-    execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
+    execution_params::{
+        ExecutionOrEarlyError, FundsWithdrawStatus, congested_gas_allowance_from_effects,
+        get_early_execution_error,
+    },
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::ExecutionMetrics,
@@ -42,8 +45,8 @@ use sui_types::{
     storage::{BackingPackageStore, PackageObject, ParentSync, RuntimeObjectResolver},
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::{
-        CallArg, CheckedInputObjects, ObjectArg, TransactionData, TransactionDataAPI,
-        TransactionKind,
+        CallArg, CheckedInputObjects, GasPaymentMode, ObjectArg, TransactionData,
+        TransactionDataAPI, TransactionKind,
     },
 };
 use tracing::{debug, debug_span, trace};
@@ -127,10 +130,24 @@ pub fn execute_transaction_to_effects(
     };
     let input_objects = CheckedInputObjects::new_for_replay(input_objects);
     // TODO(address-balances): Get withdraw status from effects.
+    let congested_gas_allowance = match txn_data.gas_payment_mode() {
+        GasPaymentMode::Allowance(id) if protocol_config.enable_gas_allowances() => {
+            congested_gas_allowance_from_effects(
+                id,
+                expected_effects.status(),
+                expected_effects
+                    .accessed_consensus_objects()
+                    .into_iter()
+                    .map(|input| input.id_and_version()),
+            )
+        }
+        _ => None,
+    };
     let early_execution_error = get_early_execution_error(
         &digest,
         &input_objects,
         &config_certificate_deny_set,
+        congested_gas_allowance,
         // TODO(address-balances): Support balance withdraw status for replay
         &FundsWithdrawStatus::MaybeSufficient,
     );

@@ -259,7 +259,11 @@ async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
 
     let executor = ForkedTransactionExecutor::new(harness.context.clone());
     let result = tokio::task::spawn_blocking(move || {
-        executor.simulate_transaction(tx_data, TransactionChecks::Enabled, false)
+        executor.simulate_transaction(
+            tx_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::NoMock,
+        )
     })
     .await
     .expect("simulate_transaction task should complete")
@@ -290,7 +294,11 @@ async fn test_simulate_transaction_supports_mock_gas() {
 
     let executor = ForkedTransactionExecutor::new(harness.context.clone());
     let result = tokio::task::spawn_blocking(move || {
-        executor.simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+        executor.simulate_transaction(
+            tx_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
     })
     .await
     .expect("simulate_transaction task should complete")

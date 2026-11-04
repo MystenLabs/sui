@@ -2169,7 +2169,11 @@ async fn test_fake_coin_reservation_dry_run_does_not_panic() {
         .sui_node
         .with(|node| node.state().clone());
     let join = tokio::task::spawn(async move {
-        state.simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+        state.simulate_transaction(
+            tx_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
     });
 
     match join.await {
@@ -2277,7 +2281,11 @@ async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
         .sui_node
         .with(|node| node.state().clone());
     let join = tokio::task::spawn(async move {
-        state.simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+        state.simulate_transaction(
+            tx_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
     });
 
     match join.await {

@@ -40,10 +40,10 @@ use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NodeEntryPoint {
     Validator, // submit_and_execute() -> try_execute_executable_for_test() -> try_execute_immediately()
-    SimulateFullChecks, // simulate_transaction(TransactionChecks::Enabled, mock_gas=false)
-    SimulateFullChecksMockGas, // simulate_transaction(TransactionChecks::Enabled, mock_gas=true)
-    SimulateSkipChecks, // simulate_transaction(TransactionChecks::Disabled, mock_gas=false)
-    SimulateSkipChecksMockGas, // simulate_transaction(TransactionChecks::Disabled, mock_gas=true)
+    SimulateFullChecks,
+    SimulateFullChecksMockGas,
+    SimulateSkipChecks,
+    SimulateSkipChecksMockGas,
 }
 
 impl fmt::Display for NodeEntryPoint {
@@ -206,22 +206,22 @@ async fn run_all_entry_points(env: &TestEnv, data: TransactionData) -> Vec<Entry
         (
             NodeEntryPoint::SimulateFullChecks,
             TransactionChecks::Enabled,
-            false,
+            sui_types::transaction_executor::SimulationGasPayment::NoMock,
         ),
         (
             NodeEntryPoint::SimulateFullChecksMockGas,
             TransactionChecks::Enabled,
-            true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         ),
         (
             NodeEntryPoint::SimulateSkipChecks,
             TransactionChecks::Disabled,
-            false,
+            sui_types::transaction_executor::SimulationGasPayment::NoMock,
         ),
         (
             NodeEntryPoint::SimulateSkipChecksMockGas,
             TransactionChecks::Disabled,
-            true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         ),
     ] {
         let mapped = match env
@@ -300,7 +300,11 @@ async fn test_simulate_transaction_returns_objects_with_real_gas() {
 
     let result = env
         .fullnode
-        .simulate_transaction(data.clone(), TransactionChecks::Enabled, false)
+        .simulate_transaction(
+            data.clone(),
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::NoMock,
+        )
         .unwrap();
     assert!(result.effects.status().is_ok());
     assert_eq!(result.mock_gas_id, None);
@@ -325,9 +329,11 @@ async fn test_simulate_transaction_without_payment_fails_without_mock_gas() {
     let env = setup_test_env().await;
     let mut no_payment = build_transfer(&env, TEST_GAS_BUDGET, env.rgp);
     no_payment.gas_data_mut().payment.clear();
-    let without_mock =
-        env.fullnode
-            .simulate_transaction(no_payment, TransactionChecks::Enabled, false);
+    let without_mock = env.fullnode.simulate_transaction(
+        no_payment,
+        TransactionChecks::Enabled,
+        sui_types::transaction_executor::SimulationGasPayment::NoMock,
+    );
     assert_simulate_err(
         without_mock,
         |e| {
@@ -349,7 +355,11 @@ async fn test_simulate_transaction_with_mock_gas_returns_mock_object() {
     no_payment.gas_data_mut().payment.clear();
     let with_mock = env
         .fullnode
-        .simulate_transaction(no_payment, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            no_payment,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     assert!(with_mock.effects.status().is_ok());
     assert_eq!(with_mock.mock_gas_id, Some(ObjectID::MAX));
@@ -386,7 +396,11 @@ async fn test_simulate_transaction_returns_events_when_effects_have_event_digest
 
     let event_result = env
         .fullnode
-        .simulate_transaction(event_tx, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            event_tx,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     assert!(event_result.effects.status().is_ok());
     assert!(event_result.effects.events_digest().is_some());
@@ -416,7 +430,11 @@ async fn test_simulate_transaction_preserves_command_outputs() {
 
     let result = env
         .fullnode
-        .simulate_transaction(data, TransactionChecks::Disabled, true)
+        .simulate_transaction(
+            data,
+            TransactionChecks::Disabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     assert!(result.effects.status().is_ok());
 
@@ -452,9 +470,11 @@ async fn test_simulate_transaction_guard_errors() {
     let env = setup_test_env().await;
     let data = build_transfer(&env, TEST_GAS_BUDGET, env.rgp);
 
-    let validator_result =
-        env.validator
-            .simulate_transaction(data, TransactionChecks::Enabled, false);
+    let validator_result = env.validator.simulate_transaction(
+        data,
+        TransactionChecks::Enabled,
+        sui_types::transaction_executor::SimulationGasPayment::NoMock,
+    );
     assert_simulate_err(
         validator_result,
         |e| {
@@ -474,9 +494,11 @@ async fn test_simulate_transaction_guard_errors() {
         TEST_GAS_BUDGET,
         env.rgp,
     );
-    let system_result =
-        env.fullnode
-            .simulate_transaction(system_transaction, TransactionChecks::Enabled, false);
+    let system_result = env.fullnode.simulate_transaction(
+        system_transaction,
+        TransactionChecks::Enabled,
+        sui_types::transaction_executor::SimulationGasPayment::NoMock,
+    );
     assert_simulate_err(
         system_result,
         |e| {
@@ -527,7 +549,11 @@ async fn test_simulate_transaction_dev_inspect_disabled_guard() {
         fullnode.reference_gas_price_for_testing().unwrap(),
     );
 
-    let disabled = fullnode.simulate_transaction(data.clone(), TransactionChecks::Disabled, false);
+    let disabled = fullnode.simulate_transaction(
+        data.clone(),
+        TransactionChecks::Disabled,
+        sui_types::transaction_executor::SimulationGasPayment::NoMock,
+    );
     assert_simulate_err(
         disabled,
         |e| {
@@ -541,7 +567,11 @@ async fn test_simulate_transaction_dev_inspect_disabled_guard() {
     );
 
     let enabled = fullnode
-        .simulate_transaction(data, TransactionChecks::Enabled, false)
+        .simulate_transaction(
+            data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::NoMock,
+        )
         .unwrap();
     assert!(enabled.effects.status().is_ok());
 }
@@ -815,7 +845,11 @@ async fn test_gas_coin_smash_with_pure_arg() {
     for &entry_point in DEV_INSPECT_ENTRY_POINTS {
         let result = match entry_point {
             NodeEntryPoint::SimulateSkipChecks | NodeEntryPoint::SimulateSkipChecksMockGas => {
-                let mock_gas = entry_point == NodeEntryPoint::SimulateSkipChecksMockGas;
+                let mock_gas = if entry_point == NodeEntryPoint::SimulateSkipChecksMockGas {
+                    sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty
+                } else {
+                    sui_types::transaction_executor::SimulationGasPayment::NoMock
+                };
                 let mut data = TransactionData::new(
                     TransactionKind::programmable(pt.clone()),
                     env.sender,

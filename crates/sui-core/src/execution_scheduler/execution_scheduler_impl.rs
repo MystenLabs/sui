@@ -1507,8 +1507,8 @@ mod test {
         assert!(rx_ready_certificates.try_recv().is_err());
     }
 
-    // Tests transaction cancellation logic in execution scheduler. Mainly tests that for cancelled transaction,
-    // execution scheduler only waits for all non-shared objects to be available before outputting the transaction.
+    // Tests transaction cancellation logic in execution scheduler. A cancelled shared input is
+    // immediately available, while a normally assigned shared input still gates execution.
     #[sim_test]
     async fn execution_scheduler_with_cancelled_transactions() {
         // Initialize an authority state, with gas objects and 3 shared objects.
@@ -1560,13 +1560,14 @@ mod test {
                 CallArg::Object(owned_object_arg),
             ],
         );
+        let normal_shared_version = initial_shared_version_1.next();
         let assigned_versions = vec![
             (
                 (
                     shared_object_1.id(),
                     shared_object_1.owner().start_version().unwrap(),
                 ),
-                SequenceNumber::CANCELLED_READ,
+                normal_shared_version,
             ),
             (
                 (
@@ -1605,7 +1606,21 @@ mod test {
             .get_cache_writer()
             .write_object_entry_for_test(new_owned_object);
 
-        // scheduler should output the transaction as soon as the owned object is available.
+        // The normally assigned shared object still blocks execution.
+        sleep(Duration::from_secs(1)).await;
+        assert!(rx_ready_certificates.try_recv().is_err());
+
+        let mut new_shared_object = shared_object_1.clone();
+        new_shared_object
+            .data
+            .try_as_move_mut()
+            .unwrap()
+            .increment_version_to(normal_shared_version);
+        state
+            .get_cache_writer()
+            .write_object_entry_for_test(new_shared_object);
+
+        // Scheduler output is released once the normal shared input becomes available.
         let available_txn = rx_ready_certificates.recv().await.unwrap().certificate;
         assert_eq!(available_txn.digest(), cancelled_transaction.digest());
 

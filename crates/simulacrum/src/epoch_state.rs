@@ -38,7 +38,7 @@ use sui_types::{
         InputObjectKind, InputObjects, ReceivingObjects, TransactionData, TransactionDataAPI,
         TxValidityCheckContext, VerifiedTransaction,
     },
-    transaction_executor::{SimulateTransactionResult, TransactionChecks},
+    transaction_executor::{SimulateTransactionResult, SimulationGasPayment, TransactionChecks},
 };
 
 use crate::SimulatorStore;
@@ -241,7 +241,7 @@ impl EpochState {
         verifier_signing_config: &VerifierSigningConfig,
         transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
+        gas_payment: SimulationGasPayment,
     ) -> SuiResult<SimulateTransactionResult> {
         let input_loader = SimulatorInputLoader(store);
         let account_funds_read = SimulatorAccountFundsRead(store);
@@ -251,7 +251,7 @@ impl EpochState {
         simulate_transaction(
             transaction,
             checks,
-            allow_mock_gas_coin,
+            gas_payment,
             Some(self.reference_gas_price()),
             TxValidityCheckContext {
                 config: &self.protocol_config,

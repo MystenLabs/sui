@@ -201,10 +201,10 @@ impl InvariantChecker {
     /// previous epoch.  Specifically, this checks two key invariants about storage
     /// fees and storage rebate:
     ///
-    /// 1. all SUI in storage rebate fields of input objects should flow either to the transaction
-    ///    storage rebate, or the transaction non-refundable storage rebate
-    /// 2. all SUI charged for storage should flow into the storage rebate field of some output
-    ///    object
+    /// Protected deposits explicitly carried between inputs and outputs must balance. For the
+    /// remaining deposits:
+    /// 1. input rebates flow to the transaction storage rebate or non-refundable storage rebate
+    /// 2. storage charges flow to output storage rebates
     ///
     /// This function is intended to be called *after* we have charged for
     /// gas + applied the storage rebate to the gas object, but *before* we
@@ -222,13 +222,58 @@ impl InvariantChecker {
         let mut total_input_rebate = 0;
         // total amount of SUI in storage rebate of output objects
         let mut total_output_rebate = 0;
-        for (_id, input, output) in get_modified_objects(store) {
-            if let Some(input) = input {
+        let mut carried_input_rebate = 0;
+        let mut carried_output_rebate = 0;
+        let mut carried_inputs = 0;
+        let mut carried_outputs = 0;
+        for (id, input, output) in get_modified_objects(store) {
+            if let Some(rebate) = store.carried_rebate_inputs.get(&id) {
+                let Some(input) = input else {
+                    return Err(ExecutionError::invariant_violation(format!(
+                        "Carried storage rebate source {id} was not an input"
+                    )));
+                };
+                let Some(metered_rebate) = input.storage_rebate.checked_sub(*rebate) else {
+                    return Err(ExecutionError::invariant_violation(format!(
+                        "Carried storage rebate source {id} exceeds its deposit"
+                    )));
+                };
+                total_input_rebate += metered_rebate;
+                carried_input_rebate += *rebate;
+                carried_inputs += 1;
+            } else if let Some(input) = input {
                 total_input_rebate += input.storage_rebate;
             }
-            if let Some(object) = output {
-                total_output_rebate += object.storage_rebate;
+            if let Some(rebate) = store.carried_rebate_outputs.get(&id) {
+                let Some(output) = output else {
+                    return Err(ExecutionError::invariant_violation(format!(
+                        "Carried storage rebate output {id} was not written"
+                    )));
+                };
+                let Some(metered_rebate) = output.storage_rebate.checked_sub(*rebate) else {
+                    return Err(ExecutionError::invariant_violation(format!(
+                        "Carried storage rebate output {id} exceeds its deposit"
+                    )));
+                };
+                total_output_rebate += metered_rebate;
+                carried_output_rebate += *rebate;
+                carried_outputs += 1;
+            } else if let Some(output) = output {
+                total_output_rebate += output.storage_rebate;
             }
+        }
+        if carried_inputs != store.carried_rebate_inputs.len()
+            || carried_outputs != store.carried_rebate_outputs.len()
+        {
+            return Err(ExecutionError::invariant_violation(
+                "Carried storage rebate did not correspond to a transaction object",
+            ));
+        }
+        if carried_input_rebate != carried_output_rebate {
+            return Err(ExecutionError::invariant_violation(format!(
+                "Carried storage rebate input {carried_input_rebate} did not equal output \
+                 {carried_output_rebate}"
+            )));
         }
 
         if gas_summary.storage_cost == 0 {
@@ -380,6 +425,12 @@ impl InvariantChecker {
                     actual >= 0,
                     "PTB-emitted Balance accumulator deposits do not cover the runtime \
                     withdrawal at address {address} for type {type_tag}: net change {actual}"
+                );
+            } else if let Some(refund) = store.storage_refunds.get(address) {
+                assert_invariant!(
+                    type_tag == &Balance::type_tag(sui_types::gas_coin::GAS::type_tag())
+                        && actual == i128::from(*refund),
+                    "Runtime storage refund does not match its attributed deposit"
                 );
             } else {
                 invariant_violation!(

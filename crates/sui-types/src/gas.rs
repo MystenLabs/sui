@@ -142,6 +142,42 @@ pub mod checked {
                 Self::V2(SuiGasStatusV2::new_unmetered())
             }
         }
+        /// Finds the least budget for which the active gas model accepts a storage-read charge.
+        /// This deliberately asks the meter rather than reproducing its pricing or rounding rules.
+        pub fn minimum_gas_budget_for_storage_read(
+            size: usize,
+            gas_price: u64,
+            reference_gas_price: u64,
+            config: &ProtocolConfig,
+        ) -> SuiResult<u64> {
+            if size == 0 {
+                return Ok(0);
+            }
+            let can_charge = |budget| -> SuiResult<bool> {
+                let mut status = Self::new(budget, gas_price, reference_gas_price, config)?;
+                Ok(status.charge_storage_read(size).is_ok())
+            };
+            let mut lower = 0;
+            let mut upper = config.max_tx_gas();
+            if !can_charge(upper)? {
+                return Err(UserInputError::GasBudgetTooLow {
+                    gas_budget: upper,
+                    min_budget: upper.saturating_add(1),
+                }
+                .into());
+            }
+            while lower < upper {
+                let middle = lower + (upper - lower) / 2;
+                if can_charge(middle)? {
+                    upper = middle;
+                } else {
+                    lower = middle
+                        .checked_add(1)
+                        .expect("upper bound guarantees a representable lookup budget");
+                }
+            }
+            Ok(lower)
+        }
     }
 
     /// Summary of the charges in a transaction.
@@ -180,8 +216,8 @@ pub mod checked {
         #[schemars(with = "BigInt<u64>")]
         #[serde_as(as = "Readable<BigInt<u64>, _>")]
         pub storage_cost: u64,
-        /// The amount of storage cost refunded to the user for all objects deleted or mutated in the
-        /// transaction.
+        /// The amount of storage rebate released to the gas payer for objects deleted or mutated
+        /// in the transaction. Protected deposits owed to another funder remain in storage claims.
         #[schemars(with = "BigInt<u64>")]
         #[serde_as(as = "Readable<BigInt<u64>, _>")]
         pub storage_rebate: u64,

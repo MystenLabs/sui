@@ -45,9 +45,7 @@ use std::fs::OpenOptions;
 use std::path::Path;
 use std::{fs, io};
 use sui::{
-    client_commands::{
-        SuiClientCommandResult, SuiClientCommands, SwitchResponse, estimate_gas_budget,
-    },
+    client_commands::{SuiClientCommandResult, SuiClientCommands, SwitchResponse},
     sui_commands::{SuiCommand, parse_host_port},
 };
 use sui_config::{
@@ -4890,16 +4888,11 @@ async fn test_transfer_serialized_kind() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_gas_estimation() -> Result<(), anyhow::Error> {
-    let (mut test_cluster, client, rgp, objects, _, addresses) = test_cluster_helper().await;
+    let (mut test_cluster, _, _, objects, _, addresses) = test_cluster_helper().await;
     let object_id1 = objects[0];
     let address2 = addresses[0];
     let context = &mut test_cluster.wallet;
     let amount = 1000;
-    let sender = context.active_address().unwrap();
-    let tx_builder = client.transaction_builder();
-    let tx_kind = tx_builder.transfer_sui_tx_kind(address2, Some(amount));
-    let gas_estimate = estimate_gas_budget(context, sender, tx_kind, rgp, vec![], None).await;
-    assert!(gas_estimate.is_ok());
 
     let transfer_sui_cmd = SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(address2),
@@ -4915,10 +4908,441 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
         assert!(response.effects.status().is_ok());
         let gas_used = response.effects.gas_object().unwrap().0.0;
         assert_eq!(gas_used, object_id1);
-        assert!(response.effects.gas_cost_summary().gas_used() <= gas_estimate.unwrap());
     } else {
         panic!("TransferSui test failed");
     }
+    Ok(())
+}
+
+#[cfg(not(msim))]
+async fn issue_cli_gas_allowance(
+    env: &mut test_cluster::addr_balance_test_env::TestEnv,
+    spender: SuiAddress,
+) -> Result<(ObjectID, sui_types::base_types::SequenceNumber), anyhow::Error> {
+    use move_core_types::identifier::Identifier;
+    use sui_types::{
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        transaction::{Argument, Command},
+    };
+
+    let funder = env.get_sender(0);
+    let mut issue = ProgrammableTransactionBuilder::new();
+    let amount = issue.pure(500_000_000u64)?;
+    let payment = issue.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
+    let spender = issue.pure(spender)?;
+    issue.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("gas_allowance")?,
+        Identifier::new("new")?,
+        vec![],
+        vec![payment, spender],
+    );
+    let issue = TransactionData::new_programmable(
+        funder,
+        vec![env.get_gas_for_sender(funder)[0]],
+        issue.finish(),
+        20_000_000,
+        env.rgp,
+    );
+    let (_, effects) = env.exec_tx_directly(issue).await?;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    Ok(effects
+        .created()
+        .into_iter()
+        .find_map(|(reference, owner)| match owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => Some((reference.0, initial_shared_version)),
+            _ => None,
+        })
+        .unwrap())
+}
+
+#[cfg(not(msim))]
+#[tokio::test]
+async fn test_cli_allowance_simulations_resolve_gas() -> Result<(), anyhow::Error> {
+    use sui_json_rpc_types::{DryRunTransactionBlockResponse, SuiTransactionBlockEffectsAPI};
+    use sui_types::{
+        effects::TransactionEffects,
+        gas_allowance::GasAllowance,
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        transaction::{Argument, Command, ObjectArg, SharedObjectMutability},
+    };
+    use test_cluster::addr_balance_test_env::TestEnvBuilder;
+
+    let mut env = TestEnvBuilder::new().build().await;
+    let funder = env.get_sender(0);
+    let spender = env.get_sender(1);
+    let (allowance, initial_shared_version) = issue_cli_gas_allowance(&mut env, spender).await?;
+
+    let mut drain = ProgrammableTransactionBuilder::new();
+    let recipient = drain.pure(funder)?;
+    drain.command(Command::TransferObjects(vec![Argument::GasCoin], recipient));
+    let drain = TransactionData::new_programmable(
+        spender,
+        env.get_gas_for_sender(spender),
+        drain.finish(),
+        20_000_000,
+        env.rgp,
+    );
+    let (_, effects) = env.exec_tx_directly(drain).await?;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert!(env.cluster.wallet.gas_objects(spender).await?.is_empty());
+    assert_eq!(env.get_sui_balance_ab(spender), 0);
+
+    let allowance_before = env
+        .cluster
+        .get_object_from_fullnode_store(&allowance)
+        .await
+        .unwrap();
+    let allowance_balance = GasAllowance::from_object(&allowance_before)?
+        .balance
+        .value();
+    let max_gas_budget =
+        sui::client_commands::max_gas_budget(&env.cluster.wallet.grpc_client()?).await?;
+    assert!(
+        allowance_balance < max_gas_budget,
+        "test allowance must be smaller than the protocol maximum"
+    );
+    let allowance_before = allowance_before.compute_object_reference();
+    let funder_before = env.get_sui_balance(funder).await;
+    let spender_before = env.get_sui_balance(spender).await;
+
+    let mut pt = ProgrammableTransactionBuilder::new();
+    pt.obj(ObjectArg::SharedObject {
+        id: allowance,
+        initial_shared_version,
+        mutability: SharedObjectMutability::Immutable,
+    })?;
+    let tx_kind = TransactionKind::ProgrammableTransaction(pt.finish());
+    let tx_bytes = Base64::encode(bcs::to_bytes(&tx_kind)?);
+
+    let dry_run = tokio::process::Command::new(env!("CARGO_BIN_EXE_sui"))
+        .arg("client")
+        .arg("--client.config")
+        .arg(env.cluster.wallet.config.path())
+        .args(["--json", "serialized-tx-kind"])
+        .arg(&tx_bytes)
+        .args(["--gas-sponsor"])
+        .arg(allowance.to_string())
+        .args(["--gas-budget", "20000000", "--sender"])
+        .arg(spender.to_string())
+        .arg("--dry-run")
+        .output()
+        .await?;
+    assert!(
+        dry_run.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&dry_run.stdout),
+        String::from_utf8_lossy(&dry_run.stderr),
+    );
+    let dry_run: DryRunTransactionBlockResponse = serde_json::from_slice(&dry_run.stdout)?;
+    assert!(
+        dry_run.effects.status().is_ok(),
+        "{:?}",
+        dry_run.effects.status()
+    );
+
+    let dev_inspect = tokio::process::Command::new(env!("CARGO_BIN_EXE_sui"))
+        .arg("client")
+        .arg("--client.config")
+        .arg(env.cluster.wallet.config.path())
+        .args(["--json", "serialized-tx-kind"])
+        .arg(tx_bytes)
+        .args(["--gas-sponsor"])
+        .arg(allowance.to_string())
+        .arg("--sender")
+        .arg(spender.to_string())
+        .arg("--dev-inspect")
+        .output()
+        .await?;
+    assert!(
+        dev_inspect.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&dev_inspect.stdout),
+        String::from_utf8_lossy(&dev_inspect.stderr),
+    );
+    let dev_inspect: serde_json::Value = serde_json::from_slice(&dev_inspect.stdout)?;
+    let effects: TransactionEffects =
+        serde_json::from_value(dev_inspect["transaction"]["effects"].clone())?;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+
+    let allowance_after = env
+        .cluster
+        .get_object_from_fullnode_store(&allowance)
+        .await
+        .unwrap()
+        .compute_object_reference();
+    assert_eq!(allowance_after, allowance_before);
+    assert_eq!(env.get_sui_balance(funder).await, funder_before);
+    assert_eq!(env.get_sui_balance(spender).await, spender_before);
+    Ok(())
+}
+
+#[cfg(not(msim))]
+#[tokio::test]
+async fn test_cli_serialized_allowance_preserves_payment() -> Result<(), anyhow::Error> {
+    use sui_types::{
+        gas_allowance::GasAllowance,
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        transaction::{Argument, Command, GasData, ObjectArg, SharedObjectMutability},
+    };
+    use test_cluster::addr_balance_test_env::TestEnvBuilder;
+
+    let mut env = TestEnvBuilder::new().build().await;
+    let spender = env.get_sender(1);
+    let (allowance, initial_shared_version) = issue_cli_gas_allowance(&mut env, spender).await?;
+    for nonce in 0..2 {
+        if nonce == 1 {
+            // The second invocation has no personally owned gas at all.
+            let mut drain = ProgrammableTransactionBuilder::new();
+            let recipient = drain.pure(env.get_sender(0))?;
+            drain.command(Command::TransferObjects(vec![Argument::GasCoin], recipient));
+            let drain = TransactionData::new_programmable(
+                spender,
+                env.get_gas_for_sender(spender),
+                drain.finish(),
+                20_000_000,
+                env.rgp,
+            );
+            let (_, effects) = env.exec_tx_directly(drain).await?;
+            assert!(effects.status().is_ok(), "{:?}", effects.status());
+            assert!(env.cluster.wallet.gas_objects(spender).await?.is_empty());
+            assert_eq!(env.get_sui_balance_ab(spender), 0);
+        }
+        let escrow_before = GasAllowance::from_object(
+            &env.cluster
+                .get_object_from_fullnode_store(&allowance)
+                .await
+                .unwrap(),
+        )?
+        .balance
+        .value();
+        let spender_before = env.get_sui_balance(spender).await;
+        let mut pt = ProgrammableTransactionBuilder::new();
+        pt.obj(ObjectArg::SharedObject {
+            id: allowance,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })?;
+        let transaction = TransactionData::new_with_gas_data_and_expiration(
+            TransactionKind::ProgrammableTransaction(pt.finish()),
+            spender,
+            GasData {
+                payment: vec![],
+                owner: allowance.into(),
+                price: env.rgp,
+                budget: 20_000_000,
+            },
+            TransactionExpiration::ValidDuring {
+                min_epoch: Some(0),
+                max_epoch: Some(0),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: env.chain_id,
+                nonce,
+            },
+        );
+        let digest = transaction.digest();
+        let output = tokio::process::Command::new(env!("CARGO_BIN_EXE_sui"))
+            .arg("client")
+            .arg("--client.config")
+            .arg(env.cluster.wallet.config.path())
+            .args(["--json", "serialized-tx"])
+            .arg(Base64::encode(bcs::to_bytes(&transaction)?))
+            .output()
+            .await?;
+        assert!(
+            output.status.success(),
+            "stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        let response: sui_json_rpc_types::SuiTransactionBlockResponse =
+            serde_json::from_slice(&output.stdout)?;
+        let effects = env
+            .cluster
+            .wallet
+            .grpc_client()?
+            .get_transaction(&response.digest)
+            .await?
+            .effects;
+        assert!(effects.status().is_ok(), "{:?}", effects.status());
+        assert!(effects.gas_object().is_none(), "{:?}", effects.gas_object());
+        assert_eq!(*effects.transaction_digest(), digest);
+        env.cluster.wait_for_tx_settlement(&[digest]).await;
+        let escrow_after = GasAllowance::from_object(
+            &env.cluster
+                .get_object_from_fullnode_store(&allowance)
+                .await
+                .unwrap(),
+        )?
+        .balance
+        .value();
+        assert_eq!(env.get_sui_balance(spender).await, spender_before);
+        assert_eq!(
+            i128::from(escrow_before - escrow_after),
+            i128::from(effects.gas_cost_summary().net_gas_usage()),
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(msim))]
+#[tokio::test]
+async fn test_cli_gas_estimation_with_protected_storage() -> Result<(), anyhow::Error> {
+    use move_core_types::identifier::Identifier;
+    use sui_types::{
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        transaction::{GasData, ObjectArg, SharedObjectMutability},
+    };
+    use test_cluster::addr_balance_test_env::TestEnvBuilder;
+
+    let mut env = TestEnvBuilder::new().build().await;
+    let package = env
+        .setup_test_package(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-e2e-tests/tests/move_test_code"),
+        )
+        .await;
+    let funder = env.get_sender(0);
+    let spender = env.get_sender(1);
+    let (allowance, initial_shared_version) = issue_cli_gas_allowance(&mut env, spender).await?;
+
+    let mut create = ProgrammableTransactionBuilder::new();
+    let value = create.pure(1u64)?;
+    let data = create.pure(vec![7u8; 16_000])?;
+    create.programmable_move_call(
+        package,
+        Identifier::new("gas_test")?,
+        Identifier::new("create_object_with_large_storage")?,
+        vec![],
+        vec![value, data],
+    );
+    create.obj(ObjectArg::SharedObject {
+        id: allowance,
+        initial_shared_version,
+        mutability: SharedObjectMutability::Mutable,
+    })?;
+    let create = TransactionData::new_with_gas_data_and_expiration(
+        TransactionKind::ProgrammableTransaction(create.finish()),
+        spender,
+        GasData {
+            payment: vec![],
+            owner: allowance.into(),
+            price: env.rgp,
+            budget: 200_000_000,
+        },
+        TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: env.chain_id,
+            nonce: 0,
+        },
+    );
+    let (_, effects) = env.exec_tx_directly(create).await?;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    let object = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| *owner == Owner::AddressOwner(spender))
+        .unwrap()
+        .0
+        .0;
+    env.fund_one_address_balance(spender, 500_000_000).await;
+    let funder_before = env.get_sui_balance_ab(funder);
+    let spender_before = env.get_sui_balance_ab(spender);
+
+    let dry_run = tokio::process::Command::new(env!("CARGO_BIN_EXE_sui"))
+        .arg("client")
+        .arg("--client.config")
+        .arg(env.cluster.wallet.config.path())
+        .args(["call", "--package"])
+        .arg(package.to_string())
+        .args([
+            "--module",
+            "gas_test",
+            "--function",
+            "transfer_object",
+            "--args",
+        ])
+        .arg(object.to_string())
+        .arg(spender.to_string())
+        .args(["--sender"])
+        .arg(spender.to_string())
+        .arg("--dry-run")
+        .output()
+        .await?;
+    assert!(
+        dry_run.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&dry_run.stdout),
+        String::from_utf8_lossy(&dry_run.stderr),
+    );
+    println!(
+        "Native dry-run CLI output:\n{}",
+        String::from_utf8_lossy(&dry_run.stdout)
+    );
+    assert_eq!(env.get_sui_balance_ab(funder), funder_before);
+    assert_eq!(env.get_sui_balance_ab(spender), spender_before);
+
+    // Exercise the real CLI without --gas-budget. Its payer must finance a new
+    // deposit while the protected deposit remains in a separate funder-owned claim.
+    let output = tokio::process::Command::new(env!("CARGO_BIN_EXE_sui"))
+        .arg("client")
+        .arg("--client.config")
+        .arg(env.cluster.wallet.config.path())
+        .args(["--json", "call", "--package"])
+        .arg(package.to_string())
+        .args([
+            "--module",
+            "gas_test",
+            "--function",
+            "transfer_object",
+            "--args",
+        ])
+        .arg(object.to_string())
+        .arg(spender.to_string())
+        .arg("--sender")
+        .arg(spender.to_string())
+        .output()
+        .await?;
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let response: sui_json_rpc_types::SuiTransactionBlockResponse =
+        serde_json::from_slice(&output.stdout)?;
+    let effects = env
+        .cluster
+        .wallet
+        .grpc_client()?
+        .get_transaction(&response.digest)
+        .await?
+        .effects;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    env.cluster
+        .wait_for_tx_settlement(&[*effects.transaction_digest()])
+        .await;
+    let costs = effects.gas_cost_summary();
+    let claim = env
+        .cluster
+        .get_object_from_fullnode_store(&sui_types::gas_allowance::StorageRebate::claim_id(
+            funder,
+            effects.transaction_digest(),
+        ))
+        .await
+        .expect("protected deposit must remain available to its funder");
+    assert_eq!(claim.owner, Owner::AddressOwner(funder));
+    assert!(claim.storage_rebate > 100_000_000);
+    assert_eq!(env.get_sui_balance_ab(funder), funder_before);
+    assert_eq!(
+        i128::from(spender_before - env.get_sui_balance_ab(spender)),
+        i128::from(costs.net_gas_usage()),
+    );
     Ok(())
 }
 
@@ -5776,12 +6200,7 @@ fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> 
         .append(true)
         .open(package_path.join("Move.toml"))
         .unwrap();
-    writeln!(
-        toml,
-        "{}",
-        &format!("[environments]\nlocalnet=\"{chain_id}\"")
-    )
-    .unwrap();
+    writeln!(toml, "[environments]\nlocalnet=\"{chain_id}\"").unwrap();
 
     orig_toml
 }

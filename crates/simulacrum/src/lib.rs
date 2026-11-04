@@ -61,8 +61,8 @@ use self::store::in_mem_store::KeyStore;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction_executor::SimulateTransactionResult;
 pub use sui_types::transaction_executor::TransactionChecks;
+use sui_types::transaction_executor::{SimulateTransactionResult, SimulationGasPayment};
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -249,7 +249,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
+        gas_payment: SimulationGasPayment,
     ) -> SuiResult<SimulateTransactionResult>
     where
         S: Send + Sync,
@@ -260,7 +260,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             &self.verifier_signing_config,
             transaction,
             checks,
-            allow_mock_gas_coin,
+            gas_payment,
         )
     }
 
@@ -1063,7 +1063,11 @@ mod tests {
         let checkpoint_before = sim.store().get_highest_checkpint().unwrap();
 
         let result = sim
-            .simulate_transaction(transaction, TransactionChecks::Enabled, false)
+            .simulate_transaction(
+                transaction,
+                TransactionChecks::Enabled,
+                sui_types::transaction_executor::SimulationGasPayment::NoMock,
+            )
             .unwrap();
 
         assert!(result.effects.status().is_ok());
@@ -1134,7 +1138,11 @@ mod tests {
         };
 
         let result = sim
-            .simulate_transaction(transaction, TransactionChecks::Enabled, false)
+            .simulate_transaction(
+                transaction,
+                TransactionChecks::Enabled,
+                sui_types::transaction_executor::SimulationGasPayment::NoMock,
+            )
             .expect("simulation should use the configured chain identifier");
         assert!(result.effects.status().is_ok());
     }

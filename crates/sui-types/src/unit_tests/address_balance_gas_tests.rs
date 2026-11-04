@@ -9,8 +9,8 @@ use crate::{
     error::UserInputError,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        CallArg, GasData, ObjectArg, SharedObjectMutability, TransactionDataV1,
-        TransactionExpiration, TransactionKind,
+        Argument, CallArg, Command, GasData, GasPaymentMode, ObjectArg, ProgrammableTransaction,
+        SharedObjectMutability, TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -77,6 +77,38 @@ fn create_address_balance_tx(
             nonce: 123,
         },
     }
+}
+
+fn create_gas_allowance_tx(
+    mutability: SharedObjectMutability,
+    commands: Vec<Command>,
+) -> (TransactionDataV1, ObjectID) {
+    let sender = SuiAddress::random_for_testing_only();
+    let allowance_id = ObjectID::random();
+    (
+        TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+                inputs: vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: allowance_id,
+                        initial_shared_version: SequenceNumber::from_u64(1),
+                        mutability,
+                    }),
+                    CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+                ],
+                commands,
+            }),
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: allowance_id.into(),
+                price: 1000,
+                budget: 1_000_000,
+            },
+            expiration: TransactionExpiration::None,
+        },
+        allowance_id,
+    )
 }
 
 fn create_test_transaction_data_with_owned_inputs(
@@ -787,5 +819,127 @@ fn test_address_balance_with_shared_objects_and_coin_reservation_allows_relaxed_
     assert!(
         result.is_ok(),
         "Transaction with shared objects + coin reservation should allow None expiration"
+    );
+}
+
+#[test]
+fn test_gas_allowance_shape_has_no_address_payer() {
+    let (mut tx, allowance_id) = create_gas_allowance_tx(SharedObjectMutability::Mutable, vec![]);
+
+    assert_eq!(
+        tx.gas_payment_mode(),
+        GasPaymentMode::Allowance(allowance_id)
+    );
+    assert_eq!(tx.gas_payer_address(), None);
+    assert!(!tx.is_sponsored_tx());
+    assert!(!tx.is_gas_paid_from_address_balance());
+    assert!(!tx.is_gasless_transaction());
+
+    tx.gas_data.owner = ObjectID::random().into();
+    assert_eq!(tx.gas_payment_mode(), GasPaymentMode::AddressBalance);
+    assert_eq!(tx.gas_payer_address(), Some(tx.gas_owner()));
+    assert!(tx.is_gas_paid_from_address_balance());
+}
+
+#[test]
+fn test_gas_allowance_requires_feature_flag() {
+    let disabled = ProtocolConfig::get_for_version(ProtocolVersion::new(141), Chain::Unknown);
+    let enabled = ProtocolConfig::get_for_max_version_UNSAFE();
+    let (tx, _) = create_gas_allowance_tx(SharedObjectMutability::Mutable, vec![]);
+
+    assert!(
+        tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&disabled))
+            .is_err()
+    );
+    tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&enabled))
+        .unwrap();
+}
+
+#[test]
+fn disabling_accumulators_rejects_gas_allowances_but_preserves_provenance() {
+    let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let (tx, _) = create_gas_allowance_tx(SharedObjectMutability::Mutable, vec![]);
+    tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config))
+        .unwrap();
+    assert!(config.enable_storage_rebate_provenance());
+
+    config.disable_accumulators_for_testing();
+    assert!(
+        tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config))
+            .is_err()
+    );
+    assert!(config.enable_storage_rebate_provenance());
+}
+
+#[test]
+fn test_gas_allowance_requires_mutable_shared_input() {
+    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    assert!(config.enable_gas_allowances());
+    let (tx, _) = create_gas_allowance_tx(SharedObjectMutability::Immutable, vec![]);
+
+    assert!(
+        tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config))
+            .is_err()
+    );
+}
+
+#[test]
+fn test_gas_allowance_rejects_command_references_and_gas_coin() {
+    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    for commands in [
+        vec![Command::TransferObjects(
+            vec![Argument::Input(0)],
+            Argument::Input(1),
+        )],
+        vec![Command::TransferObjects(
+            vec![Argument::GasCoin],
+            Argument::Input(1),
+        )],
+    ] {
+        let (tx, _) = create_gas_allowance_tx(SharedObjectMutability::Mutable, commands);
+        assert!(
+            tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config))
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn test_gas_allowance_only_requires_sender_signature() {
+    let (tx, _) = create_gas_allowance_tx(SharedObjectMutability::Mutable, vec![]);
+
+    assert_eq!(tx.gas_payer_address(), None);
+    assert!(!tx.is_sponsored_tx());
+    assert_eq!(
+        tx.required_signers().iter().copied().collect::<Vec<_>>(),
+        vec![tx.sender]
+    );
+}
+
+#[test]
+fn test_normal_sponsorship_still_requires_sponsor_signature() {
+    let sender = SuiAddress::random_for_testing_only();
+    let sponsor = SuiAddress::random_for_testing_only();
+    let tx = TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: vec![],
+            commands: vec![],
+        }),
+        sender,
+        gas_data: GasData {
+            payment: vec![random_object_ref()],
+            owner: sponsor,
+            price: 1000,
+            budget: 1_000_000,
+        },
+        expiration: TransactionExpiration::None,
+    };
+
+    assert_eq!(tx.gas_payer_address(), Some(sponsor));
+    assert!(tx.is_sponsored_tx());
+    assert_eq!(tx.gas_payment_mode(), GasPaymentMode::Coins);
+    assert_eq!(
+        tx.required_signers().iter().copied().collect::<Vec<_>>(),
+        vec![sender, sponsor]
     );
 }

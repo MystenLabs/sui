@@ -13598,6 +13598,7 @@ dependencies = [
  "tokio-stream",
  "toml 0.7.4",
  "toml_edit 0.19.10",
+ "tonic 0.14.6",
  "tracing",
  "url",
 ]

@@ -126,7 +126,11 @@ async fn test_borrowed_clock_in_simulation() {
     let (result, clock) = test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let result = state
-            .simulate_transaction(tx, TransactionChecks::Enabled, false)
+            .simulate_transaction(
+                tx,
+                TransactionChecks::Enabled,
+                sui_types::transaction_executor::SimulationGasPayment::NoMock,
+            )
             .unwrap();
         let clock_version = clock_read_only_root_version(&result.effects)
             .expect("implicit Clock read must be recorded in simulated effects");

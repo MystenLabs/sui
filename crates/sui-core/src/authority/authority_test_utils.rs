@@ -47,7 +47,11 @@ pub fn dev_inspect_for_testing(
         gas_price.unwrap_or(epoch_store.reference_gas_price()),
         gas_sponsor.unwrap_or(sender),
     );
-    state.simulate_transaction(transaction, checks, /* allow_mock_gas_coin */ true)
+    state.simulate_transaction(
+        transaction,
+        checks,
+        sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+    )
 }
 
 // =============================================================================

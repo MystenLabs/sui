@@ -87,12 +87,12 @@ use sui_types::{
     object::{Object, Owner},
     parse_sui_type_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
+    rpc_proto_conversions::ObjectRefExt,
     signature::GenericSignature,
     sui_sdk_types_conversions::type_tag_sdk_to_core,
     transaction::{
-        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, SenderSignedData,
-        SharedObjectMutability, Transaction, TransactionData, TransactionDataAPI,
-        TransactionExpiration, TransactionKind,
+        Argument, Command, FundsWithdrawalArg, ObjectArg, SenderSignedData, SharedObjectMutability,
+        Transaction, TransactionData, TransactionDataAPI, TransactionKind,
     },
 };
 
@@ -1713,24 +1713,7 @@ impl SuiClientCommands {
                     bail!("Failed to parse --tx-bytes as TransactionData");
                 };
 
-                let sender = tx_data.sender();
-                let gas_payment = tx_data.gas().to_owned();
-                let gas_data = GasDataArgs {
-                    gas_budget: Some(tx_data.gas_budget()),
-                    gas_price: Some(tx_data.gas_price()),
-                    gas_sponsor: Some(tx_data.gas_owner()),
-                };
-                let tx_kind = tx_data.into_kind();
-
-                dry_run_or_execute_or_serialize(
-                    sender,
-                    tx_kind,
-                    context,
-                    gas_payment,
-                    gas_data,
-                    processing,
-                )
-                .await?
+                execute_or_serialize(tx_data, context, processing).await?
             }
             SuiClientCommands::SerializedTxKind {
                 tx_bytes,
@@ -3410,72 +3393,6 @@ fn format_balance(
     format!("{whole}.{fractional}{suffix}")
 }
 
-/// Helper function to reduce code duplication for executing dry run
-pub async fn execute_dry_run(
-    context: &mut WalletContext,
-    signer: SuiAddress,
-    kind: TransactionKind,
-    gas_budget: Option<u64>,
-    gas_price: u64,
-    gas_payment: Vec<ObjectRef>,
-    sponsor: Option<SuiAddress>,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
-    let client = context.grpc_client()?;
-    let gas_budget = match gas_budget {
-        Some(gas_budget) => gas_budget,
-        None => max_gas_budget(&client).await?,
-    };
-    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
-        kind,
-        signer,
-        gas_payment,
-        gas_budget,
-        gas_price,
-        sponsor.unwrap_or(signer),
-    );
-    debug!("Executing dry run");
-    let response = client
-        .simulate_transaction(&tx_data, true, false)
-        .await
-        .context("Dry run failed")?;
-    debug!("Finished executing dry run");
-    Ok(SuiClientCommandResult::DryRun(response))
-}
-
-/// Call a dry run with the transaction data to estimate the gas budget.
-/// The estimated gas budget is computed as following:
-/// * the maximum between A and B, where:
-///
-/// A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
-/// B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
-/// overhead
-///
-/// This gas estimate is computed exactly as in the TypeScript SDK
-/// <https://github.com/MystenLabs/sui/blob/3c4369270605f78a243842098b7029daf8d883d9/sdk/typescript/src/transactions/TransactionBlock.ts#L845-L858>
-pub async fn estimate_gas_budget(
-    context: &mut WalletContext,
-    signer: SuiAddress,
-    kind: TransactionKind,
-    gas_price: u64,
-    gas_payment: Vec<ObjectRef>,
-    sponsor: Option<SuiAddress>,
-) -> Result<u64, anyhow::Error> {
-    let dry_run =
-        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await;
-    if let Ok(SuiClientCommandResult::DryRun(dry_run)) = dry_run {
-        let rgp = context.get_reference_gas_price().await?;
-        Ok(estimate_gas_budget_from_gas_cost(
-            dry_run.transaction.effects.gas_cost_summary(),
-            rgp,
-        ))
-    } else {
-        bail!(
-            "Could not determine the gas budget. Error: {}",
-            dry_run.unwrap_err()
-        )
-    }
-}
-
 pub fn estimate_gas_budget_from_gas_cost(
     gas_cost_summary: &GasCostSummary,
     reference_gas_price: u64,
@@ -3632,47 +3549,78 @@ async fn send_all_coins(
     dry_run_or_execute_or_serialize(signer, tx_kind, context, coin_refs, gas_data, processing).await
 }
 
-/// Ask the fullnode to pick the gas payment for a transaction, and return it along with the
-/// budget and expiration it resolved.
-///
-/// The fullnode applies the same rules as the TypeScript SDK: it pays from `gas_owner`'s address
-/// balance when the transaction never touches the gas coin and that balance covers the budget
-/// (empty payment, `ValidDuring` expiration), pays from their SUI coins otherwise, and when the
-/// transaction *does* use the gas coin it prepends an address balance reservation so both sources
-/// are available. Coins already used as inputs are excluded.
-async fn select_gas_with_fullnode(
+/// Resolve missing gas payment or budget using the fullnode's payer-aware estimator.
+/// Keep the intended transaction local; the node may supply only missing gas fields and expiration.
+async fn resolve_gas_with_fullnode(
     client: &Client,
-    signer: SuiAddress,
-    tx_kind: &TransactionKind,
-    gas_owner: SuiAddress,
-    gas_budget: u64,
-    gas_price: u64,
-) -> Result<(Vec<ObjectRef>, u64, TransactionExpiration), anyhow::Error> {
-    // An empty payment is what asks the fullnode to perform selection.
-    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
-        tx_kind.clone(),
-        signer,
-        vec![],
-        gas_budget,
-        gas_price,
-        gas_owner,
-    );
+    mut intended: TransactionData,
+    gas_budget: Option<u64>,
+) -> Result<TransactionData, anyhow::Error> {
+    let allowance = match intended.gas_payment_mode() {
+        sui_types::transaction::GasPaymentMode::Allowance(id) => Some(id),
+        _ => None,
+    };
+    let TransactionData::V1(data) = &mut intended;
+    if let Some(allowance) = allowance
+        && let TransactionKind::ProgrammableTransaction(pt) = &mut data.kind
+    {
+        // The locally selected gas allowance is a native mutable input, even when no command
+        // references it. No other input or command may be changed by gas resolution.
+        for input in &mut pt.inputs {
+            if let sui_types::transaction::CallArg::Object(ObjectArg::SharedObject {
+                id,
+                mutability,
+                ..
+            }) = input
+                && *id == allowance
+            {
+                *mutability = SharedObjectMutability::Mutable;
+            }
+        }
+    }
+    let mut payment = proto::GasPayment::default()
+        .with_owner(data.gas_data.owner.to_string())
+        .with_price(data.gas_data.price);
+    payment.budget = gas_budget;
+    payment.objects = data
+        .gas_data
+        .payment
+        .iter()
+        .copied()
+        .map(ObjectRefExt::to_proto)
+        .collect();
+    let transaction = proto::Transaction::default()
+        .with_sender(data.sender.to_string())
+        .with_kind(proto::TransactionKind::from(data.kind.clone()))
+        .with_gas_payment(payment);
+    let mut request = proto::SimulateTransactionRequest::new(transaction)
+        .with_checks(proto::simulate_transaction_request::TransactionChecks::Enabled)
+        .with_do_gas_selection(true);
+    request.read_mask.get_or_insert_default().paths =
+        vec!["transaction.transaction.bcs".to_owned()];
 
-    debug!("Selecting gas payment");
-    let resolved = client
-        .simulate_transaction(&tx_data, true, true)
+    debug!("Resolving gas payment and budget");
+    let response = client
+        .clone()
+        .into_inner()
+        .execution_client()
+        .simulate_transaction(request)
         .await
-        .context("Gas selection failed")?
-        .transaction
-        .transaction;
-    debug!("Finished selecting gas payment");
-
-    let gas_data = resolved.gas_data();
-    Ok((
-        gas_data.payment.clone(),
-        gas_data.budget,
-        resolved.expiration().clone(),
-    ))
+        .context("Gas resolution failed")?
+        .into_inner();
+    let resolved: TransactionData = response
+        .transaction()
+        .transaction()
+        .bcs()
+        .deserialize()
+        .context("Gas resolution returned invalid transaction data")?;
+    let TransactionData::V1(resolved) = resolved;
+    data.gas_data.budget = gas_budget.unwrap_or(resolved.gas_data.budget);
+    if data.gas_data.payment.is_empty() && allowance.is_none() {
+        data.gas_data.payment = resolved.gas_data.payment;
+    }
+    data.expiration = resolved.expiration;
+    Ok(intended)
 }
 
 /// Dry run, execute, or serialize a transaction.
@@ -3685,14 +3633,81 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     context: &mut WalletContext,
     gas_payment: Vec<ObjectRef>,
     gas_data: GasDataArgs,
-    processing: TxProcessingArgs,
+    mut processing: TxProcessingArgs,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
+    ensure!(
+        !processing.serialize_unsigned_transaction || !processing.serialize_signed_transaction,
+        "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
+    );
     let GasDataArgs {
         gas_budget,
         gas_price,
         gas_sponsor,
     } = gas_data;
+    let signer = processing.sender.take().unwrap_or(signer);
+    let gas_owner = gas_sponsor.unwrap_or(signer);
+    let gas_price = match gas_price {
+        Some(price) => price,
+        None => context.get_reference_gas_price().await?,
+    };
+    let client = context.grpc_client()?;
+    let tx_data = if processing.dry_run || processing.dev_inspect {
+        let mut intended = TransactionData::new_with_gas_coins_allow_sponsor(
+            tx_kind,
+            signer,
+            gas_payment,
+            gas_budget.unwrap_or_default(),
+            gas_price,
+            gas_owner,
+        );
+        if matches!(
+            intended.gas_payment_mode(),
+            sui_types::transaction::GasPaymentMode::Allowance(_)
+        ) {
+            resolve_gas_with_fullnode(&client, intended, gas_budget).await?
+        } else {
+            let TransactionData::V1(data) = &mut intended;
+            data.gas_data.budget = match gas_budget {
+                Some(budget) => budget,
+                None => max_gas_budget(&client).await?,
+            };
+            intended
+        }
+    } else if let Some(budget) = gas_budget
+        && !gas_payment.is_empty()
+    {
+        TransactionData::new_with_gas_coins_allow_sponsor(
+            tx_kind,
+            signer,
+            gas_payment,
+            budget,
+            gas_price,
+            gas_owner,
+        )
+    } else {
+        resolve_gas_with_fullnode(
+            &client,
+            TransactionData::new_with_gas_coins_allow_sponsor(
+                tx_kind,
+                signer,
+                gas_payment,
+                gas_budget.unwrap_or_default(),
+                gas_price,
+                gas_owner,
+            ),
+            gas_budget,
+        )
+        .await?
+    };
+    execute_or_serialize(tx_data, context, processing).await
+}
 
+/// Process an already constructed transaction without replacing its gas selector or expiration.
+async fn execute_or_serialize(
+    mut tx_data: TransactionData,
+    context: &mut WalletContext,
+    processing: TxProcessingArgs,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
     let TxProcessingArgs {
         tx_digest,
         dry_run,
@@ -3702,92 +3717,26 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         sender,
         skip_signing,
     } = processing;
-
     ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
         "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
     );
-
-    let gas_price = if let Some(gas_price) = gas_price {
-        gas_price
-    } else {
-        context.get_reference_gas_price().await?
-    };
-
-    let client = context.grpc_client()?;
-
-    let signer = sender.unwrap_or(signer);
-
-    if dev_inspect {
-        return execute_dev_inspect(
-            context,
-            signer,
-            tx_kind,
-            gas_budget,
-            gas_price,
-            gas_payment,
-            gas_sponsor,
-            None,
-        )
-        .await;
+    if let Some(sender) = sender {
+        let TransactionData::V1(data) = &mut tx_data;
+        data.sender = sender;
     }
-
-    if dry_run {
-        return execute_dry_run(
-            context,
-            signer,
-            tx_kind,
-            gas_budget,
-            gas_price,
-            gas_payment.clone(),
-            None,
-        )
-        .await;
+    if dev_inspect || dry_run {
+        let response = context
+            .grpc_client()?
+            .simulate_transaction(&tx_data, true, false)
+            .await
+            .context("Simulation failed")?;
+        return Ok(if dev_inspect {
+            SuiClientCommandResult::DevInspect(response)
+        } else {
+            SuiClientCommandResult::DryRun(response)
+        });
     }
-
-    let gas_budget = match gas_budget {
-        Some(gas_budget) => gas_budget,
-        None => {
-            debug!("Estimating gas budget");
-            // Estimate against an empty gas payment so the fullnode simulates with a mock gas
-            // coin. Passing the real payment here would have it checked against the very budget
-            // we are trying to compute.
-            let budget = estimate_gas_budget(
-                context,
-                signer,
-                tx_kind.clone(),
-                gas_price,
-                vec![],
-                gas_sponsor,
-            )
-            .await?;
-            debug!("Finished estimating gas budget");
-            budget
-        }
-    };
-
-    let gas_owner = gas_sponsor.unwrap_or(signer);
-
-    let (gas_payment, gas_budget, expiration) = if !gas_payment.is_empty() {
-        (gas_payment, gas_budget, TransactionExpiration::None)
-    } else {
-        select_gas_with_fullnode(&client, signer, &tx_kind, gas_owner, gas_budget, gas_price)
-            .await?
-    };
-
-    debug!("Preparing transaction data");
-    let tx_data = TransactionData::new_with_gas_data_and_expiration(
-        tx_kind,
-        signer,
-        GasData {
-            payment: gas_payment,
-            owner: gas_owner,
-            price: gas_price,
-            budget: gas_budget,
-        },
-        expiration,
-    );
-    debug!("Finished preparing transaction data");
 
     if serialize_unsigned_transaction {
         Ok(SuiClientCommandResult::SerializedUnsignedTransaction(
@@ -3799,24 +3748,13 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         let signatures = if skip_signing {
             vec![]
         } else {
-            let mut signatures = vec![
-                context
-                    .sign_secure(
-                        &KeyIdentity::Address(signer),
-                        &tx_data,
-                        Intent::sui_transaction(),
-                    )
-                    .await?
-                    .into(),
-            ];
-
-            if let Some(gas_sponsor) = gas_sponsor
-                && gas_sponsor != signer
-            {
+            let signers = tx_data.required_signers();
+            let mut signatures = Vec::with_capacity(signers.len());
+            for signer in signers {
                 signatures.push(
                     context
                         .sign_secure(
-                            &KeyIdentity::Address(gas_sponsor),
+                            &KeyIdentity::Address(signer),
                             &tx_data,
                             Intent::sui_transaction(),
                         )
@@ -3826,7 +3764,6 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             }
             signatures
         };
-
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
         if serialize_signed_transaction {
             Ok(SuiClientCommandResult::SerializedSignedTransaction(
@@ -3847,11 +3784,9 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
                 } else {
                     format!("{error:?}")
                 };
-
-                let error = render_clever_error_opt(&description, &client)
+                let error = render_clever_error_opt(&description, &context.grpc_client()?)
                     .await
                     .unwrap_or(description);
-
                 return Err(anyhow!(
                     "Error executing transaction '{}': {error}",
                     response.transaction.digest(),
@@ -3860,34 +3795,6 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             Ok(SuiClientCommandResult::TransactionBlock(response))
         }
     }
-}
-
-async fn execute_dev_inspect(
-    context: &mut WalletContext,
-    signer: SuiAddress,
-    tx_kind: TransactionKind,
-    gas_budget: Option<u64>,
-    gas_price: u64,
-    gas_objects: Vec<ObjectRef>,
-    gas_sponsor: Option<SuiAddress>,
-    skip_checks: Option<bool>,
-) -> Result<SuiClientCommandResult, anyhow::Error> {
-    let client = context.grpc_client()?;
-
-    let max_gas_budget = max_gas_budget(&client).await?;
-    let tx = TransactionData::new_with_gas_coins_allow_sponsor(
-        tx_kind,
-        signer,
-        gas_objects,
-        gas_budget.unwrap_or(max_gas_budget),
-        gas_price,
-        gas_sponsor.unwrap_or(signer),
-    );
-
-    let result = client
-        .simulate_transaction(&tx, !skip_checks.unwrap_or(false), false)
-        .await?;
-    Ok(SuiClientCommandResult::DevInspect(result))
 }
 
 /// Warn the user if the CLI falls behind more than 2 protocol versions.
@@ -4578,6 +4485,93 @@ fn find_faucet_url(rpc: &str) -> anyhow::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn gas_resolution_cannot_replace_locally_intended_commands() {
+        use proto::transaction_execution_service_server::{
+            TransactionExecutionService, TransactionExecutionServiceServer,
+        };
+
+        struct MaliciousFullnode {
+            response: proto::SimulateTransactionResponse,
+        }
+
+        #[tonic::async_trait]
+        impl TransactionExecutionService for MaliciousFullnode {
+            async fn simulate_transaction(
+                &self,
+                _request: tonic::Request<proto::SimulateTransactionRequest>,
+            ) -> Result<tonic::Response<proto::SimulateTransactionResponse>, tonic::Status>
+            {
+                Ok(tonic::Response::new(self.response.clone()))
+            }
+        }
+
+        let sender = SuiAddress::random_for_testing_only();
+        let attacker = SuiAddress::random_for_testing_only();
+        let mut malicious_ptb = ProgrammableTransactionBuilder::new();
+        let recipient = malicious_ptb.pure(attacker).unwrap();
+        malicious_ptb.command(Command::TransferObjects(vec![Argument::GasCoin], recipient));
+        let malicious = TransactionData::new_programmable(
+            sender,
+            vec![sui_types::base_types::random_object_ref()],
+            malicious_ptb.finish(),
+            10_000_000,
+            1_000,
+        );
+        let response = proto::SimulateTransactionResponse::default().with_transaction(
+            proto::ExecutedTransaction::default()
+                .with_transaction(proto::Transaction::default().with_bcs(
+                    proto::Bcs::default().with_value(bcs::to_bytes(&malicious).unwrap()),
+                )),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (shutdown, stopped) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(async move {
+            tonic::transport::Server::builder()
+                .add_service(
+                    TransactionExecutionServiceServer::new(MaliciousFullnode { response })
+                        .accept_compressed(tonic::codec::CompressionEncoding::Zstd),
+                )
+                .serve_with_incoming_shutdown(
+                    tokio_stream::wrappers::TcpListenerStream::new(listener),
+                    async {
+                        let _ = stopped.await;
+                    },
+                )
+                .await
+                .unwrap();
+        });
+
+        let intended =
+            TransactionKind::programmable(ProgrammableTransactionBuilder::new().finish());
+        let intended_data = TransactionData::new_with_gas_coins_allow_sponsor(
+            intended.clone(),
+            sender,
+            vec![],
+            0,
+            1_000,
+            sender,
+        );
+        let result = resolve_gas_with_fullnode(
+            &Client::new(format!("http://{address}")).unwrap(),
+            intended_data,
+            None,
+        )
+        .await;
+        shutdown.send(()).unwrap();
+        server.await.unwrap();
+
+        let resolved = result.unwrap();
+        assert_eq!(
+            resolved.kind(),
+            &intended,
+            "gas resolution must not authorize the fullnode's transfer to an attacker"
+        );
+        assert_eq!(resolved.sender(), sender);
+        assert_eq!(resolved.gas_data().owner, sender);
+    }
 
     #[test]
     fn protocol_config_out_of_range_errors_instead_of_panicking() {

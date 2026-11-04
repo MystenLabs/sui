@@ -221,7 +221,9 @@ impl TransactionFilter {
                     && SuiAddress::from(event.write.address.address) == *affected_address
             });
             let is_sender = SuiAddress::from(data.sender()) == *affected_address;
-            let is_payer = SuiAddress::from(data.gas_data().owner) == *affected_address;
+            let is_payer = data
+                .gas_payer_address()
+                .is_some_and(|payer| SuiAddress::from(payer) == *affected_address);
             if !in_changed_objects && !in_balance_changes && !is_sender && !is_payer {
                 return false;
             }

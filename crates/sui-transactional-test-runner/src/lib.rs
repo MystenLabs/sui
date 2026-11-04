@@ -208,7 +208,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         self.fullnode()?.simulate_transaction(
             transaction_block,
             TransactionChecks::Enabled,
-            /* allow_mock_gas_coin */ true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         )
     }
 

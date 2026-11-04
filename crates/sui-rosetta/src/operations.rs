@@ -1653,12 +1653,29 @@ impl Operations {
             && tx.function() == "join"
     }
 
+    fn is_gas_allowance_payment(transaction: &ProtoTransaction, tx_kind: &TransactionKind) -> bool {
+        let gas_payment = transaction.gas_payment();
+        let Some(owner) = gas_payment.owner.as_deref() else {
+            return false;
+        };
+        gas_payment.objects.is_empty()
+            && gas_payment.price.is_some_and(|price| price != 0)
+            && matches!(
+                &tx_kind.data,
+                Some(TransactionKindData::ProgrammableTransaction(pt))
+                    if pt.inputs.iter().any(|input| {
+                        input.kind() == InputKind::Shared
+                            && input.object_id.as_deref() == Some(owner)
+                    })
+            )
+    }
+
     fn process_balance_change(
-        gas_owner: SuiAddress,
+        gas_owner: Option<SuiAddress>,
         gas_used: i128,
         balance_changes: &[(BalanceChange, Currency)],
-        status: Option<OperationStatus>,
         balances: HashMap<(SuiAddress, Currency), i128>,
+        status: Option<OperationStatus>,
     ) -> impl Iterator<Item = Operation> {
         let mut balances =
             balance_changes
@@ -1673,8 +1690,9 @@ impl Operations {
                     }
                     balances
                 });
-        // separate gas from balances
-        *balances.entry((gas_owner, SUI.clone())).or_default() -= gas_used;
+        if let Some(gas_owner) = gas_owner {
+            *balances.entry((gas_owner, SUI.clone())).or_default() -= gas_used;
+        }
 
         let balance_change = balances.into_iter().filter(|(_, amount)| *amount != 0).map(
             move |((addr, currency), amount)| {
@@ -1682,12 +1700,10 @@ impl Operations {
             },
         );
 
-        let gas = if gas_used != 0 {
-            vec![Operation::gas(gas_owner, gas_used)]
-        } else {
-            // Gas can be 0 for system tx
-            vec![]
-        };
+        let gas = gas_owner
+            .filter(|_| gas_used != 0)
+            .into_iter()
+            .map(move |gas_owner| Operation::gas(gas_owner, gas_used));
         balance_change.chain(gas)
     }
 
@@ -1857,44 +1873,42 @@ impl Operations {
             ..
         } = executed_tx;
 
-        let transaction = transaction.ok_or_else(|| {
+        let mut transaction = transaction.ok_or_else(|| {
             Error::DataError("ExecutedTransaction missing transaction".to_string())
         })?;
         let effects = effects
             .ok_or_else(|| Error::DataError("ExecutedTransaction missing effects".to_string()))?;
 
         let sender = SuiAddress::from_str(transaction.sender())?;
+        let tx_kind = transaction
+            .kind
+            .take()
+            .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?;
+        let is_allowance_payment = Self::is_gas_allowance_payment(&transaction, &tx_kind);
+        let is_gascoin_transfer = Self::is_gascoin_transfer(&tx_kind);
 
-        // Post-execution owner of the gas coin. This is empty when the gas coin no
-        // longer exists after execution: a `coin::send_funds` that moves the entire
-        // gas coin into an address balance (gasless / free-tier transfers) deletes
-        // the gas object, so its effects carry no output owner.
-        let gas_output_owner = effects.gas_object().output_owner().address();
-        let gas_owner = if !gas_output_owner.is_empty() {
-            SuiAddress::from_str(gas_output_owner)?
-        } else if sender == SuiAddress::ZERO {
-            // System transactions don't have a gas_object.
-            sender
+        let gas_owner = if is_allowance_payment {
+            None
         } else {
-            // No gas coin output owner: either gas was paid from the sender's address
-            // balance (no gas coin object) or the gas coin was fully consumed/deleted.
-            // Either way the gas payment owner is the account that paid for the txn.
-            SuiAddress::from_str(transaction.gas_payment().owner())?
+            let gas_output_owner = effects.gas_object().output_owner().address();
+            if !gas_output_owner.is_empty() {
+                Some(SuiAddress::from_str(gas_output_owner)?)
+            } else if sender == SuiAddress::ZERO {
+                Some(sender)
+            } else {
+                Some(SuiAddress::from_str(transaction.gas_payment().owner())?)
+            }
         };
+        let prev_gas_owner = gas_owner
+            .map(|_| SuiAddress::from_str(transaction.gas_payment().owner()))
+            .transpose()?;
 
+        let events = events.as_ref().map(|e| e.events.as_slice()).unwrap_or(&[]);
         let gas_summary = effects.gas_used();
         let gas_used = gas_summary.storage_rebate_opt().unwrap_or(0) as i128
             - gas_summary.storage_cost_opt().unwrap_or(0) as i128
             - gas_summary.computation_cost_opt().unwrap_or(0) as i128;
-
         let status = Some(effects.status().into());
-
-        let prev_gas_owner = SuiAddress::from_str(transaction.gas_payment().owner())?;
-
-        let tx_kind = transaction
-            .kind
-            .ok_or_else(|| Error::DataError("Transaction missing kind".to_string()))?;
-        let is_gascoin_transfer = Self::is_gascoin_transfer(&tx_kind);
 
         // Resolve coins to currencies and pick the payment's currency in one pass.
         // `by_coin_type` is reused by the reconciliation pass below
@@ -1925,8 +1939,7 @@ impl Operations {
         let mut principal_amounts = 0;
         let mut reward_amounts = 0;
 
-        // Extract balance change from unstake events
-        let events = events.as_ref().map(|e| e.events.as_slice()).unwrap_or(&[]);
+        // Extract balance change from unstake events.
         for event in events {
             let event_type = event.event_type();
             if let Ok(type_tag) = StructTag::from_str(event_type)
@@ -1970,26 +1983,31 @@ impl Operations {
             })
             .collect();
 
-        // Extract coin change operations from balance changes
         let mut coin_change_operations = Self::process_balance_change(
             gas_owner,
             gas_used,
             &balance_changes_with_currency,
-            status,
             accounted_balances.clone(),
+            if is_allowance_payment {
+                Some(OperationStatus::Success)
+            } else {
+                status
+            },
         );
-
-        // Take {gas, previous gas owner, new gas owner} out of coin_change_operations
-        // and convert BalanceChange to PaySui when GasCoin is transferred
-        let gascoin_transfer_operations = Self::process_gascoin_transfer(
-            &mut coin_change_operations,
-            is_gascoin_transfer,
-            prev_gas_owner,
-            gas_owner,
-            gas_used,
-            &balance_changes_with_currency,
-            &accounted_balances,
-        )?;
+        let gascoin_transfer_operations =
+            if let (Some(prev_gas_owner), Some(gas_owner)) = (prev_gas_owner, gas_owner) {
+                Self::process_gascoin_transfer(
+                    &mut coin_change_operations,
+                    is_gascoin_transfer,
+                    prev_gas_owner,
+                    gas_owner,
+                    gas_used,
+                    &balance_changes_with_currency,
+                    &accounted_balances,
+                )?
+            } else {
+                vec![]
+            };
 
         let ops: Operations = ops
             .into_iter()
@@ -2170,6 +2188,18 @@ impl Operation {
         }
     }
 
+    fn gas(addr: SuiAddress, amount: i128) -> Self {
+        Self {
+            operation_identifier: Default::default(),
+            type_: OperationType::Gas,
+            status: Some(OperationStatus::Success),
+            account: Some(addr.into()),
+            amount: Some(Amount::new(amount, None)),
+            coin_change: None,
+            metadata: None,
+        }
+    }
+
     fn balance_change(
         status: Option<OperationStatus>,
         addr: SuiAddress,
@@ -2182,17 +2212,6 @@ impl Operation {
             status,
             account: Some(addr.into()),
             amount: Some(Amount::new(amount, Some(currency))),
-            coin_change: None,
-            metadata: None,
-        }
-    }
-    fn gas(addr: SuiAddress, amount: i128) -> Self {
-        Self {
-            operation_identifier: Default::default(),
-            type_: OperationType::Gas,
-            status: Some(OperationStatus::Success),
-            account: Some(addr.into()),
-            amount: Some(Amount::new(amount, None)),
             coin_change: None,
             metadata: None,
         }
@@ -2350,8 +2369,6 @@ fn apply_aux(ops: &mut [Operation], aux: &AuxData) -> Result<(), Error> {
     Ok(())
 }
 
-/// Return the single operation of `expected` type, rejecting if the parsed
-/// family does not match the aux-data family.
 fn single_op(ops: &mut [Operation], expected: OperationType) -> Result<&mut Operation, Error> {
     match ops {
         [op] if op.type_ == expected => Ok(op),
@@ -2372,8 +2389,9 @@ mod tests {
     use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{
-        CallArg, Command as NativeCommand, ObjectArg, ProgrammableTransaction,
-        TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData,
+        CallArg, Command as NativeCommand, GasData, ObjectArg, ProgrammableTransaction,
+        SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData,
+        TransactionDataV1, TransactionExpiration, TransactionKind as NativeTransactionKind,
     };
 
     fn random_object_ref() -> ObjectRef {
@@ -2382,6 +2400,37 @@ mod tests {
             SequenceNumber::from(1),
             ObjectDigest::random(),
         )
+    }
+
+    fn allowance_transaction(sender: SuiAddress, allowance: ObjectID) -> Transaction {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .obj(ObjectArg::SharedObject {
+                id: allowance,
+                initial_shared_version: SequenceNumber::new(),
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+        TransactionData::V1(TransactionDataV1 {
+            kind: NativeTransactionKind::ProgrammableTransaction(builder.finish()),
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: allowance.into(),
+                price: 1,
+                budget: 1_000,
+            },
+            expiration: TransactionExpiration::None,
+        })
+        .into()
+    }
+
+    fn sui_balance_change(address: SuiAddress, amount: i128) -> BalanceChange {
+        let mut change = BalanceChange::default();
+        change.address = Some(address.to_string());
+        change.coin_type = Some(SUI.metadata.coin_type.clone());
+        change.amount = Some(amount.to_string());
+        change
     }
 
     /// Parse a native `ProgrammableTransaction` via the proto pipeline.
@@ -2727,14 +2776,9 @@ mod tests {
         Ok(())
     }
 
-    /// Regression test for the gas coin being fully consumed during execution.
-    /// A `coin::send_funds` that moves the entire gas coin into an address balance
-    /// (gasless / free-tier transfers) deletes the gas object, so its effects carry
-    /// a `ChangedObject` with no `output_owner`. Previously `try_from_executed_transaction`
-    /// fed the resulting empty owner string to `SuiAddress::from_str`, which produced
-    /// `FastCryptoError::InvalidInput` ("Invalid value was given to the function") and
-    /// failed the whole `/block` request. It must instead fall back to the gas payment
-    /// owner and attribute gas to it.
+    /// Regression test for a gas coin being fully consumed during execution.
+    /// A deleted gas object has no output owner, so gas must fall back to the
+    /// transaction's address payer.
     #[tokio::test]
     async fn test_try_from_executed_transaction_deleted_gas_coin() -> Result<(), anyhow::Error> {
         use std::num::NonZeroUsize;
@@ -2805,6 +2849,143 @@ mod tests {
             .expect("expected a Gas operation");
         assert_eq!(gas_op.account.as_ref().map(|a| a.address), Some(sender));
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_failed_ordinary_payment_preserves_residual_status() -> Result<(), anyhow::Error> {
+        use sui_rpc::proto::sui::rpc::v2::{
+            ExecutedTransaction, ExecutionStatus, GasCostSummary, TransactionEffects,
+        };
+
+        let sender = SuiAddress::random_for_testing_only();
+        let residual_owner = SuiAddress::random_for_testing_only();
+        let transaction = TransactionData::new_programmable(
+            sender,
+            vec![random_object_ref()],
+            ProgrammableTransactionBuilder::new().finish(),
+            1_000,
+            1,
+        );
+        let mut status = ExecutionStatus::default();
+        status.success = Some(false);
+        let mut gas_used = GasCostSummary::default();
+        gas_used.computation_cost = Some(100);
+        let mut effects = TransactionEffects::default();
+        effects.status = Some(status);
+        effects.gas_used = Some(gas_used);
+        let mut executed = ExecutedTransaction::default();
+        executed.transaction = Some(transaction.into());
+        executed.effects = Some(effects);
+        executed.balance_changes = vec![
+            sui_balance_change(sender, -100),
+            sui_balance_change(residual_owner, 20),
+        ];
+
+        let operations = Operations::try_from_executed_transaction(executed, &unreachable_cache())
+            .await?
+            .0;
+        assert!(operations.iter().any(|operation| {
+            operation.type_ == OperationType::Gas
+                && operation.status == Some(OperationStatus::Success)
+                && operation.account.as_ref().map(|account| account.address) == Some(sender)
+                && operation.amount.as_ref().map(|amount| amount.value) == Some(-100)
+        }));
+        assert!(operations.iter().any(|operation| {
+            operation.type_ == OperationType::SuiBalanceChange
+                && operation.status == Some(OperationStatus::Failure)
+                && operation.account.as_ref().map(|account| account.address) == Some(residual_owner)
+                && operation.amount.as_ref().map(|amount| amount.value) == Some(20)
+        }));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_allowance_spend_never_synthesizes_an_address_gas_payer()
+    -> Result<(), anyhow::Error> {
+        use sui_rpc::proto::sui::rpc::v2::{
+            ExecutedTransaction, ExecutionStatus, GasCostSummary, TransactionEffects,
+        };
+
+        let sender = SuiAddress::random_for_testing_only();
+        let funder = SuiAddress::random_for_testing_only();
+        let allowance = ObjectID::random();
+        let mut status = ExecutionStatus::default();
+        status.success = Some(true);
+        let mut gas_used = GasCostSummary::default();
+        gas_used.computation_cost = Some(100);
+        gas_used.storage_cost = Some(50);
+        gas_used.storage_rebate = Some(170);
+        let mut effects = TransactionEffects::default();
+        effects.status = Some(status);
+        effects.gas_used = Some(gas_used);
+        let mut executed = ExecutedTransaction::default();
+        executed.transaction = Some(allowance_transaction(sender, allowance));
+        executed.effects = Some(effects);
+        executed.balance_changes = vec![sui_balance_change(funder, 20)];
+
+        let operations = Operations::try_from_executed_transaction(executed, &unreachable_cache())
+            .await?
+            .0;
+        assert!(
+            operations.iter().all(|operation| {
+                operation.type_ != OperationType::Gas
+                    && operation.account.as_ref().map(|account| account.address)
+                        != Some(allowance.into())
+            }),
+            "allowance object ID must never be rendered as an address payer: {operations:?}"
+        );
+        assert!(operations.iter().any(|operation| {
+            operation.type_ == OperationType::SuiBalanceChange
+                && operation.status == Some(OperationStatus::Success)
+                && operation.account.as_ref().map(|account| account.address) == Some(funder)
+                && operation.amount.as_ref().map(|amount| amount.value) == Some(20)
+        }));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_charged_failed_allowance_spend_preserves_successful_refunds()
+    -> Result<(), anyhow::Error> {
+        use sui_rpc::proto::sui::rpc::v2::{
+            ExecutedTransaction, ExecutionStatus, GasCostSummary, TransactionEffects,
+        };
+
+        let sender = SuiAddress::random_for_testing_only();
+        let funder = SuiAddress::random_for_testing_only();
+        let allowance = ObjectID::random();
+        let mut status = ExecutionStatus::default();
+        status.success = Some(false);
+        let mut gas_used = GasCostSummary::default();
+        gas_used.computation_cost = Some(100);
+        gas_used.storage_rebate = Some(120);
+        let mut effects = TransactionEffects::default();
+        effects.status = Some(status);
+        effects.gas_used = Some(gas_used);
+        let mut executed = ExecutedTransaction::default();
+        executed.transaction = Some(allowance_transaction(sender, allowance));
+        executed.effects = Some(effects);
+        executed.balance_changes = vec![sui_balance_change(funder, 20)];
+
+        let operations = Operations::try_from_executed_transaction(executed, &unreachable_cache())
+            .await?
+            .0;
+        assert!(operations.iter().all(|operation| {
+            operation.type_ != OperationType::Gas
+                && operation.account.as_ref().map(|account| account.address)
+                    != Some(allowance.into())
+        }));
+        assert!(
+            operations
+                .iter()
+                .any(|operation| operation.status == Some(OperationStatus::Failure))
+        );
+        assert!(operations.iter().any(|operation| {
+            operation.type_ == OperationType::SuiBalanceChange
+                && operation.status == Some(OperationStatus::Success)
+                && operation.account.as_ref().map(|account| account.address) == Some(funder)
+                && operation.amount.as_ref().map(|amount| amount.value) == Some(20)
+        }));
         Ok(())
     }
 
@@ -2949,8 +3130,8 @@ mod tests {
             .expect("expected a Gas operation");
         assert_eq!(gas_op.account.as_ref().map(|a| a.address), Some(sender));
 
-        // Every operation amount, gas included, must add up to the on-chain balance
-        // changes per address.
+        // Every operation amount, gas included, must add up to the on-chain
+        // balance changes per address.
         let mut net_by_address: HashMap<SuiAddress, i128> = HashMap::new();
         for op in &ops.0 {
             if let (Some(account), Some(amount)) = (&op.account, &op.amount) {
