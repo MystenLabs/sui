@@ -3109,7 +3109,7 @@ async fn test_timestamp_expiration_decided_outside_execution() {
     // the decision in `ExecutionEnv`. Execution never reads the Clock for this, and never aborts a
     // transaction for being before its `min_timestamp`.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_ids = [ObjectID::random(), ObjectID::random()];
+    let gas_object_ids = [ObjectID::random(), ObjectID::random(), ObjectID::random()];
     let (authority_state, package_object_ref) = init_state_with_ids_and_object_basics(
         gas_object_ids
             .iter()
@@ -3203,6 +3203,26 @@ async fn test_timestamp_expiration_decided_outside_execution() {
     // The gas object is still charged and bumped, consuming the owned-object lock.
     assert!(effects.gas_cost_summary().net_gas_usage() > 0);
     assert_no_clock_read(&effects);
+
+    // Expiry replaces any other early error.
+    let effects = execute(
+        gas_object_ids[2],
+        ExecutionEnv::new()
+            .with_insufficient_funds()
+            .with_timestamp_expired(),
+    )
+    .await;
+    assert!(
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::TransactionExpired,
+                ..
+            })
+        ),
+        "{:?}",
+        effects.status()
+    );
 }
 
 #[sim_test]

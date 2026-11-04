@@ -367,7 +367,8 @@ impl ExecutionScheduler {
             let Schedulable::Transaction(cert) = schedulable else {
                 continue;
             };
-            if !cert.transaction_data().has_funds_withdrawals() {
+            // An expired transaction aborts without withdrawing funds.
+            if !cert.transaction_data().has_funds_withdrawals() || env.timestamp_expired {
                 continue;
             }
             let tx_withdraws = cert
@@ -554,7 +555,7 @@ impl ExecutionScheduler {
         for (schedulable, env) in certs {
             match schedulable {
                 Schedulable::Transaction(tx) => {
-                    if tx.transaction_data().has_funds_withdrawals() {
+                    if tx.transaction_data().has_funds_withdrawals() && !env.timestamp_expired {
                         tx_with_withdraws.push((tx, env));
                     } else {
                         ordinary_txns.push((tx, env));

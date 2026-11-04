@@ -61,13 +61,6 @@ impl ExecutionOrEarlyError {
     pub fn accumulator_version(&self) -> Option<SequenceNumber> {
         self.accumulator_version
     }
-
-    /// Fails the transaction with `error` if it has no early error yet.
-    pub fn fail_if_ok(&mut self, error: ExecutionErrorKind) {
-        if self.early_errors.is_none() {
-            self.early_errors = Some(NonEmpty::new(error));
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
