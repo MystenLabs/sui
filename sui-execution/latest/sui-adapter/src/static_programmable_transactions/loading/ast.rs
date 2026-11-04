@@ -38,7 +38,7 @@ pub struct Transaction {
     /// should be < `original_command_len`
     pub original_command_len: usize,
     pub commands: Commands,
-    pub unified_linkage: Option<ExecutableLinkage>,
+    pub unified_linkage: ExecutableLinkage,
 }
 
 pub type Inputs = Vec<(InputArg, InputType)>;
@@ -399,22 +399,6 @@ impl Command {
                 Box::new(std::iter::once(coin).chain(coins.iter_mut()))
             }
             Command::MakeMoveVec(_, elements) => Box::new(elements.iter_mut()),
-            Command::Publish(_, _, _) => Box::new(std::iter::empty()),
-            Command::Upgrade(_, _, _, obj, _) => Box::new(std::iter::once(obj)),
-        }
-    }
-
-    pub fn arguments(&self) -> Box<dyn Iterator<Item = &Argument> + '_> {
-        match self {
-            Command::MoveCall(mc) => Box::new(mc.arguments.iter()),
-            Command::TransferObjects(objs, recipient) => {
-                Box::new(objs.iter().chain(std::iter::once(recipient)))
-            }
-            Command::SplitCoins(coin, amounts) => {
-                Box::new(std::iter::once(coin).chain(amounts.iter()))
-            }
-            Command::MergeCoins(coin, coins) => Box::new(std::iter::once(coin).chain(coins.iter())),
-            Command::MakeMoveVec(_, elements) => Box::new(elements.iter()),
             Command::Publish(_, _, _) => Box::new(std::iter::empty()),
             Command::Upgrade(_, _, _, obj, _) => Box::new(std::iter::once(obj)),
         }

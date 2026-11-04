@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::{
-    linkage::resolved_linkage::ResolvedLinkage, loading::ast as L,
-    metering::translation_meter::TranslationMeter,
+    loading::ast as L, metering::translation_meter::TranslationMeter,
 };
 use sui_types::error::ExecutionErrorTrait;
 
@@ -23,10 +22,6 @@ pub fn meter<E: ExecutionErrorTrait>(
         meter.charge_num_type_nodes(ty.node_count())?;
     }
 
-    for linkage in transaction.commands.iter().filter_map(command_linkage) {
-        meter.charge_num_linkage_entries(linkage.linkage_resolution.len())?;
-    }
-
     for cmd in &transaction.commands {
         match cmd {
             L::Command::Publish(payload, _, _) | L::Command::Upgrade(payload, _, _, _, _) => {
@@ -41,19 +36,6 @@ pub fn meter<E: ExecutionErrorTrait>(
     }
 
     Ok(())
-}
-
-fn command_linkage(cmd: &L::Command) -> Option<&ResolvedLinkage> {
-    match cmd {
-        L::Command::Publish(_, _, linkage) | L::Command::Upgrade(_, _, _, _, linkage) => {
-            Some(linkage)
-        }
-        L::Command::MoveCall(call) => Some(&call.function.linkage.0),
-        L::Command::MakeMoveVec(_, _)
-        | L::Command::TransferObjects(_, _)
-        | L::Command::SplitCoins(_, _)
-        | L::Command::MergeCoins(_, _) => None,
-    }
 }
 
 fn command_types(cmd: &L::Command) -> Box<dyn Iterator<Item = &L::Type> + '_> {

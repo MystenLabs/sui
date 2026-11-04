@@ -5,167 +5,29 @@ use crate::{
     data_store::VerifiedPackageStore,
     static_programmable_transactions::{
         linkage::{
-            analysis::LinkageAnalyzer,
-            resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
-            resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
+            resolution::{
+                LinkageMeter, ResolutionTable, VersionConstraint, add_and_unify, get_package,
+            },
+            resolved_linkage::ResolvedLinkage,
         },
-        loading::ast::{
-            Argument, Command, DeserializedPackage, InputArg, InputType, Inputs, LoadedFunction,
-            PackagePayload, Transaction, Type, module_has_init,
-        },
+        loading::ast::{DeserializedPackage, PackagePayload, module_has_init},
+        preparation::ast::Command,
     },
 };
 use move_binary_format::file_format::Visibility;
-use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    Identifier,
+    Identifier, TypeTag,
     base_types::ObjectID,
     error::ExecutionErrorTrait,
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
 };
 
-/// Replace each command's per-call linkage with a single linkage shared by the whole transaction.
-///
-/// Done in two passes:
-///   1. Fold every command's package and type-argument constraints into one `ResolutionTable`,
-///      unifying as we go (an error here means the commands cannot agree on a single set of
-///      package versions).
-///      - Top level functions are pinned `exact`, while their dependencies are
-///        pinned `exact` or `at_least` based on the visibility of the top-level function.
-///        Type-argument packages are always `at_least`.
-///      - Publishes and upgrades introduce their own constraints to the linkage, but only if
-///        they have an `init` function (otherwise they do not contribute to the linkage). See
-///        comments on each of the command arms for details on this.
-///   2. Write the resulting unified linkage back into every `MoveCall`.
-///
-/// Because all calls end up sharing one linkage, every package version selection is consistent
-/// across the transaction.
-pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
-    txn: &mut Transaction,
-    linkage_analysis: &LinkageAnalyzer,
-    package_store: &VerifiedPackageStore<'_>,
-    protocol_config: &ProtocolConfig,
-) -> Result<(), E> {
-    let mut base_linkage = linkage_analysis
-        .config()
-        .resolution_table_with_native_packages::<E, _>(package_store)?;
-    let mut seen_fixed_inputs = BTreeSet::new();
-
-    for (i, command) in txn.commands.iter().enumerate() {
-        analyze_command::<E>(command, &mut base_linkage, package_store)
-            .map_err(|e| e.with_command_index(i))?;
-        add_used_input_linkage::<E>(
-            command.arguments(),
-            &txn.inputs,
-            &mut base_linkage,
-            &mut seen_fixed_inputs,
-            package_store,
-            protocol_config,
-        )
-        .map_err(|e| e.with_command_index(i))?;
-    }
-
-    add_withdrawal_compatibility_input_linkage::<E>(
-        &txn.inputs,
-        &mut base_linkage,
-        package_store,
-        protocol_config,
-    )?;
-
-    for (i, command) in txn.commands.iter().enumerate() {
-        let Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) = command else {
-            continue;
-        };
-        analyze_upgrade_command::<E>(
-            payload,
-            current_package_id,
-            resolved_linkage,
-            &mut base_linkage,
-            package_store,
-            protocol_config,
-        )
-        .map_err(|e| e.with_command_index(i))?;
-    }
-
-    // Constraint-level invariant check, run before `from_resolution_table` erases the
-    // underlying constraints.
-    for (i, command) in txn.commands.iter().enumerate() {
-        validate_init_linkage_pinning::<E>(command, &base_linkage, package_store)
-            .map_err(|e| e.with_command_index(i))?;
-    }
-
-    let resolved_linkage =
-        ExecutableLinkage::new(ResolvedLinkage::from_resolution_table(base_linkage));
-
-    assert_invariant!(
-        resolved_linkage
-            .0
-            .linkage_resolution
-            .iter()
-            .all(|(_, resolution)| { resolution.version.is_some() }),
-        "Unified linkage must resolve every package to a specific version, but found: {:?}",
-        resolved_linkage
-    );
-
-    for (i, command) in txn.commands.iter_mut().enumerate() {
-        write_back_linkage::<E>(command, &resolved_linkage).map_err(|e| e.with_command_index(i))?;
-    }
-
-    txn.unified_linkage = Some(resolved_linkage);
-
-    Ok(())
-}
-
-fn add_used_input_linkage<'a, E: ExecutionErrorTrait>(
-    arguments: impl IntoIterator<Item = &'a Argument>,
-    inputs: &Inputs,
-    resolution_table: &mut ResolutionTable,
-    seen_fixed_inputs: &mut BTreeSet<u16>,
-    store: &VerifiedPackageStore<'_>,
-    _protocol_config: &ProtocolConfig,
-) -> Result<(), E> {
-    for argument in arguments {
-        if let Argument::Input(i) = argument
-            && let Some((_, InputType::Fixed(ty))) = inputs.get(*i as usize)
-            && seen_fixed_inputs.insert(*i)
-        {
-            add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
-        }
-    }
-    Ok(())
-}
-
-fn add_withdrawal_compatibility_input_linkage<E: ExecutionErrorTrait>(
-    inputs: &Inputs,
-    resolution_table: &mut ResolutionTable,
-    store: &VerifiedPackageStore<'_>,
-    _protocol_config: &ProtocolConfig,
-) -> Result<(), E> {
-    add_type_packages::<E>(
-        resolution_table,
-        inputs.iter().filter_map(|(input_arg, input_ty)| {
-            if let InputArg::FundsWithdrawal(withdrawal) = input_arg
-                && withdrawal.from_compatibility_object
-                && let InputType::Fixed(ty) = input_ty
-            {
-                Some(ty)
-            } else {
-                None
-            }
-        }),
-        store,
-    )
-}
-
 /// A publish or upgrade that runs an `init` executes it under the linkage declared by that command
 /// so every dependency the command declares must be pinned `exact`ly to the version it declared in
 /// the larger unified linkage.
-fn validate_init_linkage_pinning<E: ExecutionErrorTrait>(
+pub(crate) fn validate_init_linkage_pinning<E: ExecutionErrorTrait>(
     command: &Command,
     resolution_table: &ResolutionTable,
     store: &VerifiedPackageStore<'_>,
@@ -215,16 +77,39 @@ fn validate_init_linkage_pinning<E: ExecutionErrorTrait>(
     }
 }
 
-/// Fold a single command's contribution into the shared `resolution_table` (pass 1). Only commands
-/// that pull packages into the runtime linkage contribute; the rest are no-ops.
-fn analyze_command<E: ExecutionErrorTrait>(
+/// Fold a prepared command's ordinary constraints into the transaction-wide resolution table.
+/// MoveCall targets are `Exact`; their dependencies are `AtLeast` for public functions and
+/// `Exact` for private/friend functions. Explicit call and vector types contribute their defining
+/// packages and dependencies as `AtLeast` constraints. A publish with an initializer pins its
+/// publication linkage `Exact`; a publish without an initializer contributes nothing.
+///
+/// Preparation calls this in command order, after collecting input constraints. Upgrades are
+/// deferred so their initializer membership checks see all ordinary contributions, including
+/// those from commands after the upgrade. The other commands introduce no package constraints.
+pub(crate) fn analyze_command<E: ExecutionErrorTrait>(
     command: &Command,
     resolution_table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
+    meter: &mut LinkageMeter<'_, E>,
 ) -> Result<(), E> {
     match command {
-        Command::MoveCall(move_call) => {
-            add_call_to_table::<E>(resolution_table, &move_call.function, store)?;
+        Command::MoveCall(call) => {
+            add_and_unify(
+                &call.package,
+                store,
+                resolution_table,
+                VersionConstraint::exact,
+                meter,
+            )?;
+            let pkg = get_package(&call.package, store)?;
+            let dep_resolution = match call.visibility {
+                Visibility::Public => VersionConstraint::at_least,
+                Visibility::Private | Visibility::Friend => VersionConstraint::exact,
+            };
+            for dep in resolution_table.config.linkage_table(&pkg).into_values() {
+                add_and_unify(&dep.into(), store, resolution_table, dep_resolution, meter)?;
+            }
+            add_type_packages::<E>(resolution_table, call.type_arguments.iter(), store, meter)?;
         }
         Command::Publish(PackagePayload::Deserialized(pkg), _, resolved_linkage) => {
             // A publish only affects the transaction's linkage if the package has an `init`
@@ -235,13 +120,19 @@ fn analyze_command<E: ExecutionErrorTrait>(
             // `modules` is guaranteed to be non-empty by the `deserialize_modules` function.
             if pkg.has_potential_init() {
                 for resolved in resolved_linkage.linkage.values() {
-                    add_and_unify(resolved, store, resolution_table, VersionConstraint::exact)?;
+                    add_and_unify(
+                        resolved,
+                        store,
+                        resolution_table,
+                        VersionConstraint::exact,
+                        meter,
+                    )?;
                 }
             }
         }
         Command::Upgrade(_, _, _, _, _) => {}
         Command::MakeMoveVec(Some(ty), _) => {
-            add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
+            add_type_packages::<E>(resolution_table, std::iter::once(ty), store, meter)?;
         }
         Command::MakeMoveVec(None, _) => (),
         Command::TransferObjects(_, _) | Command::SplitCoins(_, _) | Command::MergeCoins(_, _) => {}
@@ -250,13 +141,14 @@ fn analyze_command<E: ExecutionErrorTrait>(
 }
 
 /// Analyze the linkage contribution of an upgrade command.
-fn analyze_upgrade_command<E: ExecutionErrorTrait>(
+pub(crate) fn analyze_upgrade_command<E: ExecutionErrorTrait>(
     payload: &PackagePayload,
     current_package_id: &ObjectID,
     resolved_linkage: &ResolvedLinkage,
     resolution_table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
+    meter: &mut LinkageMeter<'_, E>,
 ) -> Result<(), E> {
     let current_pkg = get_package(current_package_id, store)?;
 
@@ -296,6 +188,7 @@ fn analyze_upgrade_command<E: ExecutionErrorTrait>(
             resolved_linkage,
             store,
             protocol_config,
+            meter,
         )?;
     }
 
@@ -364,39 +257,58 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     resolved_linkage: &ResolvedLinkage,
     store: &VerifiedPackageStore<'_>,
     _protocol_config: &ProtocolConfig,
+    meter: &mut LinkageMeter<'_, E>,
 ) -> Result<(), E> {
     let current_pkg = get_package(current_package_id, store)?;
     let pkg_original_id: ObjectID = current_pkg.original_id().into();
 
+    // Case 1: The upgraded package does not participate in runtime linkage. As with a fresh
+    // publish with init, add its publication linkage as Exact constraints using normal unification.
     if !resolution_table
         .resolution_table
         .contains_key(&pkg_original_id)
     {
         for resolved in resolved_linkage.linkage.values() {
-            add_and_unify(resolved, store, resolution_table, VersionConstraint::exact)?;
+            add_and_unify(
+                resolved,
+                store,
+                resolution_table,
+                VersionConstraint::exact,
+                meter,
+            )?;
         }
         return Ok(());
     }
 
+    // Case 2: The upgraded package already participates. Each dependency must either be absent
+    // or already select the declared version; init cannot replace an existing version selection.
     for (original_id, version_id) in &resolved_linkage.linkage {
+        meter()?;
         match resolution_table.resolution_table.get(original_id) {
             None => {
+                // Case 2a: The dependency is absent, so introduce its declared Exact constraint.
                 add_and_unify(
                     version_id,
                     store,
                     resolution_table,
                     VersionConstraint::exact,
+                    meter,
                 )?;
             }
             Some(existing) if existing.object_id() == *version_id => {
+                // Case 2b: The selected version agrees. Tighten an AtLeast constraint to Exact,
+                // or retain an existing Exact constraint, so later upgrades cannot change it.
                 add_and_unify(
                     version_id,
                     store,
                     resolution_table,
                     VersionConstraint::exact,
+                    meter,
                 )?;
             }
             Some(existing) => {
+                // Case 2c: The selected version differs. Reject even if normal unification could
+                // raise an AtLeast constraint; participation requires equality with init's linkage.
                 return Err(E::new_with_source(
                     ExecutionErrorKind::InvalidLinkage,
                     format!(
@@ -413,39 +325,13 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     Ok(())
 }
 
-/// Add a `MoveCall`'s target package and type-argument packages to the resolution table.
-///
-/// The called package itself is pinned `exact` (we must run exactly the version being called). Its
-/// dependencies are constrained by the callee's visibility: a public entrypoint is a stable ABI,
-/// so its dependencies may be upgraded (`at_least`); a private/`friend` entrypoint is not, so they
-/// are pinned `exact`. Type-argument packages are always `at_least`, since types resolve upwards
-/// to later versions. This mirrors `LinkageAnalyzer::compute_call_linkage_`.
-fn add_call_to_table<E: ExecutionErrorTrait>(
-    resolution_table: &mut ResolutionTable,
-    function: &LoadedFunction,
-    store: &VerifiedPackageStore<'_>,
-) -> Result<(), E> {
-    let dep_resolution_fn = match function.visibility {
-        Visibility::Public => VersionConstraint::at_least,
-        Visibility::Private | Visibility::Friend => VersionConstraint::exact,
-    };
-    let package: ObjectID = (*function.version_mid.address()).into();
-    add_package::<E>(
-        &package,
-        store,
-        resolution_table,
-        VersionConstraint::exact,
-        dep_resolution_fn,
-    )?;
-    add_type_packages::<E>(resolution_table, function.type_arguments.iter(), store)
-}
-
 /// Resolve every package mentioned by `types`. Types resolve upwards to later versions, so the
 /// package and its deps are both `at_least`.
-fn add_type_packages<'a, E: ExecutionErrorTrait>(
+pub(crate) fn add_type_packages<'a, E: ExecutionErrorTrait>(
     resolution_table: &mut ResolutionTable,
-    types: impl IntoIterator<Item = &'a Type>,
+    types: impl IntoIterator<Item = &'a TypeTag>,
     store: &VerifiedPackageStore<'_>,
+    meter: &mut LinkageMeter<'_, E>,
 ) -> Result<(), E> {
     resolution_table.add_type_linkages_to_table(
         types
@@ -453,68 +339,6 @@ fn add_type_packages<'a, E: ExecutionErrorTrait>(
             .flat_map(|ty| ty.all_addresses())
             .map(ObjectID::from),
         store,
+        meter,
     )
-}
-
-/// Add a package and its transitive dependencies to the resolution table. The package itself
-/// gets `self_resolution_fn`'s constraint; every transitive dep (per the package's linkage
-/// table) gets `dep_resolution_fn`'s constraint.
-fn add_package<E: ExecutionErrorTrait>(
-    object_id: &ObjectID,
-    store: &VerifiedPackageStore<'_>,
-    resolution_table: &mut ResolutionTable,
-    self_resolution_fn: fn(&Arc<VerifiedPackage>) -> Option<VersionConstraint>,
-    dep_resolution_fn: fn(&Arc<VerifiedPackage>) -> Option<VersionConstraint>,
-) -> Result<(), E> {
-    let pkg = get_package(object_id, store)?;
-    let transitive_deps = resolution_table
-        .config
-        .linkage_table(&pkg)
-        .into_values()
-        .map(ObjectID::from);
-    add_and_unify(object_id, store, resolution_table, self_resolution_fn)?;
-    for dep_id in transitive_deps {
-        add_and_unify(&dep_id, store, resolution_table, dep_resolution_fn)?;
-    }
-    Ok(())
-}
-
-/// Overwrite each `MoveCall`'s per-call linkage with the unified transaction-wide linkage (pass 2).
-/// Only `MoveCall`s carry an executable linkage; the other commands need no write-back.
-fn write_back_linkage<E: ExecutionErrorTrait>(
-    command: &mut Command,
-    ptb_linkage: &ExecutableLinkage,
-) -> Result<(), E> {
-    match command {
-        Command::MoveCall(move_call) => {
-            let previous_linkage = &move_call.function.linkage;
-            // Stronger than the length check above: every package the per-call linkage resolved
-            // must still be present in the per-component linkage. Unification only ever adds
-            // packages (the key set is a union across member calls), so a dropped key signals a
-            // bug in how component constraints were folded together.
-            //
-            // Since `linkage`'s keys are a set, this check also implies that
-            // `previous_linkage.0.linkage.len() <= ptb_linkage.0.linkage.len()`.
-            assert_invariant!(
-                previous_linkage
-                    .0
-                    .linkage
-                    .keys()
-                    .all(|k| ptb_linkage.0.linkage.contains_key(k)),
-                "single linkage drops a package that the per-call linkage of MoveCall had resolved"
-            );
-            debug_assert!(
-                previous_linkage.0.linkage.len() <= ptb_linkage.0.linkage.len(),
-                "single linkage has fewer candidates than the per-call linkage of MoveCall"
-            );
-            move_call.function.linkage = ptb_linkage.clone();
-        }
-        Command::TransferObjects(_, _)
-        | Command::SplitCoins(_, _)
-        | Command::MergeCoins(_, _)
-        | Command::MakeMoveVec(_, _)
-        | Command::Publish(_, _, _)
-        | Command::Upgrade(_, _, _, _, _) => (),
-    };
-    Ok(())
 }

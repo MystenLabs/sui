@@ -6,13 +6,15 @@ use crate::{
     metering::gas_charger::GasPayment,
     static_programmable_transactions::{
         env::Env,
-        linkage,
-        loading::ast::{self as L, PackagePayload},
+        loading::ast::{self as L},
         metering::{self, translation_meter::TranslationMeter},
+        preparation::ast as A,
+        typing::invariant_checks::linkage_consistency,
     },
 };
 use move_core_types::{language_storage::StructTag, u256::U256};
 use mysten_common::ZipDebugEqIteratorExt;
+use std::rc::Rc;
 use sui_types::{
     base_types::TxContext,
     error::ExecutionErrorTrait,
@@ -28,15 +30,17 @@ pub(crate) fn transaction<Mode: ExecutionMode>(
     // be the same length as the inputs
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
     gas_payment: Option<GasPayment>,
-    pt: P::ProgrammableTransaction,
+    pt: A::Transaction,
 ) -> Result<L::Transaction, Mode::Error> {
-    if let Err(err) = pt.validate_argument_indices() {
-        invariant_violation!(
-            "PTB argument indices are checked at signing -- this should be impossible: {err}"
+    let A::Transaction {
+        inputs,
+        commands,
+        unified_linkage,
+    } = pt;
+    assert_invariant!(
+        Rc::ptr_eq(&unified_linkage.0, &env.unified_linkage.0),
+        "prepared transaction and environment must share linkage"
         );
-    }
-    metering::pre_translation::meter::<Mode::Error>(meter, &pt)?;
-    let P::ProgrammableTransaction { inputs, commands } = pt;
     let withdrawal_compatibility_inputs =
         withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; inputs.len()]);
     assert_invariant!(
@@ -50,6 +54,14 @@ pub(crate) fn transaction<Mode: ExecutionMode>(
             input::<Mode>(env, tx_context, is_withdrawal_compatibility_input, arg)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    // Check every known input before typing can transform or discard unused inputs.
+    linkage_consistency::verify_type_linkage::<Mode>(
+        inputs.iter().filter_map(|(_, ty)| match ty {
+            L::InputType::Fixed(ty) => Some(ty),
+            L::InputType::Bytes => None,
+        }),
+        &unified_linkage,
+    )?;
     let original_command_len = commands.len();
     let commands = commands
         .into_iter()
@@ -61,16 +73,10 @@ pub(crate) fn transaction<Mode: ExecutionMode>(
         inputs,
         original_command_len,
         commands,
-        // Set by `linkage::refine_linkage` below if unified linkage is enabled.
-        unified_linkage: None,
+        unified_linkage,
     };
     metering::loading::meter::<Mode::Error>(meter, &loaded_tx)?;
-    linkage::refine_linkage::<Mode>(
-        loaded_tx,
-        env.linkage_analysis,
-        env.linkable_store,
-        env.protocol_config,
-    )
+    Ok(loaded_tx)
 }
 
 fn input<Mode: ExecutionMode>(
@@ -256,54 +262,58 @@ fn refine_permissions<Mode: ExecutionMode>(
 
 fn command<Mode: ExecutionMode>(
     env: &Env<Mode>,
-    command: P::Command,
+    command: A::Command,
 ) -> Result<L::Command, Mode::Error> {
     Ok(match command {
-        P::Command::MoveCall(pmc) => {
-            let P::ProgrammableMoveCall {
+        A::Command::MoveCall(pmc) => {
+            let A::MoveCall {
                 package,
                 module,
                 function: name,
                 type_arguments: ptype_arguments,
                 arguments,
+                visibility,
             } = *pmc;
             let type_arguments = ptype_arguments
                 .into_iter()
                 .enumerate()
-                .map(|(idx, ty)| env.load_type_input(idx, ty))
+                .map(|(idx, ty)| env.load_type_tag(idx, &ty))
                 .collect::<Result<Vec<_>, _>>()?;
-            let function = env.load_function(package, module, name, type_arguments)?;
+            let function =
+                env.load_function(package, module.clone(), name.clone(), type_arguments)?;
+            assert_invariant!(
+                function.name == name
+                    && function.visibility == visibility
+                    && *function.version_mid.address() == package.into()
+                    && function.version_mid.name() == module.as_ident_str()
+                    && function.original_mid.name() == module.as_ident_str(),
+                "prepared call to {package}::{module}::{name} (visibility {visibility:?}) was loaded as {}::{} (visibility {:?}, original module {})",
+                function.version_mid,
+                function.name,
+                function.visibility,
+                function.original_mid,
+            );
             L::Command::MoveCall(Box::new(L::MoveCall {
                 function,
                 arguments,
             }))
         }
-        P::Command::MakeMoveVec(ptype_argument, arguments) => {
+        A::Command::MakeMoveVec(ptype_argument, arguments) => {
             let type_argument = ptype_argument
-                .map(|ty| env.load_type_input(0, ty))
+                .map(|ty| env.load_type_tag(0, &ty))
                 .transpose()?;
             L::Command::MakeMoveVec(type_argument, arguments)
         }
-        P::Command::TransferObjects(objects, address) => {
+        A::Command::TransferObjects(objects, address) => {
             L::Command::TransferObjects(objects, address)
         }
-        P::Command::SplitCoins(coin, amounts) => L::Command::SplitCoins(coin, amounts),
-        P::Command::MergeCoins(target, coins) => L::Command::MergeCoins(target, coins),
-        P::Command::Publish(items, dep_ids) => {
-            let resolved_linkage = env
-                .linkage_analysis
-                .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
-            let payload = PackagePayload::Deserialized(deserialized_pkg);
-            L::Command::Publish(payload, dep_ids, resolved_linkage)
+        A::Command::SplitCoins(coin, amounts) => L::Command::SplitCoins(coin, amounts),
+        A::Command::MergeCoins(target, coins) => L::Command::MergeCoins(target, coins),
+        A::Command::Publish(payload, dep_ids, linkage) => {
+            L::Command::Publish(payload, dep_ids, linkage)
         }
-        P::Command::Upgrade(items, dep_ids, object_id, argument) => {
-            let resolved_linkage = env
-                .linkage_analysis
-                .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
-            let payload = PackagePayload::Deserialized(deserialized_pkg);
-            L::Command::Upgrade(payload, dep_ids, object_id, argument, resolved_linkage)
+        A::Command::Upgrade(payload, dep_ids, object_id, argument, linkage) => {
+            L::Command::Upgrade(payload, dep_ids, object_id, argument, linkage)
         }
     })
 }

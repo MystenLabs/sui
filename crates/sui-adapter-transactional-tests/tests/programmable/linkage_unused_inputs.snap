@@ -1,0 +1,82 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Unused owned objects and explicit funds withdrawals still impose type-package minimum
+// versions. Tests that they raise a public consumer from dependency v1 to v2 but conflict
+// with an exact v1 call target; the control without those inputs stays on v1.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-13:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5266800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-17:
+//# publish --dependencies DepV1 --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 19-33:
+//# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 9720400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, line 35:
+//# run DepV2::m::make --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 37-39:
+//# programmable --sender A --inputs 1u64
+// Without another contribution, the public call uses DepV1.
+//> Consumer::m::check(Input(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, lines 41-43:
+//# programmable --sender A --inputs object(4,0) 2u64
+// The unused object was introduced in v2 and upgrades the public call's dependency.
+//> Consumer::m::check(Input(1));
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 7, lines 45-47:
+//# programmable --sender A --inputs object(4,0)
+// The unused object's minimum v2 conflicts with an exact v1 call target.
+//> DepV1::m::ping();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(0) } }
+
+task 8, line 49:
+//# run DepV2::m::fund --sender A
+created: object(8,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(8,1), A, sui::balance::Balance<DepV2::m::NewType>, Merge, 2)
+gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, line 51:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 10, lines 53-55:
+//# programmable --sender A --inputs withdraw<sui::balance::Balance<DepV2::m::NewType>>(1) 2u64
+// An unused explicit withdrawal also raises the public call's dependency to v2.
+//> Consumer::m::check(Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 11, lines 57-59:
+//# programmable --sender A --inputs withdraw<sui::balance::Balance<DepV2::m::NewType>>(1)
+// Its minimum v2 also conflicts with an exact v1 target.
+//> DepV1::m::ping();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Debug of error: InvalidLinkage at command Some(0)

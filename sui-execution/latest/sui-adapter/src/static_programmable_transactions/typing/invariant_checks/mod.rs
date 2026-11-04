@@ -17,7 +17,7 @@ pub fn transaction<Mode: ExecutionMode>(
     defining_ids_in_types::verify(env, tt)?;
     type_check::verify::<Mode>(env, tt)?;
     memory_safety::verify(env, tt)?;
-    linkage_consistency::verify(env, tt, &tt.unified_linkage)?;
+    linkage_consistency::verify(env, tt)?;
     // Add in other invariants checks here as needed/desired.
     Ok(())
 }

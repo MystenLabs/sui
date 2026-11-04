@@ -5,13 +5,14 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use crate::{
     data_store::{PackageMetadata, PackageStore},
+    execution_mode::ExecutionMode,
     static_programmable_transactions::linkage::resolution::{
-        ResolutionTable, VersionConstraint, add_and_unify,
+        LinkageMeter, ResolutionTable, VersionConstraint, add_and_unify,
     },
 };
 use move_binary_format::binary_config::BinaryConfig;
 use move_vm_runtime::shared::types::{OriginalId, VersionId};
-use sui_protocol_config::Amendments;
+use sui_protocol_config::{Amendments, ProtocolConfig};
 use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID, base_types::ObjectID,
     error::ExecutionErrorTrait,
@@ -21,7 +22,7 @@ use sui_types::{
 /// different parts of the system and are not required to be explicitly imported always.
 /// Additionally, there is no versioning concerns around these as they are "stable" for a given
 /// epoch, and are the special packages that are always available, and updated in-place.
-const NATIVE_PACKAGE_IDS: &[ObjectID] = &[
+pub(crate) const NATIVE_PACKAGE_IDS: &[ObjectID] = &[
     SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_PACKAGE_ID,
     MOVE_STDLIB_PACKAGE_ID,
@@ -51,6 +52,16 @@ pub struct LinkageConfig {
 }
 
 impl ResolutionConfig {
+    pub fn from_protocol_config<Mode: ExecutionMode>(protocol_config: &ProtocolConfig) -> Self {
+        let linkage_config = LinkageConfig::new(
+            protocol_config
+                .include_special_package_amendments_as_option()
+                .clone(),
+            !Mode::packages_are_predefined(),
+        );
+        Self::new(linkage_config, protocol_config.binary_config(None))
+    }
+
     pub fn new(linkage_config: LinkageConfig, binary_config: BinaryConfig) -> Self {
         Self(Rc::new(ResolutionConfig_ {
             linkage_config,
@@ -72,10 +83,18 @@ impl ResolutionConfig {
     >(
         &self,
         store: &S,
+        meter: &mut LinkageMeter<'_, E>,
     ) -> Result<ResolutionTable, E> {
         let mut resolution_table = ResolutionTable::empty(self.clone());
         if self.0.linkage_config.always_include_system_packages {
             for id in NATIVE_PACKAGE_IDS {
+                add_and_unify(
+                    id,
+                    store,
+                    &mut resolution_table,
+                    VersionConstraint::exact,
+                    meter,
+                )?;
                 #[cfg(debug_assertions)]
                 {
                     use crate::static_programmable_transactions::linkage::resolution::get_package;
@@ -83,7 +102,6 @@ impl ResolutionConfig {
                     debug_assert_eq!(package.version_id(), *id);
                     debug_assert_eq!(package.original_id(), *id);
                 }
-                add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
             }
         }
 
