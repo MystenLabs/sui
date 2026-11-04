@@ -16376,7 +16376,6 @@ dependencies = [
  "sui-futures",
  "sui-indexer-alt-framework",
  "sui-inverted-index",
- "sui-package-resolver",
  "sui-types",
  "tempfile",
  "tokio",

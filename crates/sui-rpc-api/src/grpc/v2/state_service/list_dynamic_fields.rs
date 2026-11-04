@@ -4,6 +4,7 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::grpc::v2::render::RenderContext;
 use bytes::Bytes;
 use move_core_types::language_storage::StructTag;
 use prost::Message;
@@ -19,7 +20,6 @@ use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsResponse;
 use sui_rpc::proto::sui::rpc::v2::dynamic_field::DynamicFieldKind;
 use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
-use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::storage::DynamicFieldKey;
 
 const MAX_PAGE_SIZE: usize = 1000;
@@ -91,15 +91,20 @@ pub fn list_dynamic_fields(
         }),
     )?;
     let mut dynamic_fields = Vec::with_capacity(page_size);
+    let render_context = RenderContext::empty(service.reader.inner());
     let mut size_bytes = 0;
     while let Some(key) = iter
         .next()
         .transpose()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
     {
-        let Some(dynamic_field) =
-            get_dynamic_field(service, &key.parent, &key.field_id, &read_mask)
-        else {
+        let Some(dynamic_field) = get_dynamic_field(
+            service,
+            &key.parent,
+            &key.field_id,
+            &read_mask,
+            &render_context,
+        ) else {
             continue;
         };
 
@@ -154,6 +159,7 @@ fn get_dynamic_field(
     parent: &ObjectID,
     field_id: &ObjectID,
     read_mask: &FieldMaskTree,
+    render_context: &RenderContext,
 ) -> Option<DynamicField> {
     let mut message = DynamicField::default();
 
@@ -166,7 +172,8 @@ fn get_dynamic_field(
     }
 
     if should_load_field(read_mask)
-        && let Err(e) = load_dynamic_field(service, field_id, read_mask, &mut message)
+        && let Err(e) =
+            load_dynamic_field(service, field_id, read_mask, &mut message, render_context)
     {
         tracing::warn!("error loading dynamic object: {e}");
         return None;
@@ -193,6 +200,7 @@ fn load_dynamic_field(
     field_id: &ObjectID,
     read_mask: &FieldMaskTree,
     message: &mut DynamicField,
+    render_context: &RenderContext,
 ) -> Result<(), anyhow::Error> {
     use sui_types::dynamic_field::DynamicFieldType;
     use sui_types::dynamic_field::visitor as DFV;
@@ -217,25 +225,14 @@ fn load_dynamic_field(
         return Ok(());
     }
 
-    let layout = match service
-        .reader
-        .inner()
-        .get_struct_layout(&move_object.type_().clone().into())
-    {
-        Ok(Some(layout)) => layout,
-        Ok(None) => {
-            return Err(anyhow::anyhow!(
-                "unable to load layout for type `{:?}`",
-                move_object.type_()
-            ));
-        }
-        Err(e) => {
-            return Err(anyhow::anyhow!(
+    let layout = render_context
+        .type_layout(move_object.type_().clone().into())
+        .map_err(|e| {
+            anyhow::anyhow!(
                 "unable to load layout for type `{:?}`: {e}",
                 move_object.type_()
-            ));
-        }
-    };
+            )
+        })?;
 
     let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)?;
 
@@ -267,7 +264,7 @@ fn load_dynamic_field(
         message.set_field_object(service.render_object_to_proto(
             &field_object,
             &submask,
-            &ObjectSet::default(),
+            render_context,
         ));
     }
 
@@ -302,7 +299,7 @@ fn load_dynamic_field(
                     message.set_child_object(service.render_object_to_proto(
                         &object,
                         &submask,
-                        &ObjectSet::default(),
+                        render_context,
                     ));
                 }
             }

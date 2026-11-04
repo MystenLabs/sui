@@ -20,9 +20,8 @@ use crate::messages_checkpoint::{
     VersionedFullCheckpointContents,
 };
 use crate::object::Object;
-use crate::storage::ObjectKey;
+use crate::storage::{BackingPackageStore, ObjectKey};
 use crate::transaction::{TransactionData, VerifiedTransaction};
-use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -740,33 +739,11 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
         self.get_latest_checkpoint_sequence_number()
     }
 
-    fn get_type_layout(&self, type_tag: &TypeTag) -> Result<Option<MoveTypeLayout>> {
-        match type_tag {
-            TypeTag::Bool => Ok(Some(MoveTypeLayout::Bool)),
-            TypeTag::U8 => Ok(Some(MoveTypeLayout::U8)),
-            TypeTag::U64 => Ok(Some(MoveTypeLayout::U64)),
-            TypeTag::U128 => Ok(Some(MoveTypeLayout::U128)),
-            TypeTag::Address => Ok(Some(MoveTypeLayout::Address)),
-            TypeTag::Signer => Ok(Some(MoveTypeLayout::Signer)),
-            TypeTag::Vector(type_tag) => Ok(self
-                .get_type_layout(type_tag)?
-                .map(|layout| MoveTypeLayout::Vector(Box::new(layout)))),
-            TypeTag::Struct(struct_tag) => self.get_struct_layout(struct_tag),
-            TypeTag::U16 => Ok(Some(MoveTypeLayout::U16)),
-            TypeTag::U32 => Ok(Some(MoveTypeLayout::U32)),
-            TypeTag::U256 => Ok(Some(MoveTypeLayout::U256)),
+    /// Returns the package source for response-local layout resolution. Readers whose
+    /// runtime package store is unavailable or uses a different read policy override this.
+    fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
+        Box::new(self)
         }
-    }
-
-    fn get_struct_layout(&self, struct_tag: &StructTag) -> Result<Option<MoveTypeLayout>> {
-        self.get_struct_layout_with_overlay(struct_tag, &ObjectSet::default())
-    }
-
-    fn get_struct_layout_with_overlay(
-        &self,
-        struct_tag: &StructTag,
-        overlay: &ObjectSet,
-    ) -> Result<Option<MoveTypeLayout>>;
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;

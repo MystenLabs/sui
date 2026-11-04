@@ -19,7 +19,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_package_resolver::SyncResolver;
+use sui_package_resolver::{PackageStoreWithLruCache, SyncResolver};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -975,12 +975,13 @@ impl AuthorityStore {
         old_epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult
     where
-        T: TypeLayoutStore + Send + Copy,
+        T: TypeLayoutStore + Send + Sync + Copy,
     {
         if !self.enable_epoch_sui_conservation_check {
             return Ok(());
         }
 
+        let package_store = PackageStoreWithLruCache::new(type_layout_store);
         info!("Starting SUI conservation check. This may take a while..");
         let cur_time = Instant::now();
         let mut pending_objects = vec![];
@@ -997,8 +998,9 @@ impl AuthorityStore {
                         if count % 1_000_000 == 0 {
                             let mut task_objects = vec![];
                             mem::swap(&mut pending_objects, &mut task_objects);
+                            let package_store = &package_store;
                             pending_tasks.push(s.spawn(move || {
-                                let mut layout_resolver = SyncResolver::new(type_layout_store);
+                                let mut layout_resolver = SyncResolver::new(package_store);
                                 let mut total_storage_rebate = 0;
                                 let mut total_sui = 0;
                                 for object in task_objects {
@@ -1045,7 +1047,7 @@ impl AuthorityStore {
                 (init.0 + result.0, init.1 + result.1)
             })
         });
-        let mut layout_resolver = SyncResolver::new(type_layout_store);
+        let mut layout_resolver = SyncResolver::new(&package_store);
         for object in pending_objects {
             total_storage_rebate += object.storage_rebate;
             total_sui +=
