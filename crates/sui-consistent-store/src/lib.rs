@@ -47,6 +47,7 @@ pub mod store;
 pub mod synchronizer;
 
 pub use crate::batch::Batch;
+pub use crate::db::CompactionBytes;
 pub use crate::db::Db;
 pub use crate::db::DbOptions;
 pub use crate::db::DbRef;

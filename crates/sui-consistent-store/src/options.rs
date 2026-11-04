@@ -494,12 +494,20 @@ impl CfOptionsResolver {
     }
 
     /// Database-wide options for `open_cf_descriptors`. Always sets
-    /// `create_if_missing` and `create_missing_column_families`; the
-    /// remaining knobs are applied only when configured.
+    /// `create_if_missing` and `create_missing_column_families`, and
+    /// enables RocksDB statistics so [`Db::compaction_bytes`](crate::Db::compaction_bytes)
+    /// can read the compaction byte tickers; the remaining knobs are
+    /// applied only when configured.
     pub(crate) fn db_options(&self) -> rocksdb::Options {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
+        opts.enable_statistics();
+        // rust-rocksdb's `StatsLevel` discriminants are one above the C
+        // API's, so this selects RocksDB's `kExceptTimers`: tickers and
+        // size histograms, with timer histograms off. RocksDB still times
+        // every merge-operator call whenever statistics are enabled.
+        opts.set_statistics_level(rocksdb::statistics::StatsLevel::ExceptHistogramOrTimers);
 
         let db = &self.config.db;
         if let Some(n) = db.parallelism {

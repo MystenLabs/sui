@@ -36,6 +36,7 @@ use anyhow::Context as _;
 use mysten_common::fatal;
 use prometheus::Registry;
 use sui_config::NodeConfig;
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_consistent_store::ChainId;
 use sui_consistent_store::Db;
 use sui_consistent_store::DbOptions;
@@ -86,23 +87,18 @@ const RPC_STORE_DIR: &str = "rpc_store";
 
 const SECONDS_PER_DAY: u64 = 86_400;
 
-/// Number of in-memory snapshots retained for consistent reads.
-///
-/// Zero disables snapshotting entirely (the synchronizer's
-/// `take_snapshot` becomes a no-op). Today the embedded deployment never
-/// serves point-in-time reads from a RocksDB snapshot so we will disable
-/// it for now.
-const SNAPSHOT_CAPACITY: usize = 0;
-
 fn bitmap_periodic_compaction_seconds(days: u64) -> anyhow::Result<u64> {
     days.checked_mul(SECONDS_PER_DAY).ok_or_else(|| {
         anyhow::anyhow!("rpc-store-bitmap-periodic-compaction-days value {days} overflows seconds")
     })
 }
 
-fn db_options(bitmap_periodic_compaction_days: Option<u64>) -> anyhow::Result<DbOptions> {
+/// Build the embedded rpc-store's [`DbOptions`] from the node's pruning
+/// config: the bitmap CFs' periodic-compaction override, and the number
+/// of per-checkpoint snapshots to retain (zero disables snapshotting).
+fn db_options(config: &AuthorityStorePruningConfig) -> anyhow::Result<DbOptions> {
     let mut rocksdb = default_rocksdb_config();
-    if let Some(days) = bitmap_periodic_compaction_days {
+    if let Some(days) = config.rpc_store_bitmap_periodic_compaction_days {
         let seconds = bitmap_periodic_compaction_seconds(days)?;
         for name in [transaction_bitmap::NAME, event_bitmap::NAME] {
             rocksdb
@@ -114,7 +110,7 @@ fn db_options(bitmap_periodic_compaction_days: Option<u64>) -> anyhow::Result<Db
     }
     Ok(DbOptions {
         rocksdb,
-        snapshot_capacity: SNAPSHOT_CAPACITY,
+        snapshot_capacity: config.rpc_store_num_checkpoint_snapshots_to_retain,
     })
 }
 
@@ -334,11 +330,7 @@ impl EmbeddedRpcStore {
     ) -> anyhow::Result<Self> {
         let perpetual = authority_store.perpetual_tables.clone();
         let path = config.db_path().join(RPC_STORE_DIR);
-        let options = db_options(
-            config
-                .authority_store_pruning_config
-                .rpc_store_bitmap_periodic_compaction_days,
-        )?;
+        let options = db_options(&config.authority_store_pruning_config)?;
         let (db, schema) = open_db(&path, options).await?;
         let schema = Arc::new(schema);
 
@@ -847,7 +839,9 @@ mod tests {
 
     #[test]
     fn bitmap_periodic_compaction_defaults_and_overrides_target_only_bitmap_cfs() {
-        let defaults = db_options(None).unwrap().rocksdb;
+        let defaults = db_options(&AuthorityStorePruningConfig::default())
+            .unwrap()
+            .rocksdb;
         assert_eq!(
             defaults.column_family[transaction_bitmap::NAME].periodic_compaction_seconds,
             Some(7 * SECONDS_PER_DAY)
@@ -857,7 +851,12 @@ mod tests {
             Some(7 * SECONDS_PER_DAY)
         );
 
-        let config = db_options(Some(17)).unwrap().rocksdb;
+        let config = db_options(&AuthorityStorePruningConfig {
+            rpc_store_bitmap_periodic_compaction_days: Some(17),
+            ..Default::default()
+        })
+        .unwrap()
+        .rocksdb;
         assert_eq!(
             config.column_family[transaction_bitmap::NAME].periodic_compaction_seconds,
             Some(17 * SECONDS_PER_DAY)
@@ -878,10 +877,35 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_retention_follows_pruning_config() {
+        let take_snapshots = |config: &AuthorityStorePruningConfig| {
+            let dir = tempfile::tempdir().unwrap();
+            let (db, _schema) =
+                Db::open::<RpcStoreSchema>(dir.path(), db_options(config).unwrap()).unwrap();
+            for checkpoint in 1..=5 {
+                db.take_snapshot(Watermark::for_checkpoint(checkpoint));
+            }
+            db.snapshot_range()
+        };
+
+        assert_eq!(
+            take_snapshots(&AuthorityStorePruningConfig::default()),
+            None
+        );
+
+        let retain_three = AuthorityStorePruningConfig {
+            rpc_store_num_checkpoint_snapshots_to_retain: 3,
+            ..Default::default()
+        };
+        assert_eq!(take_snapshots(&retain_three), Some(3..=5));
+    }
+
+    #[test]
     fn clear_rpc_store_resets_the_bitmap_floor() {
         let dir = tempfile::tempdir().unwrap();
         let (db, schema) =
-            Db::open::<RpcStoreSchema>(dir.path(), db_options(None).unwrap()).unwrap();
+            Db::open::<RpcStoreSchema>(dir.path(), db_options(&Default::default()).unwrap())
+                .unwrap();
         let floor = transaction_bitmap::TX_BUCKET_SIZE;
         let (watermark_key, watermark_value) =
             pruning_watermark::store(&pruning_watermark::Watermarks {

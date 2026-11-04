@@ -966,6 +966,10 @@ fn is_true(value: &bool) -> bool {
     *value
 }
 
+fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
 impl Config for NodeConfig {}
 
 impl NodeConfig {
@@ -1314,6 +1318,23 @@ pub struct AuthorityStorePruningConfig {
     /// wall-clock deletion SLA.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rpc_store_bitmap_periodic_compaction_days: Option<u64>,
+    /// Number of per-checkpoint RocksDB snapshots the embedded RPC store
+    /// retains in memory. The store's synchronizer takes a snapshot each
+    /// time every pipeline in its cohort has committed a checkpoint; once
+    /// this many are retained, each new one evicts the oldest. Zero (the
+    /// default) disables snapshotting.
+    ///
+    /// Nothing reads these snapshots yet; they are intended to back
+    /// consistent pagination for the RPC store's live-index reads.
+    /// Retaining them prevents compaction from dropping keys overwritten
+    /// or deleted after the oldest retained snapshot, and from combining
+    /// merge operands that a snapshot separates, so a key merged in many
+    /// checkpoints (a balance, the current bitmap bucket) keeps up to one
+    /// operand per checkpoint in the window for reads to fold. Larger
+    /// values therefore cost disk space, compaction work, and read latency.
+    /// At ~4 checkpoints per second, 15,000 snapshots span about an hour.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub rpc_store_num_checkpoint_snapshots_to_retain: usize,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
@@ -1359,6 +1380,7 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: default_max_transactions_in_batch(),
             periodic_compaction_threshold_days: None,
             rpc_store_bitmap_periodic_compaction_days: None,
+            rpc_store_num_checkpoint_snapshots_to_retain: 0,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
