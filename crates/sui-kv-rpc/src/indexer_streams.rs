@@ -27,6 +27,7 @@
 //! answered `Unavailable`, and [`crate::Health`] reports the replica not ready.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -128,7 +129,7 @@ async fn publish_service_info(
                     watermark.timestamp_ms_hi_inclusive,
                 );
                 server.metrics.observe_served_service_info(&info);
-                server.cache.send_replace(Some(info));
+                server.cache.send_replace(Some(Arc::new(info)));
             }
             Some(_) => {}
             None if !missing.is_empty()
@@ -182,9 +183,7 @@ mod tests {
     use sui_kvstore::rpc::proto::v1alpha::watermark_service_server::WatermarkServiceServer;
     use sui_kvstore::rpc::watermark_service::WatermarkService;
     use sui_kvstore::testing::MockBigtableServer;
-    use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
     use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
-    use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
     use sui_rpc_api::proto::timestamp_ms_to_proto;
     use tokio::time::sleep;
     use tokio::time::timeout;
@@ -194,7 +193,9 @@ mod tests {
     use crate::LedgerHistoryConfig;
     use crate::ServerConfig;
     use crate::StagesConfig;
+    use crate::served_height::ServedHeight;
     use crate::service_info_watermark_pipelines;
+    use crate::tests::get_service_info;
     use crate::tests::watermark_reads;
 
     /// Covers subscribing to an indexer that restarted, which waits out the follower's 2 s
@@ -329,7 +330,7 @@ mod tests {
         .await
         .unwrap_or_else(|_| panic!("served checkpoint never reached {checkpoint}"))
         .expect("service info sender dropped");
-        info.clone().unwrap()
+        GetServiceInfoResponse::clone(info.as_ref().unwrap())
     }
 
     fn cached_checkpoint(server: &KvRpcServer) -> Option<u64> {
@@ -338,17 +339,6 @@ mod tests {
             .borrow()
             .as_ref()
             .and_then(|info| info.checkpoint_height)
-    }
-
-    async fn get_service_info(
-        server: &KvRpcServer,
-    ) -> Result<GetServiceInfoResponse, tonic::Status> {
-        LedgerService::get_service_info(
-            server,
-            tonic::Request::new(GetServiceInfoRequest::default()),
-        )
-        .await
-        .map(tonic::Response::into_inner)
     }
 
     #[test]
@@ -425,7 +415,8 @@ mod tests {
 
         sleep(QUIET_PERIOD).await;
         assert_eq!(cached_checkpoint(&server), None);
-        let error = tonic::Status::from(server.served_height().unwrap_err());
+        let error =
+            tonic::Status::from(ServedHeight::of(&server.admitted_request(())).unwrap_err());
         assert_eq!(error.code(), tonic::Code::Unavailable);
         let error = get_service_info(&server).await.unwrap_err();
         assert_eq!(error.code(), tonic::Code::Unavailable);

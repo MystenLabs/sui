@@ -16,8 +16,9 @@ use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 use tonic::codegen::BoxStream;
 
 use crate::KvRpcServer;
-use crate::WatermarkSource;
+use crate::admission::AdmittedServiceInfo;
 use crate::operation::OperationSpec;
+use crate::served_height::ServedHeight;
 
 pub(crate) mod get_checkpoint;
 mod get_epoch;
@@ -34,34 +35,13 @@ mod resume_tests;
 impl LedgerService for KvRpcServer {
     async fn get_service_info(
         &self,
-        _: tonic::Request<GetServiceInfoRequest>,
+        request: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
-        {
-            let cache = self.cache.borrow();
-            if let Some(cached_info) = cache.as_ref() {
-                return Ok(tonic::Response::new(cached_info.clone()));
-            }
-        }
-        // Before the cache is first filled, a replica that polls Bigtable reads the watermark rows
-        // directly. A replica that follows indexer streams has no answer until they report every
-        // served pipeline. An indexer's first response already holds every pipeline it runs,
-        // starting from the stored watermark rows it read at startup, so this lasts until the
-        // first response arrives, and the replica's `/health` reports it not ready until then.
-        match &self.watermark_source {
-            WatermarkSource::Bigtable => get_service_info(
-                self.client.clone(),
-                self.chain_id,
-                self.server_version.clone(),
-                &self.service_info_watermark_pipelines,
-            )
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into),
-            WatermarkSource::IndexerStreams(_) => Err(tonic::Status::unavailable(
-                "served checkpoint not known yet: the indexer watermark streams have not reported \
-                 every served pipeline",
-            )),
-        }
+        // Unavailable only before the replica's first served checkpoint, while `/health` reports
+        // it not ready.
+        let info = AdmittedServiceInfo::of(&request)?
+            .ok_or_else(|| tonic::Status::unavailable("served checkpoint not known yet"))?;
+        Ok(tonic::Response::new(info.clone()))
     }
 
     async fn get_object(
@@ -99,7 +79,7 @@ impl LedgerService for KvRpcServer {
         get_transaction::get_transaction(
             self.limited_client("GetTransaction"),
             &self.stages,
-            self.served_height()?,
+            ServedHeight::of(&request)?,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -115,7 +95,7 @@ impl LedgerService for KvRpcServer {
         get_transaction::batch_get_transactions(
             self.limited_client("BatchGetTransactions"),
             &self.stages,
-            self.served_height()?,
+            ServedHeight::of(&request)?,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -132,7 +112,7 @@ impl LedgerService for KvRpcServer {
             self.client.clone(),
             self.limited_client("GetCheckpoint"),
             &self.stages,
-            self.served_height()?,
+            ServedHeight::of(&request)?,
             request.into_inner(),
         )
         .await
@@ -146,7 +126,7 @@ impl LedgerService for KvRpcServer {
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(
             self.client.clone(),
-            self.served_height()?,
+            ServedHeight::of(&request)?,
             request.into_inner(),
             self.chain_id.chain(),
         )
@@ -579,5 +559,146 @@ pub(crate) mod test_utils {
             mock,
             server,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use futures::TryStreamExt;
+    use sui_kvstore::testing::MockBigtableServer;
+    use sui_kvstore::testing::insert_checkpoint_rows;
+    use sui_rpc::field::FieldMask;
+    use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    use super::*;
+    use crate::KvRpcConfig;
+    use crate::LedgerHistoryConfig;
+    use crate::StagesConfig;
+    use crate::WatermarkSource;
+
+    /// A replica over checkpoints 0 to 2 whose served height moves only when the test publishes
+    /// one.
+    struct Fixture {
+        server: KvRpcServer,
+        _mock: MockBigtableServer,
+        _mock_server: tokio::task::JoinHandle<()>,
+    }
+
+    impl Fixture {
+        async fn new() -> Self {
+            let mock = MockBigtableServer::new();
+            let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+            let mut builder = TestCheckpointBuilder::new(0);
+            for object in 10..13 {
+                builder = builder
+                    .start_transaction(0)
+                    .create_owned_object(object)
+                    .finish_transaction();
+                insert_checkpoint_rows(&mock, &builder.build_checkpoint()).await;
+            }
+
+            // A replica that follows indexer streams publishes only from `start_service`, which
+            // this never calls, so `publish` alone moves the served height.
+            let server = KvRpcServer::new_local_with_config(
+                addr.to_string(),
+                "test".to_string(),
+                None,
+                LedgerHistoryConfig::default(),
+                KvRpcConfig::default().request_bigtable_concurrency(),
+                KvRpcConfig::default().monotonic_read_wait_timeout(),
+                StagesConfig::default(),
+                WatermarkSource::IndexerStreams(vec![]),
+            )
+            .await
+            .expect("create kv-rpc server");
+
+            Self {
+                server,
+                _mock: mock,
+                _mock_server: mock_server,
+            }
+        }
+
+        fn publish(&self, checkpoint: u64) {
+            let info = service_info(self.server.chain_id, None, 0, checkpoint, checkpoint);
+            self.server.cache.send_replace(Some(Arc::new(info)));
+        }
+
+        /// `message` admitted at checkpoint 1, with checkpoint 2 published after admission.
+        fn admitted_before_publish<T>(&self, message: T) -> tonic::Request<T> {
+            self.publish(1);
+            let request = self.server.admitted_request(message);
+            self.publish(2);
+            request
+        }
+    }
+
+    #[tokio::test]
+    async fn service_info_reports_the_admitted_height() {
+        let fixture = Fixture::new().await;
+        let request = fixture.admitted_before_publish(GetServiceInfoRequest::default());
+
+        let info = fixture
+            .server
+            .get_service_info(request)
+            .await
+            .expect("service info")
+            .into_inner();
+        assert_eq!(info.checkpoint_height, Some(1));
+    }
+
+    #[tokio::test]
+    async fn latest_checkpoint_is_the_admitted_height() {
+        let fixture = Fixture::new().await;
+        let mut message = GetCheckpointRequest::default();
+        message.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        let request = fixture.admitted_before_publish(message);
+
+        let checkpoint = fixture
+            .server
+            .get_checkpoint(request)
+            .await
+            .expect("latest checkpoint")
+            .into_inner()
+            .checkpoint
+            .expect("response carries a checkpoint");
+        assert_eq!(checkpoint.sequence_number, Some(1));
+    }
+
+    #[tokio::test]
+    async fn checkpoint_list_stops_at_the_admitted_height() {
+        let fixture = Fixture::new().await;
+        let mut message = ListCheckpointsRequest::default();
+        message.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        let request = fixture.admitted_before_publish(message);
+
+        let frames: Vec<ListCheckpointsResponse> = fixture
+            .server
+            .list_checkpoints(request)
+            .await
+            .expect("list checkpoints")
+            .into_inner()
+            .try_collect()
+            .await
+            .expect("list checkpoints stream");
+
+        let listed: Vec<u64> = frames
+            .iter()
+            .filter_map(|frame| frame.checkpoint.as_ref()?.sequence_number)
+            .collect();
+        assert_eq!(listed, [0, 1]);
+        let terminal = frames.last().expect("terminal frame");
+        assert_eq!(
+            terminal.end.as_ref().map(|end| end.reason()),
+            Some(QueryEndReason::LedgerTip)
+        );
+        assert_eq!(
+            terminal.watermark.as_ref().and_then(|w| w.checkpoint),
+            Some(1)
+        );
     }
 }

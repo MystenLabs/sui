@@ -47,11 +47,11 @@ use tonic::transport::ServerTlsConfig;
 use tonic::transport::server::TcpIncoming;
 use tracing::error;
 
+mod admission;
 mod bigtable_client;
 mod config;
 mod error_log;
 mod indexer_streams;
-mod monotonic_read;
 mod object_cache;
 mod operation;
 mod package_store;
@@ -62,6 +62,8 @@ mod resolve;
 mod served_height;
 mod v2;
 
+use admission::AdmissionLayer;
+pub use admission::X_SUI_MIN_CHECKPOINT;
 use bigtable_client::Metrics as BigTableLimiterMetrics;
 pub use config::KvRpcConfig;
 pub use config::LedgerHistoryConfig;
@@ -72,8 +74,6 @@ pub use config::ResolvedStageConfig;
 pub use config::StageConfig;
 pub use config::StagesConfig;
 pub use indexer_streams::WatermarkSource;
-use monotonic_read::MonotonicReadLayer;
-pub use monotonic_read::X_SUI_MIN_CHECKPOINT;
 use package_store::BigTablePackageStore;
 
 /// Pipelines whose watermarks always bound the `GetServiceInfo` checkpoint
@@ -308,8 +308,10 @@ pub struct KvRpcServer {
     /// Refreshed from Bigtable's watermark rows by the task spawned in
     /// [`KvRpcServer::init`], or from indexer watermark streams by the service started in
     /// [`KvRpcServer::start_service`], as `watermark_source` selects.
-    /// A `watch` channel so a monotonic read can await a refresh rather than poll for one.
-    cache: Arc<watch::Sender<Option<GetServiceInfoResponse>>>,
+    /// A `watch` channel so a monotonic read can await a refresh rather than poll for one, and
+    /// behind an `Arc` so admitting a request records the info it is served at without copying it
+    /// (see [`admission`]).
+    cache: Arc<watch::Sender<Option<Arc<GetServiceInfoResponse>>>>,
     watermark_source: WatermarkSource,
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
@@ -322,19 +324,16 @@ pub struct KvRpcServer {
 /// Answers whether a replica is ready for traffic, for its `/health` endpoint.
 #[derive(Clone)]
 pub struct Health {
-    /// The replica's service info when readiness waits for it, or `None` for a replica that
-    /// polls Bigtable, which is ready from startup.
-    served: Option<watch::Receiver<Option<GetServiceInfoResponse>>>,
+    served: watch::Receiver<Option<Arc<GetServiceInfoResponse>>>,
 }
 
 impl Health {
-    /// Whether the replica is ready. A replica that follows indexer watermark streams is ready
-    /// once every served pipeline has a streamed watermark, and stays ready after that, because
-    /// its served checkpoint is never cleared. A replica that polls Bigtable is always ready.
+    /// Whether the replica is ready: once it knows the checkpoint it serves, from its first
+    /// successful watermark refresh or, following indexer watermark streams, once every served
+    /// pipeline has a streamed watermark. It stays ready after that, because its served checkpoint
+    /// is never cleared.
     pub fn is_ready(&self) -> bool {
-        self.served
-            .as_ref()
-            .is_none_or(|served| served.borrow().is_some())
+        self.served.borrow().is_some()
     }
 }
 
@@ -394,13 +393,13 @@ fn spawn_listener(
                 grpc_method_allowlist,
             ),
         ))
-        // Logs each response that ends in a server-side error; outside the monotonic-read layer so
-        // its rejections are logged too.
+        // Logs each response that ends in a server-side error; outside the admission layer so its
+        // rejections are logged too.
         .layer(CallbackLayer::new(error_log::MakeServerErrorLog))
         .layer(request_log_layer)
         // Innermost, so a request held or rejected here is still counted by the metrics layer and
         // recorded by the request log above it.
-        .layer(MonotonicReadLayer::new(
+        .layer(AdmissionLayer::new(
             ledger.cache.subscribe(),
             ledger.monotonic_read_wait_timeout,
         ))
@@ -603,7 +602,7 @@ impl KvRpcServer {
                     {
                         Ok(info) => {
                             server_clone.metrics.observe_served_service_info(&info);
-                            server_clone.cache.send_replace(Some(info));
+                            server_clone.cache.send_replace(Some(Arc::new(info)));
                         }
                         Err(e) => error!("Failed to update service info cache: {:?}", e),
                     }
@@ -618,8 +617,7 @@ impl KvRpcServer {
     /// The readiness this replica reports on its `/health` endpoint.
     pub fn health(&self) -> Health {
         Health {
-            served: matches!(self.watermark_source, WatermarkSource::IndexerStreams(_))
-                .then(|| self.cache.subscribe()),
+            served: self.cache.subscribe(),
         }
     }
 
@@ -728,6 +726,7 @@ mod tests {
     use sui_kvstore::WatermarkV1;
     use sui_kvstore::tables::watermarks;
     use sui_kvstore::testing::MockBigtableServer;
+    use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
     use tokio::time::timeout;
 
     use super::*;
@@ -757,31 +756,11 @@ mod tests {
         .unwrap_or_else(|_| panic!("served checkpoint never reached {checkpoint}"));
     }
 
-    #[tokio::test]
-    async fn polling_replica_is_healthy_before_its_first_refresh() {
-        let mock = MockBigtableServer::new();
-        let (addr, _mock_server) = mock.start().await.expect("start mock BigTable");
-        // Without watermark rows no refresh succeeds, so the served checkpoint stays unknown.
-        let server = KvRpcServer::new_local(addr.to_string(), "test".to_string(), None)
-            .await
-            .expect("start kv-rpc server");
-        sleep(Duration::from_millis(50)).await;
-        assert!(server.cache.borrow().is_none());
-        assert!(server.health().is_ready());
-    }
-
-    #[tokio::test]
-    async fn served_checkpoint_gauges_follow_refresh_and_survive_failed_refresh() {
-        let mock = MockBigtableServer::new();
-        let (addr, _mock_server) = mock.start().await.expect("start mock BigTable");
-        let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
-            .await
-            .expect("connect to mock BigTable");
-
-        // The objects pipeline lags, so it bounds the served checkpoint, and the timestamp must
-        // come from its watermark rather than from a pipeline that is further ahead.
+    /// Write a watermark row for every served pipeline, at the checkpoint `checkpoint_of` names
+    /// for it.
+    async fn seed_watermarks(client: &mut BigTableClient, checkpoint_of: impl Fn(&str) -> u64) {
         for pipeline in service_info_watermark_pipelines() {
-            let checkpoint = if pipeline == OBJECTS_PIPELINE { 20 } else { 25 };
+            let checkpoint = checkpoint_of(pipeline);
             client
                 .create_pipeline_watermark_if_absent(
                     pipeline,
@@ -799,6 +778,60 @@ mod tests {
                 .await
                 .expect("seed watermark");
         }
+    }
+
+    pub(crate) async fn get_service_info(
+        server: &KvRpcServer,
+    ) -> Result<GetServiceInfoResponse, tonic::Status> {
+        LedgerService::get_service_info(
+            server,
+            server.admitted_request(GetServiceInfoRequest::default()),
+        )
+        .await
+        .map(tonic::Response::into_inner)
+    }
+
+    #[tokio::test]
+    async fn polling_replica_is_ready_from_its_first_refresh() {
+        let mock = MockBigtableServer::new();
+        let (addr, _mock_server) = mock.start().await.expect("start mock BigTable");
+        let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        let server = KvRpcServer::new_local(addr.to_string(), "test".to_string(), None)
+            .await
+            .expect("start kv-rpc server");
+
+        // Without watermark rows no refresh succeeds, so the served checkpoint stays unknown.
+        sleep(Duration::from_millis(50)).await;
+        assert!(!server.health().is_ready());
+        let error = get_service_info(&server).await.unwrap_err();
+        assert_eq!(error.code(), tonic::Code::Unavailable);
+
+        seed_watermarks(&mut client, |_| 20).await;
+        timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
+            .await
+            .expect("service info never refreshed")
+            .expect("service info sender dropped");
+        assert!(server.health().is_ready());
+        let info = get_service_info(&server).await.unwrap();
+        assert_eq!(info.checkpoint_height, Some(20));
+    }
+
+    #[tokio::test]
+    async fn served_checkpoint_gauges_follow_refresh_and_survive_failed_refresh() {
+        let mock = MockBigtableServer::new();
+        let (addr, _mock_server) = mock.start().await.expect("start mock BigTable");
+        let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        // The objects pipeline lags, so it bounds the served checkpoint, and the timestamp must
+        // come from its watermark rather than from a pipeline that is further ahead.
+        seed_watermarks(&mut client, |pipeline| {
+            if pipeline == OBJECTS_PIPELINE { 20 } else { 25 }
+        })
+        .await;
 
         let server = KvRpcServer::new_local(addr.to_string(), "test".to_string(), None)
             .await
@@ -829,6 +862,7 @@ mod tests {
         .expect("service info refresh stopped polling");
         assert_eq!(server.metrics.served_checkpoint.get(), 20);
         assert_eq!(server.metrics.served_checkpoint_timestamp_ms.get(), 20_000);
+        assert!(server.health().is_ready());
 
         // Once the objects pipeline catches up past the others, they bound the served checkpoint.
         mock.insert_row(
