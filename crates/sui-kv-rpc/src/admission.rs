@@ -51,21 +51,21 @@ pub const X_SUI_MIN_CHECKPOINT: &str = "x-sui-min-checkpoint";
 pub(crate) struct AdmittedServiceInfo(Option<Arc<GetServiceInfoResponse>>);
 
 impl AdmittedServiceInfo {
-    /// The view `request` was admitted at. `Internal` for a request that did not pass through
-    /// [`AdmissionLayer`].
-    pub(crate) fn of<T>(request: &tonic::Request<T>) -> Result<&Self, RpcError> {
-        request.extensions().get().ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                "request reached its handler without being admitted",
-            )
-        })
-    }
-
-    /// The service info this request is served at, `None` if the replica had none when it
-    /// admitted the request.
-    pub(crate) fn service_info(&self) -> Option<&GetServiceInfoResponse> {
-        self.0.as_deref()
+    /// The service info `request` is served at, `None` if the replica had none when it admitted
+    /// the request. `Internal` for a request that did not pass through [`AdmissionLayer`].
+    pub(crate) fn of<T>(
+        request: &tonic::Request<T>,
+    ) -> Result<Option<&GetServiceInfoResponse>, RpcError> {
+        request
+            .extensions()
+            .get::<Self>()
+            .map(|admitted| admitted.0.as_deref())
+            .ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    "request reached its handler without being admitted",
+                )
+            })
     }
 }
 
@@ -239,7 +239,7 @@ mod tests {
                 let admitted = request
                     .extensions()
                     .get::<AdmittedServiceInfo>()
-                    .and_then(AdmittedServiceInfo::service_info)
+                    .and_then(|admitted| admitted.0.as_deref())
                     .and_then(|info| info.checkpoint_height);
                 Ok::<_, Infallible>(http::Response::new(admitted))
             }),

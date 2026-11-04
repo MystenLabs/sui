@@ -38,7 +38,7 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
-        if let Some(info) = AdmittedServiceInfo::of(&request)?.service_info() {
+        if let Some(info) = AdmittedServiceInfo::of(&request)? {
             return Ok(tonic::Response::new(info.clone()));
         }
         // For a request admitted before the cache is first filled, a replica that polls Bigtable

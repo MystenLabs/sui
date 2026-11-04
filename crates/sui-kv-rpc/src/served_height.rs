@@ -26,7 +26,7 @@ impl ServedHeight {
     /// The height `request` is served at, from the service info it was admitted at.
     /// `Unavailable` if the replica had no served height when it admitted the request.
     pub(crate) fn of<T>(request: &tonic::Request<T>) -> Result<Self, RpcError> {
-        let info = AdmittedServiceInfo::of(request)?.service_info();
+        let info = AdmittedServiceInfo::of(request)?;
         match (
             info.and_then(|info| info.checkpoint_height),
             info.and_then(|info| info.epoch),
