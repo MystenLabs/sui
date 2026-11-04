@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::load_package;
+use super::{load_package_by_id, parse_package_id};
 use crate::{ErrorReason, Result, RpcError, RpcService};
 use bytes::Bytes;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
@@ -45,35 +45,13 @@ pub fn list_package_versions(
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = load_package(service, package_id_str)?;
-    let original_package_id = package.original_package_id();
-
-    let page_size = request
-        .page_size
-        .map(|s| (s as usize).clamp(1, 10000))
-        .unwrap_or(1000);
-
-    let page_token = request
-        .page_token
-        .map(|token| decode_page_token(&token))
-        .transpose()?;
-
-    if let Some(token) = &page_token
-        && token.original_package_id != original_package_id
-    {
-        return Err(FieldViolation::new("page_token")
-            .with_description("page token package ID does not match request package ID")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
-    }
-
-    let indexes = service
-        .reader
-        .inner()
-        .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+    let package_id = parse_package_id(package_id_str)?;
 
     if let Some(at_checkpoint) = request.at_checkpoint {
+        // Both bounds are checked before the package is loaded: a package published above the
+        // highest indexed checkpoint may not exist on this node yet, and answering `NotFound`
+        // for it would hide that the bound is not served yet.
+        //
         // Above the highest indexed checkpoint the index may be missing versions, and while a
         // restore is still backfilling history, versions published in the part of its window it
         // has not reached still have no recorded checkpoint, so a bound anywhere could include
@@ -99,6 +77,33 @@ pub fn list_package_versions(
             .at_checkpoint_lower_bound()?
             .check(at_checkpoint)?;
     }
+
+    let original_package_id = load_package_by_id(service, package_id)?.original_package_id();
+
+    let page_size = request
+        .page_size
+        .map(|s| (s as usize).clamp(1, 10000))
+        .unwrap_or(1000);
+
+    let page_token = request
+        .page_token
+        .map(|token| decode_page_token(&token))
+        .transpose()?;
+
+    if let Some(token) = &page_token
+        && token.original_package_id != original_package_id
+    {
+        return Err(FieldViolation::new("page_token")
+            .with_description("page token package ID does not match request package ID")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
+    }
+
+    let indexes = service
+        .reader
+        .inner()
+        .indexes()
+        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
 
     let mut versions = vec![];
     let iter = indexes

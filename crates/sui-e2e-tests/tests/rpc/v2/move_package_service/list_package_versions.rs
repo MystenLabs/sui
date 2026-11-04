@@ -15,7 +15,8 @@ use sui_types::{
     move_package::UpgradePolicy,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TransactionData,
+        ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, Transaction,
+        TransactionData,
     },
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -450,6 +451,12 @@ async fn execute_package_write(
     cluster: &TestCluster,
     pt: ProgrammableTransaction,
 ) -> (ObjectID, ObjectRef, u64) {
+    let transaction = sign_package_write(cluster, pt).await;
+    execute_signed_package_write(cluster, transaction).await
+}
+
+/// Sign a package publish or upgrade from the cluster's first address.
+async fn sign_package_write(cluster: &TestCluster, pt: ProgrammableTransaction) -> Transaction {
     let address = cluster.get_address_0();
     let gas_price = cluster.wallet.get_reference_gas_price().await.unwrap();
     let gas_object = cluster
@@ -465,10 +472,16 @@ async fn execute_package_write(
         TEST_ONLY_GAS_UNIT_FOR_PUBLISH * gas_price,
         gas_price,
     );
-    let response = cluster
-        .sign_and_execute_transaction(&transaction_data)
-        .await;
+    cluster.sign_transaction(&transaction_data).await
+}
 
+/// Execute a transaction signed by [`sign_package_write`]; returns what
+/// [`execute_package_write`] returns.
+async fn execute_signed_package_write(
+    cluster: &TestCluster,
+    transaction: Transaction,
+) -> (ObjectID, ObjectRef, u64) {
+    let response = cluster.execute_transaction(transaction).await;
     let package_id = response.get_new_package_obj().unwrap().0;
     let upgrade_cap = response.get_new_package_upgrade_cap().unwrap();
     let checkpoint = cluster.fullnode_handle.sui_node.with(|node| {
@@ -485,17 +498,24 @@ async fn execute_package_write(
     (package_id, upgrade_cap, checkpoint)
 }
 
-async fn publish_upgradeable(
+fn publish_upgradeable_pt(
     cluster: &TestCluster,
     package: &CompiledPackage,
-) -> (ObjectID, ObjectRef, u64) {
+) -> ProgrammableTransaction {
     let mut builder = ProgrammableTransactionBuilder::new();
     let upgrade_cap = builder.publish_upgradeable(
         package.get_package_bytes(false),
         package.get_dependency_storage_package_ids(),
     );
     builder.transfer_arg(cluster.get_address_0(), upgrade_cap);
-    execute_package_write(cluster, builder.finish()).await
+    builder.finish()
+}
+
+async fn publish_upgradeable(
+    cluster: &TestCluster,
+    package: &CompiledPackage,
+) -> (ObjectID, ObjectRef, u64) {
+    execute_package_write(cluster, publish_upgradeable_pt(cluster, package)).await
 }
 
 /// Upgrade `package_id` by republishing `package`'s code.
@@ -668,6 +688,58 @@ async fn test_list_package_versions_at_checkpoint() {
         .unwrap();
     assert_eq!(listed(&second), vec![entry_2.clone()]);
     assert!(second.next_page_token.is_none());
+}
+
+#[sim_test]
+async fn test_list_package_versions_at_checkpoint_above_indexed_is_checked_before_lookup() {
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    cluster.wait_for_rpc_index_ready().await;
+
+    // A package that was never published gets `OutOfRange`, not `NotFound`, for a bound above
+    // the indexed ceiling.
+    let never_published = ObjectID::from_hex_literal("0x999").unwrap();
+    let error = list_versions(&mut service, never_published, Some(u64::MAX), None, None)
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
+
+    // So does a package published above the ceiling but at or below the bound. Sign a publish and
+    // derive its package id, the transaction's first created object, before the fullnode has
+    // executed it. The bound is far enough above the ceiling that the publish lands at or below it.
+    let first_unavailable: u64 =
+        error_info(&error.rpc_status()).metadata["firstUnavailableCheckpoint"]
+            .parse()
+            .unwrap();
+    let at_checkpoint = first_unavailable + 1000;
+
+    let mut test_package_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    test_package_path.push("tests/move_test_code");
+    let package = BuildConfig::new_for_testing()
+        .build_async(&test_package_path)
+        .await
+        .unwrap();
+    let transaction =
+        sign_package_write(&cluster, publish_upgradeable_pt(&cluster, &package)).await;
+    let package_id = ObjectID::derive_id(*transaction.digest(), 0);
+
+    let error = list_versions(&mut service, package_id, Some(at_checkpoint), None, None)
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", at_checkpoint);
+
+    let (published_id, _, published_checkpoint) =
+        execute_signed_package_write(&cluster, transaction).await;
+    assert_eq!(published_id, package_id);
+    assert!(
+        published_checkpoint <= at_checkpoint,
+        "{published_checkpoint} {at_checkpoint}"
+    );
 }
 
 #[sim_test]
