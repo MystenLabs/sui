@@ -4,6 +4,7 @@
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
+use crate::grpc::v2::render::RenderContext;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -170,10 +171,11 @@ pub async fn execute_transaction(
             objects
         };
 
+        let render_context = RenderContext::new(service.reader.inner(), Some(&objects));
         let events = read_mask
             .subtree(ExecutedTransaction::EVENTS_FIELD)
             .and_then(|mask| {
-                events.map(|events| service.render_events_to_proto(&events, &mask, &objects))
+                events.map(|events| service.render_events_to_proto(&events, &mask, &render_context))
             });
 
         let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
@@ -219,7 +221,7 @@ pub async fn execute_transaction(
                 ObjectSet::default().with_objects(
                     objects
                         .iter()
-                        .map(|o| service.render_object_to_proto(o, &mask, &objects))
+                        .map(|o| service.render_object_to_proto(o, &mask, &render_context))
                         .collect(),
                 )
             });

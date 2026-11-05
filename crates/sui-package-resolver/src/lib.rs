@@ -42,6 +42,8 @@ use sui_types::Identifier;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::is_primitive_type_tag;
+use sui_types::error::{SuiError, SuiErrorKind};
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::move_package::MovePackage;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
@@ -94,9 +96,9 @@ pub struct Limits {
     pub max_move_value_depth: usize,
 }
 
-/// Store which fetches package for the given address from the backend db and caches it
-/// locally in an lru cache. On every call to `fetch` it checks backend db and if package
-/// version is stale locally, it updates the local state before returning to the user
+/// Caches parsed packages by address in an LRU cache. Cache hits do not recheck the backing
+/// store. Callers must evict entries when system packages are upgraded, or use a fresh cache
+/// for each response against a fixed package view.
 pub struct PackageStoreWithLruCache<T> {
     pub(crate) packages: Mutex<LruCache<AccountAddress, Arc<Package>>>,
     pub(crate) inner: T,
@@ -1003,6 +1005,20 @@ impl<S: SyncPackageStore> SyncResolver<S> {
     }
 }
 
+impl<S: SyncPackageStore> LayoutResolver for SyncResolver<S> {
+    fn get_annotated_layout(
+        &mut self,
+        struct_tag: &StructTag,
+    ) -> std::result::Result<A::MoveDatatypeLayout, SuiError> {
+        self.datatype_layout(struct_tag).map_err(|e| {
+            SuiErrorKind::FailObjectLayout {
+                st: format!("Failed to generate object layout for {struct_tag}: {e}"),
+            }
+            .into()
+        })
+    }
+}
+
 impl<T> PackageStoreWithLruCache<T> {
     pub fn new(inner: T) -> Self {
         let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
@@ -1016,6 +1032,39 @@ impl<T> PackageStoreWithLruCache<T> {
         for id in ids {
             packages.pop(&id);
         }
+    }
+}
+
+impl<T: SyncPackageStore> SyncPackageStore for PackageStoreWithLruCache<T> {
+    fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        if let Some(package) = {
+            let mut packages = self.packages.lock().unwrap();
+            packages.get(&id).map(Arc::clone)
+        } {
+            return Ok(package);
+        };
+
+        let package = self.inner.fetch(id)?;
+
+        let mut packages = self.packages.lock().unwrap();
+        Ok(match packages.peek(&id) {
+            Some(prev) if package.version <= prev.version => {
+                let package = prev.clone();
+                packages.promote(&id);
+                package
+            }
+
+            Some(_) | None => {
+                packages.push(id, package.clone());
+                package
+            }
+        })
+    }
+}
+
+impl<T: SyncPackageStore> SyncPackageStore for &PackageStoreWithLruCache<T> {
+    fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        SyncPackageStore::fetch(*self, id)
     }
 }
 
@@ -2796,6 +2845,64 @@ mod tests {
         let struct_layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
         let enum_layout = resolver.type_layout(type_("0x1::m::E1")).await.unwrap();
         insta::assert_snapshot!(fmt(struct_layout, enum_layout));
+    }
+
+    #[tokio::test]
+    async fn test_sync_package_caching() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        #[derive(Clone)]
+        struct CountingStore {
+            package: Package,
+            fetches: Arc<AtomicUsize>,
+        }
+
+        impl SyncPackageStore for CountingStore {
+            fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+                self.fetches.fetch_add(1, Ordering::Relaxed);
+                if id != self.package.storage_id {
+                    return Err(Error::PackageNotFound(id));
+                }
+                Ok(Arc::new(self.package.clone()))
+            }
+        }
+
+        let fetches = Arc::new(AtomicUsize::new(0));
+        let store = CountingStore {
+            package: cached_package(1, BTreeMap::new(), &build_package("a0"), &a0_types()),
+            fetches: fetches.clone(),
+        };
+        let resolver = SyncResolver::new(PackageStoreWithLruCache::new(store.clone()));
+        for tag in ["0xa0::m::T0", "0xa0::m::T0", "0xa0::m::T2", "0xa0::m::E0"] {
+            resolver.type_layout(type_(tag)).unwrap();
+        }
+        assert_eq!(fetches.load(Ordering::Relaxed), 1);
+
+        let cache = resolver.package_store();
+        let first = SyncPackageStore::fetch(cache, addr("0xa0")).unwrap();
+        let second = SyncPackageStore::fetch(cache, addr("0xa0")).unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(fetches.load(Ordering::Relaxed), 1);
+
+        std::thread::scope(|scope| {
+            for tag in ["0xa0::m::T0", "0xa0::m::T2", "0xa0::m::E0"] {
+                scope.spawn(move || {
+                    SyncResolver::new(cache).type_layout(type_(tag)).unwrap();
+                });
+            }
+        });
+        SyncResolver::new(cache)
+            .type_layout(type_("0xa0::m::T0"))
+            .unwrap();
+        assert_eq!(fetches.load(Ordering::Relaxed), 1);
+
+        cache.evict([addr("0xa0")]);
+        resolver.type_layout(type_("0xa0::m::T0")).unwrap();
+        assert_eq!(fetches.load(Ordering::Relaxed), 2);
+
+        let next_response = SyncResolver::new(PackageStoreWithLruCache::new(store));
+        next_response.type_layout(type_("0xa0::m::T0")).unwrap();
+        assert_eq!(fetches.load(Ordering::Relaxed), 3);
     }
 
     #[tokio::test]

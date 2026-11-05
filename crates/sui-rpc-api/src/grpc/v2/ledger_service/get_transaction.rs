@@ -6,6 +6,7 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::TransactionNotFoundError;
+use crate::grpc::v2::render::RenderContext;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -83,12 +84,14 @@ pub fn get_transaction(
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
     let objects = fetch_transaction_object_set(&service.reader, &transaction_read, &read_mask)?;
 
+    let render_context = RenderContext::empty(service.reader.inner());
     let transaction = render_executed_transaction(
         service,
         transaction_read,
         &objects,
         transaction_checkpoint,
         &read_mask,
+        &render_context,
     )?;
 
     Ok(GetTransactionResponse::new(transaction))
@@ -127,6 +130,7 @@ pub fn batch_get_transactions(
         .sequence_number;
     let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
 
+    let render_context = RenderContext::empty(service.reader.inner());
     let transactions = digests
         .into_iter()
         .enumerate()
@@ -160,6 +164,7 @@ pub fn batch_get_transactions(
                 &objects,
                 transaction_checkpoint,
                 &read_mask,
+                &render_context,
             )
         })
         .map(|result| match result {
@@ -171,6 +176,8 @@ pub fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
+/// Renders historical object and event JSON against the same backing-only package context,
+/// independently of which objects the read mask requests.
 pub(crate) fn render_executed_transaction(
     service: &RpcService,
     crate::reader::TransactionRead {
@@ -185,6 +192,7 @@ pub(crate) fn render_executed_transaction(
     objects: &ObjectSet,
     checkpoint: u64,
     mask: &FieldMaskTree,
+    render_context: &RenderContext,
 ) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
@@ -217,10 +225,8 @@ pub(crate) fn render_executed_transaction(
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD) {
-        // For historical transactions read from the ledger, packages should already be in the
-        // backing store, so we pass an empty ObjectSet for overlay resolution.
-        message.events = events
-            .map(|events| service.render_events_to_proto(&events, &submask, &ObjectSet::default()));
+        message.events =
+            events.map(|events| service.render_events_to_proto(&events, &submask, render_context));
     }
 
     if mask.contains(ExecutedTransaction::CHECKPOINT_FIELD) {
@@ -246,7 +252,9 @@ pub(crate) fn render_executed_transaction(
             ProtoObjectSet::default().with_objects(
                 objects
                     .iter()
-                    .map(|object| service.render_object_to_proto(object, &object_mask, objects))
+                    .map(|object| {
+                        service.render_object_to_proto(object, &object_mask, render_context)
+                    })
                     .collect(),
             ),
         );

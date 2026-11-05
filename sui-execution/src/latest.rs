@@ -16,11 +16,10 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, ExecutionErrorTrait, SuiError, SuiResult},
-    execution::{ExecutionResult, TypeLayoutStore},
+    execution::ExecutionResult,
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
@@ -32,7 +31,6 @@ use sui_adapter_latest::adapter::{new_move_runtime, run_metered_move_bytecode_ve
 use sui_adapter_latest::execution_engine::{
     ExecutionOutput, execute_genesis_state_update, execute_transaction_to_effects,
 };
-use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
 use sui_types::storage::BackingStore;
 use sui_verifier_latest::meter::SuiVerifierMeter;
@@ -299,14 +297,6 @@ impl executor::Executor for Executor {
         );
         let tx_context = Rc::new(RefCell::new(tx_context));
         execute_genesis_state_update(store, protocol_config, metrics, &self.0, tx_context, pt)
-    }
-
-    fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
-        &'vm self,
-        protocol_config: &'vm ProtocolConfig,
-        store: Box<dyn TypeLayoutStore + 'store>,
-    ) -> Box<dyn LayoutResolver + 'r> {
-        Box::new(TypeLayoutResolver::new(&self.0, protocol_config, store))
     }
 }
 

@@ -15,11 +15,10 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::ExecutionError,
-    execution::{ExecutionResult, TypeLayoutStore},
+    execution::ExecutionResult,
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    layout_resolver::LayoutResolver,
     metrics::ExecutionMetrics,
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
@@ -133,10 +132,4 @@ pub trait Executor {
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError>;
-
-    fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
-        &'vm self,
-        protocol_config: &'vm ProtocolConfig,
-        store: Box<dyn TypeLayoutStore + 'store>,
-    ) -> Box<dyn LayoutResolver + 'r>;
 }

@@ -4,6 +4,7 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::grpc::v2::render::RenderContext;
 use bytes::Bytes;
 use prost::Message;
 use prost_types::FieldMask;
@@ -15,7 +16,6 @@ use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_sdk_types::Address;
-use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::storage::OwnedObjectInfo;
 
 const MAX_PAGE_SIZE: usize = 1000;
@@ -91,6 +91,7 @@ pub fn list_owned_objects(
         page_token.map(|t| t.inner),
     )?;
     let mut objects = Vec::with_capacity(page_size);
+    let render_context = RenderContext::empty(service.reader.inner());
     let mut size_bytes = 0;
     while let Some(object_info) = iter
         .next()
@@ -111,7 +112,7 @@ pub fn list_owned_objects(
                 continue;
             };
 
-            service.render_object_to_proto(&object, &read_mask, &ObjectSet::default())
+            service.render_object_to_proto(&object, &read_mask, &render_context)
         } else {
             owned_object_to_proto(object_info, &read_mask)
         };

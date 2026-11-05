@@ -6,6 +6,7 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use crate::error::InsufficientGasBalanceError;
+use crate::grpc::v2::render::RenderContext;
 use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
 use sui_protocol_config::ProtocolVersion;
@@ -273,6 +274,7 @@ pub fn simulate_transaction(
         ));
     }
 
+    let render_context = RenderContext::new(service.reader.inner(), Some(&objects));
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
@@ -301,7 +303,7 @@ pub fn simulate_transaction(
         message.events = submask
             .subtree(ExecutedTransaction::EVENTS_FIELD.name)
             .and_then(|mask| {
-                events.map(|events| service.render_events_to_proto(&events, &mask, &objects))
+                events.map(|events| service.render_events_to_proto(&events, &mask, &render_context))
             });
 
         message.transaction = submask
@@ -319,7 +321,7 @@ pub fn simulate_transaction(
                 ObjectSet::default().with_objects(
                     objects
                         .iter()
-                        .map(|o| service.render_object_to_proto(o, &mask, &objects))
+                        .map(|o| service.render_object_to_proto(o, &mask, &render_context))
                         .collect(),
                 )
             });
@@ -337,11 +339,13 @@ pub fn simulate_transaction(
                 let mut message = CommandResult::default();
                 message.return_values = return_values
                     .into_iter()
-                    .map(|(bcs, ty)| to_command_output(service, None, bcs, ty))
+                    .map(|(bcs, ty)| to_command_output(service, None, bcs, ty, &render_context))
                     .collect();
                 message.mutated_by_ref = reference_outputs
                     .into_iter()
-                    .map(|(arg, bcs, ty)| to_command_output(service, Some(arg), bcs, ty))
+                    .map(|(arg, bcs, ty)| {
+                        to_command_output(service, Some(arg), bcs, ty, &render_context)
+                    })
                     .collect();
                 message
             })
@@ -376,13 +380,11 @@ fn to_command_output(
     arg: Option<sui_types::transaction::Argument>,
     bcs: Vec<u8>,
     ty: sui_types::TypeTag,
+    render_context: &RenderContext,
 ) -> CommandOutput {
-    let json = service
-        .reader
-        .inner()
-        .get_type_layout(&ty)
+    let json = render_context
+        .type_layout(ty.clone())
         .ok()
-        .flatten()
         .and_then(|layout| {
             let bound = service.config.max_json_move_value_size();
             sui_types::object::rpc_visitor::proto::ProtoVisitor::new(bound)
