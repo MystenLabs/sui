@@ -19,6 +19,7 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::storage::RpcIndexes;
 use sui_types::transaction::{TransactionData, TransactionKind};
 
 mod ledger_service;
@@ -259,8 +260,10 @@ fn fullnode_highest_executed(cluster: &test_cluster::TestCluster) -> u64 {
     })
 }
 
-/// Stop every validator once the fullnode has executed a few checkpoints, wait for its rpc
-/// indexes to catch up, and return its highest executed checkpoint, which no longer moves.
+/// Stop every validator once the fullnode has executed a few checkpoints, wait until the fullnode
+/// has executed every checkpoint it synced and its rpc indexes have committed them, and return
+/// that checkpoint. It no longer moves, and it is the highest checkpoint the rpc indexes serve
+/// (the upper bound of checkpoint-pinned reads).
 async fn halt_chain(cluster: &test_cluster::TestCluster) -> u64 {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
     while fullnode_highest_executed(cluster) < 3 {
@@ -271,8 +274,39 @@ async fn halt_chain(cluster: &test_cluster::TestCluster) -> u64 {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     cluster.stop_all_validators().await;
-    cluster.wait_for_rpc_index_ready().await;
-    fullnode_highest_executed(cluster)
+
+    // The fullnode keeps executing the checkpoints it synced before the validators stopped.
+    loop {
+        let (synced, executed, indexed) = cluster.fullnode_handle.sui_node.with(|node| {
+            let state = node.state();
+            let checkpoint_store = state.get_checkpoint_store();
+            let reader = node
+                .embedded_rpc_store()
+                .expect("the fullnode runs the rpc indexes")
+                .reader();
+            (
+                checkpoint_store
+                    .get_highest_synced_checkpoint_seq_number()
+                    .unwrap(),
+                checkpoint_store
+                    .get_highest_executed_checkpoint_seq_number()
+                    .unwrap(),
+                RpcIndexes::get_highest_indexed_checkpoint_seq_number(&reader).unwrap(),
+            )
+        });
+        if let Some(executed) = executed
+            && synced == Some(executed)
+            && indexed == Some(executed)
+        {
+            return executed;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for the halted fullnode to settle (synced = {synced:?}, \
+             executed = {executed:?}, indexed = {indexed:?})"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }
 
 /// Prune the fullnode's object versions with zero retention, which stops one below its highest

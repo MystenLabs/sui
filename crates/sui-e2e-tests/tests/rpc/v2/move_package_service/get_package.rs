@@ -17,8 +17,10 @@ use sui_types::{
 };
 use test_cluster::TestClusterBuilder;
 
+use crate::v2::RpcStatusExt;
 use crate::v2::assert_above_latest_available;
 use crate::v2::assert_below_earliest_available;
+use crate::v2::error_info;
 use crate::v2::halt_chain;
 use crate::v2::move_package_service::system_package_expectations::validate_system_package;
 use crate::v2::prune_objects_below_tip;
@@ -46,29 +48,18 @@ async fn test_get_package_system() {
 async fn test_get_package_not_found() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
-        // Zero-epoch retention, the default, runs the tidehunter objects compactor, and a node
-        // that runs it refuses `at_checkpoint` reads.
-        .disable_fullnode_pruning()
         .build()
         .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
-    let unknown_id = "0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF";
     let mut request = GetPackageRequest::default();
-    request.package_id = Some(unknown_id.to_string());
+    request.package_id =
+        Some("0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF".to_string());
 
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
-
-    // A bound above the indexed ceiling is out of range whether or not the package exists, as on
-    // kv-rpc.
-    let mut request = GetPackageRequest::default();
-    request.package_id = Some(unknown_id.to_string());
-    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
-    let error = service.get_package(request).await.unwrap_err();
-    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
 }
 
 #[sim_test]
@@ -251,13 +242,6 @@ async fn test_get_package_lineage_lookups() {
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
 
-    // A bound above the indexed ceiling is rejected, never clamped to the latest known version.
-    let mut request = GetPackageRequest::default();
-    request.package_id = Some(original_id.to_string());
-    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
-    let error = service.get_package(request).await.unwrap_err();
-    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
-
     // The checkpoint that contains the upgrade transaction resolves to the upgraded package.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(original_id.to_string());
@@ -393,4 +377,46 @@ async fn test_get_package_at_checkpoint_below_available_floor() {
         .package
         .unwrap();
     assert_eq!(package.version, Some(1));
+}
+
+/// `at_checkpoint` is served through the highest checkpoint the rpc indexes have committed, and
+/// is out of range above it whether or not the package exists.
+#[sim_test]
+async fn test_get_package_at_checkpoint_above_indexed_tip() {
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let tip = halt_chain(&cluster).await;
+
+    let request = |package_id: &str, at_checkpoint| {
+        let mut request = GetPackageRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.selector = Some(Selector::AtCheckpoint(at_checkpoint));
+        request
+    };
+    let package = service
+        .get_package(request("0x3", tip))
+        .await
+        .unwrap()
+        .into_inner()
+        .package
+        .unwrap();
+    assert_eq!(package.version, Some(1));
+    for package_id in ["0x3", "0xdeadbeef"] {
+        let error = service
+            .get_package(request(package_id, tip + 1))
+            .await
+            .unwrap_err();
+        assert_above_latest_available(&error, "at_checkpoint", tip + 1);
+        assert_eq!(
+            error_info(&error.rpc_status()).metadata["firstUnavailableCheckpoint"],
+            (tip + 1).to_string()
+        );
+    }
 }
