@@ -1149,6 +1149,14 @@ impl ValidatorService {
             if let Err(error) = epoch_store.check_timestamp_expiration_at_submission(
                 verified_transaction.tx().data().transaction_data(),
             ) {
+                debug!(
+                    ?tx_digest,
+                    "Transaction rejected during submission: {error}"
+                );
+                metrics
+                    .submission_rejected_transactions
+                    .with_label_values(&[error.to_variant_name()])
+                    .inc();
                 results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }

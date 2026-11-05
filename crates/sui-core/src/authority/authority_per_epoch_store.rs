@@ -1392,23 +1392,21 @@ impl AuthorityPerEpochStore {
         {
             return Ok(());
         }
-        let now_ms = crate::authority::AuthorityState::unixtime_now_ms();
-        if tx.expiration().is_not_yet_valid_at(now_ms) {
+        let result = check_not_before_min_timestamp(tx.expiration());
+        if result.is_err() {
+            // The submission check prevents this unless a fail point skips it.
             assert_reachable_gated!(
                 "voted to reject a transaction before its min_timestamp",
-                |pc| pc.enable_timestamp_transaction_expiration()
+                |pc| cfg!(any(msim, fail_points)) && pc.enable_timestamp_transaction_expiration()
             );
-            return Err(SuiErrorKind::TransactionNotYetValid {
-                timestamp_ms: now_ms,
-            }
-            .into());
         }
-        Ok(())
+        result
     }
 
-    /// Rejects a transaction whose timestamp window does not contain the local wall-clock time.
-    /// This check is advisory, because the local clock can differ from consensus commit
-    /// timestamps. The consensus handler makes the binding decision with the commit timestamp.
+    /// Rejects a transaction before its `min_timestamp`, or more than
+    /// `MAX_TIMESTAMP_GRACE_MS` after its `max_timestamp`, by the local wall-clock time.
+    /// Voting enforces `min_timestamp`, and execution enforces `max_timestamp`, so this check
+    /// only avoids sequencing transactions that would be rejected or aborted.
     pub fn check_timestamp_expiration_at_submission(&self, tx: &TransactionData) -> SuiResult {
         if !self
             .protocol_config()
@@ -1416,8 +1414,8 @@ impl AuthorityPerEpochStore {
         {
             return Ok(());
         }
-        // Simulates a proposer whose clock is ahead, so that voting sees transactions before
-        // their `min_timestamp`.
+        // Simulates a validator whose clock differs from the voters' clocks, so that voting and
+        // execution see transactions outside their windows.
         #[allow(unused_mut)]
         let mut skip = false;
         fail_point_if!("skip-timestamp-expiration-check-at-submission", || {
@@ -1426,19 +1424,18 @@ impl AuthorityPerEpochStore {
         if skip {
             return Ok(());
         }
-        let now_ms = crate::authority::AuthorityState::unixtime_now_ms();
         let expiration = tx.expiration();
-        if expiration.is_not_yet_valid_at(now_ms) {
+        if let Err(e) = check_not_before_min_timestamp(expiration) {
             assert_reachable_gated!(
                 "transaction before its min_timestamp rejected at submission",
                 |pc| pc.enable_timestamp_transaction_expiration()
             );
-            return Err(SuiErrorKind::TransactionNotYetValid {
-                timestamp_ms: now_ms,
-            }
-            .into());
+            return Err(e);
         }
-        if expiration.is_expired_at(now_ms) {
+        if is_expired_beyond_grace(
+            expiration,
+            crate::authority::AuthorityState::unixtime_now_ms(),
+        ) {
             assert_reachable_gated!(
                 "transaction after its max_timestamp rejected at submission",
                 |pc| pc.enable_timestamp_transaction_expiration()
@@ -3698,4 +3695,30 @@ impl From<LockDetails> for LockDetailsWrapper {
         // always use latest version.
         LockDetailsWrapper::V1(details)
     }
+}
+
+/// How long after a transaction's `max_timestamp` admission and the submission queues still
+/// accept it. Another validator may have admitted the transaction before its `max_timestamp`, so
+/// it can still execute. A rejection within that time would tell the client that a transaction
+/// failed when it may execute.
+pub(crate) const MAX_TIMESTAMP_GRACE_MS: u64 = 10_000;
+
+pub(crate) fn is_expired_beyond_grace(
+    expiration: &sui_types::transaction::TransactionExpiration,
+    now_ms: u64,
+) -> bool {
+    expiration.is_expired_at(now_ms.saturating_sub(MAX_TIMESTAMP_GRACE_MS))
+}
+
+fn check_not_before_min_timestamp(
+    expiration: &sui_types::transaction::TransactionExpiration,
+) -> SuiResult {
+    let now_ms = crate::authority::AuthorityState::unixtime_now_ms();
+    if expiration.is_not_yet_valid_at(now_ms) {
+        return Err(SuiErrorKind::TransactionNotYetValid {
+            timestamp_ms: now_ms,
+        }
+        .into());
+    }
+    Ok(())
 }
