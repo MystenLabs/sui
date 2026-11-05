@@ -13,7 +13,7 @@ fn bootstrap() {
     let proto_ext = OsStr::new("proto");
 
     let mut proto_files = vec![];
-    for entry in WalkDir::new(&proto_dir) {
+    for entry in WalkDir::new(proto_dir.join("sui/rpc/cursor")) {
         let entry = entry.unwrap();
         if entry.file_type().is_dir() {
             continue;
@@ -25,7 +25,7 @@ fn bootstrap() {
         }
     }
 
-    let out_dir = root_dir.join("src").join("proto").join("generated");
+    let out_dir = root_dir.join("src/ledger_history/cursor/proto/generated");
 
     let mut fds = protox::Compiler::new(std::slice::from_ref(&proto_dir))
         .unwrap()
@@ -38,8 +38,8 @@ fn bootstrap() {
     // Sort files by name to have deterministic codegen output
     fds.file.sort_by(|a, b| a.name.cmp(&b.name));
 
-    // This crate's protos define no gRPC services — only message types serialized as opaque cursor
-    // bytes — so plain prost-build (no tonic) is all that's needed.
+    // These protos define no gRPC services — only message types serialized as opaque cursor bytes —
+    // so plain prost-build (no tonic) is all that's needed.
     if let Err(error) = prost_build::Config::new()
         .out_dir(&out_dir)
         .compile_fds(fds)

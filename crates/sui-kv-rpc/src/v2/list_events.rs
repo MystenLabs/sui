@@ -9,7 +9,6 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use prost::Message;
-use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_inverted_index::event_seq;
 use sui_kvstore::RowFilter;
@@ -30,7 +29,8 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
-use sui_rpc_api::ledger_history::ledger_point::LedgerPoint;
+use sui_rpc_api::ledger_history::cursor::LedgerPoint;
+use sui_rpc_api::ledger_history::cursor::Position;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
@@ -42,9 +42,7 @@ use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -56,7 +54,6 @@ use crate::config::PipelineStage;
 use crate::config::ResolvedStageConfig;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
-use crate::pipeline::PlacedFrontier;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
@@ -299,15 +296,14 @@ pub(crate) async fn list_events(
                     );
                     let watermark = item_watermark(
                         Position::Events {
-                            checkpoint: item_checkpoint,
                             tx_seq: rendered.position.tx_seq,
                             event_index: rendered.position.index,
+                            public_position: LedgerPoint::event(
+                                item_checkpoint,
+                                rendered.tx_offset as u64,
+                                rendered.position.index,
+                            ),
                         },
-                        LedgerPoint::event(
-                            item_checkpoint,
-                            rendered.tx_offset as u64,
-                            rendered.position.index,
-                        ),
                         direction,
                         covered_checkpoint_bound,
                     );
@@ -335,12 +331,11 @@ pub(crate) async fn list_events(
                 Ok(ResolvedWatermarked::Watermark { position, frontier }) => {
                     let watermark = event_frontier_watermark(
                         &options,
-                        direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
-                        Some(frontier),
-                    )?;
+                        frontier,
+                    );
                     let response = watermark_response(watermark);
                     ctx.inc_stream_watermark_frames();
                     if !first_frame_emitted {
@@ -355,7 +350,6 @@ pub(crate) async fn list_events(
                     let response = terminal_response_from_scan_stop(
                         stop,
                         &options,
-                        direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
@@ -671,52 +665,30 @@ fn range_end_response(
 /// `frontier` (see [`ResolvedScanStop`]).
 fn event_frontier_watermark(
     options: &QueryOptions,
-    direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: IntraTxCoordinate,
-    frontier: Option<PlacedFrontier>,
-) -> Result<Watermark, RpcError> {
-    let checkpoint_at_frontier = frontier.map(|frontier| frontier.checkpoint);
-    if let Some(checkpoint) = checkpoint_at_frontier {
-        *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
-            *covered_checkpoint_bound,
-            checkpoint,
-            entry_checkpoint,
-            options,
-        );
-    }
-    let cursor_checkpoint =
-        scan_frontier_cursor_cp(checkpoint_at_frontier, position.tx_seq, direction).ok_or_else(
-            || {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!(
-                        "event scan frontier {}/{} has no checkpoint mapping",
-                        position.tx_seq, position.index
-                    ),
-                )
-            },
-        )?;
-    Ok(boundary_watermark(
+    frontier: LedgerPoint,
+) -> Watermark {
+    *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
+        *covered_checkpoint_bound,
+        frontier.checkpoint,
+        entry_checkpoint,
+        options,
+    );
+    boundary_watermark(
         Position::Events {
-            checkpoint: cursor_checkpoint,
             tx_seq: position.tx_seq,
             event_index: position.index,
+            public_position: frontier,
         },
-        // Unplaced only at the genesis or numeric-edge frontier, which starts its checkpoint.
-        frontier.map_or(
-            LedgerPoint::checkpoint_start(cursor_checkpoint),
-            |frontier| frontier.point,
-        ),
         *covered_checkpoint_bound,
-    ))
+    )
 }
 
 fn terminal_response_from_scan_stop(
     stop: ResolvedScanStop<IntraTxCoordinate>,
     options: &QueryOptions,
-    direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListEventsResponse, RpcError> {
@@ -724,12 +696,11 @@ fn terminal_response_from_scan_stop(
     let terminal = ScanTerminal::ScanLimit {
         watermark: event_frontier_watermark(
             options,
-            direction,
             entry_checkpoint,
             covered_checkpoint_bound,
             position,
             frontier,
-        )?,
+        ),
     };
     let reason = terminal.reason()?;
     Ok(end_response(
@@ -873,10 +844,10 @@ async fn resolve_event_range(
         .await?;
     let window = positions.event_window(&cp_range.range, boundary)?;
     let resolved = ResolvedScan::<IntraTxCoordinate>::resolve(cp_range, window.clone(), options)?;
-    let range_end = resolved.range_end(&window, options, |checkpoint, position| Position::Events {
-        checkpoint,
+    let range_end = resolved.range_end(&window, options, |position, point| Position::Events {
         tx_seq: position.tx_seq,
         event_index: position.index,
+        public_position: point,
     });
     Ok((resolved, range_end))
 }
@@ -894,7 +865,7 @@ mod tests {
     };
     use move_core_types::ident_str;
     use sui_rpc::proto::sui::rpc::v2 as proto;
-    use sui_rpc_cursor::CursorToken;
+    use sui_rpc_api::ledger_history::cursor::CursorToken;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_types::{base_types::ObjectID, event::Event, gas_coin::GAS};
 
@@ -911,9 +882,9 @@ mod tests {
             .build_checkpoint();
         insert_checkpoint_rows(&mock, &checkpoint).await;
         let after_past_tip = CursorToken::boundary(Position::Events {
-            checkpoint: 1_000,
             tx_seq: 1_000_000,
             event_index: 0,
+            public_position: LedgerPoint::checkpoint_start(1_000),
         })
         .encode();
         for (start_checkpoint, after) in [(Some(1_000), None), (None, Some(after_past_tip))] {
@@ -1225,11 +1196,10 @@ mod tests {
             .as_ref()
             .expect("ledger exhaustion proves a terminal boundary");
         let expected_cursor = CursorToken::boundary(Position::Events {
-            checkpoint: 0,
             tx_seq: 0,
             event_index: 0,
+            public_position: LedgerPoint::GENESIS,
         })
-        .with_public_position(Some(sui_rpc_cursor::PublicPosition::default()))
         .encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);

@@ -10,12 +10,11 @@ pub struct CursorToken {
     /// The boundary immediately before the item at this cursor's coordinate
     /// (`tx_seq` and `event_index`), in public ledger coordinates; independent
     /// of `kind`. An item cursor carries its item's key; a boundary cursor the
-    /// boundary it names. Set on transaction and event cursors whose issuer
-    /// knew it; a checkpoint cursor's `checkpoint` is already its public
-    /// position. Servers use it only to report positions (`cursor_position`):
-    /// scans stay bounded by `tx_seq` and `event_index`, so a forged value only
-    /// misleads the client that sent it. Readers must accept a cursor without
-    /// it.
+    /// boundary it names. Required on transaction and event cursors. A
+    /// checkpoint cursor's `checkpoint` is already its public position, so it
+    /// carries none, and readers ignore one it carries. Servers use it only to
+    /// report positions (`cursor_position`): scans stay bounded by `tx_seq` and
+    /// `event_index`, so a forged value only misleads the client that sent it.
     #[prost(message, optional, tag = "9")]
     pub public_position: ::core::option::Option<PublicPosition>,
     /// Coordinate schema / endpoint scope. This does not imply Item vs Boundary.
@@ -44,14 +43,6 @@ pub struct CheckpointsPosition {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TransactionsPosition {
-    /// Checkpoint containing or bounding the transaction sequence position.
-    /// Item cursors carry the checkpoint containing the transaction. Boundary
-    /// cursors carry that checkpoint or the one before or after it, depending
-    /// on the scan that issued them; readers must not let it exclude a
-    /// position that `tx_seq` and the cursor kind admit. Readers must accept
-    /// a cursor without it.
-    #[prost(uint64, optional, tag = "1")]
-    pub checkpoint: ::core::option::Option<u64>,
     /// Global transaction sequence number. Item cursors resume strictly after it;
     /// Boundary cursors resume at it.
     #[prost(uint64, optional, tag = "2")]
@@ -59,10 +50,6 @@ pub struct TransactionsPosition {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct EventsPosition {
-    /// Checkpoint containing or bounding the event position, with the same
-    /// guarantees as `TransactionsPosition.checkpoint`.
-    #[prost(uint64, optional, tag = "1")]
-    pub checkpoint: ::core::option::Option<u64>,
     /// Global transaction sequence number.
     #[prost(uint64, optional, tag = "2")]
     pub tx_seq: ::core::option::Option<u64>,
@@ -73,7 +60,7 @@ pub struct EventsPosition {
 /// A position in public ledger coordinates, as `sui.rpc.v2.LedgerPosition`
 /// names it: the boundary just before the item keyed
 /// `(checkpoint, transaction_index, event_index)`. Transaction cursors leave
-/// `event_index` unset (0).
+/// `event_index` unset (0), and readers ignore one they carry.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PublicPosition {
     /// Checkpoint sequence number.

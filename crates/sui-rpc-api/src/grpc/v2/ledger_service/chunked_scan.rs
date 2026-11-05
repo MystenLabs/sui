@@ -218,12 +218,11 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::ledger_history::ledger_point::LedgerPoint;
-    use crate::ledger_history::ledger_point::TerminalLedgerPosition;
+    use crate::ledger_history::cursor::LedgerPoint;
+    use crate::ledger_history::cursor::Position;
     use crate::ledger_history::query_options::RangeExhaustion;
     use crate::ledger_history::watermark::NaturalRangeEnd;
     use std::time::Instant;
-    use sui_rpc_cursor::Position;
 
     use prometheus::Registry;
     use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
@@ -257,10 +256,10 @@ mod tests {
                     terminal: ScanTerminal::from_range_exhaustion(
                         RangeExhaustion::CheckpointBound,
                         Position::Transactions {
-                            checkpoint: 0,
                             tx_seq: 0,
+                            public_position: LedgerPoint::GENESIS,
                         },
-                        TerminalLedgerPosition::known(LedgerPoint::GENESIS),
+                        LedgerPoint::GENESIS,
                         None,
                     ),
                     remaining_scan_budget: scan_budget - 1,
@@ -279,10 +278,10 @@ mod tests {
             Some(ScanTerminal::NaturalRange {
                 end: NaturalRangeEnd::CheckpointBound,
                 position: Position::Transactions {
-                    checkpoint: 0,
                     tx_seq: 0,
+                    public_position: LedgerPoint::GENESIS,
                 },
-                ledger: TerminalLedgerPosition::known(LedgerPoint::GENESIS),
+                cursor_position: LedgerPoint::GENESIS,
                 claimed_checkpoint: None,
             })
         );
@@ -306,10 +305,10 @@ mod tests {
                     terminal: ScanTerminal::from_range_exhaustion(
                         RangeExhaustion::CheckpointBound,
                         Position::Transactions {
-                            checkpoint: 0,
                             tx_seq: 0,
+                            public_position: LedgerPoint::GENESIS,
                         },
-                        TerminalLedgerPosition::known(LedgerPoint::GENESIS),
+                        LedgerPoint::GENESIS,
                         None,
                     ),
                     remaining_scan_budget: args.scan_budget,
@@ -443,10 +442,10 @@ mod tests {
                     terminal: ScanTerminal::from_range_exhaustion(
                         RangeExhaustion::CheckpointBound,
                         Position::Transactions {
-                            checkpoint: 0,
                             tx_seq: 0,
+                            public_position: LedgerPoint::GENESIS,
                         },
-                        TerminalLedgerPosition::known(LedgerPoint::GENESIS),
+                        LedgerPoint::GENESIS,
                         None,
                     ),
                     remaining_scan_budget: args.scan_budget - buckets_evaluated,

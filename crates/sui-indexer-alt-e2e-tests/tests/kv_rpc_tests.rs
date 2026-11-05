@@ -53,9 +53,10 @@ use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::get_object_result;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
-use sui_rpc_cursor::CursorKind;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
+use sui_rpc_api::ledger_history::cursor::CursorKind;
+use sui_rpc_api::ledger_history::cursor::CursorToken;
+use sui_rpc_api::ledger_history::cursor::LedgerPoint;
+use sui_rpc_api::ledger_history::cursor::Position;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -3636,12 +3637,13 @@ async fn test_list_after_cursor_past_the_tip() {
     let tip = CursorToken::decode(&resp.end_cursor.unwrap()).unwrap();
     assert_eq!(tip.kind, CursorKind::Boundary);
     let Position::Transactions {
-        checkpoint: tip_checkpoint,
         tx_seq: tip_tx,
+        public_position: tip_position,
     } = tip.position
     else {
         panic!("unexpected tip cursor {tip:?}");
     };
+    let tip_checkpoint = tip_position.checkpoint;
     let last_indexed = Some(tip_checkpoint - 1);
     assert_eq!(resp.frames.last().unwrap().1.checkpoint, last_indexed);
 
@@ -3659,9 +3661,14 @@ async fn test_list_after_cursor_past_the_tip() {
         req.options = Some(options);
         req
     };
-    let tx = |checkpoint, tx_seq| Position::Transactions { checkpoint, tx_seq };
-    let past_tip = CursorToken::boundary(tx(tip_checkpoint + 1, tip_tx + 3));
-    let crossing = CursorToken::boundary(tx(tip_checkpoint + 1, tip_tx + 2));
+    // A transaction cursor at `tx_seq`, the transaction at `transaction_index` in `checkpoint`.
+    let tx = |tx_seq, checkpoint, transaction_index| Position::Transactions {
+        tx_seq,
+        public_position: LedgerPoint::transaction(checkpoint, transaction_index),
+    };
+    // Past the tip, `tip_checkpoint` holds two transactions and the next checkpoint the rest.
+    let past_tip = CursorToken::boundary(tx(tip_tx + 3, tip_checkpoint + 1, 1));
+    let crossing = CursorToken::boundary(tx(tip_tx + 2, tip_checkpoint + 1, 0));
     // Each case: the request, then the page's end cursor, end reason, and checkpoint claim.
     let cases = [
         (
@@ -3673,12 +3680,12 @@ async fn test_list_after_cursor_past_the_tip() {
         // An Item resumes at the boundary after it.
         (
             request(
-                &CursorToken::item(tx(tip_checkpoint, tip_tx)),
+                &CursorToken::item(tx(tip_tx, tip_checkpoint, 0)),
                 None,
                 None,
                 None,
             ),
-            CursorToken::boundary(tx(tip_checkpoint, tip_tx + 1)),
+            CursorToken::boundary(tx(tip_tx + 1, tip_checkpoint, 1)),
             QueryEndReason::LedgerTip,
             None,
         ),
@@ -3721,9 +3728,9 @@ async fn test_list_after_cursor_past_the_tip() {
     let mut options = query_options(10);
     options.after = Some(
         CursorToken::item(Position::Events {
-            checkpoint: tip_checkpoint,
             tx_seq: tip_tx,
             event_index: 0,
+            public_position: LedgerPoint::checkpoint_start(tip_checkpoint),
         })
         .encode(),
     );
@@ -3736,9 +3743,9 @@ async fn test_list_after_cursor_past_the_tip() {
     assert_eq!(
         CursorToken::decode(&resp.end_cursor.unwrap()).unwrap(),
         CursorToken::boundary(Position::Events {
-            checkpoint: tip_checkpoint,
             tx_seq: tip_tx,
             event_index: 1,
+            public_position: LedgerPoint::event(tip_checkpoint, 0, 1),
         })
     );
     assert_eq!(resp.frames.last().unwrap().1.checkpoint, None);
@@ -5178,38 +5185,21 @@ async fn walk(
     panic!("paging did not reach the end: {query:?}");
 }
 
-/// What [`assert_cursors_resume_in_the_opposite_direction`] exercised.
-struct OppositeDirectionCoverage {
-    /// Every page's end reason.
-    end_reasons: Vec<QueryEndReason>,
-    /// Boundary cursors from ascending and from descending pages whose checkpoint field, read as
-    /// written in the opposite direction, would exclude an item their position admits.
-    misread_fields: (usize, usize),
-}
-
 /// Every cursor paging `query` returns in either ordering, with and without a far cursor bound,
 /// sent back with the opposite ordering, returns exactly the items its position and kind admit.
 /// A bounded paging's closing cursor, sent back in its own ordering without the far bound (an
-/// item), resumes with exactly the items the bound excluded.
+/// item), resumes with exactly the items the bound excluded. Returns every page's end reason.
 async fn assert_cursors_resume_in_the_opposite_direction(
     client: &mut LedgerServiceClient<Channel>,
     query: &CursorQuery,
     window: (Option<u64>, Option<u64>),
-) -> OppositeDirectionCoverage {
+) -> Vec<QueryEndReason> {
     let all = walk(client, query, window, true, None, None).await;
     assert!(all.items.len() >= 4, "too few items to page: {query:?}");
-    let item_checkpoints: std::collections::HashMap<(u64, u32), u64> = all
-        .item_cursors
-        .iter()
-        .map(|cursor| (cursor_key(cursor).1, cursor_checkpoint(cursor)))
-        .collect();
     // Far bounds at every third item: the bounded pages end on a restatement of the bound.
     let far_bounds: Vec<_> = all.item_cursors.iter().step_by(3).cloned().collect();
 
-    let mut coverage = OppositeDirectionCoverage {
-        end_reasons: Vec::new(),
-        misread_fields: (0, 0),
-    };
+    let mut end_reasons = Vec::new();
     for ascending in [true, false] {
         let mut cursors = Vec::new();
         for far_bound in std::iter::once(None).chain(far_bounds.iter().cloned().map(Some)) {
@@ -5237,7 +5227,7 @@ async fn assert_cursors_resume_in_the_opposite_direction(
                 "ascending={ascending} paging bounded at {far_key:?}: {query:?}"
             );
             cursors.extend(paged.cursors.iter().cloned());
-            coverage.end_reasons.extend(paged.end_reasons);
+            end_reasons.extend(paged.end_reasons);
             let Some(far_key) = far_key else {
                 continue;
             };
@@ -5286,24 +5276,6 @@ async fn assert_cursors_resume_in_the_opposite_direction(
                     })
                     .collect()
             };
-            // As written, a `before` field is an exclusive upper checkpoint bound and an `after`
-            // field an inclusive lower one.
-            let field = cursor_checkpoint(&cursor);
-            let field_excludes_an_item = expected.iter().any(|item| {
-                let checkpoint = item_checkpoints[item];
-                if ascending {
-                    checkpoint >= field
-                } else {
-                    checkpoint < field
-                }
-            });
-            if kind == CursorKind::Boundary && field_excludes_an_item {
-                if ascending {
-                    coverage.misread_fields.0 += 1;
-                } else {
-                    coverage.misread_fields.1 += 1;
-                }
-            }
             let opposite = walk(client, query, window, !ascending, Some(cursor), None).await;
             assert_eq!(
                 opposite.items, expected,
@@ -5312,32 +5284,13 @@ async fn assert_cursors_resume_in_the_opposite_direction(
             );
         }
     }
-    coverage
-}
-
-/// The checkpoint field of a cursor's position.
-fn cursor_checkpoint(cursor: &[u8]) -> u64 {
-    CursorToken::decode(cursor)
-        .expect("cursor decodes")
-        .position
-        .checkpoint()
-}
-
-/// Asserts that `coverage` sent back boundary cursors from both orderings whose checkpoint field,
-/// read as written, excludes an item.
-fn assert_misread_fields_exercised(coverage: &OppositeDirectionCoverage, query: &str) {
-    let (from_ascending, from_descending) = coverage.misread_fields;
-    assert!(
-        from_ascending > 0 && from_descending > 0,
-        "{query}: frontiers must include ones whose field, read as written, excludes an item: \
-         {from_ascending} from ascending pages, {from_descending} from descending pages"
-    );
+    end_reasons
 }
 
 /// Cursors are opaque: a client may send any cursor it received back as either `after` or
-/// `before`, in either ordering. Scan frontiers inside a checkpoint (from the event bitmap's
-/// bucket edge and the unfiltered event scan's transaction cap) and cursor bounds restated by a
-/// page's end must each return every item their position admits.
+/// `before`, in either ordering. Scan frontiers (from the event bitmap's bucket edge and the
+/// unfiltered event scan's transaction cap) and cursor bounds restated by a page's end must each
+/// return every item their position admits.
 #[tokio::test]
 async fn test_list_cursors_resume_in_the_opposite_direction() {
     let kv_rpc_config = KvRpcConfig {
@@ -5456,25 +5409,23 @@ async fn test_list_cursors_resume_in_the_opposite_direction() {
 
     // Filtered events: a one-bucket budget stops each scan at the bucket edge, inside the edge
     // checkpoint.
-    let coverage = assert_cursors_resume_in_the_opposite_direction(
+    let end_reasons = assert_cursors_resume_in_the_opposite_direction(
         &mut client,
         &CursorQuery::Events(Some(ev_sender(emitter))),
         (None, None),
     )
     .await;
-    assert!(coverage.end_reasons.contains(&QueryEndReason::ScanLimit));
-    assert_misread_fields_exercised(&coverage, "filtered events");
+    assert!(end_reasons.contains(&QueryEndReason::ScanLimit));
 
     // Unfiltered events in the mixed checkpoints: the transaction cap stops each scan between
     // transactions of one checkpoint.
-    let coverage = assert_cursors_resume_in_the_opposite_direction(
+    let end_reasons = assert_cursors_resume_in_the_opposite_direction(
         &mut client,
         &CursorQuery::Events(None),
         (Some(mixed_start), Some(mixed_end)),
     )
     .await;
-    assert!(coverage.end_reasons.contains(&QueryEndReason::ScanLimit));
-    assert_misread_fields_exercised(&coverage, "unfiltered events");
+    assert!(end_reasons.contains(&QueryEndReason::ScanLimit));
 
     // Filtered transactions: pages end on items and on restated cursor bounds inside
     // checkpoints.

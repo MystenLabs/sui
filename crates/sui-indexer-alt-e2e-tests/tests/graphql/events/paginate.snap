@@ -52,8 +52,8 @@ Response: {
   "data": {
     "allEvents": {
       "pageInfo": {
-        "startCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
-        "endCursor": "AAEBDigCQgYIAhAHGABKAggCAQECAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "startCursor": "AAEBDigBQgQQAhgASgQIARABAQABAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+        "endCursor": "AAEBDCgCQgQQBxgASgIIAgEBAgAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "hasNextPage": false,
         "hasPreviousPage": false
       },
@@ -153,8 +153,8 @@ Response: {
     },
     "eventsHasNext": {
       "pageInfo": {
-        "startCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
-        "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
+        "startCursor": "AAEBDigBQgQQAhgASgQIARABAQABAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+        "endCursor": "AAEBDigBQgQQAxgASgQIARACAQABAAAAAAAAAAIAAAAAAAAAAAAAAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -177,8 +177,8 @@ Response: {
     },
     "eventsHasPrevious": {
       "pageInfo": {
-        "startCursor": "AAEBEigBQgYIARAEGAhKBggBEAMYCAEAAQAAAAAAAAADAAAAAAAAAAgAAAA=",
-        "endCursor": "AAEBEigBQgYIARAEGAlKBggBEAMYCQEAAQAAAAAAAAADAAAAAAAAAAkAAAA=",
+        "startCursor": "AAEBECgBQgQQBBgISgYIARADGAgBAAEAAAAAAAAAAwAAAAAAAAAIAAAA",
+        "endCursor": "AAEBECgBQgQQBBgJSgYIARADGAkBAAEAAAAAAAAAAwAAAAAAAAAJAAAA",
         "hasNextPage": false,
         "hasPreviousPage": true
       },
@@ -266,8 +266,8 @@ Response: {
   "data": {
     "eventsAfterTransaction2AndEvent0": {
       "pageInfo": {
-        "startCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
-        "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
+        "startCursor": "AAEBDigBQgQQAxgASgQIARACAQABAAAAAAAAAAIAAAAAAAAAAAAAAA==",
+        "endCursor": "AAEBDigBQgQQAxgASgQIARACAQABAAAAAAAAAAIAAAAAAAAAAAAAAA==",
         "hasNextPage": true,
         "hasPreviousPage": true
       },
@@ -290,8 +290,8 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent0": {
       "pageInfo": {
-        "startCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
-        "endCursor": "AAEBECgBQgYIARACGABKBAgBEAEBAAEAAAAAAAAAAQAAAAAAAAAAAAAA",
+        "startCursor": "AAEBDigBQgQQAhgASgQIARABAQABAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+        "endCursor": "AAEBDigBQgQQAhgASgQIARABAQABAAAAAAAAAAEAAAAAAAAAAAAAAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -314,8 +314,8 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent1FromBack": {
       "pageInfo": {
-        "startCursor": "AAEBDCgCQgYIABAAGABKAAEBAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        "endCursor": "AAEBECgBQgYIARADGABKBAgBEAIBAAEAAAAAAAAAAgAAAAAAAAAAAAAA",
+        "startCursor": "AAEBCigCQgQQABgASgABAQAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "endCursor": "AAEBDigBQgQQAxgASgQIARACAQABAAAAAAAAAAIAAAAAAAAAAAAAAA==",
         "hasNextPage": true,
         "hasPreviousPage": false
       },

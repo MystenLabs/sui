@@ -9,9 +9,9 @@ use sui_types::storage::LedgerTxSeqDigest;
 
 use crate::RpcError;
 use crate::RpcService;
-use crate::ledger_history::ledger_point::LedgerPoint;
-use crate::ledger_history::ledger_point::RowPlacement;
+use crate::ledger_history::cursor::LedgerPoint;
 use crate::ledger_history::query_options::below_serving_floor;
+use crate::ledger_history::row_placement::RowPlacement;
 
 pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
@@ -364,33 +364,19 @@ fn get_tx_seq_digest(service: &RpcService, tx_seq: u64) -> Result<LedgerTxSeqDig
         .expect("multi-get of one tx_seq returns one row"))
 }
 
-/// A transaction- or event-lane scan frontier, placed by the index row its [`RowPlacement`]
-/// names.
-pub(super) struct PlacedFrontier {
-    /// The checkpoint of the placing transaction, which bounds the covered range. `None` only at
-    /// the ascending genesis frontier, where nothing is yet covered.
-    pub(super) checkpoint: Option<u64>,
-    /// The frontier in ledger coordinates.
-    pub(super) point: LedgerPoint,
-}
-
-/// Place a scan frontier by the one index row `placement` names, or at genesis for `None` (see
-/// [`RowPlacement::transaction_boundary`] and [`RowPlacement::event_boundary`]).
+/// Place a transaction- or event-lane scan frontier by the one index row `placement` names, or at
+/// genesis for `None` (see [`RowPlacement::transaction_boundary`] and
+/// [`RowPlacement::event_boundary`]). The point lies in the placing transaction's checkpoint,
+/// which bounds the covered range.
 pub(super) fn place_frontier(
     service: &RpcService,
     placement: Option<RowPlacement>,
-) -> Result<PlacedFrontier, RpcError> {
+) -> Result<LedgerPoint, RpcError> {
     let Some(placement) = placement else {
-        return Ok(PlacedFrontier {
-            checkpoint: None,
-            point: LedgerPoint::GENESIS,
-        });
+        return Ok(LedgerPoint::GENESIS);
     };
     let row = get_tx_seq_digest(service, placement.tx_seq)?;
-    Ok(PlacedFrontier {
-        checkpoint: Some(row.checkpoint_number),
-        point: placement.point(row.checkpoint_number, row.tx_offset as u64),
-    })
+    Ok(placement.point(row.checkpoint_number, row.tx_offset as u64))
 }
 
 /// Classify a missing `tx_seq_digest` row encountered during a scan. The serving
