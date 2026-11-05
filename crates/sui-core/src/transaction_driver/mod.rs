@@ -237,7 +237,15 @@ where
                 amplification_factor
             };
 
-        if let Some(tx_data) = tx_data {
+        // Simulates a fullnode whose clock differs from the validators' clocks.
+        #[allow(unused_mut)]
+        let mut skip_timestamp_check = false;
+        sui_macros::fail_point_if!("skip-timestamp-check-in-transaction-driver", || {
+            skip_timestamp_check = true;
+        });
+        if let Some(tx_data) = tx_data
+            && !skip_timestamp_check
+        {
             check_timestamp_window(tx_data.expiration(), AuthorityState::unixtime_now_ms())?;
         }
 
