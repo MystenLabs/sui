@@ -2444,11 +2444,11 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Earliest consensus commit time (Unix seconds, inclusive) at which the transaction is
-        /// valid. Before it, consensus drops the transaction, and it can be submitted again.
+        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. Validators
+        /// reject the transaction before it by their local clocks, and it can be submitted again.
         min_timestamp: Option<u64>,
         /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
-        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
+        /// valid. A transaction in a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2462,11 +2462,11 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Earliest consensus commit time (Unix seconds, inclusive) at which the transaction is
-        /// valid. Before it, consensus drops the transaction, and it can be submitted again.
+        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. Validators
+        /// reject the transaction before it by their local clocks, and it can be submitted again.
         min_timestamp: Option<u64>,
         /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
-        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
+        /// valid. A transaction in a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -3569,6 +3569,16 @@ impl TransactionDataAPI for TransactionDataV1 {
                         )
                         .into()
                     );
+                    // gRPC carries the bounds as signed protobuf `Timestamp` seconds.
+                    for timestamp in [min_timestamp, max_timestamp].into_iter().flatten() {
+                        fp_ensure!(
+                            i64::try_from(*timestamp).is_ok(),
+                            UserInputError::InvalidExpiration {
+                                error: format!("timestamp {timestamp} is greater than i64::MAX"),
+                            }
+                            .into()
+                        );
+                    }
                     if let (Some(min), Some(max)) = (min_timestamp, max_timestamp) {
                         fp_ensure!(
                             min <= max,
