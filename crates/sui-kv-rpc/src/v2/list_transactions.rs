@@ -697,7 +697,6 @@ mod tests {
     use crate::v2::get_transaction::get_transaction;
     use sui_inverted_index::ScanDirection;
     use sui_rpc_api::ledger_history::cursor::CursorToken;
-    use sui_rpc_api::ledger_history::ledger_point::ledger_position;
 
     use crate::v2::test_utils::{
         ascending_options, assert_identity_only_object_mask, assert_list_metric_absent,
@@ -1094,7 +1093,7 @@ mod tests {
             );
             assert_eq!(
                 watermark.cursor_position,
-                Some(ledger_position(expected_point, &cursor))
+                Some(expected_point.to_ledger_position(&cursor))
             );
             assert_eq!(
                 watermark.checkpoint, expected_proof,

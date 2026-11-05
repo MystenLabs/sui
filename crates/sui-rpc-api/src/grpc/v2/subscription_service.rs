@@ -568,7 +568,6 @@ mod tests {
 
     use super::*;
     use crate::ledger_history::cursor::CursorToken;
-    use crate::ledger_history::ledger_point::ledger_position;
 
     #[test]
     fn initial_watermark_tick_covers_checkpoint_before_entry() {
@@ -597,7 +596,7 @@ mod tests {
         );
         assert_eq!(
             watermark.cursor_position,
-            Some(ledger_position(point, &cursor))
+            Some(point.to_ledger_position(&cursor))
         );
     }
 

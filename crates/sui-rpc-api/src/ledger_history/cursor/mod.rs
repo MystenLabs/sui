@@ -4,6 +4,8 @@
 use anyhow::Context as _;
 use bytes::Bytes;
 use prost::Message as _;
+use sui_inverted_index::ScanDirection;
+use sui_rpc::proto::sui::rpc::v2::LedgerPosition;
 
 mod proto;
 
@@ -62,6 +64,19 @@ impl LedgerPoint {
             event_index,
         }
     }
+
+    /// The wire form of this point for a watermark whose cursor is `position`: only the
+    /// coordinates of that lane's keys are set.
+    pub fn to_ledger_position(self, position: &Position) -> LedgerPosition {
+        let proto = LedgerPosition::default().with_checkpoint(self.checkpoint);
+        match position {
+            Position::Checkpoints { .. } => proto,
+            Position::Transactions { .. } => proto.with_transaction_index(self.transaction_index),
+            Position::Events { .. } => proto
+                .with_transaction_index(self.transaction_index)
+                .with_event_index(self.event_index),
+        }
+    }
 }
 
 /// Endpoint-specific cursor position. Transaction and event positions carry `public_position`,
@@ -96,6 +111,32 @@ impl Position {
             | Position::Events {
                 public_position, ..
             } => public_position,
+        }
+    }
+
+    /// The resume point of a frame carrying the item at this position, whose public position is
+    /// the item's key: ascending, the boundary right after the item (the key with its lane's
+    /// finest index incremented, never carried into the next transaction or checkpoint);
+    /// descending, the key.
+    pub fn item_resume(&self, direction: ScanDirection) -> LedgerPoint {
+        let key = self.public_position();
+        if !direction.is_ascending() {
+            return key;
+        }
+        // The finest index of a real item never reaches its numeric maximum; saturating keeps the
+        // impossible edge, which a client's cursor can still name, from wrapping.
+        match self {
+            Position::Checkpoints { .. } => {
+                LedgerPoint::checkpoint_start(key.checkpoint.saturating_add(1))
+            }
+            Position::Transactions { .. } => {
+                LedgerPoint::transaction(key.checkpoint, key.transaction_index.saturating_add(1))
+            }
+            Position::Events { .. } => LedgerPoint::event(
+                key.checkpoint,
+                key.transaction_index,
+                key.event_index.saturating_add(1),
+            ),
         }
     }
 }
@@ -477,5 +518,72 @@ mod tests {
             }),
         );
         assert!(CursorToken::decode(&checkpoints).is_err());
+    }
+
+    #[test]
+    fn item_resume_is_above_the_key_ascending_and_the_key_descending() {
+        for (item, key, above) in [
+            (
+                Position::Checkpoints { checkpoint: 4 },
+                LedgerPoint::checkpoint_start(4),
+                LedgerPoint::checkpoint_start(5),
+            ),
+            (
+                Position::Transactions {
+                    tx_seq: 9,
+                    public_position: LedgerPoint::transaction(4, 2),
+                },
+                LedgerPoint::transaction(4, 2),
+                LedgerPoint::transaction(4, 3),
+            ),
+            (
+                Position::Events {
+                    tx_seq: 9,
+                    event_index: 1,
+                    public_position: LedgerPoint::event(4, 2, 1),
+                },
+                LedgerPoint::event(4, 2, 1),
+                LedgerPoint::event(4, 2, 2),
+            ),
+        ] {
+            assert_eq!(item.item_resume(ScanDirection::Ascending), above);
+            assert_eq!(item.item_resume(ScanDirection::Descending), key);
+        }
+    }
+
+    /// The lane comes from the cursor position; its own coordinates don't matter.
+    #[test]
+    fn to_ledger_position_sets_only_the_lane_coordinates() {
+        let point = LedgerPoint::event(4, 2, 1);
+        let checkpoint = point.to_ledger_position(&Position::Checkpoints { checkpoint: 0 });
+        assert_eq!(
+            (
+                checkpoint.checkpoint,
+                checkpoint.transaction_index,
+                checkpoint.event_index
+            ),
+            (Some(4), None, None)
+        );
+        let transaction = point.to_ledger_position(&Position::Transactions {
+            tx_seq: 0,
+            public_position: LedgerPoint::GENESIS,
+        });
+        assert_eq!(
+            (
+                transaction.checkpoint,
+                transaction.transaction_index,
+                transaction.event_index
+            ),
+            (Some(4), Some(2), None)
+        );
+        let event = point.to_ledger_position(&Position::Events {
+            tx_seq: 0,
+            event_index: 0,
+            public_position: LedgerPoint::GENESIS,
+        });
+        assert_eq!(
+            (event.checkpoint, event.transaction_index, event.event_index),
+            (Some(4), Some(2), Some(1))
+        );
     }
 }

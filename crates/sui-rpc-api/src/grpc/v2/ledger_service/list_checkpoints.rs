@@ -922,7 +922,6 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
 
     use crate::ledger_history::cursor::CursorToken;
-    use crate::ledger_history::ledger_point::ledger_position;
     use crate::ledger_history::watermark::ScanTerminal;
 
     use crate::ledger_history::query_options::ScanBounds;
@@ -1304,10 +1303,10 @@ mod tests {
             assert_eq!(watermark.checkpoint, expected_proof, "{case}");
             assert_eq!(
                 watermark.cursor_position,
-                Some(ledger_position(
-                    LedgerPoint::checkpoint_start(expected_cursor),
-                    &expected_position
-                )),
+                Some(
+                    LedgerPoint::checkpoint_start(expected_cursor)
+                        .to_ledger_position(&expected_position)
+                ),
                 "{case}: a checkpoint cursor names its own ledger point",
             );
             if let Some(covered) = covered {

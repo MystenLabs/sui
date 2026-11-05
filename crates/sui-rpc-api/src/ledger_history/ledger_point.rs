@@ -12,52 +12,13 @@
 //! frontier is placed by the index row (checkpoint and position in it) of one transaction the
 //! scan already reads: [`RowPlacement`] says which one, and how its row places the boundary.
 //! Checkpoint boundaries, the request's own fields, and items need no read.
+//!
+//! [`Position::public_position`]: crate::ledger_history::cursor::Position::public_position
 
 use sui_inverted_index::ScanDirection;
-use sui_rpc::proto::sui::rpc::v2::LedgerPosition;
 
 use crate::ledger_history::cursor::LedgerPoint;
-use crate::ledger_history::cursor::Position;
 use crate::ledger_history::query_options::IntraTxCoordinate;
-
-/// The resume point of a frame carrying the item at cursor `position`, whose public position is
-/// the item's key: ascending, the boundary right after the item (the key with its lane's finest
-/// index incremented, never carried into the next transaction or checkpoint); descending, the
-/// key.
-pub fn item_resume(position: &Position, direction: ScanDirection) -> LedgerPoint {
-    let key = position.public_position();
-    if !direction.is_ascending() {
-        return key;
-    }
-    // The finest index of a real item never reaches its numeric maximum; saturating keeps the
-    // impossible edge, which a client's cursor can still name, from wrapping.
-    match position {
-        Position::Checkpoints { .. } => {
-            LedgerPoint::checkpoint_start(key.checkpoint.saturating_add(1))
-        }
-        Position::Transactions { .. } => {
-            LedgerPoint::transaction(key.checkpoint, key.transaction_index.saturating_add(1))
-        }
-        Position::Events { .. } => LedgerPoint::event(
-            key.checkpoint,
-            key.transaction_index,
-            key.event_index.saturating_add(1),
-        ),
-    }
-}
-
-/// The wire form of `point` for a watermark whose cursor is `position`: only the coordinates of
-/// that lane's keys are set.
-pub fn ledger_position(point: LedgerPoint, position: &Position) -> LedgerPosition {
-    let proto = LedgerPosition::default().with_checkpoint(point.checkpoint);
-    match position {
-        Position::Checkpoints { .. } => proto,
-        Position::Transactions { .. } => proto.with_transaction_index(point.transaction_index),
-        Position::Events { .. } => proto
-            .with_transaction_index(point.transaction_index)
-            .with_event_index(point.event_index),
-    }
-}
 
 /// Which transaction's index row places a transaction- or event-lane boundary, and how. A scan
 /// boundary is placed by the transaction on its covered side: ascending, the last transaction
@@ -115,76 +76,6 @@ impl RowPlacement {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const TX: Position = Position::Transactions {
-        tx_seq: 0,
-        public_position: LedgerPoint::GENESIS,
-    };
-    const EVENT: Position = Position::Events {
-        tx_seq: 0,
-        event_index: 0,
-        public_position: LedgerPoint::GENESIS,
-    };
-    const CHECKPOINT: Position = Position::Checkpoints { checkpoint: 0 };
-
-    #[test]
-    fn item_resume_is_above_the_key_ascending_and_the_key_descending() {
-        for (item, key, above) in [
-            (
-                Position::Checkpoints { checkpoint: 4 },
-                LedgerPoint::checkpoint_start(4),
-                LedgerPoint::checkpoint_start(5),
-            ),
-            (
-                Position::Transactions {
-                    tx_seq: 9,
-                    public_position: LedgerPoint::transaction(4, 2),
-                },
-                LedgerPoint::transaction(4, 2),
-                LedgerPoint::transaction(4, 3),
-            ),
-            (
-                Position::Events {
-                    tx_seq: 9,
-                    event_index: 1,
-                    public_position: LedgerPoint::event(4, 2, 1),
-                },
-                LedgerPoint::event(4, 2, 1),
-                LedgerPoint::event(4, 2, 2),
-            ),
-        ] {
-            assert_eq!(item_resume(&item, ScanDirection::Ascending), above);
-            assert_eq!(item_resume(&item, ScanDirection::Descending), key);
-        }
-    }
-
-    #[test]
-    fn ledger_position_sets_only_the_lane_coordinates() {
-        let point = LedgerPoint::event(4, 2, 1);
-        let checkpoint = ledger_position(point, &CHECKPOINT);
-        assert_eq!(
-            (
-                checkpoint.checkpoint,
-                checkpoint.transaction_index,
-                checkpoint.event_index
-            ),
-            (Some(4), None, None)
-        );
-        let transaction = ledger_position(point, &TX);
-        assert_eq!(
-            (
-                transaction.checkpoint,
-                transaction.transaction_index,
-                transaction.event_index
-            ),
-            (Some(4), Some(2), None)
-        );
-        let event = ledger_position(point, &EVENT);
-        assert_eq!(
-            (event.checkpoint, event.transaction_index, event.event_index),
-            (Some(4), Some(2), Some(1))
-        );
-    }
 
     #[test]
     fn row_placement_reads_the_covered_side() {

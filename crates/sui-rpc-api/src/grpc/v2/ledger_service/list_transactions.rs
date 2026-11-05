@@ -671,7 +671,6 @@ mod tests {
 
     use crate::ledger_history::cursor::CursorKind;
     use crate::ledger_history::cursor::CursorToken;
-    use crate::ledger_history::ledger_point::ledger_position;
     use crate::ledger_history::query_options::RangeExhaustion;
     use crate::ledger_history::watermark::ScanTerminal;
 
@@ -744,7 +743,7 @@ mod tests {
             assert_eq!(watermark.checkpoint, expected_proof);
             assert_eq!(
                 watermark.cursor_position,
-                Some(ledger_position(cursor_position, &expected_position))
+                Some(cursor_position.to_ledger_position(&expected_position))
             );
             let terminal = ScanTerminal::ScanLimit { watermark };
             let response = end_response(

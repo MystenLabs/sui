@@ -15,7 +15,6 @@ use crate::ledger_history::cursor::CursorKind;
 use crate::ledger_history::cursor::CursorToken;
 use crate::ledger_history::cursor::LedgerPoint;
 use crate::ledger_history::cursor::Position;
-use crate::ledger_history::ledger_point::item_resume;
 use crate::ledger_history::watermark::RangeEnd;
 use crate::proto::google::rpc::ErrorInfo;
 use crate::proto::google::rpc::bad_request::FieldViolation;
@@ -1191,7 +1190,7 @@ where
 fn after_resume_point(after: &CursorToken, resumed_kind: CursorKind) -> LedgerPoint {
     match (after.kind, resumed_kind) {
         (CursorKind::Item, CursorKind::Boundary) => {
-            item_resume(&after.position, ScanDirection::Ascending)
+            after.position.item_resume(ScanDirection::Ascending)
         }
         _ => after.position.public_position(),
     }
@@ -1395,7 +1394,6 @@ fn assert_above_latest_available_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger_history::ledger_point::ledger_position;
 
     /// The event-coordinate window spanning whole transactions `[start, end)`.
     fn tx_window(range: Range<u64>) -> Range<IntraTxCoordinate> {
@@ -3555,7 +3553,7 @@ mod tests {
         {
             let resume = first_admitted_key(after).expect("model cursors have a successor");
             let resume_point = match after.kind {
-                CursorKind::Item => item_resume(&after.position, ScanDirection::Ascending),
+                CursorKind::Item => after.position.item_resume(ScanDirection::Ascending),
                 CursorKind::Boundary => after.position.public_position(),
             };
             // The terminal cursor carries `after`'s point where both cursors name its position.
@@ -4211,7 +4209,7 @@ mod tests {
         assert_eq!(watermark.cursor, Some(past_tip_after.encode()));
         assert_eq!(
             watermark.cursor_position,
-            Some(ledger_position(past_tip_point, &past_tip_after.position))
+            Some(past_tip_point.to_ledger_position(&past_tip_after.position))
         );
 
         // An Item cursor resumes right after its item.

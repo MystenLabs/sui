@@ -31,7 +31,6 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 
 use crate::RpcError;
 use crate::ledger_history::cursor::{CursorKind, CursorToken, LedgerPoint, Position};
-use crate::ledger_history::ledger_point::{item_resume, ledger_position};
 use crate::ledger_history::query_options::{QueryOptions, RangeExhaustion, below_serving_floor};
 
 /// Populate the completion-boundary `checkpoint` field of a `Watermark` from
@@ -99,7 +98,7 @@ pub fn advance_covered_bound_before_checkpoint(
 /// plus the current direction-matching checkpoint boundary. `position` is the
 /// item's cursor coordinates (`list_checkpoints` passes its cp_seq), whose
 /// public position is the item's key in ledger coordinates; the frame's
-/// `cursor_position` follows from it (see [`item_resume`]).
+/// `cursor_position` follows from it (see [`Position::item_resume`]).
 pub fn item_watermark(
     position: Position,
     direction: ScanDirection,
@@ -108,7 +107,7 @@ pub fn item_watermark(
     cursor_watermark(
         position,
         CursorKind::Item,
-        item_resume(&position, direction),
+        position.item_resume(direction),
         boundary,
     )
 }
@@ -145,7 +144,7 @@ fn cursor_watermark(
     };
     let mut wm = Watermark::default();
     wm.cursor = Some(cursor.encode());
-    wm.cursor_position = Some(ledger_position(cursor_position, &position));
+    wm.cursor_position = Some(cursor_position.to_ledger_position(&position));
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -476,13 +475,13 @@ mod tests {
         assert_eq!(wm.cursor.as_ref(), Some(&cursor));
         assert_eq!(
             wm.cursor_position,
-            Some(ledger_position(LedgerPoint::transaction(9, 4), &pos))
+            Some(LedgerPoint::transaction(9, 4).to_ledger_position(&pos))
         );
 
         let wm = item_watermark(pos, ScanDirection::Descending, None);
         assert_eq!(wm.checkpoint, None);
         assert_eq!(wm.cursor.as_ref(), Some(&cursor));
-        assert_eq!(wm.cursor_position, Some(ledger_position(key, &pos)));
+        assert_eq!(wm.cursor_position, Some(key.to_ledger_position(&pos)));
 
         // A checkpoint cursor's public position is its checkpoint's start.
         let checkpoint = Position::Checkpoints { checkpoint: 9 };
@@ -493,18 +492,12 @@ mod tests {
         );
         assert_eq!(
             wm.cursor_position,
-            Some(ledger_position(
-                LedgerPoint::checkpoint_start(10),
-                &checkpoint
-            ))
+            Some(LedgerPoint::checkpoint_start(10).to_ledger_position(&checkpoint))
         );
         let wm = item_watermark(checkpoint, ScanDirection::Descending, None);
         assert_eq!(
             wm.cursor_position,
-            Some(ledger_position(
-                LedgerPoint::checkpoint_start(9),
-                &checkpoint
-            ))
+            Some(LedgerPoint::checkpoint_start(9).to_ledger_position(&checkpoint))
         );
     }
 
@@ -583,7 +576,7 @@ mod tests {
             let watermark = terminal.into_watermark(Some(3));
             assert_eq!(
                 watermark.cursor_position,
-                Some(ledger_position(cursor_position, &position))
+                Some(cursor_position.to_ledger_position(&position))
             );
             let cursor = CursorToken::decode(&watermark.cursor.unwrap()).unwrap();
             assert_eq!(
@@ -623,7 +616,7 @@ mod tests {
             assert_eq!(watermark.checkpoint, Some(7));
             assert_eq!(
                 watermark.cursor_position,
-                Some(ledger_position(floor, &position))
+                Some(floor.to_ledger_position(&position))
             );
         }
     }
