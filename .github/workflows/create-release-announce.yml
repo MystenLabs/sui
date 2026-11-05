@@ -59,11 +59,22 @@ jobs:
           export previous_release_branch="releases/sui-v${previous_release_version}-release"
           echo "previous_release_branch=${previous_release_branch}" >> $GITHUB_ENV
 
+      - name: Keep the release version check from main
+        shell: bash
+        run: cp scripts/check-release-version.sh "$RUNNER_TEMP/"
+
       - name: Checkout release branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
           fetch-depth: 0
           ref: ${{ inputs.sui_commit }}
+
+      - name: Check the release version is not already released from another commit
+        shell: bash
+        run: |
+          # Runs before the network branch moves or any tag is created.
+          version=$(grep '^version =' Cargo.toml | head -1 | tr -d '"' | awk '{ print $3 }')
+          "$RUNNER_TEMP/check-release-version.sh" "$version" "$(git rev-parse HEAD)"
 
       - name: Update ${{ inputs.network }} branch
         shell: bash

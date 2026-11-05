@@ -109,24 +109,33 @@ jobs:
           export os_type="${system_os}-${arch}"
           echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV     
 
-      - name: Check if archive for this version has already been published
+      - name: Reuse a published archive only if it was built from this commit
         continue-on-error: true
         shell: bash
         run: |
-          echo "s3_existing_archive=$(for network in mainnet testnet devnet; do \
-            if curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${network}-v${{ env.sui_version }}-${{ env.os_type }}.tgz \
-            | head -n1 | grep -q '200 OK'; then echo "releases/sui-${network}-v${{ env.sui_version }}-${{ env.os_type }}.tgz"; \
-            break; fi; done)" >> $GITHUB_ENV
-
-      - name: Download archive, if it exists
-        if: ${{ env.s3_existing_archive != '' }}
-        shell: bash
-        run: |
-          mkdir -p ${{ env.TMP_BUILD_DIR }}
-          # released archives are publicly readable (the existence check above
-          # relies on that), so no AWS credentials are needed here
-          curl -fSs -o ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz https://sui-releases.s3.us-east-1.amazonaws.com/${{ env.s3_existing_archive }}
-          tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
+          # Matching on version alone is not enough: networks have shipped the
+          # same version from different commits (mainnet-v1.83.1 reused the
+          # testnet-v1.83.1 archives). Reuse only when the archived `sui` reports
+          # the commit this tag points at; otherwise build from source.
+          # Released archives are publicly readable, so no AWS credentials are needed.
+          want=$(git rev-parse --short=12 HEAD)
+          archive="./tmp/sui-${sui_tag}-${os_type}.tgz"
+          mkdir -p ./tmp
+          for network in mainnet testnet devnet; do
+            key="releases/sui-${network}-v${sui_version}-${os_type}.tgz"
+            curl -fsS -o "$archive" "https://sui-releases.s3.us-east-1.amazonaws.com/${key}" 2>/dev/null || continue
+            rm -rf "$TMP_BUILD_DIR" && mkdir -p "$TMP_BUILD_DIR"
+            tar -xf "$archive" -C "$TMP_BUILD_DIR" || continue
+            got=$("$TMP_BUILD_DIR/sui${extention}" --version 2>/dev/null | awk '{print $2}' | sed 's/.*-//' || true)
+            if [ "$got" = "$want" ]; then
+              echo "Reusing ${key} (built from ${got})"
+              echo "s3_existing_archive=${key}" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "Not reusing ${key}: built from '${got:-unknown}', ${sui_tag} is ${want}"
+          done
+          rm -rf "$TMP_BUILD_DIR" "$archive"
+          echo "No published archive was built from ${want}; building from source"
 
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_existing_archive == '' }}

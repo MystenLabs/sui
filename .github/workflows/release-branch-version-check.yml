@@ -1,0 +1,32 @@
+name: Release Branch Version Check
+
+# Every commit released from a release branch needs its own version: once a
+# version is tagged for any network, the next PR into the branch must bump it.
+on:
+  pull_request:
+    branches:
+      - 'releases/sui-v*-release'
+
+permissions:
+  contents: read
+
+jobs:
+  version-check:
+    name: Version not already released
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+
+      - name: Fail if this PR lands on an already-released version
+        shell: bash
+        run: |
+          version=$(grep '^version =' Cargo.toml | head -1 | tr -d '"' | awk '{ print $3 }')
+          rc=0
+          scripts/check-release-version.sh "$version" || rc=$?
+          if [[ $rc -eq 1 ]]; then
+            echo "::error file=Cargo.toml::Version $version is already released. Bump the patch version in this PR."
+          elif [[ $rc -ne 0 ]]; then
+            echo "::error::Could not check release tags for version $version."
+          fi
+          exit "$rc"
