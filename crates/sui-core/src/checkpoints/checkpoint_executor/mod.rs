@@ -954,14 +954,18 @@ impl CheckpointExecutor {
                             env = env.with_insufficient_funds();
                         }
 
-                        // Effects record the consensus handler's expiry decision. When another
-                        // early error is reported instead, the decision does not change effects.
+                        // The commit timestamp is not in the checkpoint. Any timestamp after
+                        // `max_timestamp` reproduces the expiry that effects record.
                         if let &ExecutionStatus::Failure(ExecutionFailure {
                             error: ExecutionErrorKind::TransactionExpired,
                             ..
                         }) = effects.status()
+                            && let Some(timestamp_ms) = txn
+                                .transaction_data()
+                                .expiration()
+                                .first_expired_timestamp_ms()
                         {
-                            env = env.with_timestamp_expired();
+                            env = env.with_consensus_commit_timestamp(timestamp_ms);
                         }
 
                         Some((tx_digest, (txn.clone(), env)))
