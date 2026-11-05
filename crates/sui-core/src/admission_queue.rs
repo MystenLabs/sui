@@ -9,6 +9,7 @@ use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
 use crate::staggered_submission::proposers_metric_label;
 use arc_swap::ArcSwap;
+use itertools::Itertools as _;
 use mysten_common::debug_fatal;
 use mysten_metrics::{COUNT_BUCKETS, spawn_monitored_task};
 use prometheus::{
@@ -854,10 +855,10 @@ impl AdmissionQueueEventLoop {
         }
         let now_ms = AuthorityState::unixtime_now_ms();
         for entry in entries {
-            // An entry that consensus already processed goes on to the adapter, which reports it
-            // as processed.
+            // An entry that was already processed goes on to the adapter, which reports it as
+            // processed.
             if earliest_expiry_deadline_ms(&entry.transactions).is_some_and(|d| now_ms >= d)
-                && !self.all_consensus_processed(&entry.transactions)
+                && !self.all_processed(&entry.transactions)
             {
                 debug!(
                     keys = ?entry.transactions.iter().map(|t| t.key()).collect::<Vec<_>>(),
@@ -881,14 +882,40 @@ impl AdmissionQueueEventLoop {
         *self.last_drain.lock().unwrap() = Instant::now();
     }
 
-    fn all_consensus_processed(&self, transactions: &[ConsensusTransaction]) -> bool {
-        transactions.iter().all(|transaction| {
-            self.epoch_store
-                .is_consensus_message_processed(&SequencedConsensusTransactionKey::External(
-                    transaction.key(),
-                ))
-                .expect("Storage error when checking consensus message processed")
-        })
+    /// Whether every transaction in `transactions` was processed by consensus or executed from
+    /// a checkpoint, as `ConsensusAdapter` checks before it submits.
+    fn all_processed(&self, transactions: &[ConsensusTransaction]) -> bool {
+        let consensus_processed = self.epoch_store.check_consensus_messages_processed(
+            transactions
+                .iter()
+                .map(|transaction| SequencedConsensusTransactionKey::External(transaction.key())),
+        );
+        let unprocessed: Vec<_> = transactions
+            .iter()
+            .zip_eq(consensus_processed)
+            .filter(|(_, processed)| !processed)
+            .map(|(transaction, _)| transaction)
+            .collect();
+        if unprocessed.is_empty() {
+            return true;
+        }
+        let Some(digests) = unprocessed
+            .iter()
+            .map(|transaction| {
+                transaction
+                    .kind
+                    .as_user_transaction()
+                    .map(|tx| *tx.digest())
+            })
+            .collect::<Option<Vec<_>>>()
+        else {
+            return false;
+        };
+        self.epoch_store
+            .multi_get_transaction_checkpoint(&digests)
+            .expect("Storage error when checking transaction executed in checkpoint")
+            .iter()
+            .all(Option::is_some)
     }
 
     fn handle_insert(&mut self, cmd: InsertCommand) {
