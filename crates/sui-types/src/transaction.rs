@@ -2423,6 +2423,9 @@ pub fn is_gasless_transaction(gas_data: &GasData, transaction_kind: &Transaction
     is_gas_paid_from_address_balance(gas_data, transaction_kind) && gas_data.price == 0
 }
 
+/// The largest `min_timestamp` or `max_timestamp` (Unix seconds), 9999-12-31T23:59:59Z.
+pub const MAX_EXPIRATION_TIMESTAMP_SECS: u64 = 253_402_300_799;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
@@ -2450,7 +2453,7 @@ pub enum TransactionExpiration {
         /// again.
         min_timestamp: Option<u64>,
         /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
-        /// valid. A transaction in a later commit fails with `TransactionExpired`.
+        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2470,7 +2473,7 @@ pub enum TransactionExpiration {
         /// again.
         min_timestamp: Option<u64>,
         /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
-        /// valid. A transaction in a later commit fails with `TransactionExpired`.
+        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2553,6 +2556,18 @@ impl TransactionExpiration {
             TransactionExpiration::ValidDuring { max_timestamp, .. }
             | TransactionExpiration::Validity { max_timestamp, .. } => {
                 max_timestamp.is_some_and(|max| timestamp_ms / 1000 > max)
+            }
+        }
+    }
+
+    /// The earliest timestamp (Unix ms) at which `is_not_yet_valid_at` is false, if there is a
+    /// `min_timestamp`.
+    pub fn first_valid_timestamp_ms(&self) -> Option<u64> {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => None,
+            TransactionExpiration::ValidDuring { min_timestamp, .. }
+            | TransactionExpiration::Validity { min_timestamp, .. } => {
+                min_timestamp.and_then(|min| min.checked_mul(1000))
             }
         }
     }
@@ -3573,12 +3588,15 @@ impl TransactionDataAPI for TransactionDataV1 {
                         )
                         .into()
                     );
-                    // gRPC carries the bounds as signed protobuf `Timestamp` seconds.
+                    // gRPC carries the bounds as protobuf `Timestamp` seconds, which end at
+                    // 9999-12-31T23:59:59Z. The bound also rejects millisecond values.
                     for timestamp in [min_timestamp, max_timestamp].into_iter().flatten() {
                         fp_ensure!(
-                            i64::try_from(*timestamp).is_ok(),
+                            *timestamp <= MAX_EXPIRATION_TIMESTAMP_SECS,
                             UserInputError::InvalidExpiration {
-                                error: format!("timestamp {timestamp} is greater than i64::MAX"),
+                                error: format!(
+                                    "timestamp {timestamp} is greater than {MAX_EXPIRATION_TIMESTAMP_SECS}"
+                                ),
                             }
                             .into()
                         );
