@@ -999,7 +999,8 @@ mod tests {
     #[test]
     fn scan_limit_terminal_frames_use_transaction_domain_in_both_directions() {
         // The expected point is the placing row's, or, at the ascending genesis frontier no row
-        // places, genesis.
+        // places, genesis. A frontier past the entry checkpoint claims the checkpoint before its
+        // own in scan direction.
         for (
             direction,
             position,
@@ -1035,6 +1036,24 @@ mod tests {
                 None,
                 LedgerPoint::transaction(10, 7),
                 None,
+            ),
+            (
+                ScanDirection::Ascending,
+                50,
+                Some(12),
+                10,
+                None,
+                LedgerPoint::transaction(12, 7),
+                Some(11),
+            ),
+            (
+                ScanDirection::Descending,
+                50,
+                Some(8),
+                10,
+                None,
+                LedgerPoint::transaction(8, 7),
+                Some(9),
             ),
             (
                 ScanDirection::Ascending,

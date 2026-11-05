@@ -813,7 +813,9 @@ mod tests {
             (false, IntraTxCoordinate::from((18, 2)), Some(5), 7, Some(6)),
         ] {
             let options = options(ascending);
-            let cursor_position = LedgerPoint::event(checkpoint.unwrap_or(0), 3, frontier.index);
+            let cursor_position = checkpoint.map_or(LedgerPoint::GENESIS, |checkpoint| {
+                LedgerPoint::event(checkpoint, 3, frontier.index)
+            });
             let expected_position = Position::Events {
                 tx_seq: frontier.tx_seq,
                 event_index: frontier.index,

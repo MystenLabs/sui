@@ -4600,7 +4600,8 @@ async fn test_list_cursors_resume_in_the_opposite_direction() {
 
 /// A descending event frontier whose transaction lies in the last pruned checkpoint, sent back as
 /// `after`, asks for the positions from its pruned transaction on, so the request is `OutOfRange`
-/// in either ordering, though events remain above the floor.
+/// in either ordering, though events remain above the floor. The floor check reads the cursor's
+/// position, so the same cursor with a public position at the floor is `OutOfRange` too.
 #[sim_test]
 async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
     let cluster = transaction_capped_event_cluster().await;
@@ -4678,22 +4679,47 @@ async fn test_list_events_frontier_below_the_pruned_floor_is_out_of_range() {
             .unwrap();
     });
 
-    for ascending in [true, false] {
-        let mut options = query_options(2);
-        options.after = Some(frontier.clone());
-        if !ascending {
-            options.ordering = Some(Ordering::Descending as i32);
+    let forged = match CursorToken::decode(&frontier).expect("cursor decodes") {
+        CursorToken {
+            kind,
+            position:
+                Position::Events {
+                    tx_seq,
+                    event_index,
+                    ..
+                },
+        } => CursorToken {
+            kind,
+            position: Position::Events {
+                tx_seq,
+                event_index,
+                public_position: sui_rpc_api::ledger_history::cursor::LedgerPoint::checkpoint_start(
+                    floor,
+                ),
+            },
+        },
+        other => panic!("event cursor: {other:?}"),
+    }
+    .encode();
+
+    for (after, label) in [(frontier, "frontier"), (forged, "forged frontier")] {
+        for ascending in [true, false] {
+            let mut options = query_options(2);
+            options.after = Some(after.clone());
+            if !ascending {
+                options.ordering = Some(Ordering::Descending as i32);
+            }
+            let mut request = ListEventsRequest::default();
+            request.end_checkpoint = Some(end);
+            request.read_mask = Some(event_type_and_position_mask());
+            request.options = Some(options);
+            let status = list_error(client.list_events(request).await).await;
+            assert_eq!(
+                status.code(),
+                tonic::Code::OutOfRange,
+                "{label}, ascending {ascending}: {status:?}"
+            );
         }
-        let mut request = ListEventsRequest::default();
-        request.end_checkpoint = Some(end);
-        request.read_mask = Some(event_type_and_position_mask());
-        request.options = Some(options);
-        let status = list_error(client.list_events(request).await).await;
-        assert_eq!(
-            status.code(),
-            tonic::Code::OutOfRange,
-            "ascending {ascending}: {status:?}"
-        );
     }
 }
 

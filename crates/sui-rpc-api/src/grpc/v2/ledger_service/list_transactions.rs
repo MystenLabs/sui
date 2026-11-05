@@ -718,7 +718,9 @@ mod tests {
             (false, 18, Some(5), 7, Some(6)),
         ] {
             let options = options(ascending);
-            let cursor_position = LedgerPoint::transaction(checkpoint.unwrap_or(0), 3);
+            let cursor_position = checkpoint.map_or(LedgerPoint::GENESIS, |checkpoint| {
+                LedgerPoint::transaction(checkpoint, 3)
+            });
             let expected_position = Position::Transactions {
                 tx_seq: frontier,
                 public_position: cursor_position,
