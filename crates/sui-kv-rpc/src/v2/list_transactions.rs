@@ -12,7 +12,6 @@ use futures::stream::BoxStream;
 use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
-use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_kvstore::tables::tx_seq_digest;
@@ -161,11 +160,12 @@ pub(crate) async fn list_transactions(
     // keyspace directly, bounded by limit_items.
     let digest_stream: BoxStream<'static, Result<Watermarked<TxSeqDigestData>, ScanStop>> =
         if let Some(query) = filter_query {
-            let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+            let spec = ctx.tx_bitmap_spec();
+            let scan_budget = ctx.ledger_history().bitmap_bucket_budget_tx();
             let seq_stream = client.eval_bitmap_query_stream(
                 query,
                 tx_range.clone(),
-                BitmapIndexSpec::tx(),
+                spec,
                 options.scan_direction(),
                 scan_budget,
                 ctx.bitmap_skip_policy(),

@@ -28,8 +28,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 pub const NAME: &str = "tx_seq_digest";
 pub const SCHEMA_VERSION: u32 = 1;
-/// Number of tx_sequence_numbers per forward-scan bucket. Tied to
-/// SCHEMA_VERSION; changing it requires a version bump and backfill.
+/// Number of tx_sequence_numbers per forward-scan bucket. Changing it requires a new table and a
+/// backfill.
 pub const FORWARD_BUCKET_SIZE: u64 = 1_000;
 const FORWARD_KEY_NUMBER_WIDTH: usize = 20;
 const FORWARD_BUCKET_PREFIX_WIDTH: usize = 16;

@@ -26,7 +26,7 @@ impl BitmapIndexMetrics {
     pub(crate) fn new(pipeline: &'static str, registry: &Registry) -> Arc<Self> {
         let latency_buckets = prometheus::exponential_buckets(0.0005, 2.0, 18).unwrap();
         let lag_buckets = prometheus::exponential_buckets(1.0, 2.0, 18).unwrap();
-        // 8B → ~16KB. Row keys are `v{version}#{dim_key}#{bucket_id:010}` —
+        // 8B → ~16KB. Row keys are `{prefix}{dim_key}#{bucket_id}` —
         // typically tens of bytes (short dim tags + 32B address) but can
         // reach hundreds for struct-tag dimensions.
         let row_key_size_buckets = prometheus::exponential_buckets(8.0, 2.0, 12).unwrap();

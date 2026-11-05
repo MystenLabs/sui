@@ -47,9 +47,12 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::BITMAP_INDEX_V2_PIPELINE;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
+use sui_kvstore::BitmapSchema;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
+use sui_kvstore::EVENT_BITMAP_INDEX_V2_PIPELINE;
 use sui_kvstore::IndexerConfig as BtIndexerConfig;
 use sui_kvstore::IngestionConfig as BtIngestionConfig;
 use sui_kvstore::KeyValueStoreReader;
@@ -898,6 +901,11 @@ pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Re
     Ok(())
 }
 
+/// Alpha BigTable pipelines the archival stack registers: the v2 bitmap pipelines, whose tables
+/// kv-rpc reads.
+const BIGTABLE_ALPHA_PIPELINES: [&str; 2] =
+    [BITMAP_INDEX_V2_PIPELINE, EVENT_BITMAP_INDEX_V2_PIPELINE];
+
 /// Start the archival stack: BigTable emulator, BigTable indexer, and sui-kv-rpc.
 async fn start_archival(
     client_args: ClientArgs,
@@ -933,7 +941,7 @@ async fn start_archival(
         CommitterConfig::default(),
         BtIndexerConfig::default(),
         bt_pipeline_layer,
-        &[],
+        &BIGTABLE_ALPHA_PIPELINES,
         Chain::Unknown,
         registry,
     )
@@ -947,11 +955,14 @@ async fn start_archival(
         .await
         .context("Failed to start BigTable indexer")?;
 
+    // The indexer writes both bitmap schemas; kv-rpc reads the v2 tables.
+    let mut ledger_history = kv_rpc_config.ledger_history();
+    ledger_history.bitmap_schema = Some(BitmapSchema::V2);
     let kv_rpc_server = KvRpcServer::new_local_with_config(
         emulator.host().to_string(),
         INSTANCE_ID.to_string(),
         None,
-        kv_rpc_config.ledger_history(),
+        ledger_history,
         kv_rpc_config.request_bigtable_concurrency(),
         kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),

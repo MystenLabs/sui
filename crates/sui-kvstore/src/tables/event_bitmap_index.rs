@@ -14,32 +14,42 @@
 //! namespace at `EVENT_BITS = 16`, while leaving bucket-relative bit positions
 //! (max `2^28 - 1`) well within RoaringBitmap's `u32` limit.
 
-pub const NAME: &str = "event_bitmap_index";
+use super::BitmapSchema;
 
-pub const SCHEMA_VERSION: u32 = 1;
+/// Table of [`BitmapSchema::V1`] rows.
+pub const NAME: &str = "event_bitmap_index";
+/// Table of [`BitmapSchema::V2`] rows.
+pub const NAME_V2: &str = "event_bitmap_index_v2";
+
 pub const BUCKET_ID_WIDTH: usize = 12;
-/// Number of packed `event_seq`s per bitmap bucket.
+/// Number of packed `event_seq`s per bitmap bucket. Changing it requires a new table and a
+/// backfill.
 pub const BUCKET_SIZE: u64 = 268_435_456;
 
 pub mod col {
     pub const BITMAP: &str = "b";
 }
 
+/// The table that holds the rows of `schema`.
+pub const fn table_name(schema: BitmapSchema) -> &'static str {
+    match schema {
+        BitmapSchema::V1 => NAME,
+        BitmapSchema::V2 => NAME_V2,
+    }
+}
+
 /// Encode a full row key for the event-keyed bitmap index.
 ///
-/// Format: `v{version}#{dimension_key}#{bucket_id:012}`
+/// Format: `{prefix}{dimension_key}#{bucket_id:012}`, where the prefix is `v1#` for
+/// [`BitmapSchema::V1`] and empty for [`BitmapSchema::V2`].
 ///
 /// Uses 12-digit zero-padded bucket ids because the event_seq namespace is
 /// ~2^16 larger than the tx_seq namespace, overflowing the 10-digit format
 /// used by the tx-keyed index.
-pub fn encode_row_key(version: u32, dimension_key: &[u8], bucket_id: u64) -> Vec<u8> {
+pub fn encode_row_key(schema: BitmapSchema, dimension_key: &[u8], bucket_id: u64) -> Vec<u8> {
     let mut key = Vec::new();
-    encode_row_key_into(&mut key, version, dimension_key, bucket_id);
+    super::encode_bitmap_row_key_into(&mut key, schema, BUCKET_ID_WIDTH, dimension_key, bucket_id);
     key
-}
-
-pub fn encode_row_key_into(out: &mut Vec<u8>, version: u32, dimension_key: &[u8], bucket_id: u64) {
-    super::encode_bitmap_row_key_into(out, version, BUCKET_ID_WIDTH, dimension_key, bucket_id);
 }
 
 #[cfg(test)]
@@ -49,10 +59,10 @@ mod tests {
     #[test]
     fn test_encode_row_key_format() {
         let dim_key = vec![0x01, 0xAA];
-        let key = encode_row_key(1, &dim_key, 42);
-        let key_str = String::from_utf8_lossy(&key);
-        assert!(key_str.starts_with("v1#"));
-        assert!(key_str.ends_with("#000000000042"));
+        assert_eq!(
+            encode_row_key(BitmapSchema::V2, &dim_key, 42),
+            b"\x01\xAA#000000000042",
+        );
     }
 
     #[test]
