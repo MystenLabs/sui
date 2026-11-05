@@ -30,6 +30,16 @@ async fn get_test_object(test_cluster: &TestCluster) -> ObjectID {
         .0
 }
 
+/// The `google.rpc.ErrorInfo` among `status`'s details.
+fn error_info(status: &tonic::Status) -> ErrorInfo {
+    sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"))
+}
+
 #[sim_test]
 async fn test_missing_object_id() {
     let test_cluster = TestClusterBuilder::new()
@@ -147,18 +157,79 @@ async fn test_checkpoint_not_yet_indexed() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_eq!(err.code(), tonic::Code::OutOfRange);
-    let error_info = sui_rpc::proto::google::rpc::Status::decode(err.details())
-        .unwrap()
-        .details
-        .iter()
-        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
-        .expect("ErrorInfo");
+    let error_info = error_info(&err);
     assert_eq!(
         error_info.reason,
         ErrorReason::AboveLatestAvailable.as_str_name()
     );
     assert_eq!(error_info.metadata["bound"], "checkpoint");
     assert_eq!(error_info.metadata["requestedCheckpoint"], "999999");
+}
+
+/// A proof at a checkpoint whose contents were pruned is out of range, also while the object
+/// versions it wrote are still stored, as when checkpoints are retained for fewer epochs than
+/// objects.
+#[sim_test]
+async fn test_pruned_checkpoint_is_below_earliest_available() {
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(create_rpc_config_with_indexing())
+        .build()
+        .await;
+
+    test_cluster.trigger_reconfiguration().await;
+    test_cluster.trigger_reconfiguration().await;
+    let lowest_available = test_cluster.prune_fullnode_checkpoints_for_testing().await + 1;
+    assert_eq!(
+        test_cluster.fullnode_handle.sui_node.with(|node| node
+            .state()
+            .get_object_cache_reader()
+            .get_highest_pruned_checkpoint()),
+        None,
+        "object versions must not be pruned"
+    );
+
+    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    for checkpoint in [1, lowest_available - 1] {
+        let request = GetCheckpointObjectProofRequest::default()
+            .with_object_id(ObjectID::random().to_string())
+            .with_checkpoint(checkpoint);
+        let err = proof_client
+            .get_checkpoint_object_proof(request)
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::OutOfRange, "{err:?}");
+        let error_info = error_info(&err);
+        assert_eq!(
+            error_info.reason,
+            ErrorReason::BelowEarliestAvailable.as_str_name()
+        );
+        assert_eq!(
+            error_info.metadata["lowestAvailableCheckpoint"],
+            lowest_available.to_string()
+        );
+    }
+
+    // The lowest available checkpoint itself is served.
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id(ObjectID::random().to_string())
+        .with_checkpoint(lowest_available);
+    let proof = proof_client
+        .get_checkpoint_object_proof(request)
+        .await
+        .expect("a proof at the lowest available checkpoint should succeed")
+        .into_inner()
+        .proof
+        .expect("proof should be present");
+    assert!(
+        matches!(
+            proof,
+            get_checkpoint_object_proof_response::Proof::NonInclusion(_)
+        ),
+        "expected non-inclusion proof for a random object id"
+    );
 }
 
 /// When the object id was not modified in the requested checkpoint, the

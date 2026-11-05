@@ -3,6 +3,7 @@
 
 use futures::StreamExt;
 use move_core_types::identifier::Identifier;
+use prost::Message;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_keys::keystore::AccountKeystore;
@@ -474,6 +475,8 @@ async fn test_client_resume_from_checkpoint_without_events() {
     );
 }
 
+/// Resuming a stream at a checkpoint whose contents were pruned fails with the proof service's
+/// `OUT_OF_RANGE` / `BELOW_EARLIEST_AVAILABLE`.
 #[sim_test]
 async fn test_client_pruned_checkpoint_error() {
     let _guard: sui_protocol_config::OverrideGuard =
@@ -487,6 +490,8 @@ async fn test_client_pruned_checkpoint_error() {
     let test_cluster = TestClusterBuilder::new()
         .with_rpc_config(rpc_config)
         .with_epoch_duration_ms(10000)
+        // Only the explicit prune below moves the floor.
+        .disable_fullnode_pruning()
         .build()
         .await;
 
@@ -501,6 +506,8 @@ async fn test_client_pruned_checkpoint_error() {
     for _ in 0..2 {
         test_cluster.wait_for_epoch(None).await;
     }
+    let lowest_available = test_cluster.prune_fullnode_checkpoints_for_testing().await + 1;
+    assert!(first_checkpoint < lowest_available);
 
     let genesis_committee = get_genesis_committee(&test_cluster).await;
     let client = Arc::new(
@@ -515,32 +522,30 @@ async fn test_client_pruned_checkpoint_error() {
         .await;
 
     let Err(e) = result else {
-        panic!(
-            "Expected error resuming from an unmodifiable checkpoint, but stream creation succeeded"
-        );
+        panic!("Expected error resuming from a pruned checkpoint, but stream creation succeeded");
     };
-
-    // Two outcomes are valid for resuming at a checkpoint that didn't emit
-    // any events on this stream:
-    //   * `RpcError` (OutOfRange) — the checkpoint was actually pruned before
-    //     the resume request landed.
-    //   * `InternalError` carrying "EventStreamHead was not updated" — the
-    //     checkpoint is still retained but never modified the head, so the
-    //     server returned a non-inclusion proof and the client surfaces it
-    //     as an internal error.
-    // The test relies on cluster pruning to flush a stale checkpoint within
-    // the 2-epoch window, but cluster timing is not strict; both shapes
-    // confirm the client refused to silently resume from a checkpoint with
-    // no committed head update.
-    use sui_light_client::authenticated_events::ClientError;
-    match &e {
-        ClientError::RpcError(status) if status.code() == tonic::Code::OutOfRange => {}
-        ClientError::InternalError(msg) if msg.contains("EventStreamHead was not updated") => {}
-        other => panic!(
-            "Expected RpcError(OutOfRange) or InternalError(\"...not updated...\"), got: {:?}",
-            other
-        ),
-    }
+    let sui_light_client::authenticated_events::ClientError::RpcError(status) = &e else {
+        panic!("Expected RpcError(OutOfRange), got: {e:?}");
+    };
+    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+    let error_info = sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| {
+            detail
+                .to_msg::<sui_rpc::proto::google::rpc::ErrorInfo>()
+                .ok()
+        })
+        .expect("ErrorInfo");
+    assert_eq!(
+        error_info.reason,
+        sui_rpc::proto::sui::rpc::v2::ErrorReason::BelowEarliestAvailable.as_str_name()
+    );
+    assert_eq!(
+        error_info.metadata["lowestAvailableCheckpoint"],
+        lowest_available.to_string()
+    );
 }
 
 #[sim_test]
