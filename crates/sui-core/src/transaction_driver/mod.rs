@@ -33,7 +33,7 @@ use sui_types::{
     committee::EpochId,
     error::{ErrorCategory, SuiErrorKind, UserInputError},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
-    transaction::{AllowedProposers, TransactionDataAPI as _},
+    transaction::{AllowedProposers, TransactionDataAPI as _, TransactionExpiration},
     transaction_executor::ProposerSelector,
 };
 use tokio::{
@@ -238,21 +238,7 @@ where
             };
 
         if let Some(tx_data) = tx_data {
-            let now_ms = AuthorityState::unixtime_now_ms();
-            let expiration = tx_data.expiration();
-            if expiration.is_not_yet_valid_at(now_ms) {
-                return Err(TransactionDriverError::ValidationFailed {
-                    error: SuiErrorKind::TransactionNotYetValid {
-                        timestamp_ms: now_ms,
-                    }
-                    .to_string(),
-                });
-            }
-            if is_expired_beyond_grace(expiration, now_ms) {
-                return Err(TransactionDriverError::ValidationFailed {
-                    error: SuiErrorKind::TransactionExpired.to_string(),
-                });
-            }
+            check_timestamp_window(tx_data.expiration(), AuthorityState::unixtime_now_ms())?;
         }
 
         let tx_type = request.tx_type();
@@ -589,5 +575,51 @@ impl State {
         Self {
             tasks: JoinSet::new(),
         }
+    }
+}
+
+/// Rejects a transaction that validators would reject by their clocks at admission, so that it
+/// is not submitted to them.
+fn check_timestamp_window(
+    expiration: &TransactionExpiration,
+    now_ms: u64,
+) -> Result<(), TransactionDriverError> {
+    if expiration.is_not_yet_valid_at(now_ms) {
+        return Err(TransactionDriverError::ValidationFailed {
+            error: SuiErrorKind::TransactionNotYetValid {
+                timestamp_ms: now_ms,
+            }
+            .to_string(),
+        });
+    }
+    if is_expired_beyond_grace(expiration, now_ms) {
+        return Err(TransactionDriverError::ValidationFailed {
+            error: SuiErrorKind::TransactionExpired.to_string(),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod timestamp_window_tests {
+    use super::*;
+    use crate::authority::authority_per_epoch_store::MAX_TIMESTAMP_GRACE_MS;
+    use sui_types::digests::ChainIdentifier;
+
+    #[test]
+    fn test_check_timestamp_window() {
+        let window = TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp: Some(1_000),
+            max_timestamp: Some(2_000),
+            chain: ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
+            nonce: 0,
+        };
+        assert!(check_timestamp_window(&window, 999_999).is_err());
+        assert!(check_timestamp_window(&window, 1_000_000).is_ok());
+        assert!(check_timestamp_window(&window, 2_000_999 + MAX_TIMESTAMP_GRACE_MS).is_ok());
+        assert!(check_timestamp_window(&window, 2_001_000 + MAX_TIMESTAMP_GRACE_MS).is_err());
+        assert!(check_timestamp_window(&TransactionExpiration::None, 0).is_ok());
     }
 }

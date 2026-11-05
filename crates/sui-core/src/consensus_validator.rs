@@ -1284,7 +1284,7 @@ mod tests {
             config
         });
         let (sender, keypair) = deterministic_random_account_key();
-        let gas_objects: Vec<Object> = (0..2)
+        let gas_objects: Vec<Object> = (0..3)
             .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
             .collect();
         let network_config =
@@ -1328,7 +1328,16 @@ mod tests {
             expiration(Some(now_secs + 3_600), None),
         )
         .await;
-        let serialized: Vec<_> = [expired, early]
+        let open = test_user_transaction_with_expiration(
+            &state,
+            sender,
+            &keypair,
+            gas_objects[2].clone(),
+            vec![],
+            expiration(Some(now_secs - 60), Some(now_secs + 3_600)),
+        )
+        .await;
+        let serialized: Vec<_> = [expired, early, open]
             .into_iter()
             .map(|t| {
                 bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
