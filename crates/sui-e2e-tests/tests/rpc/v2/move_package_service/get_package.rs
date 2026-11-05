@@ -46,6 +46,9 @@ async fn test_get_package_system() {
 async fn test_get_package_not_found() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        // Zero-epoch retention, the default, runs the tidehunter objects compactor, and a node
+        // that runs it refuses `at_checkpoint` reads.
+        .disable_fullnode_pruning()
         .build()
         .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
@@ -90,6 +93,10 @@ async fn test_get_package_invalid_hex() {
 async fn test_get_package_lineage_lookups() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        // Zero-epoch retention, the default, runs the tidehunter objects compactor, and a node
+        // that runs it refuses `at_checkpoint` reads. It also lets the objects pruner raise the
+        // floor above the checkpoints read below.
+        .disable_fullnode_pruning()
         .build()
         .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
