@@ -2444,8 +2444,10 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. Validators
-        /// reject the transaction before it by their local clocks, and it can be submitted again.
+        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. A quorum
+        /// must vote to accept the transaction at or after this time by their local clocks, so
+        /// the commit timestamp can be slightly earlier. A rejected transaction can be submitted
+        /// again.
         min_timestamp: Option<u64>,
         /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
         /// valid. A transaction in a later commit fails with `TransactionExpired`.
@@ -2462,8 +2464,10 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. Validators
-        /// reject the transaction before it by their local clocks, and it can be submitted again.
+        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. A quorum
+        /// must vote to accept the transaction at or after this time by their local clocks, so
+        /// the commit timestamp can be slightly earlier. A rejected transaction can be submitted
+        /// again.
         min_timestamp: Option<u64>,
         /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
         /// valid. A transaction in a later commit fails with `TransactionExpired`.
