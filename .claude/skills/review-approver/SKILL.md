@@ -67,15 +67,12 @@ Classify the PR yourself from the diff and the tier definitions. Do not rely on 
 
 ## Step 4 — Verify the AI review
 
-Find the review tag in the description:
-
-```
-[🤖🔍 ai-review: /code-review max <model> <sha>]
-```
+Find the review tag in the description. `review-author` Step 4 defines its format, which records
+a `<model>` and a `<sha>`.
 
 If `<model>` is not in the allowed model list in the base-branch copy of `review-author`, treat
-the PR as if it had no tag. Otherwise, trust the tag. It means that the authoring agent ran the review and the author decided every
-finding. Do not repeat a review that the tag records, and do not look for its findings in the PR.
+the PR as if it had no tag. Otherwise, trust the tag. It means that the authoring agent ran the
+review and the author decided every finding. Do not repeat a review that the tag records, and do not look for its findings in the PR.
 
 - If `<sha>` is the PR head, the review requirement is met.
 - If `<sha>` is an ancestor of the PR head, run `/code-review max` on the commits after it

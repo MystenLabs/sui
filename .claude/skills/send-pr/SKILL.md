@@ -166,7 +166,7 @@ Only state what a reviewer genuinely needs in order to trust the change. Do NOT 
 - If new tests were added, say which behavior they cover (one line).
 - If you verified something manually or by a non-obvious command, give the steps so a reviewer could repeat them.
 - If the change is covered entirely by existing automated tests and there is nothing else to convey, write a single short line saying so (e.g. "Covered by existing tests in `<area>`.") rather than a paragraph of boilerplate.
-- End the test plan with the review tag `[🤖🔍 ai-review: /code-review max <model> <sha>]`, where `<model>` is the model ID that ran the review and `<sha>` is the full hash of the head commit pushed in Step 11. The tag records a check CI does not run, and `/review-approver` relies on the hash to skip a second review. If Step 4 skipped the gate because the diff changes no code, omit the tag.
+- End the test plan with the review tag defined in `/review-author` Step 4. Its `<sha>` is the full hash of the head commit pushed in Step 11. The tag records a check CI does not run, and `/review-approver` relies on the hash to skip a second review. If Step 4 skipped the gate because the diff changes no code, omit the tag.
 
 ### Release notes
 
