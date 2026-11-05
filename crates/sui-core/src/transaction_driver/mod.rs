@@ -237,12 +237,10 @@ where
                 amplification_factor
             };
 
-        // Simulates a fullnode whose clock differs from the validators' clocks.
-        #[allow(unused_mut)]
-        let mut skip_timestamp_check = false;
-        sui_macros::fail_point_if!("skip-timestamp-check-in-transaction-driver", || {
-            skip_timestamp_check = true;
-        });
+        // In tests, sometimes skip the check, as a fullnode whose clock differs from the
+        // validators' clocks would, so that validators see transactions outside their windows.
+        let skip_timestamp_check =
+            mysten_common::in_test_configuration() && rand::thread_rng().gen_bool(0.5);
         if let Some(tx_data) = tx_data
             && !skip_timestamp_check
         {

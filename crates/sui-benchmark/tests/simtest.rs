@@ -2188,11 +2188,6 @@ mod test {
         register_fail_point_if("skip-timestamp-expiration-check-at-submission", || {
             thread_rng().gen_bool(0.2)
         });
-        // The fullnode sometimes submits a transaction outside its timestamp window, as a
-        // fullnode with a clock that differs from the validators' clocks would.
-        register_fail_point_if("skip-timestamp-check-in-transaction-driver", || {
-            thread_rng().gen_bool(0.5)
-        });
 
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
