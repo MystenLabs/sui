@@ -24,7 +24,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, dbg_addr},
     coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
     digests::{ChainIdentifier, CheckpointDigest},
-    effects::{InputConsensusObject, TransactionEffectsAPI},
+    effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI},
     error::UserInputResult,
     gas::GasCostSummary,
     gas_coin::GAS,
@@ -4302,4 +4302,124 @@ async fn address_balance_gas_transfer_storage_objects_out_of_gas_no_panic() {
 
     // Reconfig runs SUI conservation invariant checks across the epoch boundary
     test_env.cluster.trigger_reconfiguration().await;
+}
+
+/// Each `send_wide_to_distinct` write carries a ~3 KB type tag, so 400 distinct recipients
+/// produce more than 1 MB of accumulator writes in effects.
+const WIDE_ACCUMULATOR_RECIPIENTS: u64 = 400;
+
+async fn send_wide_accumulator_writes(limit_enabled: bool, count: u64) -> TransactionEffects {
+    send_accumulator_writes(limit_enabled, "send_wide_to_distinct", count).await
+}
+
+async fn send_accumulator_writes(
+    limit_enabled: bool,
+    function: &str,
+    count: u64,
+) -> TransactionEffects {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(move |_, mut cfg| {
+            cfg.set_complete_effects_size_estimate_for_testing(limit_enabled);
+            cfg
+        }))
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let pkg = test_env.setup_test_package(move_test_code_path()).await;
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let count_arg = builder.pure(count).unwrap();
+    builder.programmable_move_call(
+        pkg,
+        Identifier::new("accumulator_spam").unwrap(),
+        Identifier::new(function).unwrap(),
+        vec![],
+        vec![count_arg],
+    );
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        50_000_000_000,
+        test_env.rgp,
+    );
+
+    let (_, effects) = test_env
+        .exec_tx_directly(tx)
+        .await
+        .expect("execution must not panic the node");
+    effects
+}
+
+#[sim_test]
+async fn test_accumulator_writes_count_toward_effects_size_limit() {
+    let max_effects_size = ProtocolConfig::get_for_max_version_UNSAFE()
+        .max_serialized_tx_effects_size_bytes() as usize;
+
+    let effects = send_wide_accumulator_writes(true, WIDE_ACCUMULATOR_RECIPIENTS).await;
+    assert!(
+        matches!(
+            effects.status(),
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if matches!(
+                    failure.error,
+                    sui_types::execution_status::ExecutionFailureStatus::EffectsTooLarge { .. }
+                )
+        ),
+        "expected EffectsTooLarge, got {:?}",
+        effects.status()
+    );
+    let effects_size = bcs::serialized_size(&effects).unwrap();
+    assert!(
+        effects_size <= max_effects_size,
+        "effects size {effects_size} exceeds limit {max_effects_size}"
+    );
+    assert!(
+        effects.accumulator_events().len() <= 1,
+        "only the gas write may remain: {:?}",
+        effects.accumulator_events()
+    );
+
+    let effects = send_wide_accumulator_writes(true, 10).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert_eq!(effects.accumulator_events().len(), 10);
+}
+
+/// Shows the size bypass that `complete_effects_size_estimate` closes.
+#[sim_test]
+async fn test_accumulator_writes_exceed_effects_size_limit_when_unchecked() {
+    let max_effects_size = ProtocolConfig::get_for_max_version_UNSAFE()
+        .max_serialized_tx_effects_size_bytes() as usize;
+
+    let effects = send_wide_accumulator_writes(false, WIDE_ACCUMULATOR_RECIPIENTS).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    let effects_size = bcs::serialized_size(&effects).unwrap();
+    assert!(
+        effects_size > max_effects_size,
+        "effects size {effects_size} is within limit {max_effects_size}"
+    );
+}
+
+#[sim_test]
+async fn test_accumulator_event_count_limit() {
+    let max = ProtocolConfig::get_for_max_version_UNSAFE().max_num_accumulator_events();
+
+    let effects = send_accumulator_writes(true, "send_to_one", max).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert_eq!(effects.accumulator_events().len(), 1);
+
+    let effects = send_accumulator_writes(true, "send_to_one", max + 1).await;
+    assert!(
+        matches!(
+            effects.status(),
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if matches!(
+                    failure.error,
+                    sui_types::execution_status::ExecutionFailureStatus::MovePrimitiveRuntimeError(_)
+                )
+        ),
+        "expected an accumulator event count failure, got {:?}",
+        effects.status()
+    );
 }

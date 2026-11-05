@@ -477,4 +477,100 @@ mod tests {
 
         AccumulatorWriteV1::merge(writes);
     }
+
+    fn effects_entry_size(write: AccumulatorWriteV1) -> usize {
+        let entry = (
+            crate::base_types::ObjectID::random(),
+            EffectsObjectChange::new_from_accumulator_write(write),
+        );
+        bcs::serialized_size(&entry).unwrap()
+    }
+
+    // A struct tag nested `depth` levels deep, with identifiers of the given length.
+    fn wide_type(depth: usize, ident_len: usize) -> TypeTag {
+        let ident = "a".repeat(ident_len);
+        let mut ty: TypeTag = format!("0x1234::{ident}::{ident}").parse().unwrap();
+        for _ in 1..depth {
+            ty = format!("0x1234::{ident}::{ident}<{ty}>").parse().unwrap();
+        }
+        ty
+    }
+
+    #[test]
+    fn test_accumulator_write_size_estimate_is_upper_bound() {
+        use crate::effects::{APPROX_SIZE_OF_ACCUMULATOR_EVENT_DIGEST, TransactionEffects};
+
+        for ty in [
+            "0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap(),
+            wide_type(8, 128),
+            wide_type(16, 128),
+        ] {
+            let estimate = TransactionEffects::estimate_accumulator_write_size_upperbound(&ty);
+            let address = AccumulatorAddress::new(SuiAddress::random_for_testing_only(), ty);
+
+            for value in [
+                AccumulatorValue::Integer(u64::MAX),
+                AccumulatorValue::IntegerTuple(u64::MAX, u64::MAX),
+            ] {
+                let actual = effects_entry_size(AccumulatorWriteV1 {
+                    address: address.clone(),
+                    operation: AccumulatorOperation::Split,
+                    value,
+                });
+                assert!(actual <= estimate, "{actual} > {estimate}");
+            }
+
+            for num_digests in [1, 1000] {
+                let digests = NonEmpty::from_vec(
+                    (0..num_digests)
+                        .map(|i| (u64::MAX - i, Digest::random()))
+                        .collect(),
+                )
+                .unwrap();
+                let actual = effects_entry_size(AccumulatorWriteV1 {
+                    address: address.clone(),
+                    operation: AccumulatorOperation::Merge,
+                    value: AccumulatorValue::EventDigest(digests),
+                });
+                let estimate =
+                    estimate + APPROX_SIZE_OF_ACCUMULATOR_EVENT_DIGEST * num_digests as usize;
+                assert!(actual <= estimate, "{actual} > {estimate}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_id_only_change_and_unchanged_consensus_size_estimates_are_upper_bounds() {
+        use crate::base_types::{ObjectDigest, ObjectID, SequenceNumber};
+        use crate::effects::{
+            APPROX_SIZE_OF_ID_ONLY_CHANGE, APPROX_SIZE_OF_UNCHANGED_CONSENSUS_OBJECT,
+            UnchangedConsensusKind,
+        };
+
+        let id = ObjectID::random();
+        for id_operation in [IDOperation::Created, IDOperation::Deleted] {
+            let change = EffectsObjectChange {
+                input_state: ObjectIn::NotExist,
+                output_state: ObjectOut::NotExist,
+                id_operation,
+            };
+            let actual = bcs::serialized_size(&(id, change)).unwrap();
+            assert!(actual <= APPROX_SIZE_OF_ID_ONLY_CHANGE, "{actual}");
+        }
+
+        let version = SequenceNumber::from_u64(u64::MAX);
+        for kind in [
+            UnchangedConsensusKind::ReadOnlyRoot((version, ObjectDigest::random())),
+            UnchangedConsensusKind::MutateConsensusStreamEnded(version),
+            UnchangedConsensusKind::ReadConsensusStreamEnded(version),
+            UnchangedConsensusKind::Cancelled(version),
+            UnchangedConsensusKind::PerEpochConfig,
+        ] {
+            let actual = bcs::serialized_size(&(id, kind)).unwrap();
+            assert!(
+                actual <= APPROX_SIZE_OF_UNCHANGED_CONSENSUS_OBJECT,
+                "{actual}"
+            );
+        }
+    }
 }
