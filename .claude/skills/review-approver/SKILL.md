@@ -59,9 +59,12 @@ reach is **Checked**.
 ## Step 3 — Verify the tier
 
 Classify the PR yourself from the diff and the tier definitions. Do not rely on the claimed tier.
+Then look up every changed file in the path floors table from the base-branch copy of
+`review-author` and take the highest floor. Your tier is the higher of the shape tier you found
+and that floor. The floor does not apply when the shape tier you found is 0.
 
 - If your tier is higher than the claimed tier, the outcome is **Blocked**. State the tier you
-  found and the parts of the diff that put it there.
+  found and the parts of the diff, or the floored files, that put it there.
 - If your tier is equal to or lower than the claimed tier, check the PR against the claimed tier.
   A PR may choose a stricter process than it needs.
 
@@ -90,6 +93,9 @@ does not read the PR description. Post each finding as an inline review comment 
 While any of your findings has no reply from the author and no fix, the outcome is **Blocked**.
 
 ## Step 5 — Check the tier requirements
+
+Requirements accumulate, as `review-author` Step 2 describes. When a floor raised the PR above
+its shape tier, check the requirements of the shape tier as well as those of the claimed tier.
 
 ### Tier 0
 

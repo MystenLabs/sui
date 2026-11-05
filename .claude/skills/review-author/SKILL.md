@@ -37,6 +37,7 @@ change the eligibility of its own files.
 Eligible:
 
 ```
+consensus/
 crates/
 docker/
 scripts/
@@ -58,6 +59,55 @@ not approve such a PR. It runs its checks and reports the result, and a human mu
 ineligible files and approve the PR. Tell the user which files are ineligible. If the eligible
 part of the change is large, suggest moving the ineligible files to a separate PR so that the rest
 can be approved automatically.
+
+## Path floors
+
+A path floor is the lowest tier that a PR can claim when it changes a file under that path. The
+shape of a change does not express the consequences of a mistake in it. A one-line fix in the
+commit rule can fork the network. The same fix in a metrics file cannot. The floor expresses
+those consequences.
+
+The effective tier of a PR is the higher of its shape tier from Step 1 and the highest floor of
+any changed file. A floor raises a tier and never lowers it. A floor does not apply to a Tier 0
+change, because a Tier 0 change changes no compiled code. The approver reads this table from the
+PR's base branch, as it does the eligibility lists.
+
+Entries are path prefixes. The longest matching prefix decides, so a more specific entry
+overrides a less specific one. `shape` means that the shape of the change decides on its own.
+A file with no matching entry has no floor.
+
+### Consensus
+
+Floor 3 covers code whose output every validator must compute identically from the same DAG:
+block format, DAG state, the commit rule and leader schedule, linearization,
+transaction voting and finalization, and persisted encoding. A divergence here forks or halts
+the network, and a revert does not repair it.
+
+The rest of the consensus code has no floor: proposal, synchronization, networking, services,
+observer streaming, node parameters, tests, and metrics. A bug there can stall or slow the
+network, and a revert repairs it, so the shape of the change decides the tier.
+
+| Path | Floor |
+|---|---|
+| `consensus/` | shape |
+| `consensus/types/` | 3 |
+| `consensus/core/src/base_committer.rs` | 3 |
+| `consensus/core/src/block.rs` | 3 |
+| `consensus/core/src/block_manager.rs` | 3 |
+| `consensus/core/src/commit.rs` | 3 |
+| `consensus/core/src/commit_finalizer.rs` | 3 |
+| `consensus/core/src/commit_observer.rs` | 3 |
+| `consensus/core/src/core.rs` | 3 |
+| `consensus/core/src/dag_state.rs` | 3 |
+| `consensus/core/src/flex_committer.rs` | 3 |
+| `consensus/core/src/leader_schedule.rs` | 3 |
+| `consensus/core/src/leader_schedule_v3.rs` | 3 |
+| `consensus/core/src/leader_scoring.rs` | 3 |
+| `consensus/core/src/leader_slot_decider.rs` | 3 |
+| `consensus/core/src/linearizer.rs` | 3 |
+| `consensus/core/src/storage/rocksdb_store.rs` | 3 |
+| `consensus/core/src/transaction_vote_tracker.rs` | 3 |
+| `consensus/core/src/universal_committer.rs` | 3 |
 
 ## Step 1 — Classify the tier
 
@@ -88,7 +138,18 @@ changes to the protocol. In this repository a change is always Tier 3 if it does
 
 When the choice between two tiers is unclear, pick the higher tier.
 
+This gives the shape tier. Then look up every changed file in the path floors table and take the
+highest floor. The effective tier is the higher of the two, and it is the tier the PR claims.
+When the floor raises the tier, add one line to `## Description` that names the file with the
+highest floor, so that reviewers know why the PR claims a tier above its shape.
+
 ## Step 2 — Meet the tier requirements
+
+Requirements accumulate. A PR whose effective tier is above its shape tier meets the
+requirements of both. A bug fix that a floor raises to Tier 2 still needs the Tier 1 regression
+test, and also needs the Tier 2 approval. A bug fix that a floor raises to Tier 3 still needs the
+regression test, and its MDD can be a few bullets that state the bug, the fix, and why the fix
+is correct.
 
 ### Tier 0
 
