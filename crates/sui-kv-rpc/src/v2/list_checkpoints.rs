@@ -395,7 +395,6 @@ fn drive_rendered_checkpoints(
                     let watermark = checkpoint_frontier_watermark(
                         frontier.checkpoint,
                         entry_checkpoint,
-                        direction,
                         &options,
                         &mut covered_checkpoint_bound,
                     );
@@ -413,7 +412,6 @@ fn drive_rendered_checkpoints(
                     let response = terminal_response_from_scan_stop(
                         stop,
                         &options,
-                        direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
@@ -450,10 +448,10 @@ fn drive_rendered_checkpoints(
 fn checkpoint_frontier_watermark(
     checkpoint_at_frontier: u64,
     entry_checkpoint: u64,
-    direction: ScanDirection,
     options: &QueryOptions,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Watermark {
+    let direction = options.scan_direction();
     let resume_checkpoint = boundary_cursor_cp(checkpoint_at_frontier, direction);
     let resume_checkpoint = clamp_cp_frontier_past_last(
         Some(resume_checkpoint),
@@ -478,7 +476,6 @@ fn checkpoint_frontier_watermark(
 fn terminal_response_from_scan_stop(
     stop: ResolvedScanStop<u64>,
     options: &QueryOptions,
-    direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListCheckpointsResponse, RpcError> {
@@ -489,7 +486,6 @@ fn terminal_response_from_scan_stop(
         watermark: checkpoint_frontier_watermark(
             checkpoint_at_frontier,
             entry_checkpoint,
-            direction,
             options,
             covered_checkpoint_bound,
         ),
@@ -1032,7 +1028,6 @@ mod tests {
             let response = terminal_response_from_scan_stop(
                 ResolvedScanStop::ScanLimit { position, frontier },
                 &options,
-                direction,
                 entry_checkpoint,
                 &mut covered,
             )
@@ -1080,14 +1075,9 @@ mod tests {
         ] {
             let mut covered = None;
             let entry_checkpoint = 0;
-            let error = terminal_response_from_scan_stop(
-                stop,
-                &options,
-                ScanDirection::Ascending,
-                entry_checkpoint,
-                &mut covered,
-            )
-            .expect_err("fault/cancellation must not produce a QueryEnd response");
+            let error =
+                terminal_response_from_scan_stop(stop, &options, entry_checkpoint, &mut covered)
+                    .expect_err("fault/cancellation must not produce a QueryEnd response");
             assert_eq!(error.into_status_proto().code, expected_code as i32);
         }
     }
