@@ -32,7 +32,9 @@ use sui_config::NodeConfig;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_execution::{self, Executor};
 use sui_macros::{fail_point, fail_point_if};
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{
+    Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion, assert_reachable_gated,
+};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::authenticator_state::{ActiveJwk, get_authenticator_state};
 use sui_types::base_types::{
@@ -1381,13 +1383,6 @@ impl AuthorityPerEpochStore {
         self.check_allowed_proposer(tx, own_index)
     }
 
-    fn wall_clock_ms() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time is before the Unix epoch")
-            .as_millis() as u64
-    }
-
     /// Votes to reject a transaction that is before its `min_timestamp` by the local wall-clock
     /// time. A transaction after its `max_timestamp` is not rejected, because execution aborts it.
     pub fn check_timestamp_expiration_for_vote(&self, tx: &TransactionData) -> SuiResult {
@@ -1397,10 +1392,16 @@ impl AuthorityPerEpochStore {
         {
             return Ok(());
         }
-        let now_ms = Self::wall_clock_ms();
+        let now_ms = crate::authority::AuthorityState::unixtime_now_ms();
         if tx.expiration().is_not_yet_valid_at(now_ms) {
-            assert_reachable!("voted to reject a transaction before its min_timestamp");
-            return Err(SuiError::not_yet_valid(now_ms));
+            assert_reachable_gated!(
+                "voted to reject a transaction before its min_timestamp",
+                |pc| pc.enable_timestamp_transaction_expiration()
+            );
+            return Err(SuiErrorKind::TransactionNotYetValid {
+                timestamp_ms: now_ms,
+            }
+            .into());
         }
         Ok(())
     }
@@ -1415,7 +1416,7 @@ impl AuthorityPerEpochStore {
         {
             return Ok(());
         }
-        // Simulates a proposer whose clock is behind, so that voting sees transactions before
+        // Simulates a proposer whose clock is ahead, so that voting sees transactions before
         // their `min_timestamp`.
         #[allow(unused_mut)]
         let mut skip = false;
@@ -1425,14 +1426,23 @@ impl AuthorityPerEpochStore {
         if skip {
             return Ok(());
         }
-        let now_ms = Self::wall_clock_ms();
+        let now_ms = crate::authority::AuthorityState::unixtime_now_ms();
         let expiration = tx.expiration();
         if expiration.is_not_yet_valid_at(now_ms) {
-            assert_reachable!("transaction before its min_timestamp rejected at submission");
-            return Err(SuiError::not_yet_valid(now_ms));
+            assert_reachable_gated!(
+                "transaction before its min_timestamp rejected at submission",
+                |pc| pc.enable_timestamp_transaction_expiration()
+            );
+            return Err(SuiErrorKind::TransactionNotYetValid {
+                timestamp_ms: now_ms,
+            }
+            .into());
         }
         if expiration.is_expired_at(now_ms) {
-            assert_reachable!("transaction after its max_timestamp rejected at submission");
+            assert_reachable_gated!(
+                "transaction after its max_timestamp rejected at submission",
+                |pc| pc.enable_timestamp_transaction_expiration()
+            );
             return Err(SuiErrorKind::TransactionExpired.into());
         }
         Ok(())

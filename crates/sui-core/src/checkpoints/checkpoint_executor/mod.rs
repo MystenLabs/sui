@@ -954,8 +954,8 @@ impl CheckpointExecutor {
                             env = env.with_insufficient_funds();
                         }
 
-                        // The consensus handler decided this from the commit timestamp. Effects
-                        // record the decision, so execution from checkpoints does not repeat it.
+                        // Effects record the consensus handler's expiry decision. When another
+                        // early error is reported instead, the decision does not change effects.
                         if let &ExecutionStatus::Failure(ExecutionFailure {
                             error: ExecutionErrorKind::TransactionExpired,
                             ..
