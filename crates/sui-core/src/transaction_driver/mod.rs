@@ -238,8 +238,8 @@ where
                 amplification_factor
             };
 
-        // Under test configurations, half of transactions skip this check so that validators
-        // see transactions outside their windows.
+        // Half of transactions skip this check so that validators see transactions outside
+        // their windows.
         let skip_timestamp_check = mysten_common::in_test_configuration()
             && mysten_common::random::get_rng().gen_bool(0.5);
         let mut not_yet_valid_wait = None;
@@ -251,7 +251,8 @@ where
             match check_timestamp_window(expiration, now_ms) {
                 Ok(()) => {}
                 // Validators would reject the transaction until `min_timestamp`, so the driver
-                // waits until then. The wait counts against the finality timeout.
+                // waits until then. The wait counts against the finality timeout, and a wait
+                // that would outlast it fails at once with a retriable error.
                 Err(error)
                     if matches!(
                         error.as_inner(),
@@ -259,10 +260,18 @@ where
                     ) =>
                 {
                     let valid_from_ms = expiration.first_valid_timestamp_ms().unwrap_or(now_ms);
-                    not_yet_valid_wait = Some((
-                        Duration::from_millis(valid_from_ms.saturating_sub(now_ms)),
-                        error,
-                    ));
+                    let wait = Duration::from_millis(valid_from_ms.saturating_sub(now_ms));
+                    if timeout_duration.is_some_and(|timeout| wait >= timeout) {
+                        return Err(TransactionDriverError::Aborted {
+                            submission_non_retriable_errors: AggregatedRequestErrors::default(),
+                            submission_retriable_errors: AggregatedRequestErrors {
+                                errors: vec![(error.to_string(), vec![], 0, error.categorize())],
+                                total_stake: 0,
+                            },
+                            observed_effects_digests: AggregatedEffectsDigests { digests: vec![] },
+                        });
+                    }
+                    not_yet_valid_wait = Some(wait);
                 }
                 Err(error) => {
                     return Err(TransactionDriverError::ValidationFailed {
@@ -278,13 +287,6 @@ where
         } else {
             "false"
         };
-        let timer = Instant::now();
-
-        self.metrics
-            .total_transactions_submitted
-            .with_label_values(&[tx_type.as_str(), ping_label])
-            .inc();
-
         let mut backoff = ExponentialBackoff::new(
             Duration::from_millis(100),
             MAX_DRIVE_TRANSACTION_RETRY_DELAY,
@@ -293,17 +295,16 @@ where
         let mut latest_retriable_error = None;
 
         let retry_loop = async {
-            if let Some((wait, error)) = not_yet_valid_wait {
-                latest_retriable_error = Some(TransactionDriverError::Aborted {
-                    submission_non_retriable_errors: AggregatedRequestErrors::default(),
-                    submission_retriable_errors: AggregatedRequestErrors {
-                        errors: vec![(error.to_string(), vec![], 0, error.categorize())],
-                        total_stake: 0,
-                    },
-                    observed_effects_digests: AggregatedEffectsDigests { digests: vec![] },
-                });
+            if let Some(wait) = not_yet_valid_wait {
                 sleep(wait).await;
             }
+            // Started after the wait, so that finality latency excludes the delay the client
+            // chose with `min_timestamp`.
+            let timer = Instant::now();
+            self.metrics
+                .total_transactions_submitted
+                .with_label_values(&[tx_type.as_str(), ping_label])
+                .inc();
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self

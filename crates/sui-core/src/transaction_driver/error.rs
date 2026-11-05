@@ -161,7 +161,8 @@ impl TransactionDriverError {
         };
         let mut msgs =
             vec!["Transaction processing aborted (retriable with another submission).".to_string()];
-        if submission_retriable_errors.total_stake > 0 {
+        // The driver reports a transaction before its `min_timestamp` with no stake.
+        if !submission_retriable_errors.errors.is_empty() {
             msgs.push(format!(
                 "Retriable errors: [{submission_retriable_errors}]."
             ));
