@@ -103,6 +103,9 @@ pub fn load_nitro_attestation_internal(
         is_upgraded(context)?,
         is_all_nonzero_pcrs_included(context)?,
         is_always_include_required_pcrs(context)?,
+        // This frozen execution version predates the unprotected-header flag and
+        // must keep parsing the unprotected header.
+        false,
     ) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();
