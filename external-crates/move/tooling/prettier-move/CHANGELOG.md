@@ -1,5 +1,11 @@
 # @mysten/prettier-plugin-move
 
+## 0.5.0
+
+### Minor Changes
+
+- removes support for `spec` for good
+
 ## 0.4.0
 
 ### Minor Changes
