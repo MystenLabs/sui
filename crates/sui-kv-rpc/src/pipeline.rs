@@ -14,7 +14,7 @@ use futures::stream::BoxStream;
 use sui_futures::task::TaskGuard;
 use sui_inverted_index::ScanStop;
 use sui_rpc_api::RpcError;
-use sui_rpc_cursor::LedgerPoint;
+use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::mpsc;

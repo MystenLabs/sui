@@ -14461,7 +14461,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-rpc",
  "sui-rpc-api",
- "sui-rpc-cursor",
  "sui-sdk",
  "sui-sdk-types",
  "sui-simulator",
@@ -14963,7 +14962,7 @@ dependencies = [
  "sui-pg-db",
  "sui-protocol-config",
  "sui-rpc",
- "sui-rpc-cursor",
+ "sui-rpc-api",
  "sui-sdk",
  "sui-simulator",
  "sui-swarm-config",
@@ -15334,7 +15333,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-rpc",
  "sui-rpc-api",
- "sui-rpc-cursor",
  "sui-types",
  "telemetry-subscribers",
  "tokio",
@@ -16163,7 +16161,9 @@ dependencies = [
  "mysten-network",
  "prometheus",
  "prost 0.14.1",
+ "prost-build",
  "prost-types 0.14.1",
+ "protox",
  "rand 0.8.5",
  "roaring",
  "serde",
@@ -16178,7 +16178,6 @@ dependencies = [
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rpc",
- "sui-rpc-cursor",
  "sui-sdk-types",
  "sui-transaction-builder",
  "sui-transaction-checks",
@@ -16194,6 +16193,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
@@ -16219,18 +16219,6 @@ dependencies = [
  "tokio-postgres",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "sui-rpc-cursor"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "prost 0.14.1",
- "prost-build",
- "protox",
- "walkdir",
 ]
 
 [[package]]

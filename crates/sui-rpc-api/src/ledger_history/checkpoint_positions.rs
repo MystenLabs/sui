@@ -17,10 +17,10 @@ use std::ops::Range;
 
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
-use sui_rpc_cursor::LedgerPoint;
 
 use crate::ErrorReason;
 use crate::RpcError;
+use crate::ledger_history::cursor::LedgerPoint;
 use crate::ledger_history::query_options::IntraTxCoordinate;
 use crate::ledger_history::query_options::LedgerWindow;
 use crate::ledger_history::query_options::ScanWindow;
@@ -300,9 +300,10 @@ fn require_field_when_set<R, W>(
 mod tests {
     use sui_rpc::proto::sui::rpc::v2::Ordering as ProtoOrdering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
-    use sui_rpc_cursor::CursorToken;
-    use sui_rpc_cursor::Position;
 
+    use crate::ledger_history::cursor::CursorKind;
+    use crate::ledger_history::cursor::CursorToken;
+    use crate::ledger_history::cursor::Position;
     use crate::ledger_history::query_options::Ordering;
     use crate::ledger_history::query_options::QueryOptions;
     use crate::ledger_history::query_options::RangeExhaustion;
@@ -566,7 +567,7 @@ mod tests {
 
     const CHECKPOINT_BOUND: RangeExhaustion = RangeExhaustion::CheckpointBound;
     const CURSOR_BOUND: RangeExhaustion = RangeExhaustion::CursorBound {
-        kind: sui_rpc_cursor::CursorKind::Boundary,
+        kind: CursorKind::Boundary,
     };
 
     #[test]

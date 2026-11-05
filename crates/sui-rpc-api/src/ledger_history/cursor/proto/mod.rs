@@ -4,11 +4,11 @@
 //! Generated protobuf types backing the opaque cursor wire format.
 //!
 //! These are the on-wire format only. The public API is the native
-//! [`CursorToken`](crate::CursorToken); it converts to and from these messages at the encode/decode
+//! [`CursorToken`](super::CursorToken); it converts to and from these messages at the encode/decode
 //! boundary.
 //!
-//! Regenerate via the `bootstrap` test (`cargo test -p sui-rpc-cursor`) after changing any file
-//! under `proto/`, then commit the output.
+//! Regenerate via the `bootstrap` test (`cargo test -p sui-rpc-api --test bootstrap`) after
+//! changing any file under `crates/sui-rpc-api/proto/`, then commit the output.
 
 #[allow(clippy::all)]
 pub mod sui {

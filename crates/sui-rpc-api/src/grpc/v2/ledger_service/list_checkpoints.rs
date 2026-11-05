@@ -18,8 +18,6 @@ use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
-use sui_rpc_cursor::LedgerPoint;
-use sui_rpc_cursor::Position;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -27,6 +25,8 @@ use tracing::info;
 use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::ledger_service::get_checkpoint::get_checkpoint;
+use crate::ledger_history::cursor::LedgerPoint;
+use crate::ledger_history::cursor::Position;
 use crate::ledger_history::filter::transaction_filter_to_query;
 use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::LedgerWindow;
@@ -920,8 +920,8 @@ mod tests {
     use super::*;
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
-    use sui_rpc_cursor::CursorToken;
 
+    use crate::ledger_history::cursor::CursorToken;
     use crate::ledger_history::ledger_point::ledger_position;
     use crate::ledger_history::watermark::ScanTerminal;
 

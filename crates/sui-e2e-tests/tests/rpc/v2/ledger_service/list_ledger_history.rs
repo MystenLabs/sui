@@ -46,9 +46,9 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::event_literal;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
-use sui_rpc_cursor::CursorKind;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
+use sui_rpc_api::ledger_history::cursor::CursorKind;
+use sui_rpc_api::ledger_history::cursor::CursorToken;
+use sui_rpc_api::ledger_history::cursor::Position;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -2977,7 +2977,8 @@ async fn test_list_checkpoints_pruned_serving_floor() {
     // becomes servable once the node catches up, so it keeps the retryable error.
     let beyond_tip = floor + 1_000_000;
     let beyond_tip_tx_seq = 1_000_000_000;
-    let beyond_tip_position = sui_rpc_cursor::LedgerPoint::checkpoint_start(beyond_tip);
+    let beyond_tip_position =
+        sui_rpc_api::ledger_history::cursor::LedgerPoint::checkpoint_start(beyond_tip);
     for start_checkpoint in [0, floor] {
         let mut options = query_options_descending(3);
         options.before = Some(
@@ -3270,7 +3271,9 @@ async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
     let past_tip_resumes_at = (floor + 1_000, 0, 0);
     let past_tip_after = CursorToken::boundary(Position::Transactions {
         tx_seq: past_tip_tx_seq,
-        public_position: sui_rpc_cursor::LedgerPoint::checkpoint_start(past_tip_resumes_at.0),
+        public_position: sui_rpc_api::ledger_history::cursor::LedgerPoint::checkpoint_start(
+            past_tip_resumes_at.0,
+        ),
     })
     .encode();
 
@@ -6317,7 +6320,8 @@ async fn assert_past_tip_positions(
     }
 
     let past_tip_point = (beyond_tip, 0, 0);
-    let public_position = sui_rpc_cursor::LedgerPoint::checkpoint_start(beyond_tip);
+    let public_position =
+        sui_rpc_api::ledger_history::cursor::LedgerPoint::checkpoint_start(beyond_tip);
     let past_tip_cursors = [
         (
             PositionQuery::Checkpoints(None),

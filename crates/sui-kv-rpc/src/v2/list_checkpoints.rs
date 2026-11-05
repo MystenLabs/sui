@@ -27,6 +27,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::cursor::Position;
 use sui_rpc_api::ledger_history::query_options::LedgerWindow;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
@@ -40,7 +41,6 @@ use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc_cursor::Position;
 use tracing::Instrument;
 use tracing::debug_span;
 use tracing::info;
@@ -699,10 +699,10 @@ fn clamp_cp_frontier_past_last(
 mod tests {
     use super::*;
     use mysten_common::ZipDebugEqIteratorExt;
+    use sui_rpc_api::ledger_history::cursor::CursorToken;
+    use sui_rpc_api::ledger_history::cursor::LedgerPoint;
     use sui_rpc_api::ledger_history::ledger_point::ledger_position;
     use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
-    use sui_rpc_cursor::CursorToken;
-    use sui_rpc_cursor::LedgerPoint;
 
     use crate::pipeline::PlacedFrontier;
     use crate::v2::test_utils::{

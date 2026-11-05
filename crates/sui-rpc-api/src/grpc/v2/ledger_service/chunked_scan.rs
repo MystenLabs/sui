@@ -218,11 +218,11 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::ledger_history::cursor::LedgerPoint;
+    use crate::ledger_history::cursor::Position;
     use crate::ledger_history::query_options::RangeExhaustion;
     use crate::ledger_history::watermark::NaturalRangeEnd;
     use std::time::Instant;
-    use sui_rpc_cursor::LedgerPoint;
-    use sui_rpc_cursor::Position;
 
     use prometheus::Registry;
     use sui_rpc::proto::sui::rpc::v2::QueryEndReason;

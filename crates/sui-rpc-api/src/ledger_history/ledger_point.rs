@@ -15,9 +15,9 @@
 
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::LedgerPosition;
-use sui_rpc_cursor::LedgerPoint;
-use sui_rpc_cursor::Position;
 
+use crate::ledger_history::cursor::LedgerPoint;
+use crate::ledger_history::cursor::Position;
 use crate::ledger_history::query_options::IntraTxCoordinate;
 
 /// The resume point of a frame carrying the item at cursor `position`, whose public position is

@@ -7,13 +7,14 @@ use bytes::Bytes;
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::Ordering as ProtoOrdering;
 use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::LedgerPoint;
-use sui_rpc_cursor::Position;
 
 use crate::ErrorDetails;
 use crate::ErrorReason;
 use crate::RpcError;
+use crate::ledger_history::cursor::CursorKind;
+use crate::ledger_history::cursor::CursorToken;
+use crate::ledger_history::cursor::LedgerPoint;
+use crate::ledger_history::cursor::Position;
 use crate::ledger_history::ledger_point::item_resume;
 use crate::ledger_history::watermark::RangeEnd;
 use crate::proto::google::rpc::ErrorInfo;
@@ -51,7 +52,7 @@ pub enum RangeExhaustion {
     /// cursor must carry so resume neither repeats nor skips an item: Item only for an `after`
     /// Item cursor at the last position, which has no next position to name as a boundary;
     /// Boundary everywhere else.
-    CursorBound { kind: sui_rpc_cursor::CursorKind },
+    CursorBound { kind: CursorKind },
     /// A descending scan with no lower bound of its own reached this server's serving floor, the
     /// lowest checkpoint it still serves; everything below is pruned. The stream sends a watermark
     /// at the floor claiming `floor_checkpoint`, then fails with `OutOfRange` (see
@@ -788,15 +789,15 @@ where
     fn apply_after_cursor(
         &mut self,
         options: &QueryOptions,
-    ) -> Option<(LedgerPoint, P, sui_rpc_cursor::CursorKind)> {
+    ) -> Option<(LedgerPoint, P, CursorKind)> {
         let cursor = options.after.as_ref()?;
         let position: P = cursor.coordinate();
 
         // Symbolic resume in every lane: an Item admits strictly-after, a
         // Boundary admits from itself.
         let candidate = match cursor.kind {
-            sui_rpc_cursor::CursorKind::Item => Bound::Excluded(position),
-            sui_rpc_cursor::CursorKind::Boundary => Bound::Included(position),
+            CursorKind::Item => Bound::Excluded(position),
+            CursorKind::Boundary => Bound::Included(position),
         };
 
         if !lower_bound_gte(candidate, self.bounds.lo) {
@@ -842,7 +843,7 @@ where
     fn apply_before_cursor(
         &mut self,
         options: &QueryOptions,
-    ) -> Option<(LedgerPoint, P, sui_rpc_cursor::CursorKind)> {
+    ) -> Option<(LedgerPoint, P, CursorKind)> {
         let cursor = options.before.as_ref()?;
         let point = cursor.position.public_position();
         let position: P = cursor.coordinate();
@@ -856,7 +857,7 @@ where
                 point,
                 position,
                 RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
             );
         }
@@ -867,7 +868,7 @@ where
             return None;
         }
 
-        Some((point, position, sui_rpc_cursor::CursorKind::Boundary))
+        Some((point, position, CursorKind::Boundary))
     }
 
     /// Raises the scan's low end to the serving floor, for a scan with no lower bound of its own
@@ -1034,12 +1035,12 @@ where
             }
             let after = options.after.as_ref()?;
             let first_admitted = match after.kind {
-                sui_rpc_cursor::CursorKind::Item => position(after).successor()?,
-                sui_rpc_cursor::CursorKind::Boundary => position(after),
+                CursorKind::Item => position(after).successor()?,
+                CursorKind::Boundary => position(after),
             };
             (first_admitted >= window.end).then(|| {
                 (
-                    after_resume_point(after, sui_rpc_cursor::CursorKind::Boundary),
+                    after_resume_point(after, CursorKind::Boundary),
                     first_admitted,
                 )
             })
@@ -1089,8 +1090,8 @@ where
         // A boundary exactly at the tip is where a caught-up scan resumes; an item there, or any
         // position beyond it, has not been indexed here.
         let past_tip = match cursor.kind {
-            sui_rpc_cursor::CursorKind::Item => position >= tip,
-            sui_rpc_cursor::CursorKind::Boundary => position > tip,
+            CursorKind::Item => position >= tip,
+            CursorKind::Boundary => position > tip,
         };
         if past_tip {
             let requested_checkpoint = cursor.position.public_position().checkpoint;
@@ -1138,13 +1139,13 @@ where
             before.position.public_position(),
             before.coordinate(),
             RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
+                kind: CursorKind::Boundary,
             },
         ));
     }
     let exhaustion = match kind {
-        sui_rpc_cursor::CursorKind::Boundary => RangeExhaustion::LedgerTip,
-        sui_rpc_cursor::CursorKind::Item => RangeExhaustion::CursorBound { kind },
+        CursorKind::Boundary => RangeExhaustion::LedgerTip,
+        CursorKind::Item => RangeExhaustion::CursorBound { kind },
     };
     Some((after_resume_point(after, kind), end, exhaustion))
 }
@@ -1153,14 +1154,11 @@ where
 /// names that place: a Boundary cursor's own position, or the boundary after an Item cursor's
 /// item. An Item at the last position names no boundary after it, so it names itself, still an
 /// Item.
-fn after_resume<P: ScanPosition>(
-    position: P,
-    kind: sui_rpc_cursor::CursorKind,
-) -> (P, sui_rpc_cursor::CursorKind) {
+fn after_resume<P: ScanPosition>(position: P, kind: CursorKind) -> (P, CursorKind) {
     match kind {
-        sui_rpc_cursor::CursorKind::Boundary => (position, kind),
-        sui_rpc_cursor::CursorKind::Item => match position.successor() {
-            Some(next) => (next, sui_rpc_cursor::CursorKind::Boundary),
+        CursorKind::Boundary => (position, kind),
+        CursorKind::Item => match position.successor() {
+            Some(next) => (next, CursorKind::Boundary),
             None => (position, kind),
         },
     }
@@ -1190,12 +1188,9 @@ where
 /// The public position of where `after` resumes as a cursor of `resumed_kind` (see
 /// [`after_resume`]): the boundary right after an Item cursor's item (its key with the finest
 /// index incremented), or the cursor's own public position where it names itself.
-fn after_resume_point(
-    after: &CursorToken,
-    resumed_kind: sui_rpc_cursor::CursorKind,
-) -> LedgerPoint {
+fn after_resume_point(after: &CursorToken, resumed_kind: CursorKind) -> LedgerPoint {
     match (after.kind, resumed_kind) {
-        (sui_rpc_cursor::CursorKind::Item, sui_rpc_cursor::CursorKind::Boundary) => {
+        (CursorKind::Item, CursorKind::Boundary) => {
             item_resume(&after.position, ScanDirection::Ascending)
         }
         _ => after.position.public_position(),
@@ -1933,7 +1928,7 @@ mod tests {
                 model_point(u64::MAX, 0),
                 u64::MAX,
                 RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Item,
+                    kind: CursorKind::Item,
                 },
             )
         );
@@ -1949,7 +1944,7 @@ mod tests {
         assert_eq!(
             bounded.exhaustion,
             RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
+                kind: CursorKind::Boundary,
             }
         );
         // The terminal is the boundary just above the `after` item, which the scan excluded.
@@ -1980,7 +1975,7 @@ mod tests {
                 end_public_position: after_transaction_point(12),
                 end_scan_position: 12,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(19),
             }
@@ -2297,7 +2292,7 @@ mod tests {
                     // takes on the cursor position that emptied the range
                     end_scan_position: new_coordinate,
                     exhaustion: RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                        kind: CursorKind::Boundary,
                     },
                     window_claim: Some(3),
                 }
@@ -2377,7 +2372,7 @@ mod tests {
                     index: 2,
                 },
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 ..resolved_intra_tx()
             }
@@ -2400,7 +2395,7 @@ mod tests {
                     index: 1,
                 },
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 ..resolved_intra_tx()
             }
@@ -2429,7 +2424,7 @@ mod tests {
             end_public_position: model_point(coordinate.tx_seq, coordinate.index),
             end_scan_position: coordinate,
             exhaustion: RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
+                kind: CursorKind::Boundary,
             },
             window_claim: Some(3),
         };
@@ -2511,7 +2506,7 @@ mod tests {
                 index: 1,
             },
             exhaustion: RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
+                kind: CursorKind::Boundary,
             },
             window_claim: Some(8),
         };
@@ -2537,7 +2532,7 @@ mod tests {
             end_public_position: model_point(3, 0),
             end_scan_position: IntraTxCoordinate::start_of_tx(3),
             exhaustion: RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
+                kind: CursorKind::Boundary,
             },
             ..seed.clone()
         };
@@ -2589,7 +2584,7 @@ mod tests {
                 end_public_position: model_point(3, 0),
                 end_scan_position: IntraTxCoordinate::start_of_tx(3),
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(8),
             }
@@ -2616,7 +2611,7 @@ mod tests {
                 end_public_position: model_point(12, 0),
                 end_scan_position: IntraTxCoordinate::start_of_tx(12),
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(8),
             }
@@ -2643,7 +2638,7 @@ mod tests {
                     index: 2,
                 },
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(8),
             }
@@ -2665,7 +2660,7 @@ mod tests {
                 end_public_position: model_point(5, 0),
                 end_scan_position: IntraTxCoordinate::start_of_tx(5),
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(8),
             }
@@ -2705,7 +2700,7 @@ mod tests {
                 end_public_position: model_point(10, 0),
                 end_scan_position: IntraTxCoordinate::start_of_tx(10),
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(8),
             }
@@ -2722,7 +2717,7 @@ mod tests {
                 end_public_position: LedgerPoint::GENESIS,
                 end_scan_position: IntraTxCoordinate::start_of_tx(0),
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(8),
             }
@@ -2783,7 +2778,7 @@ mod tests {
                 end_public_position: after_transaction_point(13),
                 end_scan_position: 13,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(19),
             }
@@ -2797,7 +2792,7 @@ mod tests {
                 end_public_position: after_transaction_point(13),
                 end_scan_position: 13,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(19),
             }
@@ -2819,7 +2814,7 @@ mod tests {
                 end_public_position: after_transaction_point(25),
                 end_scan_position: 25,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(19),
             }
@@ -2833,7 +2828,7 @@ mod tests {
                 end_public_position: after_transaction_point(25),
                 end_scan_position: 25,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(19),
             }
@@ -2886,7 +2881,7 @@ mod tests {
                 model_point(u64::MAX, 0),
                 u64::MAX,
                 RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
             )
         );
@@ -2912,7 +2907,7 @@ mod tests {
                 end_public_position: model_point(15, 0),
                 end_scan_position: 15,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(19),
             }
@@ -2937,7 +2932,7 @@ mod tests {
                 end_public_position: model_point(15, 0),
                 end_scan_position: 15,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 window_claim: Some(19),
             }
@@ -2985,7 +2980,7 @@ mod tests {
                 end_public_position: after_transaction_point(20),
                 end_scan_position: 20,
                 exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
+                    kind: CursorKind::Boundary,
                 },
                 ..initial_range
             }
@@ -3127,7 +3122,7 @@ mod tests {
         assert_eq!(
             at_tip.exhaustion,
             RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary
+                kind: CursorKind::Boundary
             }
         );
         assert!(is_out_of_range(resolve_checkpoints(
@@ -3440,8 +3435,8 @@ mod tests {
         let after = options.after.as_ref().is_none_or(|cursor| {
             let cursor_key = scan_order(&cursor.position);
             match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => key > cursor_key,
-                sui_rpc_cursor::CursorKind::Boundary => key >= cursor_key,
+                CursorKind::Item => key > cursor_key,
+                CursorKind::Boundary => key >= cursor_key,
             }
         });
         let before = options
@@ -3506,8 +3501,8 @@ mod tests {
         let past_tip = |cursor: &CursorToken| {
             let cursor_key = scan_order(&cursor.position);
             match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => cursor_key >= tip_key,
-                sui_rpc_cursor::CursorKind::Boundary => cursor_key > tip_key,
+                CursorKind::Item => cursor_key >= tip_key,
+                CursorKind::Boundary => cursor_key > tip_key,
             }
         };
         let window_reaches_tip = window.1.is_none_or(|end| end > TIP);
@@ -3549,8 +3544,8 @@ mod tests {
         let first_admitted_key = |cursor: &CursorToken| {
             let position: P = cursor.coordinate();
             match cursor.kind {
-                sui_rpc_cursor::CursorKind::Item => position.successor().map(&key),
-                sui_rpc_cursor::CursorKind::Boundary => Some(key(position)),
+                CursorKind::Item => position.successor().map(&key),
+                CursorKind::Boundary => Some(key(position)),
             }
         };
 
@@ -3560,16 +3555,14 @@ mod tests {
         {
             let resume = first_admitted_key(after).expect("model cursors have a successor");
             let resume_point = match after.kind {
-                sui_rpc_cursor::CursorKind::Item => {
-                    item_resume(&after.position, ScanDirection::Ascending)
-                }
-                sui_rpc_cursor::CursorKind::Boundary => after.position.public_position(),
+                CursorKind::Item => item_resume(&after.position, ScanDirection::Ascending),
+                CursorKind::Boundary => after.position.public_position(),
             };
             // The terminal cursor carries `after`'s point where both cursors name its position.
             let (reason, end, end_cursor_public_position) = match options.before.as_ref() {
                 Some(before) if cursor_key(before) <= resume => (
                     RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Boundary,
+                        kind: CursorKind::Boundary,
                     },
                     cursor_key(before),
                     if cursor_key(before) == resume {
@@ -3726,7 +3719,7 @@ mod tests {
             RangeExhaustion::CursorBound { kind } => kind,
             RangeExhaustion::LedgerTip
             | RangeExhaustion::CheckpointBound
-            | RangeExhaustion::ServingFloor { .. } => sui_rpc_cursor::CursorKind::Boundary,
+            | RangeExhaustion::ServingFloor { .. } => CursorKind::Boundary,
         };
         CursorToken {
             kind,
@@ -3990,7 +3983,7 @@ mod tests {
         assert_eq!(
             resolved.exhaustion,
             RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Item
+                kind: CursorKind::Item
             }
         );
     }
@@ -4090,10 +4083,8 @@ mod tests {
                         .after
                         .as_ref()
                         .is_some_and(|after| match after.kind {
-                            sui_rpc_cursor::CursorKind::Item => key(position) <= cursor_key(after),
-                            sui_rpc_cursor::CursorKind::Boundary => {
-                                key(position) < cursor_key(after)
-                            }
+                            CursorKind::Item => key(position) <= cursor_key(after),
+                            CursorKind::Boundary => key(position) < cursor_key(after),
                         }))
         };
         let end_excludes = |position: P| {
@@ -4334,7 +4325,7 @@ mod tests {
     fn caught_up_ascending_scan_ends_with_ledger_tip() {
         let tip_tx = first_tx(TIP);
         let cursor_bound = RangeExhaustion::CursorBound {
-            kind: sui_rpc_cursor::CursorKind::Boundary,
+            kind: CursorKind::Boundary,
         };
         // The `LedgerTip` terminal, an ascending frontier at the tip, and the last item, each
         // with the public position where it resumes.
@@ -4453,7 +4444,7 @@ mod tests {
                 (
                     u64::MAX,
                     RangeExhaustion::CursorBound {
-                        kind: sui_rpc_cursor::CursorKind::Item
+                        kind: CursorKind::Item
                     }
                 ),
                 "{window:?}"

@@ -35,7 +35,6 @@ futures.workspace = true
 sui-name-service.workspace = true
 fastcrypto.workspace = true
 sui-inverted-index.workspace = true
-sui-rpc-cursor.workspace = true
 sui-types.workspace = true
 sui-macros.workspace = true
 mysten-common.workspace = true
@@ -66,4 +65,7 @@ base64.workspace = true
 # virtual-time deadline tests in `grpc::deadline`.
 tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber.workspace = true
+prost-build.workspace = true
+protox.workspace = true
+walkdir.workspace = true
 

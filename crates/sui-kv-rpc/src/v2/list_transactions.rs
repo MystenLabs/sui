@@ -24,6 +24,8 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
+use sui_rpc_api::ledger_history::cursor::LedgerPoint;
+use sui_rpc_api::ledger_history::cursor::Position;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
 use sui_rpc_api::ledger_history::query_options::ResolvedCheckpointRange;
 use sui_rpc_api::ledger_history::query_options::ResolvedScan;
@@ -33,8 +35,6 @@ use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_cursor::LedgerPoint;
-use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -696,8 +696,8 @@ mod tests {
     use crate::config::StagesConfig;
     use crate::v2::get_transaction::get_transaction;
     use sui_inverted_index::ScanDirection;
+    use sui_rpc_api::ledger_history::cursor::CursorToken;
     use sui_rpc_api::ledger_history::ledger_point::ledger_position;
-    use sui_rpc_cursor::CursorToken;
 
     use crate::v2::test_utils::{
         ascending_options, assert_identity_only_object_mask, assert_list_metric_absent,
@@ -1149,7 +1149,7 @@ mod tests {
         assert_eq!(
             digest_wm.cursor.as_ref(),
             Some(
-                &sui_rpc_cursor::CursorToken::item(Position::Transactions {
+                &CursorToken::item(Position::Transactions {
                     tx_seq: 42,
                     public_position: LedgerPoint::transaction(9, 5),
                 })

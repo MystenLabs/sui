@@ -78,10 +78,10 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
-use sui_rpc_cursor::CursorKind;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::LedgerPoint;
-use sui_rpc_cursor::Position;
+use sui_rpc_api::ledger_history::cursor::CursorKind;
+use sui_rpc_api::ledger_history::cursor::CursorToken;
+use sui_rpc_api::ledger_history::cursor::LedgerPoint;
+use sui_rpc_api::ledger_history::cursor::Position;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -1967,8 +1967,8 @@ async fn assert_opposite_direction_resumes(endpoint: Endpoint) {
                     all.iter()
                         .copied()
                         .filter(|&item| match token.kind {
-                            sui_rpc_cursor::CursorKind::Item => item > key,
-                            sui_rpc_cursor::CursorKind::Boundary => item >= key,
+                            CursorKind::Item => item > key,
+                            CursorKind::Boundary => item >= key,
                         })
                         .collect()
                 } else {

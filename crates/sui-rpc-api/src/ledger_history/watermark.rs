@@ -28,9 +28,9 @@
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
-use sui_rpc_cursor::{CursorKind, CursorToken, LedgerPoint, Position};
 
 use crate::RpcError;
+use crate::ledger_history::cursor::{CursorKind, CursorToken, LedgerPoint, Position};
 use crate::ledger_history::ledger_point::{item_resume, ledger_position};
 use crate::ledger_history::query_options::{QueryOptions, RangeExhaustion, below_serving_floor};
 
@@ -347,7 +347,6 @@ impl ScanTerminal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_rpc_cursor::{CursorKind, Position};
 
     use crate::ledger_history::query_options::assert_below_serving_floor_error;
 

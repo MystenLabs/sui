@@ -30,6 +30,8 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::checkpoint_positions::CheckpointPositions;
+use sui_rpc_api::ledger_history::cursor::LedgerPoint;
+use sui_rpc_api::ledger_history::cursor::Position;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::query_options::IntraTxScanBounds;
 use sui_rpc_api::ledger_history::query_options::QueryOptions;
@@ -42,8 +44,6 @@ use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpo
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc_cursor::LedgerPoint;
-use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -870,7 +870,7 @@ mod tests {
     };
     use move_core_types::ident_str;
     use sui_rpc::proto::sui::rpc::v2 as proto;
-    use sui_rpc_cursor::CursorToken;
+    use sui_rpc_api::ledger_history::cursor::CursorToken;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_types::{base_types::ObjectID, event::Event, gas_coin::GAS};
 

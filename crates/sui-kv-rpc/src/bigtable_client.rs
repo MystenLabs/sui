@@ -465,7 +465,7 @@ impl BigTableClient {
     /// ascending genesis frontier, which covers no checkpoint and lies at
     /// [`LedgerPoint::GENESIS`]. A missing row is `Internal`.
     ///
-    /// [`LedgerPoint::GENESIS`]: sui_rpc_cursor::LedgerPoint::GENESIS
+    /// [`LedgerPoint::GENESIS`]: sui_rpc_api::ledger_history::cursor::LedgerPoint::GENESIS
     pub(crate) async fn place_frontier(
         &self,
         placement: Option<RowPlacement>,
@@ -670,7 +670,7 @@ mod tests {
 
     use super::*;
     use sui_kvstore::tables::tx_seq_digest;
-    use sui_rpc_cursor::LedgerPoint;
+    use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 
     /// A `tx_cp_resolve` permit, plus the registry its metrics are recorded in.
     async fn test_permit(limiter: &Arc<Semaphore>) -> (LimitedPermit, Registry) {

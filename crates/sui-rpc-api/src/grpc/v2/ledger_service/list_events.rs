@@ -18,8 +18,6 @@ use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
-use sui_rpc_cursor::LedgerPoint;
-use sui_rpc_cursor::Position;
 use sui_types::storage::LedgerTxSeqDigest;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -28,6 +26,8 @@ use tracing::info;
 use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::checkpoint_positions::CheckpointPositions;
+use crate::ledger_history::cursor::LedgerPoint;
+use crate::ledger_history::cursor::Position;
 use crate::ledger_history::filter::event_filter_to_query;
 use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::IntraTxScanBounds;
@@ -771,9 +771,10 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions as ProtoQueryOptions;
 
+    use crate::ledger_history::cursor::CursorKind;
+    use crate::ledger_history::cursor::CursorToken;
     use crate::ledger_history::ledger_point::ledger_position;
     use crate::ledger_history::watermark::ScanTerminal;
-    use sui_rpc_cursor::CursorToken;
 
     fn options(ascending: bool) -> QueryOptions {
         let mut proto = ProtoQueryOptions::default();
@@ -893,7 +894,7 @@ mod tests {
             }
             .into_watermark(None);
             let cursor = CursorToken::decode(terminal.cursor.as_ref().unwrap()).unwrap();
-            assert_eq!(cursor.kind, sui_rpc_cursor::CursorKind::Boundary);
+            assert_eq!(cursor.kind, CursorKind::Boundary);
             assert!(item.cursor_position.is_some());
             assert_eq!(terminal.cursor_position, item.cursor_position);
         }
