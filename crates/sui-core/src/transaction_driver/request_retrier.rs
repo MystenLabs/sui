@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use sui_types::base_types::AuthorityName;
 use sui_types::transaction::AllowedProposers;
@@ -19,6 +22,20 @@ use crate::{
 
 /// Select validators with latencies within 2% of the lowest latency.
 pub(crate) const SELECT_LATENCY_DELTA: f64 = 0.02;
+
+/// Targeting for an unrestricted transaction while validators stagger submission:
+/// rank targets by the transaction's stagger order instead of pure latency, so
+/// requests land on validators that propose it immediately.
+pub(crate) struct StaggerTargets {
+    /// The transaction's stagger order over the full committee.
+    pub order: Vec<AuthorityName>,
+    /// How many leading slots propose immediately (free slots, widened by paid
+    /// amplification) — the same count the validators grant.
+    pub free_slots: usize,
+    /// How many leading slots may propose at all: the free slots plus the holders.
+    /// Validators past them reject the submission, so they are never targeted.
+    pub proposer_slots: usize,
+}
 
 /// Provides the next target validator to retry operations,
 /// and gathers the errors along with the operations.
@@ -51,9 +68,31 @@ impl<A: Clone> RequestRetrier<A> {
         allowed_validators: Vec<String>,
         blocked_validators: Vec<String>,
         allowed_proposers: Option<&AllowedProposers>,
+        stagger_targets: Option<StaggerTargets>,
     ) -> Self {
-        let ranked_validators = client_monitor
-            .select_shuffled_preferred_validators(&auth_agg.committee, SELECT_LATENCY_DELTA);
+        let ranked_validators = if let Some(targets) = stagger_targets {
+            // Free slots first — best latency score within them — then the rest of the
+            // stagger order. Retries beyond the free slots must keep walking the slot
+            // order rather than fall back to latency ranking: the latency-preferred
+            // validators are exactly the ones that would hold the transaction.
+            let latency_rank: HashMap<AuthorityName, usize> = client_monitor
+                .select_shuffled_preferred_validators(&auth_agg.committee, SELECT_LATENCY_DELTA)
+                .into_iter()
+                .enumerate()
+                .map(|(rank, name)| (name, rank))
+                .collect();
+            let mut order = targets.order;
+            // Paid amplification can widen the free slots past the stake cut; the
+            // validators propose for those slots too.
+            order.truncate(targets.proposer_slots.max(targets.free_slots));
+            let free_slots = targets.free_slots.min(order.len());
+            order[..free_slots]
+                .sort_by_key(|name| latency_rank.get(name).copied().unwrap_or(usize::MAX));
+            order
+        } else {
+            client_monitor
+                .select_shuffled_preferred_validators(&auth_agg.committee, SELECT_LATENCY_DELTA)
+        };
         let ranked_clients = ranked_validators
             .into_iter()
             .filter(|name| {
@@ -184,7 +223,8 @@ mod tests {
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
         let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-        let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None);
+        let mut retrier =
+            RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None, None);
 
         for name in auth_agg.committee.names() {
             retrier.next_target().unwrap();
@@ -226,8 +266,14 @@ mod tests {
                 authorities[0].concise().to_string(), // This one exists in auth_agg
             ];
 
-            let retrier =
-                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![], None);
+            let retrier = RequestRetrier::new(
+                &auth_agg,
+                &client_monitor,
+                allowed_validators,
+                vec![],
+                None,
+                None,
+            );
 
             // Should only have 1 remaining client (the known validator)
             assert_eq!(retrier.ranked_clients.len(), 1);
@@ -241,8 +287,14 @@ mod tests {
                 unknown_validator2.concise().to_string(),
             ];
 
-            let retrier =
-                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![], None);
+            let retrier = RequestRetrier::new(
+                &auth_agg,
+                &client_monitor,
+                allowed_validators,
+                vec![],
+                None,
+                None,
+            );
 
             // Should have no remaining clients since none of the allowed validators exist
             assert_eq!(retrier.ranked_clients.len(), 0);
@@ -275,6 +327,7 @@ mod tests {
             vec![],
             blocked_display_names,
             None,
+            None,
         );
 
         // The last validator will be picked up.
@@ -291,7 +344,8 @@ mod tests {
         // Add retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None);
+            let mut retrier =
+                RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None, None);
 
             // 25% stake.
             retrier
@@ -327,7 +381,8 @@ mod tests {
         // Add mix of retriable and non-retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None);
+            let mut retrier =
+                RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None, None);
 
             // 25% stake retriable error.
             retrier
@@ -365,6 +420,101 @@ mod tests {
         }
     }
 
+    /// While staggering is active, targets follow the transaction's stagger order:
+    /// free slots first (best latency score within them), then the remaining slots in
+    /// order — never the latency ranking, which would walk into holding validators.
+    #[tokio::test]
+    async fn test_stagger_targets_order() {
+        use crate::validator_client_monitor::{OperationFeedback, OperationType};
+        use std::time::Duration;
+
+        let auth_agg = Arc::new(get_authority_aggregator(4));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let validators: Vec<_> = auth_agg.committee.names().copied().collect();
+
+        // Make validator 3 fastest, then 2, 1, 0 — the latency ranking is the exact
+        // reverse of the stagger order used below.
+        for (i, validator) in validators.iter().enumerate() {
+            client_monitor.record_interaction_result(OperationFeedback {
+                authority_name: *validator,
+                display_name: auth_agg.get_display_name(validator),
+                operation: OperationType::SharedObjectFinality,
+                ping_type: None,
+                result: Ok(Duration::from_millis(400 - (i as u64) * 100)),
+            });
+        }
+        client_monitor.force_update_cached_latencies(&auth_agg);
+
+        let targets = StaggerTargets {
+            order: validators.clone(),
+            free_slots: 2,
+            proposer_slots: 4,
+        };
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            vec![],
+            None,
+            Some(targets),
+        );
+
+        // Free slots are validators 0 and 1; validator 1 is faster, so it goes first.
+        assert_eq!(retrier.next_target().unwrap().0, validators[1]);
+        assert_eq!(retrier.next_target().unwrap().0, validators[0]);
+        // Past the free slots the stagger order continues unchanged, even though the
+        // latency ranking would prefer validator 3.
+        assert_eq!(retrier.next_target().unwrap().0, validators[2]);
+        assert_eq!(retrier.next_target().unwrap().0, validators[3]);
+        assert!(retrier.next_target().is_err());
+    }
+
+    /// Validators past the proposer set reject the submission, so the walk stops at the
+    /// set's end instead of asking them.
+    #[tokio::test]
+    async fn test_stagger_targets_stop_at_proposer_set() {
+        let auth_agg = Arc::new(get_authority_aggregator(4));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let validators: Vec<_> = auth_agg.committee.names().copied().collect();
+
+        let targets = StaggerTargets {
+            order: validators.clone(),
+            free_slots: 1,
+            proposer_slots: 3,
+        };
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            vec![],
+            None,
+            Some(targets),
+        );
+        assert_eq!(retrier.next_target().unwrap().0, validators[0]);
+        assert_eq!(retrier.next_target().unwrap().0, validators[1]);
+        assert_eq!(retrier.next_target().unwrap().0, validators[2]);
+        assert!(retrier.next_target().is_err());
+
+        // Paid amplification widening the free slots past the cut keeps those targets.
+        let targets = StaggerTargets {
+            order: validators.clone(),
+            free_slots: 4,
+            proposer_slots: 2,
+        };
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            vec![],
+            None,
+            Some(targets),
+        );
+        for _ in 0..4 {
+            assert!(retrier.next_target().is_ok());
+        }
+        assert!(retrier.next_target().is_err());
+    }
+
     /// Only the validators a transaction names may propose it; submitting anywhere else can only
     /// waste the attempt, so those targets are dropped before any request is made.
     #[tokio::test]
@@ -377,8 +527,14 @@ mod tests {
             epoch: committee.epoch(),
             proposers: nonempty::nonempty![1, 3],
         };
-        let retrier =
-            RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], Some(&allowed));
+        let retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            vec![],
+            Some(&allowed),
+            None,
+        );
 
         assert_eq!(retrier.ranked_clients.len(), 2);
         for (name, _) in &retrier.ranked_clients {
@@ -401,8 +557,14 @@ mod tests {
             epoch: auth_agg.committee.epoch(),
             proposers: nonempty::nonempty![99],
         };
-        let retrier =
-            RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], Some(&allowed));
+        let retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            vec![],
+            Some(&allowed),
+            None,
+        );
 
         assert_eq!(retrier.ranked_clients.len(), 0);
     }
