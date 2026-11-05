@@ -15,6 +15,7 @@ use sui_inverted_index::for_each_event_dimension;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::tables::BitmapSchema;
 use crate::tables::event_bitmap_index;
 
 use crate::handlers::bitmap::BitmapIndexProcessor;
@@ -22,49 +23,83 @@ use crate::handlers::bitmap::BitmapIndexProcessor;
 // Compile-time check that BUCKET_SIZE fits in u32 (required for RoaringBitmap bit positions).
 const _: () = assert!(event_bitmap_index::BUCKET_SIZE <= u32::MAX as u64);
 
-/// Event-keyed bitmap index: one bit per (dimension, packed event_seq).
+/// Event-keyed bitmap index: one bit per (dimension, packed event_seq). Writes the
+/// [`BitmapSchema::V1`] table.
 pub struct EventBitmapProcessor;
+
+/// Event-keyed bitmap index written to the [`BitmapSchema::V2`] table.
+pub struct EventBitmapV2Processor;
 
 impl BitmapIndexProcessor for EventBitmapProcessor {
     const NAME: &'static str = "kvstore_event_dimensions";
-    const TABLE: &'static str = "event_bitmap_index";
+    const TABLE: &'static str = event_bitmap_index::NAME;
     const COLUMN: &'static str = event_bitmap_index::col::BITMAP;
-    const SCHEMA_VERSION: u32 = event_bitmap_index::SCHEMA_VERSION;
+    const SCHEMA: BitmapSchema = BitmapSchema::V1;
     const BUCKET_ID_WIDTH: usize = event_bitmap_index::BUCKET_ID_WIDTH;
 
-    fn for_each_indexed_bit<F>(&self, checkpoint: &Checkpoint, mut emit: F)
+    fn for_each_indexed_bit<F>(&self, checkpoint: &Checkpoint, emit: F)
     where
         F: FnMut(u64, u32, IndexDimension, &[u8]),
     {
-        let cp = checkpoint.summary.data();
-        // network_total_transactions is cumulative *including* this checkpoint,
-        // so tx_lo is the first tx_seq in this checkpoint.
-        let tx_lo = cp.network_total_transactions - checkpoint.transactions.len() as u64;
-
-        for (i, tx) in checkpoint.transactions.iter().enumerate() {
-            let tx_seq = tx_lo + i as u64;
-            for_each_event_dimension(
-                tx.transaction.sender(),
-                &tx.effects,
-                tx.events.as_ref(),
-                |event_idx, dim, value| {
-                    let event_seq = event_seq::encode_event_seq(tx_seq, event_idx);
-                    let bucket_id = event_seq / event_bitmap_index::BUCKET_SIZE;
-                    let bit_position = (event_seq % event_bitmap_index::BUCKET_SIZE) as u32;
-                    emit(bucket_id, bit_position, dim, value);
-                },
-            );
-        }
+        for_each_event_bit(checkpoint, emit);
     }
 
     fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
-        // Bucket B is sealed once every future tx's smallest event_seq
-        // (`event_seq_lo(tx) = tx * MAX_EVENTS_PER_TX`) is past bucket B's
-        // upper end. Solve for the smallest tx satisfying that.
-        let seal_tx_hi = ((bucket_id + 1) * event_bitmap_index::BUCKET_SIZE)
-            .div_ceil(event_seq::MAX_EVENTS_PER_TX as u64);
-        watermark.tx_hi >= seal_tx_hi
+        is_event_bucket_sealed(bucket_id, watermark)
     }
+}
+
+impl BitmapIndexProcessor for EventBitmapV2Processor {
+    const NAME: &'static str = "kvstore_event_dimensions_v2";
+    const TABLE: &'static str = event_bitmap_index::NAME_V2;
+    const COLUMN: &'static str = event_bitmap_index::col::BITMAP;
+    const SCHEMA: BitmapSchema = BitmapSchema::V2;
+    const BUCKET_ID_WIDTH: usize = event_bitmap_index::BUCKET_ID_WIDTH;
+
+    fn for_each_indexed_bit<F>(&self, checkpoint: &Checkpoint, emit: F)
+    where
+        F: FnMut(u64, u32, IndexDimension, &[u8]),
+    {
+        for_each_event_bit(checkpoint, emit);
+    }
+
+    fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
+        is_event_bucket_sealed(bucket_id, watermark)
+    }
+}
+
+fn for_each_event_bit<F>(checkpoint: &Checkpoint, mut emit: F)
+where
+    F: FnMut(u64, u32, IndexDimension, &[u8]),
+{
+    let cp = checkpoint.summary.data();
+    // network_total_transactions is cumulative *including* this checkpoint,
+    // so tx_lo is the first tx_seq in this checkpoint.
+    let tx_lo = cp.network_total_transactions - checkpoint.transactions.len() as u64;
+
+    for (i, tx) in checkpoint.transactions.iter().enumerate() {
+        let tx_seq = tx_lo + i as u64;
+        for_each_event_dimension(
+            tx.transaction.sender(),
+            &tx.effects,
+            tx.events.as_ref(),
+            |event_idx, dim, value| {
+                let event_seq = event_seq::encode_event_seq(tx_seq, event_idx);
+                let bucket_id = event_seq / event_bitmap_index::BUCKET_SIZE;
+                let bit_position = (event_seq % event_bitmap_index::BUCKET_SIZE) as u32;
+                emit(bucket_id, bit_position, dim, value);
+            },
+        );
+    }
+}
+
+fn is_event_bucket_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
+    // Bucket B is sealed once every future tx's smallest event_seq
+    // (`event_seq_lo(tx) = tx * MAX_EVENTS_PER_TX`) is past bucket B's
+    // upper end. Solve for the smallest tx satisfying that.
+    let seal_tx_hi = ((bucket_id + 1) * event_bitmap_index::BUCKET_SIZE)
+        .div_ceil(event_seq::MAX_EVENTS_PER_TX as u64);
+    watermark.tx_hi >= seal_tx_hi
 }
 
 #[cfg(test)]
@@ -103,11 +138,7 @@ mod tests {
     fn emit_module_row_key(bucket_id: u64) -> Vec<u8> {
         let dimension_key =
             encode_dimension_key(IndexDimension::EmitModule, ObjectID::ZERO.as_ref());
-        event_bitmap_index::encode_row_key(
-            event_bitmap_index::SCHEMA_VERSION,
-            &dimension_key,
-            bucket_id,
-        )
+        event_bitmap_index::encode_row_key(BitmapSchema::V2, &dimension_key, bucket_id)
     }
 
     fn row<'a>(values: &'a [BitmapIndexValue], row_key: &[u8]) -> &'a BitmapIndexValue {
@@ -125,7 +156,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor)
+        let values = BitmapIndexHandler::new(EventBitmapV2Processor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -150,7 +181,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor)
+        let values = BitmapIndexHandler::new(EventBitmapV2Processor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -175,13 +206,13 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor)
+        let values = BitmapIndexHandler::new(EventBitmapV2Processor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
 
         let extant_key = event_bitmap_index::encode_row_key(
-            event_bitmap_index::SCHEMA_VERSION,
+            BitmapSchema::V2,
             // EventExtant is keyed by a singleton placeholder value byte.
             &encode_dimension_key(IndexDimension::EventExtant, &[0x00]),
             0,
@@ -213,7 +244,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(EventBitmapProcessor)
+        let values = BitmapIndexHandler::new(EventBitmapV2Processor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -233,5 +264,21 @@ mod tests {
         assert_eq!(bucket_1.bucket_id, 1);
         assert_eq!(bucket_1.bitmap.len(), 1);
         assert!(bucket_1.bitmap.contains(0));
+    }
+
+    #[test]
+    fn event_bitmap_seal_handles_exact_boundaries() {
+        let txs_per_event_bucket =
+            event_bitmap_index::BUCKET_SIZE / event_seq::MAX_EVENTS_PER_TX as u64;
+        let wm = |tx_hi: u64| CommitterWatermark {
+            tx_hi,
+            ..Default::default()
+        };
+        // Bucket 0: sealed at tx_hi == txs_per_event_bucket, not before.
+        assert!(!is_event_bucket_sealed(0, wm(txs_per_event_bucket - 1)));
+        assert!(is_event_bucket_sealed(0, wm(txs_per_event_bucket)));
+        // Bucket 1: sealed at tx_hi == 2 * txs_per_event_bucket, not before.
+        assert!(!is_event_bucket_sealed(1, wm(txs_per_event_bucket * 2 - 1)));
+        assert!(is_event_bucket_sealed(1, wm(txs_per_event_bucket * 2)));
     }
 }

@@ -39,6 +39,7 @@ pub use crate::bigtable::client::CheckpointSpan;
 pub use crate::object_status::ObjectStatus;
 use crate::rate_limiter::CompositeRateLimiter;
 use crate::rate_limiter::RateLimiter;
+use crate::store::BigTableStoreRuntimeBuilder;
 use sui_protocol_config::Chain;
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
@@ -75,6 +76,7 @@ pub use crate::handlers::CheckpointsPipeline;
 pub use crate::handlers::EpochEndPipeline;
 pub use crate::handlers::EpochStartPipeline;
 pub use crate::handlers::EventBitmapProcessor;
+pub use crate::handlers::EventBitmapV2Processor;
 pub use crate::handlers::ObjectTombstonesPipeline;
 pub use crate::handlers::ObjectVersionsByCheckpointPipeline;
 pub use crate::handlers::ObjectsPipeline;
@@ -84,10 +86,12 @@ pub use crate::handlers::PackagesPipeline;
 pub use crate::handlers::ProtocolConfigsPipeline;
 pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionBitmapProcessor;
+pub use crate::handlers::TransactionBitmapV2Processor;
 pub use crate::handlers::TransactionsPipeline;
 pub use crate::handlers::TxSeqDigestPipeline;
 pub use crate::store::BigTableConnection;
 pub use crate::store::BigTableStore;
+pub use crate::tables::BitmapSchema;
 pub use config::BigtablePoolLayer;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
@@ -103,6 +107,8 @@ pub use sui_inverted_index::ScanDirection;
 
 pub const BITMAP_INDEX_PIPELINE: &str =
     <BitmapIndexHandler<TransactionBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const BITMAP_INDEX_V2_PIPELINE: &str =
+    <BitmapIndexHandler<TransactionBitmapV2Processor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const CHECKPOINTS_PIPELINE: &str =
     <BigTableHandler<CheckpointsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const CHECKPOINTS_BY_DIGEST_PIPELINE: &str =
@@ -129,6 +135,8 @@ pub const TX_SEQ_DIGEST_PIPELINE: &str =
     <BigTableHandler<TxSeqDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const EVENT_BITMAP_INDEX_PIPELINE: &str =
     <BitmapIndexHandler<EventBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const EVENT_BITMAP_INDEX_V2_PIPELINE: &str =
+    <BitmapIndexHandler<EventBitmapV2Processor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE: &str = <BigTableHandler<
     ObjectVersionsByCheckpointPipeline,
 > as sui_indexer_alt_framework::pipeline::Processor>::NAME;
@@ -155,10 +163,20 @@ pub const ALL_PIPELINE_NAMES: [&str; 14] = [
 
 /// Pipelines the indexer registers only when they are named in the `alpha_pipelines` argument of
 /// [`BigTableIndexer::new`], so deployments do not start writing their tables by default.
-pub const ALPHA_PIPELINE_NAMES: [&str; 2] = [
+pub const ALPHA_PIPELINE_NAMES: [&str; 4] = [
     OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
     OBJECT_TOMBSTONES_PIPELINE,
+    BITMAP_INDEX_V2_PIPELINE,
+    EVENT_BITMAP_INDEX_V2_PIPELINE,
 ];
+
+/// The transaction and event bitmap index pipelines that write the tables of `schema`.
+pub const fn bitmap_index_pipelines(schema: BitmapSchema) -> [&'static str; 2] {
+    match schema {
+        BitmapSchema::V1 => [BITMAP_INDEX_PIPELINE, EVENT_BITMAP_INDEX_PIPELINE],
+        BitmapSchema::V2 => [BITMAP_INDEX_V2_PIPELINE, EVENT_BITMAP_INDEX_V2_PIPELINE],
+    }
+}
 
 /// Accepts the name of any pipeline the indexer knows, including alpha pipelines.
 pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
@@ -551,31 +569,37 @@ impl BigTableIndexer {
         };
         let mut store_runtime_builder = store.runtime_builder();
 
-        let tx_bitmap_rate_limiter = build_rate_limiter(
-            pipeline.transaction_bitmap_index.max_rows_per_second,
-            base_rps,
-            &global,
-        );
-        store_runtime_builder = store_runtime_builder
-            .with_bitmap_committer::<TransactionBitmapProcessor>(
-                pipeline.transaction_bitmap_index.max_rows_or_default(),
-                pipeline
-                    .transaction_bitmap_index
-                    .write_concurrency
-                    .unwrap_or(base.committer.write_concurrency),
-                tx_bitmap_rate_limiter,
-                Some(registry),
-            );
-        let tx_bitmap_handler = BitmapIndexHandler::new(TransactionBitmapProcessor);
-        indexer
-            .sequential_pipeline(
-                tx_bitmap_handler,
-                pipeline
-                    .transaction_bitmap_index
-                    .clone()
-                    .finish(base.clone()),
+        store_runtime_builder = add_bitmap_pipeline(
+            &mut indexer,
+            store_runtime_builder,
+            TransactionBitmapProcessor,
+            &pipeline.transaction_bitmap_index,
+            &base,
+            build_rate_limiter(
+                pipeline.transaction_bitmap_index.max_rows_per_second,
+                base_rps,
+                &global,
+            ),
+            registry,
+        )
+        .await?;
+        // The V2 pipeline shares the configuration of the V1 pipeline for the same index.
+        if alpha_pipelines.contains(&BITMAP_INDEX_V2_PIPELINE) {
+            store_runtime_builder = add_bitmap_pipeline(
+                &mut indexer,
+                store_runtime_builder,
+                TransactionBitmapV2Processor,
+                &pipeline.transaction_bitmap_index,
+                &base,
+                build_rate_limiter(
+                    pipeline.transaction_bitmap_index.max_rows_per_second,
+                    base_rps,
+                    &global,
+                ),
+                registry,
             )
             .await?;
+        }
         indexer
             .concurrent_pipeline(
                 BigTableHandler::new(
@@ -724,28 +748,36 @@ impl BigTableIndexer {
                 pipeline.tx_seq_digest.finish(base.clone()),
             )
             .await?;
-        let ev_bitmap_rate_limiter = build_rate_limiter(
-            pipeline.event_bitmap_index.max_rows_per_second,
-            base_rps,
-            &global,
-        );
-        store_runtime_builder = store_runtime_builder
-            .with_bitmap_committer::<EventBitmapProcessor>(
-                pipeline.event_bitmap_index.max_rows_or_default(),
-                pipeline
-                    .event_bitmap_index
-                    .write_concurrency
-                    .unwrap_or(base.committer.write_concurrency),
-                ev_bitmap_rate_limiter,
-                Some(registry),
-            );
-        let ev_bitmap_handler = BitmapIndexHandler::new(EventBitmapProcessor);
-        indexer
-            .sequential_pipeline(
-                ev_bitmap_handler,
-                pipeline.event_bitmap_index.clone().finish(base.clone()),
+        store_runtime_builder = add_bitmap_pipeline(
+            &mut indexer,
+            store_runtime_builder,
+            EventBitmapProcessor,
+            &pipeline.event_bitmap_index,
+            &base,
+            build_rate_limiter(
+                pipeline.event_bitmap_index.max_rows_per_second,
+                base_rps,
+                &global,
+            ),
+            registry,
+        )
+        .await?;
+        if alpha_pipelines.contains(&EVENT_BITMAP_INDEX_V2_PIPELINE) {
+            store_runtime_builder = add_bitmap_pipeline(
+                &mut indexer,
+                store_runtime_builder,
+                EventBitmapV2Processor,
+                &pipeline.event_bitmap_index,
+                &base,
+                build_rate_limiter(
+                    pipeline.event_bitmap_index.max_rows_per_second,
+                    base_rps,
+                    &global,
+                ),
+                registry,
             )
             .await?;
+        }
         if alpha_pipelines.contains(&OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE) {
             indexer
                 .concurrent_pipeline(
@@ -812,6 +844,37 @@ impl BigTableIndexer {
     pub async fn run(self) -> Result<Service> {
         Ok(self.indexer.run().await?.merge(self.store_service))
     }
+}
+
+/// Registers the bitmap index pipeline `P`, configured by `layer`, together with its
+/// store-owned committer.
+async fn add_bitmap_pipeline<P>(
+    indexer: &mut Indexer<BigTableStore>,
+    store_runtime_builder: BigTableStoreRuntimeBuilder,
+    processor: P,
+    layer: &SequentialLayer,
+    base: &ConcurrentConfig,
+    rate_limiter: Arc<CompositeRateLimiter>,
+    registry: &Registry,
+) -> Result<BigTableStoreRuntimeBuilder>
+where
+    P: BitmapIndexProcessor + Send + Sync + 'static,
+{
+    let store_runtime_builder = store_runtime_builder.with_bitmap_committer::<P>(
+        layer.max_rows_or_default(),
+        layer
+            .write_concurrency
+            .unwrap_or(base.committer.write_concurrency),
+        rate_limiter,
+        Some(registry),
+    );
+    indexer
+        .sequential_pipeline(
+            BitmapIndexHandler::new(processor),
+            layer.clone().finish(base.clone()),
+        )
+        .await?;
+    Ok(store_runtime_builder)
 }
 
 impl From<WatermarkV0> for sui_indexer_alt_framework_store_traits::CommitterWatermark {

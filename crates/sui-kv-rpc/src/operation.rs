@@ -11,8 +11,6 @@ use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::SkipPolicy;
 use sui_inverted_index::WatermarkPacing;
 use sui_kvstore::BitmapIndexSpec;
-use sui_kvstore::tables::event_bitmap_index;
-use sui_kvstore::tables::transaction_bitmap_index;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc_api::RpcError;
@@ -92,20 +90,16 @@ impl QueryContext {
         self.checkpoint_hi_exclusive
     }
 
-    /// Per-request evaluated-bucket budget for `spec`. Handlers pass this
-    /// into `eval_bitmap_query_stream`, which constructs a
-    /// `BitmapScanBudget` internally and reports the resulting
-    /// `BitmapScanMetrics` via the `on_metrics` callback. The budget caps
-    /// evaluated buckets, not backend reads — see
-    /// `eval_bitmap_query_stream` for the (≤ unique_leaf_count) slop at
-    /// exhaustion.
-    pub(crate) fn scan_budget(&self, spec: BitmapIndexSpec) -> u64 {
-        match spec.table_name {
-            transaction_bitmap_index::NAME => self.ledger_history.bitmap_bucket_budget_tx(),
-            event_bitmap_index::NAME => self.ledger_history.bitmap_bucket_budget_event(),
-            other => panic!("unknown bitmap index table {other}; add a budget for it"),
-        }
+    /// The transaction bitmap index table the List APIs read.
+    pub(crate) fn tx_bitmap_spec(&self) -> BitmapIndexSpec {
+        BitmapIndexSpec::tx(self.ledger_history.bitmap_schema())
     }
+
+    /// The event bitmap index table the List APIs read.
+    pub(crate) fn event_bitmap_spec(&self) -> BitmapIndexSpec {
+        BitmapIndexSpec::event(self.ledger_history.bitmap_schema())
+    }
+
     pub(crate) fn bitmap_skip_policy(&self) -> SkipPolicy {
         self.ledger_history.bitmap_skip_policy()
     }

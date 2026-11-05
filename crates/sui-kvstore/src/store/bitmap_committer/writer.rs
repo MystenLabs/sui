@@ -24,6 +24,7 @@ use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::rate_limiter::CompositeRateLimiter;
 use crate::tables;
+use crate::tables::BitmapSchema;
 
 use super::BitmapIndexMetrics;
 use super::COMMIT_RETRY_BACKOFF;
@@ -36,6 +37,9 @@ const MAX_ROW_WRITE_RETRY_BACKOFF: Duration = Duration::from_secs(1);
 pub(super) struct Row {
     pub(super) row_key: Bytes,
     pub(super) serialized: Bytes,
+    /// Last checkpoint that contributed a bit to `serialized`, and its timestamp. The table's
+    /// [`BitmapSchema`] derives the cell's timestamp from them.
+    pub(super) max_cp: u64,
     pub(super) max_ts_ms: u64,
     /// Framework commit whose generation accounting includes this row.
     pub(super) generation_checkpoint: u64,
@@ -54,6 +58,7 @@ pub(super) struct Writer {
     pub(super) pipeline: &'static str,
     pub(super) table: &'static str,
     pub(super) column: &'static str,
+    pub(super) schema: BitmapSchema,
     pub(super) client: BigTableClient,
     pub(super) rate_limiter: Arc<CompositeRateLimiter>,
     pub(super) write_rx: mpsc::Receiver<Batch>,
@@ -78,6 +83,7 @@ struct WriteContext {
     pipeline: &'static str,
     table: &'static str,
     column: &'static str,
+    schema: BitmapSchema,
     client: BigTableClient,
     rate_limiter: Arc<CompositeRateLimiter>,
     generation_tx: mpsc::Sender<generation::Event>,
@@ -91,6 +97,7 @@ impl Writer {
             pipeline,
             table,
             column,
+            schema,
             client,
             rate_limiter,
             write_rx,
@@ -109,6 +116,7 @@ impl Writer {
             pipeline,
             table,
             column,
+            schema,
             client,
             rate_limiter,
             generation_tx,
@@ -191,7 +199,7 @@ impl WriteContext {
     async fn attempt_write_chunk(&self, chunk: Chunk) -> Attempt {
         let mut client = self.client.clone();
         self.rate_limiter.acquire(chunk.rows.len()).await;
-        let (entries, checkpoint_span) = make_entries(&chunk.rows, self.column);
+        let (entries, checkpoint_span) = make_entries(&chunk.rows, self.column, self.schema);
 
         let write_start = Instant::now();
         let result = client
@@ -274,7 +282,11 @@ fn rows_flushed_by_generation(rows: Vec<Row>) -> Vec<generation::RowsFlushed> {
         .collect()
 }
 
-fn make_entries(rows: &[Row], column: &'static str) -> (Vec<Entry>, CheckpointSpan) {
+fn make_entries(
+    rows: &[Row],
+    column: &'static str,
+    schema: BitmapSchema,
+) -> (Vec<Entry>, CheckpointSpan) {
     let mut checkpoint_span = rows
         .first()
         .expect("bitmap write chunk must not be empty")
@@ -286,7 +298,7 @@ fn make_entries(rows: &[Row], column: &'static str) -> (Vec<Entry>, CheckpointSp
             tables::make_entry(
                 row.row_key.clone(),
                 [(column, row.serialized.clone())],
-                Some(row.max_ts_ms),
+                Some(schema.cell_timestamp_ms(row.max_cp, row.max_ts_ms)),
             )
         })
         .collect();
@@ -307,6 +319,7 @@ mod tests {
         Row {
             row_key: Bytes::from_static(key),
             serialized: Bytes::from_static(b"bitmap"),
+            max_cp: generation_checkpoint,
             max_ts_ms: generation_checkpoint * 1_000,
             generation_checkpoint,
             checkpoint_span: CheckpointSpan::single(generation_checkpoint),
@@ -323,7 +336,7 @@ mod tests {
 
         let mut expected_span = CheckpointSpan::single(1);
         expected_span.include(10);
-        let (_, checkpoint_span) = make_entries(&chunk.rows, "bitmap");
+        let (_, checkpoint_span) = make_entries(&chunk.rows, "bitmap", BitmapSchema::V2);
         assert_eq!(checkpoint_span, expected_span);
 
         let flushed = rows_flushed_by_generation(chunk.rows);
@@ -368,23 +381,26 @@ mod tests {
         assert_eq!(attempt.failed.len(), 2);
     }
 
+    /// The cell timestamp encoding is persisted: rows written by every deployed version must keep
+    /// sorting by checkpoint.
     #[test]
-    fn row_timestamp_becomes_bigtable_cell_version() {
+    fn row_checkpoint_sets_bigtable_cell_timestamp() {
         let rows = vec![Row {
             row_key: Bytes::from_static(b"a"),
             serialized: Bytes::from_static(b"bitmap"),
-            max_ts_ms: 123,
+            max_cp: 123,
+            max_ts_ms: 456,
             generation_checkpoint: 1,
             checkpoint_span: CheckpointSpan::single(1),
         }];
 
-        let (entries, checkpoint_span) = make_entries(&rows, "bitmap");
+        let (entries, checkpoint_span) = make_entries(&rows, "bitmap", BitmapSchema::V2);
 
         let cell = match &entries[0].mutations[0].mutation {
             Some(mutation::Mutation::SetCell(cell)) => cell,
             other => panic!("expected SetCell mutation, got {other:?}"),
         };
-        assert_eq!(cell.timestamp_micros, 123_000);
+        assert_eq!(cell.timestamp_micros, ((1 << 42) + 123) * 1000);
         assert_eq!(cell.value, Bytes::from_static(b"bitmap"));
         assert_eq!(checkpoint_span, CheckpointSpan::single(1));
     }

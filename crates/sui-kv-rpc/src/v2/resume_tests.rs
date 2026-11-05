@@ -128,6 +128,8 @@ const DENSE_EVENTS: [usize; 15] = [0, 0, 2, 1, 0, 1, 2, 0, 1, 0, 2, 0, 1, 0, 0];
 
 const EVENT_BUCKET: u64 = tables::event_bitmap_index::BUCKET_SIZE;
 const TX_BUCKET: u64 = tables::transaction_bitmap_index::BUCKET_SIZE;
+/// The bitmap tables these tests write and the List APIs read.
+const BITMAP_SCHEMA: tables::BitmapSchema = tables::BitmapSchema::V2;
 /// Delay before each row of every mock `ReadRows` response.
 const READ_LATENCY: Duration = Duration::from_millis(1);
 
@@ -323,12 +325,12 @@ async fn write_bitmaps(
     let dimension_key = encode_dimension_key(IndexDimension::Sender, sender.as_ref());
     for (bucket, bitmap) in tx_bitmaps {
         let key = tables::transaction_bitmap_index::encode_row_key(
-            tables::transaction_bitmap_index::SCHEMA_VERSION,
+            BITMAP_SCHEMA,
             &dimension_key,
             *bucket,
         );
         mock.insert_row(
-            tables::transaction_bitmap_index::NAME,
+            tables::transaction_bitmap_index::table_name(BITMAP_SCHEMA),
             key,
             [(
                 tables::transaction_bitmap_index::col::BITMAP,
@@ -338,13 +340,10 @@ async fn write_bitmaps(
         .await;
     }
     for (bucket, bitmap) in event_bitmaps {
-        let key = tables::event_bitmap_index::encode_row_key(
-            tables::event_bitmap_index::SCHEMA_VERSION,
-            &dimension_key,
-            *bucket,
-        );
+        let key =
+            tables::event_bitmap_index::encode_row_key(BITMAP_SCHEMA, &dimension_key, *bucket);
         mock.insert_row(
-            tables::event_bitmap_index::NAME,
+            tables::event_bitmap_index::table_name(BITMAP_SCHEMA),
             key,
             [(tables::event_bitmap_index::col::BITMAP, serialized(bitmap))],
         )
@@ -422,6 +421,7 @@ async fn context(
         bitmap_drain_probe_rows: None,
         watermark_beacon_buckets: Some(limits.beacon_buckets),
         max_bitmap_filter_literals: Some(2),
+        bitmap_schema: Some(BITMAP_SCHEMA),
     };
     let ctx = QueryContext::new(
         client,

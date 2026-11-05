@@ -40,21 +40,52 @@ pub const FAMILY: &str = "sui";
 /// Default column qualifier (empty string) used by single-column tables.
 pub const DEFAULT_COLUMN: &str = "";
 
+/// Row layout of a bitmap index table: its row-key format and how its cells are timestamped.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum BitmapSchema {
+    /// The `transaction_bitmap_index` and `event_bitmap_index` tables. Row keys start with
+    /// `v1#`, and a cell's timestamp is the timestamp of the last checkpoint that added a bit to
+    /// the row. Checkpoints can share a timestamp, so when two writes of a row land out of order,
+    /// the row can keep the older snapshot.
+    V1,
+    /// The `transaction_bitmap_index_v2` and `event_bitmap_index_v2` tables. Row keys have no
+    /// version prefix, and a cell's timestamp is `2^42 + checkpoint` milliseconds, where
+    /// `checkpoint` is the sequence number of the last checkpoint that added a bit to the row.
+    V2,
+}
+
+impl BitmapSchema {
+    /// Cell timestamp, in milliseconds, of a bitmap whose last bit came from `checkpoint`, which
+    /// has timestamp `checkpoint_timestamp_ms`.
+    pub(crate) fn cell_timestamp_ms(self, checkpoint: u64, checkpoint_timestamp_ms: u64) -> u64 {
+        match self {
+            Self::V1 => checkpoint_timestamp_ms,
+            Self::V2 => checkpoint_cell_timestamp_ms(checkpoint),
+        }
+    }
+}
+
+/// Row-key prefix of [`BitmapSchema::V1`] tables.
+const V1_BITMAP_ROW_KEY_PREFIX: &[u8] = b"v1#";
+
 /// Shared row-key encoder for bitmap indexes.
 ///
-/// Format: `v{version}#{dimension_key}#{bucket_id}`, where `bucket_id` is
-/// zero-padded to the table's configured width so bucket rows for a dimension
-/// sort lexicographically by bucket.
+/// Format: `{prefix}{dimension_key}#{bucket_id}`, where the prefix is `v1#` for
+/// [`BitmapSchema::V1`] and empty for [`BitmapSchema::V2`], and `bucket_id` is zero-padded to
+/// the table's configured width so bucket rows for a dimension sort lexicographically by bucket.
 pub(crate) fn encode_bitmap_row_key_into(
     out: &mut Vec<u8>,
-    version: u32,
+    schema: BitmapSchema,
     bucket_id_width: usize,
     dimension_key: &[u8],
     bucket_id: u64,
 ) {
     encode_bitmap_row_key_with_dimension(
         out,
-        version,
+        schema,
         bucket_id_width,
         dimension_key.len(),
         bucket_id,
@@ -66,7 +97,7 @@ pub(crate) fn encode_bitmap_row_key_into(
 
 pub(crate) fn encode_bitmap_row_key_parts_into(
     out: &mut Vec<u8>,
-    version: u32,
+    schema: BitmapSchema,
     bucket_id_width: usize,
     dimension_tag: u8,
     dimension_value: &[u8],
@@ -74,7 +105,7 @@ pub(crate) fn encode_bitmap_row_key_parts_into(
 ) {
     encode_bitmap_row_key_with_dimension(
         out,
-        version,
+        schema,
         bucket_id_width,
         1 + dimension_value.len(),
         bucket_id,
@@ -87,19 +118,38 @@ pub(crate) fn encode_bitmap_row_key_parts_into(
 
 fn encode_bitmap_row_key_with_dimension(
     out: &mut Vec<u8>,
-    version: u32,
+    schema: BitmapSchema,
     bucket_id_width: usize,
     dimension_len: usize,
     bucket_id: u64,
     write_dimension: impl FnOnce(&mut Vec<u8>),
 ) {
     out.clear();
-    // u32 versions are at most 10 decimal digits; u64 buckets are at most 20.
-    out.reserve(2 + 10 + dimension_len + 1 + bucket_id_width.max(20));
-    write!(out, "v{version}#").expect("writing to Vec cannot fail");
+    // u64 buckets are at most 20 decimal digits.
+    out.reserve(V1_BITMAP_ROW_KEY_PREFIX.len() + dimension_len + 1 + bucket_id_width.max(20));
+    if schema == BitmapSchema::V1 {
+        out.extend_from_slice(V1_BITMAP_ROW_KEY_PREFIX);
+    }
     write_dimension(out);
     write!(out, "#{:0width$}", bucket_id, width = bucket_id_width)
         .expect("writing to Vec cannot fail");
+}
+
+/// Start of the cell timestamps written by [`checkpoint_cell_timestamp_ms`], in milliseconds.
+/// 2^42 ms is past every checkpoint timestamp and the server's time until the year 2109, so
+/// these cells sort above any cell timestamped with a checkpoint's time or the server's time.
+const CHECKPOINT_CELL_TIMESTAMP_BASE_MS: u64 = 1 << 42;
+
+/// Cell timestamp, in milliseconds, for a value that reflects every checkpoint through
+/// `checkpoint`.
+///
+/// Readers take a column's newest cell, and several writers index the same checkpoints. A cell
+/// rewritten with a value that grows as checkpoints are indexed, like a bitmap bucket, must
+/// therefore order its versions by the checkpoint each reflects. Checkpoint timestamps cannot:
+/// checkpoints split from one consensus commit share a timestamp, and of two writes at one
+/// timestamp the later one wins, whichever checkpoint it reflects.
+pub(crate) fn checkpoint_cell_timestamp_ms(checkpoint: u64) -> u64 {
+    CHECKPOINT_CELL_TIMESTAMP_BASE_MS + checkpoint
 }
 
 /// Build an Entry from cells. Accepts any iterator to avoid intermediate allocations.

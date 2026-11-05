@@ -334,6 +334,7 @@ impl BigTableStoreRuntimeBuilder {
             pipeline: P::NAME,
             table: P::TABLE,
             column: P::COLUMN,
+            schema: P::SCHEMA,
             is_sealed: P::is_sealed,
             initial_watermarks: self.store.bitmap_initial_watermarks(),
             client: self.store.client.clone(),

@@ -10,6 +10,8 @@
 
 use std::ops::Range;
 
+use crate::tables;
+use crate::tables::BitmapSchema;
 use crate::tables::event_bitmap_index;
 use crate::tables::transaction_bitmap_index;
 use anyhow::Context;
@@ -27,48 +29,52 @@ use super::BigTableClient;
 #[derive(Clone, Copy)]
 pub struct BitmapIndexSpec {
     pub table_name: &'static str,
-    pub schema_version: u32,
+    pub schema: BitmapSchema,
     pub bucket_size: u64,
     pub bucket_id_width: usize,
     pub bitmap_column: &'static str,
 }
 
 impl BitmapIndexSpec {
-    pub const fn tx() -> Self {
+    /// The transaction bitmap index table of `schema`.
+    pub const fn tx(schema: BitmapSchema) -> Self {
         Self {
-            table_name: transaction_bitmap_index::NAME,
-            schema_version: transaction_bitmap_index::SCHEMA_VERSION,
+            table_name: transaction_bitmap_index::table_name(schema),
+            schema,
             bucket_size: transaction_bitmap_index::BUCKET_SIZE,
-            bucket_id_width: 10,
+            bucket_id_width: transaction_bitmap_index::BUCKET_ID_WIDTH,
             bitmap_column: transaction_bitmap_index::col::BITMAP,
         }
     }
 
-    pub const fn event() -> Self {
+    /// The event bitmap index table of `schema`.
+    pub const fn event(schema: BitmapSchema) -> Self {
         Self {
-            table_name: event_bitmap_index::NAME,
-            schema_version: event_bitmap_index::SCHEMA_VERSION,
+            table_name: event_bitmap_index::table_name(schema),
+            schema,
             bucket_size: event_bitmap_index::BUCKET_SIZE,
-            bucket_id_width: 12,
+            bucket_id_width: event_bitmap_index::BUCKET_ID_WIDTH,
             bitmap_column: event_bitmap_index::col::BITMAP,
         }
     }
 
+    fn is_transaction_index(&self) -> bool {
+        matches!(
+            self.table_name,
+            transaction_bitmap_index::NAME | transaction_bitmap_index::NAME_V2
+        )
+    }
+
     fn encode_row_key(&self, dimension_key: &[u8], bucket_id: u64) -> Vec<u8> {
-        // Dispatch on `table_name` rather than `bucket_id_width`: cp- and
-        // tx-bitmap rows share the same width, so width alone isn't a unique
-        // discriminant.
-        match self.table_name {
-            transaction_bitmap_index::NAME => transaction_bitmap_index::encode_row_key(
-                self.schema_version,
-                dimension_key,
-                bucket_id,
-            ),
-            event_bitmap_index::NAME => {
-                event_bitmap_index::encode_row_key(self.schema_version, dimension_key, bucket_id)
-            }
-            name => panic!("unsupported bitmap table {name}"),
-        }
+        let mut key = Vec::new();
+        tables::encode_bitmap_row_key_into(
+            &mut key,
+            self.schema,
+            self.bucket_id_width,
+            dimension_key,
+            bucket_id,
+        );
+        key
     }
 }
 
@@ -95,7 +101,7 @@ impl BitmapBucketSource for BigTableBitmapSource {
         // synthesized here rather than stored; see `IndexDimension::TxUniverse`.
         // Gated on the tx table: the key is only ever produced by the tx filter
         // layer, and in event-space a dense universe would be semantically wrong.
-        if self.spec.table_name == transaction_bitmap_index::NAME
+        if self.spec.is_transaction_index()
             && dimension_key.first() == Some(&IndexDimension::TxUniverse.tag_byte())
         {
             return futures::stream::iter(

@@ -7,14 +7,18 @@ use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_inverted_index::IndexDimension;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::tables::BitmapSchema;
+
 mod event_bitmap;
 mod handler;
 mod transaction_bitmap;
 
 pub use event_bitmap::EventBitmapProcessor;
+pub use event_bitmap::EventBitmapV2Processor;
 pub(crate) use handler::BitmapBatch;
 pub use handler::BitmapIndexHandler;
 pub use transaction_bitmap::TransactionBitmapProcessor;
+pub use transaction_bitmap::TransactionBitmapV2Processor;
 
 /// Bits contributed to one bitmap-index row for a single framework commit.
 pub struct BitmapIndexValue {
@@ -45,8 +49,8 @@ pub trait BitmapIndexProcessor {
     const TABLE: &'static str;
     /// The column qualifier that holds the serialized bitmap.
     const COLUMN: &'static str;
-    /// Row-key schema version prefix.
-    const SCHEMA_VERSION: u32;
+    /// Row layout of `TABLE`.
+    const SCHEMA: BitmapSchema;
     /// Decimal width used to zero-pad bucket ids in row keys.
     const BUCKET_ID_WIDTH: usize;
 
