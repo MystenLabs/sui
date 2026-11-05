@@ -379,7 +379,7 @@ pub(crate) async fn list_transactions(
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
-                        Some(frontier),
+                        frontier,
                     );
                     let response = watermark_response(watermark);
                     ctx.inc_stream_watermark_frames();
@@ -438,22 +438,18 @@ fn transaction_frontier_watermark(
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: u64,
-    frontier: Option<LedgerPoint>,
+    frontier: LedgerPoint,
 ) -> Watermark {
-    // Unplaced only at the ascending genesis frontier.
-    let cursor_position = frontier.map_or(LedgerPoint::GENESIS, |frontier| {
-        *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
-            *covered_checkpoint_bound,
-            frontier.checkpoint,
-            entry_checkpoint,
-            options,
-        );
-        frontier
-    });
+    *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
+        *covered_checkpoint_bound,
+        frontier.checkpoint,
+        entry_checkpoint,
+        options,
+    );
     boundary_watermark(
         Position::Transactions {
             tx_seq: position,
-            public_position: cursor_position,
+            public_position: frontier,
         },
         *covered_checkpoint_bound,
     )
@@ -997,79 +993,64 @@ mod tests {
 
     #[test]
     fn scan_limit_terminal_frames_use_transaction_domain_in_both_directions() {
-        // The expected point is the placing row's, or, at the ascending genesis frontier no row
-        // places, genesis. A frontier past the entry checkpoint claims the checkpoint before its
-        // own in scan direction.
-        for (
-            direction,
-            position,
-            checkpoint,
-            entry_checkpoint,
-            initial_proof,
-            expected_point,
-            expected_proof,
-        ) in [
+        // The frontier is the placing row's point, or genesis at the ascending genesis frontier
+        // no row places, and the cursor carries it. A frontier past the entry checkpoint claims
+        // the checkpoint before its own in scan direction.
+        for (direction, position, frontier, entry_checkpoint, initial_proof, expected_proof) in [
             (
                 ScanDirection::Ascending,
                 0,
-                None,
+                LedgerPoint::GENESIS,
                 0,
                 None,
-                LedgerPoint::GENESIS,
                 None,
             ),
             (
                 ScanDirection::Ascending,
                 50,
-                Some(10),
+                LedgerPoint::transaction(10, 7),
                 10,
                 None,
-                LedgerPoint::transaction(10, 7),
                 None,
             ),
             (
                 ScanDirection::Descending,
                 50,
-                Some(10),
+                LedgerPoint::transaction(10, 7),
                 10,
                 None,
-                LedgerPoint::transaction(10, 7),
                 None,
             ),
             (
                 ScanDirection::Ascending,
                 50,
-                Some(12),
+                LedgerPoint::transaction(12, 7),
                 10,
                 None,
-                LedgerPoint::transaction(12, 7),
                 Some(11),
             ),
             (
                 ScanDirection::Descending,
                 50,
-                Some(8),
+                LedgerPoint::transaction(8, 7),
                 10,
                 None,
-                LedgerPoint::transaction(8, 7),
                 Some(9),
             ),
             (
                 ScanDirection::Ascending,
                 50,
-                Some(10),
+                LedgerPoint::transaction(10, 7),
                 10,
                 Some(15),
-                LedgerPoint::transaction(10, 7),
                 Some(15),
             ),
             (
                 ScanDirection::Descending,
                 50,
-                Some(10),
+                LedgerPoint::transaction(10, 7),
                 10,
                 Some(5),
-                LedgerPoint::transaction(10, 7),
                 Some(5),
             ),
         ] {
@@ -1081,8 +1062,6 @@ mod tests {
             let options =
                 QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
             let mut covered = initial_proof;
-            // The placing row's point, distinct from the cursor's coordinates.
-            let frontier = checkpoint.map(|checkpoint| LedgerPoint::transaction(checkpoint, 7));
             let response = terminal_response_from_scan_stop(
                 ResolvedScanStop::ScanLimit { position, frontier },
                 &options,
@@ -1097,10 +1076,9 @@ mod tests {
                 Some(QueryEndReason::ScanLimit)
             );
             let watermark = response.watermark.expect("terminal watermark");
-            // The cursor carries the frame's point.
             let cursor = Position::Transactions {
                 tx_seq: position,
-                public_position: expected_point,
+                public_position: frontier,
             };
             assert_eq!(
                 CursorToken::decode(watermark.cursor.as_deref().expect("cursor")).unwrap(),
@@ -1108,7 +1086,7 @@ mod tests {
             );
             assert_eq!(
                 watermark.cursor_position,
-                Some(expected_point.to_ledger_position(&cursor))
+                Some(frontier.to_ledger_position(&cursor))
             );
             assert_eq!(
                 watermark.checkpoint, expected_proof,

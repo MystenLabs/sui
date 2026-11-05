@@ -1176,20 +1176,15 @@ where
 /// Terminal outcome from [`resolve_scan_watermarks`].
 ///
 /// A scan limit always carries the authoritative terminal position in the same
-/// domain as ordinary watermark frames. Its placement is `None` only at the
-/// ascending genesis frontier, which covers no checkpoint and lies at
-/// [`LedgerPoint::GENESIS`].
+/// domain as ordinary watermark frames, and its frontier in ledger coordinates.
 #[derive(Debug)]
 pub(crate) enum ResolvedScanStop<P> {
-    ScanLimit {
-        position: P,
-        frontier: Option<LedgerPoint>,
-    },
+    ScanLimit { position: P, frontier: LedgerPoint },
     Cancelled,
     Fault(anyhow::Error),
 }
 impl<P> ResolvedScanStop<P> {
-    pub(crate) fn into_scan_limit(self) -> Result<(P, Option<LedgerPoint>), RpcError> {
+    pub(crate) fn into_scan_limit(self) -> Result<(P, LedgerPoint), RpcError> {
         match self {
             Self::ScanLimit { position, frontier } => Ok((position, frontier)),
             Self::Cancelled => Err(RpcError::new(
@@ -1214,9 +1209,8 @@ impl<P> ResolvedScanStop<P> {
 /// `QueryContext::watermark_pacing`). So every watermark that reaches this
 /// stage is resolved, in arrival order, each by one `tx_cp_resolve` lookup
 /// that reads the `tx_seq_digest` row placing it (its checkpoint and its
-/// position in ledger coordinates), and emitted as a beacon when the lookup
-/// places it in a checkpoint (every lookup but the ascending genesis
-/// frontier's, which reads nothing). Items keep their order relative to
+/// position in ledger coordinates; the ascending genesis frontier reads
+/// nothing), and emitted as a beacon. Items keep their order relative to
 /// watermarks: an item passes through at once unless a lookup for an earlier
 /// watermark is still running.
 ///
@@ -1228,8 +1222,7 @@ impl<P> ResolvedScanStop<P> {
 /// Terminations:
 /// - Clean EOF: nothing more is looked up.
 /// - Scan limit: resolve the authoritative frontier, reusing the most recent
-///   completed lookup (including a completed `None`) when it is for the same
-///   position.
+///   completed lookup when it is for the same position.
 /// - Cancellation or fault: propagated as is; any watermark emitted before it
 ///   has already been resolved into the client's best resume point.
 ///
@@ -1244,7 +1237,7 @@ where
     T: Send + 'static,
     P: Copy + Eq + Send + 'static,
     F: Fn(P) -> Fut + Send + 'static,
-    Fut: Future<Output = Result<Option<LedgerPoint>, ScanStop>> + Send,
+    Fut: Future<Output = Result<LedgerPoint, ScanStop>> + Send,
     C: Fn(u64) -> P + Send + 'static,
 {
     fn resolver_error<P>(error: ScanStop) -> ResolvedScanStop<P> {
@@ -1260,8 +1253,8 @@ where
 
     async_stream::try_stream! {
         let mut upstream = std::pin::pin!(upstream);
-        // Most recent completed lookup, including a completed `None`.
-        let mut completed: Option<(P, Option<LedgerPoint>)> = None;
+        // Most recent completed lookup.
+        let mut completed: Option<(P, LedgerPoint)> = None;
 
         while let Some(next) = upstream.next().await {
             match next {
@@ -1269,16 +1262,14 @@ where
                     yield ResolvedWatermarked::Item(item);
                 }
                 Ok(Watermarked::Watermark(position)) => {
-                    let placed = resolver(position).await.map_err(resolver_error)?;
-                    completed = Some((position, placed));
-                    if let Some(frontier) = placed {
-                        yield ResolvedWatermarked::Watermark { position, frontier };
-                    }
+                    let frontier = resolver(position).await.map_err(resolver_error)?;
+                    completed = Some((position, frontier));
+                    yield ResolvedWatermarked::Watermark { position, frontier };
                 }
                 Err(ScanStop::ScanLimit { scan_frontier }) => {
                     let position = scan_frontier_to_position(scan_frontier);
                     let frontier = match completed {
-                        Some((resolved, placed)) if resolved == position => placed,
+                        Some((resolved, frontier)) if resolved == position => frontier,
                         _ => resolver(position).await.map_err(resolver_error)?,
                     };
                     Err(ResolvedScanStop::ScanLimit { position, frontier })?;
@@ -3295,8 +3286,8 @@ mod tests {
     // ---- resolve_scan_watermarks ----
 
     /// A lookup's reply as the test gives it: the checkpoint of the placing
-    /// row, or `None` for a frontier no row places.
-    type LookupReply = Result<Option<u64>, ScanStop>;
+    /// row.
+    type LookupReply = Result<u64, ScanStop>;
 
     /// The point the harness resolver returns for a row in `checkpoint`,
     /// derived from the checkpoint, so the frames can check the resolver's
@@ -3339,7 +3330,7 @@ mod tests {
     enum Frame {
         Item(u64),
         Beacon(u64, u64),
-        ScanLimit(u64, Option<u64>),
+        ScanLimit(u64, u64),
         Cancelled,
         Fault(String),
     }
@@ -3380,7 +3371,7 @@ mod tests {
                     };
                     let result = response.await.expect("the test replies to every lookup");
                     unfinished.armed = false;
-                    result.map(|checkpoint| checkpoint.map(placed_in))
+                    result.map(placed_in)
                 }
             };
             let mut resolved = resolve_scan_watermarks(upstream, resolver, std::convert::identity);
@@ -3393,7 +3384,7 @@ mod tests {
                             Frame::Beacon(position, placed_checkpoint(frontier))
                         }
                         Err(ResolvedScanStop::ScanLimit { position, frontier }) => {
-                            Frame::ScanLimit(position, frontier.map(placed_checkpoint))
+                            Frame::ScanLimit(position, placed_checkpoint(frontier))
                         }
                         Err(ResolvedScanStop::Cancelled) => Frame::Cancelled,
                         Err(ResolvedScanStop::Fault(error)) => Frame::Fault(error.to_string()),
@@ -3511,17 +3502,17 @@ mod tests {
         assert_eq!(h.frames(), vec![Frame::Item(1)]);
         assert_eq!(h.lookup_positions(), vec![5]);
 
-        h.reply(0, Ok(Some(50)));
+        h.reply(0, Ok(50));
         h.settle().await;
         assert_eq!(h.frames(), vec![Frame::Beacon(5, 50)]);
         assert_eq!(h.lookup_positions(), vec![5, 7]);
 
-        h.reply(1, Ok(Some(70)));
+        h.reply(1, Ok(70));
         h.settle().await;
         assert_eq!(h.frames(), vec![Frame::Beacon(7, 70), Frame::Item(9)]);
         assert_eq!(h.lookup_positions(), vec![5, 7, 11]);
 
-        h.reply(2, Ok(Some(110)));
+        h.reply(2, Ok(110));
         h.close();
         h.settle().await;
         assert_eq!(h.frames(), vec![Frame::Beacon(11, 110)]);
@@ -3544,31 +3535,10 @@ mod tests {
         h.settle().await;
         assert!(h.frames().is_empty(), "the item waits for the lookup");
 
-        h.reply(0, Ok(Some(50)));
+        h.reply(0, Ok(50));
         h.settle().await;
         assert_eq!(h.frames(), vec![Frame::Beacon(5, 50), Frame::Item(9)]);
         assert!(!h.any_lookup_dropped_unfinished());
-    }
-
-    /// A `None` resolution emits no frame, and the stream carries on with the
-    /// next watermark and item.
-    #[tokio::test]
-    async fn none_resolution_emits_no_frame() {
-        let mut h = ResolverHarness::new();
-        h.watermark(0);
-        h.watermark(5);
-        h.item(9);
-        h.settle().await;
-        assert_eq!(h.lookup_positions(), vec![0]);
-
-        h.reply(0, Ok(None));
-        h.settle().await;
-        assert!(h.frames().is_empty());
-        assert_eq!(h.lookup_positions(), vec![0, 5]);
-
-        h.reply(1, Ok(Some(50)));
-        h.settle().await;
-        assert_eq!(h.frames(), vec![Frame::Beacon(5, 50), Frame::Item(9)]);
     }
 
     /// A clean EOF ends the stream without a lookup of its own: only the
@@ -3582,7 +3552,7 @@ mod tests {
         h.settle().await;
         assert_eq!(h.lookup_positions(), vec![5]);
 
-        h.reply(0, Ok(Some(50)));
+        h.reply(0, Ok(50));
         h.settle().await;
         assert_eq!(h.frames(), vec![Frame::Item(1), Frame::Beacon(5, 50)]);
         assert!(h.ended());
@@ -3596,28 +3566,13 @@ mod tests {
         let mut h = ResolverHarness::new();
         h.watermark(7);
         h.settle().await;
-        h.reply(0, Ok(Some(70)));
+        h.reply(0, Ok(70));
         h.settle().await;
         assert_eq!(h.frames(), vec![Frame::Beacon(7, 70)]);
 
         h.scan_limit(7);
         h.settle().await;
-        assert_eq!(h.frames(), vec![Frame::ScanLimit(7, Some(70))]);
-        assert!(h.ended());
-        assert_eq!(h.lookup_positions(), vec![7]);
-    }
-
-    /// A completed `None` lookup is reused too: the scan limit at the same
-    /// position keeps `None` without a second lookup.
-    #[tokio::test]
-    async fn scan_limit_reuses_completed_none_lookup() {
-        let mut h = ResolverHarness::new();
-        h.watermark(7);
-        h.scan_limit(7);
-        h.settle().await;
-        h.reply(0, Ok(None));
-        h.settle().await;
-        assert_eq!(h.frames(), vec![Frame::ScanLimit(7, None)]);
+        assert_eq!(h.frames(), vec![Frame::ScanLimit(7, 70)]);
         assert!(h.ended());
         assert_eq!(h.lookup_positions(), vec![7]);
     }
@@ -3633,34 +3588,22 @@ mod tests {
         h.settle().await;
         assert_eq!(h.lookup_positions(), vec![5]);
 
-        h.reply(0, Ok(Some(50)));
+        h.reply(0, Ok(50));
         h.settle().await;
         assert_eq!(h.lookup_positions(), vec![5, 8]);
 
-        h.reply(1, Ok(Some(80)));
+        h.reply(1, Ok(80));
         h.settle().await;
         assert_eq!(
             h.frames(),
             vec![
                 Frame::Item(1),
                 Frame::Beacon(5, 50),
-                Frame::ScanLimit(8, Some(80))
+                Frame::ScanLimit(8, 80)
             ]
         );
         assert!(h.ended());
         assert_eq!(h.lookup_positions(), vec![5, 8]);
-    }
-
-    /// An unplaced frontier, the ascending genesis frontier, is a successful
-    /// resolution. Preserve `Ok(None)` so the endpoint places it at genesis.
-    #[tokio::test]
-    async fn scan_limit_preserves_successful_none_resolution() {
-        let mut h = ResolverHarness::new();
-        h.scan_limit(0);
-        h.settle().await;
-        h.reply(0, Ok(None));
-        h.settle().await;
-        assert_eq!(h.frames(), vec![Frame::ScanLimit(0, None)]);
     }
 
     /// A failed lookup ends the stream with that failure; frames queued
@@ -3688,7 +3631,7 @@ mod tests {
         h.settle().await;
         assert_eq!(h.lookup_positions(), vec![5]);
 
-        h.reply(0, Ok(Some(50)));
+        h.reply(0, Ok(50));
         h.settle().await;
         assert_eq!(
             h.frames(),
@@ -3711,7 +3654,7 @@ mod tests {
         h.settle().await;
         assert_eq!(h.lookup_positions(), vec![5]);
 
-        h.reply(0, Ok(Some(50)));
+        h.reply(0, Ok(50));
         h.settle().await;
         assert_eq!(h.frames(), vec![Frame::Beacon(5, 50), Frame::Cancelled]);
         assert!(h.ended());

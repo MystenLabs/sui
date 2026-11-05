@@ -334,7 +334,7 @@ pub(crate) async fn list_events(
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
-                        Some(frontier),
+                        frontier,
                     );
                     let response = watermark_response(watermark);
                     ctx.inc_stream_watermark_frames();
@@ -668,23 +668,19 @@ fn event_frontier_watermark(
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: IntraTxCoordinate,
-    frontier: Option<LedgerPoint>,
+    frontier: LedgerPoint,
 ) -> Watermark {
-    // Unplaced only at the ascending genesis frontier.
-    let cursor_position = frontier.map_or(LedgerPoint::GENESIS, |frontier| {
-        *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
-            *covered_checkpoint_bound,
-            frontier.checkpoint,
-            entry_checkpoint,
-            options,
-        );
-        frontier
-    });
+    *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
+        *covered_checkpoint_bound,
+        frontier.checkpoint,
+        entry_checkpoint,
+        options,
+    );
     boundary_watermark(
         Position::Events {
             tx_seq: position.tx_seq,
             event_index: position.index,
-            public_position: cursor_position,
+            public_position: frontier,
         },
         *covered_checkpoint_bound,
     )
