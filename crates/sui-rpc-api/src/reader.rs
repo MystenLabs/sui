@@ -321,13 +321,13 @@ impl StateReader {
         ))
     }
 
-    /// The lower bound for checkpoint-pinned reads: the checkpoint just below
-    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`], or the lowest checkpoint at
-    /// which the rpc indexes' history is exact if that is higher (see
-    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`]). The lowest available
+    /// The lower bound for checkpoint-pinned reads: the checkpoint just below the higher of
+    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`] and
+    /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]. The lowest available
     /// checkpoint's input objects are available, and they are the object state at the end of the
     /// checkpoint before: pruning through a checkpoint deletes only the object versions and index
-    /// rows replaced at or before it.
+    /// rows replaced at or before it. Likewise, index rows loaded without history hold the state
+    /// at the end of the checkpoint before the first one with index history.
     ///
     /// Read it after the reads, and answer every read at a checkpoint below it as pruned,
     /// whatever the read returned. Pruning can raise the floor while the reads run, and a read
@@ -337,11 +337,11 @@ impl StateReader {
     /// floor, so a read at a checkpoint this bound accepts saw no pruned data.
     pub fn at_checkpoint_lower_bound(&self) -> Result<AtCheckpointLowerBound, crate::RpcError> {
         let lowest_available_objects = self.inner().get_lowest_available_checkpoint_objects()?;
-        let pinned_read_floor = self.inner().get_lowest_checkpoint_for_pinned_reads()?;
+        let lowest_with_index_history = self.inner().get_lowest_checkpoint_with_index_history()?;
         Ok(AtCheckpointLowerBound {
             lowest_intact: lowest_available_objects
-                .saturating_sub(1)
-                .max(pinned_read_floor),
+                .max(lowest_with_index_history)
+                .saturating_sub(1),
         })
     }
 }
@@ -384,8 +384,8 @@ pub fn checkpoint_not_yet_indexed_error(checkpoint: u64, highest_indexed: u64) -
 /// See [`StateReader::at_checkpoint_lower_bound`].
 #[derive(Clone, Copy, Debug)]
 pub struct AtCheckpointLowerBound {
-    /// The lowest checkpoint whose object state is intact, raised to
-    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`].
+    /// The lowest checkpoint whose object state is intact and covered by the rpc indexes'
+    /// history.
     lowest_intact: u64,
 }
 

@@ -700,19 +700,20 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
         true
     }
 
-    /// The lowest checkpoint at which checkpoint-pinned reads of the rpc
-    /// indexes are exact.
+    /// The first checkpoint the rpc indexes have history for.
     ///
-    /// Rows a store loads from a live-object snapshot (an object's restore
-    /// floor, or a package version with no publish checkpoint) stand for
-    /// state that began at an unknown point before the history the indexes
-    /// hold, so a pinned read below where that history begins can resolve to
-    /// them and be wrong. A node that backfills history down to its lowest
-    /// available checkpoint needs no extra bound, since that floor already
-    /// rejects such reads; this defaults to `0` for it and for indexes built
-    /// from genesis. A store that never backfills, such as a fork seeded at a
-    /// checkpoint, reports where its history begins.
-    fn get_lowest_checkpoint_for_pinned_reads(&self) -> Result<CheckpointSequenceNumber> {
+    /// The indexes record each change made at or above this checkpoint with the checkpoint that
+    /// made it. Rows a store loads from a live-object snapshot instead (an object's restore
+    /// floor, or a package version with no publish checkpoint) hold the state at the end of the
+    /// checkpoint before this one, with no record of when that state began. So a listing of
+    /// indexed changes is complete only from this checkpoint, and a read of the indexes as of a
+    /// checkpoint is exact only from the checkpoint before it.
+    ///
+    /// Defaults to `0`, for indexes built from genesis and for a node that backfills index
+    /// history down to its lowest available checkpoint: the availability floors already bound
+    /// reads there. A store that never backfills, such as a fork seeded at a checkpoint, reports
+    /// the first checkpoint it indexed itself.
+    fn get_lowest_checkpoint_with_index_history(&self) -> Result<CheckpointSequenceNumber> {
         Ok(0)
     }
 
