@@ -517,20 +517,22 @@ pub fn history_seed_pending(db: &Db) -> anyhow::Result<bool> {
 /// and `package_versions`) are still backfilling below their restore anchor `T`.
 ///
 /// When a prefix of the chain has been pruned, the restore loads their floor
-/// rows at `T` and the history backfill then fills in `(L, T]`. Until a floor
+/// rows at `T` and the history backfill then fills in `[L, T]`. Until a floor
 /// pipeline has committed `T`, a checkpoint-pinned read at a checkpoint the
 /// backfill has already passed can still be wrong: an object or package version
 /// whose first change in the window comes later than the backfill has reached
 /// resolves to its floor row at `T`, as if nothing had changed since. Lowering
-/// the read's upper bound does not help, because any checkpoint in `[L, T]` can
-/// be affected, so checkpoint-pinned reads must wait for this to be `false`.
+/// the read's upper bound does not help, because any checkpoint in `[L - 1, T]`
+/// can be affected (a read at `L - 1` is served, since the state at its end is
+/// the input state of `L`), so checkpoint-pinned reads must wait for this to
+/// be `false`.
 ///
 /// A pipeline that was never restored has no floor rows and does not count. A
 /// restore that has not completed counts as pending.
 ///
 /// Between the restore's finalize, which stamps the floors' watermarks at `T`,
 /// and [`seed_history_cohort`], which rewinds them to `L - 1`, this returns
-/// `false` although nothing in `(L, T]` has been backfilled. That state is
+/// `false` although nothing in `[L, T]` has been backfilled. That state is
 /// never served: the embedded bootstrap runs both before it starts serving, and
 /// repairs a crash between them with the seed ([`history_seed_pending`]). In
 /// it, the other history pipelines have no watermark, so the indexed tip is
