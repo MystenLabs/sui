@@ -1,0 +1,79 @@
+# Throwaway smoke test for MystenLabs/sui#28586 (release integrity). Checks, on every runner the release
+# workflow uses, that actions/attest-build-provenance can sign and that the SHA256SUMS check behaves.
+# Triggered by a push to this branch (re-run from the Actions tab to trigger again). Delete the branch afterwards.
+name: Attest smoke test (release runners)
+
+on:
+  push:
+    branches: [jnaulty/attest-smoke]
+  workflow_dispatch:
+
+jobs:
+  attest-smoke:
+    name: Attest smoke (${{ matrix.os }})
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # Sigstore signing certificate
+      attestations: write # store the test attestation
+    strategy:
+      matrix:
+        os:
+          [
+            ubuntu-ghcloud,
+            ubuntu-arm64,
+            windows-ghcloud,
+            macos-latest-large,
+            macos-latest-xlarge
+          ]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Make a dummy archive
+        shell: bash
+        run: |
+          mkdir -p ./tmp/payload
+          echo "attest-smoke ${GITHUB_RUN_ID} ${{ matrix.os }}" > ./tmp/payload/README.txt
+          name="attest-smoke-${{ matrix.os }}-${GITHUB_RUN_ID}.tgz"
+          tar -czf "./tmp/${name}" -C ./tmp/payload README.txt
+          echo "archive=${name}" >> "$GITHUB_ENV"
+          ls -l ./tmp
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # pin@v4.2.2
+        with:
+          subject-path: ./tmp/${{ env.archive }}
+
+      - name: Verify the attestation with gh
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! command -v gh >/dev/null; then
+            echo "::warning::gh CLI not installed on ${{ matrix.os }}; attestation not verified here"
+            exit 0
+          fi
+          gh attestation verify "./tmp/${archive}" --repo "${GITHUB_REPOSITORY}"
+
+      - name: SHA256SUMS check (same logic as release.yml), positive and negative
+        shell: bash
+        run: |
+          cd ./tmp
+          sha256=sha256sum; command -v sha256sum >/dev/null || sha256="shasum -a 256"
+          echo "using: ${sha256}"
+          $sha256 "${archive}" > SHA256SUMS
+          cat SHA256SUMS
+          # positive: the line for this archive verifies
+          awk -v f="$archive" '$2 == f' SHA256SUMS | $sha256 -c -
+          # negative: a changed byte must fail
+          cp "${archive}" "${archive}.orig"
+          printf 'x' >> "${archive}"
+          if awk -v f="$archive" '$2 == f' SHA256SUMS | $sha256 -c - ; then
+            echo "::error::tampered archive passed the checksum check"; exit 1
+          fi
+          echo "tampered archive correctly rejected"
+          # missing entry: awk finds no line, which release.yml treats as 'build from source'
+          if [ -n "$(awk -v f="not-${archive}" '$2 == f' SHA256SUMS)" ]; then
+            echo "::error::unexpected match"; exit 1
+          fi
+          echo "missing entry correctly detected"
