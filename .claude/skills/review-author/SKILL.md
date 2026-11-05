@@ -210,6 +210,19 @@ locally, report each finding to the author, and wait until the author has accept
 each one. Apply the accepted fixes. Do not post the findings to the PR. `/send-pr` Step 4 performs
 this review.
 
+A `max` review can take hours, so run it once, as the last review before writing the tag. Review
+in two phases:
+
+1. Iterate with `/code-review high` on the full diff. Resolve its findings with the author, and
+   run it again after each round of fixes. Stop iterating when a `high` run returns no finding
+   that the author accepts.
+2. Run `/code-review max` once on the final diff. Resolve its findings with the author. If the
+   accepted fixes are small and limited to the findings, they do not need another `max` run.
+   If they change the design or add new code paths, go back to phase 1.
+
+Only the `max` run satisfies this step. Never write the review tag on the strength of a `high`
+run.
+
 The review must run on a model in this list, identified by model ID:
 
 ```
@@ -250,8 +263,8 @@ finding:
 ```
 
 `<model>` is the model ID that ran the review. `<sha>` is the full hash of the PR head commit that
-the review covered, after the push. If commits
-are added after the tag, review the new commits and update the tag to the new head.
+the review covered, after the push. If commits are added after the tag, review the new commits
+with the two phases in Step 3 and update the tag to the new head.
 
 Refresh the tags whenever the diff changes. If the new diff fits a higher tier, raise the tier and
 meet the new tier's requirements. If the PR gains ineligible files, tell the author.
