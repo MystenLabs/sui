@@ -4520,16 +4520,22 @@ mod tests {
         assert_eq!(captured_timestamp(), Some(Some(commit_timestamp_ms)));
     }
 
-    /// A transaction deferred for congestion carries the timestamp of the commit that schedules
-    /// it, so it expires if that commit is after its `max_timestamp`. With a zero congestion
-    /// budget, the second transaction on the object is deferred until its deferral limit, and a
-    /// later commit schedules it.
+    /// A transaction deferred for congestion before its `max_timestamp` and scheduled by a commit
+    /// after it fails with `TransactionExpired`. With a zero congestion budget, the first
+    /// transaction on the shared object is scheduled and the second is deferred. The rounds
+    /// skipped before the next commit clear the object's congestion debt, so that commit
+    /// schedules the second transaction.
     #[sim_test]
-    async fn test_deferred_transaction_carries_scheduling_commit_timestamp() {
+    async fn test_deferred_transaction_expires_at_scheduling_commit() {
+        use crate::consensus_adapter::consensus_tests::test_user_transaction_with_expiration;
         use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
+        use sui_types::effects::TransactionEffectsAPI as _;
+        use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
+        use sui_types::transaction::TransactionExpiration;
         telemetry_subscribers::init_for_testing();
 
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.set_enable_timestamp_transaction_expiration_for_testing(true);
         protocol_config.set_per_object_congestion_control_mode_for_testing(
             PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
                 target_utilization: 0,
@@ -4543,7 +4549,7 @@ mod tests {
                 observations_chunk_size: None,
             }),
         );
-        protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(5);
+        protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1_000);
 
         let (sender, keypair) = deterministic_random_account_key();
         let gas_objects: Vec<_> = (0..2)
@@ -4557,15 +4563,32 @@ mod tests {
             .with_protocol_config(protocol_config)
             .build()
             .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        // Commit timestamps are not allowed to precede the epoch start.
+        let epoch_start_ms = epoch_store.epoch_start_config().epoch_start_timestamp_ms();
+        let first_commit_ms = epoch_start_ms + 1_000;
+        let second_commit_ms = epoch_start_ms + 5_000;
+        let max_timestamp = first_commit_ms / 1000 + 1;
+        assert!(second_commit_ms / 1000 > max_timestamp);
+
         let mut digests = Vec::new();
         let mut consensus_transactions = Vec::new();
         for gas_object in gas_objects {
-            let transaction = test_user_transaction(
+            let transaction = test_user_transaction_with_expiration(
                 &state,
                 sender,
                 &keypair,
                 gas_object,
                 vec![shared_object.clone()],
+                TransactionExpiration::ValidDuring {
+                    min_epoch: Some(epoch_store.epoch()),
+                    max_epoch: Some(epoch_store.epoch()),
+                    min_timestamp: None,
+                    max_timestamp: Some(max_timestamp),
+                    chain: state.get_chain_identifier(),
+                    nonce: 0,
+                },
             )
             .await;
             digests.push(*transaction.tx().digest());
@@ -4575,13 +4598,6 @@ mod tests {
             ));
         }
 
-        // Commit timestamps are not allowed to precede the epoch start.
-        let epoch_start_ms = state
-            .epoch_store_for_testing()
-            .epoch_start_config()
-            .epoch_start_timestamp_ms();
-        let first_commit_ms = epoch_start_ms + 1_000;
-        let second_commit_ms = epoch_start_ms + 5_000;
         let mut setup = setup_consensus_handler_for_testing(&state).await;
         setup
             .consensus_handler
@@ -4602,28 +4618,57 @@ mod tests {
             ))
             .await;
 
-        let captured_timestamps = || {
+        let scheduled = || {
             let captured = setup.captured_transactions.lock();
             digests
                 .iter()
                 .map(|digest| {
-                    captured
-                        .iter()
-                        .flat_map(|(txns, _)| txns.iter())
-                        .find(|(s, _)| s.key() == TransactionKey::Digest(*digest))
-                        .and_then(|(_, env)| env.consensus_commit_timestamp_ms)
+                    captured.iter().flat_map(|(txns, _)| txns.iter()).find_map(
+                        |(schedulable, env)| match schedulable {
+                            Schedulable::Transaction(tx) if tx.digest() == digest => {
+                                Some((tx.clone(), env.clone()))
+                            }
+                            _ => None,
+                        },
+                    )
                 })
-                .collect::<Option<BTreeSet<_>>>()
+                .collect::<Option<Vec<_>>>()
         };
         for _ in 0..100 {
-            if captured_timestamps().is_some() {
+            if scheduled().is_some() {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+        let scheduled = scheduled().expect("both transactions are scheduled");
+
+        let mut statuses = Vec::new();
+        for (tx, env) in scheduled {
+            let commit_ms = env.consensus_commit_timestamp_ms;
+            let (effects, _) = state
+                .try_execute_immediately(&tx, env, &epoch_store)
+                .unwrap();
+            let error = match effects.status() {
+                ExecutionStatus::Success => None,
+                ExecutionStatus::Failure(failure) => Some(failure.error.clone()),
+            };
+            statuses.push((commit_ms, error));
+        }
+        statuses.sort_by_key(|(commit_ms, _)| *commit_ms);
+        // The test transaction calls a function that does not exist, so it fails in Move when it
+        // runs.
         assert_eq!(
-            captured_timestamps(),
-            Some(BTreeSet::from([first_commit_ms, second_commit_ms]))
+            statuses,
+            vec![
+                (
+                    Some(first_commit_ms),
+                    Some(ExecutionErrorKind::FunctionNotFound)
+                ),
+                (
+                    Some(second_commit_ms),
+                    Some(ExecutionErrorKind::TransactionExpired)
+                ),
+            ]
         );
     }
 
