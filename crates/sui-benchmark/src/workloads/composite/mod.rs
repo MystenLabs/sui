@@ -161,20 +161,25 @@ fn timestamp_expiration_disabled(protocol_config: Option<&ProtocolConfig>) -> bo
         .unwrap_or(false)
 }
 
-/// Picks a `(min_timestamp, max_timestamp)` window in Unix seconds. Some windows have already
-/// closed. Some open at the current or next second, or seconds from now, so validators reject the
-/// tx at submission unless a fail point skips that check, in which case voting rejects it. The
-/// rest close within a few seconds, so execution can abort the tx when it is first sequenced or
-/// after it is deferred.
+/// Picks a `(min_timestamp, max_timestamp)` window in Unix seconds.
+/// - Some windows closed seconds ago, inside the grace period in which validators still admit
+///   the transaction, so execution aborts it.
+/// - Some closed long enough ago that the fullnode and validators reject the transaction.
+/// - Some open at the current or next second, or seconds from now. The fullnode waits until
+///   `min_timestamp` before it submits, unless it skips its check, in which case admission
+///   rejects the transaction, or voting does if admission skips its check too.
+/// - The rest close within a few seconds, so execution can abort the transaction when it is
+///   first scheduled or after it is deferred.
 fn sample_timestamp_window(rng: &mut impl Rng) -> (Option<u64>, Option<u64>) {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    match rng.gen_range(0..6) {
+    match rng.gen_range(0..7) {
         0 => (None, Some(now - rng.gen_range(1..5))),
-        1 => (Some(now + rng.gen_range(0..2)), None),
-        2 => (Some(now + rng.gen_range(2..4)), None),
+        1 => (None, Some(now - rng.gen_range(12..20))),
+        2 => (Some(now + rng.gen_range(0..2)), None),
+        3 => (Some(now + rng.gen_range(2..4)), None),
         _ => {
             let max = now + rng.gen_range(0..3);
             let min = rng.gen_bool(0.5).then(|| max - rng.gen_range(1..10));
