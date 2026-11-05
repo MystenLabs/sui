@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 141;
+const MAX_PROTOCOL_VERSION: u64 = 142;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -433,6 +433,7 @@ const MAINNET_USDB: &str =
 //              Reject an overflowing x-coordinate in `secp256r1_ecrecover`.
 //              Configure explicit Move binary format encoding limits.
 //              Enable defer_owned_object_double_spend on all networks.
+// Version 142: Simplify Nitro attestation header validation.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -739,6 +740,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation to always include required PCRs, even when all zeros.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_always_include_required_pcrs_parsing: bool,
+
+    // Require an empty unprotected header and validate the protected header's exact shape.
+    #[serde(skip_serializing_if = "is_false")]
+    simplify_nitro_header_validation: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -4981,6 +4986,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.secp256r1_ecrecover_checks_x_below_p = true;
                     cfg.binary_format_limits_profile = Some(BinaryFormatLimitsProfile::V1);
                     cfg.feature_flags.defer_owned_object_double_spend = true;
+                }
+                142 => {
+                    cfg.feature_flags.simplify_nitro_header_validation = true;
                 }
                 // Use this template when making changes:
                 //

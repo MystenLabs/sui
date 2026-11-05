@@ -21,6 +21,7 @@ fn attestation_parse_and_verify() {
         true,
         true,
         true,
+        true,
     )
     .unwrap();
 
@@ -69,6 +70,7 @@ fn test_over_certificate_expiration() {
         true,
         true,
         true,
+        true,
     )
     .unwrap();
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &parsed.2, now);
@@ -80,6 +82,7 @@ fn test_over_certificate_expiration() {
         true,
         true,
         true,
+        true,
     )
     .unwrap();
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &parsed.2, now);
@@ -88,6 +91,7 @@ fn test_over_certificate_expiration() {
     let now = 1731627987382 + 3 * 60 * 60 * 1000; // add 3 hours, cert expired
     let parsed = parse_nitro_attestation(
         &Hex::decode(FIXED_VALID_ATTESTATION).unwrap(),
+        true,
         true,
         true,
         true,
@@ -107,6 +111,7 @@ fn test_over_certificate_expiration() {
         true,
         true,
         true,
+        true,
     )
     .unwrap();
     let res = verify_nitro_attestation(&parsed.0, &parsed.1, &parsed.2, now);
@@ -120,7 +125,7 @@ fn test_over_certificate_expiration() {
 
 #[test]
 fn test_with_malformed_attestation() {
-    let err = parse_nitro_attestation(&Hex::decode("0000").unwrap(), true, true, true)
+    let err = parse_nitro_attestation(&Hex::decode("0000").unwrap(), true, true, true, true)
         .unwrap_err()
         .into_inner();
 
@@ -233,6 +238,7 @@ fn bad_signature_cose() {
         true,
         true,
         true,
+        true,
     )
     .unwrap();
     let mut bad_sig = parsed.1.clone();
@@ -247,12 +253,12 @@ fn bad_signature_cose() {
 #[test]
 fn invalid_cose() {
     use crate::nitro_attestation::NitroAttestationVerifyError::InvalidCoseSign1;
-    // tests from: https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs
-    // valid
-    let res = CoseSign1::parse_and_validate(&[
-        0x84, /* Protected: {1: -35} */
-        0x44, 0xA1, 0x01, 0x38, 0x22, /* Unprotected: {4: '11'} */
-        0xA1, 0x04, 0x42, 0x31, 0x31, /* payload: */
+
+    let valid = vec![
+        0x84, // array(4)
+        0x44, 0xA1, 0x01, 0x38, 0x22, // protected: {1: -35}
+        0xA0, // unprotected: {}
+        // payload:
         0x58, 0x75, 0x49, 0x74, 0x20, 0x69, 0x73, 0x20, 0x61, 0x20, 0x74, 0x72, 0x75, 0x74, 0x68,
         0x20, 0x75, 0x6E, 0x69, 0x76, 0x65, 0x72, 0x73, 0x61, 0x6C, 0x6C, 0x79, 0x20, 0x61, 0x63,
         0x6B, 0x6E, 0x6F, 0x77, 0x6C, 0x65, 0x64, 0x67, 0x65, 0x64, 0x2C, 0x20, 0x74, 0x68, 0x61,
@@ -271,90 +277,176 @@ fn invalid_cose() {
         0xFC, 0x70, 0x59, 0xA3, 0xF1, 0x46, 0x7F, 0x64, 0xEC, 0x7E, 0x22, 0x1F, 0xD1, 0x63, 0xD8,
         0x0B, 0x3B, 0x55, 0x26, 0x25, 0xCF, 0x37, 0x9D, 0x1C, 0xBB, 0x9E, 0x51, 0x38, 0xCC, 0xD0,
         0x7A, 0x19, 0x31,
-    ]);
-    assert!(res.is_ok());
+    ];
+    // Empty unprotected header and correct protected header are both accepted.
+    assert!(CoseSign1::parse_and_validate(&valid, false).is_ok());
+    assert!(CoseSign1::parse_and_validate(&valid, true).is_ok());
 
-    // tampered content
-    let res = CoseSign1::parse_and_validate(&[
-        0x84, /* Protected: {1: -7} */
-        0x43, 0xA1, 0x01, 0x26, /* Unprotected: {4: '11'} */
-        0xA1, 0x04, 0x42, 0x31, 0x31, /* payload: */
-        0x58, 0x75, 0x49, 0x74, 0x20, 0x69, 0x73, 0x20, 0x61, 0x20, 0x74, 0x72, 0x75, 0x74, 0x68,
-        0x20, 0x75, 0x6F, 0x69, 0x76, 0x65, 0x72, 0x73, 0x61, 0x6C, 0x6C, 0x79, 0x20, 0x61, 0x63,
-        0x6B, 0x6E, 0x6F, 0x77, 0x6C, 0x65, 0x64, 0x67, 0x65, 0x64, 0x2C, 0x20, 0x74, 0x68, 0x61,
-        0x74, 0x20, 0x61, 0x20, 0x73, 0x69, 0x6E, 0x67, 0x6C, 0x65, 0x20, 0x6D, 0x61, 0x6E, 0x20,
-        0x69, 0x6E, 0x20, 0x70, 0x6F, 0x73, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6F, 0x6E, 0x20, 0x6F,
-        0x66, 0x20, 0x61, 0x20, 0x67, 0x6F, 0x6F, 0x64, 0x20, 0x66, 0x6F, 0x72, 0x74, 0x75, 0x6E,
-        0x65, 0x2C, 0x20, 0x6D, 0x75, 0x73, 0x74, 0x20, 0x62, 0x65, 0x20, 0x69, 0x6E, 0x20, 0x77,
-        0x61, 0x6E, 0x74, 0x20, 0x6F, 0x66, 0x20, 0x61, 0x20, 0x77, 0x69, 0x66, 0x65,
-        0x2E, /* Signature - length 32 x 2 */
-        0x58, 0x40, /* R: */
-        0x6E, 0x6D, 0xF6, 0x54, 0x89, 0xEA, 0x3B, 0x01, 0x88, 0x33, 0xF5, 0xFC, 0x4F, 0x84, 0xF8,
-        0x1B, 0x4D, 0x5E, 0xFD, 0x5A, 0x09, 0xD5, 0xC6, 0x2F, 0x2E, 0x92, 0x38, 0x5D, 0xCE, 0x31,
-        0xE2, 0xD1, /* S: */
-        0x5A, 0x53, 0xA9, 0xF0, 0x75, 0xE8, 0xFB, 0x39, 0x66, 0x9F, 0xCD, 0x4E, 0xB5, 0x22, 0xC8,
-        0x5C, 0x92, 0x77, 0x45, 0x2F, 0xA8, 0x57, 0xF5, 0xFE, 0x37, 0x9E, 0xDD, 0xEF, 0x0F, 0xAB,
-        0x3C, 0xDD,
-    ]);
+    let Value::Array(fields) = ciborium::de::from_reader(valid.as_slice()).unwrap() else {
+        panic!("expected COSE_Sign1 array");
+    };
+    let encode = |fields| {
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(&Value::Array(fields), &mut bytes).unwrap();
+        bytes
+    };
+
+    // Reject the wrong protected-header algorithm: -7 instead of -35.
+    let mut modified = fields.clone();
+    modified[0] = Value::Bytes(vec![0xa1, 0x01, 0x26]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a protected header with the wrong key: {2: -35}.
+    let mut modified = fields.clone();
+    modified[0] = Value::Bytes(vec![0xa1, 0x02, 0x38, 0x22]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Exact-shape validation rejects protected duplicates without the legacy duplicate scan.
+    let mut modified = fields.clone();
+    modified[0] = Value::Bytes(vec![0xa2, 0x01, 0x38, 0x22, 0x01, 0x38, 0x22]);
+    let bytes = encode(modified);
+    assert!(matches!(
+        CoseSign1::parse_and_validate(&bytes, false).unwrap_err(),
+        InvalidCoseSign1(message) if message.contains("duplicate key found in CBOR map")
+    ));
     assert_eq!(
-        res.unwrap_err(),
-        InvalidCoseSign1("invalid cbor header".to_string())
+        CoseSign1::parse_and_validate(&bytes, true).unwrap_err(),
+        InvalidCoseSign1("invalid cbor header".to_string()),
     );
 
-    // tampered signature
-    let res = CoseSign1::parse_and_validate(&[
-        0x84, /* Protected: {1: -7} */
-        0x43, 0xA1, 0x01, 0x26, /* Unprotected: {4: '11'} */
-        0xA1, 0x04, 0x42, 0x31, 0x31, /* payload: */
-        0x58, 0x75, 0x49, 0x74, 0x20, 0x69, 0x73, 0x20, 0x61, 0x20, 0x74, 0x72, 0x75, 0x74, 0x68,
-        0x20, 0x75, 0x6E, 0x69, 0x76, 0x65, 0x72, 0x73, 0x61, 0x6C, 0x6C, 0x79, 0x20, 0x61, 0x63,
-        0x6B, 0x6E, 0x6F, 0x77, 0x6C, 0x65, 0x64, 0x67, 0x65, 0x64, 0x2C, 0x20, 0x74, 0x68, 0x61,
-        0x74, 0x20, 0x61, 0x20, 0x73, 0x69, 0x6E, 0x67, 0x6C, 0x65, 0x20, 0x6D, 0x61, 0x6E, 0x20,
-        0x69, 0x6E, 0x20, 0x70, 0x6F, 0x73, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6F, 0x6E, 0x20, 0x6F,
-        0x66, 0x20, 0x61, 0x20, 0x67, 0x6F, 0x6F, 0x64, 0x20, 0x66, 0x6F, 0x72, 0x74, 0x75, 0x6E,
-        0x65, 0x2C, 0x20, 0x6D, 0x75, 0x73, 0x74, 0x20, 0x62, 0x65, 0x20, 0x69, 0x6E, 0x20, 0x77,
-        0x61, 0x6E, 0x74, 0x20, 0x6F, 0x66, 0x20, 0x61, 0x20, 0x77, 0x69, 0x66, 0x65,
-        0x2E, /* Signature - length 32 x 2 */
-        0x58, 0x40, /* R: */
-        0x6E, 0x6D, 0xF6, 0x54, 0x89, 0xEA, 0x3B, 0x01, 0x88, 0x33, 0xF5, 0xFC, 0x4F, 0x84, 0xF8,
-        0x1B, 0x4D, 0x5E, 0xFD, 0x5B, 0x09, 0xD5, 0xC6, 0x2F, 0x2E, 0x92, 0x38, 0x5D, 0xCE, 0x31,
-        0xE2, 0xD1, /* S: */
-        0x5A, 0x53, 0xA9, 0xF0, 0x75, 0xE8, 0xFB, 0x39, 0x66, 0x9F, 0xCD, 0x4E, 0xB5, 0x22, 0xC8,
-        0x5C, 0x92, 0x77, 0x45, 0x2F, 0xA8, 0x57, 0xF5, 0xFE, 0x37, 0x9E, 0xDD, 0xEF, 0x0F, 0xAB,
-        0x3C, 0xDD,
-    ]);
-    assert_eq!(
-        res.unwrap_err(),
-        InvalidCoseSign1("invalid cbor header".to_string())
-    );
+    // Reject extra entries in the protected header.
+    let mut modified = fields.clone();
+    modified[0] = Value::Bytes(vec![0xa2, 0x01, 0x38, 0x22, 0x02, 0x00]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
 
-    // invalid tag
-    let res = CoseSign1::parse_and_validate(&[
-        0xd3, /* tag 19 */
-        0x84, /* Protected: {1: -7} */
-        0x43, 0xA1, 0x01, 0x26, /* Unprotected: {4: '11'} */
-        0xA1, 0x04, 0x42, 0x31, 0x31, /* payload: */
-        0x58, 0x75, 0x49, 0x74, 0x20, 0x69, 0x73, 0x20, 0x61, 0x20, 0x74, 0x72, 0x75, 0x74, 0x68,
-        0x20, 0x75, 0x6E, 0x69, 0x76, 0x65, 0x72, 0x73, 0x61, 0x6C, 0x6C, 0x79, 0x20, 0x61, 0x63,
-        0x6B, 0x6E, 0x6F, 0x77, 0x6C, 0x65, 0x64, 0x67, 0x65, 0x64, 0x2C, 0x20, 0x74, 0x68, 0x61,
-        0x74, 0x20, 0x61, 0x20, 0x73, 0x69, 0x6E, 0x67, 0x6C, 0x65, 0x20, 0x6D, 0x61, 0x6E, 0x20,
-        0x69, 0x6E, 0x20, 0x70, 0x6F, 0x73, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6F, 0x6E, 0x20, 0x6F,
-        0x66, 0x20, 0x61, 0x20, 0x67, 0x6F, 0x6F, 0x64, 0x20, 0x66, 0x6F, 0x72, 0x74, 0x75, 0x6E,
-        0x65, 0x2C, 0x20, 0x6D, 0x75, 0x73, 0x74, 0x20, 0x62, 0x65, 0x20, 0x69, 0x6E, 0x20, 0x77,
-        0x61, 0x6E, 0x74, 0x20, 0x6F, 0x66, 0x20, 0x61, 0x20, 0x77, 0x69, 0x66, 0x65,
-        0x2E, /* Signature - length 32 x 2 */
-        0x58, 0x40, /* R: */
-        0x6E, 0x6D, 0xF6, 0x54, 0x89, 0xEA, 0x3B, 0x01, 0x88, 0x33, 0xF5, 0xFC, 0x4F, 0x84, 0xF8,
-        0x1B, 0x4D, 0x5E, 0xFD, 0x5A, 0x09, 0xD5, 0xC6, 0x2F, 0x2E, 0x92, 0x38, 0x5D, 0xCE, 0x31,
-        0xE2, 0xD1, /* S: */
-        0x5A, 0x53, 0xA9, 0xF0, 0x75, 0xE8, 0xFB, 0x39, 0x66, 0x9F, 0xCD, 0x4E, 0xB5, 0x22, 0xC8,
-        0x5C, 0x92, 0x77, 0x45, 0x2F, 0xA8, 0x57, 0xF5, 0xFE, 0x37, 0x9E, 0xDD, 0xEF, 0x0F, 0xAB,
-        0x3C, 0xDD,
+    // Only the legacy path accepts a nonempty unprotected map.
+    let mut modified = fields.clone();
+    modified[1] = Value::Map(vec![(
+        Value::Integer(4.into()),
+        Value::Bytes(vec![0x31, 0x31]),
+    )]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_ok());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Both paths reject duplicate keys in the unprotected header.
+    let mut modified = fields.clone();
+    modified[1] = Value::Map(vec![
+        (
+            Value::Integer(4.into()),
+            Value::Bytes(vec![0x31, 0x31])
+        );
+        2
     ]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a null protected header.
+    let mut modified = fields.clone();
+    modified[0] = Value::Null;
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a null unprotected header.
+    let mut modified = fields.clone();
+    modified[1] = Value::Null;
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject an array instead of an unprotected map.
+    let mut modified = fields.clone();
+    modified[1] = Value::Array(vec![]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a null payload.
+    let mut modified = fields.clone();
+    modified[2] = Value::Null;
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject an empty payload.
+    let mut modified = fields.clone();
+    modified[2] = Value::Bytes(vec![]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a payload at the exclusive size limit.
+    let mut modified = fields.clone();
+    modified[2] = Value::Bytes(vec![0; 16384]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a null signature.
+    let mut modified = fields.clone();
+    modified[3] = Value::Null;
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a signature with the wrong length: 64 instead of 96 bytes.
+    let mut modified = fields.clone();
+    modified[3] = Value::Bytes(vec![0; 64]);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Reject a missing signature field.
+    let mut modified = fields.clone();
+    modified.pop();
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_err());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Only the legacy path accepts an extra array field.
+    let mut modified = fields.clone();
+    modified.push(Value::Null);
+    let bytes = encode(modified);
+    assert!(CoseSign1::parse_and_validate(&bytes, false).is_ok());
+    assert!(CoseSign1::parse_and_validate(&bytes, true).is_err());
+
+    // Tag 18 is accepted; tag 19 is rejected.
+    let mut tagged = vec![0xd2];
+    tagged.extend_from_slice(&valid);
+    assert!(CoseSign1::parse_and_validate(&tagged, false).is_ok());
+    assert!(CoseSign1::parse_and_validate(&tagged, true).is_ok());
+    tagged[0] = 0xd3;
     assert_eq!(
-        res.unwrap_err(),
-        InvalidCoseSign1("invalid tag".to_string())
+        CoseSign1::parse_and_validate(&tagged, false).unwrap_err(),
+        InvalidCoseSign1("invalid tag".to_string()),
     );
+    assert_eq!(
+        CoseSign1::parse_and_validate(&tagged, true).unwrap_err(),
+        InvalidCoseSign1("invalid tag".to_string()),
+    );
+}
+
+#[test]
+fn verify_attestation_with_simplified_header_validation() {
+    let (mut signature, message, payload) = parse_nitro_attestation(
+        &Hex::decode(FIXED_VALID_ATTESTATION).unwrap(),
+        true,
+        true,
+        true,
+        true,
+    )
+    .unwrap();
+    assert!(verify_nitro_attestation(&signature, &message, &payload, 1731627987382).is_ok());
+    signature[0] ^= 1;
+    assert!(verify_nitro_attestation(&signature, &message, &payload, 1731627987382).is_err());
 }
 
 #[test]
@@ -366,6 +458,7 @@ fn attestation_parse_all_pcrs() {
         true,
         true,
         false,
+        true,
     )
     .unwrap();
     assert_eq!(
@@ -393,6 +486,7 @@ fn attestation_parse_all_pcrs() {
         true,
         true,
         true,
+        true,
     )
     .unwrap();
     assert_eq!(
@@ -411,6 +505,7 @@ fn attestation_parse_all_pcrs() {
         true,
         false,
         false,
+        true,
     )
     .unwrap();
     assert_eq!(
