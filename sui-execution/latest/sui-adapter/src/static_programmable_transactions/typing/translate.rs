@@ -4,7 +4,7 @@
 use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
-    gas_charger::GasPayment,
+    gas_payment::GasPayment,
     static_programmable_transactions::{
         execution::context::EitherError,
         linkage::resolved_linkage::ExecutableLinkage,
