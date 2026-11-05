@@ -911,8 +911,11 @@ pub struct ExecutionEnv {
     /// unconditionally (settlement transactions - see
     /// `execution_scheduler::causal_admission`).
     pub(crate) causal_index: Option<u64>,
-    /// Timestamp (Unix ms) of the consensus commit that scheduled the transaction. A transaction
-    /// scheduled after its `max_timestamp` fails with `TransactionExpired`. None skips the check.
+    /// Timestamp (Unix ms) used only to check `max_timestamp`: a later timestamp makes the
+    /// transaction fail with `TransactionExpired`, and None skips the check. The consensus
+    /// handler sets it to the timestamp of the commit that scheduled the transaction. Checkpoint
+    /// execution sets it to the first millisecond after `max_timestamp` when effects report
+    /// `TransactionExpired`, and leaves it None otherwise, so it is not a commit timestamp there.
     pub consensus_commit_timestamp_ms: Option<u64>,
 }
 
