@@ -732,7 +732,7 @@ where
                     .after
                     .as_ref()
                     // An Item at the last position keeps naming itself, a saturated resume point.
-                    .map(|after| after_resume::<P>(after.coordinate(), after.kind).0);
+                    .map(|after| after_resume::<P>(after).0);
                 let entry = after_resumes_at
                     .map_or(window.range.start, |resume| resume.max(window.range.start));
                 self.end_scan_position.max(entry)
@@ -808,8 +808,8 @@ where
         // The after cursor is the terminal bound for a descending scan. Its closing cursor names
         // the boundary just below the lowest position the scan admits, where `after` resumes, so
         // that sent back as `before` it resumes with the next position down.
-        let (descending_terminal, descending_terminal_kind) = after_resume(position, cursor.kind);
-        let descending_terminal_point = after_resume_point(cursor, descending_terminal_kind);
+        let (descending_terminal, descending_terminal_kind, descending_terminal_point) =
+            after_resume::<P>(cursor);
         if !options.is_ascending() {
             self.set_terminal_record(
                 descending_terminal_point,
@@ -1035,16 +1035,10 @@ where
                 return None;
             }
             let after = options.after.as_ref()?;
-            let first_admitted = match after.kind {
-                CursorKind::Item => position(after).successor()?,
-                CursorKind::Boundary => position(after),
-            };
-            (first_admitted >= window.end).then(|| {
-                (
-                    after_resume_point(after, CursorKind::Boundary),
-                    first_admitted,
-                )
-            })
+            let (first_admitted, kind, point) = after_resume::<P>(after);
+            // An Item at the last position admits nothing, so it ends no scan here.
+            (kind == CursorKind::Boundary && first_admitted >= window.end)
+                .then_some((point, first_admitted))
         }
         Ordering::Descending => {
             if options
@@ -1129,7 +1123,7 @@ where
     CursorToken: ScanCursor<P>,
 {
     let after = options.after.as_ref().filter(|_| options.is_ascending())?;
-    let (end, kind) = after_resume(after.coordinate(), after.kind);
+    let (end, kind, point) = after_resume::<P>(after);
     if end <= tip {
         return None;
     }
@@ -1148,20 +1142,25 @@ where
         CursorKind::Boundary => RangeExhaustion::LedgerTip,
         CursorKind::Item => RangeExhaustion::CursorBound { kind },
     };
-    Some((after_resume_point(after, kind), end, exhaustion))
+    Some((point, end, exhaustion))
 }
 
-/// Where an `after` cursor at `position` resumes a scan, as `(position, kind)` of the cursor that
-/// names that place: a Boundary cursor's own position, or the boundary after an Item cursor's
-/// item. An Item at the last position names no boundary after it, so it names itself, still an
-/// Item.
-fn after_resume<P: ScanPosition>(position: P, kind: CursorKind) -> (P, CursorKind) {
-    match kind {
-        CursorKind::Boundary => (position, kind),
-        CursorKind::Item => match position.successor() {
-            Some(next) => (next, CursorKind::Boundary),
-            None => (position, kind),
-        },
+/// Where an `after` cursor resumes a scan, as `(position, kind)` of the cursor that names that
+/// place, and that place's public position: a Boundary cursor's own position, or the boundary
+/// after an Item cursor's item (its key with the finest index incremented). An Item at the last
+/// position names no boundary after it, so it names itself, still an Item.
+fn after_resume<P: ScanPosition>(after: &CursorToken) -> (P, CursorKind, LedgerPoint)
+where
+    CursorToken: ScanCursor<P>,
+{
+    let position: P = after.coordinate();
+    match (after.kind, position.successor()) {
+        (CursorKind::Item, Some(next)) => (
+            next,
+            CursorKind::Boundary,
+            after.position.item_resume(ScanDirection::Ascending),
+        ),
+        _ => (position, after.kind, after.position.public_position()),
     }
 }
 
@@ -1174,8 +1173,8 @@ where
     CursorToken: ScanCursor<P>,
 {
     let after = options.after.as_ref().and_then(|after| {
-        let (resume, kind) = after_resume::<P>(after.coordinate(), after.kind);
-        (resume == position).then(|| after_resume_point(after, kind))
+        let (resume, _, point) = after_resume::<P>(after);
+        (resume == position).then_some(point)
     });
     after.or_else(|| {
         options
@@ -1184,18 +1183,6 @@ where
             .filter(|before| ScanCursor::<P>::coordinate(*before) == position)
             .map(|before| before.position.public_position())
     })
-}
-
-/// The public position of where `after` resumes as a cursor of `resumed_kind` (see
-/// [`after_resume`]): the boundary right after an Item cursor's item (its key with the finest
-/// index incremented), or the cursor's own public position where it names itself.
-fn after_resume_point(after: &CursorToken, resumed_kind: CursorKind) -> LedgerPoint {
-    match (after.kind, resumed_kind) {
-        (CursorKind::Item, CursorKind::Boundary) => {
-            after.position.item_resume(ScanDirection::Ascending)
-        }
-        _ => after.position.public_position(),
-    }
 }
 
 /// The point of `position` when it is one of `window`'s edges. Where the edges are one scan
