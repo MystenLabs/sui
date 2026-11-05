@@ -1510,8 +1510,17 @@ impl Payload for CompositePayload {
                 && !timestamp_expiration_disabled
                 && rng.gen_bool(self.config.timestamp_expiration_probability as f64))
             .then(|| sample_timestamp_window(&mut rng));
-            // Validators reject a soft bundle if any member is outside its window at submission.
-            if timestamp_window.is_some() {
+            // A soft-bundle member before its min_timestamp gets a retriable rejection, and the
+            // harness then retries the whole bundle.
+            if timestamp_window.is_some_and(|(min, _)| {
+                min.is_some_and(|min| {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+                    min >= now
+                })
+            }) {
                 self.direct_submission = true;
             }
             let builder = if lifecycle_call.is_some_and(|call| call.bare)
