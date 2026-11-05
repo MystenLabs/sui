@@ -177,6 +177,47 @@ fun next_with_context_increments_the_clock() {
 }
 
 #[test]
+fun clock_setters_combine_on_one_builder() {
+    let mut scenario = test_scenario::begin(@0xA);
+    // Each set is checked against the Clock, not the pending time, so a later set can be lower.
+    let builder = scenario.ctx_builder().set_clock_timestamp(200).set_clock_timestamp(100);
+    scenario.next_with_context(builder);
+    assert_eq!(clock::borrow().timestamp_ms(), 100);
+
+    let builder = scenario.ctx_builder().increment_clock_timestamp(5).increment_clock_timestamp(7);
+    scenario.next_with_context(builder);
+    assert_eq!(clock::borrow().timestamp_ms(), 112);
+
+    let builder = scenario.ctx_builder().increment_clock_timestamp(1000).set_clock_timestamp(150);
+    scenario.next_with_context(builder);
+    assert_eq!(clock::borrow().timestamp_ms(), 150);
+
+    let builder = scenario.ctx_builder().set_clock_timestamp(200).increment_clock_timestamp(10);
+    scenario.next_with_context(builder);
+    assert_eq!(clock::borrow().timestamp_ms(), 210);
+
+    let builder = scenario
+        .ctx_builder()
+        .increment_clock_timestamp(10)
+        .set_clock_timestamp(300)
+        .increment_clock_timestamp(5)
+        .set_clock_timestamp(400)
+        .increment_clock_timestamp(1);
+    scenario.next_with_context(builder);
+    assert_eq!(clock::borrow().timestamp_ms(), 401);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = test_scenario::EClockTimestampNotIncreased)]
+fun second_set_clock_timestamp_rejects_the_current_timestamp() {
+    let mut scenario = test_scenario::begin(@0xA);
+    let builder = scenario.ctx_builder().set_clock_timestamp(100);
+    scenario.next_with_context(builder);
+    let _builder = scenario.ctx_builder().set_clock_timestamp(200).set_clock_timestamp(100);
+    abort
+}
+
+#[test]
 fun next_with_context_advances_the_clock_by_default() {
     let mut scenario = test_scenario::begin(@0xA);
     let builder = scenario.ctx_builder().set_clock_timestamp(100);
