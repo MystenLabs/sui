@@ -10,6 +10,7 @@ mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
+use error::{AggregatedEffectsDigests, AggregatedRequestErrors};
 pub use metrics::*;
 pub use reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 
@@ -33,7 +34,7 @@ use sui_types::{
     committee::EpochId,
     error::{ErrorCategory, SuiErrorKind, UserInputError},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
-    transaction::{AllowedProposers, TransactionDataAPI as _, TransactionExpiration},
+    transaction::{AllowedProposers, TransactionDataAPI as _},
     transaction_executor::ProposerSelector,
 };
 use tokio::{
@@ -44,7 +45,7 @@ use tracing::instrument;
 use transaction_submitter::*;
 
 use crate::{
-    authority::{AuthorityState, authority_per_epoch_store::is_expired_beyond_grace},
+    authority::{AuthorityState, authority_per_epoch_store::check_timestamp_window},
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     validator_client_monitor::{
@@ -237,14 +238,38 @@ where
                 amplification_factor
             };
 
-        // In tests, sometimes skip the check, as a fullnode whose clock differs from the
-        // validators' clocks would, so that validators see transactions outside their windows.
-        let skip_timestamp_check =
-            mysten_common::in_test_configuration() && rand::thread_rng().gen_bool(0.5);
+        // Under test configurations, half of transactions skip this check so that validators
+        // see transactions outside their windows.
+        let skip_timestamp_check = mysten_common::in_test_configuration()
+            && mysten_common::random::get_rng().gen_bool(0.5);
+        let mut not_yet_valid_wait = None;
         if let Some(tx_data) = tx_data
             && !skip_timestamp_check
         {
-            check_timestamp_window(tx_data.expiration(), AuthorityState::unixtime_now_ms())?;
+            let expiration = tx_data.expiration();
+            let now_ms = AuthorityState::unixtime_now_ms();
+            match check_timestamp_window(expiration, now_ms) {
+                Ok(()) => {}
+                // Validators would reject the transaction until `min_timestamp`, so the driver
+                // waits until then. The wait counts against the finality timeout.
+                Err(error)
+                    if matches!(
+                        error.as_inner(),
+                        SuiErrorKind::TransactionNotYetValid { .. }
+                    ) =>
+                {
+                    let valid_from_ms = expiration.first_valid_timestamp_ms().unwrap_or(now_ms);
+                    not_yet_valid_wait = Some((
+                        Duration::from_millis(valid_from_ms.saturating_sub(now_ms)),
+                        error,
+                    ));
+                }
+                Err(error) => {
+                    return Err(TransactionDriverError::ValidationFailed {
+                        error: error.to_string(),
+                    });
+                }
+            }
         }
 
         let tx_type = request.tx_type();
@@ -268,6 +293,17 @@ where
         let mut latest_retriable_error = None;
 
         let retry_loop = async {
+            if let Some((wait, error)) = not_yet_valid_wait {
+                latest_retriable_error = Some(TransactionDriverError::Aborted {
+                    submission_non_retriable_errors: AggregatedRequestErrors::default(),
+                    submission_retriable_errors: AggregatedRequestErrors {
+                        errors: vec![(error.to_string(), vec![], 0, error.categorize())],
+                        total_stake: 0,
+                    },
+                    observed_effects_digests: AggregatedEffectsDigests { digests: vec![] },
+                });
+                sleep(wait).await;
+            }
             loop {
                 // TODO(fastpath): Check local state before submitting transaction
                 match self
@@ -581,51 +617,5 @@ impl State {
         Self {
             tasks: JoinSet::new(),
         }
-    }
-}
-
-/// Rejects a transaction that validators would reject by their clocks at admission, so that it
-/// is not submitted to them.
-fn check_timestamp_window(
-    expiration: &TransactionExpiration,
-    now_ms: u64,
-) -> Result<(), TransactionDriverError> {
-    if expiration.is_not_yet_valid_at(now_ms) {
-        return Err(TransactionDriverError::ValidationFailed {
-            error: SuiErrorKind::TransactionNotYetValid {
-                timestamp_ms: now_ms,
-            }
-            .to_string(),
-        });
-    }
-    if is_expired_beyond_grace(expiration, now_ms) {
-        return Err(TransactionDriverError::ValidationFailed {
-            error: SuiErrorKind::TransactionExpired.to_string(),
-        });
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod timestamp_window_tests {
-    use super::*;
-    use crate::authority::authority_per_epoch_store::MAX_TIMESTAMP_GRACE_MS;
-    use sui_types::digests::ChainIdentifier;
-
-    #[test]
-    fn test_check_timestamp_window() {
-        let window = TransactionExpiration::ValidDuring {
-            min_epoch: Some(0),
-            max_epoch: Some(0),
-            min_timestamp: Some(1_000),
-            max_timestamp: Some(2_000),
-            chain: ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
-            nonce: 0,
-        };
-        assert!(check_timestamp_window(&window, 999_999).is_err());
-        assert!(check_timestamp_window(&window, 1_000_000).is_ok());
-        assert!(check_timestamp_window(&window, 2_000_999 + MAX_TIMESTAMP_GRACE_MS).is_ok());
-        assert!(check_timestamp_window(&window, 2_001_000 + MAX_TIMESTAMP_GRACE_MS).is_err());
-        assert!(check_timestamp_window(&TransactionExpiration::None, 0).is_ok());
     }
 }

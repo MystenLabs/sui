@@ -22,7 +22,7 @@ use crate::admission_queue::{
 };
 use crate::authority::AuthorityState;
 use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, is_expired_beyond_grace,
+    AuthorityPerEpochStore, earliest_expiry_deadline_ms,
 };
 use crate::consensus_adapter::{
     BlockStatusReceiver, ConsensusAdapterMetrics, ConsensusClient, ProcessedMethod,
@@ -53,7 +53,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
-use sui_types::transaction::{InputObjectKind, TransactionDataAPI, TransactionExpiration};
+use sui_types::transaction::{InputObjectKind, TransactionDataAPI};
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
@@ -227,9 +227,9 @@ struct PoolEntry {
     /// entry is considered for a proposal, so an entry whose inputs were consumed while it
     /// waited in the pool is dropped before it occupies block space.
     owned_object_refs: Vec<ObjectRef>,
-    /// Expirations of the user transactions in the entry. `take()` rejects the entry once any
-    /// of them is past its `max_timestamp` by more than the admission grace.
-    expirations: Vec<TransactionExpiration>,
+    /// The earliest `expiry_deadline_ms` of the user transactions in the entry. `take()` rejects
+    /// the entry from that time.
+    expiry_deadline_ms: Option<u64>,
     /// Set by `take()` when the owned-object or expiration validation fails. The entry is excluded from
     /// the proposal and resolved with this error outside the pool mutex.
     rejection: Option<SuiError>,
@@ -516,7 +516,7 @@ impl ConsensusTransactionPool {
         let tx_type = tx_type_label(&transactions);
         let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
         let owned_object_refs = owned_object_refs(&transactions);
-        let expirations = transaction_expirations(&transactions);
+        let expiry_deadline_ms = earliest_expiry_deadline_ms(&transactions);
 
         let user_transactions: Vec<_> = transactions
             .iter()
@@ -537,7 +537,7 @@ impl ConsensusTransactionPool {
             metrics: self.metrics.clone(),
             processed,
             owned_object_refs,
-            expirations,
+            expiry_deadline_ms,
             rejection: None,
             staggered_slot,
         };
@@ -629,7 +629,7 @@ impl ConsensusTransactionPool {
             metrics: self.metrics.clone(),
             processed: Vec::new(),
             owned_object_refs: Vec::new(),
-            expirations: Vec::new(),
+            expiry_deadline_ms: None,
             rejection: None,
             staggered_slot: None,
         };
@@ -1184,9 +1184,8 @@ impl TransactionPool for ConsensusTransactionPool {
                 // Checked before the block limits so a rejected entry consumes neither block
                 // space nor byte budget, and never stops the iteration.
                 if entry
-                    .expirations
-                    .iter()
-                    .any(|expiration| is_expired_beyond_grace(expiration, now_ms))
+                    .expiry_deadline_ms
+                    .is_some_and(|deadline| now_ms >= deadline)
                 {
                     entry.rejection = Some(SuiErrorKind::TransactionExpired.into());
                     return PopAction::Exclude;
@@ -1394,14 +1393,6 @@ fn entry_limit(
 
 fn consensus_client_error(error: ClientError) -> SuiError {
     SuiErrorKind::FailedToSubmitToConsensus(error.to_string()).into()
-}
-
-fn transaction_expirations(transactions: &[ConsensusTransaction]) -> Vec<TransactionExpiration> {
-    transactions
-        .iter()
-        .filter_map(|transaction| transaction.kind.as_user_transaction())
-        .map(|tx| tx.data().transaction_data().expiration().clone())
-        .collect()
 }
 
 /// Owned input object refs of the user transactions in `transactions`, excluding the
@@ -1650,7 +1641,7 @@ mod tests {
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
     use sui_types::error::UserInputError;
     use sui_types::object::{Object, Owner};
-    use sui_types::transaction::PlainTransactionWithClaims;
+    use sui_types::transaction::{PlainTransactionWithClaims, TransactionExpiration};
     use sui_types::utils::to_sender_signed_transaction;
 
     async fn test_state_and_pool(
@@ -1787,7 +1778,7 @@ mod tests {
             metrics,
             processed: Vec::new(),
             owned_object_refs: Vec::new(),
-            expirations: Vec::new(),
+            expiry_deadline_ms: None,
             rejection: None,
             staggered_slot: None,
         };

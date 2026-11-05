@@ -3,9 +3,10 @@
 
 use crate::authority::AuthorityState;
 use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, is_expired_beyond_grace,
+    AuthorityPerEpochStore, earliest_expiry_deadline_ms,
 };
 use crate::consensus_adapter::ConsensusAdapter;
+use crate::consensus_handler::SequencedConsensusTransactionKey;
 use crate::staggered_submission::proposers_metric_label;
 use arc_swap::ArcSwap;
 use mysten_common::debug_fatal;
@@ -27,7 +28,6 @@ use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
 };
-use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
@@ -38,18 +38,6 @@ pub struct QueueEntry {
     pub position_sender: oneshot::Sender<Result<Vec<ConsensusPosition>, tonic::Status>>,
     pub submitter_client_addr: Option<IpAddr>,
     pub enqueue_time: Instant,
-}
-
-impl QueueEntry {
-    /// True once any user transaction in the entry is past its `max_timestamp` by more than
-    /// the admission grace.
-    fn is_expired_beyond_grace(&self, now_ms: u64) -> bool {
-        self.transactions.iter().any(|transaction| {
-            transaction.kind.as_user_transaction().is_some_and(|tx| {
-                is_expired_beyond_grace(tx.data().transaction_data().expiration(), now_ms)
-            })
-        })
-    }
 }
 
 /// What `PriorityAdmissionQueue::pop_batch_while` does with an examined entry.
@@ -196,6 +184,7 @@ pub struct AdmissionQueueMetrics {
     pub evictions: IntCounter,
     pub rejections: IntCounter,
     pub duplicate_inserts: IntCounter,
+    pub expired_at_drain: IntCounter,
 
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
@@ -248,6 +237,12 @@ impl AdmissionQueueMetrics {
             duplicate_inserts: register_int_counter_with_registry!(
                 "admission_queue_duplicate_inserts",
                 "Transactions admitted to the queue whose ConsensusTransactionKey duplicated an entry already present. Tallied as spam for DoS protection.",
+                registry,
+            )
+            .unwrap(),
+            expired_at_drain: register_int_counter_with_registry!(
+                "admission_queue_expired_at_drain",
+                "Queue entries rejected when drained because a transaction was past its max_timestamp by more than the grace period",
                 registry,
             )
             .unwrap(),
@@ -332,7 +327,7 @@ impl AdmissionQueueMetrics {
             .unwrap(),
             pool_rejected_at_proposal: register_int_counter_vec_with_registry!(
                 "consensus_transaction_pool_rejected_at_proposal",
-                "User submissions dropped at proposal time because their owned input objects no longer match live state, by error",
+                "User submissions dropped at proposal time because their owned input objects no longer match live state or a transaction expired, by error",
                 &["error"],
                 registry,
             )
@@ -859,7 +854,16 @@ impl AdmissionQueueEventLoop {
         }
         let now_ms = AuthorityState::unixtime_now_ms();
         for entry in entries {
-            if entry.is_expired_beyond_grace(now_ms) {
+            // An entry that consensus already processed goes on to the adapter, which reports it
+            // as processed.
+            if earliest_expiry_deadline_ms(&entry.transactions).is_some_and(|d| now_ms >= d)
+                && !self.all_consensus_processed(&entry.transactions)
+            {
+                debug!(
+                    keys = ?entry.transactions.iter().map(|t| t.key()).collect::<Vec<_>>(),
+                    "Admission queue entry rejected at drain: transaction expired"
+                );
+                self.queue.metrics.expired_at_drain.inc();
                 let error: SuiError = SuiErrorKind::TransactionExpired.into();
                 let _ = entry.position_sender.send(Err(error.into()));
                 continue;
@@ -875,6 +879,16 @@ impl AdmissionQueueEventLoop {
             spawn_monitored_task!(submit_queue_entry(entry, adapter, es));
         }
         *self.last_drain.lock().unwrap() = Instant::now();
+    }
+
+    fn all_consensus_processed(&self, transactions: &[ConsensusTransaction]) -> bool {
+        transactions.iter().all(|transaction| {
+            self.epoch_store
+                .is_consensus_message_processed(&SequencedConsensusTransactionKey::External(
+                    transaction.key(),
+                ))
+                .expect("Storage error when checking consensus message processed")
+        })
     }
 
     fn handle_insert(&mut self, cmd: InsertCommand) {
