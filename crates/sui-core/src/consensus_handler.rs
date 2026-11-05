@@ -4640,7 +4640,9 @@ mod tests {
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        let scheduled = scheduled().expect("both transactions are scheduled");
+        let mut scheduled = scheduled().expect("both transactions are scheduled");
+        // The later transaction reads the shared object version the earlier one writes.
+        scheduled.sort_by_key(|(_, env)| env.consensus_commit_timestamp_ms);
 
         let mut statuses = Vec::new();
         for (tx, env) in scheduled {
@@ -4654,7 +4656,6 @@ mod tests {
             };
             statuses.push((commit_ms, error));
         }
-        statuses.sort_by_key(|(commit_ms, _)| *commit_ms);
         // The test transaction calls a function that does not exist, so it fails in Move when it
         // runs.
         assert_eq!(
