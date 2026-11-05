@@ -31,7 +31,7 @@ use sui_config::NodeConfig;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
-    error::{ErrorCategory, UserInputError},
+    error::{ErrorCategory, SuiErrorKind, UserInputError},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
     transaction::{AllowedProposers, TransactionDataAPI as _},
     transaction_executor::ProposerSelector,
@@ -44,6 +44,7 @@ use tracing::instrument;
 use transaction_submitter::*;
 
 use crate::{
+    authority::{AuthorityState, authority_per_epoch_store::is_expired_beyond_grace},
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     validator_client_monitor::{
@@ -235,6 +236,24 @@ where
                 }
                 amplification_factor
             };
+
+        if let Some(tx_data) = tx_data {
+            let now_ms = AuthorityState::unixtime_now_ms();
+            let expiration = tx_data.expiration();
+            if expiration.is_not_yet_valid_at(now_ms) {
+                return Err(TransactionDriverError::ValidationFailed {
+                    error: SuiErrorKind::TransactionNotYetValid {
+                        timestamp_ms: now_ms,
+                    }
+                    .to_string(),
+                });
+            }
+            if is_expired_beyond_grace(expiration, now_ms) {
+                return Err(TransactionDriverError::ValidationFailed {
+                    error: SuiErrorKind::TransactionExpired.to_string(),
+                });
+            }
+        }
 
         let tx_type = request.tx_type();
         let ping_label = if request.ping_type.is_some() {
