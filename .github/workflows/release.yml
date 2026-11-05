@@ -50,7 +50,8 @@ jobs:
     timeout-minutes: 240
     permissions:
       contents: write # attach built archives to the GitHub release
-      id-token: write # OIDC token to assume the sccache RW role
+      id-token: write # OIDC token for the sccache RW role and the Sigstore signing certificate
+      attestations: write # store the build-provenance attestation of archives this run compiles
     strategy:
       matrix:
         os:
@@ -118,15 +119,34 @@ jobs:
             | head -n1 | grep -q '200 OK'; then echo "releases/sui-${network}-v${{ env.sui_version }}-${{ env.os_type }}.tgz"; \
             break; fi; done)" >> $GITHUB_ENV
 
-      - name: Download archive, if it exists
+      - name: Download and verify archive, if it exists
         if: ${{ env.s3_existing_archive != '' }}
         shell: bash
         run: |
-          mkdir -p ${{ env.TMP_BUILD_DIR }}
+          # The S3 key names the release that built the archive
+          # (releases/sui-{network}-v{version}-{os}.tgz). Check the archive against
+          # that release's SHA256SUMS on GitHub before reusing it. If the release
+          # has no SHA256SUMS entry for it, the archive cannot be verified, so
+          # clear s3_existing_archive and build from source instead. A hash
+          # mismatch fails the job.
+          archive_name="$(basename "$s3_existing_archive")"
+          source_tag="${archive_name#sui-}"
+          source_tag="${source_tag%-${os_type}.tgz}"
+          mkdir -p ./tmp/s3-verify
+          if ! curl -fsSL -o ./tmp/s3-verify/SHA256SUMS "https://github.com/${GITHUB_REPOSITORY}/releases/download/${source_tag}/SHA256SUMS" \
+            || [ -z "$(awk -v f="$archive_name" '$2 == f' ./tmp/s3-verify/SHA256SUMS)" ]; then
+            echo "::warning::${source_tag} publishes no checksum for ${archive_name}; building from source"
+            echo "s3_existing_archive=" >> "$GITHUB_ENV"
+            exit 0
+          fi
           # released archives are publicly readable (the existence check above
           # relies on that), so no AWS credentials are needed here
-          curl -fSs -o ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz https://sui-releases.s3.us-east-1.amazonaws.com/${{ env.s3_existing_archive }}
-          tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
+          curl -fSs -o "./tmp/s3-verify/${archive_name}" "https://sui-releases.s3.us-east-1.amazonaws.com/${s3_existing_archive}"
+          sha256=sha256sum; command -v sha256sum >/dev/null || sha256="shasum -a 256"
+          (cd ./tmp/s3-verify && awk -v f="$archive_name" '$2 == f' SHA256SUMS | $sha256 -c -)
+          mv "./tmp/s3-verify/${archive_name}" "./tmp/sui-${sui_tag}-${os_type}.tgz"
+          mkdir -p ${{ env.TMP_BUILD_DIR }}
+          tar -xf "./tmp/sui-${sui_tag}-${os_type}.tgz" -C ${{ env.TMP_BUILD_DIR }}
 
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_existing_archive == '' }}
@@ -218,6 +238,14 @@ jobs:
           mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
 
+      # Only archives this run compiled are attested; a reused S3 archive was
+      # checked against the SHA256SUMS of the release that built it instead.
+      - name: Attest build provenance
+        if: ${{ env.s3_existing_archive == '' }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # pin@v4.2.2
+        with:
+          subject-path: ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+
       - name: Publish Windows sui binary to Chocolatey
         if: ${{ matrix.os == 'windows-ghcloud' && contains(env.sui_tag, 'testnet') }}
         shell: bash
@@ -262,6 +290,51 @@ jobs:
           token: ${{ secrets.WALRUS_REPO_DISPATCH }}
           event-type: update-walrus-sui-testnet-tag
           client-payload: '{"new_tag": "${{ env.sui_tag }}"}'
+
+  # Publish a SHA256SUMS file for the archives attached to this release, so
+  # users can check a download (`sha256sum -c SHA256SUMS --ignore-missing`) and
+  # later runs can verify archives they reuse from S3. Provenance attestations
+  # are made in release-build, only for archives that run compiled. Runs only
+  # when every platform succeeded, so SHA256SUMS always covers the full set.
+  checksums:
+    name: Publish checksums
+    needs: release-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach SHA256SUMS to the GitHub release
+    steps:
+      - name: Derive the release tag
+        shell: bash
+        run: |
+          # Same normalisation and guard as release-build (read from env, never
+          # interpolated into the script).
+          sui_tag="${TAG_NAME#refs/tags/}"
+          if [[ ! "$sui_tag" =~ ^(devnet|testnet|mainnet)-v[0-9A-Za-z.-]+$ ]]; then
+            echo "sui_tag must be a release tag (devnet-v*/testnet-v*/mainnet-v*), got: $sui_tag"
+            exit 1
+          fi
+          echo "sui_tag=$sui_tag" >> "$GITHUB_ENV"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # pin@v6.0.0
+        with:
+          pattern: sui-binaries-*
+          merge-multiple: true
+          path: ./archives
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd ./archives
+          sha256sum -- *.tgz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attach SHA256SUMS to ${{ env.sui_tag }} release in GH
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # pin@v2.5.0
+        with:
+          tag_name: ${{ env.sui_tag }}
+          files: |
+            ./archives/SHA256SUMS
 
   # Copy built archives to s3://sui-releases so future runs skip the rebuild and
   # node operators can pull binaries by tag. Runs in the protected `release`
