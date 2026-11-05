@@ -479,10 +479,16 @@ pub enum CommandOutput {
     ZkLoginSigVerify(ZkLoginSigVerifyResponse),
 }
 
-/// Offline verification has no protocol config, so accept ML-DSA-65 here.
-/// The network still enforces `mldsa65_auth` at submission.
+/// Offline verification has no protocol config, so accept every signature
+/// type, like the RPC verify endpoint. The network enforces the protocol
+/// flags at submission.
 fn offline_verify_params() -> VerifyParams {
-    VerifyParams::default().with_mldsa65_in_multisig(true)
+    VerifyParams {
+        accept_zklogin_in_multisig: true,
+        accept_passkey_in_multisig: true,
+        accept_mldsa65_in_multisig: true,
+        ..Default::default()
+    }
 }
 
 impl KeyToolCommand {
