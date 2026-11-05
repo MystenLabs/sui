@@ -1645,11 +1645,13 @@ mod tests {
     use consensus_types::block::BlockDigest;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
+    use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{AuthorityName, ObjectID, random_object_ref};
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
     use sui_types::error::UserInputError;
     use sui_types::object::{Object, Owner};
     use sui_types::transaction::PlainTransactionWithClaims;
+    use sui_types::utils::to_sender_signed_transaction;
 
     async fn test_state_and_pool(
         capacity: usize,
@@ -2366,6 +2368,58 @@ mod tests {
         for receiver in live {
             assert_eq!(receiver.await.unwrap().unwrap().len(), 1);
         }
+    }
+
+    /// An entry is rejected at proposal once its `max_timestamp` is more than the grace period
+    /// in the past, and proposed while it is within the grace period.
+    #[sim_test]
+    async fn take_rejects_expired_entries() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let with_max_timestamp = |max_timestamp: u64| {
+            let (sender, keypair) = get_key_pair::<AccountKeyPair>();
+            let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+            let gas_object_ref = gas_object.compute_object_reference();
+            state.insert_genesis_object(gas_object);
+            let mut tx_data = TestTransactionBuilder::new(sender, gas_object_ref, 1)
+                .transfer_sui(Some(1), sender)
+                .build();
+            *tx_data.expiration_mut_for_testing() = TransactionExpiration::ValidDuring {
+                min_epoch: Some(epoch),
+                max_epoch: Some(epoch),
+                min_timestamp: None,
+                max_timestamp: Some(max_timestamp),
+                chain: state.get_chain_identifier(),
+                nonce: 0,
+            };
+            ConsensusTransaction::new_user_transaction_v2_message(
+                &AuthorityName::ZERO,
+                PlainTransactionWithClaims::no_aliases(to_sender_signed_transaction(
+                    tx_data, &keypair,
+                )),
+            )
+        };
+
+        let (expired_receiver, _) = pool
+            .try_insert(epoch, 100, vec![with_max_timestamp(now_secs - 60)])
+            .unwrap();
+        let (in_grace_receiver, _) = pool
+            .try_insert(epoch, 10, vec![with_max_timestamp(now_secs - 2)])
+            .unwrap();
+
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(pool.rejected_at_proposal_count("TransactionExpired"), 1);
+        assert!(matches!(
+            expired_receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::TransactionExpired
+        ));
+        ack(block(1));
+        assert_eq!(in_grace_receiver.await.unwrap().unwrap().len(), 1);
     }
 
     #[sim_test]

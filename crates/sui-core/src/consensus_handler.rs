@@ -4520,6 +4520,113 @@ mod tests {
         assert_eq!(captured_timestamp(), Some(Some(commit_timestamp_ms)));
     }
 
+    /// A transaction deferred for congestion carries the timestamp of the commit that schedules
+    /// it, so it expires if that commit is after its `max_timestamp`. With a zero congestion
+    /// budget, the second transaction on the object is deferred until its deferral limit, and a
+    /// later commit schedules it.
+    #[sim_test]
+    async fn test_deferred_transaction_carries_scheduling_commit_timestamp() {
+        use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
+        telemetry_subscribers::init_for_testing();
+
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.set_per_object_congestion_control_mode_for_testing(
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                target_utilization: 0,
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_estimate_us: u64::MAX,
+                randomness_scalar: 100,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
+            }),
+        );
+        protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(5);
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_objects: Vec<_> = (0..2)
+            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+            .collect();
+        let shared_object = Object::shared_for_testing();
+        let mut starting_objects = gas_objects.clone();
+        starting_objects.push(shared_object.clone());
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&starting_objects)
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
+        let mut digests = Vec::new();
+        let mut consensus_transactions = Vec::new();
+        for gas_object in gas_objects {
+            let transaction = test_user_transaction(
+                &state,
+                sender,
+                &keypair,
+                gas_object,
+                vec![shared_object.clone()],
+            )
+            .await;
+            digests.push(*transaction.tx().digest());
+            consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
+                &state.name,
+                transaction.into(),
+            ));
+        }
+
+        // Commit timestamps are not allowed to precede the epoch start.
+        let epoch_start_ms = state
+            .epoch_store_for_testing()
+            .epoch_start_config()
+            .epoch_start_timestamp_ms();
+        let first_commit_ms = epoch_start_ms + 1_000;
+        let second_commit_ms = epoch_start_ms + 5_000;
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                consensus_transactions,
+                1,
+                first_commit_ms,
+                1,
+            ))
+            .await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                vec![],
+                10,
+                second_commit_ms,
+                2,
+            ))
+            .await;
+
+        let captured_timestamps = || {
+            let captured = setup.captured_transactions.lock();
+            digests
+                .iter()
+                .map(|digest| {
+                    captured
+                        .iter()
+                        .flat_map(|(txns, _)| txns.iter())
+                        .find(|(s, _)| s.key() == TransactionKey::Digest(*digest))
+                        .and_then(|(_, env)| env.consensus_commit_timestamp_ms)
+                })
+                .collect::<Option<BTreeSet<_>>>()
+        };
+        for _ in 0..100 {
+            if captured_timestamps().is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            captured_timestamps(),
+            Some(BTreeSet::from([first_commit_ms, second_commit_ms]))
+        );
+    }
+
     #[sim_test]
     async fn test_rejected_transaction_sets_status_and_is_not_marked_processed() {
         telemetry_subscribers::init_for_testing();
