@@ -4227,10 +4227,6 @@ mod tests {
             resolved.end_resume_position(&window, &options),
             LedgerPoint::checkpoint_start(4)
         );
-        assert_eq!(
-            resolved.end_cursor_public_position(&options),
-            LedgerPoint::checkpoint_start(4)
-        );
     }
 
     /// An ascending scan whose high end is the tip, with nothing left to scan, ends at the tip

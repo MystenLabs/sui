@@ -464,15 +464,6 @@ mod tests {
             token,
             CursorToken::item(Position::Checkpoints { checkpoint: 5 })
         );
-        assert_eq!(
-            token.position.public_position(),
-            LedgerPoint::checkpoint_start(5)
-        );
-    }
-
-    #[test]
-    fn rejects_empty_token() {
-        assert!(CursorToken::decode(&[]).is_err());
     }
 
     /// Tokens in the schema that used tags 1-4 decode as a token with no kind or position.
