@@ -2553,6 +2553,17 @@ impl TransactionExpiration {
         }
     }
 
+    /// The earliest timestamp (Unix ms) at which `is_expired_at` is true, if there is one.
+    pub fn first_expired_timestamp_ms(&self) -> Option<u64> {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => None,
+            TransactionExpiration::ValidDuring { max_timestamp, .. }
+            | TransactionExpiration::Validity { max_timestamp, .. } => max_timestamp
+                .and_then(|max| max.checked_add(1))
+                .and_then(|secs| secs.checked_mul(1000)),
+        }
+    }
+
     /// The validators allowed to propose this transaction in consensus during `epoch`.
     ///
     /// A set recorded for any other epoch indexes into a committee that is not the one deciding

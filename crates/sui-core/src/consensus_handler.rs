@@ -610,7 +610,6 @@ impl CheckpointQueue {
         &mut self,
         chunk: Chunk,
         assigned_versions: &HashMap<TransactionKey, AssignedVersions>,
-        timestamp_expired_txns: &HashSet<TransactionKey>,
         timestamp: CheckpointTimestamp,
         consensus_commit_ref: CommitRef,
         rejected_transactions_digest: Digest,
@@ -624,15 +623,13 @@ impl CheckpointQueue {
             .schedulables
             .into_iter()
             .map(|s| {
-                let key = s.key();
                 let versions = assigned_versions
-                    .get(&key)
+                    .get(&s.key())
                     .cloned()
                     .unwrap_or_else(AssignedVersions::empty);
-                let mut env = ExecutionEnv::new().with_assigned_versions(versions);
-                if timestamp_expired_txns.contains(&key) {
-                    env = env.with_timestamp_expired();
-                }
+                let env = ExecutionEnv::new()
+                    .with_assigned_versions(versions)
+                    .with_consensus_commit_timestamp(timestamp);
                 (s, env)
             })
             .collect();
@@ -984,8 +981,6 @@ struct CommitHandlerState {
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
-    // Transactions scheduled in this commit after their `max_timestamp`. Execution aborts them.
-    timestamp_expired_txns: HashSet<TransactionKey>,
 }
 
 impl CommitHandlerState {
@@ -999,7 +994,6 @@ impl CommitHandlerState {
             occurrence_counts: HashMap::new(),
             staggering_counts: StaggeringCommitCounts::default(),
             contested_transaction_digests: HashMap::new(),
-            timestamp_expired_txns: HashSet::new(),
         }
     }
 
@@ -1516,45 +1510,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
         }
 
-        // Expiry is decided by the timestamp of the commit that schedules the transaction, after
-        // the deferral and cancellation checks above have run.
-        if protocol_config.enable_timestamp_transaction_expiration() {
-            for transaction in transactions_to_schedule
-                .iter()
-                .chain(randomness_transactions_to_schedule.iter())
-            {
-                let tx_digest = *transaction.tx().digest();
-                if !transaction
-                    .tx()
-                    .transaction_data()
-                    .expiration()
-                    .is_expired_at(commit_info.timestamp)
-                {
-                    continue;
-                }
-                if previously_deferred_tx_digests.contains_key(&tx_digest) {
-                    assert_reachable_gated!(
-                        "deferred transaction scheduled after its max_timestamp",
-                        |pc| pc.enable_timestamp_transaction_expiration()
-                    );
-                } else {
-                    assert_reachable_gated!(
-                        "new transaction scheduled after its max_timestamp",
-                        |pc| pc.enable_timestamp_transaction_expiration()
-                    );
-                }
-                if cancelled_txns.contains_key(&tx_digest) {
-                    assert_reachable_gated!(
-                        "cancelled transaction scheduled after its max_timestamp",
-                        |pc| pc.enable_timestamp_transaction_expiration()
-                    );
-                }
-                state
-                    .timestamp_expired_txns
-                    .insert(TransactionKey::Digest(tx_digest));
-            }
-        }
-
         let mut total_deferred_txns = 0;
         {
             let mut deferred_transactions = self
@@ -1811,7 +1766,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             pending_checkpoints.extend(checkpoint_queue.push_chunk(
                 chunk.into(),
                 &assigned_versions,
-                &state.timestamp_expired_txns,
                 commit_info.timestamp,
                 commit_info.consensus_commit_ref,
                 commit_info.rejected_transactions_digest,
@@ -1829,7 +1783,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 pending_checkpoints.extend(checkpoint_queue.push_chunk(
                     chunk.into(),
                     &assigned_versions,
-                    &state.timestamp_expired_txns,
                     commit_info.timestamp,
                     commit_info.consensus_commit_ref,
                     commit_info.rejected_transactions_digest,
@@ -3011,47 +2964,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // A transaction before its `min_timestamp` is dropped before it takes owned object
-                // locks, and is not marked processed, so that a later copy can be sequenced.
-                if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
-                    &parsed.transaction.kind
-                    && self
-                        .epoch_store
-                        .protocol_config()
-                        .enable_timestamp_transaction_expiration()
-                {
-                    let tx = tx_with_claims.tx();
-                    if tx
-                        .transaction_data()
-                        .expiration()
-                        .is_not_yet_valid_at(commit_info.timestamp)
-                    {
-                        assert_reachable_gated!(
-                            "transaction before its min_timestamp dropped in consensus",
-                            |pc| pc.enable_timestamp_transaction_expiration()
-                        );
-                        debug!(
-                            "Dropping transaction {} not yet valid at commit timestamp {}",
-                            tx.digest(),
-                            commit_info.timestamp
-                        );
-                        self.metrics
-                            .consensus_handler_dropped_transactions
-                            .with_label_values(&["not_yet_valid"])
-                            .inc();
-                        status_updates.push((position, ConsensusTxStatus::Dropped));
-                        num_dropped_user_transactions[author] += 1;
-                        self.epoch_store.set_rejection_vote_reason(
-                            position,
-                            &sui_types::error::SuiErrorKind::TransactionNotYetValid {
-                                timestamp_ms: commit_info.timestamp,
-                            }
-                            .into(),
-                        );
-                        continue;
-                    }
-                }
-
                 // Perform post-consensus owned object conflict detection. If lock acquisition
                 // fails, the transaction has invalid/conflicting owned inputs and should be dropped.
                 // This must happen AFTER all filtering checks above to avoid acquiring locks
@@ -3947,8 +3859,7 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         transaction::{
-            CertifiedTransaction, TransactionData, TransactionDataAPI, TransactionExpiration,
-            VerifiedCertificate,
+            CertifiedTransaction, TransactionData, TransactionDataAPI, VerifiedCertificate,
         },
     };
 
@@ -3964,9 +3875,7 @@ mod tests {
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::{
-            test_user_transaction, test_user_transaction_with_expiration,
-        },
+        consensus_adapter::consensus_tests::test_user_transaction,
         consensus_test_utils::{TestConsensusCommit, setup_consensus_handler_for_testing},
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
@@ -4561,201 +4470,54 @@ mod tests {
     }
 
     #[sim_test]
-    async fn test_timestamp_window_in_consensus() {
-        // The flag is devnet-only, and simtest-mainnet runs with the mainnet chain.
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_enable_timestamp_transaction_expiration_for_testing(true);
-            config
-        });
+    async fn test_scheduled_transaction_carries_commit_timestamp() {
         telemetry_subscribers::init_for_testing();
 
         let (sender, keypair) = deterministic_random_account_key();
-        let gas_objects: Vec<Object> = (0..3)
-            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
-            .collect();
-        let owned_objects: Vec<Object> = (0..3)
-            .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
-            .collect();
-        let mut all_objects = gas_objects.clone();
-        all_objects.extend(owned_objects.clone());
-
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
         let state = TestAuthorityBuilder::new()
-            .with_starting_objects(&all_objects)
+            .with_starting_objects(std::slice::from_ref(&gas_object))
             .build()
             .await;
-        let epoch_store = state.epoch_store_for_testing();
-        let epoch = epoch_store.epoch();
-        let chain = epoch_store.get_chain_identifier();
-        let start = epoch_store.epoch_start_config().epoch_start_timestamp_ms();
-        let expiration = |min_timestamp, max_timestamp| TransactionExpiration::ValidDuring {
-            min_epoch: Some(epoch),
-            max_epoch: Some(epoch),
-            min_timestamp,
-            max_timestamp,
-            chain,
-            nonce: 0,
-        };
-        let owned_refs: Vec<ObjectRef> = owned_objects
-            .iter()
-            .map(|o| {
-                state
-                    .get_object(&o.id())
-                    .unwrap()
-                    .compute_object_reference()
-            })
-            .collect();
 
-        let make_tx = async |i: usize, exp| {
-            let tx = test_user_transaction_with_expiration(
-                &state,
-                sender,
-                &keypair,
-                gas_objects[i].clone(),
-                vec![owned_objects[i].clone()],
-                exp,
-            )
-            .await;
-            let digest = *tx.tx().digest();
-            let consensus_tx =
-                ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
-            (digest, consensus_tx)
-        };
-        // The first commit is at the start of second `first_secs`, and the second commit is one
-        // second later. Expiration timestamps are in seconds.
-        let first_secs = start / 1000 + 1;
-        // An expired transaction is sequenced and locked so that execution aborts it. Only a
-        // transaction before its `min_timestamp` is dropped, because it can become valid later.
-        let (expired_digest, expired_tx) = make_tx(0, expiration(None, Some(first_secs - 1))).await;
-        let (valid_digest, valid_tx) =
-            make_tx(1, expiration(Some(first_secs), Some(first_secs))).await;
-        let (early_digest, early_tx) = make_tx(2, expiration(Some(first_secs + 1), None)).await;
-        let expired_key = SequencedConsensusTransactionKey::External(expired_tx.key());
-        let valid_key = SequencedConsensusTransactionKey::External(valid_tx.key());
-        let early_key = SequencedConsensusTransactionKey::External(early_tx.key());
+        let transaction = test_user_transaction(&state, sender, &keypair, gas_object, vec![]).await;
+        let digest = *transaction.tx().digest();
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
 
+        // Commit timestamps are not allowed to precede the epoch start.
+        let commit_timestamp_ms = state
+            .epoch_store_for_testing()
+            .epoch_start_config()
+            .epoch_start_timestamp_ms()
+            + 1_234;
         let mut setup = setup_consensus_handler_for_testing(&state).await;
-        let round = 100;
         setup
             .consensus_handler
             .handle_consensus_commit_for_test(TestConsensusCommit::new(
-                vec![expired_tx, valid_tx, early_tx.clone()],
-                round,
-                first_secs * 1000,
+                vec![consensus_tx],
+                100,
+                commit_timestamp_ms,
                 10,
             ))
             .await;
 
-        let status_at = |round: u64, index: TransactionIndex| {
-            epoch_store
-                .consensus_tx_status_cache
-                .notify_read_transaction_status(ConsensusPosition {
-                    epoch,
-                    block: BlockRef {
-                        author: consensus_config::AuthorityIndex::ZERO,
-                        round: round as u32,
-                        digest: Default::default(),
-                    },
-                    index,
-                })
-        };
-        assert!(matches!(
-            status_at(round, 0).await,
-            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
-        ));
-        assert!(matches!(
-            status_at(round, 1).await,
-            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
-        ));
-        assert!(matches!(
-            status_at(round, 2).await,
-            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
-        ));
-        assert_eq!(
+        let captured_timestamp = || {
             setup
-                .consensus_handler
-                .metrics
-                .consensus_handler_dropped_transactions
-                .with_label_values(&["not_yet_valid"])
-                .get(),
-            1
-        );
-
-        // The handler, not execution, decides that the transaction is past its `max_timestamp`.
-        let timestamp_expired = |digest: TransactionDigest| {
-            let captured = setup.captured_transactions.lock();
-            captured
+                .captured_transactions
+                .lock()
                 .iter()
                 .flat_map(|(txns, _)| txns.iter())
                 .find(|(s, _)| s.key() == TransactionKey::Digest(digest))
-                .map(|(_, env)| env.timestamp_expired)
+                .map(|(_, env)| env.consensus_commit_timestamp_ms)
         };
         for _ in 0..100 {
-            if timestamp_expired(valid_digest).is_some() {
+            if captured_timestamp().is_some() {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        assert_eq!(timestamp_expired(expired_digest), Some(true));
-        assert_eq!(timestamp_expired(valid_digest), Some(false));
-        assert_eq!(timestamp_expired(early_digest), None);
-
-        // The dropped transaction takes no lock and is not marked processed.
-        let locks = epoch_store.get_owned_object_locks_map(&owned_refs);
-        assert_eq!(locks.get(&owned_refs[0]), Some(&expired_digest));
-        assert_eq!(locks.get(&owned_refs[1]), Some(&valid_digest));
-        assert_eq!(locks.get(&owned_refs[2]), None);
-        assert!(
-            epoch_store
-                .is_consensus_message_processed(&expired_key)
-                .unwrap()
-        );
-        assert!(
-            epoch_store
-                .is_consensus_message_processed(&valid_key)
-                .unwrap()
-        );
-        assert!(
-            !epoch_store
-                .is_consensus_message_processed(&early_key)
-                .unwrap()
-        );
-        assert!(matches!(
-            epoch_store
-                .get_rejection_vote_reason(ConsensusPosition {
-                    epoch,
-                    block: BlockRef {
-                        author: consensus_config::AuthorityIndex::ZERO,
-                        round: round as u32,
-                        digest: Default::default(),
-                    },
-                    index: 2,
-                })
-                .map(|e| e.into_inner()),
-            Some(sui_types::error::SuiErrorKind::TransactionNotYetValid { .. })
-        ));
-
-        // A transaction sequenced before its window opens is accepted once resequenced inside it.
-        let round = round + 1;
-        setup
-            .consensus_handler
-            .handle_consensus_commit_for_test(TestConsensusCommit::new(
-                vec![early_tx],
-                round,
-                (first_secs + 1) * 1000,
-                11,
-            ))
-            .await;
-        assert!(matches!(
-            status_at(round, 0).await,
-            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
-        ));
-        let locks = epoch_store.get_owned_object_locks_map(&owned_refs);
-        assert_eq!(locks.get(&owned_refs[2]), Some(&early_digest));
-        assert!(
-            epoch_store
-                .is_consensus_message_processed(&early_key)
-                .unwrap()
-        );
+        assert_eq!(captured_timestamp(), Some(Some(commit_timestamp_ms)));
     }
 
     #[sim_test]
@@ -5526,7 +5288,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(5, 1),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5534,7 +5295,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(3, 2),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5555,7 +5315,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(5, 1),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5579,7 +5338,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 1),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5588,7 +5346,6 @@ mod tests {
             let flushed = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 2),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5606,7 +5363,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 1),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5614,7 +5370,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 2),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5622,7 +5377,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 3),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
@@ -5642,7 +5396,6 @@ mod tests {
             let flushed1 = queue.push_chunk(
                 make_chunk(max_tx / 2, 1),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5652,7 +5405,6 @@ mod tests {
             let flushed2 = queue.push_chunk(
                 make_chunk(max_tx / 2, 2),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5662,7 +5414,6 @@ mod tests {
             let flushed3 = queue.push_chunk(
                 make_chunk(max_tx / 2, 3),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(3),
                 Digest::default(),
@@ -5685,7 +5436,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 100),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5693,7 +5443,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 200),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5712,7 +5461,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(10, 1),
                 &versions,
-                &HashSet::new(),
                 5000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5752,7 +5500,6 @@ mod tests {
             queue.push_chunk(
                 chunk1,
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5760,7 +5507,6 @@ mod tests {
             queue.push_chunk(
                 chunk2,
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5787,7 +5533,6 @@ mod tests {
             queue.push_chunk(
                 chunk1,
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5809,7 +5554,6 @@ mod tests {
             let flushed = queue.push_chunk(
                 chunk2,
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(2),
                 Digest::default(),
@@ -5837,7 +5581,6 @@ mod tests {
             queue.push_chunk(
                 make_chunk(5, 1),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5858,7 +5601,6 @@ mod tests {
             let flushed1 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 1),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5866,7 +5608,6 @@ mod tests {
             let flushed2 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 2),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),
@@ -5874,7 +5615,6 @@ mod tests {
             let flushed3 = queue.push_chunk(
                 make_chunk(max_tx / 2 + 1, 3),
                 &versions,
-                &HashSet::new(),
                 1000,
                 make_commit_ref(1),
                 Digest::default(),

@@ -911,9 +911,9 @@ pub struct ExecutionEnv {
     /// unconditionally (settlement transactions - see
     /// `execution_scheduler::causal_admission`).
     pub(crate) causal_index: Option<u64>,
-    /// Whether the consensus commit that scheduled the transaction is after its
-    /// `max_timestamp`. Execution never reads the timestamp itself.
-    pub timestamp_expired: bool,
+    /// Timestamp (Unix ms) of the consensus commit that scheduled the transaction. A transaction
+    /// scheduled after its `max_timestamp` fails with `TransactionExpired`. None skips the check.
+    pub consensus_commit_timestamp_ms: Option<u64>,
 }
 
 impl Default for ExecutionEnv {
@@ -924,7 +924,7 @@ impl Default for ExecutionEnv {
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
             causal_index: None,
-            timestamp_expired: false,
+            consensus_commit_timestamp_ms: None,
         }
     }
 }
@@ -949,8 +949,8 @@ impl ExecutionEnv {
         self
     }
 
-    pub fn with_timestamp_expired(mut self) -> Self {
-        self.timestamp_expired = true;
+    pub fn with_consensus_commit_timestamp(mut self, timestamp_ms: u64) -> Self {
+        self.consensus_commit_timestamp_ms = Some(timestamp_ms);
         self
     }
 
@@ -2038,36 +2038,31 @@ impl AuthorityState {
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
+            transaction_data.expiration(),
+            execution_env
+                .consensus_commit_timestamp_ms
+                .filter(|_| protocol_config.enable_timestamp_transaction_expiration()),
         );
+        if let Some(errors) = &early_execution_error
+            && errors
+                .iter()
+                .any(|e| matches!(e, ExecutionErrorKind::TransactionExpired))
+        {
+            assert_reachable_gated!("transaction executed after its max_timestamp", |pc| pc
+                .enable_timestamp_transaction_expiration());
+            if errors
+                .iter()
+                .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
+            {
+                assert_reachable_gated!("expired transaction with insufficient funds", |pc| pc
+                    .enable_timestamp_transaction_expiration());
+            }
+        }
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let system_object_versions = execution_env
             .assigned_versions
             .system_object_versions
             .clone();
-        // Expiry goes last, so effects report any other early error and the insufficient-funds
-        // short-circuit still applies.
-        let early_execution_error = if execution_env.timestamp_expired {
-            match early_execution_error {
-                Some(mut errors) => {
-                    if errors
-                        .iter()
-                        .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
-                    {
-                        assert_reachable_gated!(
-                            "expired transaction with insufficient funds",
-                            |pc| pc.enable_timestamp_transaction_expiration()
-                        );
-                    }
-                    errors.push(ExecutionErrorKind::TransactionExpired);
-                    Some(errors)
-                }
-                None => Some(nonempty::NonEmpty::new(
-                    ExecutionErrorKind::TransactionExpired,
-                )),
-            }
-        } else {
-            early_execution_error
-        };
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),

@@ -162,10 +162,8 @@ fn timestamp_expiration_disabled(protocol_config: Option<&ProtocolConfig>) -> bo
 }
 
 /// Picks a `(min_timestamp, max_timestamp)` window in Unix seconds. Some windows have already
-/// closed, and some open seconds from now, so validators reject the tx at submission unless a fail
-/// point skips that check, in which case voting rejects an early tx. Some open at the current or
-/// next second. Commit timestamps are a median of block timestamps and can trail the validator's
-/// clock at submission, so such a tx can pass submission and still be sequenced too early. The
+/// closed. Some open at the current or next second, or seconds from now, so validators reject the
+/// tx at submission unless a fail point skips that check, in which case voting rejects it. The
 /// rest close within a few seconds, so execution can abort the tx when it is first sequenced or
 /// after it is deferred.
 fn sample_timestamp_window(rng: &mut impl Rng) -> (Option<u64>, Option<u64>) {

@@ -192,6 +192,9 @@ pub fn simulate_transaction(
         &checked_input_objects,
         certificate_deny_set,
         &FundsWithdrawStatus::MaybeSufficient,
+        transaction.expiration(),
+        // Simulation does not check the timestamp window.
+        None,
     );
     // Dev-inspect/simulation path (not committed): no assigned accumulator version here, so the
     // IFFW short-circuit applies unconditionally (`None`), matching non-mainnet execution.

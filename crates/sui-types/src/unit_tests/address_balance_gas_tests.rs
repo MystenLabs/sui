@@ -847,11 +847,12 @@ fn test_is_expired_at() {
     assert!(!TransactionExpiration::Epoch(0).is_expired_at(5));
     assert!(!valid_during_with_timestamps(None, None).is_expired_at(u64::MAX));
 
-    // Being before `min_timestamp` is not expiry.
+    // Bounds are in seconds, and the argument is in ms. Being before `min_timestamp` is not
+    // expiry.
     let window = valid_during_with_timestamps(Some(10), Some(20));
     assert!(!window.is_expired_at(0));
-    assert!(!window.is_expired_at(20));
-    assert!(window.is_expired_at(21));
+    assert!(!window.is_expired_at(20_999));
+    assert!(window.is_expired_at(21_000));
     assert!(!valid_during_with_timestamps(Some(10), None).is_expired_at(u64::MAX));
 }
 
@@ -863,8 +864,8 @@ fn test_is_not_yet_valid_at() {
 
     // Being after `max_timestamp` is expiry, not "not yet valid".
     let window = valid_during_with_timestamps(Some(10), Some(20));
-    assert!(window.is_not_yet_valid_at(9));
-    assert!(!window.is_not_yet_valid_at(10));
+    assert!(window.is_not_yet_valid_at(9_999));
+    assert!(!window.is_not_yet_valid_at(10_000));
     assert!(!window.is_not_yet_valid_at(u64::MAX));
     assert!(!valid_during_with_timestamps(None, Some(20)).is_not_yet_valid_at(0));
 }
