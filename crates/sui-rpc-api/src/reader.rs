@@ -347,7 +347,9 @@ impl StateReader {
 }
 
 /// See [`StateReader::at_checkpoint_upper_bound`]. Read once per request so that a batch checks
-/// every item against the same bound.
+/// every item against the same bound. Other implementors of the rpc services build it with
+/// [`Self::new`] from the height they serve (e.g. sui-kv-rpc's served height), so every backend
+/// applies the same check.
 #[derive(Clone, Copy, Debug)]
 pub struct AtCheckpointUpperBound {
     /// The highest checkpoint every rpc index has committed.
@@ -355,6 +357,11 @@ pub struct AtCheckpointUpperBound {
 }
 
 impl AtCheckpointUpperBound {
+    /// The bound of a backend whose indexes have all committed `highest_indexed`.
+    pub fn new(highest_indexed: u64) -> Self {
+        Self { highest_indexed }
+    }
+
     /// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`, for the request field `at_checkpoint`) if
     /// `checkpoint` is above the bound: the indexes may not have caught up to it, so an answer
     /// could be wrong.
@@ -370,9 +377,9 @@ impl AtCheckpointUpperBound {
 }
 
 /// The error for an `at_checkpoint` read above the highest indexed checkpoint: `OutOfRange` with
-/// an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo). Shared with
-/// other implementors of the rpc services (e.g. sui-kv-rpc, which passes its served height) so
-/// every backend fails identically.
+/// an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo). Public so
+/// reads that compare the bound themselves, rather than through
+/// [`AtCheckpointUpperBound::check`], fail identically on every backend.
 pub fn checkpoint_not_yet_indexed_error(checkpoint: u64, highest_indexed: u64) -> crate::RpcError {
     above_latest_available(
         "at_checkpoint",

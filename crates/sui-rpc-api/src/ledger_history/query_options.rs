@@ -230,7 +230,7 @@ pub fn below_serving_floor(floor_checkpoint: u64) -> RpcError {
 /// the field's value. It is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`] carrying
 /// all three, by which clients recognize a request that becomes servable once this server
 /// catches up.
-pub fn above_latest_available(
+pub(crate) fn above_latest_available(
     bound: &str,
     requested_checkpoint: u64,
     checkpoint_hi_exclusive: u64,
