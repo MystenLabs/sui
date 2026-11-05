@@ -35,6 +35,7 @@ title: Module `sui_system::validator_set`
 -  [Function `validator_address_by_pool_id`](#sui_system_validator_set_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#sui_system_validator_set_pool_exchange_rates)
 -  [Function `validator_by_pool_id`](#sui_system_validator_set_validator_by_pool_id)
+-  [Function `staking_pool_by_pool_id`](#sui_system_validator_set_staking_pool_by_pool_id)
 -  [Function `next_epoch_validator_count`](#sui_system_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#sui_system_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#sui_system_validator_set_is_duplicate_with_active_validator)
@@ -1647,6 +1648,47 @@ gas price, weighted by stake.
         self.inactive_validators[pool_id].load_validator_maybe_upgrade()
     };
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_staking_pool_by_pool_id"></a>
+
+## Function `staking_pool_by_pool_id`
+
+Borrow the staking pool of a validator in any state without upgrading any validator.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_by_pool_id">staking_pool_by_pool_id</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, pool_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">sui_system::staking_pool::StakingPool</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_by_pool_id">staking_pool_by_pool_id</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, pool_id: ID): &StakingPool {
+    // If the pool id is not recorded in the mapping, then it must be inactive.
+    <b>if</b> (!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>.contains(pool_id)) {
+        <b>return</b> self.inactive_validators[pool_id].staking_pool_ref()
+    };
+    <b>let</b> validator_address = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a>[pool_id];
+    <b>let</b> active_idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
+    <b>if</b> (active_idx.is_some()) {
+        <b>return</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[active_idx.destroy_some()].get_staking_pool_ref()
+    };
+    <b>let</b> pending_idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(
+        &self.pending_active_validators,
+        validator_address,
+    );
+    <b>if</b> (pending_idx.is_some()) {
+        <b>return</b> self.pending_active_validators[pending_idx.destroy_some()].get_staking_pool_ref()
+    };
+    self.validator_candidates[validator_address].staking_pool_ref()
 }
 </code></pre>
 
