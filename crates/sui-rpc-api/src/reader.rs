@@ -384,6 +384,24 @@ impl AtCheckpointUpperBound {
         let first_unindexed = self.highest_indexed.saturating_add(1);
         above_latest_available("cursor", first_unindexed, first_unindexed)
     }
+
+    /// The highest checkpoint every rpc index has committed.
+    pub(crate) fn highest_indexed(&self) -> u64 {
+        self.highest_indexed
+    }
+
+    /// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`, for a cursor) if a cursor recording `checkpoint`
+    /// names a position above the bound, which the indexes have not caught up to.
+    pub(crate) fn check_cursor(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
+        if checkpoint > self.highest_indexed {
+            return Err(above_latest_available(
+                "cursor",
+                checkpoint,
+                self.highest_indexed.saturating_add(1),
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// The error for an `at_checkpoint` read above the highest indexed checkpoint: `OutOfRange` with
