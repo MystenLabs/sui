@@ -3105,6 +3105,11 @@ async fn test_implicit_clock_read_uses_pinned_version() {
 
 #[tokio::test]
 async fn test_timestamp_expiration_decided_outside_execution() {
+    // The flag is devnet-only, and simtest-mainnet runs with the mainnet chain.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_timestamp_transaction_expiration_for_testing(true);
+        config
+    });
     // The consensus handler decides whether a transaction is past its `max_timestamp` and passes
     // the decision in `ExecutionEnv`. Execution never reads the Clock for this, and never aborts a
     // transaction for being before its `min_timestamp`.
@@ -3118,11 +3123,6 @@ async fn test_timestamp_expiration_decided_outside_execution() {
     )
     .await;
     let epoch_store = authority_state.load_epoch_store_one_call_per_task();
-    assert!(
-        epoch_store
-            .protocol_config()
-            .enable_timestamp_transaction_expiration()
-    );
 
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     // The window is far in the future, so the transaction is before its `min_timestamp` by any
@@ -3204,7 +3204,7 @@ async fn test_timestamp_expiration_decided_outside_execution() {
     assert!(effects.gas_cost_summary().net_gas_usage() > 0);
     assert_no_clock_read(&effects);
 
-    // Expiry replaces any other early error.
+    // Another early error takes precedence, and insufficient funds still charges no gas.
     let effects = execute(
         gas_object_ids[2],
         ExecutionEnv::new()
@@ -3216,13 +3216,14 @@ async fn test_timestamp_expiration_decided_outside_execution() {
         matches!(
             effects.status(),
             ExecutionStatus::Failure(ExecutionFailure {
-                error: ExecutionErrorKind::TransactionExpired,
+                error: ExecutionErrorKind::InsufficientFundsForWithdraw,
                 ..
             })
         ),
         "{:?}",
         effects.status()
     );
+    assert_eq!(effects.gas_cost_summary().net_gas_usage(), 0);
 }
 
 #[sim_test]

@@ -1278,6 +1278,11 @@ mod tests {
     /// accept vote, because execution aborts it.
     #[sim_test]
     async fn test_vote_on_timestamp_window() {
+        // The flag is devnet-only, and simtest-mainnet runs with the mainnet chain.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_enable_timestamp_transaction_expiration_for_testing(true);
+            config
+        });
         let (sender, keypair) = deterministic_random_account_key();
         let gas_objects: Vec<Object> = (0..2)
             .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
@@ -1292,11 +1297,6 @@ mod tests {
             .build()
             .await;
         let epoch_store = state.epoch_store_for_testing();
-        assert!(
-            epoch_store
-                .protocol_config()
-                .enable_timestamp_transaction_expiration()
-        );
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -1358,9 +1358,7 @@ mod tests {
                     index: 1,
                 })
                 .map(|e| e.into_inner()),
-            Some(SuiErrorKind::UserInputError {
-                error: UserInputError::InvalidExpiration { .. }
-            })
+            Some(SuiErrorKind::TransactionNotYetValid { .. })
         ));
     }
 

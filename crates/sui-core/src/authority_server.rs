@@ -822,8 +822,6 @@ impl ValidatorService {
             // Reject up front rather than proposing a block that peers would reject: the client
             // must submit to one of the proposers the transaction allows.
             epoch_store.check_self_allowed_proposer(transaction.data().transaction_data())?;
-            epoch_store
-                .check_timestamp_expiration_at_submission(transaction.data().transaction_data())?;
 
             // A request must not repeat a transaction.
             if !request_digests.insert(tx_digest) {
@@ -1143,6 +1141,15 @@ impl ValidatorService {
                     ?tx_digest,
                     "handle_submit_transaction: consensus message already processed"
                 );
+                continue;
+            }
+
+            // Checked after the lookups above, so that a retry of a transaction that already
+            // executed gets its effects rather than an expiry error.
+            if let Err(error) = epoch_store.check_timestamp_expiration_at_submission(
+                verified_transaction.tx().data().transaction_data(),
+            ) {
+                results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }
 

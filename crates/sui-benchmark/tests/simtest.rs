@@ -2183,8 +2183,8 @@ mod test {
             config
         });
 
-        // Validators sometimes admit a transaction outside its timestamp window, as a proposer
-        // with a skewed clock would, so that voting and consensus reject it instead.
+        // Validators sometimes admit a transaction outside its timestamp window, as a validator
+        // with a clock that is ahead or behind would, so that voting and consensus see it.
         register_fail_point_if("skip-timestamp-expiration-check-at-submission", || {
             thread_rng().gen_bool(0.2)
         });

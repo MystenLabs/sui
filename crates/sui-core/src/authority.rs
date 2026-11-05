@@ -2044,12 +2044,27 @@ impl AuthorityState {
             .assigned_versions
             .system_object_versions
             .clone();
-        // Expiry replaces every other early error, because an expired transaction is never
-        // checked for congestion or funds.
+        // Expiry goes last, so effects report any other early error and the insufficient-funds
+        // short-circuit still applies.
         let early_execution_error = if execution_env.timestamp_expired {
-            Some(nonempty::NonEmpty::new(
-                ExecutionErrorKind::TransactionExpired,
-            ))
+            match early_execution_error {
+                Some(mut errors) => {
+                    if errors
+                        .iter()
+                        .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
+                    {
+                        assert_reachable_gated!(
+                            "expired transaction with insufficient funds",
+                            |pc| pc.enable_timestamp_transaction_expiration()
+                        );
+                    }
+                    errors.push(ExecutionErrorKind::TransactionExpired);
+                    Some(errors)
+                }
+                None => Some(nonempty::NonEmpty::new(
+                    ExecutionErrorKind::TransactionExpired,
+                )),
+            }
         } else {
             early_execution_error
         };

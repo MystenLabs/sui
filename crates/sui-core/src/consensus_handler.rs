@@ -1490,13 +1490,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         for transaction in ordered_randomness_txns {
-            let expired = protocol_config.enable_timestamp_transaction_expiration()
-                && transaction
-                    .tx()
-                    .transaction_data()
-                    .expiration()
-                    .is_expired_at(commit_info.timestamp);
-            if state.dkg_failed && !expired {
+            if state.dkg_failed {
                 debug!(
                     "Canceling randomness-using transaction {:?} because DKG failed",
                     transaction.tx().digest(),
@@ -1520,6 +1514,45 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &previously_deferred_tx_digests,
                 execution_time_estimator,
             );
+        }
+
+        // Expiry is decided by the timestamp of the commit that schedules the transaction, after
+        // the deferral and cancellation checks above have run.
+        if protocol_config.enable_timestamp_transaction_expiration() {
+            for transaction in transactions_to_schedule
+                .iter()
+                .chain(randomness_transactions_to_schedule.iter())
+            {
+                let tx_digest = *transaction.tx().digest();
+                if !transaction
+                    .tx()
+                    .transaction_data()
+                    .expiration()
+                    .is_expired_at(commit_info.timestamp)
+                {
+                    continue;
+                }
+                if previously_deferred_tx_digests.contains_key(&tx_digest) {
+                    assert_reachable_gated!(
+                        "deferred transaction scheduled after its max_timestamp",
+                        |pc| pc.enable_timestamp_transaction_expiration()
+                    );
+                } else {
+                    assert_reachable_gated!(
+                        "new transaction scheduled after its max_timestamp",
+                        |pc| pc.enable_timestamp_transaction_expiration()
+                    );
+                }
+                if cancelled_txns.contains_key(&tx_digest) {
+                    assert_reachable_gated!(
+                        "cancelled transaction scheduled after its max_timestamp",
+                        |pc| pc.enable_timestamp_transaction_expiration()
+                    );
+                }
+                state
+                    .timestamp_expired_txns
+                    .insert(TransactionKey::Digest(tx_digest));
+            }
         }
 
         let mut total_deferred_txns = 0;
@@ -1949,44 +1982,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         execution_time_estimator: &ExecutionTimeEstimator,
     ) {
         let tx_digest = *transaction.tx().digest();
-
-        // An expired transaction aborts before reading its inputs, so it is scheduled without the
-        // deferral and cancellation checks below. A randomness-using transaction still waits for
-        // a commit that generates randomness, since only such a commit schedules it.
-        if protocol_config.enable_timestamp_transaction_expiration()
-            && transaction
-                .tx()
-                .transaction_data()
-                .expiration()
-                .is_expired_at(commit_info.timestamp)
-        {
-            if transaction.tx().transaction_data().uses_randomness()
-                && state.randomness_round.is_none()
-                && !state.dkg_failed
-                && self.epoch_store.randomness_state_enabled()
-            {
-                assert_reachable!("expired transaction deferred until randomness is generated");
-                let deferred_from_round = previously_deferred_tx_digests
-                    .get(&tx_digest)
-                    .map(|k| k.deferred_from_round())
-                    .unwrap_or(commit_info.round);
-                deferred_txns
-                    .entry(DeferralKey::new_for_randomness(deferred_from_round))
-                    .or_default()
-                    .push(transaction);
-                return;
-            }
-            if previously_deferred_tx_digests.contains_key(&tx_digest) {
-                assert_reachable!("deferred transaction scheduled after its max_timestamp");
-            } else {
-                assert_reachable!("new transaction scheduled after its max_timestamp");
-            }
-            state
-                .timestamp_expired_txns
-                .insert(TransactionKey::Digest(tx_digest));
-            scheduled_txns.push(transaction);
-            return;
-        }
 
         // Check for unpaid amplification before other deferral checks.
         // SIP-45: the gas price pays for `paid_proposer_count` submissions.
@@ -3016,16 +3011,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // A transaction sequenced before its `min_timestamp` is dropped before it takes
-                // owned object locks, so the signer can submit it again later. A transaction past
-                // its `max_timestamp` is not dropped here: it is sequenced normally, and execution
-                // aborts it with `TransactionExpired` whether or not it was deferred. A copy of an
-                // already-processed transaction is left to deduplication so that its waiters
-                // still receive effects.
-                //
-                // The dropped key is deliberately not recorded as processed. Otherwise a later
-                // copy would bypass this check, acquire locks, and then be discarded by
-                // deduplication, leaving its owned objects locked for the rest of the epoch.
+                // A transaction before its `min_timestamp` is dropped before it takes owned object
+                // locks, and is not marked processed, so that a later copy can be sequenced.
                 if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                     &parsed.transaction.kind
                     && self
@@ -3038,17 +3025,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .transaction_data()
                         .expiration()
                         .is_not_yet_valid_at(commit_info.timestamp)
-                        && !self
-                            .epoch_store
-                            .is_consensus_message_processed(
-                                &SequencedConsensusTransactionKey::External(
-                                    parsed.transaction.key(),
-                                ),
-                            )
-                            .expect("db error")
                     {
-                        assert_reachable!(
-                            "transaction before its min_timestamp dropped in consensus"
+                        assert_reachable_gated!(
+                            "transaction before its min_timestamp dropped in consensus",
+                            |pc| pc.enable_timestamp_transaction_expiration()
                         );
                         debug!(
                             "Dropping transaction {} not yet valid at commit timestamp {}",
@@ -3063,7 +3043,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         num_dropped_user_transactions[author] += 1;
                         self.epoch_store.set_rejection_vote_reason(
                             position,
-                            &sui_types::error::SuiError::not_yet_valid(commit_info.timestamp),
+                            &sui_types::error::SuiErrorKind::TransactionNotYetValid {
+                                timestamp_ms: commit_info.timestamp,
+                            }
+                            .into(),
                         );
                         continue;
                     }
@@ -4579,6 +4562,11 @@ mod tests {
 
     #[sim_test]
     async fn test_timestamp_window_in_consensus() {
+        // The flag is devnet-only, and simtest-mainnet runs with the mainnet chain.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_enable_timestamp_transaction_expiration_for_testing(true);
+            config
+        });
         telemetry_subscribers::init_for_testing();
 
         let (sender, keypair) = deterministic_random_account_key();
@@ -4596,11 +4584,6 @@ mod tests {
             .build()
             .await;
         let epoch_store = state.epoch_store_for_testing();
-        assert!(
-            epoch_store
-                .protocol_config()
-                .enable_timestamp_transaction_expiration()
-        );
         let epoch = epoch_store.epoch();
         let chain = epoch_store.get_chain_identifier();
         let start = epoch_store.epoch_start_config().epoch_start_timestamp_ms();
@@ -4746,9 +4729,7 @@ mod tests {
                     index: 2,
                 })
                 .map(|e| e.into_inner()),
-            Some(sui_types::error::SuiErrorKind::UserInputError {
-                error: sui_types::error::UserInputError::InvalidExpiration { .. }
-            })
+            Some(sui_types::error::SuiErrorKind::TransactionNotYetValid { .. })
         ));
 
         // A transaction sequenced before its window opens is accepted once resequenced inside it.

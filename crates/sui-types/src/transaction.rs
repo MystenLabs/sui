@@ -2444,13 +2444,11 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Transaction invalid if its consensus commit timestamp (Unix ms) is before this value.
-        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
-        /// after deferral.
+        /// Earliest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// valid. Before it, consensus drops the transaction, and it can be submitted again.
         min_timestamp: Option<u64>,
-        /// Transaction invalid if its consensus commit timestamp (Unix ms) is after this value.
-        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
-        /// after deferral.
+        /// Latest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2464,13 +2462,11 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Transaction invalid if its consensus commit timestamp (Unix ms) is before this value.
-        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
-        /// after deferral.
+        /// Earliest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// valid. Before it, consensus drops the transaction, and it can be submitted again.
         min_timestamp: Option<u64>,
-        /// Transaction invalid if its consensus commit timestamp (Unix ms) is after this value.
-        /// It is dropped if invalid when first sequenced, and aborted if invalid when it executes
-        /// after deferral.
+        /// Latest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2533,8 +2529,7 @@ impl TransactionExpiration {
         )
     }
 
-    /// Whether `timestamp_ms` is before `min_timestamp`. The transaction can become valid later,
-    /// so it must not be executed to abort for this.
+    /// Whether `timestamp_ms` is before `min_timestamp`. The transaction can become valid later.
     pub fn is_not_yet_valid_at(&self, timestamp_ms: u64) -> bool {
         match self {
             TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
@@ -2545,8 +2540,7 @@ impl TransactionExpiration {
         }
     }
 
-    /// Whether `timestamp_ms` is after `max_timestamp`. Unlike a timestamp before `min_timestamp`,
-    /// this condition is permanent, so a transaction may be executed to abort for it.
+    /// Whether `timestamp_ms` is after `max_timestamp`. The transaction can never become valid.
     pub fn is_expired_at(&self, timestamp_ms: u64) -> bool {
         match self {
             TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
