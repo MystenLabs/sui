@@ -445,6 +445,7 @@ const MAINNET_USDB: &str =
 //              which doubles its excess floor to 1,200 copies and makes the exit dwell ten
 //              windows. Add a minimum number of user transactions per consensus commit,
 //              duplicates included, that it requires.
+//              Add a read-only public `sui_system::calculate_rewards`.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);

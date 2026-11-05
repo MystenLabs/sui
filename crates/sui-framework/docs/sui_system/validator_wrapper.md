@@ -9,6 +9,7 @@ title: Module `sui_system::validator_wrapper`
 -  [Function `create_v1`](#sui_system_validator_wrapper_create_v1)
 -  [Function `load_validator_maybe_upgrade`](#sui_system_validator_wrapper_load_validator_maybe_upgrade)
 -  [Function `destroy`](#sui_system_validator_wrapper_destroy)
+-  [Function `staking_pool_ref`](#sui_system_validator_wrapper_staking_pool_ref)
 -  [Function `upgrade_to_latest`](#sui_system_validator_wrapper_upgrade_to_latest)
 -  [Function `version`](#sui_system_validator_wrapper_version)
 
@@ -170,6 +171,33 @@ Destroy the wrapper and retrieve the inner validator object.
     <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(&self);
     <b>let</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> { inner } = self;
     inner.<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_destroy">destroy</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_wrapper_staking_pool_ref"></a>
+
+## Function `staking_pool_ref`
+
+Borrow the staking pool without upgrading the wrapper. Inactive and candidate entries are
+upgraded only when a mutable path loads them, so this must read every stored version.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_staking_pool_ref">staking_pool_ref</a>(self: &<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">sui_system::validator_wrapper::ValidatorWrapper</a>): &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">sui_system::staking_pool::StakingPool</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_staking_pool_ref">staking_pool_ref</a>(self: &<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): &StakingPool {
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = self.inner.load_value();
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.get_staking_pool_ref()
 }
 </code></pre>
 

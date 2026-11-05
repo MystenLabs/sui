@@ -328,8 +328,11 @@ active_validator_voting_powers
 active_validator_stake_amount
 	public fun
 	0x3::sui_system
-calculate_rewards
+calculate_rewards_mut
 	public(package) fun
+	0x3::sui_system
+calculate_rewards
+	public fun
 	0x3::sui_system
 advance_epoch
 	fun
@@ -922,6 +925,9 @@ pool_exchange_rates
 validator_by_pool_id
 	public(package) fun
 	0x3::validator_set
+staking_pool_by_pool_id
+	public(package) fun
+	0x3::validator_set
 next_epoch_validator_count
 	public(package) fun
 	0x3::validator_set
@@ -1046,6 +1052,9 @@ load_validator_maybe_upgrade
 	public(package) fun
 	0x3::validator_wrapper
 destroy
+	public(package) fun
+	0x3::validator_wrapper
+staking_pool_ref
 	public(package) fun
 	0x3::validator_wrapper
 upgrade_to_latest

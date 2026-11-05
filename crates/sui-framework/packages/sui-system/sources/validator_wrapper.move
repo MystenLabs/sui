@@ -4,6 +4,7 @@
 module sui_system::validator_wrapper;
 
 use sui::versioned::{Self, Versioned};
+use sui_system::staking_pool::StakingPool;
 use sui_system::validator::Validator;
 
 const EInvalidVersion: u64 = 0;
@@ -37,6 +38,13 @@ public(package) fun destroy(self: ValidatorWrapper): Validator {
 /// Load the inner validator with assumed type. This should be used for testing only.
 public(package) fun get_inner_validator_ref(self: &ValidatorWrapper): &Validator {
     self.inner.load_value()
+}
+
+/// Borrow the staking pool without upgrading the wrapper. Inactive and candidate entries are
+/// upgraded only when a mutable path loads them, so this must read every stored version.
+public(package) fun staking_pool_ref(self: &ValidatorWrapper): &StakingPool {
+    let validator: &Validator = self.inner.load_value();
+    validator.get_staking_pool_ref()
 }
 
 fun upgrade_to_latest(self: &ValidatorWrapper) {

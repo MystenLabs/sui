@@ -33,6 +33,9 @@ To upgrade Validator type, besides everything above, we also need to:
 3. Replace all uses of Validator with ValidatorV2 except the genesis creation function.
 4. In validator_wrapper::upgrade_to_latest, check the current version in the wrapper, and if it's not the latest version,
  call the data migration function to upgrade it.
+5. In validator_wrapper::staking_pool_ref, keep reading every older version without upgrading it,
+ because <code><a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a></code> takes <code>&<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a></code> and must not abort on entries that were not
+ upgraded yet.
 In Rust, we also need to add a new case in <code>get_validator_from_table</code>.
 Note that it is possible to upgrade SuiSystemStateInner without upgrading Validator, but not the other way around.
 And when we only upgrade SuiSystemStateInner, the version of Validator in the wrapper will not be updated, and hence may become
@@ -86,6 +89,7 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `active_validator_addresses_ref`](#sui_system_sui_system_active_validator_addresses_ref)
 -  [Function `active_validator_voting_powers`](#sui_system_sui_system_active_validator_voting_powers)
 -  [Function `active_validator_stake_amount`](#sui_system_sui_system_active_validator_stake_amount)
+-  [Function `calculate_rewards_mut`](#sui_system_sui_system_calculate_rewards_mut)
 -  [Function `calculate_rewards`](#sui_system_sui_system_calculate_rewards)
 -  [Function `advance_epoch`](#sui_system_sui_system_advance_epoch)
 -  [Function `load_system_state`](#sui_system_sui_system_load_system_state)
@@ -1539,15 +1543,15 @@ Getter returns the total stake amount of a given validator.
 
 </details>
 
-<a name="sui_system_sui_system_calculate_rewards"></a>
+<a name="sui_system_sui_system_calculate_rewards_mut"></a>
 
-## Function `calculate_rewards`
+## Function `calculate_rewards_mut`
 
 Calculate the rewards for a given staked SUI object.
 Used in the package, and can be dev-inspected.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(self: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards_mut">calculate_rewards_mut</a>(self: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -1556,7 +1560,7 @@ Used in the package, and can be dev-inspected.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards_mut">calculate_rewards_mut</a>(
     self: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
     staked_sui: &StakedSui,
     ctx: &TxContext,
@@ -1566,6 +1570,35 @@ Used in the package, and can be dev-inspected.
         .validators_mut()
         .validator_by_pool_id(staked_sui.pool_id())
         .get_staking_pool_ref()
+        .<a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(staked_sui, ctx.epoch())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_calculate_rewards"></a>
+
+## Function `calculate_rewards`
+
+Calculate the rewards for a given staked SUI object without upgrading any validator.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(self: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(self: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>, staked_sui: &StakedSui, ctx: &TxContext): u64 {
+    self
+        .<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>()
+        .validators()
+        .staking_pool_by_pool_id(staked_sui.pool_id())
         .<a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(staked_sui, ctx.epoch())
 }
 </code></pre>

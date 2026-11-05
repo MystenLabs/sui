@@ -219,6 +219,7 @@ fun remove_stake_post_active_flow(should_distribute_rewards: bool) {
     let reward_amt = if (should_distribute_rewards) 15 * MIST_PER_SUI else 0;
     let validator_reward_amt = if (should_distribute_rewards) 10 * MIST_PER_SUI else 0;
 
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, reward_amt);
     runner.set_sender(STAKER_ADDR_1);
     runner.owned_tx!<StakedSui>(|stake| {
         assert_eq!(stake.amount(), 100 * MIST_PER_SUI);
@@ -537,6 +538,7 @@ fun add_remove_stake_preactive_candidate() {
     // Stake 100 SUI to the validator candidate from each of the two stakers.
     runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
     runner.set_sender(STAKER_ADDR_2).stake_with(NEW_VALIDATOR_ADDR, 100);
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, 0);
 
     // Check values for the candidate.
     runner.system_tx!(|system, _| {
@@ -599,6 +601,7 @@ fun add_preactive_candidate_drop_out() {
     runner.advance_epoch(option::none()).destroy_for_testing();
 
     // Unstake now and the staker should get no rewards.
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, 0);
     runner.set_sender(STAKER_ADDR_1).unstake(0);
     assert_eq!(runner.sui_balance(), 100 * MIST_PER_SUI);
 

@@ -32,6 +32,9 @@
 /// 3. Replace all uses of Validator with ValidatorV2 except the genesis creation function.
 /// 4. In validator_wrapper::upgrade_to_latest, check the current version in the wrapper, and if it's not the latest version,
 ///  call the data migration function to upgrade it.
+/// 5. In validator_wrapper::staking_pool_ref, keep reading every older version without upgrading it,
+///  because `calculate_rewards` takes `&SuiSystemState` and must not abort on entries that were not
+///  upgraded yet.
 /// In Rust, we also need to add a new case in `get_validator_from_table`.
 /// Note that it is possible to upgrade SuiSystemStateInner without upgrading Validator, but not the other way around.
 /// And when we only upgrade SuiSystemStateInner, the version of Validator in the wrapper will not be updated, and hence may become
@@ -564,7 +567,7 @@ public fun active_validator_stake_amount(wrapper: &SuiSystemState, validator_add
 
 /// Calculate the rewards for a given staked SUI object.
 /// Used in the package, and can be dev-inspected.
-public(package) fun calculate_rewards(
+public(package) fun calculate_rewards_mut(
     self: &mut SuiSystemState,
     staked_sui: &StakedSui,
     ctx: &TxContext,
@@ -575,6 +578,15 @@ public(package) fun calculate_rewards(
         .validators_mut()
         .validator_by_pool_id(staked_sui.pool_id())
         .get_staking_pool_ref()
+        .calculate_rewards(staked_sui, ctx.epoch())
+}
+
+/// Calculate the rewards for a given staked SUI object without upgrading any validator.
+public fun calculate_rewards(self: &SuiSystemState, staked_sui: &StakedSui, ctx: &TxContext): u64 {
+    self
+        .load_system_state_ref()
+        .validators()
+        .staking_pool_by_pool_id(staked_sui.pool_id())
         .calculate_rewards(staked_sui, ctx.epoch())
 }
 

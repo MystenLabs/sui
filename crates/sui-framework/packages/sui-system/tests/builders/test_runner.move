@@ -6,6 +6,7 @@
 /// provides a set of convenience methods for testing the Sui System.
 module sui_system::test_runner;
 
+use std::unit_test::assert_eq;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
@@ -503,6 +504,20 @@ public fun unstake(runner: &mut TestRunner, staked_sui_idx: u64) {
     });
 }
 
+/// Assert that `calculate_rewards` and `calculate_rewards_mut` return `expected` for the sender's StakedSui at
+/// `staked_sui_idx`.
+public fun assert_staking_rewards(runner: &mut TestRunner, staked_sui_idx: u64, expected: u64) {
+    let sender = runner.sender;
+    runner.set_sender(sender);
+    let stake_sui_ids = runner.scenario.ids_for_sender<StakedSui>();
+    let staked_sui = runner.scenario.take_from_sender_by_id<StakedSui>(stake_sui_ids[staked_sui_idx]);
+    let mut system = runner.scenario.take_shared<SuiSystemState>();
+    assert_eq!(system.calculate_rewards(&staked_sui, runner.scenario.ctx()), expected);
+    assert_eq!(system.calculate_rewards_mut(&staked_sui, runner.scenario.ctx()), expected);
+    test_scenario::return_shared(system);
+    runner.keep(staked_sui);
+}
+
 // === Validator Management ===
 
 /// Add a validator candidate to the system state.
@@ -589,7 +604,7 @@ public fun staking_rewards_balance(runner: &mut TestRunner): u64 {
     scenario.next_tx(sender);
     let total_balance = scenario.ids_for_sender<StakedSui>().fold!(0, |mut sum, staked_sui_id| {
         let staked_sui = scenario.take_from_sender_by_id<StakedSui>(staked_sui_id);
-        let rewards = system.calculate_rewards(&staked_sui, scenario.ctx());
+        let rewards = system.calculate_rewards_mut(&staked_sui, scenario.ctx());
 
         sum = sum + rewards + staked_sui.amount();
         scenario.return_to_sender(staked_sui);
