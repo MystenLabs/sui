@@ -226,7 +226,11 @@ impl From<&CursorToken> for grpc::CursorToken {
                 grpc::cursor_token::Position::Transactions(grpc::TransactionsPosition {
                     tx_seq: Some(tx_seq),
                 }),
-                Some(public_position),
+                // A transaction cursor's position lies between or at transactions.
+                Some(LedgerPoint::transaction(
+                    public_position.checkpoint,
+                    public_position.transaction_index,
+                )),
             ),
             Position::Events {
                 tx_seq,
@@ -385,7 +389,7 @@ mod tests {
         }
     }
 
-    /// A transaction cursor carrying a public `event_index` decodes and re-encodes without it,
+    /// A transaction cursor carrying a public `event_index` decodes and encodes without it,
     /// whatever its kind. An event cursor keeps it.
     #[test]
     fn transaction_cursors_drop_a_public_event_index() {
@@ -411,6 +415,11 @@ mod tests {
                 })
             );
             assert_eq!(decoded.encode().as_ref(), projected);
+            let minted = token(Position::Transactions {
+                tx_seq: 42,
+                public_position: LedgerPoint::event(7, 3, 9),
+            });
+            assert_eq!(minted.encode().as_ref(), projected);
         }
 
         let event = CursorToken::item(Position::Events {
