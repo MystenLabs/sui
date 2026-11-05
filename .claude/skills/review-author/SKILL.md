@@ -185,7 +185,7 @@ The review tag records that the AI review in Step 3 ran and that the author deci
 finding:
 
 ```
-[ai-review: /code-review max <model> <sha>]
+[🤖🔍 ai-review: /code-review max <model> <sha>]
 ```
 
 `<model>` is the model ID that ran the review. `<sha>` is the full hash of the PR head commit that

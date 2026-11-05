@@ -70,7 +70,7 @@ Classify the PR yourself from the diff and the tier definitions. Do not rely on 
 Find the review tag in the description:
 
 ```
-[ai-review: /code-review max <model> <sha>]
+[🤖🔍 ai-review: /code-review max <model> <sha>]
 ```
 
 If `<model>` is not in the allowed model list in the base-branch copy of `review-author`, treat
