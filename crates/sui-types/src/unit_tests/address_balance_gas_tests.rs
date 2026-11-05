@@ -842,10 +842,10 @@ fn test_timestamp_expiration_rejects_inverted_window() {
 }
 
 #[test]
-fn test_timestamp_expiration_rejects_timestamps_above_i64_max() {
+fn test_timestamp_expiration_rejects_timestamps_above_protobuf_range() {
     let mut config = create_config_with_address_balance_gas_payments_enabled();
     config.set_enable_timestamp_transaction_expiration_for_testing(true);
-    let limit = i64::MAX as u64;
+    let limit = MAX_EXPIRATION_TIMESTAMP_SECS;
 
     let tx_data =
         create_test_transaction_data(vec![], valid_during_with_timestamps(None, Some(limit)));
@@ -863,7 +863,7 @@ fn test_timestamp_expiration_rejects_timestamps_above_i64_max() {
             SuiErrorKind::UserInputError {
                 error: UserInputError::InvalidExpiration { error },
             } => {
-                assert!(error.contains("greater than i64::MAX"), "{error}");
+                assert!(error.contains("is greater than"), "{error}");
             }
             e => panic!("({min:?}, {max:?}): expected InvalidExpiration, got {e:?}"),
         }
