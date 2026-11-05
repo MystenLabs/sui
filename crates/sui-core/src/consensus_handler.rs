@@ -4620,13 +4620,15 @@ mod tests {
                 ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
             (digest, consensus_tx)
         };
-        // The first commit has timestamp `start + 1000`.
+        // The first commit is at the start of second `first_secs`, and the second commit is one
+        // second later. Expiration timestamps are in seconds.
+        let first_secs = start / 1000 + 1;
         // An expired transaction is sequenced and locked so that execution aborts it. Only a
         // transaction before its `min_timestamp` is dropped, because it can become valid later.
-        let (expired_digest, expired_tx) = make_tx(0, expiration(None, Some(start + 999))).await;
+        let (expired_digest, expired_tx) = make_tx(0, expiration(None, Some(first_secs - 1))).await;
         let (valid_digest, valid_tx) =
-            make_tx(1, expiration(Some(start + 1000), Some(start + 1000))).await;
-        let (early_digest, early_tx) = make_tx(2, expiration(Some(start + 2000), None)).await;
+            make_tx(1, expiration(Some(first_secs), Some(first_secs))).await;
+        let (early_digest, early_tx) = make_tx(2, expiration(Some(first_secs + 1), None)).await;
         let expired_key = SequencedConsensusTransactionKey::External(expired_tx.key());
         let valid_key = SequencedConsensusTransactionKey::External(valid_tx.key());
         let early_key = SequencedConsensusTransactionKey::External(early_tx.key());
@@ -4638,7 +4640,7 @@ mod tests {
             .handle_consensus_commit_for_test(TestConsensusCommit::new(
                 vec![expired_tx, valid_tx, early_tx.clone()],
                 round,
-                start + 1000,
+                first_secs * 1000,
                 10,
             ))
             .await;
@@ -4739,7 +4741,7 @@ mod tests {
             .handle_consensus_commit_for_test(TestConsensusCommit::new(
                 vec![early_tx],
                 round,
-                start + 2000,
+                (first_secs + 1) * 1000,
                 11,
             ))
             .await;

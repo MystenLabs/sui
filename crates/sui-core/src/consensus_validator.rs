@@ -1297,10 +1297,10 @@ mod tests {
             .build()
             .await;
         let epoch_store = state.epoch_store_for_testing();
-        let now_ms = std::time::SystemTime::now()
+        let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_millis() as u64;
+            .as_secs();
         let expiration = |min_timestamp, max_timestamp| TransactionExpiration::ValidDuring {
             min_epoch: Some(epoch_store.epoch()),
             max_epoch: Some(epoch_store.epoch()),
@@ -1316,7 +1316,7 @@ mod tests {
             &keypair,
             gas_objects[0].clone(),
             vec![],
-            expiration(None, Some(now_ms - 60_000)),
+            expiration(None, Some(now_secs - 60)),
         )
         .await;
         let early = test_user_transaction_with_expiration(
@@ -1325,7 +1325,7 @@ mod tests {
             &keypair,
             gas_objects[1].clone(),
             vec![],
-            expiration(Some(now_ms + 3_600_000), None),
+            expiration(Some(now_secs + 3_600), None),
         )
         .await;
         let serialized: Vec<_> = [expired, early]

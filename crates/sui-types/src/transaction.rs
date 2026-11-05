@@ -2444,10 +2444,10 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Earliest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// Earliest consensus commit time (Unix seconds, inclusive) at which the transaction is
         /// valid. Before it, consensus drops the transaction, and it can be submitted again.
         min_timestamp: Option<u64>,
-        /// Latest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
         /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
@@ -2462,10 +2462,10 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Earliest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// Earliest consensus commit time (Unix seconds, inclusive) at which the transaction is
         /// valid. Before it, consensus drops the transaction, and it can be submitted again.
         min_timestamp: Option<u64>,
-        /// Latest consensus commit timestamp (Unix ms, inclusive) at which the transaction is
+        /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
         /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
@@ -2529,24 +2529,26 @@ impl TransactionExpiration {
         )
     }
 
-    /// Whether `timestamp_ms` is before `min_timestamp`. The transaction can become valid later.
+    /// Whether `timestamp_ms` is before `min_timestamp`, which is in seconds. The transaction can
+    /// become valid later.
     pub fn is_not_yet_valid_at(&self, timestamp_ms: u64) -> bool {
         match self {
             TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
             TransactionExpiration::ValidDuring { min_timestamp, .. }
             | TransactionExpiration::Validity { min_timestamp, .. } => {
-                min_timestamp.is_some_and(|min| timestamp_ms < min)
+                min_timestamp.is_some_and(|min| timestamp_ms / 1000 < min)
             }
         }
     }
 
-    /// Whether `timestamp_ms` is after `max_timestamp`. The transaction can never become valid.
+    /// Whether `timestamp_ms` is after `max_timestamp`, which is in seconds. The bound covers
+    /// the whole second it names. The transaction can never become valid.
     pub fn is_expired_at(&self, timestamp_ms: u64) -> bool {
         match self {
             TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
             TransactionExpiration::ValidDuring { max_timestamp, .. }
             | TransactionExpiration::Validity { max_timestamp, .. } => {
-                max_timestamp.is_some_and(|max| timestamp_ms > max)
+                max_timestamp.is_some_and(|max| timestamp_ms / 1000 > max)
             }
         }
     }
