@@ -1097,7 +1097,7 @@ where
 /// A scan frontier placed by the one `tx_seq_digest` row its
 /// [`RowPlacement`] names: the transaction on the frontier's covered side.
 ///
-/// [`RowPlacement`]: sui_rpc_api::ledger_history::ledger_point::RowPlacement
+/// [`RowPlacement`]: sui_rpc_api::ledger_history::row_placement::RowPlacement
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct PlacedFrontier {
     /// The checkpoint of the placing transaction, which bounds the covered

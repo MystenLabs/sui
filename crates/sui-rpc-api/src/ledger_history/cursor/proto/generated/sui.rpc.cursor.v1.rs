@@ -60,7 +60,7 @@ pub struct EventsPosition {
 /// A position in public ledger coordinates, as `sui.rpc.v2.LedgerPosition`
 /// names it: the boundary just before the item keyed
 /// `(checkpoint, transaction_index, event_index)`. Transaction cursors leave
-/// `event_index` unset (0).
+/// `event_index` unset (0), and readers ignore one they carry.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PublicPosition {
     /// Checkpoint sequence number.

@@ -6,8 +6,8 @@
 //! Both ledger-history backends — the fullnode (`sui-rpc-api`) and bigtable
 //! (`sui-kv-rpc`) — and all three list handlers (`list_transactions`,
 //! `list_events`, `list_checkpoints`) emit the same wire `Watermark`: a resume
-//! cursor, the same resume point in ledger coordinates (`cursor_position`, see
-//! [`crate::ledger_history::ledger_point`]), and a completion boundary
+//! cursor, the same resume point in ledger coordinates (`cursor_position`, a
+//! [`LedgerPoint`]), and a completion boundary
 //! (`checkpoint`, the inclusive boundary checkpoint the scan has fully covered
 //! in the request's ordering direction).
 //! The cursor encoding and the boundary bookkeeping are identical; what differs

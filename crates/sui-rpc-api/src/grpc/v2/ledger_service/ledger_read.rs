@@ -10,8 +10,8 @@ use sui_types::storage::LedgerTxSeqDigest;
 use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::cursor::LedgerPoint;
-use crate::ledger_history::ledger_point::RowPlacement;
 use crate::ledger_history::query_options::below_serving_floor;
+use crate::ledger_history::row_placement::RowPlacement;
 
 pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())

@@ -13,7 +13,7 @@ fn bootstrap() {
     let proto_ext = OsStr::new("proto");
 
     let mut proto_files = vec![];
-    for entry in WalkDir::new(&proto_dir) {
+    for entry in WalkDir::new(proto_dir.join("sui/rpc/cursor")) {
         let entry = entry.unwrap();
         if entry.file_type().is_dir() {
             continue;

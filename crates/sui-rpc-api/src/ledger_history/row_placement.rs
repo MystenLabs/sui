@@ -1,17 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Resume points in public ledger coordinates, the `Watermark.cursor_position` of every list and
-//! subscription frame.
+//! Placing scan frontiers in public ledger coordinates.
 //!
-//! A [`LedgerPoint`] is the boundary immediately before the item with key `(checkpoint,
-//! transaction_index, event_index)`; it orders lexicographically, an unset index counting as 0
-//! (see `LedgerPosition` in `query_options.proto`). Cursors name the same boundaries by
-//! `tx_seq`, which stays private, and carry the public position of their coordinate
-//! ([`Position::public_position`]), so a server places any cursor without a read. A scan
-//! frontier is placed by the index row (checkpoint and position in it) of one transaction the
-//! scan already reads: [`RowPlacement`] says which one, and how its row places the boundary.
-//! Checkpoint boundaries, the request's own fields, and items need no read.
+//! Every list and subscription frame carries its resume point as a [`LedgerPoint`]
+//! (`Watermark.cursor_position`). Cursors name the same boundaries by `tx_seq`, which stays
+//! private, and carry the public position of their coordinate ([`Position::public_position`]),
+//! so a server places any cursor without a read. A scan frontier is placed by the index row
+//! (checkpoint and position in it) of one transaction the scan already reads: [`RowPlacement`]
+//! says which one, and how its row places the boundary. Checkpoint boundaries, the request's own
+//! fields, and items need no read.
 //!
 //! [`Position::public_position`]: crate::ledger_history::cursor::Position::public_position
 

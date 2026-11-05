@@ -4,6 +4,6 @@
 pub mod checkpoint_positions;
 pub mod cursor;
 pub mod filter;
-pub mod ledger_point;
 pub mod query_options;
+pub mod row_placement;
 pub mod watermark;

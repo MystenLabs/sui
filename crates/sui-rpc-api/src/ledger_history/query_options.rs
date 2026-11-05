@@ -155,7 +155,9 @@ pub struct ResolvedScan<P> {
     pub exhaustion: RangeExhaustion,
     /// The checkpoint a scan that drains the window reports as fully covered: the window's last
     /// checkpoint in scan direction, or the one before it in scan direction where a request
-    /// position cuts it. `None` when the window holds no such checkpoint, or when an ascending
+    /// position cuts it, which lies outside a one-checkpoint window
+    /// ([`ResolvedScan::natural_end_claim`] drops such a claim). `None` when the window holds no
+    /// checkpoint, when the checkpoint before it would precede genesis, or when an ascending
     /// scan's `after` cursor resumes past the ledger tip (see [`ResolvedScan::resolve`]).
     /// Cursors do not move it: a non-empty window's natural end claims its edge even when the
     /// scan reads nothing, because the request's starting cursor vouches for every position
@@ -3193,7 +3195,7 @@ mod tests {
     /// before it (see [`RowPlacement`]), so at a checkpoint's start it names the end of the
     /// checkpoint before.
     ///
-    /// [`RowPlacement`]: crate::ledger_history::ledger_point::RowPlacement
+    /// [`RowPlacement`]: crate::ledger_history::row_placement::RowPlacement
     fn after_transaction_point(tx: u64) -> LedgerPoint {
         tx.checked_sub(1).map_or(LedgerPoint::GENESIS, |previous| {
             LedgerPoint::transaction(containing_checkpoint(previous), previous % 5 + 1)
