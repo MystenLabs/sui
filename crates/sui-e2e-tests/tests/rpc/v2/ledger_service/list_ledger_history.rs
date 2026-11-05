@@ -2466,10 +2466,7 @@ async fn test_list_filter_edge_cases_and_limit_caps() {
     );
     let checkpoints_end = resp.watermarks.last().unwrap();
     assert_eq!(checkpoints_end.checkpoint, None);
-    assert_eq!(
-        cursor_position_of(checkpoints_end),
-        Some((beyond_tip + 1, 0, 0))
-    );
+    assert_eq!(cursor_position_of(checkpoints_end), (beyond_tip + 1, 0, 0));
     let req = checkpoints_after(query_options_descending(10));
     let status = list_error(client.list_checkpoints(req).await).await;
     assert_above_latest_available(&status, "cursor", beyond_tip);
@@ -3283,21 +3280,21 @@ async fn test_list_transactions_crossing_cursors_below_the_pruned_floor() {
             after.clone(),
             None,
             None,
-            Some(after_resumes_at),
+            after_resumes_at,
         ),
         (
             "start fields at `after`",
             after.clone(),
             Some(start_resumes_at),
             None,
-            Some(start_resumes_at),
+            start_resumes_at,
         ),
         (
             "`after` past the tip",
             past_tip_after,
             None,
             Some(floor),
-            Some(past_tip_resumes_at),
+            past_tip_resumes_at,
         ),
     ] {
         let mut req = ListTransactionsRequest::default();
@@ -5921,15 +5918,17 @@ fn end_fields(end: LedgerPoint) -> (u64, Option<u64>, Option<u32>) {
     }
 }
 
-/// A watermark's `cursor_position`, unset fields read as 0.
-fn cursor_position_of(watermark: &Watermark) -> Option<LedgerPoint> {
-    watermark.cursor_position.as_ref().map(|position| {
-        (
-            position.checkpoint.unwrap_or(0),
-            position.transaction_index.unwrap_or(0),
-            position.event_index.unwrap_or(0),
-        )
-    })
+/// A watermark's `cursor_position`, which every List frame carries, unset fields read as 0.
+fn cursor_position_of(watermark: &Watermark) -> LedgerPoint {
+    let position = watermark
+        .cursor_position
+        .as_ref()
+        .expect("every frame carries a cursor_position");
+    (
+        position.checkpoint.unwrap_or(0),
+        position.transaction_index.unwrap_or(0),
+        position.event_index.unwrap_or(0),
+    )
 }
 
 /// One List frame, reduced to what its resume point is checked against.
@@ -5941,7 +5940,7 @@ struct PositionFrame {
     /// `Watermark.checkpoint`.
     checkpoint: Option<u64>,
     /// `Watermark.cursor_position`.
-    position: Option<LedgerPoint>,
+    position: LedgerPoint,
     end_reason: Option<QueryEndReason>,
 }
 
@@ -6080,9 +6079,7 @@ fn assert_page_positions(
     let mut last_position: Option<LedgerPoint> = None;
     let mut last_item: Option<LedgerPoint> = None;
     for frame in frames {
-        let position = frame
-            .position
-            .unwrap_or_else(|| panic!("frame without a cursor_position {frame:?}: {context}"));
+        let position = frame.position;
         match query {
             PositionQuery::Checkpoints(_) => assert_eq!(
                 (position.1, position.2),
@@ -6179,7 +6176,7 @@ async fn page_by_positions(
         ) {
             return pages;
         }
-        let position = last.position.expect("a continued page has a position");
+        let position = last.position;
         if ascending {
             bounds.start = Some(position);
             bounds.after = Some(last.cursor);
@@ -6289,7 +6286,7 @@ async fn assert_far_cursor_bound_positions(
             "{context}"
         );
         assert_eq!(last.item, None, "{context}");
-        let position = last.position.expect("CURSOR_BOUND position");
+        let position = last.position;
         assert!(
             names_same_boundary(position, boundary, ledger),
             "CURSOR_BOUND position {position:?} names the boundary {boundary:?}: {context}"
@@ -6341,7 +6338,7 @@ async fn assert_past_tip_positions(
             Some(QueryEndReason::LedgerTip),
             "{context}"
         );
-        assert_eq!(frame.position, Some(start), "{context}");
+        assert_eq!(frame.position, start, "{context}");
         assert_eq!(frame.checkpoint, None, "{context}");
     }
 
@@ -6390,7 +6387,7 @@ async fn assert_past_tip_positions(
                 "{context}"
             );
             assert_eq!(frame.cursor, cursor.encode(), "{context}");
-            assert_eq!(frame.position, Some(past_tip_point), "{context}");
+            assert_eq!(frame.position, past_tip_point, "{context}");
             assert_eq!(frame.checkpoint, None, "{context}");
         }
     }
