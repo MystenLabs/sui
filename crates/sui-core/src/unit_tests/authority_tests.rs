@@ -264,7 +264,7 @@ async fn test_dry_run_transaction_block() {
         .simulate_transaction(
             transaction.data().intent_message().value.clone(),
             TransactionChecks::Enabled,
-            /* allow_mock_gas_coin */ true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         )
         .unwrap();
     assert_eq!(*sim.effects.status(), ExecutionStatus::Success);
@@ -285,7 +285,11 @@ async fn test_dry_run_transaction_block() {
         txn_data.gas_price(),
     );
     let sim = fullnode
-        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            txn_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     let gas_usage_no_gas = sim.effects.gas_cost_summary().clone();
     assert_eq!(*sim.effects.status(), ExecutionStatus::Success);
@@ -318,7 +322,7 @@ async fn test_dry_run_no_gas_big_transfer() {
         .simulate_transaction(
             signed.data().intent_message().value.clone(),
             TransactionChecks::Enabled,
-            true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         )
         .unwrap();
     assert_eq!(*sim.effects.status(), ExecutionStatus::Success);
@@ -994,7 +998,7 @@ async fn test_dry_run_on_validator() {
     let response = validator.simulate_transaction(
         transaction.data().intent_message().value.clone(),
         TransactionChecks::Enabled,
-        true,
+        sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
     );
     assert!(response.is_err());
 }
@@ -1114,7 +1118,11 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         rgp,
     );
     let sim = fullnode
-        .simulate_transaction(data, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
 
     assert_eq!(sim.effects.deleted().len(), 0);
@@ -1177,7 +1185,11 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
         rgp,
     );
     let sim = fullnode
-        .simulate_transaction(data, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     assert_eq!(sim.effects.status(), &ExecutionStatus::Success);
 }
@@ -3878,7 +3890,11 @@ async fn test_clever_abort_error() {
     );
 
     let sim = fullnode
-        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            txn_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     let execution_error_source = simulated_error_source(&sim);
 
@@ -3909,7 +3925,11 @@ async fn test_clever_abort_error() {
     );
 
     let sim = fullnode
-        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            txn_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     let execution_error_source = simulated_error_source(&sim);
 
@@ -3941,7 +3961,11 @@ async fn test_clever_abort_error() {
     );
 
     let sim = fullnode
-        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            txn_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     let execution_error_source = simulated_error_source(&sim);
 
@@ -3973,7 +3997,11 @@ async fn test_clever_abort_error() {
     );
 
     let sim = fullnode
-        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .simulate_transaction(
+            txn_data,
+            TransactionChecks::Enabled,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+        )
         .unwrap();
     let execution_error_source = simulated_error_source(&sim);
 
@@ -5517,7 +5545,7 @@ async fn test_for_inc_201_dry_run() {
         .simulate_transaction(
             signed.data().intent_message().value.clone(),
             TransactionChecks::Enabled,
-            true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         )
         .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
@@ -5563,7 +5591,7 @@ async fn test_function_not_found() {
         .simulate_transaction(
             signed.data().intent_message().value.clone(),
             TransactionChecks::Enabled,
-            true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         )
         .unwrap();
     let execution_error_source = simulated_error_source(&sim);
@@ -5613,7 +5641,7 @@ async fn test_arity_mismatch() {
         .simulate_transaction(
             signed.data().intent_message().value.clone(),
             TransactionChecks::Enabled,
-            true,
+            sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
         )
         .unwrap();
     let execution_error_source = simulated_error_source(&sim);
@@ -6578,7 +6606,8 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     );
 
     // Test get_cancelled_objects.
-    let (cancelled_objects, cancellation_reason) = input_objects.get_cancelled_objects().unwrap();
+    let (cancelled_objects, cancellation_reason) =
+        input_objects.get_cancelled_objects(None).unwrap();
     assert_eq!(cancelled_objects, vec![shared_objects[0].id()]);
     assert_eq!(cancellation_reason, SequenceNumber::CONGESTED);
 

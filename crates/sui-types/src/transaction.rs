@@ -249,11 +249,19 @@ impl FundsWithdrawalArg {
     }
 
     /// The account debited by this withdrawal
-    pub fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
+    pub fn owner_for_withdrawal(
+        &self,
+        tx: &impl TransactionDataAPI,
+    ) -> UserInputResult<SuiAddress> {
         match &self.withdraw_from {
-            WithdrawFrom::Sender => tx.sender(),
-            WithdrawFrom::Sponsor => tx.gas_owner(),
-            WithdrawFrom::SenderAllowance { funder, .. } => *funder,
+            WithdrawFrom::Sender => Ok(tx.sender()),
+            WithdrawFrom::Sponsor => {
+                tx.gas_payer_address()
+                    .ok_or_else(|| UserInputError::InvalidWithdrawReservation {
+                        error: "A gas allowance is not an address-based sponsor".to_owned(),
+                    })
+            }
+            WithdrawFrom::SenderAllowance { funder, .. } => Ok(*funder),
         }
     }
 }
@@ -2408,19 +2416,53 @@ impl GasData {
     }
 }
 
+/// Decoded gas-payment mode. `GasData`'s `owner` remains a wire-format selector: in
+/// [`GasPaymentMode::Allowance`] it encodes the allowance object ID, not an address.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum GasPaymentMode {
+    Coins,
+    AddressBalance,
+    Gasless,
+    Allowance(ObjectID),
+    Unmetered,
+}
+
+pub fn gas_payment_mode(gas_data: &GasData, transaction_kind: &TransactionKind) -> GasPaymentMode {
+    if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+        GasPaymentMode::Unmetered
+    } else if gas_data.payment.is_empty() {
+        if gas_data.price == 0 {
+            GasPaymentMode::Gasless
+        } else if let TransactionKind::ProgrammableTransaction(pt) = transaction_kind {
+            let owner = ObjectID::from(gas_data.owner);
+            if pt.shared_input_objects().any(|input| input.id == owner) {
+                GasPaymentMode::Allowance(owner)
+            } else {
+                GasPaymentMode::AddressBalance
+            }
+        } else {
+            GasPaymentMode::AddressBalance
+        }
+    } else {
+        GasPaymentMode::Coins
+    }
+}
+
 pub fn is_gas_paid_from_address_balance(
     gas_data: &GasData,
     transaction_kind: &TransactionKind,
 ) -> bool {
-    gas_data.payment.is_empty()
-        && matches!(
-            transaction_kind,
-            TransactionKind::ProgrammableTransaction(_)
-        )
+    matches!(
+        gas_payment_mode(gas_data, transaction_kind),
+        GasPaymentMode::AddressBalance | GasPaymentMode::Gasless
+    )
 }
 
 pub fn is_gasless_transaction(gas_data: &GasData, transaction_kind: &TransactionKind) -> bool {
-    is_gas_paid_from_address_balance(gas_data, transaction_kind) && gas_data.price == 0
+    matches!(
+        gas_payment_mode(gas_data, transaction_kind),
+        GasPaymentMode::Gasless
+    )
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -3066,12 +3108,18 @@ pub trait TransactionDataAPI {
     // kind is moved out of often enough that this is worth it to special case.
     fn into_kind(self) -> TransactionKind;
 
-    /// Transaction signer and Gas owner
+    /// Transaction signer and any address-based gas payer.
     fn required_signers(&self) -> NonEmpty<SuiAddress>;
 
     fn gas_data(&self) -> &GasData;
 
+    /// Raw `GasData.owner` selector preserved for transaction wire compatibility. For allowance
+    /// payments it is an object ID encoded as an address, not a gas payer.
     fn gas_owner(&self) -> SuiAddress;
+
+    fn gas_payment_mode(&self) -> GasPaymentMode;
+
+    fn gas_payer_address(&self) -> Option<SuiAddress>;
 
     fn gas(&self) -> &[ObjectRef];
 
@@ -3154,7 +3202,7 @@ pub trait TransactionDataAPI {
 
     fn is_consensus_commit_prologue(&self) -> bool;
 
-    /// Check if the transaction is sponsored (namely gas owner != sender)
+    /// Whether a distinct address, rather than the sender, pays gas.
     fn is_sponsored_tx(&self) -> bool;
 
     fn is_gas_paid_from_address_balance(&self) -> bool;
@@ -3186,11 +3234,13 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.kind
     }
 
-    /// Transaction signer and Gas owner
+    /// Transaction signer and any address-based gas payer.
     fn required_signers(&self) -> NonEmpty<SuiAddress> {
         let mut signers = nonempty![self.sender];
-        if self.gas_owner() != self.sender {
-            signers.push(self.gas_owner());
+        if let Some(payer) = self.gas_payer_address()
+            && payer != self.sender
+        {
+            signers.push(payer);
         }
         signers
     }
@@ -3201,6 +3251,20 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn gas_owner(&self) -> SuiAddress {
         self.gas_data.owner
+    }
+
+    fn gas_payment_mode(&self) -> GasPaymentMode {
+        gas_payment_mode(&self.gas_data, &self.kind)
+    }
+
+    fn gas_payer_address(&self) -> Option<SuiAddress> {
+        match self.gas_payment_mode() {
+            GasPaymentMode::Allowance(_) => None,
+            GasPaymentMode::Coins
+            | GasPaymentMode::AddressBalance
+            | GasPaymentMode::Gasless
+            | GasPaymentMode::Unmetered => Some(self.gas_owner()),
+        }
     }
 
     fn gas(&self) -> &[ObjectRef] {
@@ -3303,7 +3367,9 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
             };
 
-            let withdrawal_owner = withdraw.owner_for_withdrawal(self);
+            let withdrawal_owner = withdraw
+                .owner_for_withdrawal(self)
+                .expect("withdrawal owner checked by transaction validation");
 
             // unwrap checked at signing time
             let account_id =
@@ -3426,6 +3492,56 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn validity_check(&self, context: &TxValidityCheckContext<'_>) -> SuiResult {
         let config = context.config;
+        let gas_allowance = match self.gas_payment_mode() {
+            GasPaymentMode::Allowance(id) => Some(id),
+            _ => None,
+        };
+        if let Some(allowance_id) = gas_allowance {
+            fp_ensure!(
+                config.enable_gas_allowances(),
+                UserInputError::Unsupported("Gas allowances are not enabled".to_string()).into()
+            );
+            let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
+                unreachable!("gas allowance transactions are programmable transactions");
+            };
+            let allowance_input_index = pt
+                .inputs
+                .iter()
+                .position(|input| {
+                    matches!(
+                        input,
+                        CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == allowance_id
+                    )
+                })
+                .expect("gas allowance ID is a shared programmable transaction input");
+            let CallArg::Object(ObjectArg::SharedObject { mutability, .. }) =
+                &pt.inputs[allowance_input_index]
+            else {
+                unreachable!("gas allowance input is a shared object");
+            };
+            fp_ensure!(
+                *mutability == SharedObjectMutability::Mutable,
+                UserInputError::Unsupported("Gas allowance input must be mutable".to_string())
+                    .into()
+            );
+            fp_ensure!(
+                !pt.commands.iter().any(Command::is_gas_coin_used),
+                UserInputError::Unsupported(
+                    "Argument::GasCoin is not supported with gas allowances".to_string()
+                )
+                .into()
+            );
+            fp_ensure!(
+                !pt.commands
+                    .iter()
+                    .flat_map(|command| command.input_arguments())
+                    .any(|input| input as usize == allowance_input_index),
+                UserInputError::Unsupported(
+                    "Gas allowance input must not be used by a command".to_string()
+                )
+                .into()
+            );
+        }
 
         // Checks to see if the transaction has expired
         match self.expiration() {
@@ -3715,7 +3831,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .into());
                 }
             }
-        } else {
+        } else if gas_allowance.is_none() {
             fp_ensure!(
                 !self.gas().is_empty(),
                 UserInputError::MissingGasPayment.into()
@@ -3838,9 +3954,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(())
     }
 
-    /// Check if the transaction is sponsored (namely gas owner != sender)
+    /// Whether a distinct address, rather than the sender, pays gas.
     fn is_sponsored_tx(&self) -> bool {
-        self.gas_owner() != self.sender
+        self.gas_payer_address()
+            .is_some_and(|payer| payer != self.sender)
     }
 
     // Note: it is possible to pay gas from a coin reservation, which ultimately draws from
@@ -3856,8 +3973,11 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     /// Check if the transaction is compliant with sponsorship.
     fn check_sponsorship(&self) -> UserInputResult {
-        // Not a sponsored transaction, nothing to check
-        if self.gas_owner() == self.sender() {
+        // Allowance payments have no address sponsor.
+        let Some(payer) = self.gas_payer_address() else {
+            return Ok(());
+        };
+        if payer == self.sender() {
             return Ok(());
         }
         if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
@@ -3945,7 +4065,7 @@ impl TransactionDataV1 {
                 }
             };
 
-            let account_address = withdraw.owner_for_withdrawal(self);
+            let account_address = withdraw.owner_for_withdrawal(self)?;
             let type_tag = withdraw.type_arg.to_type_tag();
             let account_id =
                 AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
@@ -5333,14 +5453,30 @@ impl InputObjects {
             .any(|obj| obj.is_consensus_stream_ended())
     }
 
-    // Returns IDs of objects responsible for a transaction being cancelled, and the corresponding
-    // reason for cancellation.
-    pub fn get_cancelled_objects(&self) -> Option<(Vec<ObjectID>, SequenceNumber)> {
+    // Returns IDs responsible for cancellation and the reason. A congested gas allowance
+    // keeps its normal version so it can pay; only that missing sentinel is supplied separately.
+    pub fn get_cancelled_objects(
+        &self,
+        congested_gas_allowance: Option<ObjectID>,
+    ) -> Option<(Vec<ObjectID>, SequenceNumber)> {
         let mut contains_cancelled = false;
         let mut cancel_reason = None;
         let mut cancelled_objects = Vec::new();
+        let mut found_congested_allowance = false;
         for obj in &self.objects {
-            if let ObjectReadResultKind::CancelledTransactionSharedObject(version) = obj.object {
+            let version = match &obj.object {
+                ObjectReadResultKind::Object(_) if congested_gas_allowance == Some(obj.id()) => {
+                    assert!(matches!(
+                        obj.input_object_kind,
+                        InputObjectKind::SharedMoveObject { .. }
+                    ));
+                    found_congested_allowance = true;
+                    Some(SequenceNumber::CONGESTED)
+                }
+                ObjectReadResultKind::CancelledTransactionSharedObject(version) => Some(*version),
+                _ => None,
+            };
+            if let Some(version) = version {
                 contains_cancelled = true;
                 if version == SequenceNumber::CONGESTED
                     || version == SequenceNumber::RANDOMNESS_UNAVAILABLE
@@ -5352,6 +5488,7 @@ impl InputObjects {
                 }
             }
         }
+        assert!(congested_gas_allowance.is_none() || found_congested_allowance);
 
         if !cancelled_objects.is_empty() {
             Some((
@@ -5401,16 +5538,42 @@ impl InputObjects {
     /// All inputs that will be directly mutated by the transaction. This does
     /// not include SharedObjectMutability::NonExclusiveWrite inputs.
     pub fn exclusive_mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
-        self.mutables_with_input_kinds()
-            .filter_map(|(id, (version, owner, kind))| match kind {
-                InputObjectKind::SharedMoveObject { mutability, .. } => match mutability {
-                    SharedObjectMutability::Mutable => Some((id, (version, owner))),
-                    SharedObjectMutability::Immutable => None,
-                    SharedObjectMutability::NonExclusiveWrite => None,
-                },
-                _ => Some((id, (version, owner))),
+        self.exclusive_mutable_object_inputs()
+            .map(|(kind, object)| {
+                let object_ref = match kind {
+                    InputObjectKind::ImmOrOwnedMoveObject(object_ref) => *object_ref,
+                    _ => object.compute_object_reference(),
+                };
+                (
+                    object_ref.0,
+                    ((object_ref.1, object_ref.2), object.owner.clone()),
+                )
             })
             .collect()
+    }
+
+    pub fn exclusive_mutable_input_count(&self) -> usize {
+        self.exclusive_mutable_object_inputs().count()
+    }
+
+    fn exclusive_mutable_object_inputs(&self) -> impl Iterator<Item = (&InputObjectKind, &Object)> {
+        self.objects
+            .iter()
+            .filter_map(|read| match (&read.input_object_kind, &read.object) {
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(_),
+                    ObjectReadResultKind::Object(object),
+                ) => (!object.is_immutable()).then_some((&read.input_object_kind, object)),
+                (InputObjectKind::ImmOrOwnedMoveObject(_), _) => unreachable!(),
+                (
+                    InputObjectKind::SharedMoveObject {
+                        mutability: SharedObjectMutability::Mutable,
+                        ..
+                    },
+                    ObjectReadResultKind::Object(object),
+                ) => Some((&read.input_object_kind, object)),
+                _ => None,
+            })
     }
 
     pub fn non_exclusive_input_objects(&self) -> BTreeMap<ObjectID, Object> {

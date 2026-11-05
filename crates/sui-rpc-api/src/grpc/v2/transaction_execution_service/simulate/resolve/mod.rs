@@ -274,9 +274,24 @@ fn resolve_unresolved_transaction(
         })?
         .unwrap_or(sui_types::transaction::TransactionExpiration::None);
     let ptb = resolve_ptb(service, called_packages, unresolved_inputs, commands)?;
+    let mut kind = sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb);
+    // Gas settlement writes the allowance even though no PTB command may use it.
+    if let sui_types::transaction::GasPaymentMode::Allowance(allowance_id) =
+        sui_types::transaction::gas_payment_mode(&gas_data, &kind)
+        && let sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb) = &mut kind
+    {
+        for input in &mut ptb.inputs {
+            if let CallArg::Object(ObjectArg::SharedObject { id, mutability, .. }) = input
+                && *id == allowance_id
+            {
+                *mutability = sui_types::transaction::SharedObjectMutability::Mutable;
+                break;
+            }
+        }
+    }
     Ok(TransactionData::V1(
         sui_types::transaction::TransactionDataV1 {
-            kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb),
+            kind,
             sender: sender.into(),
             gas_data,
             expiration,

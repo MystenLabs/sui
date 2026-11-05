@@ -60,6 +60,7 @@ pub mod execution_status;
 pub mod full_checkpoint_content;
 pub mod funds_accumulator;
 pub mod gas;
+pub mod gas_allowance;
 pub mod gas_coin;
 pub mod gas_model;
 pub mod global_state_hash;

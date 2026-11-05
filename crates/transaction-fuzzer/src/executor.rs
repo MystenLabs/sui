@@ -168,7 +168,11 @@ impl Executor {
 
     pub fn dry_run_transaction(&self, tx_data: TransactionData) -> Result<(), SuiError> {
         self.state
-            .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+            .simulate_transaction(
+                tx_data,
+                TransactionChecks::Enabled,
+                sui_types::transaction_executor::SimulationGasPayment::MockIfEmpty,
+            )
             .map(|_| ())
     }
 

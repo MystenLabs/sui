@@ -8,8 +8,10 @@ use nonempty::NonEmpty;
 use once_cell::sync::Lazy;
 
 use crate::{
-    base_types::SequenceNumber, digests::TransactionDigest, execution_status::CongestedObjects,
-    execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
+    base_types::{ObjectID, SequenceNumber},
+    digests::TransactionDigest,
+    execution_status::{CongestedObjects, ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
+    transaction::CheckedInputObjects,
 };
 
 /// Execution inputs computed before running a transaction: whether to fail it early (and with
@@ -76,6 +78,43 @@ pub enum FundsWithdrawStatus {
     Insufficient,
 }
 
+/// Reconstruct only the congestion bit lost when a gas allowance retains its normal version.
+/// Other objects and the cancellation reason are always decoded from their version sentinels.
+/// Callers must first establish that this is an enabled allowance payment.
+pub fn congested_gas_allowance_from_effects(
+    allowance_id: ObjectID,
+    status: &ExecutionStatus,
+    shared_versions: impl IntoIterator<Item = (ObjectID, SequenceNumber)>,
+) -> Option<ObjectID> {
+    let mut allowance_is_loaded = false;
+    let mut has_cancelled_read = false;
+    let mut has_congestion = false;
+    let mut has_randomness_cancellation = false;
+    for (id, version) in shared_versions {
+        if id == allowance_id {
+            allowance_is_loaded = !version.is_cancelled();
+        }
+        has_cancelled_read |= version == SequenceNumber::CANCELLED_READ;
+        has_congestion |= version == SequenceNumber::CONGESTED;
+        has_randomness_cancellation |= version == SequenceNumber::RANDOMNESS_UNAVAILABLE;
+    }
+    if !allowance_is_loaded || has_randomness_cancellation {
+        return None;
+    }
+    let explicitly_congested = matches!(
+        status,
+        ExecutionStatus::Failure(ExecutionFailure {
+            error: ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                congested_objects: CongestedObjects(objects),
+            },
+            ..
+        }) if objects.contains(&allowance_id)
+    );
+    // If allowance availability failed first, effects need not contain a cancellation error.
+    // All other inputs being CANCELLED_READ still identifies the sole missing cause.
+    (explicitly_congested || (has_cancelled_read && !has_congestion)).then_some(allowance_id)
+}
+
 /// Determine if a transaction is predetermined to fail execution.
 /// Returns all matching error kinds, or `None` if there is no early failure.
 /// When we pass this to the execution engine, we will not execute the transaction
@@ -84,6 +123,7 @@ pub fn get_early_execution_error(
     transaction_digest: &TransactionDigest,
     input_objects: &CheckedInputObjects,
     config_certificate_deny_set: &HashSet<TransactionDigest>,
+    congested_gas_allowance: Option<ObjectID>,
     funds_withdraw_status: &FundsWithdrawStatus,
 ) -> Option<NonEmpty<ExecutionErrorKind>> {
     let mut errors = vec![];
@@ -98,8 +138,10 @@ pub fn get_early_execution_error(
         errors.push(ExecutionErrorKind::InputObjectDeleted);
     }
 
-    let cancelled_objects = input_objects.inner().get_cancelled_objects();
-    if let Some((cancelled_objects, reason)) = cancelled_objects {
+    if let Some((cancelled_objects, reason)) = input_objects
+        .inner()
+        .get_cancelled_objects(congested_gas_allowance)
+    {
         match reason {
             SequenceNumber::CONGESTED => {
                 errors.push(
@@ -189,6 +231,7 @@ mod tests {
             &tx_digest,
             &input_objects,
             &deny_set,
+            None,
             &FundsWithdrawStatus::Insufficient,
         );
         assert_eq!(
@@ -201,6 +244,7 @@ mod tests {
             &tx_digest,
             &input_objects,
             &deny_set,
+            None,
             &FundsWithdrawStatus::MaybeSufficient,
         );
         assert!(result.is_none());
@@ -218,6 +262,7 @@ mod tests {
             &tx_digest,
             &input_objects,
             &deny_set,
+            None,
             &FundsWithdrawStatus::Insufficient,
         );
         assert_eq!(
@@ -245,6 +290,7 @@ mod tests {
             &tx_digest,
             &CheckedInputObjects::new_for_replay(input_objects),
             &deny_set,
+            None,
             &FundsWithdrawStatus::Insufficient,
         );
         assert_eq!(
@@ -266,18 +312,173 @@ mod tests {
                 SequenceNumber::CONGESTED,
             ),
         }]);
-        let result = get_early_execution_error(
+        let marker_result = get_early_execution_error(
             &tx_digest,
             &CheckedInputObjects::new_for_replay(input_objects),
             &deny_set,
+            None,
             &FundsWithdrawStatus::Insufficient,
         );
-        let result: Vec<_> = result.unwrap().into_iter().collect();
+
+        let result: Vec<_> = marker_result.unwrap().into_iter().collect();
         assert_eq!(result.len(), 2);
         assert!(matches!(
             result[0],
             ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. }
         ));
         assert_eq!(result[1], ExecutionErrorKind::InsufficientFundsForWithdraw);
+    }
+
+    #[test]
+    fn replay_cancellation_uses_sentinels_not_expected_error() {
+        let allowance = crate::object::Object::shared_for_testing();
+        let allowance_id = allowance.id();
+        let congested_id = ObjectID::random();
+        let unrelated_id = ObjectID::random();
+        let inputs = |reason| {
+            CheckedInputObjects::new_for_replay(InputObjects::new(vec![
+                ObjectReadResult {
+                    input_object_kind: InputObjectKind::SharedMoveObject {
+                        id: allowance_id,
+                        initial_shared_version: allowance.owner.start_version().unwrap(),
+                        mutability: SharedObjectMutability::Mutable,
+                    },
+                    object: ObjectReadResultKind::Object(allowance.clone()),
+                },
+                ObjectReadResult {
+                    input_object_kind: InputObjectKind::SharedMoveObject {
+                        id: congested_id,
+                        initial_shared_version: SequenceNumber::MIN,
+                        mutability: SharedObjectMutability::Mutable,
+                    },
+                    object: ObjectReadResultKind::CancelledTransactionSharedObject(reason),
+                },
+                ObjectReadResult {
+                    input_object_kind: InputObjectKind::SharedMoveObject {
+                        id: unrelated_id,
+                        initial_shared_version: SequenceNumber::MIN,
+                        mutability: SharedObjectMutability::Mutable,
+                    },
+                    object: ObjectReadResultKind::CancelledTransactionSharedObject(
+                        SequenceNumber::CANCELLED_READ,
+                    ),
+                },
+            ]))
+        };
+        let versions = |reason| {
+            [
+                (allowance_id, allowance.version()),
+                (congested_id, reason),
+                (unrelated_id, SequenceNumber::CANCELLED_READ),
+            ]
+        };
+        let stale_status = ExecutionStatus::Failure(ExecutionFailure::new(
+            ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                congested_objects: CongestedObjects(vec![allowance_id, unrelated_id]),
+            },
+            None,
+        ));
+        let digest = TransactionDigest::random();
+        let deny_set = HashSet::new();
+        let reconstruct = |status: &ExecutionStatus, reason| {
+            get_early_execution_error(
+                &digest,
+                &inputs(reason),
+                &deny_set,
+                congested_gas_allowance_from_effects(allowance_id, status, versions(reason)),
+                &FundsWithdrawStatus::MaybeSufficient,
+            )
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<_>>()
+        };
+
+        // Only the allowance's missing congestion bit comes from effects. The other IDs
+        // must come from the actual sentinels, even when expected effects name the wrong object.
+        assert_eq!(
+            reconstruct(&stale_status, SequenceNumber::CONGESTED),
+            vec![
+                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                    congested_objects: CongestedObjects(vec![allowance_id, congested_id]),
+                }
+            ],
+        );
+        // An expected congestion error cannot override a randomness-unavailable sentinel.
+        assert_eq!(
+            reconstruct(&stale_status, SequenceNumber::RANDOMNESS_UNAVAILABLE),
+            vec![ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable],
+        );
+        // Unavailable escrow can supersede the cancellation status. CANCELLED_READ inputs
+        // still identify the retained allowance as the sole cause, without trusting that status.
+        assert_eq!(
+            reconstruct(
+                &ExecutionStatus::Failure(ExecutionFailure::new(
+                    ExecutionErrorKind::InsufficientGas,
+                    None,
+                )),
+                SequenceNumber::CANCELLED_READ,
+            ),
+            vec![
+                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                    congested_objects: CongestedObjects(vec![allowance_id]),
+                }
+            ],
+        );
+
+        let mut certificate_denied = HashSet::new();
+        certificate_denied.insert(digest);
+        assert_eq!(
+            get_early_execution_error(
+                &digest,
+                &inputs(SequenceNumber::CANCELLED_READ),
+                &certificate_denied,
+                congested_gas_allowance_from_effects(
+                    allowance_id,
+                    &ExecutionStatus::Failure(ExecutionFailure::new(
+                        ExecutionErrorKind::CertificateDenied,
+                        None,
+                    )),
+                    versions(SequenceNumber::CANCELLED_READ),
+                ),
+                &FundsWithdrawStatus::MaybeSufficient,
+            )
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<_>>(),
+            vec![
+                ExecutionErrorKind::CertificateDenied,
+                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                    congested_objects: CongestedObjects(vec![allowance_id]),
+                },
+            ],
+            "effects replay restores the retained allowance cancellation beneath a certificate denial"
+        );
+
+        assert_eq!(
+            get_early_execution_error(
+                &digest,
+                &inputs(SequenceNumber::CANCELLED_READ),
+                &deny_set,
+                congested_gas_allowance_from_effects(
+                    allowance_id,
+                    &ExecutionStatus::Failure(ExecutionFailure::new(
+                        ExecutionErrorKind::InsufficientFundsForWithdraw,
+                        None,
+                    )),
+                    versions(SequenceNumber::CANCELLED_READ),
+                ),
+                &FundsWithdrawStatus::Insufficient,
+            )
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<_>>(),
+            vec![
+                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                    congested_objects: CongestedObjects(vec![allowance_id]),
+                },
+                ExecutionErrorKind::InsufficientFundsForWithdraw,
+            ],
+            "effects replay retains the cancellation input to the IFFW short-circuit"
+        );
     }
 }

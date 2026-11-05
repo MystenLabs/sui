@@ -3125,8 +3125,8 @@ impl AuthorityPerEpochStore {
     }
 
     // Assigns shared object versions to transactions and updates the next shared object version state.
-    // Shared object versions in cancelled transactions are assigned to special versions that will
-    // cause the transactions to be cancelled in execution engine.
+    // Cancelled shared inputs use special versions, except a chargeable gas allowance, which
+    // remains a normal input so execution can debit it.
     pub(crate) fn process_consensus_transaction_shared_object_versions<'a, T>(
         &'a self,
         cache_reader: &dyn ObjectCacheRead,

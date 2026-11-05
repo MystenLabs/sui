@@ -23,9 +23,9 @@ use sui_types::transaction_driver_types::ExecuteTransactionRequestV3;
 use sui_types::transaction_driver_types::ExecuteTransactionResponseV3;
 use sui_types::transaction_driver_types::FinalizedEffects;
 use sui_types::transaction_driver_types::TransactionSubmissionError;
-use sui_types::transaction_executor::SimulateTransactionResult;
-use sui_types::transaction_executor::TransactionChecks;
-use sui_types::transaction_executor::TransactionExecutor;
+use sui_types::transaction_executor::{
+    SimulateTransactionResult, SimulationGasPayment, TransactionChecks, TransactionExecutor,
+};
 
 use crate::context::Context;
 
@@ -136,12 +136,12 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
+        gas_payment: SimulationGasPayment,
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.context
             .simulacrum()
             .blocking_read()
-            .simulate_transaction(transaction, checks, allow_mock_gas_coin)
+            .simulate_transaction(transaction, checks, gas_payment)
     }
 }
 

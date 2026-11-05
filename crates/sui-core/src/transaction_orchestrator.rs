@@ -32,7 +32,9 @@ use sui_types::transaction_driver_types::{
     ExecuteTransactionResponseV3, FinalizedEffects, IsTransactionExecutedLocally,
     TransactionSubmissionError,
 };
-use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
+use sui_types::transaction_executor::{
+    SimulateTransactionResult, SimulationGasPayment, TransactionChecks,
+};
 use tokio::sync::broadcast::Receiver;
 use tokio::time::{Instant, sleep, timeout};
 use tracing::{Instrument, debug, error_span, info, instrument, warn};
@@ -1170,11 +1172,11 @@ where
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
+        gas_payment: SimulationGasPayment,
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.inner
             .validator_state
-            .simulate_transaction(transaction, checks, allow_mock_gas_coin)
+            .simulate_transaction(transaction, checks, gas_payment)
     }
 }
 

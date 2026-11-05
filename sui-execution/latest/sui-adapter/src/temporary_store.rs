@@ -51,7 +51,9 @@ use sui_types::{
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 
 pub(crate) mod invariants;
+mod storage_rebates;
 use invariants::InvariantChecker;
+use storage_rebates::StorageRebatePlan;
 
 /// Declared allowance ids per `(funder, funds type)` key.
 type AllowanceIds = BTreeMap<(SuiAddress, TypeTag), Vec<ObjectID>>;
@@ -139,6 +141,11 @@ pub struct TemporaryStore<'backing> {
 
     /// Execution-attempt bookkeeping for post-execution system checks.
     invariants: InvariantChecker,
+    storage_rebate_recipients: BTreeMap<ObjectID, (SuiAddress, u64)>,
+    // Raw deposits carried unchanged into recovery writes or funder-owned claims.
+    carried_rebate_inputs: BTreeMap<ObjectID, u64>,
+    carried_rebate_outputs: BTreeMap<ObjectID, u64>,
+    storage_refunds: BTreeMap<SuiAddress, u64>,
 
     /// Versions of system objects this transaction may implicitly read during execution.
     system_object_versions: SystemObjectVersions,
@@ -255,6 +262,10 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             post_execution_check_inputs,
             invariants: InvariantChecker::default(),
+            storage_rebate_recipients: BTreeMap::new(),
+            carried_rebate_inputs: BTreeMap::new(),
+            carried_rebate_outputs: BTreeMap::new(),
+            storage_refunds: BTreeMap::new(),
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
@@ -668,27 +679,36 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.written_objects.insert(id, object);
     }
 
-    /// Mutate a child object outside of PT. This should be used extremely rarely.
-    /// Currently it's only used by advance_epoch_safe_mode because it's all native
-    /// without PT. This should almost never be used otherwise.
+    /// Mutate a child outside PT, for native epoch and storage-refund settlement.
     pub fn mutate_child_object(&mut self, old_object: Object, new_object: Object) {
         let id = new_object.id();
-        let old_ref = old_object.compute_object_reference();
-        debug_assert_eq!(old_ref.0, id);
-        self.loaded_runtime_objects.insert(
-            id,
-            DynamicallyLoadedObjectMetadata {
-                version: old_ref.1,
-                digest: old_ref.2,
-                owner: old_object.owner.clone(),
-                storage_rebate: old_object.storage_rebate,
-                previous_transaction: old_object.previous_transaction,
-            },
-        );
-        self.execution_results.modified_objects.insert(id);
+        debug_assert_eq!(old_object.id(), id);
+        self.record_modified_child(&old_object);
         self.execution_results
             .written_objects
             .insert(id, new_object);
+    }
+
+    fn delete_child_object(&mut self, object: Object) {
+        let id = object.id();
+        debug_assert!(!self.execution_results.written_objects.contains_key(&id));
+        self.record_modified_child(&object);
+        self.execution_results.deleted_object_ids.insert(id);
+    }
+
+    fn record_modified_child(&mut self, object: &Object) {
+        let (id, version, digest) = object.compute_object_reference();
+        self.loaded_runtime_objects.insert(
+            id,
+            DynamicallyLoadedObjectMetadata {
+                version,
+                digest,
+                owner: object.owner.clone(),
+                storage_rebate: object.storage_rebate,
+                previous_transaction: object.previous_transaction,
+            },
+        );
+        self.execution_results.modified_objects.insert(id);
     }
 
     /// Upgrade system package during epoch change. This requires special treatment
@@ -728,6 +748,10 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn drop_writes(&mut self) {
         self.execution_results.drop_writes();
         self.invariants = InvariantChecker::default();
+        self.storage_rebate_recipients.clear();
+        self.carried_rebate_inputs.clear();
+        self.carried_rebate_outputs.clear();
+        self.storage_refunds.clear();
     }
 
     /// Consume this (post-execution) store and return the store used by a `BumpOnly` exit: keep
@@ -758,6 +782,10 @@ impl<'backing> TemporaryStore<'backing> {
             // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
+            storage_rebate_recipients: _,
+            carried_rebate_inputs: _,
+            carried_rebate_outputs: _,
+            storage_refunds: _,
         } = self;
         let mut bump_only = Self {
             store,
@@ -779,6 +807,10 @@ impl<'backing> TemporaryStore<'backing> {
             unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
+            storage_rebate_recipients: BTreeMap::new(),
+            carried_rebate_inputs: BTreeMap::new(),
+            carried_rebate_outputs: BTreeMap::new(),
+            storage_refunds: BTreeMap::new(),
         };
         // The only writes a BumpOnly exit records: bump the versions of the mutable inputs it locked.
         bump_only.ensure_active_inputs_mutated();
@@ -1076,7 +1108,14 @@ impl TemporaryStore<'_> {
     pub(crate) fn collect_storage_and_rebate(
         &mut self,
         gas_charger: &mut GasCharger,
+        preserve_protected_inputs: bool,
     ) -> Result<(), ExecutionError> {
+        let StorageRebatePlan {
+            updates,
+            retained_rebates,
+        } = self.prepare_storage_rebates(gas_charger, true, preserve_protected_inputs)?;
+        self.carried_rebate_inputs = retained_rebates.clone();
+        self.carried_rebate_outputs = retained_rebates;
         // Use two loops because we cannot mut iterate written while calling get_object_modified_at.
         let old_storage_rebates: Vec<_> = self
             .execution_results
@@ -1094,6 +1133,29 @@ impl TemporaryStore<'_> {
             .values_mut()
             .zip_debug_eq(old_storage_rebates)
         {
+            if self.carried_rebate_outputs.contains_key(&object.id()) {
+                continue;
+            }
+            let old_storage_rebate = if let Some((recipient, amount)) =
+                self.storage_rebate_recipients.get(&object.id())
+            {
+                if *amount != 0
+                    && self
+                        .carried_rebate_inputs
+                        .insert(object.id(), *amount)
+                        .is_some()
+                {
+                    return Err(ExecutionError::invariant_violation(
+                        "Storage refund source was routed more than once",
+                    ));
+                }
+                gas_charger.route_storage_refund(*recipient, *amount)?;
+                old_storage_rebate.checked_sub(*amount).ok_or_else(|| {
+                    ExecutionError::invariant_violation("Attribution exceeds the storage deposit")
+                })?
+            } else {
+                old_storage_rebate
+            };
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
@@ -1103,11 +1165,21 @@ impl TemporaryStore<'_> {
             object.storage_rebate = new_storage_rebate;
         }
 
-        self.collect_rebate(gas_charger)
+        self.finish_storage_rebates(gas_charger, updates)?;
+        self.collect_deleted_storage_rebates(gas_charger)
     }
 
     pub(crate) fn collect_rebate(
-        &self,
+        &mut self,
+        gas_charger: &mut GasCharger,
+    ) -> Result<(), ExecutionError> {
+        let rebate_plan = self.prepare_storage_rebates(gas_charger, false, false)?;
+        self.finish_storage_rebates(gas_charger, rebate_plan.updates)?;
+        self.collect_deleted_storage_rebates(gas_charger)
+    }
+
+    fn collect_deleted_storage_rebates(
+        &mut self,
         gas_charger: &mut GasCharger,
     ) -> Result<(), ExecutionError> {
         for object_id in &self.execution_results.modified_objects {
@@ -1124,6 +1196,26 @@ impl TemporaryStore<'_> {
                 // Unwrap is safe because this loop iterates through all modified objects.
                 .unwrap()
                 .storage_rebate;
+            let storage_rebate = if let Some((recipient, amount)) =
+                self.storage_rebate_recipients.get(object_id)
+            {
+                if *amount != 0
+                    && self
+                        .carried_rebate_inputs
+                        .insert(*object_id, *amount)
+                        .is_some()
+                {
+                    return Err(ExecutionError::invariant_violation(
+                        "Storage refund source was routed more than once",
+                    ));
+                }
+                gas_charger.route_storage_refund(*recipient, *amount)?;
+                storage_rebate.checked_sub(*amount).ok_or_else(|| {
+                    ExecutionError::invariant_violation("Attribution exceeds the storage deposit")
+                })?
+            } else {
+                storage_rebate
+            };
             gas_charger
                 .track_storage_mutation(*object_id, 0, storage_rebate)
                 .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))?;

@@ -45,7 +45,7 @@ impl Processor for TxAffectedAddresses {
         for (i, tx) in transactions.iter().enumerate() {
             let tx_sequence_number = (first_tx + i) as i64;
             let sender = tx.transaction.sender();
-            let payer = tx.transaction.gas_data().owner;
+            let payer = tx.transaction.gas_payer_address();
             let recipients = affected_addresses(&tx.effects);
 
             let accumulator_addresses =
@@ -66,7 +66,8 @@ impl Processor for TxAffectedAddresses {
 
             let affected_addresses: Vec<StoredTxAffectedAddress> = accumulator_addresses
                 .chain(recipients)
-                .chain(vec![sender, payer])
+                .chain(std::iter::once(sender))
+                .chain(payer)
                 .unique()
                 .map(|a| StoredTxAffectedAddress {
                     tx_sequence_number,

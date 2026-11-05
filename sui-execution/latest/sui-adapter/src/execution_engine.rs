@@ -27,6 +27,7 @@ pub(crate) mod checked {
     };
     use sui_types::coin_reservation::ParsedDigest;
     use sui_types::execution_params::ExecutionOrEarlyError;
+    use sui_types::gas_allowance::GasAllowance;
     use sui_types::gas_coin::GAS;
     use sui_types::gas_model::gas_predicates::bump_only_enabled;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
@@ -80,9 +81,9 @@ pub(crate) mod checked {
     use sui_types::sui_system_state::{ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, AdvanceEpochParams};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
-        Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
+        Command, EndOfEpochTransactionKind, GasData, GasPaymentMode, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, Reservation, StoredExecutionTimeObservations, TransactionKind,
-        WithdrawFrom, WriteAccumulatorStorageCost, is_gasless_transaction,
+        WithdrawFrom, WriteAccumulatorStorageCost, gas_payment_mode, is_gasless_transaction,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -127,12 +128,10 @@ pub(crate) mod checked {
         gas_data: &GasData,
         transaction_kind: &TransactionKind,
     ) -> Result<PaymentKind, ExecutionError> {
-        Ok(
-            if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-                PaymentKind::unmetered()
-            } else if is_gasless_transaction(gas_data, transaction_kind) {
-                PaymentKind::gasless()
-            } else if gas_data.payment.is_empty() {
+        match gas_payment_mode(gas_data, transaction_kind) {
+            GasPaymentMode::Unmetered => Ok(PaymentKind::unmetered()),
+            GasPaymentMode::Gasless => Ok(PaymentKind::gasless()),
+            GasPaymentMode::AddressBalance => {
                 PaymentKind::smash(vec![PaymentMethod::AddressBalance(
                     gas_data.owner,
                     gas_data.budget,
@@ -141,8 +140,12 @@ pub(crate) mod checked {
                     ExecutionError::invariant_violation(
                         "unable to create a payment kind with a single address balance",
                     )
-                })?
-            } else {
+                })
+            }
+            GasPaymentMode::Allowance(_) => Err(ExecutionError::invariant_violation(
+                "gas allowance payment must be validated before gas charging",
+            )),
+            GasPaymentMode::Coins => {
                 let payment_methods = gas_data
                     .payment
                     .iter()
@@ -162,9 +165,9 @@ pub(crate) mod checked {
                         "unable to create a payment kind from the gas payment: \
                      duplicate gas coin or reservation overflow",
                     )
-                })?
-            },
-        )
+                })
+            }
+        }
     }
 
     // Legacy (gas_model < 15) payment classification (delete at execution version cut)
@@ -576,6 +579,7 @@ pub(crate) mod checked {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum BumpOnlyReason {
         InsufficientFundsForWithdraw,
+        GasAllowanceUnavailable,
         GasSmash,
         WriteReset,
         Conservation,
@@ -588,6 +592,7 @@ pub(crate) mod checked {
         fn label(self) -> &'static str {
             match self {
                 Self::InsufficientFundsForWithdraw => "insufficient_funds_for_withdraw",
+                Self::GasAllowanceUnavailable => "gas_allowance_unavailable",
                 Self::GasSmash => "gas_smash",
                 Self::WriteReset => "write_reset",
                 Self::Conservation => "conservation",
@@ -597,7 +602,10 @@ pub(crate) mod checked {
         }
 
         fn is_expected(self) -> bool {
-            matches!(self, Self::InsufficientFundsForWithdraw)
+            matches!(
+                self,
+                Self::InsufficientFundsForWithdraw | Self::GasAllowanceUnavailable
+            )
         }
     }
 
@@ -674,9 +682,39 @@ pub(crate) mod checked {
             };
         }
 
+        let allowance_payment =
+            if let GasPaymentMode::Allowance(id) = gas_payment_mode(&gas_data, &transaction_kind) {
+                let allowance = temporary_store
+                    .objects()
+                    .get(&id)
+                    .and_then(|object| GasAllowance::from_object(object).ok())
+                    .filter(|allowance| {
+                        protocol_config.enable_gas_allowances()
+                            && allowance
+                                .check_authorization(transaction_signer, gas_data.budget)
+                                .is_ok()
+                    });
+                let Some(allowance) = allowance else {
+                    let error = execution_params
+                        .into_early_errors()
+                        .map(|errors| ExecutionError::new(errors.head, None))
+                        .unwrap_or_else(|| {
+                            ExecutionError::from_kind(ExecutionErrorKind::InsufficientGas)
+                        });
+                    return Outcome::BumpOnly {
+                        gas_status,
+                        error: error.into(),
+                        reason: BumpOnlyReason::GasAllowanceUnavailable,
+                    };
+                };
+                Some(PaymentKind::gas_allowance(id, allowance.funder))
+            } else {
+                None
+            };
+
         let sponsor = {
             let gas_owner = gas_data.owner;
-            if gas_owner == transaction_signer {
+            if gas_owner == transaction_signer || allowance_payment.is_some() {
                 None
             } else {
                 Some(gas_owner)
@@ -699,7 +737,10 @@ pub(crate) mod checked {
         );
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
-        let payment_kind = match payment_kind(&gas_data, &transaction_kind) {
+        let payment_kind = match allowance_payment
+            .map(Ok)
+            .unwrap_or_else(|| payment_kind(&gas_data, &transaction_kind))
+        {
             Ok(payment_kind) => payment_kind,
             Err(error) => {
                 return Outcome::BumpOnly {

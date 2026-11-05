@@ -1490,6 +1490,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     *transaction.tx().digest(),
                     CancelConsensusCertificateReason::DkgFailed,
                 );
+                if let Some((allowance_id, settlement_cost)) =
+                    SharedObjectCongestionTracker::gas_allowance_settlement_cost(
+                        protocol_config,
+                        transaction.tx(),
+                    )
+                {
+                    shared_object_using_randomness_congestion_tracker
+                        .bump_gas_allowance_settlement_cost(
+                            allowance_id,
+                            settlement_cost,
+                            *transaction.tx().digest(),
+                        );
+                }
                 randomness_transactions_to_schedule.push(transaction);
                 continue;
             }
@@ -2064,9 +2077,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let tx_cost = shared_object_congestion_tracker.get_tx_cost(
+        let (tx_cost, allowance_settlement) = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             transaction.tx(),
+            protocol_config,
             state.indirect_state_observer.as_mut().unwrap(),
         );
 
@@ -2123,6 +2137,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 congested_objects,
                             ),
                         );
+                        if let Some((allowance_id, settlement_cost)) = allowance_settlement {
+                            shared_object_congestion_tracker.bump_gas_allowance_settlement_cost(
+                                allowance_id,
+                                settlement_cost,
+                                tx_digest,
+                            );
+                        }
+
                         scheduled_txns.push(transaction);
                     }
                 }

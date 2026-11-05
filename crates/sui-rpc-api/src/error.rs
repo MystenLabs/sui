@@ -469,10 +469,24 @@ impl From<EpochNotFoundError> for crate::RpcError {
 /// Gas selection could not find enough SUI to cover the transaction's gas budget.
 #[derive(Debug)]
 pub struct InsufficientGasBalanceError {
-    owner: sui_types::base_types::SuiAddress,
     required_budget: u64,
-    coin_balance: u64,
-    address_balance: u64,
+    payer: InsufficientGasBalancePayer,
+}
+
+#[derive(Debug)]
+enum InsufficientGasBalancePayer {
+    Wallet {
+        owner: sui_types::base_types::SuiAddress,
+        coin_balance: u64,
+        address_balance: u64,
+    },
+    SelectedPayment {
+        balance: u64,
+    },
+    Allowance {
+        id: sui_types::base_types::ObjectID,
+        balance: u64,
+    },
 }
 
 impl InsufficientGasBalanceError {
@@ -483,23 +497,57 @@ impl InsufficientGasBalanceError {
         address_balance: u64,
     ) -> Self {
         Self {
-            owner,
             required_budget,
-            coin_balance,
-            address_balance,
+            payer: InsufficientGasBalancePayer::Wallet {
+                owner,
+                coin_balance,
+                address_balance,
+            },
+        }
+    }
+
+    pub(crate) fn selected_payment(required_budget: u64, balance: u64) -> Self {
+        Self {
+            required_budget,
+            payer: InsufficientGasBalancePayer::SelectedPayment { balance },
+        }
+    }
+
+    pub(crate) fn allowance(
+        id: sui_types::base_types::ObjectID,
+        required_budget: u64,
+        balance: u64,
+    ) -> Self {
+        Self {
+            required_budget,
+            payer: InsufficientGasBalancePayer::Allowance { id, balance },
         }
     }
 }
 
 impl std::fmt::Display for InsufficientGasBalanceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Unable to perform gas selection due to insufficient SUI \
-            balance (in address balance or coins) for account {} \
-            to satisfy required budget {}.",
-            self.owner, self.required_budget,
-        )
+        match &self.payer {
+            InsufficientGasBalancePayer::Wallet { owner, .. } => write!(
+                f,
+                "Unable to perform gas selection due to insufficient SUI \
+                balance (in address balance or coins) for account {} \
+                to satisfy required budget {}.",
+                owner, self.required_budget,
+            ),
+            InsufficientGasBalancePayer::SelectedPayment { .. } => write!(
+                f,
+                "Unable to perform gas selection due to insufficient SUI \
+                balance in the selected gas payment to satisfy required budget {}.",
+                self.required_budget,
+            ),
+            InsufficientGasBalancePayer::Allowance { id, .. } => write!(
+                f,
+                "Unable to perform gas selection due to insufficient SUI \
+                balance in gas allowance {} to satisfy required budget {}.",
+                id, self.required_budget,
+            ),
+        }
     }
 }
 
@@ -507,15 +555,36 @@ impl std::error::Error for InsufficientGasBalanceError {}
 
 impl From<InsufficientGasBalanceError> for crate::RpcError {
     fn from(value: InsufficientGasBalanceError) -> Self {
-        let metadata = [
-            ("owner", value.owner.to_string()),
-            ("requiredBudget", value.required_budget.to_string()),
-            ("coinBalance", value.coin_balance.to_string()),
-            ("addressBalance", value.address_balance.to_string()),
-        ]
-        .into_iter()
-        .map(|(key, metadata_value)| (key.to_owned(), metadata_value))
-        .collect();
+        let metadata = match value.payer {
+            InsufficientGasBalancePayer::Wallet {
+                owner,
+                coin_balance,
+                address_balance,
+            } => [
+                ("owner", owner.to_string()),
+                ("requiredBudget", value.required_budget.to_string()),
+                ("coinBalance", coin_balance.to_string()),
+                ("addressBalance", address_balance.to_string()),
+            ]
+            .into_iter()
+            .map(|(key, metadata_value)| (key.to_owned(), metadata_value))
+            .collect(),
+            InsufficientGasBalancePayer::SelectedPayment { balance } => [
+                ("requiredBudget", value.required_budget.to_string()),
+                ("selectedPaymentBalance", balance.to_string()),
+            ]
+            .into_iter()
+            .map(|(key, metadata_value)| (key.to_owned(), metadata_value))
+            .collect(),
+            InsufficientGasBalancePayer::Allowance { id, balance } => [
+                ("allowanceId", id.to_string()),
+                ("requiredBudget", value.required_budget.to_string()),
+                ("allowanceBalance", balance.to_string()),
+            ]
+            .into_iter()
+            .map(|(key, metadata_value)| (key.to_owned(), metadata_value))
+            .collect(),
+        };
         let error_info = ErrorInfo::default()
             .with_reason(ErrorReason::InsufficientGasBalance.as_str_name())
             .with_domain(ErrorReason::DOMAIN)

@@ -19,6 +19,7 @@ use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsResponse;
 use sui_rpc::proto::sui::rpc::v2::dynamic_field::DynamicFieldKind;
 use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
+use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::storage::DynamicFieldKey;
 
@@ -82,14 +83,19 @@ pub fn list_dynamic_fields(
         FieldMaskTree::from(read_mask)
     };
 
-    let mut iter = indexes.dynamic_field_iter(
-        parent.into(),
-        page_token.map(|t| DynamicFieldKey {
-            parent: parent.into(),
-            field_id: t.field_id.into(),
-            object_type: t.object_type,
-        }),
-    )?;
+    let mut iter = indexes
+        .dynamic_field_iter(
+            parent.into(),
+            page_token.map(|t| DynamicFieldKey {
+                parent: parent.into(),
+                field_id: t.field_id.into(),
+                object_type: t.object_type,
+            }),
+        )?
+        .filter(|key| match key {
+            Ok(key) => DynamicFieldInfo::is_dynamic_field(&key.object_type),
+            Err(_) => true,
+        });
     let mut dynamic_fields = Vec::with_capacity(page_size);
     let mut size_bytes = 0;
     while let Some(key) = iter

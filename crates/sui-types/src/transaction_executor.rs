@@ -29,8 +29,22 @@ pub trait TransactionExecutor: Send + Sync {
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
+        gas_payment: SimulationGasPayment,
     ) -> Result<SimulateTransactionResult, SuiError>;
+}
+
+/// How simulation supplies a gas coin that is not part of the transaction.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SimulationGasPayment {
+    /// Execute only with the transaction's declared gas payment.
+    NoMock,
+    /// Add a synthetic gas coin when the transaction has no gas payment.
+    MockIfEmpty,
+    /// Add synthetic funding alongside a declared coin payment for estimation.
+    ///
+    /// The declared payment remains the primary coin, preserving its identity and
+    /// storage-rebate provenance. The synthetic coin exists only during this simulation.
+    SupplementRealPayment,
 }
 
 /// Trait to let the gRPC service name the validators a transaction should be submitted to,

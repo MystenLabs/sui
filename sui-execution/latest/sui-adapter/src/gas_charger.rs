@@ -12,11 +12,13 @@ pub mod checked {
     use either::Either;
     use indexmap::IndexMap;
     use mysten_common::assert_reachable;
+    use std::collections::BTreeMap;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
     use sui_types::digests::TransactionDigest;
     use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
+    use sui_types::gas_allowance::GasAllowance;
     use sui_types::gas_model::gas_predicates::refresh_gas_payment_location;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
@@ -38,6 +40,7 @@ pub mod checked {
         gas_model_version: u64,
         payment: PaymentMetadata,
         gas_status: SuiGasStatus,
+        storage_refunds: BTreeMap<SuiAddress, u64>,
     }
 
     /// Internal representation of how a transaction's gas is being paid.
@@ -49,6 +52,10 @@ pub mod checked {
     enum PaymentMetadata {
         Unmetered,
         Gasless,
+        GasAllowance {
+            id: ObjectID,
+            funder: SuiAddress,
+        },
         /// Contains the list of payments (coins and address balances) and additional metadata
         Smash(SmashMetadata),
     }
@@ -85,6 +92,10 @@ pub mod checked {
     enum PaymentKind_ {
         Unmetered,
         Gasless,
+        GasAllowance {
+            id: ObjectID,
+            funder: SuiAddress,
+        },
         /// A non-empty map of gas coins or address balance withdrawals, keyed by location.
         /// The first entry is the smash target; all others are smashed into it.
         Smash(IndexMap<PaymentLocation, PaymentMethod>),
@@ -131,6 +142,9 @@ pub mod checked {
             let payment = match payment_kind.0 {
                 PaymentKind_::Unmetered => PaymentMetadata::Unmetered,
                 PaymentKind_::Gasless => PaymentMetadata::Gasless,
+                PaymentKind_::GasAllowance { id, funder } => {
+                    PaymentMetadata::GasAllowance { id, funder }
+                }
                 PaymentKind_::Smash(mut payment_methods) => {
                     let (_, smash_target) = payment_methods.shift_remove_index(0).unwrap();
                     let mut metadata = SmashMetadata {
@@ -149,6 +163,7 @@ pub mod checked {
                 gas_model_version,
                 payment,
                 gas_status,
+                storage_refunds: BTreeMap::new(),
             }
         }
 
@@ -161,6 +176,7 @@ pub mod checked {
                 gas_model_version: protocol_config.gas_model_version(),
                 payment: PaymentMetadata::Unmetered,
                 gas_status: SuiGasStatus::new_unmetered(protocol_config),
+                storage_refunds: BTreeMap::new(),
             }
         }
 
@@ -168,9 +184,9 @@ pub mod checked {
         //       Explore way to remove it.
         pub(crate) fn used_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
             match &self.payment {
-                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => {
-                    Either::Left(std::iter::empty())
-                }
+                PaymentMetadata::Unmetered
+                | PaymentMetadata::Gasless
+                | PaymentMetadata::GasAllowance { .. } => Either::Left(std::iter::empty()),
                 PaymentMetadata::Smash(metadata) => Either::Right(metadata.used_coins()),
             }
         }
@@ -196,7 +212,9 @@ pub mod checked {
         /// is used.
         pub fn gas_payment_amount(&self) -> Option<GasPayment> {
             match &self.payment {
-                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
+                PaymentMetadata::Unmetered
+                | PaymentMetadata::Gasless
+                | PaymentMetadata::GasAllowance { .. } => None,
                 PaymentMetadata::Smash(metadata) => Some(GasPayment {
                     location: metadata.smash_target.location(),
                     amount: metadata.total_smashed,
@@ -215,7 +233,9 @@ pub mod checked {
 
         pub(crate) fn gas_payment_location(&self) -> Option<PaymentLocation> {
             match &self.payment {
-                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
+                PaymentMetadata::Unmetered
+                | PaymentMetadata::Gasless
+                | PaymentMetadata::GasAllowance { .. } => None,
                 PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
             }
         }
@@ -258,6 +278,32 @@ pub mod checked {
             self.gas_status.summary()
         }
 
+        pub(crate) fn allowance_funder(&self) -> Option<SuiAddress> {
+            match self.payment {
+                PaymentMetadata::GasAllowance { funder, .. } => Some(funder),
+                _ => None,
+            }
+        }
+
+        pub(crate) fn recycles_allowance_storage(&self, recipient: SuiAddress) -> bool {
+            match self.payment {
+                PaymentMetadata::GasAllowance { funder, .. } => funder == recipient,
+                _ => false,
+            }
+        }
+
+        pub(crate) fn route_storage_refund(
+            &mut self,
+            recipient: SuiAddress,
+            amount: u64,
+        ) -> Result<(), ExecutionError> {
+            let refund = self.storage_refunds.entry(recipient).or_default();
+            *refund = refund
+                .checked_add(amount)
+                .ok_or_else(|| ExecutionError::invariant_violation("Storage refund overflow"))?;
+            Ok(())
+        }
+
         // This function is called when the transaction is about to be executed.
         // It will smash all gas coins into a single one and set the logical gas coin
         // to be the first one in the list.
@@ -267,7 +313,9 @@ pub mod checked {
         // are correct.
         fn smash_gas(&mut self, temporary_store: &mut TemporaryStore<'_>) {
             match &mut self.payment {
-                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => (),
+                PaymentMetadata::Unmetered
+                | PaymentMetadata::Gasless
+                | PaymentMetadata::GasAllowance { .. } => (),
                 PaymentMetadata::Smash(smash_metadata) => {
                     smash_metadata.smash_gas(&self.tx_digest, temporary_store);
                 }
@@ -296,11 +344,16 @@ pub mod checked {
             self.gas_status.charge_publish_package(size)
         }
 
+        pub(crate) fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
+            self.gas_status.charge_storage_read(size)
+        }
+
         /// Charge `storage_read` for each input object (system packages excepted).
         pub fn charge_input_objects(
             &mut self,
             temporary_store: &TemporaryStore<'_>,
         ) -> Result<(), ExecutionError> {
+            temporary_store.charge_storage_rebate_input_reads(self)?;
             temporary_store
                 .objects()
                 .iter()
@@ -343,6 +396,7 @@ pub mod checked {
         pub fn reset(&mut self, temporary_store: &mut TemporaryStore<'_>) {
             temporary_store.drop_writes();
             self.gas_status.reset_storage_cost_and_rebate();
+            self.storage_refunds.clear();
             self.smash_gas(temporary_store);
             temporary_store.ensure_active_inputs_mutated();
         }
@@ -377,10 +431,18 @@ pub mod checked {
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
         ) -> Result<(), ExecutionError> {
+            self.meter_storage_with_rebate_policy(temporary_store, false)
+        }
+
+        fn meter_storage_with_rebate_policy(
+            &mut self,
+            temporary_store: &mut TemporaryStore<'_>,
+            preserve_protected_inputs: bool,
+        ) -> Result<(), ExecutionError> {
             match &self.payment {
                 PaymentMetadata::Unmetered => {
                     temporary_store.ensure_active_inputs_mutated();
-                    temporary_store.collect_storage_and_rebate(self)
+                    temporary_store.collect_storage_and_rebate(self, preserve_protected_inputs)
                 }
                 PaymentMetadata::Gasless => {
                     temporary_store
@@ -392,14 +454,25 @@ pub mod checked {
                             )
                         })?;
                     temporary_store.ensure_active_inputs_mutated();
-                    temporary_store.collect_storage_and_rebate(self)
+                    temporary_store.collect_storage_and_rebate(self, preserve_protected_inputs)
                 }
-                PaymentMetadata::Smash(_) => {
+                PaymentMetadata::Smash(_) | PaymentMetadata::GasAllowance { .. } => {
                     temporary_store.ensure_active_inputs_mutated();
-                    temporary_store.collect_storage_and_rebate(self)?;
+                    temporary_store.collect_storage_and_rebate(self, preserve_protected_inputs)?;
                     self.gas_status.charge_storage_and_rebate()
                 }
+            }?;
+            self.defer_storage_refunds(temporary_store)
+        }
+
+        fn defer_storage_refunds(
+            &self,
+            temporary_store: &mut TemporaryStore<'_>,
+        ) -> Result<(), ExecutionError> {
+            for (&recipient, &amount) in &self.storage_refunds {
+                temporary_store.defer_storage_refund(recipient, amount)?;
             }
+            Ok(())
         }
 
         pub(crate) fn handle_error(
@@ -407,12 +480,14 @@ pub mod checked {
             temporary_store: &mut TemporaryStore<'_>,
         ) -> Result<(), ExecutionError> {
             self.reset(temporary_store);
-            self.meter_storage(temporary_store).or_else(|_| {
-                // Even input-only storage doesn't fit: full budget for computation, rebates only.
-                self.reset(temporary_store);
-                self.set_computation_to_budget();
-                temporary_store.collect_rebate(self)
-            })
+            self.meter_storage_with_rebate_policy(temporary_store, true)
+                .or_else(|_| {
+                    // Even input-only storage doesn't fit: full budget for computation, rebates only.
+                    self.reset(temporary_store);
+                    self.set_computation_to_budget();
+                    temporary_store.collect_rebate(self)?;
+                    self.defer_storage_refunds(temporary_store)
+                })
         }
 
         /// Apply the final gas charge derived from the current `SuiGasStatus`, per payment kind
@@ -446,6 +521,29 @@ pub mod checked {
                         storage_rebate: sender_rebate,
                         non_refundable_storage_fee: cost_summary.non_refundable_storage_fee,
                     }
+                }
+                PaymentMetadata::GasAllowance { id, funder } => {
+                    let summary = self.gas_status.summary();
+                    let net = summary.net_gas_usage();
+                    let mut object = temporary_store
+                        .read_object(id)
+                        .expect("validated gas allowance is a mutable input")
+                        .clone();
+                    let mut allowance = GasAllowance::from_object(&object)
+                        .expect("gas allowance is unavailable to PTB commands");
+                    if net >= 0 {
+                        allowance
+                            .balance
+                            .withdraw(net as u64)
+                            .expect("the allowance reserved the full gas budget");
+                    } else {
+                        temporary_store.add_storage_refund(*funder, net.unsigned_abs());
+                    }
+                    object.data.try_as_move_mut().unwrap().set_contents_unsafe(
+                        bcs::to_bytes(&allowance).expect("fixed-size gas allowance"),
+                    );
+                    temporary_store.mutate_input_object(object);
+                    summary
                 }
                 PaymentMetadata::Smash(metadata) => {
                     if let PaymentLocation::Coin(_) = metadata.gas_charge_location {
@@ -580,7 +678,7 @@ pub mod checked {
                 // compute and collect storage charges
                 temporary_store.ensure_active_inputs_mutated();
                 temporary_store
-                    .collect_storage_and_rebate(self)
+                    .collect_storage_and_rebate(self, false)
                     .expect("storage gas overflow");
 
                 if matches!(&self.payment, PaymentMetadata::Unmetered) {
@@ -697,7 +795,7 @@ pub mod checked {
                     self.reset(temporary_store);
                     temporary_store.ensure_active_inputs_mutated();
                     temporary_store
-                        .collect_storage_and_rebate(self)
+                        .collect_storage_and_rebate(self, false)
                         .expect("storage gas overflow");
                     if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                         // we run out of gas attempting to charge for the input objects exclusively,
@@ -865,6 +963,10 @@ pub mod checked {
         /// Metered-but-free.
         pub fn gasless() -> Self {
             Self(PaymentKind_::Gasless)
+        }
+
+        pub(crate) fn gas_allowance(id: ObjectID, funder: SuiAddress) -> Self {
+            Self(PaymentKind_::GasAllowance { id, funder })
         }
 
         /// `None` on an invalid payment set: empty, a duplicate gas coin, or an overflowing

@@ -25,10 +25,11 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::executable_transaction::VerifiedExecutableTransactionWithAliases;
+use sui_types::execution_params::congested_gas_allowance_from_effects;
 use sui_types::storage::{
     ObjectKey, transaction_non_shared_input_object_keys, transaction_receiving_object_keys,
 };
-use sui_types::transaction::SharedObjectMutability;
+use sui_types::transaction::{GasPaymentMode, SharedObjectMutability};
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
 use sui_types::{
     IMPLICITLY_READ_SYSTEM_OBJECTS, SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber,
@@ -51,6 +52,8 @@ pub struct AssignedVersions {
     /// commit this transaction belongs to), and the forwarding address registry and Clock
     /// versions (as of the point in the commit at which this transaction is sequenced).
     pub system_object_versions: SystemObjectVersions,
+    /// Congested allowance whose normal input version replaces its cancellation sentinel.
+    pub congested_gas_allowance: Option<ObjectID>,
 }
 
 impl AssignedVersions {
@@ -74,6 +77,7 @@ impl AssignedVersions {
         Self {
             shared_object_versions,
             system_object_versions,
+            congested_gas_allowance: None,
         }
     }
 
@@ -485,10 +489,18 @@ impl SharedObjVerManager {
                 ?system_object_versions,
                 "assigned consensus object versions from effects"
             );
-            assigned_versions.push((
-                tx_key,
-                AssignedVersions::new(cert_assigned_versions, system_object_versions),
-            ));
+            let mut assigned =
+                AssignedVersions::new(cert_assigned_versions, system_object_versions);
+            if let Some(allowance_id) = chargeable_allowance_id(epoch_store, cert) {
+                assigned.congested_gas_allowance = congested_gas_allowance_from_effects(
+                    allowance_id,
+                    effects.status(),
+                    accessed_versions
+                        .iter()
+                        .map(|(id, version)| (*id, *version)),
+                );
+            }
+            assigned_versions.push((tx_key, assigned));
         }
         AssignedTxAndVersions::new(assigned_versions)
     }
@@ -528,10 +540,12 @@ impl SharedObjVerManager {
 
         let tx_key = assignable.key();
 
-        // Check if the transaction is cancelled due to congestion.
         let cancellation_info = tx_key
             .as_digest()
             .and_then(|tx_digest| cancelled_txns.get(tx_digest));
+        let chargeable_allowance = assignable
+            .as_tx()
+            .and_then(|tx| chargeable_allowance_id(epoch_store, tx));
         let congested_objects_info: Option<HashSet<_>> =
             if let Some(CancelConsensusCertificateReason::CongestionOnObjects(congested_objects)) =
                 &cancellation_info
@@ -550,14 +564,24 @@ impl SharedObjVerManager {
         input_object_keys.extend(receiving_object_keys);
 
         if txn_cancelled {
-            // For cancelled transaction due to congestion, assign special versions to all shared objects.
-            // Note that new lamport version does not depend on any shared objects.
+            // A gas allowance remains a normal mutable input so cancellation charges can debit
+            // the escrow. Every other shared input retains its cancellation sentinel.
             for SharedInputObject {
                 id,
                 initial_shared_version,
-                ..
+                mutability,
             } in shared_input_objects.iter()
             {
+                if chargeable_allowance == Some(*id) {
+                    let assigned_version = *shared_input_next_versions
+                        .get(&(*id, *initial_shared_version))
+                        .expect("gas allowance must be in shared_input_next_versions");
+                    assigned_versions.push(((*id, *initial_shared_version), assigned_version));
+                    input_object_keys.push(ObjectKey(*id, assigned_version));
+                    is_exclusively_accessed_input.push(mutability.is_exclusive());
+                    continue;
+                }
+
                 let assigned_version = match cancellation_info {
                     Some(CancelConsensusCertificateReason::CongestionOnObjects(_)) => {
                         if congested_objects_info
@@ -611,7 +635,7 @@ impl SharedObjVerManager {
             next_version
         );
 
-        if !txn_cancelled {
+        if !txn_cancelled || chargeable_allowance.is_some() {
             // Update the next version for the shared objects.
             assigned_versions
                 .iter()
@@ -642,8 +666,35 @@ impl SharedObjVerManager {
             "locking shared objects"
         );
 
-        AssignedVersions::new(assigned_versions, system_object_versions)
+        let mut assigned = AssignedVersions::new(assigned_versions, system_object_versions);
+        if let (Some(allowance_id), Some(congested_objects)) =
+            (chargeable_allowance, congested_objects_info.as_ref())
+            && congested_objects.contains(&allowance_id)
+        {
+            debug_assert!(
+                assigned
+                    .shared_object_versions
+                    .iter()
+                    .any(|((id, _), version)| *id == allowance_id && !version.is_cancelled())
+            );
+            assigned.congested_gas_allowance = Some(allowance_id);
+        }
+        assigned
     }
+}
+
+fn chargeable_allowance_id(
+    epoch_store: &AuthorityPerEpochStore,
+    transaction: &VerifiedExecutableTransaction,
+) -> Option<ObjectID> {
+    epoch_store
+        .protocol_config()
+        .enable_gas_allowances()
+        .then(|| transaction.transaction_data().gas_payment_mode())
+        .and_then(|mode| match mode {
+            GasPaymentMode::Allowance(id) => Some(id),
+            _ => None,
+        })
 }
 
 fn implicitly_read_system_objects(
@@ -1408,6 +1459,69 @@ mod tests {
     }
 
     #[sim_test]
+    async fn test_assign_versions_for_dkg_cancelled_gas_allowance() {
+        let allowance = Object::shared_for_testing();
+        let allowance_id = allowance.id();
+        let allowance_initial_version = allowance.owner.start_version().unwrap();
+        let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(ProtocolConfig::get_for_max_version_UNSAFE())
+            .with_starting_objects(std::slice::from_ref(&allowance))
+            .build()
+            .await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let randomness_initial_version = epoch_store
+            .epoch_start_config()
+            .randomness_obj_initial_shared_version()
+            .unwrap();
+        let certificate = generate_gas_allowance_tx_with_gas_version(
+            &[
+                (
+                    SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    randomness_initial_version,
+                    false,
+                ),
+                (allowance_id, allowance_initial_version, true),
+            ],
+            allowance_id,
+            3,
+        );
+        let cancelled = BTreeMap::from([(
+            *certificate.digest(),
+            CancelConsensusCertificateReason::DkgFailed,
+        )]);
+
+        let assignment = SharedObjVerManager::assign_versions_from_consensus(
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+            std::iter::once(&Schedulable::Transaction(&certificate)),
+            &cancelled,
+        )
+        .unwrap();
+        let assigned = &assignment.assigned_versions.0[0].1;
+        assert_eq!(
+            assigned.shared_object_versions,
+            vec![
+                (
+                    (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_initial_version),
+                    SequenceNumber::RANDOMNESS_UNAVAILABLE,
+                ),
+                (
+                    (allowance_id, allowance_initial_version),
+                    allowance_initial_version,
+                ),
+            ]
+        );
+        assert_eq!(
+            assignment
+                .shared_input_next_versions
+                .get(&(allowance_id, allowance_initial_version)),
+            Some(&SequenceNumber::lamport_increment(std::iter::once(
+                allowance_initial_version
+            )))
+        );
+    }
+    #[sim_test]
+
     async fn test_assign_versions_from_effects() {
         let shared_object = Object::shared_for_testing();
         let id = shared_object.id();
@@ -1529,6 +1643,49 @@ mod tests {
         ))
     }
 
+    fn generate_gas_allowance_tx_with_gas_version(
+        shared_objects: &[(ObjectID, SequenceNumber, bool)],
+        allowance_id: ObjectID,
+        gas_object_version: u64,
+    ) -> VerifiedExecutableTransaction {
+        let mut tx_builder = TestTransactionBuilder::new(
+            SuiAddress::ZERO,
+            (
+                ObjectID::random(),
+                SequenceNumber::from_u64(gas_object_version),
+                ObjectDigest::random(),
+            ),
+            0,
+        );
+        let mut tx_data = {
+            let builder = tx_builder.ptb_builder_mut();
+            for (shared_object_id, shared_object_init_version, shared_object_mutable) in
+                shared_objects
+            {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: *shared_object_id,
+                        initial_shared_version: *shared_object_init_version,
+                        mutability: if *shared_object_mutable {
+                            SharedObjectMutability::Mutable
+                        } else {
+                            SharedObjectMutability::Immutable
+                        },
+                    })
+                    .unwrap();
+            }
+            tx_builder.build()
+        };
+        let gas_data = tx_data.gas_data_mut();
+        gas_data.payment.clear();
+        gas_data.owner = allowance_id.into();
+        gas_data.price = 1;
+        let tx = SenderSignedData::new(tx_data, vec![]);
+        VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
+            tx,
+            CertificateProof::new_system(0),
+        ))
+    }
     struct WithdrawTestContext {
         authority: Arc<AuthorityState>,
         assignables: Vec<Schedulable<VerifiedExecutableTransaction>>,

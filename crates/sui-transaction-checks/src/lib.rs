@@ -15,10 +15,11 @@ mod checked {
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::gas::SuiGasStatusAPI;
+    use sui_types::gas_allowance::{GasAllowance, StorageRebate};
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
-        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResultKind,
+        CheckedInputObjects, GasPaymentMode, InputObjectKind, InputObjects, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKind,
     };
@@ -95,6 +96,7 @@ mod checked {
             &input_objects,
             &[],
         )?;
+        check_gas_allowance_input(transaction, &input_objects)?;
         transaction.check_allowance_inputs(&input_objects)?;
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
@@ -131,6 +133,8 @@ mod checked {
         // NB: move verifier is only checked at signing time, not at execution.
         // NB: allowance withdrawal declarations are only validated at signing; at execution
         // the allowance's own Move checks enforce policy on consensus-sequenced state.
+        // Gas allowance eligibility is also checked only at signing: its live shared state can
+        // change before execution, where it deterministically fails before the VM.
 
         Ok((gas_status, input_objects.into_checked()))
     }
@@ -180,6 +184,7 @@ mod checked {
             transaction,
             false, // gas_ownership_checks - false means mostly transaction level checks
         )?;
+        check_gas_allowance_input(transaction, &input_objects)?;
 
         Ok((gas_status, input_objects.into_checked()))
     }
@@ -215,6 +220,25 @@ mod checked {
         }
 
         Ok(gas_status)
+    }
+
+    fn check_gas_allowance_input(
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+    ) -> UserInputResult<()> {
+        let GasPaymentMode::Allowance(allowance_id) = transaction.gas_payment_mode() else {
+            return Ok(());
+        };
+        let object = input_objects
+            .iter()
+            .find(|input| input.id() == allowance_id)
+            .and_then(|input| input.as_object())
+            .ok_or(UserInputError::ObjectNotFound {
+                object_id: allowance_id,
+                version: None,
+            })?;
+        let allowance = GasAllowance::from_object(object)?;
+        allowance.check_authorization(transaction.sender(), transaction.gas_budget())
     }
 
     /// All transactions must have replay protection, which can come from:
@@ -374,6 +398,33 @@ mod checked {
         let gas_budget = transaction.gas_budget();
         let gas_price = transaction.gas_price();
         let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
+        let is_gas_allowance =
+            matches!(transaction.gas_payment_mode(), GasPaymentMode::Allowance(_));
+        // Provenance processing is irreversible once protected deposits exist, so its
+        // prepayment minimum is independent of whether new allowance payments are enabled.
+        // Gas smashing is non-revertible, so every mutable-input provenance lookup must fit
+        // before execution can begin and potentially consume a protected secondary payment.
+        if protocol_config.enable_storage_rebate_provenance() && !is_gasless {
+            let lookup_bytes = StorageRebate::input_read_bytes(
+                objects.exclusive_mutable_input_count(),
+                protocol_config,
+            );
+            let mut prepayment_probe =
+                SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+            if prepayment_probe.charge_storage_read(lookup_bytes).is_err() {
+                let lookup_budget = SuiGasStatus::minimum_gas_budget_for_storage_read(
+                    lookup_bytes,
+                    gas_price,
+                    reference_gas_price,
+                    protocol_config,
+                )?;
+                return Err(UserInputError::GasBudgetTooLow {
+                    gas_budget,
+                    min_budget: lookup_budget,
+                }
+                .into());
+            }
+        }
 
         let gas_status = if is_gasless {
             debug_assert_ne!(reference_gas_price, 0);
@@ -413,7 +464,7 @@ mod checked {
             (gas_objects, available_address_balance_gas)
         };
 
-        if !is_gasless {
+        if !is_gasless && !is_gas_allowance {
             if gas_ownership_checks {
                 gas_status.check_gas_objects(&gas_objects)?;
             }

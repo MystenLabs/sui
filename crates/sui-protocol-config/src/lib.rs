@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 141;
+const MAX_PROTOCOL_VERSION: u64 = 142;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -433,6 +433,8 @@ const MAINNET_USDB: &str =
 //              Reject an overflowing x-coordinate in `secp256r1_ecrecover`.
 //              Configure explicit Move binary format encoding limits.
 //              Enable defer_owned_object_double_spend on all networks.
+// Version 142: Enable gas-only spending allowances and storage-rebate provenance on devnet.
+//              Add their native congestion settlement cost floor.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1339,6 +1341,16 @@ struct FeatureFlags {
     #[skip_protocol_config_accessor]
     enable_allowances: bool,
 
+    // Once protected deposits exist this must remain enabled: disabling it would make later
+    // mutations route their refunds to the current payer rather than the recorded funder.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_storage_rebate_provenance: bool,
+
+    // Enables new allowance payments. This may be disabled without disabling processing of
+    // existing protected deposits and claims.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_gas_allowances: bool,
+
     // Fixes last-use scoping and live-reference metering for generated `Read` PTB arguments.
     #[serde(skip_serializing_if = "is_false")]
     fix_ptb_generated_reads: bool,
@@ -1803,6 +1815,8 @@ pub struct ProtocolConfig {
     obj_metadata_cost_non_refundable: Option<u64>,
 
     // === Tokenomics ===
+    /// Fixed metered bytes for each storage-rebate provenance lookup, including misses.
+    storage_rebate_lookup_bytes: Option<u64>,
 
     // TODO: Option<this should be changed to u64.
     /// Sender of a txn that touches an object will get this percent of the storage rebate back.
@@ -2231,6 +2245,10 @@ pub struct ProtocolConfig {
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// Native settlement cost in microseconds for a gas allowance that remains mutable after
+    /// congestion cancellation. Also floors the cost of an otherwise-empty allowance PTB.
+    gas_allowance_congestion_control_cost: Option<u64>,
 
     /// Time after the scheduled epoch end (`next_reconfiguration_timestamp_ms`) at which epoch
     /// close stops waiting for deferred transactions to drain: the epoch is closed even if
@@ -2816,6 +2834,7 @@ impl ProtocolConfig {
             obj_data_cost_refundable: Some(100),
             obj_metadata_cost_non_refundable: Some(50),
             gas_model_version: Some(1),
+            storage_rebate_lookup_bytes: None,
             storage_rebate_rate: Some(9900),
             storage_fund_reinvest_rate: Some(500),
             reward_slashing_rate: Some(5000),
@@ -3186,6 +3205,7 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
+            gas_allowance_congestion_control_cost: None,
 
             epoch_close_deadline_ms: None,
 
@@ -4982,6 +5002,16 @@ impl ProtocolConfig {
                     cfg.binary_format_limits_profile = Some(BinaryFormatLimitsProfile::V1);
                     cfg.feature_flags.defer_owned_object_double_spend = true;
                 }
+                142 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_storage_rebate_provenance = true;
+                        cfg.storage_rebate_lookup_bytes = Some(256);
+                        cfg.feature_flags.enable_gas_allowances = true;
+                        // This conservative floor accounts for native allowance settlement, not
+                        // execution latency; it is not a cancellation throughput guarantee.
+                        cfg.gas_allowance_congestion_control_cost = Some(1_000);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4995,6 +5025,13 @@ impl ProtocolConfig {
                 _ => panic!("unsupported version {:?}", version),
             }
         }
+
+        debug_assert!(
+            !cfg.feature_flags.enable_gas_allowances
+                || (cfg.feature_flags.enable_storage_rebate_provenance
+                    && cfg.feature_flags.enable_accumulators
+                    && cfg.gas_allowance_congestion_control_cost.is_some())
+        );
 
         cfg
     }
@@ -5232,6 +5269,9 @@ impl ProtocolConfig {
     pub fn disable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = false;
         self.feature_flags.enable_address_balance_gas_payments = false;
+        // Storage-rebate provenance remains active so protected deposits and claims survive
+        // tests that disable only payment prerequisites.
+        self.feature_flags.enable_gas_allowances = false;
     }
 
     pub fn enable_coin_reservation_for_testing(&mut self) {
@@ -5500,11 +5540,49 @@ mod test {
                 Some(8)
             );
             assert_eq!(active.vector_copy_range_base_cost_as_option(), Some(52));
+
             assert_eq!(active.vector_replace_range_base_cost_as_option(), Some(52));
             assert_eq!(
                 active.vector_replace_range_per_elem_cost_as_option(),
                 Some(8)
             );
+        }
+    }
+
+    #[test]
+    fn storage_rebate_provenance_starts_with_gas_allowances() {
+        for chain in [Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
+            let before = ProtocolConfig::get_for_version(ProtocolVersion::new(141), chain);
+            assert!(!before.enable_storage_rebate_provenance());
+            assert!(!before.enable_gas_allowances());
+            assert_eq!(before.storage_rebate_lookup_bytes_as_option(), None);
+            assert_eq!(
+                before.gas_allowance_congestion_control_cost_as_option(),
+                None
+            );
+
+            let active = ProtocolConfig::get_for_version(ProtocolVersion::new(142), chain);
+            assert!(
+                !active.enable_gas_allowances()
+                    || (active.enable_storage_rebate_provenance()
+                        && active.enable_accumulators()
+                        && active
+                            .gas_allowance_congestion_control_cost_as_option()
+                            .is_some())
+            );
+            if chain == Chain::Unknown {
+                assert!(active.enable_storage_rebate_provenance());
+                assert_eq!(active.storage_rebate_lookup_bytes(), 256);
+                assert_eq!(active.gas_allowance_congestion_control_cost(), 1_000);
+            } else {
+                assert!(!active.enable_gas_allowances());
+                assert!(!active.enable_storage_rebate_provenance());
+                assert_eq!(active.storage_rebate_lookup_bytes_as_option(), None);
+                assert_eq!(
+                    active.gas_allowance_congestion_control_cost_as_option(),
+                    None
+                );
+            }
         }
     }
 

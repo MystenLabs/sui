@@ -88,6 +88,7 @@ use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
 use sui_types::transaction_executor::SimulateTransactionResult;
+use sui_types::transaction_executor::SimulationGasPayment;
 use sui_types::transaction_executor::TransactionChecks;
 use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata};
 use tap::TapFallible;
@@ -2028,6 +2029,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            execution_env.assigned_versions.congested_gas_allowance,
             &execution_env.funds_withdraw_status,
         );
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
@@ -2294,7 +2296,7 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
+        gas_payment: SimulationGasPayment,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
@@ -2330,7 +2332,7 @@ impl AuthorityState {
         crate::transaction_simulation::simulate_transaction(
             transaction,
             checks,
-            allow_mock_gas_coin,
+            gas_payment,
             suggested_gas_price,
             epoch_store.tx_validity_check_context(),
             epoch_data.epoch_id(),

@@ -58,9 +58,9 @@ pub async fn transaction(
             "effects.gas_used",
             "effects.status",
             "balance_changes",
+            "events.events.contents",
             "events.events.event_type",
             "events.events.json",
-            "events.events.contents",
         ]));
 
     let mut client = context.client.clone();

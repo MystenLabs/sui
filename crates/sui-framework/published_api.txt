@@ -2611,6 +2611,42 @@ reserve_object_funds_for_withdrawal
 create_withdrawal
 	public(package) fun
 	0x2::funds_accumulator
+GasAllowance
+	public struct
+	0x2::gas_allowance
+StorageRebate
+	public struct
+	0x2::gas_allowance
+new
+	entry fun
+	0x2::gas_allowance
+top_up
+	entry fun
+	0x2::gas_allowance
+withdraw
+	entry fun
+	0x2::gas_allowance
+revoke
+	entry fun
+	0x2::gas_allowance
+claim_storage_rebate
+	entry fun
+	0x2::gas_allowance
+funder
+	public fun
+	0x2::gas_allowance
+spender
+	public fun
+	0x2::gas_allowance
+remaining
+	public fun
+	0x2::gas_allowance
+revoked
+	public fun
+	0x2::gas_allowance
+assert_funder
+	fun
+	0x2::gas_allowance
 Curve
 	public struct
 	0x2::groth16

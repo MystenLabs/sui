@@ -22,12 +22,16 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::coin_reservation::ParsedDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
 use sui_types::error::SuiErrorKind;
+use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::execution_status::ExecutionFailure;
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::gas_allowance::StorageRebate;
 use sui_types::transaction::AllowedProposers;
+use sui_types::transaction::GasPaymentMode;
 use sui_types::transaction::InputObjectKind;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::MAX_UNPAID_ALLOWED_PROPOSERS;
@@ -35,8 +39,9 @@ use sui_types::transaction::ObjectReadResult;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionExpiration;
 use sui_types::transaction::TransactionKind;
-use sui_types::transaction_executor::SimulateTransactionResult;
-use sui_types::transaction_executor::TransactionChecks;
+use sui_types::transaction_executor::{
+    SimulateTransactionResult, SimulationGasPayment, TransactionChecks,
+};
 
 mod resolve;
 
@@ -142,7 +147,7 @@ pub fn simulate_transaction(
                 configure_transaction_validity(service, offer_allowed_proposers, &mut gasless_tx)?;
 
                 let simulation_result = executor
-                    .simulate_transaction(gasless_tx.clone(), checks, false)
+                    .simulate_transaction(gasless_tx.clone(), checks, SimulationGasPayment::NoMock)
                     .map_err(simulation_error_to_rpc_error)?;
 
                 if !is_gasless_post_execution_failure(simulation_result.effects.status()) {
@@ -159,33 +164,68 @@ pub fn simulate_transaction(
             //   specified but the gas payment coins were specified.
             // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
             //
-            // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
-            // overwrite the resolved budget with the more accurate estimate.
-            // When the request didn't specify a budget, the budget computed below covers
-            // computation + storage + safe-overhead, with the synthetic gas coin's storage
-            // cost subtracted (it doesn't exist at execution time). The cost of loading
-            // any additional payment objects is added either in `estimate_gas_budget_from_gas_cost`
-            // (when payment was specified) or incrementally inside `select_gas` (when gas
-            // selection picks the coins).
+            // If the request did not specify a budget, estimate it from a simulation. Explicit
+            // payment objects remain primary so their storage-rebate provenance is reflected,
+            // while simulation-only funding preserves the GasCoin balance available to commands.
+            // For automatically selected coins, first use the mock-coin estimate to select
+            // payment, then re-estimate protected selected payment with the same supplement.
+            // Address-balance and allowance payments do not need the second pass.
             let budget_was_estimated = request.transaction().gas_payment().budget.is_none()
                 && request.transaction().bcs_opt().is_none();
-            let estimation_failure = if budget_was_estimated {
+            let allowance = match transaction.gas_payment_mode() {
+                GasPaymentMode::Allowance(id) => Some((
+                    id,
+                    gas_allowance_balance(service, id, transaction.sender(), 0)?,
+                )),
+                _ => None,
+            };
+            if allowance.is_some()
+                && matches!(transaction.expiration(), TransactionExpiration::None)
+            {
+                configure_transaction_validity(service, offer_allowed_proposers, &mut transaction)?;
+            }
+            let (estimation_failure, estimated_with_mock_gas) = if budget_was_estimated {
                 let mut estimation_transaction = transaction.clone();
-                estimation_transaction.gas_data_mut().payment = Vec::new();
-                estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
+                estimation_transaction.gas_data_mut().budget = allowance
+                    .as_ref()
+                    .map(|(_, balance)| *balance)
+                    .unwrap_or_else(|| protocol_config.max_tx_gas())
+                    .min(protocol_config.max_tx_gas());
+                let estimation_gas_payment = if estimation_transaction.gas_data().payment.is_empty()
+                {
+                    if matches!(
+                        estimation_transaction.gas_payment_mode(),
+                        GasPaymentMode::Allowance(_)
+                    ) {
+                        SimulationGasPayment::NoMock
+                    } else {
+                        SimulationGasPayment::MockIfEmpty
+                    }
+                } else {
+                    SimulationGasPayment::SupplementRealPayment
+                };
 
                 let simulation_result = executor
                     .simulate_transaction(
                         estimation_transaction,
                         TransactionChecks::Enabled,
-                        true, /* allow mock gas coin */
+                        estimation_gas_payment,
                     )
                     .map_err(simulation_error_to_rpc_error)?;
+
+                let estimation_failure = match simulation_result.effects.status() {
+                    ExecutionStatus::Success => None,
+                    ExecutionStatus::Failure(failure) => Some(failure.clone()),
+                };
+                if let Some(failure) = estimation_failure.as_ref()
+                    && failure.error == ExecutionErrorKind::InsufficientGas
+                {
+                    return Err(simulation_failure_error(service, failure.clone()));
+                }
 
                 let estimate = estimate_gas_budget_from_gas_cost(
                     simulation_result.effects.gas_cost_summary(),
                     reference_gas_price,
-                    request.transaction().gas_payment().objects.len(),
                     mock_gas_storage_cost(&simulation_result),
                     &protocol_config,
                 );
@@ -194,27 +234,36 @@ pub fn simulate_transaction(
                 // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
                 // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
                 // estimated budget.
-                let gas_balance = transaction.gas_data().budget;
+                let gas_balance = allowance
+                    .as_ref()
+                    .map(|(_, balance)| *balance)
+                    .unwrap_or(transaction.gas_data().budget);
                 if gas_balance < estimate {
-                    return Err(RpcError::new(
-                        tonic::Code::InvalidArgument,
-                        format!(
-                            "Insufficient gas balance to cover estimated transaction cost. \
-                            Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"
-                        ),
-                    ));
+                    if let Some(failure) = estimation_failure {
+                        return Err(simulation_failure_error(service, failure));
+                    }
+                    let insufficient_balance = match allowance {
+                        Some((id, balance)) => {
+                            InsufficientGasBalanceError::allowance(id, estimate, balance)
+                        }
+                        None => {
+                            InsufficientGasBalanceError::selected_payment(estimate, gas_balance)
+                        }
+                    };
+                    return Err(insufficient_balance.into());
                 }
                 transaction.gas_data_mut().budget = estimate;
 
-                match simulation_result.effects.status() {
-                    ExecutionStatus::Success => None,
-                    ExecutionStatus::Failure(failure) => Some(failure.clone()),
-                }
+                (
+                    estimation_failure,
+                    matches!(estimation_gas_payment, SimulationGasPayment::MockIfEmpty)
+                        && simulation_result.mock_gas_id.is_some(),
+                )
             } else {
-                None
+                (None, false)
             };
 
-            if transaction.gas_data().payment.is_empty() {
+            let selected_payment_balance = if transaction.gas_data().payment.is_empty() {
                 let gas_selection = select_gas(
                     service,
                     &mut transaction,
@@ -225,16 +274,72 @@ pub fn simulate_transaction(
                     &protocol_config,
                     offer_allowed_proposers,
                 )?;
-                if let Err(insufficient_balance) = gas_selection {
-                    // Clients use the insufficient-gas error as a funding quote, which only makes
-                    // sense for a transaction that succeeded in its estimation run. For one that
-                    // failed, report the execution failure instead; its kind tells the caller what
-                    // to fix.
-                    return Err(match estimation_failure {
-                        Some(failure) => simulation_failure_error(service, failure),
-                        None => insufficient_balance.into(),
-                    });
+                match gas_selection {
+                    Ok(balance) => Some(balance),
+                    Err(insufficient_balance) => {
+                        // Clients use the insufficient-gas error as a funding quote, which only makes
+                        // sense for a transaction that succeeded in its estimation run. For one that
+                        // failed, report the execution failure instead; its kind tells the caller what
+                        // to fix.
+                        return Err(match estimation_failure {
+                            Some(failure) => simulation_failure_error(service, failure),
+                            None => insufficient_balance.into(),
+                        });
+                    }
                 }
+            } else {
+                None
+            };
+
+            if budget_was_estimated
+                && estimated_with_mock_gas
+                && let Some(payment_balance) = selected_payment_balance
+                && !transaction.gas_data().payment.is_empty()
+                && protocol_config.enable_storage_rebate_provenance()
+                && transaction
+                    .gas_data()
+                    .payment
+                    .iter()
+                    .any(|(id, _, digest)| {
+                        !ParsedDigest::is_coin_reservation_digest(digest)
+                            && service
+                                .reader
+                                .inner()
+                                .get_object(&StorageRebate::child_id(*id))
+                                .is_some()
+                    })
+            {
+                let mut payment_estimation = transaction.clone();
+                payment_estimation.gas_data_mut().budget = protocol_config.max_tx_gas();
+                let simulation_result = executor
+                    .simulate_transaction(
+                        payment_estimation,
+                        TransactionChecks::Enabled,
+                        SimulationGasPayment::SupplementRealPayment,
+                    )
+                    .map_err(simulation_error_to_rpc_error)?;
+                if let ExecutionStatus::Failure(failure) = simulation_result.effects.status()
+                    && failure.error == ExecutionErrorKind::InsufficientGas
+                {
+                    return Err(simulation_failure_error(service, failure.clone()));
+                }
+                let estimate = estimate_gas_budget_from_gas_cost(
+                    simulation_result.effects.gas_cost_summary(),
+                    reference_gas_price,
+                    0,
+                    &protocol_config,
+                );
+                if payment_balance < estimate {
+                    if let ExecutionStatus::Failure(failure) = simulation_result.effects.status() {
+                        return Err(simulation_failure_error(service, failure.clone()));
+                    }
+                    return Err(InsufficientGasBalanceError::selected_payment(
+                        estimate,
+                        payment_balance,
+                    )
+                    .into());
+                }
+                transaction.gas_data_mut().budget = estimate;
             }
 
             // Coin-paid transactions get a proposer restriction too, so that nobody else can
@@ -247,11 +352,17 @@ pub fn simulate_transaction(
         // coin, unless it already pays for gas from address balance. Simulating such a
         // transaction with a mock gas coin would charge storage for a coin that execution never
         // writes, against a budget that `estimate_gas_budget_from_gas_cost` estimated without it.
-        let allow_mock_gas_coin = !(perform_gas_selection
+        let gas_payment = if perform_gas_selection
+            || matches!(transaction.gas_payment_mode(), GasPaymentMode::Allowance(_))
             || (checks.enabled()
-                && address_balance_pays_gas(service, &protocol_config, &transaction)));
+                && address_balance_pays_gas(service, &protocol_config, &transaction))
+        {
+            SimulationGasPayment::NoMock
+        } else {
+            SimulationGasPayment::MockIfEmpty
+        };
         executor
-            .simulate_transaction(transaction.clone(), checks, allow_mock_gas_coin)
+            .simulate_transaction(transaction.clone(), checks, gas_payment)
             .map_err(simulation_error_to_rpc_error)?
     };
 
@@ -399,32 +510,18 @@ fn to_command_output(
     message
 }
 
-/// Estimate the gas budget for a transaction based on simulation results.
-///
-/// The estimation includes:
-/// 1. Base cost from gas_cost_summary (computation + storage costs), with the synthetic gas
-///    coin's storage cost subtracted (it doesn't exist at execution time).
-/// 2. Cost of loading additional gas payment objects beyond the synthetic gas coin already
-///    in the simulation. When the request didn't specify gas payment objects, this is 0 —
-///    `select_gas` will pick the actual coins (or address balance) and adjust the budget
-///    incrementally for each one.
-/// 3. Rounding up to the protocol gas rounding step (typically 1000 MIST).
-/// 4. Adding safe overhead buffer (1000 * reference_gas_price).
-/// 5. Clamping to max_tx_gas protocol limit.
+/// Estimate the budget from simulated payer costs, excluding a synthetic primary coin's
+/// storage deposit. Add a reference-price-scaled safety margin and clamp to max_tx_gas.
 fn estimate_gas_budget_from_gas_cost(
     gas_cost_summary: &sui_types::gas::GasCostSummary,
     reference_gas_price: u64,
-    num_payment_objects_on_request: usize,
     mock_gas_storage_cost: u64,
     protocol_config: &ProtocolConfig,
 ) -> u64 {
     const GAS_SAFE_OVERHEAD: u64 = 1000;
 
-    // The simulation always loads a synthetic gas coin so that it can produce a gas cost
-    // summary even when the caller hasn't specified a gas payment. That coin's storage
-    // write is phantom — it is not written at execution time (real address-balance gas
-    // emits an accumulator event, real coin gas writes the user-provided coin instead) —
-    // so subtract its contribution from `storage_cost` before deriving the estimate.
+    // Only a synthetic primary coin has a phantom storage write. Supplemental coins are
+    // smashed into the real primary and leave no output deposit to subtract.
     let storage_cost = gas_cost_summary
         .storage_cost
         .saturating_sub(mock_gas_storage_cost);
@@ -438,17 +535,9 @@ fn estimate_gas_budget_from_gas_cost(
         net_gas_usage as u64
     });
 
-    // Loading cost for additional gas coins beyond the synthetic gas coin already counted
-    // by the simulation. When the request did not specify any payment objects, the loading
-    // cost is added incrementally inside `select_gas` once the actual coins are known.
-    let extra_payment_objects = (num_payment_objects_on_request as u64).saturating_sub(1);
-    let gas_loading_cost_mist =
-        compute_gas_loading_cost_mist(extra_payment_objects, reference_gas_price, protocol_config);
-
     let safe_overhead_mist = GAS_SAFE_OVERHEAD.saturating_mul(reference_gas_price);
 
     base_estimate_mist
-        .saturating_add(gas_loading_cost_mist)
         .saturating_add(safe_overhead_mist)
         .min(protocol_config.max_tx_gas())
 }
@@ -634,15 +723,41 @@ fn select_allowed_proposers(
         .filter(|allowed| allowed.epoch == current_epoch)
 }
 
+fn gas_allowance_balance(
+    service: &RpcService,
+    allowance_id: sui_types::base_types::ObjectID,
+    spender: sui_types::base_types::SuiAddress,
+    budget: u64,
+) -> Result<u64> {
+    use sui_types::gas_allowance::GasAllowance;
+    let object = service
+        .reader
+        .inner()
+        .get_object(&allowance_id)
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::InvalidArgument,
+                format!("Gas allowance {allowance_id} does not exist"),
+            )
+        })?;
+    let allowance = GasAllowance::from_object(&object)
+        .map_err(|error| RpcError::new(tonic::Code::InvalidArgument, error.to_string()))?;
+    allowance
+        .check_authorization(spender, budget)
+        .map_err(|error| RpcError::new(tonic::Code::InvalidArgument, error.to_string()))?;
+    Ok(allowance.balance.value())
+}
+
 /// Selects gas payment for `transaction`. The outer error reports failures while reading or
 /// preparing gas payment; the inner error reports that the gas owner's funds can't cover the budget.
+/// On success, returns the total balance made available by the selected payment.
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
     incremental_loading_rgp: Option<u64>,
     protocol_config: &ProtocolConfig,
     offer_allowed_proposers: bool,
-) -> Result<Result<(), InsufficientGasBalanceError>> {
+) -> Result<Result<u64, InsufficientGasBalanceError>> {
     use sui_types::accumulator_root::AccumulatorValue;
     use sui_types::balance::Balance;
     use sui_types::base_types::SequenceNumber;
@@ -657,6 +772,13 @@ fn select_gas(
 
     let owner = transaction.gas_data().owner;
     let budget = transaction.gas_data().budget;
+    if let GasPaymentMode::Allowance(id) = transaction.gas_payment_mode() {
+        gas_allowance_balance(service, id, transaction.sender(), budget)?;
+        if matches!(transaction.expiration(), TransactionExpiration::None) {
+            configure_transaction_validity(service, offer_allowed_proposers, transaction)?;
+        }
+        return Ok(Ok(budget));
+    }
 
     let gas_coin_used = transaction
         .kind()
@@ -757,7 +879,6 @@ fn select_gas(
         }
 
         transaction.gas_data_mut().payment = selected_gas;
-
         (selected_gas_value, coin_balance)
     };
 
@@ -784,7 +905,7 @@ fn select_gas(
     };
 
     if selected_gas_value >= final_budget {
-        Ok(Ok(()))
+        Ok(Ok(selected_gas_value))
     } else {
         Ok(Err(InsufficientGasBalanceError::new(
             owner,
