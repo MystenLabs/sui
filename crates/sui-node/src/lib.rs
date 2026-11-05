@@ -2957,25 +2957,13 @@ async fn build_http_servers(
         // Serve the index read paths from the embedded rpc-store when it
         // is enabled. Raw chain data comes from the perpetual / checkpoint
         // stores either way.
-        let reader: Arc<dyn RpcStateReader> = {
-            let retains_object_version_history =
-                !AuthorityPerpetualTablesOptions::objects_compactor_enabled(
-                    node_role.is_validator(),
-                    config.authority_store_pruning_config.num_epochs_to_retain,
-                );
-            match embedded_rpc_store {
-                Some(embedded) => Arc::new(RpcStoreReadStore::new(
-                    state.clone(),
-                    store,
-                    embedded.reader(),
-                    retains_object_version_history,
-                )),
-                None => Arc::new(RestReadStore::new(
-                    state.clone(),
-                    store,
-                    retains_object_version_history,
-                )),
-            }
+        let reader: Arc<dyn RpcStateReader> = match embedded_rpc_store {
+            Some(embedded) => Arc::new(RpcStoreReadStore::new(
+                state.clone(),
+                store,
+                embedded.reader(),
+            )),
+            None => Arc::new(RestReadStore::new(state.clone(), store)),
         };
         let mut rpc_service = sui_rpc_api::RpcService::new(reader);
         rpc_service.with_server_version(server_version);

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use crate::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::ExecutionCacheTraitPointers;
@@ -426,23 +427,24 @@ impl WriteStore for RocksDbStore {
 pub struct RestReadStore {
     state: Arc<AuthorityState>,
     rocks: RocksDbStore,
-    retains_object_version_history: bool,
 }
 
 impl RestReadStore {
-    /// `retains_object_version_history` is `false` on nodes that run the objects compactor; see
-    /// [`RpcStateReader::retains_object_version_history`].
-    pub fn new(
-        state: Arc<AuthorityState>,
-        rocks: RocksDbStore,
-        retains_object_version_history: bool,
-    ) -> Self {
-        Self {
-            state,
-            rocks,
-            retains_object_version_history,
-        }
+    pub fn new(state: Arc<AuthorityState>, rocks: RocksDbStore) -> Self {
+        Self { state, rocks }
     }
+}
+
+/// [`RpcStateReader::retains_object_version_history`] for the node `state` runs on: `false` when
+/// it runs the tidehunter objects compactor.
+fn retains_object_version_history(state: &AuthorityState) -> bool {
+    !AuthorityPerpetualTablesOptions::objects_compactor_enabled(
+        state.config.intended_node_role().is_validator(),
+        state
+            .config
+            .authority_store_pruning_config
+            .num_epochs_to_retain,
+    )
 }
 
 impl ObjectStore for RestReadStore {
@@ -636,7 +638,7 @@ impl RpcStateReader for RestReadStore {
     }
 
     fn retains_object_version_history(&self) -> bool {
-        self.retains_object_version_history
+        retains_object_version_history(&self.state)
     }
 
     fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
@@ -695,23 +697,14 @@ pub struct RpcStoreReadStore {
     state: Arc<AuthorityState>,
     rocks: RocksDbStore,
     reader: RpcStoreReader,
-    retains_object_version_history: bool,
 }
 
 impl RpcStoreReadStore {
-    /// `retains_object_version_history` is `false` on nodes that run the objects compactor; see
-    /// [`RpcStateReader::retains_object_version_history`].
-    pub fn new(
-        state: Arc<AuthorityState>,
-        rocks: RocksDbStore,
-        reader: RpcStoreReader,
-        retains_object_version_history: bool,
-    ) -> Self {
+    pub fn new(state: Arc<AuthorityState>, rocks: RocksDbStore, reader: RpcStoreReader) -> Self {
         Self {
             state,
             rocks,
             reader,
-            retains_object_version_history,
         }
     }
 }
@@ -930,7 +923,7 @@ impl RpcStateReader for RpcStoreReadStore {
     }
 
     fn retains_object_version_history(&self) -> bool {
-        self.retains_object_version_history
+        retains_object_version_history(&self.state)
     }
 
     fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
