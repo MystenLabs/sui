@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::AuthorityState;
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, is_expired_beyond_grace,
+};
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::staggered_submission::proposers_metric_label;
 use arc_swap::ArcSwap;
@@ -24,6 +27,7 @@ use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
 };
+use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
@@ -34,6 +38,18 @@ pub struct QueueEntry {
     pub position_sender: oneshot::Sender<Result<Vec<ConsensusPosition>, tonic::Status>>,
     pub submitter_client_addr: Option<IpAddr>,
     pub enqueue_time: Instant,
+}
+
+impl QueueEntry {
+    /// True once any user transaction in the entry is past its `max_timestamp` by more than
+    /// the admission grace.
+    fn is_expired_beyond_grace(&self, now_ms: u64) -> bool {
+        self.transactions.iter().any(|transaction| {
+            transaction.kind.as_user_transaction().is_some_and(|tx| {
+                is_expired_beyond_grace(tx.data().transaction_data().expiration(), now_ms)
+            })
+        })
+    }
 }
 
 /// What `PriorityAdmissionQueue::pop_batch_while` does with an examined entry.
@@ -841,7 +857,13 @@ impl AdmissionQueueEventLoop {
         if entries.is_empty() {
             return;
         }
+        let now_ms = AuthorityState::unixtime_now_ms();
         for entry in entries {
+            if entry.is_expired_beyond_grace(now_ms) {
+                let error: SuiError = SuiErrorKind::TransactionExpired.into();
+                let _ = entry.position_sender.send(Err(error.into()));
+                continue;
+            }
             let proposers = proposers_metric_label(&entry.transactions, &self.epoch_store);
             self.queue
                 .metrics

@@ -20,7 +20,10 @@
 use crate::admission_queue::{
     AdmissionQueueEntry, AdmissionQueueMetrics, PopAction, PriorityAdmissionQueue,
 };
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::AuthorityState;
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, is_expired_beyond_grace,
+};
 use crate::consensus_adapter::{
     BlockStatusReceiver, ConsensusAdapterMetrics, ConsensusClient, ProcessedMethod,
     processing_error,
@@ -50,7 +53,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
-use sui_types::transaction::{InputObjectKind, TransactionDataAPI};
+use sui_types::transaction::{InputObjectKind, TransactionDataAPI, TransactionExpiration};
 use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
@@ -224,7 +227,10 @@ struct PoolEntry {
     /// entry is considered for a proposal, so an entry whose inputs were consumed while it
     /// waited in the pool is dropped before it occupies block space.
     owned_object_refs: Vec<ObjectRef>,
-    /// Set by `take()` when the owned-object validation fails. The entry is excluded from
+    /// Expirations of the user transactions in the entry. `take()` rejects the entry once any
+    /// of them is past its `max_timestamp` by more than the admission grace.
+    expirations: Vec<TransactionExpiration>,
+    /// Set by `take()` when the owned-object or expiration validation fails. The entry is excluded from
     /// the proposal and resolved with this error outside the pool mutex.
     rejection: Option<SuiError>,
     /// Staggered submission of transactions without allowed proposers: `Some` for held
@@ -510,6 +516,7 @@ impl ConsensusTransactionPool {
         let tx_type = tx_type_label(&transactions);
         let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
         let owned_object_refs = owned_object_refs(&transactions);
+        let expirations = transaction_expirations(&transactions);
 
         let user_transactions: Vec<_> = transactions
             .iter()
@@ -530,6 +537,7 @@ impl ConsensusTransactionPool {
             metrics: self.metrics.clone(),
             processed,
             owned_object_refs,
+            expirations,
             rejection: None,
             staggered_slot,
         };
@@ -621,6 +629,7 @@ impl ConsensusTransactionPool {
             metrics: self.metrics.clone(),
             processed: Vec::new(),
             owned_object_refs: Vec::new(),
+            expirations: Vec::new(),
             rejection: None,
             staggered_slot: None,
         };
@@ -1145,6 +1154,7 @@ impl TransactionPool for ConsensusTransactionPool {
             let mut pending_count = transactions.len();
             let mut pending_bytes = system_tx_total_bytes;
             let now = Instant::now();
+            let now_ms = AuthorityState::unixtime_now_ms();
             let user_max_bytes = match &mut pool.user_byte_budget {
                 Some(budget) => {
                     max_bytes.min(system_tx_total_bytes.saturating_add(budget.available(now)))
@@ -1173,6 +1183,14 @@ impl TransactionPool for ConsensusTransactionPool {
                 }
                 // Checked before the block limits so a rejected entry consumes neither block
                 // space nor byte budget, and never stops the iteration.
+                if entry
+                    .expirations
+                    .iter()
+                    .any(|expiration| is_expired_beyond_grace(expiration, now_ms))
+                {
+                    entry.rejection = Some(SuiErrorKind::TransactionExpired.into());
+                    return PopAction::Exclude;
+                }
                 if let Err(error) = self
                     .cache_writer
                     .validate_owned_object_versions(&entry.owned_object_refs)
@@ -1376,6 +1394,14 @@ fn entry_limit(
 
 fn consensus_client_error(error: ClientError) -> SuiError {
     SuiErrorKind::FailedToSubmitToConsensus(error.to_string()).into()
+}
+
+fn transaction_expirations(transactions: &[ConsensusTransaction]) -> Vec<TransactionExpiration> {
+    transactions
+        .iter()
+        .filter_map(|transaction| transaction.kind.as_user_transaction())
+        .map(|tx| tx.data().transaction_data().expiration().clone())
+        .collect()
 }
 
 /// Owned input object refs of the user transactions in `transactions`, excluding the
@@ -1759,6 +1785,7 @@ mod tests {
             metrics,
             processed: Vec::new(),
             owned_object_refs: Vec::new(),
+            expirations: Vec::new(),
             rejection: None,
             staggered_slot: None,
         };
