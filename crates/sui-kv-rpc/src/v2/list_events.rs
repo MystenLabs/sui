@@ -55,7 +55,6 @@ use crate::config::PipelineStage;
 use crate::config::ResolvedStageConfig;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
-use crate::pipeline::PlacedFrontier;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
@@ -669,7 +668,7 @@ fn event_frontier_watermark(
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: IntraTxCoordinate,
-    frontier: Option<PlacedFrontier>,
+    frontier: Option<LedgerPoint>,
 ) -> Watermark {
     // Unplaced only at the ascending genesis frontier.
     let cursor_position = frontier.map_or(LedgerPoint::GENESIS, |frontier| {
@@ -679,7 +678,7 @@ fn event_frontier_watermark(
             entry_checkpoint,
             options,
         );
-        frontier.point
+        frontier
     });
     boundary_watermark(
         Position::Events {

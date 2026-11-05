@@ -527,16 +527,17 @@ fn next_event_chunk(
 
 /// Build the scan watermark for a chunk whose scan budget ran out mid-gap.
 /// The frontier cursor is mandatory. The one index row that places the
-/// frontier in ledger coordinates also resolves its checkpoint, which only
-/// determines the optional completed-checkpoint claim: at ascending genesis
-/// the frontier remains safe even though no checkpoint is yet fully covered.
+/// frontier in ledger coordinates also gives its checkpoint, which only
+/// determines the optional completed-checkpoint claim: at ascending genesis,
+/// placed at genesis without a read, the frontier remains safe even though no
+/// checkpoint is yet fully covered.
 fn scan_event_watermark(
     service: &RpcService,
     options: &QueryOptions,
     frontier: IntraTxCoordinate,
     entry_checkpoint: u64,
 ) -> Result<Watermark, RpcError> {
-    let placed = place_frontier(
+    let cursor_position = place_frontier(
         service,
         RowPlacement::event_boundary(frontier, options.scan_direction()),
     )?;
@@ -544,8 +545,7 @@ fn scan_event_watermark(
         options,
         frontier,
         entry_checkpoint,
-        placed.checkpoint,
-        placed.point,
+        cursor_position,
     ))
 }
 
@@ -553,12 +553,14 @@ fn event_frontier_watermark(
     options: &QueryOptions,
     frontier: IntraTxCoordinate,
     entry_checkpoint: u64,
-    checkpoint: Option<u64>,
     cursor_position: LedgerPoint,
 ) -> Watermark {
-    let boundary = checkpoint.and_then(|cp| {
-        advance_covered_bound_before_checkpoint(None, cp, entry_checkpoint, options)
-    });
+    let boundary = advance_covered_bound_before_checkpoint(
+        None,
+        cursor_position.checkpoint,
+        entry_checkpoint,
+        options,
+    );
     boundary_watermark(
         Position::Events {
             tx_seq: frontier.tx_seq,
@@ -821,13 +823,8 @@ mod tests {
                 event_index: frontier.index,
                 public_position: cursor_position,
             };
-            let watermark = event_frontier_watermark(
-                &options,
-                frontier,
-                entry_checkpoint,
-                checkpoint,
-                cursor_position,
-            );
+            let watermark =
+                event_frontier_watermark(&options, frontier, entry_checkpoint, cursor_position);
             assert_eq!(
                 CursorToken::decode(watermark.cursor.as_ref().expect("event frontier cursor"))
                     .unwrap(),
@@ -889,7 +886,6 @@ mod tests {
                     &options,
                     frontier,
                     if ascending { 0 } else { u64::MAX },
-                    Some(checkpoint),
                     placement.point(checkpoint, tx_offset),
                 ),
             }

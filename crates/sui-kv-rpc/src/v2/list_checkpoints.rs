@@ -699,7 +699,6 @@ mod tests {
     use sui_rpc_api::ledger_history::cursor::LedgerPoint;
     use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 
-    use crate::pipeline::PlacedFrontier;
     use crate::v2::test_utils::{
         LIST_PIPELINE_METRICS, ascending_options, assert_list_metric_absent, list_counter,
         list_histogram, query_context, query_context_with_registry, unparseable_transaction_filter,
@@ -966,28 +965,18 @@ mod tests {
         for (
             direction,
             entry_checkpoint,
-            position,
             checkpoint,
             initial_proof,
             expected_cursor,
             expected_proof,
         ) in [
-            (ScanDirection::Ascending, 0, 0, None, None, 0, None),
-            (ScanDirection::Ascending, 10, 50, Some(10), None, 10, None),
-            (ScanDirection::Descending, 10, 50, Some(10), None, 11, None),
-            (
-                ScanDirection::Ascending,
-                0,
-                50,
-                Some(10),
-                Some(5),
-                10,
-                Some(9),
-            ),
+            (ScanDirection::Ascending, 0, None, None, 0, None),
+            (ScanDirection::Ascending, 10, Some(10), None, 10, None),
+            (ScanDirection::Descending, 10, Some(10), None, 11, None),
+            (ScanDirection::Ascending, 0, Some(10), Some(5), 10, Some(9)),
             (
                 ScanDirection::Descending,
                 u64::MAX,
-                50,
                 Some(10),
                 Some(20),
                 11,
@@ -996,7 +985,6 @@ mod tests {
             (
                 ScanDirection::Ascending,
                 0,
-                50,
                 Some(10),
                 Some(15),
                 16,
@@ -1005,7 +993,6 @@ mod tests {
             (
                 ScanDirection::Descending,
                 u64::MAX,
-                50,
                 Some(10),
                 Some(5),
                 5,
@@ -1021,12 +1008,13 @@ mod tests {
                 QueryOptions::checkpoints_from_proto(Some(&proto_options), 10, 100).unwrap();
             let mut covered = initial_proof;
             // A transaction-lane point, which the checkpoint cursor never uses.
-            let frontier = checkpoint.map(|checkpoint| PlacedFrontier {
-                checkpoint,
-                point: LedgerPoint::transaction(checkpoint, 7),
-            });
+            let frontier = checkpoint.map(|checkpoint| LedgerPoint::transaction(checkpoint, 7));
             let response = terminal_response_from_scan_stop(
-                ResolvedScanStop::ScanLimit { position, frontier },
+                // A checkpoint terminal takes its cursor from the frontier's checkpoint alone.
+                ResolvedScanStop::ScanLimit {
+                    position: 0,
+                    frontier,
+                },
                 &options,
                 entry_checkpoint,
                 &mut covered,

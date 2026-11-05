@@ -45,7 +45,6 @@ use crate::config::PipelineStage;
 use crate::object_cache::ObjectMap;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
-use crate::pipeline::PlacedFrontier;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
@@ -439,7 +438,7 @@ fn transaction_frontier_watermark(
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: u64,
-    frontier: Option<PlacedFrontier>,
+    frontier: Option<LedgerPoint>,
 ) -> Watermark {
     // Unplaced only at the ascending genesis frontier.
     let cursor_position = frontier.map_or(LedgerPoint::GENESIS, |frontier| {
@@ -449,7 +448,7 @@ fn transaction_frontier_watermark(
             entry_checkpoint,
             options,
         );
-        frontier.point
+        frontier
     });
     boundary_watermark(
         Position::Transactions {
@@ -1083,10 +1082,7 @@ mod tests {
                 QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
             let mut covered = initial_proof;
             // The placing row's point, distinct from the cursor's coordinates.
-            let frontier = checkpoint.map(|checkpoint| PlacedFrontier {
-                checkpoint,
-                point: LedgerPoint::transaction(checkpoint, 7),
-            });
+            let frontier = checkpoint.map(|checkpoint| LedgerPoint::transaction(checkpoint, 7));
             let response = terminal_response_from_scan_stop(
                 ResolvedScanStop::ScanLimit { position, frontier },
                 &options,

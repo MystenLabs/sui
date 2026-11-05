@@ -462,16 +462,17 @@ fn next_transaction_chunk(
 /// Scan watermark for a filtered chunk whose scan budget ran out mid-gap.
 /// A transaction's member id is its own `tx_sequence_number`, so the frontier
 /// decodes to itself. The one index row that places the frontier in ledger
-/// coordinates also resolves its checkpoint for the coverage claim, which is
-/// independent: at the ascending genesis frontier there is no completed
-/// checkpoint, but genesis is still the authoritative safe resume point.
+/// coordinates also gives its checkpoint for the coverage claim: at the
+/// ascending genesis frontier, placed at genesis without a read, there is no
+/// completed checkpoint, but genesis is still the authoritative safe resume
+/// point.
 fn scan_transaction_watermark(
     service: &RpcService,
     options: &QueryOptions,
     frontier: u64,
     entry_checkpoint: u64,
 ) -> Result<Watermark, RpcError> {
-    let placed = place_frontier(
+    let cursor_position = place_frontier(
         service,
         RowPlacement::transaction_boundary(frontier, options.scan_direction()),
     )?;
@@ -479,8 +480,7 @@ fn scan_transaction_watermark(
         options,
         frontier,
         entry_checkpoint,
-        placed.checkpoint,
-        placed.point,
+        cursor_position,
     ))
 }
 
@@ -488,12 +488,14 @@ fn transaction_frontier_watermark(
     options: &QueryOptions,
     frontier: u64,
     entry_checkpoint: u64,
-    checkpoint: Option<u64>,
     cursor_position: LedgerPoint,
 ) -> Watermark {
-    let boundary = checkpoint.and_then(|cp| {
-        advance_covered_bound_before_checkpoint(None, cp, entry_checkpoint, options)
-    });
+    let boundary = advance_covered_bound_before_checkpoint(
+        None,
+        cursor_position.checkpoint,
+        entry_checkpoint,
+        options,
+    );
     boundary_watermark(
         Position::Transactions {
             tx_seq: frontier,
@@ -729,7 +731,6 @@ mod tests {
                 &options,
                 frontier,
                 entry_checkpoint,
-                checkpoint,
                 cursor_position,
             );
             assert_eq!(
@@ -791,7 +792,6 @@ mod tests {
                     &options,
                     frontier,
                     if ascending { 0 } else { u64::MAX },
-                    Some(checkpoint),
                     placement.point(checkpoint, tx_offset),
                 ),
             }

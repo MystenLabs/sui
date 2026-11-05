@@ -713,9 +713,9 @@ fn merge_checkpoint_seqs(
 
 /// Scan watermark for a filtered checkpoint chunk whose scan budget ran out.
 /// The filter scans the transaction bitmap, so the frontier is a
-/// `tx_sequence_number`; resolve it to checkpoint space. At ascending genesis
-/// no checkpoint is fully covered, but checkpoint coordinate zero remains a
-/// safe resume cursor and is emitted with no checkpoint coverage claim.
+/// `tx_sequence_number`; resolve it to checkpoint space. The ascending genesis
+/// frontier is placed in checkpoint 0 without a read: no checkpoint is fully
+/// covered, and checkpoint coordinate zero is a safe resume cursor.
 fn scan_checkpoint_watermark(
     service: &RpcService,
     options: &QueryOptions,
@@ -737,24 +737,20 @@ fn scan_checkpoint_watermark(
 
 fn checkpoint_frontier_watermark(
     options: &QueryOptions,
-    checkpoint: Option<u64>,
+    checkpoint: u64,
     covered_checkpoint_bound: Option<u64>,
     entry_checkpoint: u64,
 ) -> Watermark {
     // The frontier lands partway through its checkpoint, so that checkpoint is
     // not proven complete. Preserve any stronger proof already established by
     // emitted checkpoints.
-    let boundary = match checkpoint {
-        Some(cp) => advance_covered_bound_before_checkpoint(
-            covered_checkpoint_bound,
-            cp,
-            entry_checkpoint,
-            options,
-        ),
-        None => covered_checkpoint_bound,
-    };
-    // Unplaced only at the ascending genesis frontier, which resumes at checkpoint 0.
-    let cursor_cp = checkpoint.map_or(0, |cp| boundary_cursor_cp(cp, options.scan_direction()));
+    let boundary = advance_covered_bound_before_checkpoint(
+        covered_checkpoint_bound,
+        checkpoint,
+        entry_checkpoint,
+        options,
+    );
+    let cursor_cp = boundary_cursor_cp(checkpoint, options.scan_direction());
     boundary_watermark(
         Position::Checkpoints {
             checkpoint: clamp_checkpoint_frontier_past_covered(
@@ -1140,7 +1136,7 @@ mod tests {
             let options = options(ascending);
             let terminal_watermark = checkpoint_frontier_watermark(
                 &options,
-                Some(if ascending { 6 } else { 5 }),
+                if ascending { 6 } else { 5 },
                 emitted.last().copied(),
                 if ascending { 4 } else { 7 },
             );
@@ -1220,7 +1216,7 @@ mod tests {
             (
                 "ascending frontier maps to emitted checkpoint",
                 true,
-                Some(10),
+                10,
                 Some(10),
                 11,
                 Some(10),
@@ -1228,7 +1224,7 @@ mod tests {
             (
                 "ascending frontier advances to new checkpoint",
                 true,
-                Some(12),
+                12,
                 Some(10),
                 12,
                 Some(11),
@@ -1236,7 +1232,7 @@ mod tests {
             (
                 "ascending genesis does not fabricate proof",
                 true,
-                None,
+                0,
                 None,
                 0,
                 None,
@@ -1244,7 +1240,7 @@ mod tests {
             (
                 "ascending genesis preserves prior proof",
                 true,
-                None,
+                0,
                 Some(5),
                 6,
                 Some(5),
@@ -1252,7 +1248,7 @@ mod tests {
             (
                 "ascending terminal proof does not regress",
                 true,
-                Some(8),
+                8,
                 Some(10),
                 11,
                 Some(10),
@@ -1260,7 +1256,7 @@ mod tests {
             (
                 "descending frontier maps to emitted checkpoint",
                 false,
-                Some(10),
+                10,
                 Some(10),
                 10,
                 Some(10),
@@ -1268,7 +1264,7 @@ mod tests {
             (
                 "descending frontier advances to new checkpoint",
                 false,
-                Some(8),
+                8,
                 Some(10),
                 9,
                 Some(9),
@@ -1276,7 +1272,7 @@ mod tests {
             (
                 "descending terminal proof does not regress",
                 false,
-                Some(12),
+                12,
                 Some(10),
                 10,
                 Some(10),

@@ -1094,27 +1094,16 @@ where
     future::ready(Ok(rows))
 }
 
-/// A scan frontier placed by the one `tx_seq_digest` row its
-/// [`RowPlacement`] names: the transaction on the frontier's covered side.
+/// Resolved pipeline frame: items pass through; watermarks carry both the
+/// original scan-domain position and the frontier in ledger coordinates,
+/// placed by the one `tx_seq_digest` row its
+/// [`RowPlacement`] names: the transaction on the frontier's covered side,
+/// whose checkpoint bounds the covered range.
 ///
 /// [`RowPlacement`]: sui_rpc_api::ledger_history::row_placement::RowPlacement
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct PlacedFrontier {
-    /// The checkpoint of the placing transaction, which bounds the covered
-    /// range.
-    pub(crate) checkpoint: u64,
-    /// The frontier in ledger coordinates.
-    pub(crate) point: LedgerPoint,
-}
-
-/// Resolved pipeline frame: items pass through; watermarks carry both the
-/// original scan-domain position and its placement.
 pub(crate) enum ResolvedWatermarked<T, P = u64> {
     Item(T),
-    Watermark {
-        position: P,
-        frontier: PlacedFrontier,
-    },
+    Watermark { position: P, frontier: LedgerPoint },
 }
 
 #[derive(Debug)]
@@ -1194,13 +1183,13 @@ where
 pub(crate) enum ResolvedScanStop<P> {
     ScanLimit {
         position: P,
-        frontier: Option<PlacedFrontier>,
+        frontier: Option<LedgerPoint>,
     },
     Cancelled,
     Fault(anyhow::Error),
 }
 impl<P> ResolvedScanStop<P> {
-    pub(crate) fn into_scan_limit(self) -> Result<(P, Option<PlacedFrontier>), RpcError> {
+    pub(crate) fn into_scan_limit(self) -> Result<(P, Option<LedgerPoint>), RpcError> {
         match self {
             Self::ScanLimit { position, frontier } => Ok((position, frontier)),
             Self::Cancelled => Err(RpcError::new(
@@ -1255,7 +1244,7 @@ where
     T: Send + 'static,
     P: Copy + Eq + Send + 'static,
     F: Fn(P) -> Fut + Send + 'static,
-    Fut: Future<Output = Result<Option<PlacedFrontier>, ScanStop>> + Send,
+    Fut: Future<Output = Result<Option<LedgerPoint>, ScanStop>> + Send,
     C: Fn(u64) -> P + Send + 'static,
 {
     fn resolver_error<P>(error: ScanStop) -> ResolvedScanStop<P> {
@@ -1272,7 +1261,7 @@ where
     async_stream::try_stream! {
         let mut upstream = std::pin::pin!(upstream);
         // Most recent completed lookup, including a completed `None`.
-        let mut completed: Option<(P, Option<PlacedFrontier>)> = None;
+        let mut completed: Option<(P, Option<LedgerPoint>)> = None;
 
         while let Some(next) = upstream.next().await {
             match next {
@@ -1394,10 +1383,7 @@ mod tests {
 
     #[tokio::test]
     async fn render_ahead_preserves_items_and_watermarks_in_input_order() {
-        let placed = PlacedFrontier {
-            checkpoint: 20,
-            point: LedgerPoint::transaction(20, 3),
-        };
+        let placed = LedgerPoint::transaction(20, 3);
         let upstream: BoxStream<'static, Result<ResolvedWatermarked<u64>, RpcError>> =
             stream::iter([
                 Ok(ResolvedWatermarked::Item(0u64)),
@@ -3312,19 +3298,16 @@ mod tests {
     /// row, or `None` for a frontier no row places.
     type LookupReply = Result<Option<u64>, ScanStop>;
 
-    /// The placement the harness resolver returns for a row in `checkpoint`:
-    /// a point derived from the checkpoint, so the frames can check the
-    /// resolver's point reaches them unchanged.
-    fn placed_in(checkpoint: u64) -> PlacedFrontier {
-        PlacedFrontier {
-            checkpoint,
-            point: LedgerPoint::transaction(checkpoint, checkpoint + 1),
-        }
+    /// The point the harness resolver returns for a row in `checkpoint`,
+    /// derived from the checkpoint, so the frames can check the resolver's
+    /// point reaches them unchanged.
+    fn placed_in(checkpoint: u64) -> LedgerPoint {
+        LedgerPoint::transaction(checkpoint, checkpoint + 1)
     }
 
-    /// The checkpoint of a placement the harness resolver returned, checking
-    /// its point passed through unchanged.
-    fn placed_checkpoint(frontier: PlacedFrontier) -> u64 {
+    /// The checkpoint of a point the harness resolver returned, checking it
+    /// passed through unchanged.
+    fn placed_checkpoint(frontier: LedgerPoint) -> u64 {
         assert_eq!(frontier, placed_in(frontier.checkpoint));
         frontier.checkpoint
     }
