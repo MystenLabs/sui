@@ -14,7 +14,7 @@ use bridge::limiter::{
     total_amount,
     transfer_records,
     update_route_limit,
-    usd_value_multiplier
+    usd_value_multiplier,
 };
 use bridge::treasury::{Self, BTC, ETH, USDC, USDT};
 use std::unit_test::{assert_eq, destroy};
