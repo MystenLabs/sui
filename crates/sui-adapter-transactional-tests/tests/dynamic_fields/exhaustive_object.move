@@ -55,7 +55,7 @@ entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {
 entry fun t2(obj: &Obj) {
     let id = &obj.id;
     assert!(exists<u64>(id, 0u64), 0);
-    assert!(sui::dynamic_object_field::exists<vector<u8>>(id, b""), 0);
+    assert!(exists<vector<u8>>(id, b""), 0);
     assert!(exists<bool>(id, false), 0);
 }
 
@@ -90,7 +90,7 @@ entry fun t6(obj: &mut Obj) {
 entry fun t7(obj: &Obj) {
     let id = &obj.id;
     assert!(!exists<u64>(id, 0), 0);
-    assert!(!sui::dynamic_object_field::exists<vector<u8>>(id, b""), 0);
+    assert!(!exists<vector<u8>>(id, b""), 0);
     assert!(exists<bool>(id, false), 0);
 }
 

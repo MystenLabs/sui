@@ -24,75 +24,20 @@ use sui::package;
 
 public struct MOD() has drop;
 
+// prettier-ignore
 public struct Foo has key, store {
     id: UID,
-    deep: Deep<
-        Deep<
-            Deep<
-                Deep<
-                    Deep<
-                        Deep<
-                            Deep<
-                                Deep<
-                                    Deep<
-                                        Deep<
-                                            Deep<
-                                                Deep<
-                                                    Deep<
-                                                        Deep<
-                                                            Deep<
-                                                                Deep<
-                                                                    Deep<
-                                                                        Deep<
-                                                                            Deep<
-                                                                                Deep<
-                                                                                    Deep<
-                                                                                        Deep<
-                                                                                            Deep<
-                                                                                                Deep<
-                                                                                                    Deep<
-                                                                                                        Deep<
-                                                                                                            Deep<
-                                                                                                                Deep<
-                                                                                                                    Deep<
-                                                                                                                        Deep<
-                                                                                                                            Deep<
-                                                                                                                                Deep<
-                                                                                                                                    Deep<
-                                                                                                                                        u8,
-                                                                                                                                    >,
-                                                                                                                                >,
-                                                                                                                            >,
-                                                                                                                        >,
-                                                                                                                    >,
-                                                                                                                >,
-                                                                                                            >,
-                                                                                                        >,
-                                                                                                    >,
-                                                                                                >,
-                                                                                            >,
-                                                                                        >,
-                                                                                    >,
-                                                                                >,
-                                                                            >,
-                                                                        >,
-                                                                    >,
-                                                                >,
-                                                            >,
-                                                        >,
-                                                    >,
-                                                >,
-                                            >,
-                                        >,
-                                    >,
-                                >,
-                            >,
-                        >,
-                    >,
-                >,
-            >,
-        >,
-    >,
+    deep: Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<u8>
+          >>>>>>>>>>>>>>>>
+          >>>>>>>>>>>>>>>>,
 }
 
 public struct Deep<T: store>(T) has store;
@@ -112,76 +57,21 @@ fun init(otw: MOD, ctx: &mut TxContext) {
     transfer::public_transfer(d, ctx.sender());
 }
 
+// prettier-ignore
 public fun new(d: u8, ctx: &mut TxContext): Foo {
     Foo {
         id: object::new(ctx),
-        deep: Deep(
-            Deep(
-                Deep(
-                    Deep(
-                        Deep(
-                            Deep(
-                                Deep(
-                                    Deep(
-                                        Deep(
-                                            Deep(
-                                                Deep(
-                                                    Deep(
-                                                        Deep(
-                                                            Deep(
-                                                                Deep(
-                                                                    Deep(
-                                                                        Deep(
-                                                                            Deep(
-                                                                                Deep(
-                                                                                    Deep(
-                                                                                        Deep(
-                                                                                            Deep(
-                                                                                                Deep(
-                                                                                                    Deep(
-                                                                                                        Deep(
-                                                                                                            Deep(
-                                                                                                                Deep(
-                                                                                                                    Deep(
-                                                                                                                        Deep(
-                                                                                                                            Deep(
-                                                                                                                                Deep(
-                                                                                                                                    Deep(
-                                                                                                                                        Deep(
-                                                                                                                                            d,
-                                                                                                                                        ),
-                                                                                                                                    ),
-                                                                                                                                ),
-                                                                                                                            ),
-                                                                                                                        ),
-                                                                                                                    ),
-                                                                                                                ),
-                                                                                                            ),
-                                                                                                        ),
-                                                                                                    ),
-                                                                                                ),
-                                                                                            ),
-                                                                                        ),
-                                                                                    ),
-                                                                                ),
-                                                                            ),
-                                                                        ),
-                                                                    ),
-                                                                ),
-                                                            ),
-                                                        ),
-                                                    ),
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-        ),
+        deep: Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(d)
+              ))))))))))))))))
+              )))))))))))))))),
     }
 }
 
