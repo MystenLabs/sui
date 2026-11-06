@@ -5,6 +5,7 @@
 module sui::test_scenario;
 
 use sui::balance::Balance;
+use sui::clock;
 use sui::funds_accumulator::Withdrawal;
 use sui::vec_map::VecMap;
 
@@ -59,6 +60,9 @@ const EZeroWithdrawal: u64 = 10;
 /// reserved against those funds (e.g. one kept from an earlier transaction)
 const EUnbackedWithdrawal: u64 = 11;
 
+/// A `TxContextBuilder` set the Clock to a timestamp that is not later than its current one
+const EClockTimestampNotIncreased: u64 = 12;
+
 /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
 /// A `Scenario` maintains a view of the global object pool built up by the execution.
 /// These objects can be accessed via functions like `take_from_sender`, which gives the
@@ -105,6 +109,7 @@ public struct TxContextBuilder has copy, drop {
     gas_price: u64,
     gas_budget: u64,
     sponsor: Option<address>,
+    clock_timestamp_ms: Option<u64>,
 }
 
 /// The effects of a transaction
@@ -143,6 +148,7 @@ public fun ctx_builder_from_sender(sender: address): TxContextBuilder {
         gas_price: 1_000,
         gas_budget: 100_000_000,
         sponsor: option::none(),
+        clock_timestamp_ms: option::none(),
     }
 }
 
@@ -162,6 +168,7 @@ public fun ctx_builder_from_context(ctx: &TxContext): TxContextBuilder {
         gas_price: ctx.gas_price(),
         gas_budget: ctx.gas_budget(),
         sponsor: ctx.sponsor(),
+        clock_timestamp_ms: option::none(),
     }
 }
 
@@ -219,6 +226,25 @@ public fun unset_sponsor(mut builder: TxContextBuilder): TxContextBuilder {
     builder
 }
 
+/// Set the timestamp in milliseconds of the `Clock` returned by `sui::clock::borrow`, applied by
+/// `begin_with_context` or `next_with_context`.
+/// Without it, each new transaction advances the Clock by 1 ms.
+/// Aborts with `EClockTimestampNotIncreased` if `ms` is not later than the Clock's current
+/// timestamp.
+public fun set_clock_timestamp(mut builder: TxContextBuilder, ms: u64): TxContextBuilder {
+    assert!(ms > clock::borrow().timestamp_ms(), EClockTimestampNotIncreased);
+    builder.clock_timestamp_ms = option::some(ms);
+    builder
+}
+
+/// Advance the timestamp set by `set_clock_timestamp`, or the Clock's current timestamp if none
+/// is set, by `delta_ms`.
+/// See `set_clock_timestamp` for further details.
+public fun increment_clock_timestamp(builder: TxContextBuilder, delta_ms: u64): TxContextBuilder {
+    let ms = builder.clock_timestamp_ms.destroy_or!(clock::borrow().timestamp_ms()) + delta_ms;
+    builder.set_clock_timestamp(ms)
+}
+
 // Create a `TxContext` from a `TxContextBuilder`.
 // This is an internal function called when building a `Scenario`.
 fun make_tx_context(builder: TxContextBuilder, tx_hash: vector<u8>): TxContext {
@@ -249,7 +275,9 @@ public fun begin_with_context(ctx_builder: TxContextBuilder): Scenario {
     let txn_number = 0;
     assert!(ctx_builder.rgp.is_some());
     let hash = tx_context::dummy_tx_hash_with_hint(txn_number);
-    let ctx = ctx_builder.make_tx_context(hash);
+    let clock_timestamp_ms = ctx_builder.clock_timestamp_ms;
+    let ctx = (move ctx_builder).make_tx_context(hash);
+    if (clock_timestamp_ms.is_some()) advance_clock(clock_timestamp_ms);
     Scenario {
         txn_number,
         ctx,
@@ -260,6 +288,7 @@ public fun begin_with_context(ctx_builder: TxContextBuilder): Scenario {
 /// and other "native" objects, so they are available in the inventory.
 ///
 /// NOTE: make sure to update this call when adding new system objects.
+#[allow(deprecated_usage)]
 public fun create_system_objects(scenario: &mut Scenario) {
     let sender = scenario.ctx().sender();
 
@@ -273,6 +302,7 @@ public fun create_system_objects(scenario: &mut Scenario) {
 }
 
 /// Advance the scenario to a new transaction where `sender` is the transaction sender
+/// The Clock advances by 1 ms.
 /// All objects transferred will be moved into the inventories of the account or the global
 /// inventory. In other words, in order to access an object with one of the various "take"
 /// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
@@ -295,7 +325,9 @@ public fun next_tx(scenario: &mut Scenario, sender: address): TransactionEffects
             0,
         );
     // end the transaction
-    end_transaction()
+    let effects = end_transaction();
+    advance_clock(option::none());
+    effects
 }
 
 /// Advance the scenario to a new transaction with a given `TxContextBuilder`.
@@ -305,7 +337,7 @@ public fun next_tx(scenario: &mut Scenario, sender: address): TransactionEffects
 /// All objects transferred will be moved into the inventories of the account or the global
 /// inventory. In other words, in order to access an object with one of the various "take"
 /// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
-/// `next_tx` or `next_tx_wißth_context`.
+/// `next_tx` or `next_tx_with_context`.
 /// Returns the results from the previous transaction
 /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
 /// Will abort if TransactionEffects cannot be generated
@@ -314,36 +346,23 @@ public fun next_with_context(
     ctx_builder: TxContextBuilder,
 ): TransactionEffects {
     let epoch = ctx_builder.epoch;
-    let mut current_epoch = scenario.ctx.epoch();
+    let current_epoch = scenario.ctx.epoch();
     assert!(epoch >= current_epoch);
     // if `rgp` is set and it's not what is already there,
     // epoch must be greater than current epoch
-    assert!(
-        ctx_builder.rgp.is_none() || ctx_builder
-            .rgp
-            .contains(&scenario.ctx.reference_gas_price()) ||
-        epoch > current_epoch,
-    );
+    let current_rgp = scenario.ctx.reference_gas_price();
+    assert!(ctx_builder.rgp.is_none_or!(|rgp| *rgp == current_rgp) || epoch > current_epoch);
     assert!(ctx_builder.epoch_timestamp_ms >= scenario.ctx.epoch_timestamp_ms());
-    if (epoch == current_epoch) {
-        scenario.txn_number = scenario.txn_number + 1;
-        let hash = tx_context::dummy_tx_hash_with_hint(scenario.txn_number);
-        scenario.ctx = ctx_builder.make_tx_context(hash);
-        end_transaction()
-    } else {
-        loop {
-            current_epoch = current_epoch + 1;
-            scenario.txn_number = scenario.txn_number + 1;
-            let builder = ctx_builder;
-            builder.set_epoch(current_epoch);
-            let hash = tx_context::dummy_tx_hash_with_hint(scenario.txn_number);
-            scenario.ctx = builder.make_tx_context(hash);
-            let effects = end_transaction();
-            if (current_epoch == epoch) {
-                return effects
-            }
-        }
-    }
+    let clock_timestamp_ms = ctx_builder.clock_timestamp_ms;
+    let first_epoch = epoch.min(current_epoch + 1);
+    scenario.start_tx((copy ctx_builder).set_epoch(first_epoch));
+    let effects = end_transaction();
+    (first_epoch + 1).range_do_eq!(epoch, |e| {
+        scenario.start_tx((copy ctx_builder).set_epoch(e));
+        end_transaction();
+    });
+    advance_clock(clock_timestamp_ms);
+    effects
 }
 
 /// Advance the scenario to a new epoch and end the transaction
@@ -368,10 +387,12 @@ public fun later_epoch(
 /// Advance the scenario to a future `epoch`. Will abort if the `epoch` is in the past.
 public fun skip_to_epoch(scenario: &mut Scenario, epoch: u64) {
     assert!(epoch >= scenario.ctx.epoch());
-    (epoch - scenario.ctx.epoch()).do!(|_| {
+    let skipped = epoch - scenario.ctx.epoch();
+    skipped.do!(|_| {
         scenario.ctx.increment_epoch_number();
         end_transaction()
-    })
+    });
+    if (skipped > 0) advance_clock(option::none());
 }
 
 /// Ends the test scenario
@@ -651,7 +672,6 @@ native fun reserve_funds_from_address<T: store>(owner: address, limit: u256);
 /// Take a shared object from the global inventory and call the function `$f` on it.
 ///
 /// ```move
-/// use std::unit_test::assert_eq;
 /// use sui::test_scenario;
 ///
 /// #[test]
@@ -661,7 +681,7 @@ native fun reserve_funds_from_address<T: store>(owner: address, limit: u256);
 ///
 ///     // Take the `Clock` object from the inventory.
 ///     test.with_shared!<Clock>(|clock, test| {
-///         assert_eq!(clock.timestamp_ms(), 0);
+///         let _time = clock.timestamp_ms();
 ///     });
 ///
 ///     test.end();
@@ -702,6 +722,20 @@ native fun allocate_receiving_ticket_for_object<T: key>(object_id: ID): u64;
 native fun deallocate_receiving_ticket_for_object(object_id: ID);
 
 // == internal ==
+
+fun start_tx(scenario: &mut Scenario, ctx_builder: TxContextBuilder) {
+    scenario.txn_number = scenario.txn_number + 1;
+    let hash = tx_context::dummy_tx_hash_with_hint(scenario.txn_number);
+    scenario.ctx = ctx_builder.make_tx_context(hash);
+}
+
+/// Sets the Clock to `timestamp_ms`, or to 1 ms past its current timestamp if `none`.
+fun advance_clock(timestamp_ms: Option<u64>) {
+    let current = clock::borrow().timestamp_ms();
+    let next = timestamp_ms.destroy_or!(current + 1);
+    assert!(next > current, EClockTimestampNotIncreased);
+    clock::set_timestamp_ms_for_testing(next);
+}
 
 // internal function that ends the transaction, realizing changes (may abort with
 // `ECouldNotGenerateEffects`)

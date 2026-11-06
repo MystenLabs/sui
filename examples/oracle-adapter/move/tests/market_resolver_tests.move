@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[test_only]
+#[test_only, allow(deprecated_usage)]
 module oracle_adapter::market_resolver_tests;
 
 use oracle_adapter::market_resolver as mr;

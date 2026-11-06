@@ -19,7 +19,7 @@ use bridge::limiter::{
 use bridge::treasury::{Self, BTC, ETH, USDC, USDT};
 use std::unit_test::{assert_eq, destroy};
 use sui::clock;
-use sui::test_scenario;
+use sui::test_scenario::{Self, Scenario};
 
 #[test]
 fun test_24_hours_windows() {
@@ -37,14 +37,14 @@ fun test_24_hours_windows() {
     let id = treasury::token_id<ETH>(&treasury);
     treasury.update_asset_notional_price(id, 5 * usd_value_multiplier());
 
-    let mut clock = clock::create_for_testing(ctx);
-    clock.set_for_testing(1706288001377);
+    let clock = clock::borrow();
+    set_clock(&mut scenario, 1706288001377);
 
     // transfer 10000 ETH every hour, the totol should be 10000 * 5
     assert!(
         limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route,
             10_000 * treasury.decimal_multiplier<ETH>(),
         ),
@@ -57,11 +57,11 @@ fun test_24_hours_windows() {
     // transfer 1000 ETH every hour for 50 hours, the 24 hours totol should be 24000 * 10
     let mut i = 0;
     while (i < 50) {
-        clock.increment_for_testing(60 * 60 * 1000);
+        increment_clock(&mut scenario, 60 * 60 * 1000);
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
                 &treasury,
-                &clock,
+                clock,
                 route,
                 1_000 * treasury.decimal_multiplier<ETH>(),
             ),
@@ -79,11 +79,11 @@ fun test_24_hours_windows() {
     // At this point, every hour in past 24 hour has value $5000.
     // In each iteration, the old $5000 gets replaced with (i * 5000)
     while (i < 24) {
-        clock.increment_for_testing(60 * 60 * 1000);
+        increment_clock(&mut scenario, 60 * 60 * 1000);
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
                 &treasury,
-                &clock,
+                clock,
                 route,
                 1_000 * treasury.decimal_multiplier<ETH>() * (i + 1),
             ),
@@ -102,7 +102,6 @@ fun test_24_hours_windows() {
 
     destroy(limiter);
     destroy(treasury);
-    clock::destroy_for_testing(clock);
     test_scenario::end(scenario);
 }
 
@@ -124,14 +123,14 @@ fun test_24_hours_windows_multiple_route() {
     let id = treasury::token_id<ETH>(&treasury);
     treasury.update_asset_notional_price(id, 5 * usd_value_multiplier());
 
-    let mut clock = clock::create_for_testing(ctx);
-    clock.set_for_testing(1706288001377);
+    let clock = clock::borrow();
+    set_clock(&mut scenario, 1706288001377);
 
     // Transfer 10000 ETH on route 1
     assert!(
         limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route,
             10_000 * treasury::decimal_multiplier<ETH>(&treasury),
         ),
@@ -141,7 +140,7 @@ fun test_24_hours_windows_multiple_route() {
     assert!(
         limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route2,
             50_000 * treasury::decimal_multiplier<ETH>(&treasury),
         ),
@@ -156,7 +155,6 @@ fun test_24_hours_windows_multiple_route() {
 
     destroy(limiter);
     destroy(treasury);
-    clock::destroy_for_testing(clock);
     test_scenario::end(scenario);
 }
 
@@ -175,13 +173,13 @@ fun test_exceed_limit() {
     let id = treasury::token_id<ETH>(&treasury);
     treasury.update_asset_notional_price(id, 10 * usd_value_multiplier());
 
-    let mut clock = clock::create_for_testing(ctx);
-    clock.set_for_testing(1706288001377);
+    let clock = clock::borrow();
+    set_clock(&mut scenario, 1706288001377);
 
     assert!(
         limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route,
             90_000 * treasury::decimal_multiplier<ETH>(&treasury),
         ),
@@ -191,11 +189,11 @@ fun test_exceed_limit() {
     let record = limiter.transfer_records().get(&route);
     assert_eq!(record.total_amount(), 90000 * 10 * usd_value_multiplier());
 
-    clock.increment_for_testing(60 * 60 * 1000);
+    increment_clock(&mut scenario, 60 * 60 * 1000);
     assert!(
         limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route,
             10_000 * treasury::decimal_multiplier<ETH>(&treasury),
         ),
@@ -205,11 +203,11 @@ fun test_exceed_limit() {
     assert_eq!(record.total_amount(), 100000 * 10 * usd_value_multiplier());
 
     // Tx should fail with a tiny amount because the limit is hit
-    assert!(!limiter.check_and_record_sending_transfer<ETH>(&treasury, &clock, route, 1), 0);
+    assert!(!limiter.check_and_record_sending_transfer<ETH>(&treasury, clock, route, 1), 0);
     assert!(
         !limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route,
             90_000 * treasury::decimal_multiplier<ETH>(&treasury),
         ),
@@ -217,11 +215,11 @@ fun test_exceed_limit() {
     );
 
     // Fast forward 23 hours, now the first 90k should be discarded
-    clock.increment_for_testing(60 * 60 * 1000 * 23);
+    increment_clock(&mut scenario, 60 * 60 * 1000 * 23);
     assert!(
         limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route,
             90_000 * treasury::decimal_multiplier<ETH>(&treasury),
         ),
@@ -231,13 +229,12 @@ fun test_exceed_limit() {
     assert_eq!(record.total_amount(), 100000 * 10 * usd_value_multiplier());
 
     // But now limit is hit again
-    assert!(!limiter.check_and_record_sending_transfer<ETH>(&treasury, &clock, route, 1), 0);
+    assert!(!limiter.check_and_record_sending_transfer<ETH>(&treasury, clock, route, 1), 0);
     let record = limiter.transfer_records().get(&route);
     assert_eq!(record.total_amount(), 100000 * 10 * usd_value_multiplier());
 
     destroy(limiter);
     destroy(treasury);
-    clock::destroy_for_testing(clock);
     test_scenario::end(scenario);
 }
 
@@ -249,18 +246,17 @@ fun test_limiter_does_not_limit_receiving_transfers() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = scenario.ctx();
     let treasury = treasury::mock_for_test(ctx);
-    let mut clock = clock::create_for_testing(ctx);
-    clock.set_for_testing(1706288001377);
+    let clock = clock::borrow();
+    set_clock(&mut scenario, 1706288001377);
     // We don't limit sui -> eth transfers. This aborts with `ELimitNotFoundForRoute`
     limiter.check_and_record_sending_transfer<ETH>(
         &treasury,
-        &clock,
+        clock,
         route,
         1 * treasury::decimal_multiplier<ETH>(&treasury),
     );
     destroy(limiter);
     destroy(treasury);
-    clock::destroy_for_testing(clock);
     test_scenario::end(scenario);
 }
 
@@ -287,15 +283,15 @@ fun test_limiter_basic_op() {
     let id = treasury::token_id<USDT>(&treasury);
     treasury.update_asset_notional_price(id, 50000000);
 
-    let mut clock = clock::create_for_testing(ctx);
-    clock.set_for_testing(36082800000); // hour 10023
+    let clock = clock::borrow();
+    set_clock(&mut scenario, 36082800000); // hour 10023
 
     // hour 0 (10023): $15 * 2.5 = $37.5
     // 15 eth = $37.5
     assert!(
         limiter.check_and_record_sending_transfer<ETH>(
             &treasury,
-            &clock,
+            clock,
             route,
             15 * treasury::decimal_multiplier<ETH>(&treasury),
         ),
@@ -319,7 +315,7 @@ fun test_limiter_basic_op() {
     assert!(
         limiter.check_and_record_sending_transfer<USDC>(
             &treasury,
-            &clock,
+            clock,
             route,
             10 * treasury::decimal_multiplier<USDC>(&treasury),
         ),
@@ -341,12 +337,12 @@ fun test_limiter_basic_op() {
     assert_eq!(record.total_amount(), expected_notion_amount_10023);
 
     // hour 1 (10024): $20
-    clock.increment_for_testing(60 * 60 * 1000);
+    increment_clock(&mut scenario, 60 * 60 * 1000);
     // 2 btc = $20
     assert!(
         limiter.check_and_record_sending_transfer<BTC>(
             &treasury,
-            &clock,
+            clock,
             route,
             2 * treasury::decimal_multiplier<BTC>(&treasury),
         ),
@@ -368,13 +364,13 @@ fun test_limiter_basic_op() {
     assert_eq!(record.total_amount(), expected_notion_amount_10023 + expected_notion_amount_10024);
 
     // Fast forward 22 hours, now hour 23 (10046): try to transfer $33 willf fail
-    clock.increment_for_testing(60 * 60 * 1000 * 22);
+    increment_clock(&mut scenario, 60 * 60 * 1000 * 22);
     // fail
     // 65 usdt = $33
     assert!(
         !limiter.check_and_record_sending_transfer<USDT>(
             &treasury,
-            &clock,
+            clock,
             route,
             66 * 1_000_000,
         ),
@@ -399,7 +395,7 @@ fun test_limiter_basic_op() {
     assert!(
         limiter.check_and_record_sending_transfer<USDT>(
             &treasury,
-            &clock,
+            clock,
             route,
             65 * 1_000_000,
         ),
@@ -425,12 +421,9 @@ fun test_limiter_basic_op() {
     );
 
     // Hour 24 (10047), we can deposit $0.5 now
-    clock.increment_for_testing(60 * 60 * 1000);
+    increment_clock(&mut scenario, 60 * 60 * 1000);
     // 1 usdt = $0.5
-    assert!(
-        limiter.check_and_record_sending_transfer<USDT>(&treasury, &clock, route, 1_000_000),
-        0,
-    );
+    assert!(limiter.check_and_record_sending_transfer<USDT>(&treasury, clock, route, 1_000_000), 0);
     let record = limiter.transfer_records().get(&route);
     let expected_notion_amount_10047 = 5 * usd_value_multiplier() / 10;
     assert_eq!(record.hour_head(), 10047);
@@ -451,12 +444,12 @@ fun test_limiter_basic_op() {
     );
 
     // Fast forward to Hour 30 (10053)
-    clock.increment_for_testing(60 * 60 * 1000 * 6);
+    increment_clock(&mut scenario, 60 * 60 * 1000 * 6);
     // 1 usdc = $1
     assert!(
         limiter.check_and_record_sending_transfer<USDC>(
             &treasury,
-            &clock,
+            clock,
             route,
             1 * treasury::decimal_multiplier<USDC>(&treasury),
         ),
@@ -483,12 +476,12 @@ fun test_limiter_basic_op() {
     );
 
     // Fast forward to hour 130 (10153)
-    clock.increment_for_testing(60 * 60 * 1000 * 100);
+    increment_clock(&mut scenario, 60 * 60 * 1000 * 100);
     // 1 usdc = $1
     assert!(
         limiter.check_and_record_sending_transfer<USDC>(
             &treasury,
-            &clock,
+            clock,
             route,
             treasury::decimal_multiplier<USDC>(&treasury),
         ),
@@ -511,7 +504,6 @@ fun test_limiter_basic_op() {
 
     destroy(limiter);
     destroy(treasury);
-    clock::destroy_for_testing(clock);
     test_scenario::end(scenario);
 }
 
@@ -615,4 +607,14 @@ fun test_update_asset_price() {
     assert_eq!(treasury.notional_value<USDC>(), (1 * usd_value_multiplier()));
     scenario.end();
     destroy(treasury);
+}
+
+fun set_clock(scenario: &mut Scenario, timestamp_ms: u64) {
+    let builder = scenario.ctx_builder().set_clock_timestamp(timestamp_ms);
+    scenario.next_with_context(builder);
+}
+
+fun increment_clock(scenario: &mut Scenario, delta_ms: u64) {
+    let builder = scenario.ctx_builder().increment_clock_timestamp(delta_ms);
+    scenario.next_with_context(builder);
 }
