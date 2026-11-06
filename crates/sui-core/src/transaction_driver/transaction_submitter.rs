@@ -419,7 +419,7 @@ mod validator_error_tests {
     #[test]
     fn test_not_yet_valid_is_not_a_validator_error() {
         let not_yet_valid: SuiError =
-            SuiErrorKind::TransactionNotYetValid { timestamp_ms: 0 }.into();
+            SuiErrorKind::TransactionNotYetValid { min_timestamp: 0 }.into();
         assert_eq!(not_yet_valid.categorize(), ErrorCategory::Aborted);
         assert!(!is_validator_error(&not_yet_valid));
         let overloaded: SuiError = SuiErrorKind::TooManyTransactionsPendingConsensus.into();

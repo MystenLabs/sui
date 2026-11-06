@@ -3733,11 +3733,10 @@ pub(crate) fn check_timestamp_window(expiration: &TransactionExpiration, now_ms:
 }
 
 fn check_not_before_min_timestamp(expiration: &TransactionExpiration, now_ms: u64) -> SuiResult {
-    if expiration.is_not_yet_valid_at(now_ms) {
-        return Err(SuiErrorKind::TransactionNotYetValid {
-            timestamp_ms: now_ms,
-        }
-        .into());
+    if expiration.is_not_yet_valid_at(now_ms)
+        && let Some(min_timestamp) = expiration.min_timestamp()
+    {
+        return Err(SuiErrorKind::TransactionNotYetValid { min_timestamp }.into());
     }
     Ok(())
 }
