@@ -55,6 +55,29 @@ pub struct ValidatorGenesisConfig {
 }
 
 impl ValidatorGenesisConfig {
+    /// Copies the config, including its key pairs. Key pairs are not `Clone`, so the struct
+    /// cannot derive it.
+    pub fn copy(&self) -> Self {
+        Self {
+            key_pair: self.key_pair.copy(),
+            worker_key_pair: self.worker_key_pair.copy(),
+            account_key_pair: self.account_key_pair.copy(),
+            network_key_pair: self.network_key_pair.copy(),
+            network_address: self.network_address.clone(),
+            p2p_address: self.p2p_address.clone(),
+            p2p_listen_address: self.p2p_listen_address,
+            metrics_address: self.metrics_address,
+            narwhal_metrics_address: self.narwhal_metrics_address.clone(),
+            gas_price: self.gas_price,
+            commission_rate: self.commission_rate,
+            narwhal_primary_address: self.narwhal_primary_address.clone(),
+            narwhal_worker_address: self.narwhal_worker_address.clone(),
+            consensus_address: self.consensus_address.clone(),
+            stake: self.stake,
+            name: self.name.clone(),
+        }
+    }
+
     pub fn to_validator_info(&self, name: String) -> GenesisValidatorInfo {
         let protocol_key: AuthorityPublicKeyBytes = self.key_pair.public().into();
         let account_key: PublicKey = self.account_key_pair.public();
