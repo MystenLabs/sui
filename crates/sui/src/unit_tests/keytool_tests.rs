@@ -793,8 +793,8 @@ fn pay_sui_from(sender: SuiAddress) -> TransactionData {
     .unwrap()
 }
 
-// `VerifyParams::default()` rejects ML-DSA-65, so the offline verifiers must opt in
-// or every valid ML-DSA-65 signature decodes as invalid.
+// Keytool verifies offline with `VerifyParams::default()`, so that has to accept
+// ML-DSA-65.
 #[tokio::test]
 async fn keytool_verifies_mldsa65_offline() -> Result<(), anyhow::Error> {
     let kp = SuiKeyPair::decode(MLDSA65_TEST_SUIPRIVKEY).unwrap();
