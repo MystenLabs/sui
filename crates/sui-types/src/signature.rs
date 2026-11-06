@@ -30,7 +30,7 @@ use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::sync::Arc;
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct VerifyParams {
     // map from JwkId (iss, kid) => JWK
     pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
@@ -46,6 +46,30 @@ pub struct VerifyParams {
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     pub additional_multisig_checks: bool,
     pub validate_zklogin_public_identifier: bool,
+}
+
+/// For verifiers with no protocol config, like keytool. Every bool flag is
+/// on, as on mainnet, plus ML-DSA-65, so a pass means the signature is valid,
+/// not that a network accepts the scheme. A zkLogin proof still cannot verify
+/// with these alone, since the JWK map is empty. Validators take the flags
+/// from the protocol config.
+impl Default for VerifyParams {
+    fn default() -> Self {
+        Self {
+            oidc_provider_jwks: Default::default(),
+            supported_providers: Default::default(),
+            zk_login_env: Default::default(),
+            zklogin_circuit_mode: 0,
+            verify_legacy_zklogin_address: true,
+            accept_zklogin_in_multisig: true,
+            accept_passkey_in_multisig: true,
+            accept_mldsa65_in_multisig: true,
+            // No bound: these callers may not have the current epoch.
+            zklogin_max_epoch_upper_bound_delta: None,
+            additional_multisig_checks: true,
+            validate_zklogin_public_identifier: true,
+        }
+    }
 }
 
 impl VerifyParams {
@@ -77,9 +101,7 @@ impl VerifyParams {
     }
 
     /// Whether ML-DSA-65 signatures are accepted, standalone or as a multisig
-    /// member. Off by default: only the validator path turns it on, from the
-    /// `mldsa65_auth` protocol flag, so client-side verifiers match validators
-    /// until the scheme is enabled.
+    /// member. Validators set it from the `mldsa65_auth` protocol flag.
     pub fn with_mldsa65_in_multisig(mut self, accept: bool) -> Self {
         self.accept_mldsa65_in_multisig = accept;
         self
