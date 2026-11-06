@@ -18,8 +18,8 @@ This document covers everything that *changes* an accumulator balance:
 
 For the on-chain data layout these operations target, see [`data_model.md`](./data_model.md).
 For pre-execution withdraw scheduling, see
-[`address_funds_scheduling.md`](./address_funds_scheduling.md). For post-execution sufficiency
-checking, see [`object_funds_checking.md`](./object_funds_checking.md).
+[`address_funds_scheduling.md`](./address_funds_scheduling.md). For object-owned sufficiency
+checking, see [`object_funds_in_execution.md`](./object_funds_in_execution.md).
 
 ## 1. Declaring a withdraw in a transaction
 
@@ -134,8 +134,8 @@ way to manufacture one given a signed delta (see `accumulator_event.rs:50`).
 The full ordered list of events for a transaction lives on
 `InnerTemporaryStore::accumulator_events` and is what feeds settlement. A derived summary,
 `InnerTemporaryStore::accumulator_running_max_withdraws: BTreeMap<AccumulatorObjId, u128>`, is
-also computed during execution; that one is the input to object-funds checking — see
-[`object_funds_checking.md`](./object_funds_checking.md) §1 for what "running max" means.
+also computed during execution; it bounds the net object withdrawals recorded as unsettled — see
+[`object_funds_in_execution.md`](./object_funds_in_execution.md) §3 for what "running max" means.
 
 ### Where events surface in effects
 
@@ -276,11 +276,8 @@ ExecutionScheduler::settle_address_funds(FundsSettlement {
 ingests this via its settlement channel and updates per-account state — see
 [`address_funds_scheduling.md`](./address_funds_scheduling.md) §4.
 
-The object-funds checker uses a different hook: it tracks `last_settled_version` via a
-`tokio::sync::watch` channel that is bumped from inside
-`AuthorityState::process_certificate` whenever a **barrier transaction** finishes executing
-(gated by `TransactionKind::is_accumulator_barrier_settle_tx`). This is a deliberate design
-choice — see §5 below.
+The object funds check has no settlement hook. It reads the accumulator root at the
+transaction's assigned version and waits until the local store has that version — see §5 below.
 
 ## 5. Two paths to settlement
 
@@ -315,9 +312,9 @@ Each subsystem keeps the two paths consistent without path-specific code:
   [`address_funds_scheduling.md`](./address_funds_scheduling.md) §3.1 and §4). On the
   checkpoint-executor path it never builds up state for an already-settled version in the
   first place, so there's nothing to reconcile.
-- The **object-funds checker** drives `last_settled_version` from the barrier-tx execution
-  hook in `process_certificate`, which fires regardless of which path produced the barrier.
-  See [`object_funds_checking.md`](./object_funds_checking.md) §3.
+- The **in-execution object funds check** waits for the accumulator root to reach the
+  transaction's version in the local store, which happens regardless of which path produced the
+  barrier. See [`object_funds_in_execution.md`](./object_funds_in_execution.md) §2.
 - **Garbage collection** for unsettled withdraws is tied to effects commitment
   (`UnsettledObjectWithdrawals::commit_accumulator_versions`), which is also path-agnostic.
 
@@ -331,10 +328,9 @@ subsystem whose job is to gate *pre-execution* work. That is the address-funds s
 some other path has advanced storage past version V, the scheduler can safely stop and return
 `SkipSchedule`.
 
-The object-funds checker is different because it runs *post-execution*. At that point there is no
-separate scheduler left to take over, and the checker must still reconcile an already-executed
-transaction's object-withdraw effects against the accumulator version assigned to that
-transaction. That is why it uses a barrier-driven settled-version signal plus MVCC-bounded reads,
+The object funds check is different because it runs *during* execution. No separate scheduler
+exists to take over, and the check must read the balance at the accumulator version assigned to
+the transaction. That is why it waits for the root version and then does a version-bounded read,
 rather than a latest-state skip.
 
 There is a second boundary to keep in mind for those MVCC-bounded reads: checkpoint finalization
@@ -352,9 +348,8 @@ historical-version validation.
 | `FundsWithdrawalArg` | tx input | `sui-types/src/transaction.rs` | signing; execution; scheduler |
 | `process_funds_withdrawals_for_execution` | fn | `sui-types/src/transaction.rs` | scheduler input construction |
 | `rewrite_transaction_for_coin_reservations` | fn | `accumulators/transaction_rewriting.rs` | tx normalization before execution |
-| `AccumulatorEvent` | execution output | `sui-types/src/accumulator_event.rs` | settlement builder; object funds checker |
-| `accumulator_running_max_withdraws` | execution output | `sui-types/src/inner_temporary_store.rs` | object funds checker |
+| `AccumulatorEvent` | execution output | `sui-types/src/accumulator_event.rs` | settlement builder; `UnsettledObjectWithdrawals::record_object_funds_withdraws` |
+| `accumulator_running_max_withdraws` | execution output | `sui-types/src/inner_temporary_store.rs` | `UnsettledObjectWithdrawals::record_object_funds_withdraws` |
 | `AccumulatorSettlementTxBuilder` | settlement constructor | `accumulators/mod.rs` | early-settlement scheduler; checkpoint builder |
 | `build_accumulator_barrier_tx` | settlement constructor | `accumulators/mod.rs` | early-settlement scheduler; checkpoint builder |
 | `FundsSettlement { next_accumulator_version, funds_changes }` | scheduler input | `funds_withdraw_scheduler/address_funds/mod.rs` | address-funds scheduler |
-| `settle_accumulator_version` | watch-channel update | `accumulators/object_funds_checker/mod.rs` | invoked from `process_certificate` on barrier execution |

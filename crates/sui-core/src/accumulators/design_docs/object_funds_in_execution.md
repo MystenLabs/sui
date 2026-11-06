@@ -3,9 +3,11 @@
 This document covers the **in-execution** sufficiency check for object-owned virtual balance
 withdrawals: the `reserve_object_funds_for_withdrawal` native consulted by
 `funds_accumulator::withdraw_from_object` while the transaction is running inside the executor.
-It is gated by the `check_object_funds_withdraw_in_execution` protocol flag and supersedes the
-post-execution checker described in [`object_funds_checking.md`](./object_funds_checking.md)
-(now `ObjectFundsCheckerDEPRECATED`); the plan is to enable the flag everywhere.
+It is gated by the `check_object_funds_withdraw_in_execution` protocol flag, which is enabled on
+all networks. Nodes still execute transactions from earlier protocol versions with the flag off,
+but only from certified effects: the checkpoint executor reproduces an
+`InsufficientFundsForWithdraw` failure as an early error, and every other outcome needs no balance
+read. No post-execution object funds check exists.
 
 For the on-chain data layout, see [`data_model.md`](./data_model.md). For how withdrawals are
 declared, executed, and settled, see [`write_path.md`](./write_path.md).
@@ -73,9 +75,8 @@ Key properties:
 
 ## 3. Unsettled-withdrawal tracking
 
-`UnsettledObjectWithdrawals` (in `accumulators/unsettled_object_withdrawals.rs`) is the
-bookkeeping shared with the deprecated checker: per-account, per-accumulator-version totals of
-executed-but-unsettled withdrawals.
+`UnsettledObjectWithdrawals` (in `accumulators/unsettled_object_withdrawals.rs`) holds
+per-account, per-accumulator-version totals of executed-but-unsettled withdrawals.
 
 - **Recording.** After a transaction executes *successfully* under the in-execution check, the
   authority records its per-account **net** withdrawal amounts from the effects
@@ -84,6 +85,13 @@ executed-but-unsettled withdrawals.
   `record_net_unsettled_object_withdraws`, so nets are the only amounts recorded; the running max
   survives as a debug assertion (net can never exceed the checked peak). Failed transactions
   settle nothing and record nothing.
+
+  The running max (`InnerTemporaryStore::accumulator_running_max_withdraws`) is the peak net
+  withdrawal per account during the transaction. Walking the events in order, a Split adds its
+  amount to a running counter and a Merge subtracts it; the peak is the largest positive value
+  the counter reaches. For example, `Split(100), Merge(100), Split(100)` has a running max of 100
+  and a net of 100, while `Split(300), Split(200), Merge(100)` has a running max of 500 and a net
+  of 400.
 - **Reading.** The executor reads the store through the `UnsettledObjectFundsRead` trait, threaded
   into the temporary store as `unsettled_object_funds`.
 - **GC.** Entries are dropped at checkpoint commit for versions the committed effects settled
@@ -102,13 +110,13 @@ executed-but-unsettled withdrawals.
 |------|-----------------------------------------------|
 | Live consensus execution | Assigned versions (`AssignedVersions.system_object_versions`). |
 | Checkpoint execution / crash recovery | Back-filled from the settlement barrier's input version, with recorded `ReadOnlyRoot` versions checked for consistency. See `CheckpointTransactionData::new` in the [checkpoint executor](../../checkpoints/checkpoint_executor/mod.rs). |
-| Dev-inspect / dry-run | Captured from the latest stored root before execution (`SystemObjectVersions::from_latest_in_store`). The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
+| Dev-inspect / dry-run | Captured from the latest stored root before execution (`SystemObjectVersions::from_latest_in_store`). Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
 | `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Reconstructing them in replay is tracked in #28300. |
 
 ## 5. Failure and error semantics
 
 - Insufficiency aborts the transaction: a real, committed failed execution with normal gas
-  charging (unlike the old path's cancellation-style outcome, which never entered execution).
+  charging (unlike an `InsufficientFundsForWithdraw` early error, which never enters execution).
 - The native's abort surfaces as an ordinary framework abort,
   `MoveAbort(funds_accumulator, E_OBJECT_FUNDS_INSUFFICIENT)` — deliberately *not* remapped to a
   dedicated `ExecutionErrorKind`, keeping the invariant that Move aborts surface uniformly as

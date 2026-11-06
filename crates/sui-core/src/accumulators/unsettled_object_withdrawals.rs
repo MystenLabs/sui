@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use parking_lot::RwLock;
+use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
 use sui_protocol_config::assert_reachable_gated;
 use sui_types::{
     accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
@@ -16,11 +14,33 @@ use sui_types::{
     transaction::{TransactionData, TransactionDataAPI},
 };
 
-use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
-
 pub struct UnsettledObjectWithdrawals {
     inner: RwLock<Inner>,
-    metrics: Arc<ObjectFundsCheckerMetrics>,
+    metrics: UnsettledObjectWithdrawalsMetrics,
+}
+
+struct UnsettledObjectWithdrawalsMetrics {
+    unsettled_accounts: IntGauge,
+    unsettled_versions: IntGauge,
+}
+
+impl UnsettledObjectWithdrawalsMetrics {
+    fn new(registry: &Registry) -> Self {
+        Self {
+            unsettled_accounts: register_int_gauge_with_registry!(
+                "object_funds_unsettled_accounts",
+                "Number of accounts with unsettled withdraws",
+                registry,
+            )
+            .unwrap(),
+            unsettled_versions: register_int_gauge_with_registry!(
+                "object_funds_unsettled_versions",
+                "Number of versions with unsettled accounts",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -30,9 +50,8 @@ struct Inner {
     /// Balance are updated only by settlement transactions, not when we withdraw funds.
     /// Hence when we are checking object funds, on top of the settled balance, we also need to account for
     /// the amount of withdraws from the same consensus commit (that all reads from the same accumulator version).
-    /// When `record_net_unsettled_object_withdraws` is enabled, the recorded amounts are the per-account
-    /// net withdraws from effects (what settlement will actually deduct); otherwise they are the
-    /// running max withdraws.
+    /// The recorded amounts are the per-account net withdraws from effects (what settlement will
+    /// actually deduct).
     unsettled_withdraws: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
     /// Tracks the accounts that have pending withdraws at each accumulator version.
     /// This information is not required for functional correctness, but needed to garbage collect
@@ -56,10 +75,10 @@ impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
 }
 
 impl UnsettledObjectWithdrawals {
-    pub fn new(metrics: Arc<ObjectFundsCheckerMetrics>) -> Self {
+    pub fn new(registry: &Registry) -> Self {
         Self {
             inner: RwLock::new(Inner::default()),
-            metrics,
+            metrics: UnsettledObjectWithdrawalsMetrics::new(registry),
         }
     }
 
@@ -81,7 +100,7 @@ impl UnsettledObjectWithdrawals {
     /// Record a new unsettled withdraw for an account at a given accumulator version.
     /// This updates the unsettled withdraws map, and is called after a transaction successfully executed
     /// that withdraws funds from an object balance account.
-    pub(crate) fn record_unsettled_withdraws(
+    fn record_unsettled_withdraws(
         &self,
         withdraws: impl IntoIterator<Item = (AccumulatorObjId, u128)>,
         accumulator_version: SequenceNumber,
@@ -104,6 +123,7 @@ impl UnsettledObjectWithdrawals {
         self.update_unsettled_metrics(&inner);
     }
 
+    /// Returns whether the transaction withdrew from any object account.
     pub fn record_object_funds_withdraws(
         &self,
         tx_data: &TransactionData,
@@ -111,14 +131,17 @@ impl UnsettledObjectWithdrawals {
         accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
         accumulator_version: SequenceNumber,
         chain_identifier: ChainIdentifier,
-    ) {
+    ) -> bool {
         if accumulator_running_max_withdraws.is_empty() {
-            return;
+            return false;
         }
         let address_funds_reservations: BTreeSet<_> = tx_data
             .process_funds_withdrawals_for_execution(chain_identifier)
             .into_keys()
             .collect();
+        let withdrew_from_object = accumulator_running_max_withdraws
+            .keys()
+            .any(|account| !address_funds_reservations.contains(account));
         let updates: Vec<_> = effects
             .accumulator_events()
             .into_iter()
@@ -132,7 +155,7 @@ impl UnsettledObjectWithdrawals {
             })
             .collect();
         if updates.is_empty() {
-            return;
+            return withdrew_from_object;
         }
         debug_assert!(
             updates.iter().all(|(obj_id, net)| {
@@ -150,10 +173,7 @@ impl UnsettledObjectWithdrawals {
             "record unsettled object withdraws from in-execution check",
             |pc| pc.check_object_funds_withdraw_in_execution()
         );
-        self.metrics
-            .in_execution_check_result
-            .with_label_values(&["sufficient"])
-            .inc();
+        true
     }
 
     fn update_unsettled_metrics(&self, inner: &Inner) {
@@ -184,11 +204,5 @@ impl UnsettledObjectWithdrawals {
             }
         }
         self.update_unsettled_metrics(&inner);
-    }
-
-    #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
-        let inner = self.inner.read();
-        inner.unsettled_withdraws.is_empty() && inner.unsettled_accounts.is_empty()
     }
 }
