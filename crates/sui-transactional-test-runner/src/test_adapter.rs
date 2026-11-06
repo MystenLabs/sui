@@ -2281,33 +2281,13 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
-        self.record_creation_order(effects.transaction_digest(), &created_ids);
-
-        // make sure objects that have previously not been in storage get assigned a fake id.
-        let mut might_need_fake_id: Vec<_> = created_ids
-            .iter()
-            .chain(unwrapped_ids.iter())
-            .copied()
-            .collect();
-
-        // Use a stable sort before assigning fake ids, so test output remains stable.
-        might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        // Simulated outputs are not persisted, so leave their IDs unnumbered.
         accumulators_written.sort_by_key(|(_, address, ty, _, _)| {
             (
                 self.stabilize_str(format!("{}", address)),
                 self.stabilize_str(format!("{}", ty)),
             )
         });
-
-        might_need_fake_id.extend(
-            accumulators_written
-                .iter()
-                .map(|(obj_id, _, _, _, _)| *obj_id),
-        );
-
-        for id in might_need_fake_id {
-            self.enumerate_fake(id);
-        }
 
         // Treat unwrapped objects as writes (even though sometimes this is the first time we can
         // refer to them at their id in storage).

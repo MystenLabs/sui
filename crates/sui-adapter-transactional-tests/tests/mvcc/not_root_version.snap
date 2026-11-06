@@ -99,7 +99,7 @@ task 10, lines 81-83:
 //# programmable --sender P2 --inputs object(2,0)@4 object(6,0)@2 0 --dev-inspect
 //> 0: test::m::append(Input(0), Input(1));
 //> 1: test::m::check(Input(0), Input(2));
-created: object(10,0)
+created: object(_)
 mutated: object(_), object(2,0)
 wrapped: object(6,0)
 gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2416558, non_refundable_storage_fee: 242
@@ -111,7 +111,7 @@ task 11, lines 88-90:
 //# programmable --sender P2 --inputs object(2,0)@4 object(6,0)@3 1 --dev-inspect
 //> 0: test::m::append(Input(0), Input(1));
 //> 1: test::m::check(Input(0), Input(2));
-created: object(10,0)
+created: object(_)
 mutated: object(_), object(2,0)
 wrapped: object(6,0)
 gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2416558, non_refundable_storage_fee: 242

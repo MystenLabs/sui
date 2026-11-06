@@ -1,0 +1,104 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+// Dry-run and dev-inspect must leave created and unwrapped simulated outputs unnumbered.
+// Both must leave the wrapped parent unchanged
+// so that subsequent committed execution can still unwrap its child.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-33:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7455600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 35:
+//# run test::m::make_wrapped --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2538400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 37-39:
+//# programmable --sender A --dev-inspect
+// Created simulated outputs are unnumbered.
+//> test::m::create();
+created: object(_), object(_)
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 3594800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 41-43:
+//# programmable --sender A --dry-run
+// Dry-run uses the same convention for multiple created objects.
+//> test::m::create();
+created: object(_), object(_)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3594800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 45-47:
+//# programmable --sender A --dev-inspect --inputs object(2,0)
+// The simulated unwrapped output is also unnumbered.
+//> test::m::unwrap(Input(0));
+mutated: object(_)
+unwrapped: object(_)
+deleted: object(2,0)
+gas summary: computation_cost: 500000, storage_cost: 2287600,  storage_rebate: 1550245, non_refundable_storage_fee: 155
+
+task 6, lines 49-50:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    child: test::m::First {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: 7u64,
+    },
+}
+
+task 7, lines 52-54:
+//# programmable --sender A --dry-run --inputs object(2,0)
+// The same parent is still available; its simulated unwrapped output is unnumbered.
+//> test::m::unwrap(Input(0));
+mutated: object(0,0)
+unwrapped: object(_)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2538146, non_refundable_storage_fee: 254
+
+task 8, lines 56-57:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    child: test::m::First {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        value: 7u64,
+    },
+}
+
+task 9, lines 59-60:
+//# run test::m::unwrap --sender A --args object(2,0)
+mutated: object(0,0)
+unwrapped: object(9,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2538146, non_refundable_storage_fee: 254
