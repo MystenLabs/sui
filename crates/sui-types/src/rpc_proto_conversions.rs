@@ -3689,6 +3689,40 @@ impl TryFrom<&ObjectSet> for crate::full_checkpoint_content::ObjectSet {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn test_expiration_timestamp_conversions() {
+        assert_eq!(
+            seconds_to_timestamp(1_700_000_000),
+            prost_types::Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }
+        );
+        assert_eq!(seconds_to_timestamp(u64::MAX).seconds, i64::MAX);
+        assert_eq!(
+            timestamp_to_seconds(&prost_types::Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }),
+            Ok(1_700_000_000)
+        );
+        assert!(
+            timestamp_to_seconds(&prost_types::Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 500_000_000,
+            })
+            .is_err()
+        );
+        assert!(
+            timestamp_to_seconds(&prost_types::Timestamp {
+                seconds: -1,
+                nanos: 0,
+            })
+            .is_err()
+        );
+    }
+    use super::{seconds_to_timestamp, timestamp_to_seconds};
     use crate::effects::TransactionEffectsAPI;
 
     #[test]
