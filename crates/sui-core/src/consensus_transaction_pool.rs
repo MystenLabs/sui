@@ -44,6 +44,7 @@ use std::sync::Weak;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef};
+use sui_types::coin_reservation::ParsedDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -211,6 +212,9 @@ struct PoolEntry {
     transactions: Vec<Transaction>,
     /// Owned gas payment objects consumed by this entry, captured before serialization
     /// so the admission queue can dedup on them without re-parsing the consensus bytes.
+    /// Coin reservation refs are excluded: they name a reusable address balance rather
+    /// than an exclusive object, so distinct transactions may share one and must not
+    /// dedup against each other.
     gas_payment_objects: Vec<ObjectRef>,
     total_bytes: usize,
     gas_price: u64,
@@ -540,7 +544,14 @@ impl ConsensusTransactionPool {
             .collect();
         let gas_payment_objects: Vec<ObjectRef> = user_transactions
             .iter()
-            .flat_map(|tx| tx.transaction_data().gas_data().payment.iter().copied())
+            .flat_map(|tx| {
+                tx.transaction_data()
+                    .gas_data()
+                    .payment
+                    .iter()
+                    .filter(|object_ref| !ParsedDigest::is_coin_reservation_digest(&object_ref.2))
+                    .copied()
+            })
             .collect();
         let staggered_slot = self
             .stagger_quota
@@ -1662,8 +1673,10 @@ mod tests {
     use consensus_types::block::BlockDigest;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::{AuthorityName, ObjectID, random_object_ref};
+    use sui_types::base_types::{AuthorityName, ObjectID, SequenceNumber, random_object_ref};
+    use sui_types::coin_reservation::encode_object_ref;
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
+    use sui_types::digests::ChainIdentifier;
     use sui_types::error::UserInputError;
     use sui_types::object::{Object, Owner};
     use sui_types::transaction::PlainTransactionWithClaims;
@@ -2412,6 +2425,35 @@ mod tests {
             }
         ));
         drop(ack);
+    }
+
+    #[sim_test]
+    async fn coin_reservation_gas_does_not_dedup_against_the_same_balance() {
+        let (_state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+
+        // Two transactions paying gas from the same SUI address balance share the
+        // reservation ref's (id, version); only the amount in the digest differs. The
+        // balance is reusable, so both are valid and neither may displace the other.
+        let chain = ChainIdentifier::default();
+        let balance_id = ObjectID::random();
+        let version = SequenceNumber::from_u64(5);
+        let first_ref = encode_object_ref(balance_id, version, epoch, 100, chain);
+        let second_ref = encode_object_ref(balance_id, version, epoch, 200, chain);
+        assert_eq!((first_ref.0, first_ref.1), (second_ref.0, second_ref.1));
+        assert_ne!(first_ref.2, second_ref.2);
+
+        let (_first, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(first_ref)])
+            .unwrap();
+        let (_second, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(second_ref)])
+            .unwrap();
+
+        assert_eq!(pool.queue_depth("user"), 2);
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        ack(block(1));
     }
 
     #[sim_test]
