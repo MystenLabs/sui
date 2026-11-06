@@ -1412,18 +1412,24 @@ impl ValidatorService {
                 let mut receivers = Vec::with_capacity(tx_groups.len());
                 for txns in tx_groups {
                     let gas_price = Self::extract_gas_price(&txns);
-                    let (rx, newly_inserted) = aq
-                        .try_insert(gas_price, txns, submitter_client_addr)
-                        .await?;
-                    if !newly_inserted {
-                        // Duplicate of an in-flight submission; flag the request as spam. The
-                        // per-tx result is still Submitted, so this is tracked separately.
-                        duplicate_at_admission = true;
+                    match aq.try_insert(gas_price, txns, submitter_client_addr).await {
+                        Ok((rx, newly_inserted)) => {
+                            if !newly_inserted {
+                                // Duplicate of an in-flight submission; flag the request as spam.
+                                // The per-tx result is still Submitted, so this is tracked
+                                // separately.
+                                duplicate_at_admission = true;
+                            }
+                            receivers.push(Ok(rx));
+                        }
+                        Err(error) if Self::is_owned_object_conflict(&error) => {
+                            receivers.push(Err(error))
+                        }
+                        Err(error) => return Err(error),
                     }
-                    receivers.push(rx);
                 }
                 future::join_all(receivers.into_iter().map(|rx| async move {
-                    match rx.await {
+                    match rx?.await {
                         Ok(result) => result.map_err(SuiError::from),
                         Err(_) => Err(SuiError::from(
                             SuiErrorKind::TooManyTransactionsPendingConsensus,
@@ -1518,6 +1524,14 @@ impl ValidatorService {
                             results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
                         }
                     }
+                    // Another queued transaction holds an owned gas object of this group. Report
+                    // it per-tx, like a duplicate, so it counts toward the request's spam weight
+                    // and does not fail the other groups.
+                    Err(err) if Self::is_owned_object_conflict(&err) => {
+                        for (idx, _) in txns_meta {
+                            results[idx] = Some(SubmitTxResult::Rejected { error: err.clone() });
+                        }
+                    }
                     // The transaction(s) in this group are already being processed by consensus.
                     // Report per-tx as a retriable rejection rather than failing the whole request.
                     Err(err) => {
@@ -1560,6 +1574,13 @@ impl ValidatorService {
         );
         let response = Self::try_from_submit_tx_response(results)?;
         Ok((response, spam_weight))
+    }
+
+    fn is_owned_object_conflict(error: &SuiError) -> bool {
+        matches!(
+            error.as_inner(),
+            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+        )
     }
 
     /// Traffic-control spam weight for a whole submit request. The request is spam unless it is
