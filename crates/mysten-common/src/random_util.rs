@@ -33,9 +33,26 @@ where
         panic!("Failed to convert 2 to T");
     };
 
+    // If size <= 2, sampling the half-open range 2..size would be empty and panic (#28498).
+    if size <= two {
+        return size;
+    }
+
     let random_size = rng.gen_range(two..size);
     let choices = [two, size, random_size];
     *choices.choose(&mut rng).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn small_cache_capacity() {
+        assert_eq!(randomize_cache_capacity_in_tests(0_u64), 0);
+        assert_eq!(randomize_cache_capacity_in_tests(1_u64), 1);
+        assert_eq!(randomize_cache_capacity_in_tests(2_u64), 2);
+    }
 }
 
 pub type TempDir = tempfile::TempDir;
