@@ -938,6 +938,24 @@ impl ValidatorService {
                 continue;
             }
 
+            // The rate-limiter slot is not refunded, so a gasless transaction before its
+            // `min_timestamp` is rejected first.
+            if is_gasless
+                && let Err(error) = epoch_store
+                    .check_timestamp_expiration_at_submission(transaction.data().transaction_data())
+                && matches!(
+                    error.as_inner(),
+                    SuiErrorKind::TransactionNotYetValid { .. }
+                )
+            {
+                metrics
+                    .submission_rejected_transactions
+                    .with_label_values(&[error.to_variant_name()])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
+            }
+
             if is_gasless
                 && !self
                     .gasless_limiter
