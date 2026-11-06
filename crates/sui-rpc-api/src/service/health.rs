@@ -167,6 +167,12 @@ struct IndexTimestamps<'a> {
 /// that advanced in between can leave it slightly above; that counts as zero
 /// lag. A `None` minimum (in practice a history pipeline after a restore,
 /// before its seed) is never healthy, and neither is a missing live frontier.
+///
+/// A timestamp of 0 means the watermark was written without one, not a real
+/// chain time: the embedded restore anchors the live cohort with only its
+/// checkpoint set, so until the live indexer commits its first checkpoint both
+/// timestamps read 0 while history may still sit at its seed far below. A 0 on
+/// either side is therefore never healthy either.
 fn history_caught_up(
     max_lag_seconds: Option<u32>,
     indexes: Option<IndexTimestamps<'_>>,
@@ -181,7 +187,7 @@ fn history_caught_up(
     let live = (indexes.read_live_indexed_ms)()?;
     let all = (indexes.read_all_indexed_ms)()?;
     Ok(match (live, all) {
-        (Some(live), Some(all)) => live.saturating_sub(all) <= max_lag_ms,
+        (Some(live), Some(all)) if live > 0 && all > 0 => live.saturating_sub(all) <= max_lag_ms,
         _ => false,
     })
 }
@@ -333,6 +339,17 @@ mod tests {
         assert!(!history_ok(Some(u32::MAX), Some(100_000), None));
         assert!(!history_ok(Some(u32::MAX), None, Some(100_000)));
         assert!(!history_ok(Some(u32::MAX), None, None));
+    }
+
+    // Right after the embedded restore the live cohort's watermarks carry
+    // only the restore checkpoint, so the live and all-pipelines timestamps
+    // both read 0 while history sits at its seed: unhealthy, however large
+    // the allowed lag, until the live indexer commits a real timestamp.
+    #[test]
+    fn history_not_caught_up_without_recorded_timestamps() {
+        assert!(!history_ok(Some(u32::MAX), Some(0), Some(0)));
+        assert!(!history_ok(Some(u32::MAX), Some(100_000), Some(0)));
+        assert!(!history_ok(Some(u32::MAX), Some(0), Some(100_000)));
     }
 
     // A failure reading either timestamp propagates rather than being read as
