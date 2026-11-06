@@ -7,15 +7,19 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct R has key, store { id: UID }
-    public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
+module test::m1;
 
-    public fun dirty(_: &mut R) {}
-    public fun dirty_u64(_: &mut u64) {}
-    entry fun priv(_: vector<R>) { abort 0 }
-    entry fun priv2(_: vector<u64>) { abort 0 }
-}
+public struct R has key, store { id: UID }
+
+public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
+
+public fun dirty(_: &mut R) {}
+
+public fun dirty_u64(_: &mut u64) {}
+
+entry fun priv(_: vector<R>) { abort 0 }
+
+entry fun priv2(_: vector<u64>) { abort 0 }
 
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();

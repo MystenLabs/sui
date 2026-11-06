@@ -7,55 +7,78 @@
 //# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A B
 
 //# publish
-module test::m;
+module test::m {
+    use sui::balance::Balance;
+    use sui::coin::Coin;
+    use sui::funds_accumulator::Withdrawal;
+    use sui::sui::SUI;
+    use sui::transfer::Receiving;
 
-use sui::balance::Balance;
-use sui::coin::Coin;
-use sui::funds_accumulator::Withdrawal;
-use sui::sui::SUI;
-use sui::transfer::Receiving;
+    public struct Obj has key, store { id: UID, inner: Inner }
+    public struct Inner has copy, drop, store { f: u64, g: u64 }
+    public struct NoCopy has drop { f: u64 }
+    public struct Potato { v: u64 }
+    public struct Parent has key, store { id: UID }
+    public struct Child has key, store { id: UID }
 
-public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
-public struct NoCopy has drop { f: u64 }
-public struct Potato { v: u64 }
-public struct Parent has key, store { id: UID }
-public struct Child has key, store { id: UID }
+    public fun new(ctx: &mut TxContext): Obj {
+        Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    }
 
-public fun new(ctx: &mut TxContext): Obj {
-    Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    public fun share(ctx: &mut TxContext) {
+        transfer::public_share_object(Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } })
+    }
+
+    public fun new_parent(ctx: &mut TxContext): Parent { Parent { id: object::new(ctx) } }
+
+    public fun new_child(p: &Parent, ctx: &mut TxContext) {
+        transfer::public_transfer(Child { id: object::new(ctx) }, object::id_address(p))
+    }
+
+    public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
+    public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
+
+    public fun nc(): NoCopy { NoCopy { f: 0 } }
+
+    public fun nc_f_mut(n: &mut NoCopy): &mut u64 { &mut n.f }
+
+    public fun nc_f(n: &NoCopy): &u64 { &n.f }
+
+    public fun take(_: NoCopy) {}
+
+    public fun read_then_take(x: u64, n: NoCopy) { assert!(x == n.f, 0) }
+
+    public fun take_then_mut(o: Obj, _: &mut Inner) { delete(o) }
+
+    public fun open(o: &mut Obj): (Potato, &mut Inner) { (Potato { v: 1 }, &mut o.inner) }
+
+    public fun close_and_delete(p: Potato, o: Obj) { let Potato { v: _ } = p; delete(o) }
+
+    public fun recv_mut(r: &mut Receiving<Child>): &mut Receiving<Child> { r }
+
+    public fun receive(p: &mut Parent, r: Receiving<Child>): Child {
+        transfer::public_receive(&mut p.id, r)
+    }
+
+    public fun id<T>(t: &T): &T { t }
+
+    public fun id_mut<T>(t: &mut T): &mut T { t }
+
+    public fun use_mut<T>(_: &mut T) {}
+
+    public fun write(r: &mut u64, v: u64) { *r = v }
+
+    public fun value_at_least(c: &Coin<SUI>, v: u64) { assert!(c.value() >= v, 0) }
+
+    public fun limit_at_least(w: &Withdrawal<Balance<SUI>>, v: u256) {
+        assert!(w.withdrawal_limit() >= v, 0)
+    }
+
+    public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
+
+    public fun delete_child(c: Child) { let Child { id } = c; object::delete(id) }
 }
-public fun share(ctx: &mut TxContext) {
-    transfer::public_share_object(Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } })
-}
-public fun new_parent(ctx: &mut TxContext): Parent { Parent { id: object::new(ctx) } }
-public fun new_child(p: &Parent, ctx: &mut TxContext) {
-    transfer::public_transfer(Child { id: object::new(ctx) }, object::id_address(p))
-}
-public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
-public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
-public fun nc(): NoCopy { NoCopy { f: 0 } }
-public fun nc_f_mut(n: &mut NoCopy): &mut u64 { &mut n.f }
-public fun nc_f(n: &NoCopy): &u64 { &n.f }
-public fun take(_: NoCopy) {}
-public fun read_then_take(x: u64, n: NoCopy) { assert!(x == n.f, 0) }
-public fun take_then_mut(o: Obj, _: &mut Inner) { delete(o) }
-public fun open(o: &mut Obj): (Potato, &mut Inner) { (Potato { v: 1 }, &mut o.inner) }
-public fun close_and_delete(p: Potato, o: Obj) { let Potato { v: _ } = p; delete(o) }
-public fun recv_mut(r: &mut Receiving<Child>): &mut Receiving<Child> { r }
-public fun receive(p: &mut Parent, r: Receiving<Child>): Child {
-    transfer::public_receive(&mut p.id, r)
-}
-public fun id<T>(t: &T): &T { t }
-public fun id_mut<T>(t: &mut T): &mut T { t }
-public fun use_mut<T>(_: &mut T) {}
-public fun write(r: &mut u64, v: u64) { *r = v }
-public fun value_at_least(c: &Coin<SUI>, v: u64) { assert!(c.value() >= v, 0) }
-public fun limit_at_least(w: &Withdrawal<Balance<SUI>>, v: u256) {
-    assert!(w.withdrawal_limit() >= v, 0)
-}
-public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
-public fun delete_child(c: Child) { let Child { id } = c; object::delete(id) }
 
 //# publish --upgradeable --sender A
 module q::m {

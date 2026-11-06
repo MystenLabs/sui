@@ -6,13 +6,11 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
+module test::m;
 
 public struct S<phantom T: copy> {}
 
 entry fun foo<T>() {}
-
-}
 
 //# run test::m::foo --type-args test::x::x
 

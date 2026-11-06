@@ -8,39 +8,39 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-16:
+task 1, lines 8-18:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 18-20:
+task 2, lines 20-22:
 // input out of bounds at len
 //# programmable --inputs 0u8
 //> test::m::take_b(Input(0), Input(1))
 Error: Error checking transaction input objects: Invalid argument at command 0, argument 1: index 1 is out of bounds
 
-task 3, lines 22-24:
+task 3, lines 24-26:
 // input out of bounds
 //# programmable --inputs 0u8
 //> test::m::take_b(Input(0), Input(100))
 Error: Error checking transaction input objects: Invalid argument at command 0, argument 1: index 100 is out of bounds
 
-task 4, lines 26-29:
+task 4, lines 28-31:
 // result out of bounds at len
 //# programmable
 //> test::m::a();
 //> test::m::take_b(Result(0), Result(1))
 Error: Error checking transaction input objects: Invalid argument at command 1, argument 1: index 1 is out of bounds
 
-task 5, lines 31-34:
+task 5, lines 33-36:
 // result out of bounds
 //# programmable
 //> test::m::a();
 //> test::m::take_b(Result(0), Result(5123))
 Error: Error checking transaction input objects: Invalid argument at command 1, argument 1: index 5123 is out of bounds
 
-task 6, lines 36-40:
+task 6, lines 38-42:
 // nested results out of bounds at len
 //# programmable
 //> test::m::a();
@@ -48,7 +48,7 @@ task 6, lines 36-40:
 //> test::m::take_b(Result(0), NestedResult(2, 0))
 Error: Error checking transaction input objects: Invalid argument at command 2, argument 1: index 2 is out of bounds
 
-task 7, lines 42-46:
+task 7, lines 44-48:
 // nested results out of bounds
 //# programmable
 //> test::m::a();
@@ -56,7 +56,7 @@ task 7, lines 42-46:
 //> test::m::take_b(Result(0), NestedResult(115, 0))
 Error: Error checking transaction input objects: Invalid argument at command 2, argument 1: index 115 is out of bounds
 
-task 8, lines 48-52:
+task 8, lines 50-54:
 // nested secondary out of bounds barely
 //# programmable
 //> test::m::a();
@@ -65,7 +65,7 @@ task 8, lines 48-52:
 Error: Transaction Effects Status: Invalid command argument at 1. Out of bounds secondary access to result vector 1 at secondary index 2
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: SecondaryIndexOutOfBounds { result_idx: 1, secondary_idx: 2 } }, source: None, command: Some(2) } }
 
-task 9, lines 54-58:
+task 9, lines 56-60:
 // nested secondary out of bounds
 //# programmable
 //> test::m::a();

@@ -8,26 +8,36 @@
 //# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A
 
 //# publish
-module test::m;
+module test::m {
+    public struct Obj has key, store { id: UID, inner: Inner }
+    public struct Inner has copy, drop, store { f: u64, g: u64 }
+    public struct Hot {}
+    public struct Potato { v: u64 }
 
-public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
-public struct Hot {}
-public struct Potato { v: u64 }
+    public fun new(ctx: &mut TxContext): Obj {
+        Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    }
 
-public fun new(ctx: &mut TxContext): Obj {
-    Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
+    public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
+    public fun f_g_mut(i: &mut Inner): (&mut u64, &mut u64) { (&mut i.f, &mut i.g) }
+
+    public fun hot_and_ref(i: &mut Inner): (Hot, &mut u64) { (Hot {}, &mut i.f) }
+
+    public fun cool(h: Hot) { let Hot {} = h; }
+
+    public fun open(o: &mut Obj): (Potato, &mut Inner) { (Potato { v: 1 }, &mut o.inner) }
+
+    public fun close_with_parent(p: Potato, o: &mut Obj) { let Potato { v } = p; o.inner.g = v }
+
+    public fun id<T>(t: &T): &T { t }
+
+    public fun use_mut<T>(_: &mut T) {}
+
+    public fun write(r: &mut u64, v: u64) { *r = v }
+
+    public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 }
-public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
-public fun f_g_mut(i: &mut Inner): (&mut u64, &mut u64) { (&mut i.f, &mut i.g) }
-public fun hot_and_ref(i: &mut Inner): (Hot, &mut u64) { (Hot {}, &mut i.f) }
-public fun cool(h: Hot) { let Hot {} = h; }
-public fun open(o: &mut Obj): (Potato, &mut Inner) { (Potato { v: 1 }, &mut o.inner) }
-public fun close_with_parent(p: Potato, o: &mut Obj) { let Potato { v } = p; o.inner.g = v }
-public fun id<T>(t: &T): &T { t }
-public fun use_mut<T>(_: &mut T) {}
-public fun write(r: &mut u64, v: u64) { *r = v }
-public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 
 //# publish --upgradeable --sender A
 module q::m {

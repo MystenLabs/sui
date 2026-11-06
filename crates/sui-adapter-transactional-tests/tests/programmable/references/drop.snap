@@ -10,19 +10,19 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-30:
+task 1, lines 10-40:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8724800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 32-35:
+task 2, lines 42-45:
 //# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 42-47:
+task 4, lines 52-57:
 //# programmable
 // VALID: an unused `&mut Inner`, the parent used mutably right after
 //> 0: test::m::new();
@@ -32,7 +32,7 @@ task 4, lines 42-47:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 49-56:
+task 5, lines 59-66:
 //# programmable --inputs 1
 // VALID: one of two sibling references unused, the parent of both then used
 //> 0: test::m::new();
@@ -44,7 +44,7 @@ task 5, lines 49-56:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 58-65:
+task 6, lines 68-75:
 //# programmable
 // VALID: an unused reference next to a hot potato; the reference is dropped, the potato is consumed
 //> 0: test::m::new();
@@ -56,7 +56,7 @@ task 6, lines 58-65:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 67-72:
+task 7, lines 77-82:
 //# programmable --sender A
 // VALID: the sibling reference unused and released, the potato closed against the parent
 //> 0: test::m::new();
@@ -66,7 +66,7 @@ task 7, lines 67-72:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 74-78:
+task 8, lines 84-88:
 //# programmable
 // VALID: an unused reference at the end of the transaction
 //> 0: test::m::new();
@@ -75,7 +75,7 @@ task 8, lines 74-78:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 80-85:
+task 9, lines 90-95:
 //# programmable --sender A --inputs object(2,1) 0u8 digest(q_2)
 // VALID: an unused reference into the ticket does not prevent Upgrade from consuming it
 //> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));

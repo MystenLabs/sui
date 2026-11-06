@@ -4,8 +4,8 @@
 /// A regulated test coin for multi-currency stress testing.
 module basics::test_coin;
 
-use sui::coin::{Self, TreasuryCap, Coin, DenyCapV2};
 use sui::balance::Balance;
+use sui::coin::{Self, TreasuryCap, Coin, DenyCapV2};
 use sui::deny_list::DenyList;
 
 public struct TEST_COIN has drop {}

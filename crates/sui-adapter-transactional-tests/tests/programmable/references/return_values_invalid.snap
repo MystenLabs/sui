@@ -9,13 +9,13 @@ processed 14 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-32:
+task 1, lines 9-50:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 9173200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 34-44:
+task 2, lines 52-62:
 //# programmable --inputs 1
 // INVALID: InvalidReferenceArgument at arg 0 of command 5, the source the callee did not return is blocked too
 //> 0: test::m::new();
@@ -30,7 +30,7 @@ task 2, lines 34-44:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(5) } }
 
-task 3, lines 46-56:
+task 3, lines 64-74:
 //# programmable --inputs 1
 // INVALID: InvalidReferenceArgument at arg 0 of command 5, the returned source is blocked
 //> 0: test::m::new();
@@ -45,7 +45,7 @@ task 3, lines 46-56:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(5) } }
 
-task 4, lines 58-68:
+task 4, lines 76-86:
 //# programmable
 // INVALID: InvalidReferenceArgument at arg 0 of command 5, an immutable result blocks a `&mut` of an immutable source
 //> 0: test::m::new();
@@ -60,7 +60,7 @@ task 4, lines 58-68:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(5) } }
 
-task 5, lines 70-80:
+task 5, lines 88-98:
 //# programmable
 // INVALID: InvalidReferenceArgument at arg 0 of command 5, an immutable result of `(&mut A, &B)` returned from B still blocks a `&mut` of A
 //> 0: test::m::new();
@@ -75,7 +75,7 @@ task 5, lines 70-80:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(5) } }
 
-task 6, lines 82-92:
+task 6, lines 100-110:
 //# programmable
 // INVALID: InvalidReferenceArgument at arg 0 of command 5, an immutable result of `(&mut A, &B)` returned from B blocks a `&mut` of B
 //> 0: test::m::new();
@@ -90,7 +90,7 @@ task 6, lines 82-92:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(5) } }
 
-task 7, lines 94-104:
+task 7, lines 112-122:
 //# programmable
 // INVALID: InvalidReferenceArgument at arg 0 of command 5, an immutable result of `(&mut A, &B)` returned from A still blocks a `&mut` of B
 //> 0: test::m::new();
@@ -105,7 +105,7 @@ task 7, lines 94-104:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(5) } }
 
-task 8, lines 106-118:
+task 8, lines 124-136:
 //# programmable --inputs 1
 // INVALID: InvalidReferenceArgument at arg 0 of command 7, a chained `&mut` descendant of a two-source result blocks the returned source
 //> 0: test::m::new();
@@ -122,7 +122,7 @@ task 8, lines 106-118:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(7) } }
 
-task 9, lines 120-132:
+task 9, lines 138-150:
 //# programmable --inputs 1
 // INVALID: InvalidReferenceArgument at arg 0 of command 7, a chained `&mut` descendant of a two-source result blocks the source the callee did not return
 //> 0: test::m::new();
@@ -139,7 +139,7 @@ task 9, lines 120-132:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(7) } }
 
-task 10, lines 134-140:
+task 10, lines 152-158:
 //# programmable --inputs 1 2
 // INVALID: InvalidReferenceArgument at arg 0 of command 3, with the `&mut U` result unused, the live `&T` result of `(&T, value, &mut U)` still extends the mutable source U
 //> 0: MakeMoveVec<u64>([Input(0)]);
@@ -150,7 +150,7 @@ task 10, lines 134-140:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(3) } }
 
-task 11, lines 142-148:
+task 11, lines 160-166:
 //# programmable --inputs 1 2
 // INVALID: InvalidReferenceArgument at arg 0 of command 3, the live `&T` result also extends its own source T
 //> 0: MakeMoveVec<u64>([Input(0)]);
@@ -161,7 +161,7 @@ task 11, lines 142-148:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(3) } }
 
-task 12, lines 150-156:
+task 12, lines 168-174:
 //# programmable --inputs 1 2
 // INVALID: InvalidReferenceArgument at arg 0 of command 3, with the `&T` result unused, the live `&mut U` result blocks a `&mut` of U
 //> 0: MakeMoveVec<u64>([Input(0)]);
@@ -172,7 +172,7 @@ task 12, lines 150-156:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(3) } }
 
-task 13, lines 158-162:
+task 13, lines 176-180:
 //# programmable --inputs 0
 // INVALID: InvalidReferenceArgument at arg 0 of command 1, a laundered TxContext reference blocks a `&mut` of the other argument
 //> 0: test::m::digest_via(Input(0));

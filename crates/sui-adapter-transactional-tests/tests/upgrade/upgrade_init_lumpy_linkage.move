@@ -2,19 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Upgrade commands only contribute to the transaction-wide Lumpy linkage when the upgraded package
-// introduces an `init` function in a new module. 
+// introduces an `init` function in a new module.
 
 //# init --addresses Dep_V1=0x0 Dep_V2=0x0 NoInit_V0=0x0 NoInit_V1=0x0 Init_V0=0x0 Init_V1_Dep1=0x0 Init_V1_Dep2=0x0 --accounts A
 
 //# publish --upgradeable --sender A
 module Dep_V1::d {
     public fun val(): u64 { 1 }
+
     public fun ping() {}
 }
 
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 module Dep_V2::d {
     public fun val(): u64 { 2 }
+
     public fun ping() {}
 }
 

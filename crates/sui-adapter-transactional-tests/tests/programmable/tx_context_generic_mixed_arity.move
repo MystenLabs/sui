@@ -10,11 +10,9 @@
 //# publish
 module test::m;
 
-public fun gen_leading<T>(_x: &mut T, _y: u64) {
-}
+public fun gen_leading<T>(_x: &mut T, _y: u64) {}
 
-public fun gen_trailing<T>(_x: u64, _y: &mut T) {
-}
+public fun gen_trailing<T>(_x: u64, _y: &mut T) {}
 
 //# programmable --inputs 0
 // only the u64 is supplied; the leading &mut T (TxContext) is injected

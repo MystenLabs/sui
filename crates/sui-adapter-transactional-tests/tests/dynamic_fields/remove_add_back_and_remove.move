@@ -9,46 +9,46 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct Object has key, store {
-        id: UID,
-        wrapped: Option<Child>,
-    }
+module test::m1;
 
-    public struct Child has key, store {
-        id: UID,
-    }
+public struct Object has key, store {
+    id: UID,
+    wrapped: Option<Child>,
+}
 
-    public entry fun create(ctx: &mut TxContext) {
-        let o = Object { id: object::new(ctx), wrapped: option::none() };
-        transfer::public_transfer(o, tx_context::sender(ctx))
-    }
+public struct Child has key, store {
+    id: UID,
+}
 
-    public entry fun add_child(parent: &mut Object, ctx: &mut TxContext) {
-        let child = Child { id: object::new(ctx) };
-        sui::dynamic_object_field::add(&mut parent.id, 0u64, child);
-    }
+public entry fun create(ctx: &mut TxContext) {
+    let o = Object { id: object::new(ctx), wrapped: option::none() };
+    transfer::public_transfer(o, tx_context::sender(ctx))
+}
 
-    public fun transfer_child(parent: &mut Object, ctx: &TxContext) {
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
-        sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
-        transfer::public_transfer(child, tx_context::sender(ctx))
-    }
+public entry fun add_child(parent: &mut Object, ctx: &mut TxContext) {
+    let child = Child { id: object::new(ctx) };
+    sui::dynamic_object_field::add(&mut parent.id, 0u64, child);
+}
 
-    public fun delete_child(parent: &mut Object) {
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
-        sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
-        let Child { id } = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
-        object::delete(id);
-    }
+public fun transfer_child(parent: &mut Object, ctx: &TxContext) {
+    let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+    sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
+    let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
+    transfer::public_transfer(child, tx_context::sender(ctx))
+}
 
-    public fun wrap_child(parent: &mut Object) {
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
-        sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
-        let child = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
-        option::fill(&mut parent.wrapped, child);
-    }
+public fun delete_child(parent: &mut Object) {
+    let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+    sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
+    let Child { id } = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
+    object::delete(id);
+}
+
+public fun wrap_child(parent: &mut Object) {
+    let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+    sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
+    let child = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
+    option::fill(&mut parent.wrapped, child);
 }
 
 //# run test::m1::create --sender A

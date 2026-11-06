@@ -71,7 +71,6 @@ fragment Cp on Checkpoint {
 }
 */
 
-
 //# run-graphql
 /*
 { # Multi-get a mix of existing and non-existing checkpoints and partial fields

@@ -4,20 +4,20 @@
 //# init --accounts A --addresses test=0x0 --simulator --protocol-version 118
 
 //# publish --sender A
-module test::mod {
-  use std::type_name::{Self, TypeName};
+module test::mod;
 
-  public struct Foo has key, store {
+use std::type_name::{Self, TypeName};
+
+public struct Foo has key, store {
     id: UID,
     tn: TypeName,
-  }
+}
 
-  public fun new(ctx: &mut TxContext): Foo {
+public fun new(ctx: &mut TxContext): Foo {
     Foo {
-      id: object::new(ctx),
-      tn: type_name::with_original_ids<vector<Foo>>(),
+        id: object::new(ctx),
+        tn: type_name::with_original_ids<vector<Foo>>(),
     }
-  }
 }
 
 //# programmable --sender A --inputs @A

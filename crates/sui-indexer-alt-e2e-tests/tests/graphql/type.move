@@ -98,21 +98,13 @@ fragment Type on MoveType {
 
 //# publish --upgradeable --sender A
 module P0::m {
-  public struct S0<T> {
-    xs: vector<vector<vector<vector<
-        vector<vector<vector<vector<
-            T
-        >>>>
-        >>>>
-  }
+    public struct S0<T> {
+        xs: vector<vector<vector<vector<vector<vector<vector<vector<T>>>>>>>>,
+    }
 
-  public struct S1<T> {
-    xss: S0<S0<S0<S0<S0<S0<S0<S0<
-         S0<S0<S0<S0<S0<S0<S0<S0<
-             T
-         >>>>>>>>
-         >>>>>>>>
-  }
+    public struct S1<T> {
+        xss: S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<T>>>>>>>>>>>>>>>>,
+    }
 }
 
 //# create-checkpoint
@@ -128,21 +120,13 @@ module P0::m {
 
 //# upgrade --package P0 --upgrade-capability 8,1 --sender A
 module P0::m {
-  public struct S0<T> {
-    xs: vector<vector<vector<vector<
-        vector<vector<vector<vector<
-            T
-        >>>>
-        >>>>
-  }
+    public struct S0<T> {
+        xs: vector<vector<vector<vector<vector<vector<vector<vector<T>>>>>>>>,
+    }
 
-  public struct S1<T> {
-    xss: S0<S0<S0<S0<S0<S0<S0<S0<
-         S0<S0<S0<S0<S0<S0<S0<S0<
-             T
-         >>>>>>>>
-         >>>>>>>>
-  }
+    public struct S1<T> {
+        xss: S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<S0<T>>>>>>>>>>>>>>>>,
+    }
 }
 
 //# create-checkpoint

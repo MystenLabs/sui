@@ -14,39 +14,63 @@ use sui::coin::Coin;
 use sui::sui::SUI;
 
 public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
+public struct Inner has copy, drop, store { f: u64, g: u64 }
 public struct NoCopy has drop { value: u64 }
 public struct NoDrop has copy { f: u64 }
 
 public fun new(ctx: &mut TxContext): Obj {
     Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
 }
+
 public fun inner_val(): Inner { Inner { f: 0, g: 0 } }
+
 public fun inner(o: &Obj): &Inner { &o.inner }
+
 public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
 public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
+
 public fun copy_inner(i: &Inner): Inner { *i }
+
 public fun id_mut<T>(t: &mut T): &mut T { t }
+
 public fun use_imm<T>(_: &T) {}
+
 public fun use_mut<T>(_: &mut T) {}
+
 public fun write(r: &mut u64, v: u64) { *r = v }
+
 public fun check(x: u64, v: u64) { assert!(x == v, 0) }
+
 public fun check_inner(i: &Inner, f: u64) { assert!(i.f == f, 0) }
+
 public fun take_inner(i: Inner, f: u64) { assert!(i.f == f, 0) }
+
 public fun take(_: u64) {}
+
 public fun copy_mut(_: u64, _: &mut u64) {}
+
 public fun mut_copy(_: &mut u64, _: u64) {}
+
 public fun value_at_least(c: &Coin<SUI>, v: u64) { assert!(c.value() >= v, 0) }
+
 public fun no_copy(value: u64): NoCopy { NoCopy { value } }
+
 public fun value_ref(n: &NoCopy): &u64 { &n.value }
+
 public fun take_no_copy(_: NoCopy) {}
+
 public fun no_drop(): NoDrop { NoDrop { f: 0 } }
+
 public fun no_drop_f_mut(x: &mut NoDrop): &mut u64 { &mut x.f }
+
 public fun take_no_drop(x: NoDrop) { let NoDrop { f: _ } = x; }
+
 public fun take_no_drop_check(x: NoDrop, expected: u64) {
     let NoDrop { f } = x;
     assert!(f == expected, 0)
 }
+
 public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 
 // --- copy and freeze of reference results ---

@@ -3,11 +3,9 @@
 
 module bridged_usdc::usdc {
     use std::option;
-
     use sui::coin;
     use sui::transfer;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     struct USDC has drop {}
 
@@ -21,7 +19,7 @@ module bridged_usdc::usdc {
             b"USD Coin",
             b"Bridged USD Coin token",
             option::none(),
-            ctx
+            ctx,
         );
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury_cap, tx_context::sender(ctx));

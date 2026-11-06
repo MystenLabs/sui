@@ -8,48 +8,46 @@
 //# publish
 
 /// gas heavy function
-module test::m {
+module test::m;
 
+public struct Obj has key {
+    id: object::UID,
+    contents: vector<u8>,
+}
 
-    public struct Obj has key {
-        id: object::UID,
-        contents: vector<u8>
-    }
+entry fun get_objects(ctx: &mut TxContext) {
+    let mut i = 0u64;
+    while (i < 5) {
+        let obj = Obj { id: object::new(ctx), contents: vector[] };
+        transfer::transfer(obj, tx_context::sender(ctx));
+        i = i + 1;
+    };
+}
 
-    entry fun get_objects(ctx: &mut TxContext) {
-        let mut i = 0u64;
-        while (i < 5) {
-            let obj = Obj { id: object::new(ctx), contents: vector[] };
-            transfer::transfer(obj, tx_context::sender(ctx));
-            i = i + 1;
-        };
-    }
+entry fun destroy_object(obj: Obj) {
+    let Obj { id, contents: _ } = obj;
+    id.delete();
+}
 
-    entry fun destroy_object(obj: Obj) {
-        let Obj { id, contents: _ } = obj;
-        id.delete();
-    }
+public entry fun large_storage_func(n: u64, ctx: &mut TxContext) {
+    let mut v: vector<u64> = vector[];
+    let mut i = 0u64;
+    while (i < n) {
+        vector::push_back(&mut v, i);
+        i = i + 1;
+    };
 
-    public entry fun large_storage_func(n: u64, ctx: &mut TxContext) {
-        let mut v: vector<u64> = vector[];
-        let mut i = 0u64;
-        while (i < n) {
-            vector::push_back(&mut v, i);
-            i = i + 1;
-        };
+    transfer::transfer(Obj { id: object::new(ctx), contents: vector[] }, tx_context::sender(ctx))
+}
 
-        transfer::transfer(Obj { id: object::new(ctx), contents: vector[] }, tx_context::sender(ctx))
-    }
-
-    // no objects just computation
-    public entry fun large_compute_func(n: u64) {
-        let mut v: vector<u64> = vector[];
-        let mut i = 0u64;
-        while (i < n) {
-            vector::push_back(&mut v, i);
-            i = i + 1;
-        };
-    }
+// no objects just computation
+public entry fun large_compute_func(n: u64) {
+    let mut v: vector<u64> = vector[];
+    let mut i = 0u64;
+    while (i < n) {
+        vector::push_back(&mut v, i);
+        i = i + 1;
+    };
 }
 
 // Give A a 5 objects 2,0 to 2,4

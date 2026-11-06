@@ -6,22 +6,25 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct R has key, store { id: UID }
-    public struct Cup<T> has copy, drop { t: T }
-    public struct Copyable has copy {}
+module test::m1;
 
-    public fun r(ctx: &mut TxContext): R {
-        R { id: object::new(ctx) }
-    }
+public struct R has key, store { id: UID }
+public struct Cup<T> has copy, drop { t: T }
+public struct Copyable has copy {}
 
-    public fun cup<T>(t: T): Cup<T> { Cup { t } }
-    public fun destroy_cup<T>(cup: Cup<T>): T { let Cup { t } = cup; t }
-
-    public fun copyable(): Copyable { Copyable {} }
-    public fun borrow(_: &Copyable) {}
-    public fun copy_(c: Copyable) { let Copyable {} = c; }
+public fun r(ctx: &mut TxContext): R {
+    R { id: object::new(ctx) }
 }
+
+public fun cup<T>(t: T): Cup<T> { Cup { t } }
+
+public fun destroy_cup<T>(cup: Cup<T>): T { let Cup { t } = cup; t }
+
+public fun copyable(): Copyable { Copyable {} }
+
+public fun borrow(_: &Copyable) {}
+
+public fun copy_(c: Copyable) { let Copyable {} = c; }
 
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();

@@ -4,15 +4,15 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish
-module P::M {
-  public struct T has key, store {
-    id: UID,
-    x: u64
-  }
+module P::M;
 
-  public fun new(x: u64, ctx: &mut TxContext): T {
+public struct T has key, store {
+    id: UID,
+    x: u64,
+}
+
+public fun new(x: u64, ctx: &mut TxContext): T {
     T { id: object::new(ctx), x }
-  }
 }
 
 //# programmable --sender A --inputs 42 @A

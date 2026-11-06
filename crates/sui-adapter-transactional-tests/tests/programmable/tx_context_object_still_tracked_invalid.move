@@ -26,8 +26,7 @@ public fun borrow_mut(x: &mut X, _ctx: &mut TxContext): &mut Y {
     &mut x.y
 }
 
-public fun touch(_x: &mut X, _ctx: &mut TxContext) {
-}
+public fun touch(_x: &mut X, _ctx: &mut TxContext) {}
 
 public fun write(y: &mut Y, _ctx: &mut TxContext) {
     y.f = y.f + 1;

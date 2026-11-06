@@ -9,19 +9,19 @@ processed 22 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-58:
+task 1, lines 9-81:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 15564800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 60-63:
+task 2, lines 83-86:
 //# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, lines 70-72:
+task 4, lines 93-95:
 //# programmable --sender A --inputs @A
 //> 0: test::m::new();
 //> 1: TransferObjects([Result(0)], Input(0));
@@ -29,7 +29,7 @@ created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 74-76:
+task 5, lines 97-99:
 //# programmable --sender A --inputs @A
 //> 0: test::m::new();
 //> 1: TransferObjects([Result(0)], Input(0));
@@ -37,14 +37,14 @@ created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 78-79:
+task 6, lines 101-102:
 //# programmable --sender A
 //> 0: test::m::share();
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 81-83:
+task 7, lines 104-106:
 //# programmable --sender A --inputs @A
 //> 0: test::m::new_parent();
 //> 1: TransferObjects([Result(0)], Input(0));
@@ -52,14 +52,14 @@ created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 85-86:
+task 8, lines 108-109:
 //# programmable --sender A --inputs object(7,0)
 //> 0: test::m::new_child(Input(0));
 created: object(8,0)
 mutated: object(0,0), object(7,0)
 gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 2234177, non_refundable_storage_fee: 223
 
-task 9, lines 88-91:
+task 9, lines 111-114:
 //# programmable --sender A --inputs 1000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -68,13 +68,13 @@ mutated: object(0,0)
 accumulators_written: (object(9,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, line 93:
+task 10, line 116:
 //# create-checkpoint
 Checkpoint created: 1
 
 // --- values and results ---
 
-task 11, lines 97-102:
+task 11, lines 120-125:
 //# programmable --inputs 1
 // VALID: a result moved once the reference into it is dead
 //> 0: test::m::nc();
@@ -84,7 +84,7 @@ task 11, lines 97-102:
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 12, lines 104-108:
+task 12, lines 127-131:
 //# programmable --inputs 1
 // VALID: a last-use read releases the reference before the root is moved in the same call
 //> 0: test::m::nc();
@@ -93,7 +93,7 @@ task 12, lines 104-108:
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 13, lines 110-115:
+task 13, lines 133-138:
 //# programmable --sender A --inputs object(4,0)
 // VALID: an object by value next to a reference into a different object
 //> 0: test::m::new();
@@ -104,7 +104,7 @@ mutated: object(0,0)
 deleted: object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
-task 14, lines 117-122:
+task 14, lines 140-145:
 //# programmable --sender A
 // VALID: the parent consumed with the hot potato once the sibling reference is dead
 //> 0: test::m::new();
@@ -116,7 +116,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- object inputs ---
 
-task 15, lines 126-131:
+task 15, lines 149-154:
 //# programmable --sender A --inputs object(5,0) 10 @B
 // VALID: an owned input transferred after the reference into it is dead
 //> 0: test::m::inner_mut(Input(0));
@@ -126,7 +126,7 @@ task 15, lines 126-131:
 mutated: object(0,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
-task 16, lines 133-138:
+task 16, lines 156-161:
 //# programmable --sender A --inputs object(6,0) 8
 // VALID: a shared input deleted after the reference into it is dead
 //> 0: test::m::inner_mut(Input(0));
@@ -137,7 +137,7 @@ mutated: object(0,0)
 deleted: object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
-task 17, lines 140-145:
+task 17, lines 163-168:
 //# programmable --sender A --inputs object(7,0) receiving(8,0)
 // VALID: a receiving input received after the reference into it is dead
 //> 0: test::m::recv_mut(Input(1));
@@ -150,7 +150,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 
 
 // --- gas, coins, withdrawals ---
 
-task 18, lines 149-155:
+task 18, lines 172-178:
 //# programmable --sender A --inputs 1000 100 @A
 // VALID: a coin merged away once its `&mut Balance` is dead
 //> 0: SplitCoins(Gas, [Input(0), Input(1)]);
@@ -162,7 +162,7 @@ created: object(18,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 19, lines 157-162:
+task 19, lines 180-185:
 //# programmable --sender A --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @B 500u256
 // VALID: a withdrawal redeemed by value after the reference into it is dead
 //> 0: test::m::id_mut<sui::funds_accumulator::Withdrawal<sui::balance::Balance<sui::sui::SUI>>>(Input(0));
@@ -175,7 +175,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- upgrade tickets and receipts ---
 
-task 20, lines 166-172:
+task 20, lines 189-195:
 //# programmable --sender A --inputs object(2,1) 0u8 digest(q_2)
 // VALID: Upgrade consumes the ticket after its reference's last use
 //> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
@@ -189,7 +189,7 @@ gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 
 
 // --- the gas coin, last because send_funds consumes the sender's gas object ---
 
-task 21, lines 176-180:
+task 21, lines 199-203:
 //# programmable --sender A --inputs @B 1
 // VALID: the gas coin sent by value after the reference into it is dead
 //> 0: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Gas);

@@ -7,10 +7,7 @@ use sui::coin_registry::{Self, CoinRegistry};
 
 public struct Dynamic has key { id: UID }
 
-entry fun new_currency(
-    registry: &mut CoinRegistry,
-    ctx: &mut TxContext,
-) {
+entry fun new_currency(registry: &mut CoinRegistry, ctx: &mut TxContext) {
     let (mut init, mut treasury_cap) = coin_registry::new_currency<Dynamic>(
         registry,
         2,

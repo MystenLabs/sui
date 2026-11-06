@@ -9,13 +9,13 @@ processed 21 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-23:
+task 1, lines 9-29:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10776800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 27-30:
+task 3, lines 33-36:
 //# programmable --sender A --inputs 10000 object(1,1) @A
 //> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
 //> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
@@ -25,15 +25,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
 gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
-task 4, line 32:
+task 4, line 38:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, line 34:
+task 5, line 40:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 10000
 
-task 6, lines 36-39:
+task 6, lines 42-45:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(9000) @B
 // Accept: withdraw 9000 from 10000, leaving 1000 (== min)
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
@@ -42,15 +42,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 9000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 9000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 7, line 41:
+task 7, line 47:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 8, line 43:
+task 8, line 49:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 1000
 
-task 9, lines 45-48:
+task 9, lines 51-54:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(1000) @B
 // Accept: withdraw all remaining 1000, leaving 0
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
@@ -59,15 +59,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 1000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 1000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 10, line 50:
+task 10, line 56:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 11, line 52:
+task 11, line 58:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 No funds accumulator object found
 
-task 12, lines 54-57:
+task 12, lines 60-63:
 //# programmable --sender A --inputs 10000 object(1,1) @A
 //> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
 //> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
@@ -77,15 +77,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
 gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
-task 13, line 59:
+task 13, line 65:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 14, line 61:
+task 14, line 67:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 10000
 
-task 15, lines 63-68:
+task 15, lines 69-74:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(3000) @B 2000 @A
 // Accept: withdraw 3000, send 2000 to B, send 1000 back to self (>= min)
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
@@ -96,15 +96,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 2000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 2000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 16, line 70:
+task 16, line 76:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 17, line 72:
+task 17, line 78:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 8000
 
-task 18, lines 74-80:
+task 18, lines 80-86:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(2000) @B 1000u256
 // Accept: withdrawal_split 1000 from 2000, redeem both halves, send both to B
 //> 0: sui::funds_accumulator::withdrawal_split<sui::balance::Balance<test::usdc::USDC>>(Input(0), Input(2));
@@ -116,10 +116,10 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 2000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 2000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 19, line 82:
+task 19, line 88:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 20, line 84:
+task 20, line 90:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 6000

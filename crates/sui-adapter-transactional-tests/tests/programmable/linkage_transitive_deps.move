@@ -10,42 +10,44 @@
 //# init --addresses Leaf_V1=0x0 Leaf_V2=0x0 Mid=0x0 Root=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module Leaf_V1::l;
+module Leaf_V1::l {
+    public fun val(): u64 { 1 }
 
-public fun val(): u64 { 1 }
-
-public fun ping() {}
-
-//# publish --dependencies Leaf_V1 --sender A
-module Mid::mid;
-use Leaf_V1::l;
-
-public fun mid_val(): u64 { l::val() }
-
-//# publish --dependencies Mid Leaf_V1 --sender A
-module Root::m;
-use Mid::mid;
-
-public struct R has key, store { id: sui::object::UID, v: u64 }
-
-public fun make(ctx: &mut sui::tx_context::TxContext) {
-    sui::transfer::share_object(R { id: sui::object::new(ctx), v: 0 })
+    public fun ping() {}
 }
 
-// Public: transitive deps pinned `at_least`.
-public fun pub_go(r: &mut R) { r.v = mid::mid_val() }
+//# publish --dependencies Leaf_V1 --sender A
+module Mid::mid {
+    use Leaf_V1::l;
 
-// Private `entry`: transitive deps pinned `exact`.
-entry fun ent_go(r: &mut R) { r.v = mid::mid_val() }
+    public fun mid_val(): u64 { l::val() }
+}
+
+//# publish --dependencies Mid Leaf_V1 --sender A
+module Root::m {
+    use Mid::mid;
+
+    public struct R has key, store { id: sui::object::UID, v: u64 }
+
+    public fun make(ctx: &mut sui::tx_context::TxContext) {
+        sui::transfer::share_object(R { id: sui::object::new(ctx), v: 0 })
+    }
+
+    // Public: transitive deps pinned `at_least`.
+    public fun pub_go(r: &mut R) { r.v = mid::mid_val() }
+
+    // Private `entry`: transitive deps pinned `exact`.
+    entry fun ent_go(r: &mut R) { r.v = mid::mid_val() }
+}
 
 //# run Root::m::make --sender A
 
 //# upgrade --package Leaf_V1 --upgrade-capability 1,1 --sender A
-module Leaf_V2::l;
+module Leaf_V2::l {
+    public fun val(): u64 { 2 }
 
-public fun val(): u64 { 2 }
-
-public fun ping() {}
+    public fun ping() {}
+}
 
 //# programmable --sender A --inputs object(4,0)
 // Entry locks the whole closure: transitive `Leaf` pinned exact(1) => runs v1 => writes 10.

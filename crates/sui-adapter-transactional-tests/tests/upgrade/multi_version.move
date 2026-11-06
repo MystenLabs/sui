@@ -5,16 +5,17 @@
 
 //# publish --upgradeable --sender A
 module Test_V1::M1 {
-    fun init(_ctx: &mut TxContext) { }
+    fun init(_ctx: &mut TxContext) {}
 }
 
 //# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 module Test_V2::M1 {
-    fun init(_ctx: &mut TxContext) { }
-    public fun f1() { }
+    fun init(_ctx: &mut TxContext) {}
+
+    public fun f1() {}
 }
 
 //# upgrade --package Test_V2 --upgrade-capability 1,1 --sender A
 module Test_V3::M1 {
-    fun init(_ctx: &mut TxContext) { }
+    fun init(_ctx: &mut TxContext) {}
 }

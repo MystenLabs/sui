@@ -4,22 +4,22 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    public struct A has key, store {
-        id: UID,
-    }
+module tto::M1;
 
-    public struct B has key, store {
-        id: UID,
-    }
+public struct A has key, store {
+    id: UID,
+}
 
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-    }
+public struct B has key, store {
+    id: UID,
+}
+
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
 }
 
 //# run tto::M1::start

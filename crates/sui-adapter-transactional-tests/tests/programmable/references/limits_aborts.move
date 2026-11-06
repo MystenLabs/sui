@@ -10,13 +10,90 @@
 //# publish
 module test::m;
 
-public fun boom16(): (&mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64, &mut u64) { abort 0 }
+public fun boom16(): (
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+    &mut u64,
+) { abort 0 }
+
 public fun use1(_: &u64) {}
+
 public fun use_mut1(_: &mut u64) {}
-public fun use_mut16(_: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64) {}
-public fun use_mut15(_: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64, _: &mut u64) {}
+
+public fun use_mut16(
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+) {}
+
+public fun use_mut15(
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+    _: &mut u64,
+) {}
+
 public fun check(x: u64, v: u64) { assert!(x == v, 0) }
-public fun many_ctx(_: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext) {}
+
+public fun many_ctx(
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+) {}
 
 //# programmable
 // ABORTS: a move of a `&mut` at 64 live references creates nothing, boom16 aborts with code 0

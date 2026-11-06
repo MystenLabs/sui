@@ -11,11 +11,17 @@
 module test::m;
 
 public fun boom_mut(): &mut u64 { abort 7 }
+
 public fun boom_imm(): &u64 { abort 8 }
+
 public fun launder(_: &u64): &mut u64 { abort 9 }
+
 public fun id_mut<T>(t: &mut T): &mut T { t }
+
 public fun two_mut(_: &mut u64, _: &mut u64) {}
+
 public fun write(r: &mut u64, v: u64) { *r = v }
+
 public fun use_imm<T>(_: &T) {}
 
 //# programmable --inputs 1

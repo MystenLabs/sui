@@ -26,25 +26,25 @@ created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 8937600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 4, lines 60-83:
+task 4, lines 60-84:
 // Remove a friend function -- and replace with a call to a public function at a previous version should also be fine
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 9864800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 5, line 85:
+task 5, line 86:
 //# run V3::friend_module::call_friend
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 6, line 87:
+task 6, line 88:
 //# run V3::friend_module::call_public
 created: object(6,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, line 89:
+task 7, line 90:
 //# view-object 6,0
 Owner: Account Address ( A )
 Version: 3

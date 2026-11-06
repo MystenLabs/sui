@@ -4,35 +4,34 @@
 //# init --accounts A --addresses test=0x0 --simulator --protocol-version 118
 
 //# publish --sender A
-module test::mod {
-  use std::string::String;
-  use sui::display_registry::DisplayCap;
-  use sui::display_registry::DisplayRegistry;
+module test::mod;
 
-  public struct Foo has key, store {
+use std::string::String;
+use sui::display_registry::{DisplayCap, DisplayRegistry};
+
+public struct Foo has key, store {
     id: UID,
     bar: Bar,
-  }
+}
 
-  public struct Bar has store {
+public struct Bar has store {
     label: String,
     count: u64,
-  }
+}
 
-  public fun new(label: String, count: u64, ctx: &mut TxContext): Foo {
+public fun new(label: String, count: u64, ctx: &mut TxContext): Foo {
     Foo {
-      id: object::new(ctx),
-      bar: Bar { label, count },
+        id: object::new(ctx),
+        bar: Bar { label, count },
     }
-  }
+}
 
-  public fun display(registry: &mut DisplayRegistry, ctx: &mut TxContext): DisplayCap<Foo> {
+public fun display(registry: &mut DisplayRegistry, ctx: &mut TxContext): DisplayCap<Foo> {
     let (mut display, cap) = registry.new(internal::permit(), ctx);
     display.set(&cap, "label", "{bar.label}");
     display.set(&cap, "bar", "{bar:json}");
     display.share();
     cap
-  }
 }
 
 //# programmable --sender A --inputs @A "hello" 42u64

@@ -9,13 +9,13 @@ processed 9 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-23:
+task 1, lines 9-29:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10776800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 27-30:
+task 3, lines 33-36:
 //# programmable --sender A --inputs 10000 object(1,1) @A
 //> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
 //> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
@@ -25,22 +25,22 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
 gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
-task 4, line 32:
+task 4, line 38:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, line 34:
+task 5, line 40:
 //# view-funds sui::balance::Balance<test::usdc::USDC> A
 10000
 
-task 6, lines 36-39:
+task 6, lines 42-45:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(9500) @B
 // Reject: withdraw 9500 from 10000, leaving 500 (below min 1000) - fails at voting time
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
 Error: Error checking transaction input objects: Invalid withdraw reservation: Invalid gasless withdrawal of coin type object(1,0)::usdc::USDC from address @A. Gasless transactions must either use the entire address balance, or leave at least 1000. Remaining amount would be 500
 
-task 7, lines 41-46:
+task 7, lines 47-52:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(3000) @B 2500 @A
 // Reject: withdraw 3000, send 2500 to B, send 500 back to self (below min) - fails at execution
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
@@ -50,7 +50,7 @@ task 7, lines 41-46:
 Error: Transaction Effects Status: Insufficient Gas.
 Debug of error: InsufficientGas at command None
 
-task 8, lines 48-52:
+task 8, lines 54-58:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(2000) @B 1500u256
 // Reject: withdrawal_split 1500 from 2000, drop remaining 500 (below min) - fails at execution
 //> 0: sui::funds_accumulator::withdrawal_split<sui::balance::Balance<test::usdc::USDC>>(Input(0), Input(2));

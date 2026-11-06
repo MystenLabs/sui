@@ -18,28 +18,28 @@ public struct REGULATED_COIN has drop {}
 
 #[allow(deprecated_usage)]
 fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
-  let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
-    otw,
-    9,
-    b"RC",
-    b"REGULATED_COIN",
-    b"A new regulated coin",
-    option::none(),
-    false,
-    ctx,
-  );
-  let coin = coin::mint(&mut treasury_cap, 10000, ctx);
-  transfer::public_transfer(coin, tx_context::sender(ctx));
-  transfer::public_transfer(deny_cap, tx_context::sender(ctx));
-  transfer::public_freeze_object(treasury_cap);
-  transfer::public_freeze_object(metadata);
+    let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
+        otw,
+        9,
+        b"RC",
+        b"REGULATED_COIN",
+        b"A new regulated coin",
+        option::none(),
+        false,
+        ctx,
+    );
+    let coin = coin::mint(&mut treasury_cap, 10000, ctx);
+    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(deny_cap, tx_context::sender(ctx));
+    transfer::public_freeze_object(treasury_cap);
+    transfer::public_freeze_object(metadata);
 }
 
 public fun split_to_balance(
-  coin: &mut coin::Coin<REGULATED_COIN>,
-  amount: u64,
+    coin: &mut coin::Coin<REGULATED_COIN>,
+    amount: u64,
 ): balance::Balance<REGULATED_COIN> {
-  balance::split(coin::balance_mut(coin), amount)
+    balance::split(coin::balance_mut(coin), amount)
 }
 
 // Initial transfer should succeed before any deny-list action is taken.

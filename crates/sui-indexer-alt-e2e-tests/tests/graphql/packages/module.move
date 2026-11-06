@@ -5,26 +5,26 @@
 
 //# publish --upgradeable --sender A
 module P::M {
-  public fun foo(): u64 { 42 }
+    public fun foo(): u64 { 42 }
 }
 
 module P::N {
-  public fun bar(): u64 { 43 }
+    public fun bar(): u64 { 43 }
 }
 
 //# create-checkpoint
 
 //# upgrade --package P --upgrade-capability 1,1 --sender A
 module P::M {
-  public fun foo(): u64 { 42 }
+    public fun foo(): u64 { 42 }
 }
 
 module P::N {
-  public fun bar(): u64 { 43 }
+    public fun bar(): u64 { 43 }
 }
 
 module P::O {
-  public fun baz(): u64 { 44 }
+    public fun baz(): u64 { 44 }
 }
 
 //# create-checkpoint

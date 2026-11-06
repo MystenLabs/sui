@@ -6,14 +6,16 @@
 //# init --addresses test=0x0 --accounts A --protocol-version 139
 
 //# publish
-module test::m1 {
-    public struct A has copy, drop { value: u64 }
-    public struct B has copy, drop { value: u256 }
+module test::m1;
 
-    public fun t1(_: &mut u64): &mut u64 { abort 0}
-    public fun t2(_: &mut u64): &u64 { abort 0}
-    public fun t3(_: &mut u64): (u64, &u64) { abort 0}
-}
+public struct A has copy, drop { value: u64 }
+public struct B has copy, drop { value: u256 }
+
+public fun t1(_: &mut u64): &mut u64 { abort 0 }
+
+public fun t2(_: &mut u64): &u64 { abort 0 }
+
+public fun t3(_: &mut u64): (u64, &u64) { abort 0 }
 
 //# programmable --inputs 0
 //> 0: test::m1::t1(Input(0));

@@ -8,23 +8,17 @@
 //# publish
 module test::m;
 
-public fun t2(_: &TxContext, _: &TxContext) {
-}
+public fun t2(_: &TxContext, _: &TxContext) {}
 
-public fun t3(_: &TxContext, _: &TxContext, _: &TxContext) {
-}
+public fun t3(_: &TxContext, _: &TxContext, _: &TxContext) {}
 
-public fun t4(_: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext) {
-}
+public fun t4(_: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext) {}
 
-public fun t3_u1(_: &TxContext, _: u64, _: &TxContext, _: &TxContext) {
-}
+public fun t3_u1(_: &TxContext, _: u64, _: &TxContext, _: &TxContext) {}
 
-public fun t3_u2(_: &TxContext, _: u64, _: &TxContext, _: &TxContext, _: u64) {
-}
+public fun t3_u2(_: &TxContext, _: u64, _: &TxContext, _: &TxContext, _: u64) {}
 
-public fun gen_imm_tx<T>(_: &T, _: &TxContext) {
-}
+public fun gen_imm_tx<T>(_: &T, _: &TxContext) {}
 
 //# programmable
 //> test::m::t2();

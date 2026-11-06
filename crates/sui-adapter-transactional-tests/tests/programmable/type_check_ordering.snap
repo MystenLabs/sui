@@ -5,34 +5,34 @@ processed 6 tasks
 
 // tests ordering of multiple incorrect arguments
 
-task 1, lines 8-35:
+task 1, lines 8-33:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6224400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 37-38:
+task 2, lines 35-36:
 //# programmable
 //> test::m::a()
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 40-41:
+task 3, lines 38-39:
 //# programmable
 //> test::m::b()
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 43-44:
+task 4, lines 41-42:
 //# programmable
 //> test::m::c()
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 47-49:
+task 5, lines 44-46:
 //# programmable --inputs object(2,0) object(3,0) object(4,0)
 // Should fail with type error in the first argument, even though the third is also incorrect
 //> test::m::t0(Input(2), Input(1), Input(0))

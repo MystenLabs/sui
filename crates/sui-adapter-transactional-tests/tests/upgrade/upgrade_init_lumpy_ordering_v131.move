@@ -6,12 +6,14 @@
 //# publish --upgradeable --sender A
 module Dep_V1::d {
     public fun val(): u64 { 1 }
+
     public fun ping() {}
 }
 
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 module Dep_V2::d {
     public fun val(): u64 { 2 }
+
     public fun ping() {}
 }
 

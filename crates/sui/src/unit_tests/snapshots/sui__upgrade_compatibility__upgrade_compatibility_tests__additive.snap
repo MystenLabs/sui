@@ -5,7 +5,7 @@ expression: normalize_path(err.to_string())
 error[EUC01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:8
   │
-4 │ module upgrades::upgrades {
+4 │ module upgrades::upgrades;
   │        ^^^^^^^^^^^^^^^^^^ enum 'EnumToRemove' is missing
   │
   = Enums cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
@@ -14,7 +14,7 @@ error[EUC01007]: missing declaration
 error[EUC01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:8
   │
-4 │ module upgrades::upgrades {
+4 │ module upgrades::upgrades;
   │        ^^^^^^^^^^^^^^^^^^ function 'function_to_remove' is missing
   │
   = Functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
@@ -23,28 +23,28 @@ error[EUC01007]: missing declaration
 error[EUC01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:8
   │
-4 │ module upgrades::upgrades {
+4 │ module upgrades::upgrades;
   │        ^^^^^^^^^^^^^^^^^^ struct 'StructToRemove' is missing
   │
   = Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = Add missing struct 'StructToRemove' back to the module 'upgrades'.
 
 error[EUC01002]: type mismatch
-  ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:7:9
+  ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:7:5
   │
-6 │     public struct StructToChange {
-  │                   -------------- Struct definition
-7 │         new_field: u32 // changed to u32
-  │         ^^^^^^^^^ Mismatched field type 'u32', expected 'u64'.
+6 │ public struct StructToChange {
+  │               -------------- Struct definition
+7 │     new_field: u32, // changed to u32
+  │     ^^^^^^^^^ Mismatched field type 'u32', expected 'u64'.
   │
   = Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = Restore the original struct's field for struct 'StructToChange' including the ordering.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:18:31
+   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:18:27
    │
-18 │     fun function_to_change(): u32 { // changed to u32
-   │                               ^^^ Unexpected return type 'u32', expected 'u64'
+18 │ fun function_to_change(): u32 {
+   │                           ^^^ Unexpected return type 'u32', expected 'u64'
    │
    = Functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
    = Restore the original function's return type for function 'function_to_change'.

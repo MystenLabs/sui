@@ -12,30 +12,30 @@ use sui::derived_object;
 use sui::party;
 
 public struct Parent has key, store {
-  id: UID,
+    id: UID,
 }
 
 public struct Derived has key, store {
-  id: UID,
+    id: UID,
 }
 
 entry fun create_parent(ctx: &mut TxContext) {
-  transfer::public_transfer(Parent { id: object::new(ctx) }, ctx.sender());
+    transfer::public_transfer(Parent { id: object::new(ctx) }, ctx.sender());
 }
 
 entry fun derive_and_share(parent: &mut Parent) {
-  let derived = Derived { id: derived_object::claim(&mut parent.id, 0u64) };
-  transfer::share_object(derived);
+    let derived = Derived { id: derived_object::claim(&mut parent.id, 0u64) };
+    transfer::share_object(derived);
 }
 
 entry fun derive_and_make_party(parent: &mut Parent, ctx: &TxContext) {
-  let derived = Derived { id: derived_object::claim(&mut parent.id, 1u64) };
-  party::single_owner(ctx.sender()).transfer!(derived);
+    let derived = Derived { id: derived_object::claim(&mut parent.id, 1u64) };
+    party::single_owner(ctx.sender()).transfer!(derived);
 }
 
 entry fun derive_and_make_immutable(parent: &mut Parent) {
-  let derived = Derived { id: derived_object::claim(&mut parent.id, 2u64) };
-  transfer::freeze_object(derived);
+    let derived = Derived { id: derived_object::claim(&mut parent.id, 2u64) };
+    transfer::freeze_object(derived);
 }
 
 //# run a::m::create_parent --sender A

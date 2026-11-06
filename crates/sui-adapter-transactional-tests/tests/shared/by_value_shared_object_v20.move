@@ -33,7 +33,6 @@ module t1::o1 {
     }
 }
 
-
 //# run t2::o2::create
 
 //# view-object 3,0

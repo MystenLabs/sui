@@ -4,29 +4,30 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish
-module P::M {
-  use sui::coin::Coin;
-  use sui::sui::SUI;
+module P::M;
 
-  public struct S has copy, drop { x: u64 }
-  public enum E has store {
+use sui::coin::Coin;
+use sui::sui::SUI;
+
+public struct S has copy, drop { x: u64 }
+
+public enum E has store {
     F(u8, u16),
-    G { y: address }
-  }
+    G { y: address },
+}
 
-  public struct T<phantom U: drop> {
+public struct T<phantom U: drop> {
     z: u32,
     w: vector<Coin<SUI>>,
-  }
+}
 
-  public enum V<W: key> {
+public enum V<W: key> {
     X { a: W },
     Y(vector<W>),
     Z,
-  }
-
-  public struct A() has copy, drop, store;
 }
+
+public struct A() has copy, drop, store;
 
 //# create-checkpoint
 

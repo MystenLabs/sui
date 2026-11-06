@@ -10,13 +10,13 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-33:
+task 1, lines 10-42:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8732400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 35-37:
+task 2, lines 44-46:
 //# programmable --sender A --inputs @A
 //> 0: test::m::new();
 //> 1: TransferObjects([Result(0)], Input(0));
@@ -24,14 +24,14 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 39-40:
+task 3, lines 48-49:
 //# programmable --sender A
 //> 0: test::m::share();
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 42-47:
+task 4, lines 51-56:
 //# programmable --sender A --inputs object(2,0)
 // INVALID: InvalidArgumentToPrivateEntryFunction at arg 0 of command 2, the reference's source holds a hot potato
 //> 0: test::m::heat(Input(0));
@@ -41,7 +41,7 @@ task 4, lines 42-47:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(2) } }
 
-task 5, lines 49-54:
+task 5, lines 58-63:
 //# programmable --sender A --inputs object(2,0)
 // INVALID: InvalidArgumentToPrivateEntryFunction at arg 0 of command 2, a by-value read of a reference whose source holds a hot potato
 //> 0: test::m::heat(Input(0));
@@ -51,7 +51,7 @@ task 5, lines 49-54:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(2) } }
 
-task 6, lines 56-61:
+task 6, lines 65-70:
 //# programmable --sender A --inputs object(3,0) 0
 // INVALID: InvalidArgumentToPrivateEntryFunction at arg 0 of command 2, a reference into a vector holding a shared object
 //> 0: MakeMoveVec([Input(0)]);

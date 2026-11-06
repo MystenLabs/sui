@@ -107,5 +107,4 @@ fun write_accumulator_storage_cost(
     _wrapper: &mut SuiSystemState,
     _storage_cost: u64,
     _ctx: &TxContext,
-) {
-}
+) {}

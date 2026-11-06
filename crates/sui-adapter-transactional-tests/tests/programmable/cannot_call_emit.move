@@ -6,10 +6,11 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct A has copy, drop, store {}
-    public fun a(): A { A {} }
-}
+module test::m1;
+
+public struct A has copy, drop, store {}
+
+public fun a(): A { A {} }
 
 //# programmable
 //> 0: test::m1::a();

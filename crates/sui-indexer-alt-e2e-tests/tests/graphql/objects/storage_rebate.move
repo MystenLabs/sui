@@ -4,9 +4,9 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish
-module P::M {
-  public fun foo(): u64 { 42 }
-}
+module P::M;
+
+public fun foo(): u64 { 42 }
 
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

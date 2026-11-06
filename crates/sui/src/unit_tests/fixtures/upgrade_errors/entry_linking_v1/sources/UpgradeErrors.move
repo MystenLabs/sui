@@ -4,7 +4,6 @@
 /// Module: UpgradeErrors
 
 #[allow(unused_field)]
-module upgrades::upgrades {
-    entry fun entry_to_be_removed() {}
-}
+module upgrades::upgrades;
 
+entry fun entry_to_be_removed() {}

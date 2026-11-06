@@ -6,22 +6,23 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct A has copy, drop { value: u64 }
-    public struct B has copy, drop { value: u256 }
+module test::m1;
 
-    public fun a(): A { A { value: 0 } }
-    public fun b(): B { B { value: 0 } }
+public struct A has copy, drop { value: u64 }
+public struct B has copy, drop { value: u256 }
 
-    public fun swap<T1: copy, T2: copy>(
-        v1: &vector<T1>,
-        v2: &mut vector<T2>,
-    ): (vector<vector<T2>>, vector<vector<T1>>) {
-        (vector[*v2], vector[*v1])
-    }
+public fun a(): A { A { value: 0 } }
 
-    public fun eat(_: &vector<vector<A>>, _: &mut vector<vector<B>>, _: vector<vector<A>>) {}
+public fun b(): B { B { value: 0 } }
+
+public fun swap<T1: copy, T2: copy>(
+    v1: &vector<T1>,
+    v2: &mut vector<T2>,
+): (vector<vector<T2>>, vector<vector<T1>>) {
+    (vector[*v2], vector[*v1])
 }
+
+public fun eat(_: &vector<vector<A>>, _: &mut vector<vector<B>>, _: vector<vector<A>>) {}
 
 // valid
 //# programmable

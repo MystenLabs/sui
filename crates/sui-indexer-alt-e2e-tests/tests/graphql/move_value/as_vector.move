@@ -4,26 +4,22 @@
 //# init --protocol-version 108 --accounts A --addresses test=0x0 --simulator
 
 //# publish --sender A
-module test::mod {
-  public struct Foo has key, store {
+module test::mod;
+
+public struct Foo has key, store {
     id: UID,
     values: vector<u64>,
     nested: vector<vector<u64>>,
     addr: address,
-  }
+}
 
-  public fun create(ctx: &mut TxContext): Foo {
+public fun create(ctx: &mut TxContext): Foo {
     Foo {
-      id: object::new(ctx),
-      values: vector[11, 22, 33, 44],
-      nested: vector[
-        vector[1, 2],
-        vector[3],
-        vector[],
-      ],
-      addr: ctx.sender(),
+        id: object::new(ctx),
+        values: vector[11, 22, 33, 44],
+        nested: vector[vector[1, 2], vector[3], vector[]],
+        addr: ctx.sender(),
     }
-  }
 }
 
 //# programmable --sender A --inputs @A

@@ -11,27 +11,27 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module test::regulated_coin {
-    use sui::coin;
+module test::regulated_coin;
 
-    public struct REGULATED_COIN has drop {}
+use sui::coin;
 
-    fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
-        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
-            otw,
-            9,
-            b"RC",
-            b"REGULATED_COIN",
-            b"A new regulated coin",
-            option::none(),
-            ctx
-        );
-        let coin = coin::mint(&mut treasury_cap, 10000, ctx);
-        transfer::public_transfer(coin, tx_context::sender(ctx));
-        transfer::public_transfer(deny_cap, tx_context::sender(ctx));
-        transfer::public_freeze_object(treasury_cap);
-        transfer::public_freeze_object(metadata);
-    }
+public struct REGULATED_COIN has drop {}
+
+fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
+    let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
+        otw,
+        9,
+        b"RC",
+        b"REGULATED_COIN",
+        b"A new regulated coin",
+        option::none(),
+        ctx,
+    );
+    let coin = coin::mint(&mut treasury_cap, 10000, ctx);
+    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(deny_cap, tx_context::sender(ctx));
+    transfer::public_freeze_object(treasury_cap);
+    transfer::public_freeze_object(metadata);
 }
 
 //# view-object 1,0

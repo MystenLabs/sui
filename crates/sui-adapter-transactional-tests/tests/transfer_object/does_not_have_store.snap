@@ -53,13 +53,13 @@ Contents: test::m::S {
 
 // Mint Cup<S> to A. Fail to transfer Cup<S> from A to B
 
-task 6, line 38:
+task 6, line 37:
 //# run test::m::mint_cup --type-args test::m::S --sender A
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2500400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, line 40:
+task 7, line 39:
 //# view-object 6,0
 Owner: Account Address ( A )
 Version: 4
@@ -71,12 +71,12 @@ Contents: test::m::Cup<test::m::S> {
     },
 }
 
-task 8, line 42:
+task 8, line 41:
 //# transfer-object 6,0 --sender A --recipient B
 Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject }, source: None, command: Some(0) } }
 
-task 9, line 44:
+task 9, line 43:
 //# view-object 6,0
 Owner: Account Address ( A )
 Version: 5

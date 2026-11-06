@@ -3,22 +3,21 @@
 
 // tests various valid operations involving SplitCoins
 
-
 //# init --addresses test=0x0 --accounts A B
 
 //# publish
-module test::m1 {
-    use sui::coin;
+module test::m1;
 
-    public fun ret_one_amount(): u64 {
-        100
-    }
+use sui::coin;
 
-    public fun transfer_(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
-        v.do!(|c| {
-            transfer::public_transfer(c, r);
-        });
-    }
+public fun ret_one_amount(): u64 {
+    100
+}
+
+public fun transfer_(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
+    v.do!(|c| {
+        transfer::public_transfer(c, r);
+    });
 }
 
 //# programmable --sender A --inputs 100000 @A
@@ -38,7 +37,6 @@ module test::m1 {
 //# view-object 3,0
 
 //# view-object 5,0
-
 
 // split 100 off the freshly created coin twice
 //# programmable --sender A --inputs object(3,0) 100 @B

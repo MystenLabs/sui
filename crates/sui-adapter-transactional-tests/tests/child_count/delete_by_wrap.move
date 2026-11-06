@@ -8,32 +8,32 @@
 
 //# publish
 
-module test::m {
-    use sui::dynamic_object_field as ofield;
+module test::m;
 
-    public struct S has key, store {
-        id: sui::object::UID,
-    }
+use sui::dynamic_object_field as ofield;
 
-    public struct R has key, store {
-        id: sui::object::UID,
-        s: S,
-    }
+public struct S has key, store {
+    id: sui::object::UID,
+}
 
-    public entry fun mint(ctx: &mut TxContext) {
-        let id = sui::object::new(ctx);
-        sui::transfer::public_transfer(S { id }, tx_context::sender(ctx))
-    }
+public struct R has key, store {
+    id: sui::object::UID,
+    s: S,
+}
 
-    public entry fun add(parent: &mut S, idx: u64, ctx: &mut TxContext) {
-        let child = S { id: sui::object::new(ctx) };
-        ofield::add(&mut parent.id, idx, child);
-    }
+public entry fun mint(ctx: &mut TxContext) {
+    let id = sui::object::new(ctx);
+    sui::transfer::public_transfer(S { id }, tx_context::sender(ctx))
+}
 
-    public entry fun wrap(s: S, ctx: &mut TxContext) {
-        let r = R { id: sui::object::new(ctx), s };
-        sui::transfer::public_transfer(r, tx_context::sender(ctx))
-    }
+public entry fun add(parent: &mut S, idx: u64, ctx: &mut TxContext) {
+    let child = S { id: sui::object::new(ctx) };
+    ofield::add(&mut parent.id, idx, child);
+}
+
+public entry fun wrap(s: S, ctx: &mut TxContext) {
+    let r = R { id: sui::object::new(ctx), s };
+    sui::transfer::public_transfer(r, tx_context::sender(ctx))
 }
 
 //# run test::m::mint --sender A

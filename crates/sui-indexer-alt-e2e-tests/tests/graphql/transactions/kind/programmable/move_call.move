@@ -4,36 +4,36 @@
 //# init --protocol-version 108 --accounts A B --addresses test=0x0 --simulator
 
 //# publish
-module test::move_call_test {
-  use sui::coin::{Self, Coin};
-  use sui::sui::SUI;
+module test::move_call_test;
 
-  public struct TestObject has drop {
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+
+public struct TestObject has drop {
     value: u64,
-  }
+}
 
-  // Simple function that takes pure value - demonstrates Input arguments
-  public fun create_test_object(value: u64): TestObject {
+// Simple function that takes pure value - demonstrates Input arguments
+public fun create_test_object(value: u64): TestObject {
     TestObject {
-      value,
+        value,
     }
-  }
+}
 
-  // Function that takes an object - demonstrates Result arguments
-  public fun get_object_value(obj: &TestObject): u64 {
+// Function that takes an object - demonstrates Result arguments
+public fun get_object_value(obj: &TestObject): u64 {
     obj.value
-  }
+}
 
-  // Function that takes gas coin by reference - demonstrates GasCoin arguments
-  public fun check_gas_coin(coin: &Coin<SUI>): u64 {
+// Function that takes gas coin by reference - demonstrates GasCoin arguments
+public fun check_gas_coin(coin: &Coin<SUI>): u64 {
     coin::value(coin)
-  }
+}
 
-  // Function for testing nested results - transfer coins to avoid drop issues
-  public fun transfer_coins(coin1: Coin<SUI>, coin2: Coin<SUI>, recipient: address) {
+// Function for testing nested results - transfer coins to avoid drop issues
+public fun transfer_coins(coin1: Coin<SUI>, coin2: Coin<SUI>, recipient: address) {
     transfer::public_transfer(coin1, recipient);
     transfer::public_transfer(coin2, recipient);
-  }
 }
 
 //# programmable --sender A --inputs 42u64 1000u64 @A @B

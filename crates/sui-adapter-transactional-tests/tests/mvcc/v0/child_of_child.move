@@ -7,62 +7,62 @@
 
 //# publish
 
-module test::m {
-    use sui::dynamic_object_field as ofield;
+module test::m;
 
-    public struct Obj has key, store {
-        id: UID,
-        value: u64,
-    }
+use sui::dynamic_object_field as ofield;
 
-    const KEY: u64 = 0;
+public struct Obj has key, store {
+    id: UID,
+    value: u64,
+}
 
-    //////////////////////////////////////////////////////////////
-    // new
+const KEY: u64 = 0;
 
-    public fun new(ctx: &mut TxContext): Obj {
-        let mut grand = Obj { id: object::new(ctx), value: 0 };
-        let mut parent = Obj { id: object::new(ctx), value: 0 };
-        let child = Obj { id: object::new(ctx), value: 0 };
-        ofield::add(&mut parent.id, KEY, child);
-        ofield::add(&mut grand.id, KEY, parent);
-        grand
-    }
+//////////////////////////////////////////////////////////////
+// new
 
-    //////////////////////////////////////////////////////////////
-    // set
+public fun new(ctx: &mut TxContext): Obj {
+    let mut grand = Obj { id: object::new(ctx), value: 0 };
+    let mut parent = Obj { id: object::new(ctx), value: 0 };
+    let child = Obj { id: object::new(ctx), value: 0 };
+    ofield::add(&mut parent.id, KEY, child);
+    ofield::add(&mut grand.id, KEY, parent);
+    grand
+}
 
-    public fun set(grand: &mut Obj, v1: u64, v2: u64, v3: u64) {
-        grand.value = v1;
-        let parent: &mut Obj = ofield::borrow_mut(&mut grand.id, KEY);
-        parent.value = v2;
-        let child: &mut Obj = ofield::borrow_mut(&mut parent.id, KEY);
-        child.value = v3;
-    }
+//////////////////////////////////////////////////////////////
+// set
 
-    //////////////////////////////////////////////////////////////
-    // remove
+public fun set(grand: &mut Obj, v1: u64, v2: u64, v3: u64) {
+    grand.value = v1;
+    let parent: &mut Obj = ofield::borrow_mut(&mut grand.id, KEY);
+    parent.value = v2;
+    let child: &mut Obj = ofield::borrow_mut(&mut parent.id, KEY);
+    child.value = v3;
+}
 
-    public fun remove(grand: &mut Obj) {
-        let parent: &mut Obj = ofield::borrow_mut(&mut grand.id, KEY);
-        let Obj { id, value: _ } = ofield::remove(&mut parent.id, KEY);
-        object::delete(id);
-    }
+//////////////////////////////////////////////////////////////
+// remove
 
-    //////////////////////////////////////////////////////////////
-    // check
+public fun remove(grand: &mut Obj) {
+    let parent: &mut Obj = ofield::borrow_mut(&mut grand.id, KEY);
+    let Obj { id, value: _ } = ofield::remove(&mut parent.id, KEY);
+    object::delete(id);
+}
 
-    #[allow(deprecated_usage)]
-    public fun check(grand: &Obj, v1: u64, v2: u64, v3: Option<u64>) {
-        assert!(grand.value == v1, 0);
-        let parent: &Obj = ofield::borrow(&grand.id, KEY);
-        assert!(parent.value == v2, 0);
-        if (option::is_some(&v3)) {
-            let child: &Obj = ofield::borrow(&parent.id, KEY);
-            assert!(&child.value == option::borrow(&v3), 0);
-        } else {
-            assert!(!ofield::exists_<u64>(&parent.id, KEY), 0);
-        }
+//////////////////////////////////////////////////////////////
+// check
+
+#[allow(deprecated_usage)]
+public fun check(grand: &Obj, v1: u64, v2: u64, v3: Option<u64>) {
+    assert!(grand.value == v1, 0);
+    let parent: &Obj = ofield::borrow(&grand.id, KEY);
+    assert!(parent.value == v2, 0);
+    if (option::is_some(&v3)) {
+        let child: &Obj = ofield::borrow(&parent.id, KEY);
+        assert!(&child.value == option::borrow(&v3), 0);
+    } else {
+        assert!(!ofield::exists_<u64>(&parent.id, KEY), 0);
     }
 }
 
@@ -82,7 +82,6 @@ module test::m {
 
 //# view-object 2,0
 
-
 // dev-inspect with 'check' and correct values
 
 //# programmable --sender A --inputs object(2,0)@2 0 0 vector[0] --dev-inspect
@@ -93,7 +92,6 @@ module test::m {
 
 //# programmable --sender A --inputs object(2,0)@4 1 2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
-
 
 // dev-inspect with 'check' and _incorrect_ values
 

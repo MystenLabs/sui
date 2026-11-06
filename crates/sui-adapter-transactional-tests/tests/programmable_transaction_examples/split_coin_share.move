@@ -4,17 +4,17 @@
 //# init --addresses p=0x0 q=0x0 q_2=0x0 r=0x0 s=0x0 --accounts A
 
 //# publish
-module p::m {
-    use sui::sui::SUI;
-    use sui::coin;
+module p::m;
 
-    public fun sharer<T: key + store>(x: T) {
-        transfer::public_share_object(x);
-    }
+use sui::coin;
+use sui::sui::SUI;
 
-    public fun mint_shared(ctx: &mut TxContext) {
-        transfer::public_share_object(coin::zero<SUI>(ctx))
-    }
+public fun sharer<T: key + store>(x: T) {
+    transfer::public_share_object(x);
+}
+
+public fun mint_shared(ctx: &mut TxContext) {
+    transfer::public_share_object(coin::zero<SUI>(ctx))
 }
 
 //# programmable --sender A --inputs 10

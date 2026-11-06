@@ -6,25 +6,25 @@ processed 9 tasks
 // tests that shared objects can be deleted by passing by value
 // in both the defining module and in a module that did not define the type
 
-task 1, lines 9-26:
+task 1, lines 9-25:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5358000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 28-36:
+task 2, lines 27-35:
 //# publish --dependencies t2
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, line 38:
+task 3, line 37:
 //# run t2::o2::create
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, line 40:
+task 4, line 39:
 //# view-object 3,0
 Owner: Shared( 4 )
 Version: 4
@@ -36,20 +36,20 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 5, lines 42-43:
+task 5, lines 41-42:
 // this deletes an object through consumption by another module
 //# run t1::o1::consume_o2 --args object(3,0)
 mutated: object(0,0)
 deleted: object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2226577, non_refundable_storage_fee: 223
 
-task 6, line 45:
+task 6, line 44:
 //# run t2::o2::create
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, line 47:
+task 7, line 46:
 //# view-object 6,0
 Owner: Shared( 6 )
 Version: 6
@@ -61,7 +61,7 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 8, lines 49-50:
+task 8, lines 48-49:
 // this deletes an object directly via the defining module
 //# run t2::o2::consume_o2 --args object(6,0)
 mutated: object(0,0)

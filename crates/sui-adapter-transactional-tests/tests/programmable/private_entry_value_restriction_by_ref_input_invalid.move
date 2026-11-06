@@ -7,26 +7,28 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    use sui::coin::Coin;
-    use sui::sui::SUI;
+module test::m1;
 
-    public struct R has key, store { id: UID }
-    public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
+use sui::coin::Coin;
+use sui::sui::SUI;
 
-    public fun v(): u64 { 100 }
+public struct R has key, store { id: UID }
 
-    public fun id(r: R): R { r }
-    public fun dirty(_: &mut R) {}
+public fun r(ctx: &mut TxContext): R { R { id: object::new(ctx) } }
 
-    entry fun priv(_: R) { abort 0 }
-    entry fun coin(_: &mut Coin<SUI>) {}
-}
+public fun v(): u64 { 100 }
+
+public fun id(r: R): R { r }
+
+public fun dirty(_: &mut R) {}
+
+entry fun priv(_: R) { abort 0 }
+
+entry fun coin(_: &mut Coin<SUI>) {}
 
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();
 //> TransferObjects([Result(0)], Input(0))
-
 
 // cannot use results from other functions
 

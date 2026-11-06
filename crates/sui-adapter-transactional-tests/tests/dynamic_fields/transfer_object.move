@@ -8,7 +8,7 @@
 //# init --addresses a=0x0 --accounts A
 
 //# publish
-module a::m {
+module a::m;
 
 use sui::dynamic_object_field::{add, borrow, borrow_mut, remove};
 
@@ -60,8 +60,6 @@ entry fun assert_count(obj: &Obj, target: u64) {
 entry fun transfer(o1: &mut Obj, o2: &mut Obj) {
     let c: Counter = remove(&mut o1.id, 0u64);
     add(&mut o2.id, 0u64, c)
-}
-
 }
 
 //# run a::m::create --sender A

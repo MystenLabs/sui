@@ -30,6 +30,7 @@ module r::m {
 //# stage-package --dependencies r
 module q_2::m {
     public fun x(): u64 { y() + 1 }
+
     public fun y(): u64 { r::m::y() }
 }
 

@@ -8,19 +8,19 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-10:
+task 1, lines 8-11:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 12-32:
+task 2, lines 13-34:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 12524800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 3, line 34:
+task 3, line 36:
 //# view-object 2,1
 Owner: Immutable
 Version: 3
@@ -35,7 +35,7 @@ Contents: sui::coin::TreasuryCap<v0::has_otw::HAS_OTW> {
     },
 }
 
-task 4, line 36:
+task 4, line 38:
 //# view-object 2,2
 Owner: Immutable
 Version: 3

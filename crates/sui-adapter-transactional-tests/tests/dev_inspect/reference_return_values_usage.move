@@ -7,40 +7,40 @@
 
 //# publish
 
-module test::m {
-    public struct S has key, store {
-        id: UID,
-        f: u64,
-    }
+module test::m;
 
-    public fun new(ctx: &mut TxContext): S {
-        S { id: object::new(ctx), f: 42 }
-    }
+public struct S has key, store {
+    id: UID,
+    f: u64,
+}
 
-    public fun delete(s: S) {
-        let S { id, .. } = s;
-        object::delete(id);
-    }
+public fun new(ctx: &mut TxContext): S {
+    S { id: object::new(ctx), f: 42 }
+}
 
-    public fun borrow_f_mut(s: &mut S): &mut u64 {
-        &mut s.f
-    }
+public fun delete(s: S) {
+    let S { id, .. } = s;
+    object::delete(id);
+}
 
-    public fun borrow_f(s: &S): &u64 {
-        &s.f
-    }
+public fun borrow_f_mut(s: &mut S): &mut u64 {
+    &mut s.f
+}
 
-    public fun inc(u: &mut u64) {
-        *u = *u + 1;
-    }
+public fun borrow_f(s: &S): &u64 {
+    &s.f
+}
 
-    public fun read(u: &u64): u64 {
-        *u
-    }
+public fun inc(u: &mut u64) {
+    *u = *u + 1;
+}
 
-    public fun check(u: &u64, expected: u64) {
-        assert!(*u == expected, 0);
-    }
+public fun read(u: &u64): u64 {
+    *u
+}
+
+public fun check(u: &u64, expected: u64) {
+    assert!(*u == expected, 0);
 }
 
 // read from a returned reference
@@ -60,7 +60,6 @@ module test::m {
 //> test::m::check(Result(1), Result(2));
 //> test::m::check(Result(1), Input(0));
 //> test::m::delete(Result(0));
-
 
 // Read from the struct again to check that the reference was actually
 // updated, and not just `Result(1)`

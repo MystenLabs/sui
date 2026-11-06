@@ -8,10 +8,12 @@
 
 //# publish --upgradeable --sender A
 module v0::m {
+
 }
 
 //# stage-package
 module v1_0::m {
+
 }
 module v1_0::n {
     public struct Obj has key, store {
@@ -29,6 +31,7 @@ module v1_0::n {
 
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 module v1_1::m {
+
 }
 module v1_1::n {
     public struct Obj has key, store {

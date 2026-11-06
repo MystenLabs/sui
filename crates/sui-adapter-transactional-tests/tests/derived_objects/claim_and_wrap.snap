@@ -8,25 +8,25 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-54:
+task 1, lines 8-57:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 10032000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 56:
+task 2, line 59:
 //# run a::m::create_parent --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 58:
+task 3, line 61:
 //# run a::m::claim_and_wrap --sender A --args object(2,0)
 created: object(3,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 4978000,  storage_rebate: 2241776, non_refundable_storage_fee: 224
 
-task 4, line 60:
+task 4, line 63:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 3
@@ -47,7 +47,7 @@ Contents: a::m::Parent {
     },
 }
 
-task 5, line 62:
+task 5, line 65:
 //# view-object 3,0
 Owner: Object ID: ( fake(2,0) )
 Version: 3
@@ -65,30 +65,30 @@ Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_o
     value: sui::derived_object::ClaimedStatus::Reserved{},
 }
 
-task 6, line 64:
+task 6, line 67:
 //# run a::m::transfer_to_wrapped --sender A --args object(2,0)
 created: object(6,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 3708800,  storage_rebate: 2484951, non_refundable_storage_fee: 249
 
-task 7, line 66:
+task 7, line 69:
 //# run a::m::receive_from_derived_wrapped --sender A --args object(2,0) receiving(6,0)
 mutated: object(0,0), object(2,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 3708800,  storage_rebate: 3708429, non_refundable_storage_fee: 371
 
-task 8, line 68:
+task 8, line 71:
 //# run a::m::create_parent --sender A
 created: object(8,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, line 70:
+task 9, line 73:
 //# run a::m::transfer_to_wrapped --sender A --args object(8,0)
 created: object(9,0)
 mutated: object(0,0), object(8,0)
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 2241776, non_refundable_storage_fee: 224
 
-task 10, line 72:
+task 10, line 75:
 //# run a::m::claim_and_wrap_and_receive --sender A --args object(8,0) receiving(9,0)
 created: object(10,0)
 mutated: object(0,0), object(8,0), object(9,0)

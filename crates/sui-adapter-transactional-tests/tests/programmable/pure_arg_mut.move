@@ -6,37 +6,40 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    use std::string::{Self, String};
-    use std::ascii;
+module test::m1;
 
-    public fun borrow_mut<T>(x: &mut T): &mut T {
-        x
-    }
+use std::ascii;
+use std::string::{Self, String};
 
-    public fun modify_u8(s: &mut u8) {
-        assert!(*s == 0);
-        *s = 1;
-    }
-    public fun assert_u8(s: u8) {
-        assert!(s == 1);
-    }
+public fun borrow_mut<T>(x: &mut T): &mut T {
+    x
+}
 
-    public fun modify_ascii(s: &mut ascii::String) {
-        assert!(s.is_empty());
-        s.append(ascii::string(b"ascii"));
-    }
-    public fun assert_ascii(s: ascii::String) {
-        assert!(s.as_bytes() == b"ascii");
-    }
+public fun modify_u8(s: &mut u8) {
+    assert!(*s == 0);
+    *s = 1;
+}
 
-    public fun modify_string(s: &mut String) {
-        assert!(s.is_empty());
-        s.append(string::utf8(b"utf8"));
-    }
-    public fun assert_string(s: String) {
-        assert!(s.as_bytes() == b"utf8");
-    }
+public fun assert_u8(s: u8) {
+    assert!(s == 1);
+}
+
+public fun modify_ascii(s: &mut ascii::String) {
+    assert!(s.is_empty());
+    s.append(ascii::string(b"ascii"));
+}
+
+public fun assert_ascii(s: ascii::String) {
+    assert!(s.as_bytes() == b"ascii");
+}
+
+public fun modify_string(s: &mut String) {
+    assert!(s.is_empty());
+    s.append(string::utf8(b"utf8"));
+}
+
+public fun assert_string(s: String) {
+    assert!(s.as_bytes() == b"utf8");
 }
 
 // In statically checked PTBs, tests that each type usage gets its own value/locals

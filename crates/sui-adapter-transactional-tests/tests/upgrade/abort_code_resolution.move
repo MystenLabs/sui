@@ -5,22 +5,21 @@
 
 //# publish --upgradeable --sender A
 module Test1::M1 {
-    public fun f1() { 
+    public fun f1() {
         abort 0
     }
 }
 
-
 //# upgrade --package Test1 --upgrade-capability 1,1 --sender A
 module Test2::M1 {
-    public fun f1() { 
+    public fun f1() {
         abort 0
     }
 }
 
 //# upgrade --package Test2 --upgrade-capability 1,1 --sender A
 module Test3::M1 {
-    public fun f1() { 
+    public fun f1() {
         abort 0
     }
 

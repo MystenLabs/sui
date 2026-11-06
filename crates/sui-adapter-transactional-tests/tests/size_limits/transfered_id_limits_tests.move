@@ -9,24 +9,23 @@
 
 /// Test transferred id limits enforced
 /// Right now, we should never be able to hit the transfer limit because we will hit the create limit first
-module Test::M1 {
+module Test::M1;
 
-    public struct Obj has key, store {
-        id: UID
-    }
+public struct Obj has key, store {
+    id: UID,
+}
 
-    public entry fun transfer_n_ids(n: u64, ctx: &mut TxContext) {
-        let mut i = 0;
-        while (i < n) {
-            transfer::public_transfer(
-                Obj {
-                    id: object::new(ctx)
-                },
-                tx_context::sender(ctx),
-            );
-            i = i + 1;
-        };
-    }
+public entry fun transfer_n_ids(n: u64, ctx: &mut TxContext) {
+    let mut i = 0;
+    while (i < n) {
+        transfer::public_transfer(
+            Obj {
+                id: object::new(ctx),
+            },
+            tx_context::sender(ctx),
+        );
+        i = i + 1;
+    };
 }
 
 // transfer below transfer count limit should succeed

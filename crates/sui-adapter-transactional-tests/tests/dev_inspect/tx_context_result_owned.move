@@ -18,13 +18,11 @@ public fun mut_id(ctx: &mut TxContext): &mut TxContext {
     ctx
 }
 
-public fun owned_mut(_: TxContext, _: &mut TxContext) {
-}
+public fun owned_mut(_: TxContext, _: &mut TxContext) {}
 
 //# programmable --dev-inspect --inputs struct(@0,vector[],0,0,0)
 // Invalid, cannot specify inferred TxContext
 //> test::m::mut_id(Input(0));
-
 
 //# programmable --dev-inspect --inputs struct(@0,vector[],0,0,0)
 // Invalid, cannot specify inferred TxContext; the arity error precedes the by-value check

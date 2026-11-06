@@ -6,17 +6,19 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct Potato {}
+module test::m1;
 
-    public fun potato(): Potato { Potato {} }
-    public fun otatop(tater: Potato) { let Potato {} = tater; }
+public struct Potato {}
 
-    public fun pass(tater: Potato): Potato { tater }
-    public fun imm(_: &Potato) {}
-    public fun mut_(_: &mut Potato) {}
+public fun potato(): Potato { Potato {} }
 
-}
+public fun otatop(tater: Potato) { let Potato {} = tater; }
+
+public fun pass(tater: Potato): Potato { tater }
+
+public fun imm(_: &Potato) {}
+
+public fun mut_(_: &mut Potato) {}
 
 //# programmable
 //> 0: test::m1::potato();

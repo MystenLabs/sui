@@ -10,37 +10,37 @@ processed 17 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-13:
+task 1, lines 10-15:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5662000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-19:
+task 2, lines 17-24:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 5, lines 29-32:
+task 5, lines 36-40:
 //# publish --dependencies DepV1 --sender A
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4339600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 34-38:
+task 6, lines 42-47:
 //# publish --upgradeable --dependencies DepV1 --sender A
 created: object(6,0), object(6,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 40-42:
+task 7, lines 49-52:
 //# upgrade --package DepConsumerV1 --upgrade-capability 6,1 --dependencies DepV2 --sender A
 created: object(7,0)
 mutated: object(0,0), object(6,1)
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 8, lines 45-49:
+task 8, lines 54-58:
 //# programmable --sender A --inputs 10 @A
 // publish pins DepV2 exact; direct call pins DepV1 exact => exact/exact conflict.
 //> 0: Publish(Test, [DepV2, sui, std]);
@@ -49,7 +49,7 @@ task 8, lines 45-49:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV2 (version 2) and DepV1 (version 1) to be used in the same transaction"), command: Some(1) } }
 
-task 9, lines 51-55:
+task 9, lines 60-64:
 //# programmable --sender A --inputs 10 @A
 // As above, order independent.
 //> 0: DepV1::M1::f1();
@@ -58,7 +58,7 @@ task 9, lines 51-55:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV1 (version 1) and DepV2 (version 2) to be used in the same transaction"), command: Some(1) } }
 
-task 10, lines 57-62:
+task 10, lines 66-71:
 //# programmable --sender A --inputs 10 @A
 // Conflict via a dependency, not the root target: V1Consumer is not a transitive dep of Test, but
 // its private entry pins DepV1 exact vs publish's DepV2 exact => exact/exact conflict.
@@ -68,7 +68,7 @@ task 10, lines 57-62:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV2 (version 2) and DepV1 (version 1) to be used in the same transaction"), command: Some(1) } }
 
-task 11, lines 64-68:
+task 11, lines 73-77:
 //# programmable --sender A --inputs 10 @A
 // As above, order independent.
 //> 0: V1Consumer::M::consume_v1();
@@ -77,7 +77,7 @@ task 11, lines 64-68:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV1 (version 1) and DepV2 (version 2) to be used in the same transaction"), command: Some(1) } }
 
-task 12, lines 70-75:
+task 12, lines 79-84:
 //# programmable --sender A --inputs 10 @A
 // publish pins DepV1 exact (v1); public-fn dep pins Dep at_least 2 => exact(1) < at_least(2) =>
 // Exact/AtLeast conflict.
@@ -87,7 +87,7 @@ task 12, lines 70-75:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(1) } }
 
-task 13, lines 77-81:
+task 13, lines 86-90:
 //# programmable --sender A --inputs 10 @A
 // As above, order independent.
 //> 0: DepConsumerV2::M::consume();
@@ -96,7 +96,7 @@ task 13, lines 77-81:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(1) } }
 
-task 14, lines 83-88:
+task 14, lines 92-97:
 //# programmable --sender A --inputs 10 @A
 // No `init` => publish contributes no constraint; DepV2 dep list is inert. Direct DepV1 call is the
 // sole constraint => succeeds.
@@ -107,7 +107,7 @@ created: object(14,0), object(14,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5548000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 15, lines 90-94:
+task 15, lines 99-103:
 //# programmable --sender A --inputs @A
 // Two init publishes in one PTB: DepV1 exact + DepV2 exact => exact/exact conflict.
 //> 0: Publish(Test, [DepV1, sui, std]);
@@ -116,7 +116,7 @@ task 15, lines 90-94:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV1 (version 1) and DepV2 (version 2) to be used in the same transaction"), command: Some(1) } }
 
-task 16, lines 96-100:
+task 16, lines 105-109:
 //# programmable --sender A --inputs @A
 // As above but the DepV2 publish has no `init` => inert => only DepV1 exact => succeeds.
 //> 0: Publish(Test, [DepV1, sui, std]);

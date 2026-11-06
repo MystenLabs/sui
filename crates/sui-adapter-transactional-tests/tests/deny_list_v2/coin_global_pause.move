@@ -8,66 +8,62 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
-module test::regulated_coin {
-    use sui::coin::{Self, Coin};
-    use sui::deny_list::DenyList;
+module test::regulated_coin;
 
-    public struct REGULATED_COIN has drop {}
+use sui::coin::{Self, Coin};
+use sui::deny_list::DenyList;
 
-    public struct Wrapper has key {
-        id: UID,
-        coin: Coin<REGULATED_COIN>,
-    }
+public struct REGULATED_COIN has drop {}
 
-    #[allow(deprecated_usage)]
-    fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
-        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
-            otw,
-            9,
-            b"RC",
-            b"REGULATED_COIN",
-            b"A new regulated coin",
-            option::none(),
-            true,
-            ctx
-        );
-        let coin = coin::mint(&mut treasury_cap, 10000, ctx);
-        transfer::public_transfer(coin, tx_context::sender(ctx));
-        transfer::public_transfer(deny_cap, tx_context::sender(ctx));
-        transfer::public_freeze_object(treasury_cap);
-        transfer::public_freeze_object(metadata);
-    }
+public struct Wrapper has key {
+    id: UID,
+    coin: Coin<REGULATED_COIN>,
+}
 
-    entry fun partial_wrap(coin: &mut Coin<REGULATED_COIN>, ctx: &mut TxContext) {
-        let new_coin = coin::split(coin, 1, ctx);
-        full_wrap(new_coin, ctx);
-    }
+#[allow(deprecated_usage)]
+fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
+    let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
+        otw,
+        9,
+        b"RC",
+        b"REGULATED_COIN",
+        b"A new regulated coin",
+        option::none(),
+        true,
+        ctx,
+    );
+    let coin = coin::mint(&mut treasury_cap, 10000, ctx);
+    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(deny_cap, tx_context::sender(ctx));
+    transfer::public_freeze_object(treasury_cap);
+    transfer::public_freeze_object(metadata);
+}
 
-    entry fun full_wrap(coin: Coin<REGULATED_COIN>, ctx: &mut TxContext) {
-        let wrapper = Wrapper {
-            id: object::new(ctx),
-            coin,
-        };
-        transfer::transfer(wrapper, tx_context::sender(ctx));
-    }
+entry fun partial_wrap(coin: &mut Coin<REGULATED_COIN>, ctx: &mut TxContext) {
+    let new_coin = coin::split(coin, 1, ctx);
+    full_wrap(new_coin, ctx);
+}
 
-    entry fun unwrap(wrapper: Wrapper, ctx: &TxContext) {
-        let Wrapper {
-          id,
-          coin
-        } = wrapper;
-        transfer::public_transfer(coin, tx_context::sender(ctx));
-        object::delete(id);
-    }
+entry fun full_wrap(coin: Coin<REGULATED_COIN>, ctx: &mut TxContext) {
+    let wrapper = Wrapper {
+        id: object::new(ctx),
+        coin,
+    };
+    transfer::transfer(wrapper, tx_context::sender(ctx));
+}
 
-    entry fun assert_global_pause_status(
-        deny_list: &DenyList,
-        expected: bool,
-    ) {
-        let status =
-            coin::deny_list_v2_is_global_pause_enabled_next_epoch<REGULATED_COIN>(deny_list);
-        assert!(status == expected, 0);
-    }
+entry fun unwrap(wrapper: Wrapper, ctx: &TxContext) {
+    let Wrapper {
+        id,
+        coin,
+    } = wrapper;
+    transfer::public_transfer(coin, tx_context::sender(ctx));
+    object::delete(id);
+}
+
+entry fun assert_global_pause_status(deny_list: &DenyList, expected: bool) {
+    let status = coin::deny_list_v2_is_global_pause_enabled_next_epoch<REGULATED_COIN>(deny_list);
+    assert!(status == expected, 0);
 }
 
 // Transfer the newly minted coin works normally.

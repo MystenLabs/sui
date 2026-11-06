@@ -19,7 +19,8 @@ module A2::m {
     public struct A {}
     public struct B {}
     public struct C {}
-    entry fun call<T>() { }
+
+    entry fun call<T>() {}
 }
 
 // Resolves fine
@@ -34,7 +35,6 @@ module A2::m {
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args 0x0::m::A --sender A
 
-
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args A0::m::B --sender A
 
@@ -46,7 +46,6 @@ module A2::m {
 
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args 0x0::m::B --sender A
-
 
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args A0::m::C --sender A

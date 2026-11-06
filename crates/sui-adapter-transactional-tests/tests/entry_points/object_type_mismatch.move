@@ -37,19 +37,31 @@ public entry fun mint_wrapper_bool(ctx: &mut TxContext) {
 }
 
 public entry fun take_a(_o: &ObjA) {}
+
 public entry fun take_b(_o: &ObjB) {}
+
 public entry fun take_wrapper_u64(_o: &Wrapper<u64>) {}
+
 public entry fun take_wrapper_bool(_o: &Wrapper<bool>) {}
+
 public entry fun take_generic<T: key + store>(_o: &T) {}
 
 public entry fun take_a_mut(_o: &mut ObjA) {}
+
 public entry fun take_wrapper_u64_mut(_o: &mut Wrapper<u64>) {}
+
 public entry fun take_wrapper_bool_mut(_o: &mut Wrapper<bool>) {}
 
 public entry fun destroy_a(o: ObjA) { let ObjA { id } = o; object::delete(id) }
+
 public entry fun destroy_b(o: ObjB) { let ObjB { id } = o; object::delete(id) }
+
 public entry fun destroy_wrapper_u64(o: Wrapper<u64>) { let Wrapper { id } = o; object::delete(id) }
-public entry fun destroy_wrapper_bool(o: Wrapper<bool>) { let Wrapper { id } = o; object::delete(id) }
+
+public entry fun destroy_wrapper_bool(o: Wrapper<bool>) {
+    let Wrapper { id } = o;
+    object::delete(id)
+}
 
 // mint one of each
 // object(2,0) = ObjA

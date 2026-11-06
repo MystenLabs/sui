@@ -8,7 +8,7 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-15:
+task 1, lines 8-17:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
@@ -16,21 +16,21 @@ gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 
 
 // Has store, but cannot be used with internal variants
 
-task 2, lines 19-21:
+task 2, lines 21-23:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::pub();
 //> sui::transfer::transfer<test::m1::Pub>(Result(0), Input(0));
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::transfer' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_transfer'."), command: Some(1) } }
 
-task 3, lines 23-25:
+task 3, lines 25-27:
 //# programmable
 //> 0: test::m1::pub();
 //> sui::transfer::share_object<test::m1::Pub>(Result(0));
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::share_object' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_share_object'."), command: Some(1) } }
 
-task 4, lines 27-29:
+task 4, lines 29-31:
 //# programmable
 //> 0: test::m1::pub();
 //> sui::transfer::freeze_object<test::m1::Pub>(Result(0));
@@ -39,21 +39,21 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 // Does not have store, cannot be used with internal variants
 
-task 5, lines 34-36:
+task 5, lines 35-37:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::priv();
 //> sui::transfer::transfer<test::m1::Priv>(Result(0), Input(0));
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::transfer' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_transfer'."), command: Some(1) } }
 
-task 6, lines 38-40:
+task 6, lines 39-41:
 //# programmable
 //> 0: test::m1::priv();
 //> sui::transfer::share_object<test::m1::Priv>(Result(0));
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::share_object' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_share_object'."), command: Some(1) } }
 
-task 7, lines 42-44:
+task 7, lines 43-45:
 //# programmable
 //> 0: test::m1::priv();
 //> sui::transfer::freeze_object<test::m1::Priv>(Result(0));

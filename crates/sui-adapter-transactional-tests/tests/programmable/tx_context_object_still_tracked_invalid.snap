@@ -6,13 +6,13 @@ processed 3 tasks
 // Only TxContext is stripped: the result still borrows the object, so mutably using the
 // object while the result is live is rejected.
 
-task 1, lines 9-39:
+task 1, lines 9-38:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 41-47:
+task 2, lines 40-46:
 //# programmable
 // mutably using the object while the `&mut Y` result is live must fail
 //> 0: test::m::new();

@@ -10,7 +10,7 @@ processed 29 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-55:
+task 1, lines 10-90:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
@@ -18,7 +18,7 @@ gas summary: computation_cost: 1000000, storage_cost: 15519200,  storage_rebate:
 
 // --- the same reference twice in one call ---
 
-task 2, lines 59-64:
+task 2, lines 94-99:
 //# programmable
 // VALID: a `&mut` result frozen twice in one call
 //> 0: test::m::new();
@@ -28,7 +28,7 @@ task 2, lines 59-64:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 66-71:
+task 3, lines 101-106:
 //# programmable
 // VALID: an immutable result twice in one call
 //> 0: test::m::new();
@@ -38,14 +38,14 @@ task 3, lines 66-71:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 73-75:
+task 4, lines 108-110:
 //# programmable --inputs 0u8
 // VALID: one pure input at two types is two locations, so both `&mut` borrows are fine
 //> 0: test::m::two_views<u8, bool>(Input(0), Input(0));
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 77-82:
+task 5, lines 112-117:
 //# programmable --inputs 0u8 7u8
 // VALID: a `&mut bool` view live while the u8 view is borrowed mutably
 //> 0: test::m::id_mut<bool>(Input(0));
@@ -57,7 +57,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- siblings ---
 
-task 6, lines 86-94:
+task 6, lines 121-129:
 //# programmable --inputs 1
 // VALID: two `&mut` siblings from one call passed together, both written
 //> 0: test::m::new();
@@ -70,7 +70,7 @@ task 6, lines 86-94:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 96-103:
+task 7, lines 131-138:
 //# programmable --inputs 0
 // VALID: a `&mut` and a `&` sibling from one call passed together
 //> 0: test::m::new();
@@ -82,7 +82,7 @@ task 7, lines 96-103:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 105-116:
+task 8, lines 140-151:
 //# programmable --inputs 1
 // VALID: `&mut` references into two different objects passed together
 //> 0: test::m::new();
@@ -98,7 +98,7 @@ task 8, lines 105-116:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 118-126:
+task 9, lines 153-161:
 //# programmable --inputs 1 2
 // VALID: a second field borrow from the same parent once the first is dead
 //> 0: test::m::new();
@@ -111,7 +111,7 @@ task 9, lines 118-126:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, lines 128-136:
+task 10, lines 163-171:
 //# programmable --sender A --inputs 1
 // VALID: a hot potato and a reference from one call consumed together, the write observed after
 //> 0: test::m::new();
@@ -126,7 +126,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0
 
 // --- descendants of sibling results ---
 
-task 11, lines 140-146:
+task 11, lines 175-181:
 //# programmable --inputs 2
 // VALID: replace one `&mut` sibling while a descendant of the other is live
 //> 0: test::m::pair();
@@ -137,7 +137,7 @@ task 11, lines 140-146:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 12, lines 148-157:
+task 12, lines 183-192:
 //# programmable --inputs 2
 // VALID: the same through a depth-three identity chain
 //> 0: test::m::pair();
@@ -151,7 +151,7 @@ task 12, lines 148-157:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 13, lines 159-166:
+task 13, lines 194-201:
 //# programmable --inputs 0
 // VALID: replace a sibling once its own descendant is dead
 //> 0: test::m::pair();
@@ -163,7 +163,7 @@ task 13, lines 159-166:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 14, lines 168-175:
+task 14, lines 203-210:
 //# programmable --inputs 2
 // VALID: replace the `&mut` sibling while a descendant of the `&` sibling is live
 //> 0: test::m::pair();
@@ -175,7 +175,7 @@ task 14, lines 168-175:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 15, lines 177-183:
+task 15, lines 212-218:
 //# programmable
 // VALID: replace the root once the `&` sibling's descendant is dead
 //> 0: test::m::pair();
@@ -188,7 +188,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- dynamic fields ---
 
-task 16, lines 187-197:
+task 16, lines 222-232:
 //# programmable --inputs 1
 // VALID: remove a dynamic field once the `&mut` into its stored vector is dead
 //> 0: test::m::new();
@@ -203,7 +203,7 @@ task 16, lines 187-197:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 17, lines 199-209:
+task 17, lines 234-244:
 //# programmable --inputs 1
 // VALID: remove a dynamic field once the `&` into its stored vector is dead
 //> 0: test::m::new();
@@ -220,7 +220,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- parents after children die ---
 
-task 18, lines 213-219:
+task 18, lines 248-254:
 //# programmable
 // VALID: `&mut Obj` after the `&mut Inner` child's last use
 //> 0: test::m::new();
@@ -231,7 +231,7 @@ task 18, lines 213-219:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 19, lines 221-227:
+task 19, lines 256-262:
 //# programmable
 // VALID: `&mut Obj` after the `&Inner` child's last use
 //> 0: test::m::new();
@@ -242,7 +242,7 @@ task 19, lines 221-227:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 20, lines 229-239:
+task 20, lines 264-274:
 //# programmable --inputs 3
 // VALID: write at the leaf of a chain, then reopen each level upward
 //> 0: test::m::new();
@@ -259,7 +259,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- immutable views of a parent while a mutable child is live ---
 
-task 21, lines 243-249:
+task 21, lines 278-284:
 //# programmable
 // VALID: `&Obj` while the `&mut Inner` child is live, child still writable after
 //> 0: test::m::new();
@@ -270,7 +270,7 @@ task 21, lines 243-249:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 22, lines 251-258:
+task 22, lines 286-293:
 //# programmable --inputs 1
 // VALID: a frozen use of the `&mut Inner` while its `&mut u64` child is live
 //> 0: test::m::new();
@@ -282,7 +282,7 @@ task 22, lines 251-258:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 23, lines 260-268:
+task 23, lines 295-303:
 //# programmable
 // VALID: an immutable result of the parent is readable while the mutable child is dormant
 //> 0: test::m::new();
@@ -295,7 +295,7 @@ task 23, lines 260-268:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 24, lines 270-277:
+task 24, lines 305-312:
 //# programmable
 // VALID: the mutable child is usable again once the immutable result is dead
 //> 0: test::m::new();
@@ -309,7 +309,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- a last-use read releases its reference inside the argument list ---
 
-task 25, lines 281-285:
+task 25, lines 316-320:
 //# programmable --inputs 1
 // VALID: read then a fresh `&mut` borrow of the root
 //> 0: test::m::no_copy(Input(0));
@@ -318,7 +318,7 @@ task 25, lines 281-285:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 26, lines 287-291:
+task 26, lines 322-326:
 //# programmable --inputs 1
 // VALID: a fresh `&mut` borrow of the root then the read; transferability is checked after all arguments
 //> 0: test::m::no_copy(Input(0));
@@ -329,7 +329,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 
 // --- vector natives ---
 
-task 27, lines 295-302:
+task 27, lines 330-337:
 //# programmable --inputs 1 2 0 9 3
 // VALID: length while a `&mut` element is live; push after the element reference is dead
 //> 0: MakeMoveVec<u64>([Input(0), Input(1)]);
@@ -341,7 +341,7 @@ task 27, lines 295-302:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 28, lines 304-310:
+task 28, lines 339-345:
 //# programmable --inputs 1 2 0 1
 // VALID: two immutable element borrows in two commands
 //> 0: MakeMoveVec<u64>([Input(0), Input(1)]);

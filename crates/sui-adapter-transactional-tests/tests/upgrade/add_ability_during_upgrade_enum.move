@@ -6,7 +6,7 @@
 //# publish --upgradeable --sender A
 module Test_V0::base {
     public enum Foo {
-        V0
+        V0,
     }
 }
 
@@ -21,48 +21,48 @@ module Test_V1::base {
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
     public enum Foo has drop {
-        V0
+        V0,
     }
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
     public enum Foo has copy {
-        V0
+        V0,
     }
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
     public enum Foo has store {
-        V0
+        V0,
     }
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
     public enum Foo has drop, store {
-        V0
+        V0,
     }
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
-    public enum Foo has drop, copy {
-        V0
+    public enum Foo has copy, drop {
+        V0,
     }
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
-    public enum Foo has store, copy {
-        V0
+    public enum Foo has copy, store {
+        V0,
     }
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
-    public enum Foo has drop, copy, store {
-        V0
+    public enum Foo has copy, drop, store {
+        V0,
     }
 }

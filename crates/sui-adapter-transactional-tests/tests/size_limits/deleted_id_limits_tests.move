@@ -9,24 +9,23 @@
 
 /// Test deleted id limits enforced
 /// Right now, we should never be able to hit the delete limit because we will hit the create limit first
-module Test::M1 {
+module Test::M1;
 
-    public entry fun delete_n_ids(n: u64, ctx: &mut TxContext) {
-        let mut v: vector<UID> = vector[];
-        let mut i = 0;
-        while (i < n) {
-            let id = object::new(ctx);
-            vector::push_back(&mut v, id);
-            i = i + 1;
-        };
-        i = 0;
-        while (i < n) {
-            let id = vector::pop_back(&mut v);
-            object::delete(id);
-            i = i + 1;
-        };
-        vector::destroy_empty(v);
-    }
+public entry fun delete_n_ids(n: u64, ctx: &mut TxContext) {
+    let mut v: vector<UID> = vector[];
+    let mut i = 0;
+    while (i < n) {
+        let id = object::new(ctx);
+        vector::push_back(&mut v, id);
+        i = i + 1;
+    };
+    i = 0;
+    while (i < n) {
+        let id = vector::pop_back(&mut v);
+        object::delete(id);
+        i = i + 1;
+    };
+    vector::destroy_empty(v);
 }
 
 // delete below delete count limit should succeed

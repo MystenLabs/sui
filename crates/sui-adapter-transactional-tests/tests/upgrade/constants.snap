@@ -43,21 +43,21 @@ created: object(6,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6384000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 7, lines 87-101:
+task 7, lines 86-101:
 // OK to remove constants in additive policy as long as they're unused
 //# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy additive
 created: object(7,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6308000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 8, lines 103-116:
+task 8, lines 103-117:
 // OK to remove constants in dep_only policy -- if they're unused
 //# upgrade --package V4 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(8,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6224400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 9, lines 118-132:
+task 9, lines 119-134:
 // Fine to introduce a new constant as long as it's not used in either policy
 //# upgrade --package V5 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(9,0)

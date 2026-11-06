@@ -8,32 +8,32 @@
 //# init --accounts A --addresses test=0x0 --simulator
 
 //# publish --sender A
-module test::m {
-    use sui::clock::{Self, Clock};
+module test::m;
 
-    public struct Stamp has key, store {
-        id: UID,
-        timestamp_ms: u64,
-    }
+use sui::clock::{Self, Clock};
 
-    // Written against `&Clock`, as existing code is.
-    fun timestamp_of(clock: &Clock): u64 {
-        clock.timestamp_ms()
-    }
+public struct Stamp has key, store {
+    id: UID,
+    timestamp_ms: u64,
+}
 
-    public fun record(ctx: &mut TxContext) {
-        let stamp = Stamp { id: object::new(ctx), timestamp_ms: timestamp_of(clock::borrow()) };
-        transfer::public_transfer(stamp, ctx.sender())
-    }
+// Written against `&Clock`, as existing code is.
+fun timestamp_of(clock: &Clock): u64 {
+    clock.timestamp_ms()
+}
 
-    public fun assert_matches(clock: &Clock) {
-        assert!(clock::borrow().timestamp_ms() == clock.timestamp_ms(), 0);
-    }
+public fun record(ctx: &mut TxContext) {
+    let stamp = Stamp { id: object::new(ctx), timestamp_ms: timestamp_of(clock::borrow()) };
+    transfer::public_transfer(stamp, ctx.sender())
+}
 
-    public fun read_then_abort() {
-        let _ = clock::borrow().timestamp_ms();
-        abort 42
-    }
+public fun assert_matches(clock: &Clock) {
+    assert!(clock::borrow().timestamp_ms() == clock.timestamp_ms(), 0);
+}
+
+public fun read_then_abort() {
+    let _ = clock::borrow().timestamp_ms();
+    abort 42
 }
 
 //# run test::m::record --sender A

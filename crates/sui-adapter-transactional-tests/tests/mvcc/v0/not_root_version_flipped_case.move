@@ -7,48 +7,46 @@
 
 //# publish
 
-module test::m {
-    use sui::dynamic_field as field;
+module test::m;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::dynamic_field as field;
 
-    public struct B has key, store {
-        id: UID,
-    }
-
-    const KEY: u64 = 0;
-
-    public fun a(ctx: &mut TxContext): A {
-        A { id: object::new(ctx) }
-    }
-
-    public fun b(ctx: &mut TxContext): B {
-        let mut b = B { id: object::new(ctx) };
-        field::add(&mut b.id, KEY, 0u64);
-        b
-
-    }
-
-    public fun bump(b: &mut B) {
-        let f: &mut u64 = field::borrow_mut(&mut b.id, KEY);
-        *f = *f + 1;
-    }
-
-    public fun append(a: &mut A, b: B) {
-        field::add(&mut a.id, KEY, b);
-    }
-
-    public fun check(a: &A, expected: u64) {
-        let b: &B = field::borrow(&a.id, KEY);
-        let v = *field::borrow(&b.id, KEY);
-        assert!(v == expected, 0);
-    }
-
-    public fun nop() {
-    }
+public struct A has key, store {
+    id: UID,
 }
+
+public struct B has key, store {
+    id: UID,
+}
+
+const KEY: u64 = 0;
+
+public fun a(ctx: &mut TxContext): A {
+    A { id: object::new(ctx) }
+}
+
+public fun b(ctx: &mut TxContext): B {
+    let mut b = B { id: object::new(ctx) };
+    field::add(&mut b.id, KEY, 0u64);
+    b
+}
+
+public fun bump(b: &mut B) {
+    let f: &mut u64 = field::borrow_mut(&mut b.id, KEY);
+    *f = *f + 1;
+}
+
+public fun append(a: &mut A, b: B) {
+    field::add(&mut a.id, KEY, b);
+}
+
+public fun check(a: &A, expected: u64) {
+    let b: &B = field::borrow(&a.id, KEY);
+    let v = *field::borrow(&b.id, KEY);
+    assert!(v == expected, 0);
+}
+
+public fun nop() {}
 
 // Create object A at version 2
 
@@ -56,9 +54,7 @@ module test::m {
 //> 0: test::m::a();
 //> TransferObjects([Result(0)], Input(0))
 
-
 //# view-object 2,0
-
 
 // Create object B with a version 2 and 3 for it's dynamic field
 

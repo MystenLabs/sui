@@ -6,13 +6,17 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct R has drop {}
-    public fun nop() {}
-    public fun r(): (R, R) { (R{}, R{}) }
-    public fun take(_: R) { abort 0 }
-    public fun take_vec(_: vector<R>) { abort 0 }
-}
+module test::m1;
+
+public struct R has drop {}
+
+public fun nop() {}
+
+public fun r(): (R, R) { (R {}, R {}) }
+
+public fun take(_: R) { abort 0 }
+
+public fun take_vec(_: vector<R>) { abort 0 }
 
 //# programmable
 //> 0: test::m1::nop();

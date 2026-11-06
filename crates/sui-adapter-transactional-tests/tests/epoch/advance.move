@@ -5,22 +5,22 @@
 
 //# publish
 
-module test::m {
-    public struct S has key, store {
-        id: UID,
-        value: u64
-    }
+module test::m;
 
-    public fun create(ctx: &mut TxContext) {
-        transfer::public_share_object(S {
-            id: object::new(ctx),
-            value: ctx.epoch(),
-        })
-    }
+public struct S has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public fun check(s: &S, epoch_diff: u64, ctx: &TxContext) {
-        assert!(s.value + epoch_diff == ctx.epoch());
-    }
+public fun create(ctx: &mut TxContext) {
+    transfer::public_share_object(S {
+        id: object::new(ctx),
+        value: ctx.epoch(),
+    })
+}
+
+public fun check(s: &S, epoch_diff: u64, ctx: &TxContext) {
+    assert!(s.value + epoch_diff == ctx.epoch());
 }
 
 //# run test::m::create

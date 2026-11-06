@@ -7,56 +7,56 @@
 //# init --addresses ex=0x0 --accounts A --flavor core
 
 //# publish
-module ex::m {
-    use sui::dynamic_field;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+module ex::m;
 
-    public struct A has key { id: UID, value: u64 }
-    public struct B has key { id: UID }
-    public struct Holder has key { id: UID, inner: UID }
-    public struct Parent has key { id: UID }
+use sui::dynamic_field;
+use sui::object::{Self, UID};
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
 
-    public fun mint(ctx: &mut TxContext) {
-        transfer::transfer(A { id: object::new(ctx), value: 0 }, tx_context::sender(ctx));
-        transfer::transfer(Parent { id: object::new(ctx) }, tx_context::sender(ctx))
-    }
+public struct A has key { id: UID, value: u64 }
+public struct B has key { id: UID }
+public struct Holder has key { id: UID, inner: UID }
+public struct Parent has key { id: UID }
 
-    public fun wrap(a: A, ctx: &mut TxContext) {
-        let A { id, value: _ } = a;
-        transfer::transfer(Holder { id: object::new(ctx), inner: id }, tx_context::sender(ctx))
-    }
+public fun mint(ctx: &mut TxContext) {
+    transfer::transfer(A { id: object::new(ctx), value: 0 }, tx_context::sender(ctx));
+    transfer::transfer(Parent { id: object::new(ctx) }, tx_context::sender(ctx))
+}
 
-    public fun unwrap_as_b(h: Holder, ctx: &TxContext) {
-        let Holder { id, inner } = h;
-        object::delete(id);
-        transfer::transfer(B { id: inner }, tx_context::sender(ctx))
-    }
+public fun wrap(a: A, ctx: &mut TxContext) {
+    let A { id, value: _ } = a;
+    transfer::transfer(Holder { id: object::new(ctx), inner: id }, tx_context::sender(ctx))
+}
 
-    public fun stash(p: &mut Parent, b: B) {
-        let B { id } = b;
-        dynamic_field::add(&mut p.id, 0u64, id)
-    }
+public fun unwrap_as_b(h: Holder, ctx: &TxContext) {
+    let Holder { id, inner } = h;
+    object::delete(id);
+    transfer::transfer(B { id: inner }, tx_context::sender(ctx))
+}
 
-    public fun unstash_as_a(p: &mut Parent, ctx: &TxContext) {
-        let id: UID = dynamic_field::remove(&mut p.id, 0u64);
-        transfer::transfer(A { id, value: 7 }, tx_context::sender(ctx))
-    }
+public fun stash(p: &mut Parent, b: B) {
+    let B { id } = b;
+    dynamic_field::add(&mut p.id, 0u64, id)
+}
 
-    public fun wrap_then_delete(a: A, ctx: &mut TxContext) {
-        let A { id, value: _ } = a;
-        let h = Holder { id: object::new(ctx), inner: id };
-        let Holder { id, inner } = h;
-        object::delete(id);
-        transfer::transfer(B { id: inner }, tx_context::sender(ctx))
-    }
+public fun unstash_as_a(p: &mut Parent, ctx: &TxContext) {
+    let id: UID = dynamic_field::remove(&mut p.id, 0u64);
+    transfer::transfer(A { id, value: 7 }, tx_context::sender(ctx))
+}
 
-    public fun delete_inner(h: Holder) {
-        let Holder { id, inner } = h;
-        object::delete(id);
-        object::delete(inner)
-    }
+public fun wrap_then_delete(a: A, ctx: &mut TxContext) {
+    let A { id, value: _ } = a;
+    let h = Holder { id: object::new(ctx), inner: id };
+    let Holder { id, inner } = h;
+    object::delete(id);
+    transfer::transfer(B { id: inner }, tx_context::sender(ctx))
+}
+
+public fun delete_inner(h: Holder) {
+    let Holder { id, inner } = h;
+    object::delete(id);
+    object::delete(inner)
 }
 
 //# run ex::m::mint --sender A

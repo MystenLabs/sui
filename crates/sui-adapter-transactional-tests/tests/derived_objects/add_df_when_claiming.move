@@ -12,21 +12,21 @@ use sui::derived_object;
 use sui::dynamic_field;
 
 public struct Parent has key, store {
-  id: UID,
+    id: UID,
 }
 
 public struct Derived has key, store {
-  id: UID,
+    id: UID,
 }
 
 entry fun create_parent(ctx: &mut TxContext) {
-  transfer::public_transfer(Parent { id: object::new(ctx) }, ctx.sender());
+    transfer::public_transfer(Parent { id: object::new(ctx) }, ctx.sender());
 }
 
 entry fun derive_and_add_df(parent: &mut Parent, key: u64, ctx: &mut TxContext) {
-  let mut id = derived_object::claim(&mut parent.id, key);
-  dynamic_field::add(&mut id, b"key", b"value");
-  transfer::public_transfer(Derived { id }, ctx.sender());
+    let mut id = derived_object::claim(&mut parent.id, key);
+    dynamic_field::add(&mut id, b"key", b"value");
+    transfer::public_transfer(Derived { id }, ctx.sender());
 }
 
 //# run a::m::create_parent --sender A

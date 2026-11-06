@@ -4,10 +4,10 @@
 //# init --protocol-version 108 --accounts A B --addresses test=0x0 --simulator
 
 //# publish --sender A
-module test::simple_module {
-    public fun hello(): u64 {
-        42
-    }
+module test::simple_module;
+
+public fun hello(): u64 {
+    42
 }
 
 //# create-checkpoint

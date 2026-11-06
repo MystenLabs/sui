@@ -6,23 +6,23 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-7:
+task 1, lines 6-9:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4826000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 9-13:
+task 2, lines 11-15:
 //# publish --upgradeable --dependencies Dep1 --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5373200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, line 15:
+task 3, line 17:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 17-28:
+task 4, lines 19-30:
 //# run-graphql
 Response: {
   "data": {

@@ -7,16 +7,16 @@
 
 //# publish
 
-module test::m {
-    public struct S has key {
-        id: UID,
-        setting: u64,
-    }
+module test::m;
 
-    public fun take_s(s: S) {
-        let S { id, .. } = s;
-        id.delete();
-    }
+public struct S has key {
+    id: UID,
+    setting: u64,
+}
+
+public fun take_s(s: S) {
+    let S { id, .. } = s;
+    id.delete();
 }
 
 //# programmable --sender A --inputs struct(@empty,0) --dev-inspect

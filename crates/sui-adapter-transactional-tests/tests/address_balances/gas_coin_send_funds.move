@@ -17,7 +17,6 @@
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 
-
 //# programmable --sender B --inputs @B --gas-budget 10000000
 // Send gas coin to self via send_funds, the gas coin should be deleted
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
@@ -28,7 +27,6 @@
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 
-
 //# programmable --sender B --inputs @B --address-balance-gas --gas-budget 10000000
 // Send ephemeral gas coin to self via send_funds
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
@@ -36,7 +34,6 @@
 //# create-checkpoint
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
-
 
 //# programmable --sender B --inputs @C --address-balance-gas --gas-budget 10000000
 // Send ephemeral gas coin to another address via send_funds
@@ -47,7 +44,6 @@
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> C
-
 
 //# programmable --sender C --inputs @D 10 --gas-budget 10000000
 // Send the gas coin via send_funds, but split from it first

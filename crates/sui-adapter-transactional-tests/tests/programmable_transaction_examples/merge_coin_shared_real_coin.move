@@ -7,13 +7,13 @@
 
 //# publish
 
-module test::m1 {
-    use sui::sui::SUI;
-    use sui::coin;
+module test::m1;
 
-    public fun mint_shared(ctx: &mut TxContext) {
-        transfer::public_share_object(coin::zero<SUI>(ctx))
-    }
+use sui::coin;
+use sui::sui::SUI;
+
+public fun mint_shared(ctx: &mut TxContext) {
+    transfer::public_share_object(coin::zero<SUI>(ctx))
 }
 
 //# run test::m1::mint_shared

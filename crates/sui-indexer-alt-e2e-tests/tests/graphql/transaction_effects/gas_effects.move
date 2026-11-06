@@ -8,10 +8,10 @@
 //> 1: TransferObjects([Result(0)], Input(1))
 
 //# publish
-module test::gas_test {
-    public entry fun simple_function() {
-        // Simple function that does minimal work for predictable gas costs
-    }
+module test::gas_test;
+
+public entry fun simple_function() {
+    // Simple function that does minimal work for predictable gas costs
 }
 
 //# run test::gas_test::simple_function --sender A

@@ -3,100 +3,100 @@ source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility
 expression: normalize_path(err.to_string())
 ---
 error[EUC03001]: function signature mismatch
-  ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:9:38
-  │
-9 │     public fun func_with_wrong_param(a: u32): u64 {
-  │                                      ^ Unexpected parameter 'u32', expected 'u64'
-  │
-  = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
-  = Restore the original function's parameter for function 'func_with_wrong_param'.
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:10:34
+   │
+10 │ public fun func_with_wrong_param(a: u32): u64 {
+   │                                  ^ Unexpected parameter 'u32', expected 'u64'
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's parameter for function 'func_with_wrong_param'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:14:42
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:15:38
    │
-14 │     public fun func_with_wrong_return(): u32 {
-   │                                          ^^^ Unexpected return type 'u32', expected 'u64'
+15 │ public fun func_with_wrong_return(): u32 {
+   │                                      ^^^ Unexpected return type 'u32', expected 'u64'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's return type for function 'func_with_wrong_return'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:49
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:20:45
    │
-19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
-   │                                                 ^ Unexpected parameter 'u32', expected 'u64'
+20 │ public fun func_with_wrong_param_and_return(a: u32): u32 {
+   │                                             ^ Unexpected parameter 'u32', expected 'u64'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'func_with_wrong_param_and_return'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:19:58
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:20:54
    │
-19 │     public fun func_with_wrong_param_and_return(a: u32): u32 {
-   │                                                          ^^^ Unexpected return type 'u32', expected 'u64'
+20 │ public fun func_with_wrong_param_and_return(a: u32): u32 {
+   │                                                      ^^^ Unexpected return type 'u32', expected 'u64'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's return type for function 'func_with_wrong_param_and_return'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:24:16
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:25:12
    │
-24 │     public fun func_with_wrong_param_length(a: u64): u64 {
-   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected 2 parameters, found 1
+25 │ public fun func_with_wrong_param_length(a: u64): u64 {
+   │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected 2 parameters, found 1
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameters for function 'func_with_wrong_param_length', expected 2 parameters.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:29:16
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:30:12
    │
-29 │     public fun func_with_wrong_return_length(): u64 {
-   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected 2 return types, found 1
+30 │ public fun func_with_wrong_return_length(): u64 {
+   │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected 2 return types, found 1
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's return types for function 'func_with_wrong_return_length'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:42:45
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:43:41
    │
-42 │     public fun func_with_wrong_struct_param(a: StructB): u64 {
-   │                                             ^ Unexpected parameter '0x0::upgrades::StructB', expected '0x0::upgrades::StructA'
+43 │ public fun func_with_wrong_struct_param(a: StructB): u64 {
+   │                                         ^ Unexpected parameter '0x0::upgrades::StructB', expected '0x0::upgrades::StructA'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'func_with_wrong_struct_param'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:47:29
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:48:25
    │
-47 │     public fun ref_to_value(a: u32): u64 {
-   │                             ^ Unexpected parameter 'u32', expected '&u32'
+48 │ public fun ref_to_value(a: u32): u64 {
+   │                         ^ Unexpected parameter 'u32', expected '&u32'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'ref_to_value'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:52:29
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:53:25
    │
-52 │     public fun value_to_ref(a: &u32): u64 {
-   │                             ^ Unexpected parameter '&u32', expected 'u32'
+53 │ public fun value_to_ref(a: &u32): u64 {
+   │                         ^ Unexpected parameter '&u32', expected 'u32'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'value_to_ref'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:57:41
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:58:37
    │
-57 │     public fun mutable_to_immutable_ref(a: &u32): u64 {
-   │                                         ^ Unexpected parameter '&u32', expected '&mut u32'
+58 │ public fun mutable_to_immutable_ref(a: &u32): u64 {
+   │                                     ^ Unexpected parameter '&u32', expected '&mut u32'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'mutable_to_immutable_ref'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:62:41
+   ┌─ /fixtures/upgrade_errors/function_errors_v2/sources/UpgradeErrors.move:63:37
    │
-62 │     public fun immutable_to_mutable_ref(a: &mut u32): u64 {
-   │                                         ^ Unexpected parameter '&mut u32', expected '&u32'
+63 │ public fun immutable_to_mutable_ref(a: &mut u32): u64 {
+   │                                     ^ Unexpected parameter '&mut u32', expected '&u32'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'immutable_to_mutable_ref'.

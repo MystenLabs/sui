@@ -7,22 +7,19 @@
 
 //# publish
 
-module test::m1 {
-    // not a native coin, but same type structure and BCS layout
-    public struct Coin has key, store {
-        id: UID,
-        value: u64,
-    }
+module test::m1;
 
-    public fun mint_shared(ctx: &mut TxContext) {
-        transfer::public_share_object(
-            Coin {
-                id: object::new(ctx),
-                value: 1000000,
-            }
-        )
-    }
+// not a native coin, but same type structure and BCS layout
+public struct Coin has key, store {
+    id: UID,
+    value: u64,
+}
 
+public fun mint_shared(ctx: &mut TxContext) {
+    transfer::public_share_object(Coin {
+        id: object::new(ctx),
+        value: 1000000,
+    })
 }
 
 //# run test::m1::mint_shared

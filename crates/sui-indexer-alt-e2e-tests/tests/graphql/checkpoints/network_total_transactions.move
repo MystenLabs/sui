@@ -14,7 +14,6 @@
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
 
-
 //# create-checkpoint
 
 //# run-graphql
@@ -68,7 +67,6 @@ fragment Cp on Checkpoint {
   networkTotalTransactions
 }
 */
-
 
 //# run-graphql
 /*

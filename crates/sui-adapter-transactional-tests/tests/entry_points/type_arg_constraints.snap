@@ -5,60 +5,60 @@ processed 11 tasks
 
 // Tests function type parameter ability constraint violations
 
-task 1, lines 8-20:
+task 1, lines 8-24:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6178800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 22-23:
+task 2, lines 26-27:
 // NoCopy has drop but not copy
 //# run test::m::needs_copy --type-args test::m::NoCopy
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
 
-task 3, lines 25-26:
+task 3, lines 29-30:
 // NoDrop has copy but not drop
 //# run test::m::needs_drop --type-args test::m::NoDrop
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
 
-task 4, lines 28-29:
+task 4, lines 32-33:
 // NoStore has copy+drop but not store
 //# run test::m::needs_store --type-args test::m::NoStore
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
 
-task 5, lines 31-32:
+task 5, lines 35-36:
 // needs_copy_drop: NoCopy missing copy
 //# run test::m::needs_copy_drop --type-args test::m::NoCopy
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
 
-task 6, lines 34-35:
+task 6, lines 38-39:
 // needs_copy_drop: NoDrop missing drop
 //# run test::m::needs_copy_drop --type-args test::m::NoDrop
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
 
-task 7, lines 37-38:
+task 7, lines 41-42:
 // needs_copy_drop_store: NoStore missing store
 //# run test::m::needs_copy_drop_store --type-args test::m::NoStore
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
 
-task 8, lines 40-41:
+task 8, lines 44-45:
 // happy paths
 //# run test::m::needs_copy --type-args u64
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, line 43:
+task 9, line 47:
 //# run test::m::needs_copy_drop --type-args u64
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, line 45:
+task 10, line 49:
 //# run test::m::needs_copy_drop_store --type-args test::m::HasAll
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

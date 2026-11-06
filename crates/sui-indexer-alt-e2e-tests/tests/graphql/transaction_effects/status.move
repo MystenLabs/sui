@@ -4,11 +4,11 @@
 //# init --protocol-version 108 --accounts A B --addresses test=0x0 --simulator
 
 //# publish
-module test::failed_module {
-    /// Function that always aborts, creating a failed transaction
-    public entry fun always_fails() {
-        abort 42
-    }
+module test::failed_module;
+
+/// Function that always aborts, creating a failed transaction
+public entry fun always_fails() {
+    abort 42
 }
 
 //# programmable --sender A --inputs 100 @B

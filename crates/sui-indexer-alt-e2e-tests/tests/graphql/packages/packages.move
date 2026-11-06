@@ -12,38 +12,38 @@
 
 //# publish --upgradeable --sender A
 module P1::M {
-	public fun foo(): u64 { 42 }
+    public fun foo(): u64 { 42 }
 }
 
 //# create-checkpoint
 
 //# upgrade --package P1 --upgrade-capability 1,1 --sender A
 module P2::M {
-	public fun foo(): u64 { 43 }
+    public fun foo(): u64 { 43 }
 }
 
 //# publish --upgradeable --sender A
 module Q1::N {
-  public fun bar(): u64 { 44 }
+    public fun bar(): u64 { 44 }
 }
 
 //# create-checkpoint
 
 //# upgrade --package P2 --upgrade-capability 1,1 --sender A
 module P3::M {
-  public fun foo(): u64 { 45 }
+    public fun foo(): u64 { 45 }
 }
 
 //# create-checkpoint
 
 //# upgrade --package Q1 --upgrade-capability 4,1 --sender A
 module Q2::N {
-  public fun bar(): u64 { 46 }
+    public fun bar(): u64 { 46 }
 }
 
 //# upgrade --package Q2 --upgrade-capability 4,1 --sender A
 module Q3::N {
-  public fun bar(): u64 { 47 }
+    public fun bar(): u64 { 47 }
 }
 
 //# create-checkpoint

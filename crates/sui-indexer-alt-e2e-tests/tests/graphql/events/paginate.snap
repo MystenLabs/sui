@@ -260,7 +260,7 @@ Response: {
   }
 }
 
-task 11, lines 162-179:
+task 11, lines 161-178:
 //# run-graphql --cursors bcs(0u8,1u8,0u8,0u8,1,1,0u32)
 Response: {
   "data": {
@@ -284,7 +284,7 @@ Response: {
   }
 }
 
-task 12, lines 181-198:
+task 12, lines 180-197:
 //# run-graphql --cursors bcs(0u8,1u8,0u8,0u8,1,2,0u32)
 Response: {
   "data": {
@@ -308,7 +308,7 @@ Response: {
   }
 }
 
-task 13, lines 200-217:
+task 13, lines 199-216:
 //# run-graphql --cursors bcs(0u8,1u8,0u8,0u8,1,2,1u32)
 Response: {
   "data": {

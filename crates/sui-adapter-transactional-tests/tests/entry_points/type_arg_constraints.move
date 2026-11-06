@@ -14,9 +14,13 @@ public struct NoStore has copy, drop {}
 public struct HasAll has copy, drop, store {}
 
 entry fun needs_copy<T: copy>() {}
+
 entry fun needs_drop<T: drop>() {}
+
 entry fun needs_store<T: store>() {}
+
 entry fun needs_copy_drop<T: copy + drop>() {}
+
 entry fun needs_copy_drop_store<T: copy + drop + store>() {}
 
 // NoCopy has drop but not copy

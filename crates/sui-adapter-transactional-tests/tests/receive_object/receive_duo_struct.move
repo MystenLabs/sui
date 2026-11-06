@@ -4,43 +4,43 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
+module tto::M1;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::transfer::Receiving;
 
-    public struct B has key, store {
-        id: UID,
-    }
+public struct A has key, store {
+    id: UID,
+}
 
-    public struct Duo<phantom T: key> has drop {
-        r1: Receiving<T>,
-        r2: Receiving<T>,
-    }
+public struct B has key, store {
+    id: UID,
+}
 
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        let b_address = object::id_address(&b);
-        let c = B { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-        transfer::public_transfer(c, b_address);
-    }
+public struct Duo<phantom T: key> has drop {
+    r1: Receiving<T>,
+    r2: Receiving<T>,
+}
 
-    public fun make_duo(r1: Receiving<B>, r2: Receiving<B>): Duo<B> {
-        Duo { r1, r2 }
-    }
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    let b_address = object::id_address(&b);
+    let c = B { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+    transfer::public_transfer(c, b_address);
+}
 
-    public fun receive_duo(parent: &mut A, d: Duo<B>): (B, B) {
-        let Duo { r1, r2 } = d;
-        let mut r1 = transfer::receive(&mut parent.id, r1);
-        let r2 = transfer::receive(&mut r1.id, r2);
-        (r1, r2)
-    }
+public fun make_duo(r1: Receiving<B>, r2: Receiving<B>): Duo<B> {
+    Duo { r1, r2 }
+}
+
+public fun receive_duo(parent: &mut A, d: Duo<B>): (B, B) {
+    let Duo { r1, r2 } = d;
+    let mut r1 = transfer::receive(&mut parent.id, r1);
+    let r2 = transfer::receive(&mut r1.id, r2);
+    (r1, r2)
 }
 
 //# run tto::M1::start

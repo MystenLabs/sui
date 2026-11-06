@@ -5,25 +5,25 @@
 
 //# publish --upgradeable --sender A
 module A0::base {
-    public fun f<T: store + copy + key>() { }
+    public fun f<T: store + copy + key>() {}
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
-    public fun f<T: store + copy>() { }
+    public fun f<T: store + copy>() {}
 }
 
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 module A2::base {
-    public fun f<T: store>() { }
+    public fun f<T: store>() {}
 }
 
 //# upgrade --package A2 --upgrade-capability 1,1 --sender A
 module A3::base {
-    public fun f<T>() { }
+    public fun f<T>() {}
 }
 
 //# upgrade --package A3 --upgrade-capability 1,1 --sender A
 module A4::base {
-    public fun f<T: store>() { }
+    public fun f<T: store>() {}
 }

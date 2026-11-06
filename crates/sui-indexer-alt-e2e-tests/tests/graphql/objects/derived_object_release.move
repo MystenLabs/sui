@@ -8,38 +8,38 @@
 //# init --protocol-version 141 --accounts A --addresses test=0x0 --simulator
 
 //# publish --sender A
-module test::derived {
-  use sui::derived_object;
+module test::derived;
 
-  public struct Parent has key, store {
+use sui::derived_object;
+
+public struct Parent has key, store {
     id: UID,
-  }
+}
 
-  public struct Child has key, store {
+public struct Child has key, store {
     id: UID,
     value: u64,
-  }
+}
 
-  public struct Other has key, store {
+public struct Other has key, store {
     id: UID,
-  }
+}
 
-  public fun new(ctx: &mut TxContext): Parent {
+public fun new(ctx: &mut TxContext): Parent {
     Parent { id: object::new(ctx) }
-  }
+}
 
-  public fun claim(parent: &mut Parent, value: u64): Child {
+public fun claim(parent: &mut Parent, value: u64): Child {
     Child { id: derived_object::claim(&mut parent.id, 0u64), value }
-  }
+}
 
-  public fun claim_other(parent: &mut Parent): Other {
+public fun claim_other(parent: &mut Parent): Other {
     Other { id: derived_object::claim(&mut parent.id, 0u64) }
-  }
+}
 
-  public fun release(parent: &mut Parent, child: Child) {
+public fun release(parent: &mut Parent, child: Child) {
     let Child { id, value: _ } = child;
     derived_object::release(&mut parent.id, id)
-  }
 }
 
 //# programmable --sender A --inputs @A

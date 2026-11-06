@@ -11,63 +11,58 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module test::mod {
-  use std::string::{String, utf8};
-  use sui::display;
-  use sui::package;
+module test::mod;
 
-  public struct MOD() has drop;
+use std::string::{String, utf8};
+use sui::display;
+use sui::package;
 
-  public struct Foo has key, store {
+public struct MOD() has drop;
+
+public struct Foo has key, store {
     id: UID,
     bar: Bar,
-  }
+}
 
-  public struct Bar has store { baz: Baz, val: u64 }
-  public struct Baz has store { qux: Qux, val: bool }
-  public struct Qux has store { quy: Quy, val: String }
-  public struct Quy has store { quz: Quz, val: Option<ID> }
-  public struct Quz has store { val: u8 }
+public struct Bar has store { baz: Baz, val: u64 }
+public struct Baz has store { qux: Qux, val: bool }
+public struct Qux has store { quy: Quy, val: String }
+public struct Quy has store { quz: Quz, val: Option<ID> }
+public struct Quz has store { val: u8 }
 
-  fun init(otw: MOD, ctx: &mut TxContext) {
+fun init(otw: MOD, ctx: &mut TxContext) {
     let publisher = package::claim(otw, ctx);
     let mut d = display::new_with_fields<Foo>(
-      &publisher,
-      vector[
-        utf8(b"bar"),
-        utf8(b"baz"),
-        utf8(b"quy"),
-        utf8(b"qu_"),
-      ],
-      vector[
-        utf8(b"bar is {bar.val}!"),
-        utf8(b"baz is {bar.baz.val}?"),
-        utf8(b"quy is {bar.baz.qux.quy}."),
-        utf8(b"x({bar.baz.qux.val}) y({bar.baz.qux.quy.val}), z({bar.baz.qux.quy.quz.val})?!"),
-      ],
-      ctx,
+        &publisher,
+        vector[utf8(b"bar"), utf8(b"baz"), utf8(b"quy"), utf8(b"qu_")],
+        vector[
+            utf8(b"bar is {bar.val}!"),
+            utf8(b"baz is {bar.baz.val}?"),
+            utf8(b"quy is {bar.baz.qux.quy}."),
+            utf8(b"x({bar.baz.qux.val}) y({bar.baz.qux.quy.val}), z({bar.baz.qux.quy.quz.val})?!"),
+        ],
+        ctx,
     );
 
     d.update_version();
     transfer::public_transfer(publisher, ctx.sender());
     transfer::public_transfer(d, ctx.sender());
-  }
+}
 
-  public fun new(
+public fun new(
     v_bar: u64,
     v_baz: bool,
     v_qux: String,
     v_quy: Option<ID>,
     v_quz: u8,
     ctx: &mut TxContext,
-  ): Foo {
+): Foo {
     let quz = Quz { val: v_quz };
     let quy = Quy { val: v_quy, quz };
     let qux = Qux { val: v_qux, quy };
     let baz = Baz { val: v_baz, qux };
     let bar = Bar { val: v_bar, baz };
     Foo { id: object::new(ctx), bar }
-  }
 }
 
 //# programmable --sender A --inputs @A 42 true "hello" 43u8

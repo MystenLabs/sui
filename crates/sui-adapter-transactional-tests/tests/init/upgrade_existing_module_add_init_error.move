@@ -8,6 +8,7 @@
 
 //# publish --upgradeable --sender A
 module v0::a {
+
 }
 
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A

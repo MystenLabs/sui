@@ -8,11 +8,13 @@
 
 //# publish --upgradeable --sender A
 module v0::m {
+
 }
 
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 // fail the upgrade via an abort in init
 module v1::m {
+
 }
 module v1::n {
     public struct Obj has key, store {
@@ -32,6 +34,7 @@ module v1::n {
 
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 module v1::m {
+
 }
 module v1::n {
     public struct Obj has key, store {

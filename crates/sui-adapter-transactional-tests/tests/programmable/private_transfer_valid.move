@@ -6,10 +6,11 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct Pub has key, store { id: UID }
-    public fun pub(ctx: &mut TxContext): Pub { Pub { id: object::new(ctx) } }
-}
+module test::m1;
+
+public struct Pub has key, store { id: UID }
+
+public fun pub(ctx: &mut TxContext): Pub { Pub { id: object::new(ctx) } }
 
 //# programmable --sender A --inputs @A
 //> 0: test::m1::pub();

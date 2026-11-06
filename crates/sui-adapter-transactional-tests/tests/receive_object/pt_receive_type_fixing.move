@@ -4,49 +4,49 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
+module tto::M1;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::transfer::Receiving;
 
-    public struct B has key, store {
-        id: UID,
-    }
+public struct A has key, store {
+    id: UID,
+}
 
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-    }
+public struct B has key, store {
+    id: UID,
+}
 
-    public entry fun pass_through(x: Receiving<B>): Receiving<B> { x }
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+}
 
-    public entry fun pass_through_a(x: Receiving<A>): Receiving<A> { x }
+public entry fun pass_through(x: Receiving<B>): Receiving<B> { x }
 
-    public entry fun pass_through_ref_a(_x: &Receiving<A>) { }
+public entry fun pass_through_a(x: Receiving<A>): Receiving<A> { x }
 
-    public entry fun pass_through_mut_ref_a(_x: &mut Receiving<A>) { }
+public entry fun pass_through_ref_a(_x: &Receiving<A>) {}
 
-    public fun unpacker_a(mut x: vector<Receiving<A>>): Receiving<A> {
-        vector::pop_back(&mut x)
-    }
+public entry fun pass_through_mut_ref_a(_x: &mut Receiving<A>) {}
 
-    public fun unpacker_b(mut x: vector<Receiving<B>>): Receiving<B> {
-        vector::pop_back(&mut x)
-    }
+public fun unpacker_a(mut x: vector<Receiving<A>>): Receiving<A> {
+    vector::pop_back(&mut x)
+}
 
-    public fun unpacker_generic<T: key + store>(mut x: vector<Receiving<T>>): Receiving<T> {
-        vector::pop_back(&mut x)
-    }
+public fun unpacker_b(mut x: vector<Receiving<B>>): Receiving<B> {
+    vector::pop_back(&mut x)
+}
 
-    public entry fun receiver(parent: &mut A, x: Receiving<B>) {
-        let b = transfer::receive(&mut parent.id, x);
-        transfer::public_transfer(b, @tto);
-    }
+public fun unpacker_generic<T: key + store>(mut x: vector<Receiving<T>>): Receiving<T> {
+    vector::pop_back(&mut x)
+}
+
+public entry fun receiver(parent: &mut A, x: Receiving<B>) {
+    let b = transfer::receive(&mut parent.id, x);
+    transfer::public_transfer(b, @tto);
 }
 
 //# run tto::M1::start

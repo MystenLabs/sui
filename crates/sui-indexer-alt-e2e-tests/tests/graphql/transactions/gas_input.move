@@ -4,22 +4,22 @@
 //# init --protocol-version 108 --accounts A --addresses test=0x0 --simulator
 
 //# publish
-module test::simple {
-    public struct Counter has key {
-        id: UID,
-        value: u64,
-    }
+module test::simple;
 
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Counter {
-            id: object::new(ctx),
-            value: 0,
-        })
-    }
+public struct Counter has key {
+    id: UID,
+    value: u64,
+}
 
-    public fun increment(counter: &mut Counter) {
-        counter.value = counter.value + 1;
-    }
+fun init(ctx: &mut TxContext) {
+    transfer::share_object(Counter {
+        id: object::new(ctx),
+        value: 0,
+    })
+}
+
+public fun increment(counter: &mut Counter) {
+    counter.value = counter.value + 1;
 }
 
 // Digest 2: Basic transaction with single gas payment
@@ -92,7 +92,6 @@ module test::simple {
   }
 }
 */
-
 
 //# run-graphql
 /*

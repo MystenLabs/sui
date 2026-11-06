@@ -8,13 +8,13 @@ processed 3 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-13:
+task 1, lines 8-15:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4058400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-18:
+task 2, lines 17-20:
 //# programmable
 //> 0: test::m1::r();
 //> test::m1::copy_(Result(0));

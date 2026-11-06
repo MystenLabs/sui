@@ -5,12 +5,12 @@
 
 //# publish --upgradeable --sender A
 module Test_V0::base {
-    public fun f() { }
+    public fun f() {}
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V0::base {
-    public fun f(_x: u64) { }
+    public fun f(_x: u64) {}
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
@@ -20,30 +20,30 @@ module Test_V0::base {
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V0::base {
-    fun f() {  }
+    fun f() {}
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V0::base {
-    entry fun f() {  }
+    entry fun f() {}
 }
 
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 module Test_V1::base {
-    public entry fun f() {  }
+    public entry fun f() {}
 }
 
 //# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 module Test_V2::base {
-    public entry fun f(_x: u64) {  }
+    public entry fun f(_x: u64) {}
 }
 
 //# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 module Test_V2::base {
-    public fun f(_x: u64) {  }
+    public fun f(_x: u64) {}
 }
 
 //# upgrade --package Test_V1 --upgrade-capability 1,1 --sender A
 module Test_V2::base {
-    public fun f() {  }
+    public fun f() {}
 }

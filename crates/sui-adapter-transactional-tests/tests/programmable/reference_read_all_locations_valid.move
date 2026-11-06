@@ -6,66 +6,66 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
-    public struct Pair has copy, drop, store {
-        x: u64,
-        y: u64,
-    }
+module test::m;
 
-    public struct Obj has key, store {
-        id: UID,
-        value: u64,
-    }
+public struct Pair has copy, drop, store {
+    x: u64,
+    y: u64,
+}
 
-    public fun id_ref<T>(x: &T): &T {
-        x
-    }
+public struct Obj has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public fun pair(x: u64, y: u64): Pair {
-        Pair { x, y }
-    }
+public fun id_ref<T>(x: &T): &T {
+    x
+}
 
-    public fun borrow_x(p: &Pair): &u64 {
-        &p.x
-    }
+public fun pair(x: u64, y: u64): Pair {
+    Pair { x, y }
+}
 
-    public fun borrow_x_y(p: &Pair): (&u64, &u64) {
-        (&p.x, &p.y)
-    }
+public fun borrow_x(p: &Pair): &u64 {
+    &p.x
+}
 
-    public fun borrow_x_mut(p: &mut Pair): &mut u64 {
-        &mut p.x
-    }
+public fun borrow_x_y(p: &Pair): (&u64, &u64) {
+    (&p.x, &p.y)
+}
 
-    public fun write_u64(x: &mut u64) {
-        *x = *x + 1;
-    }
+public fun borrow_x_mut(p: &mut Pair): &mut u64 {
+    &mut p.x
+}
 
-    public fun new_obj(value: u64, ctx: &mut TxContext): Obj {
-        Obj { id: object::new(ctx), value }
-    }
+public fun write_u64(x: &mut u64) {
+    *x = *x + 1;
+}
 
-    public fun borrow_value(o: &Obj): &u64 {
-        &o.value
-    }
+public fun new_obj(value: u64, ctx: &mut TxContext): Obj {
+    Obj { id: object::new(ctx), value }
+}
 
-    public fun check(value: u64, expected: u64) {
-        assert!(value == expected, 0);
-    }
+public fun borrow_value(o: &Obj): &u64 {
+    &o.value
+}
 
-    public fun check_pair(p: Pair, x: u64, y: u64) {
-        assert!(p.x == x && p.y == y, 0);
-    }
+public fun check(value: u64, expected: u64) {
+    assert!(value == expected, 0);
+}
 
-    public fun check_and_borrow_y(x: u64, p: &Pair): &u64 {
-        assert!(p.x == x, 0);
-        &p.y
-    }
+public fun check_pair(p: Pair, x: u64, y: u64) {
+    assert!(p.x == x && p.y == y, 0);
+}
 
-    public fun check_vec(v: vector<u64>, len: u64, value: u64) {
-        assert!(v.length() == len, 0);
-        v.do!(|x| assert!(x == value, 0));
-    }
+public fun check_and_borrow_y(x: u64, p: &Pair): &u64 {
+    assert!(p.x == x, 0);
+    &p.y
+}
+
+public fun check_vec(v: vector<u64>, len: u64, value: u64) {
+    assert!(v.length() == len, 0);
+    v.do!(|x| assert!(x == value, 0));
 }
 
 // Move call value parameter

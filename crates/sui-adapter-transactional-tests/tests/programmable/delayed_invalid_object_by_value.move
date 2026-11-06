@@ -6,26 +6,27 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct R has key {
-        id: UID,
-    }
+module test::m1;
 
-    public fun r(ctx: &mut TxContext): R {
-        R { id: object::new(ctx) }
-    }
-
-    public fun share_r(ctx: &mut TxContext) {
-        transfer::share_object(r(ctx))
-    }
-
-    public fun freeze_r(ctx: &mut TxContext) {
-        transfer::share_object(r(ctx))
-    }
-
-    public fun imm(_: &R, _: R) { abort 0 }
-    public fun mut_(_: &mut R, _: R) { abort 0 }
+public struct R has key {
+    id: UID,
 }
+
+public fun r(ctx: &mut TxContext): R {
+    R { id: object::new(ctx) }
+}
+
+public fun share_r(ctx: &mut TxContext) {
+    transfer::share_object(r(ctx))
+}
+
+public fun freeze_r(ctx: &mut TxContext) {
+    transfer::share_object(r(ctx))
+}
+
+public fun imm(_: &R, _: R) { abort 0 }
+
+public fun mut_(_: &mut R, _: R) { abort 0 }
 
 //# programmable
 //> test::m1::share_r();

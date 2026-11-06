@@ -5,8 +5,8 @@
 
 //# publish --sender A
 module P1::M1 {
-    use sui::event;
     use std::ascii;
+    use sui::event;
 
     public struct EventA has copy, drop {
         message: ascii::String,
@@ -33,8 +33,8 @@ module P1::M1 {
 
 //# publish --sender B
 module P2::M2 {
-    use sui::event;
     use std::ascii;
+    use sui::event;
 
     public struct EventC has copy, drop {
         message: ascii::String,

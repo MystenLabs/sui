@@ -7,8 +7,7 @@
 
 //# publish --sender A
 
-module test::m {}
-
+module test::m;
 
 //# view-object 1,0
 

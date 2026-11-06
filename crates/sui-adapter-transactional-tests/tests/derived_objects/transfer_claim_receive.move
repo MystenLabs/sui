@@ -13,38 +13,38 @@ use sui::derived_object;
 use sui::transfer::Receiving;
 
 public struct Parent has key, store {
-  id: UID,
+    id: UID,
 }
 
 public struct Derived has key, store {
-  id: UID,
+    id: UID,
 }
 
 public struct Obj has key, store {
-  id: UID,
+    id: UID,
 }
 
 entry fun create_parent(ctx: &mut TxContext) {
-  let parent = Parent { id: object::new(ctx) };
-  transfer::public_transfer(parent, ctx.sender());
+    let parent = Parent { id: object::new(ctx) };
+    transfer::public_transfer(parent, ctx.sender());
 }
 
 entry fun transfer_obj_to_derived(parent: &Parent, key: u64, ctx: &mut TxContext) {
-  let obj = Obj { id: object::new(ctx) };
-  let recipient = derived_object::derive_address(parent.id.to_inner(), key);
-  transfer::public_transfer(obj, recipient);
+    let obj = Obj { id: object::new(ctx) };
+    let recipient = derived_object::derive_address(parent.id.to_inner(), key);
+    transfer::public_transfer(obj, recipient);
 }
 
 entry fun claim_and_receive(
-  parent: &mut Parent,
-  key: u64,
-  receiving: Receiving<Obj>,
-  ctx: &mut TxContext,
+    parent: &mut Parent,
+    key: u64,
+    receiving: Receiving<Obj>,
+    ctx: &mut TxContext,
 ) {
-  let mut derived = Derived { id: derived_object::claim(&mut parent.id, key) };
-  let obj = transfer::public_receive(&mut derived.id, receiving);
-  transfer::public_transfer(obj, ctx.sender());
-  transfer::public_transfer(derived, ctx.sender());
+    let mut derived = Derived { id: derived_object::claim(&mut parent.id, key) };
+    let obj = transfer::public_receive(&mut derived.id, receiving);
+    transfer::public_transfer(obj, ctx.sender());
+    transfer::public_transfer(derived, ctx.sender());
 }
 
 //# run a::m::create_parent --sender A

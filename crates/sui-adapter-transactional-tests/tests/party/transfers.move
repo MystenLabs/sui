@@ -90,7 +90,7 @@ public fun priv_fastpath(obj: Priv, addr: address) {
 
 //# view-object 2,0
 
-// Transfers party object via `transfer` with wrong sender; should fail 
+// Transfers party object via `transfer` with wrong sender; should fail
 //# programmable --inputs object(2,1) @B --sender B
 //> ex::m::priv_fastpath(Input(0), Input(1));
 

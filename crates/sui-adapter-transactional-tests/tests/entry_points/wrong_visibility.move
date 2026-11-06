@@ -6,23 +6,22 @@
 //# init --addresses Test=0x0
 
 //# publish
-module Test::M {
-    public(package) fun t2(_: &mut TxContext) {
-        abort 0
-    }
+module Test::M;
 
-    fun t3(_: &mut TxContext) {
-        abort 0
-    }
+public(package) fun t2(_: &mut TxContext) {
+    abort 0
+}
 
-    public fun t4(x: &u64, _: &mut TxContext): &u64 {
-        x
-    }
+fun t3(_: &mut TxContext) {
+    abort 0
+}
 
-    public fun t5(x: &mut u64, _: &mut TxContext): &mut u64 {
-        x
-    }
+public fun t4(x: &u64, _: &mut TxContext): &u64 {
+    x
+}
 
+public fun t5(x: &mut u64, _: &mut TxContext): &mut u64 {
+    x
 }
 
 //# run Test::M::t2

@@ -9,27 +9,27 @@
 //# init --addresses test=0x0 --accounts A B
 
 //# publish --sender A
-module test::large_balance {
-	use sui::balance::{Self, Supply};
+module test::large_balance;
 
-	public struct MARKER has drop {}
+use sui::balance::{Self, Supply};
 
-	public struct SupplyHolder has key, store {
-		id: UID,
-		supply: Supply<MARKER>,
-	}
+public struct MARKER has drop {}
 
-	public fun create_holder(ctx: &mut TxContext): SupplyHolder {
-		SupplyHolder {
-			id: object::new(ctx),
-			supply: balance::create_supply(MARKER {}),
-		}
-	}
+public struct SupplyHolder has key, store {
+    id: UID,
+    supply: Supply<MARKER>,
+}
 
-	public fun send_large_balance(holder: &mut SupplyHolder, recipient: address, amount: u64) {
-		let balance = holder.supply.increase_supply(amount);
-		balance::send_funds(balance, recipient);
-	}
+public fun create_holder(ctx: &mut TxContext): SupplyHolder {
+    SupplyHolder {
+        id: object::new(ctx),
+        supply: balance::create_supply(MARKER {}),
+    }
+}
+
+public fun send_large_balance(holder: &mut SupplyHolder, recipient: address, amount: u64) {
+    let balance = holder.supply.increase_supply(amount);
+    balance::send_funds(balance, recipient);
 }
 
 // Create two supply holders

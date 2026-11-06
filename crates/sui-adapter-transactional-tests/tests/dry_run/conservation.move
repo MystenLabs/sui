@@ -7,13 +7,13 @@
 
 //# publish
 
-module test::m {
-    use sui::sui::SUI;
-    use sui::coin::Coin;
+module test::m;
 
-    public fun transfer_back(c: Coin<SUI>, ctx: &mut TxContext) {
-        sui::transfer::public_transfer(c, tx_context::sender(ctx))
-    }
+use sui::coin::Coin;
+use sui::sui::SUI;
+
+public fun transfer_back(c: Coin<SUI>, ctx: &mut TxContext) {
+    sui::transfer::public_transfer(c, tx_context::sender(ctx))
 }
 
 //# programmable --sender A --inputs struct(@empty,1) --dry-run

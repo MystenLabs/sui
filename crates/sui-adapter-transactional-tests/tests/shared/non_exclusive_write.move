@@ -12,49 +12,49 @@ module a::m;
 use sui::dynamic_field::{add, remove};
 
 public struct Obj has key, store {
-  id: object::UID,
-  val: u64,
+    id: object::UID,
+    val: u64,
 }
 
 public fun create(ctx: &mut TxContext) {
-  transfer::public_share_object(Obj { id: object::new(ctx), val: 0 })
+    transfer::public_share_object(Obj { id: object::new(ctx), val: 0 })
 }
 
 public fun add_dynamic_field(obj: &mut Obj) {
-  add<u64, u64>(&mut obj.id, 0, 42);
+    add<u64, u64>(&mut obj.id, 0, 42);
 }
 
 public fun mutate(obj: &mut Obj) {
-  obj.val = 1;
+    obj.val = 1;
 }
 
 public fun by_value_with_mutation(mut obj: Obj) {
-  obj.val = 2;
-  transfer::public_share_object(obj);
+    obj.val = 2;
+    transfer::public_share_object(obj);
 }
 
 public fun by_value_delete(obj: Obj) {
-  let Obj { id, val: _ } = obj;
-  object::delete(id);
+    let Obj { id, val: _ } = obj;
+    object::delete(id);
 }
 
 public fun by_value_without_mutation(obj: Obj) {
-  transfer::public_share_object(obj);
+    transfer::public_share_object(obj);
 }
 
 public struct Wrapper {
-  obj: Obj,
+    obj: Obj,
 }
 
 public fun by_value_without_mutation_wrapped(obj: Obj) {
-  let wrapper = Wrapper { obj };
-  let Wrapper { obj } = wrapper;
-  transfer::public_share_object(obj);
+    let wrapper = Wrapper { obj };
+    let Wrapper { obj } = wrapper;
+    transfer::public_share_object(obj);
 }
 
 public fun remove_and_transfer(obj: &mut Obj, ctx: &mut TxContext) {
-  let val = remove<u64, u64>(&mut obj.id, 0);
-  transfer::public_share_object(Obj { id: object::new(ctx), val });
+    let val = remove<u64, u64>(&mut obj.id, 0);
+    transfer::public_share_object(Obj { id: object::new(ctx), val });
 }
 
 //# run a::m::create --sender A

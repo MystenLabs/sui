@@ -7,25 +7,23 @@
 
 //# publish
 
-module t2::o2 {
+module t2::o2;
 
-    public struct Obj2 has key, store {
-        id: UID,
-    }
+public struct Obj2 has key, store {
+    id: UID,
+}
 
-    public entry fun create(ctx: &mut TxContext) {
-        let o = Obj2 { id: object::new(ctx) };
-        transfer::public_share_object(o)
-    }
+public entry fun create(ctx: &mut TxContext) {
+    let o = Obj2 { id: object::new(ctx) };
+    transfer::public_share_object(o)
+}
 
-    public entry fun consume(mut v: vector<Obj2>) {
-        while (!vector::is_empty(&v)) {
-            let Obj2 { id } = vector::pop_back(&mut v);
-            object::delete(id);
-        };
-        vector::destroy_empty(v)
-    }
-
+public entry fun consume(mut v: vector<Obj2>) {
+    while (!vector::is_empty(&v)) {
+        let Obj2 { id } = vector::pop_back(&mut v);
+        object::delete(id);
+    };
+    vector::destroy_empty(v)
 }
 
 //# run t2::o2::create

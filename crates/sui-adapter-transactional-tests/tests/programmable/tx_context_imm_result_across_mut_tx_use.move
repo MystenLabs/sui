@@ -26,8 +26,7 @@ public fun borrow(x: &X, _ctx: &TxContext): &Y {
     &x.y
 }
 
-public fun mut_tx(_: &mut TxContext) {
-}
+public fun mut_tx(_: &mut TxContext) {}
 
 public fun check(y: &Y, expected: u64, _ctx: &TxContext) {
     assert!(y.f == expected, 0);

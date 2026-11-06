@@ -7,28 +7,27 @@
 //# init --addresses a=0x0 --accounts A --enable-feature-flags shared_object_deletion
 
 //# publish
-module a::m {
-    use sui::dynamic_field::{add, remove};
+module a::m;
 
-    public struct Obj has key, store {
-        id: object::UID,
-    }
+use sui::dynamic_field::{add, remove};
 
-    public entry fun create(ctx: &mut TxContext) {
-        transfer::public_share_object(Obj { id: object::new(ctx) })
-    }
+public struct Obj has key, store {
+    id: object::UID,
+}
 
-    public entry fun add_dynamic_field(mut obj: Obj) {
-        add<u64, u64>(&mut obj.id, 0, 0);
-        transfer::public_share_object(obj);
-    }
+public entry fun create(ctx: &mut TxContext) {
+    transfer::public_share_object(Obj { id: object::new(ctx) })
+}
 
-    public entry fun add_and_remove_dynamic_field(mut obj: Obj) {
-        add<u64, u64>(&mut obj.id, 0, 0);
-        remove<u64, u64>(&mut obj.id, 0 );
-        transfer::public_share_object(obj);
-    }
+public entry fun add_dynamic_field(mut obj: Obj) {
+    add<u64, u64>(&mut obj.id, 0, 0);
+    transfer::public_share_object(obj);
+}
 
+public entry fun add_and_remove_dynamic_field(mut obj: Obj) {
+    add<u64, u64>(&mut obj.id, 0, 0);
+    remove<u64, u64>(&mut obj.id, 0);
+    transfer::public_share_object(obj);
 }
 
 //# run a::m::create --sender A

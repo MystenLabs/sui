@@ -8,35 +8,35 @@
 
 //# publish
 
-module test::event_streams {
-	use sui::event;
+module test::event_streams;
 
-	public struct AuthEvent has copy, drop {
-		value: u64,
-	}
+use sui::event;
 
-	public struct TestObject has key {
-		id: UID,
-		value: u64,
-	}
+public struct AuthEvent has copy, drop {
+    value: u64,
+}
 
-	// test that reading o2 and updating o1 works
-	public entry fun emit_event(value: u64) {
-		// emit an event so the world can see the new value
-		let ev = AuthEvent { value };
-		event::emit_authenticated(ev);
-	}
+public struct TestObject has key {
+    id: UID,
+    value: u64,
+}
 
-	public entry fun mint_and_emit(value: u64, ctx: &mut TxContext) {
-		let obj = TestObject {
-			id: object::new(ctx),
-			value,
-		};
-		transfer::transfer(obj, tx_context::sender(ctx));
+// test that reading o2 and updating o1 works
+public entry fun emit_event(value: u64) {
+    // emit an event so the world can see the new value
+    let ev = AuthEvent { value };
+    event::emit_authenticated(ev);
+}
 
-		let ev = AuthEvent { value };
-		event::emit_authenticated(ev);
-	}
+public entry fun mint_and_emit(value: u64, ctx: &mut TxContext) {
+    let obj = TestObject {
+        id: object::new(ctx),
+        value,
+    };
+    transfer::transfer(obj, tx_context::sender(ctx));
+
+    let ev = AuthEvent { value };
+    event::emit_authenticated(ev);
 }
 
 //# run test::event_streams::emit_event --sender A --args 10

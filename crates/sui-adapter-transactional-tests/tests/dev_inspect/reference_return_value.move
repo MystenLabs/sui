@@ -7,10 +7,10 @@
 
 //# publish
 
-module test::m {
-    public fun return_ref(n: &u64): &u64 {
-        n
-    }
+module test::m;
+
+public fun return_ref(n: &u64): &u64 {
+    n
 }
 
 //# programmable --sender A --inputs 0 --dev-inspect

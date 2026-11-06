@@ -10,25 +10,43 @@
 module test::m;
 
 public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
+public struct Inner has copy, drop, store { f: u64, g: u64 }
 
 public fun new(ctx: &mut TxContext): Obj {
     Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
 }
+
 public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
 public fun pick(a: &mut Inner, _b: &mut Inner): &mut u64 { &mut a.f }
+
 public fun pick_imm(a: &Inner, _b: &Inner): &u64 { &a.f }
+
 public fun pick_imm_from_imm(_a: &mut Inner, b: &Inner): &u64 { &b.f }
+
 public fun pick_imm_from_mut(a: &mut Inner, _b: &Inner): &u64 { &a.f }
+
 public fun id_mut<T>(t: &mut T): &mut T { t }
+
 public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
+
 public fun f(i: &Inner): &u64 { &i.f }
-public fun imm_val_mut(a: &vector<u64>, b: &mut vector<u64>): (&vector<u64>, u64, &mut vector<u64>) { (a, 1, b) }
+
+public fun imm_val_mut(
+    a: &vector<u64>,
+    b: &mut vector<u64>,
+): (&vector<u64>, u64, &mut vector<u64>) { (a, 1, b) }
+
 public fun replace(v: &mut vector<u64>) { *v = vector[] }
+
 public fun digest_via(ctx: &TxContext, _x: &u64): &vector<u8> { ctx.digest() }
+
 public fun use_imm<T>(_: &T) {}
+
 public fun use_mut<T>(_: &mut T) {}
+
 public fun write(r: &mut u64, v: u64) { *r = v }
+
 public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 
 //# programmable --inputs 1

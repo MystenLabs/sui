@@ -5,7 +5,7 @@ expression: normalize_path(err.to_string())
 error[EUC01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:8
   │
-6 │ module upgrades::upgrades {
+6 │ module upgrades::upgrades;
   │        ^^^^^^^^^^^^^^^^^^ enum 'EnumToBeRemoved' is missing
   │
   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
@@ -14,158 +14,158 @@ error[EUC01001]: missing public declaration
 error[EUC01001]: missing public declaration
   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:6:8
   │
-6 │ module upgrades::upgrades {
+6 │ module upgrades::upgrades;
   │        ^^^^^^^^^^^^^^^^^^ struct 'StructToBeRemoved' is missing
   │
   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing struct 'StructToBeRemoved' back to the module 'upgrades'.
 
 error[EUC01003]: ability mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:11:19
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:12:15
    │
-11 │     public struct StructAbilityMismatchAdd has copy {} // added the copy ability where none existed
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
+12 │ public struct StructAbilityMismatchAdd has copy {} // added the copy ability where none existed
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original abilities of struct 'StructAbilityMismatchAdd': none.
 
 error[EUC01003]: ability mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:14:19
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:15:15
    │
-14 │     public struct StructAbilityMismatchRemove {} // removed the copy ability
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing ability: 'copy'
+15 │ public struct StructAbilityMismatchRemove {} // removed the copy ability
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing ability: 'copy'
    │
    = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original ability of struct 'StructAbilityMismatchRemove': 'copy'.
 
 error[EUC01003]: ability mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:17:19
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:18:15
    │
-17 │     public struct StructAbilityMismatchChange has drop {} // changed from drop to copy
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'drop'
+18 │ public struct StructAbilityMismatchChange has drop {} // changed from drop to copy
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'drop'
    │
    = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original ability of struct 'StructAbilityMismatchChange': 'copy'.
 
 error[EUC01005]: type parameter mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:20:19
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:21:15
    │
-20 │     public struct StructTypeParamMismatch<T> { a: T } // changed S to T
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, found 1
+21 │ public struct StructTypeParamMismatch<T> { a: T } // changed S to T
+   │               ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, found 1
    │
    = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original struct's type parameters for struct 'StructTypeParamMismatch' including the ordering.
 
 error[EUC01002]: type mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:23:19
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:24:15
    │
-23 │     public struct StructFieldMismatchAdd {
-   │                   ^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of fields: expected 2, found 3
+24 │ public struct StructFieldMismatchAdd {
+   │               ^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of fields: expected 2, found 3
    │
    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original struct's fields for struct 'StructFieldMismatchAdd' including the ordering.
 
 error[EUC01002]: type mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:30:19
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:31:15
    │
-30 │     public struct StructFieldMismatchRemove {
-   │                   ^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of fields: expected 2, found 1
+31 │ public struct StructFieldMismatchRemove {
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect number of fields: expected 2, found 1
    │
    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original struct's fields for struct 'StructFieldMismatchRemove' including the ordering.
 
 error[EUC01002]: type mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:38:9
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:39:5
    │
-36 │     public struct StructFieldMismatchChange {
-   │                   ------------------------- Struct definition
-37 │         a: u64,
-38 │         b: u8 // changed b from u64 to u8
-   │         ^ Mismatched field type 'u8', expected 'u64'.
+37 │ public struct StructFieldMismatchChange {
+   │               ------------------------- Struct definition
+38 │     a: u64,
+39 │     b: u8, // changed b from u64 to u8
+   │     ^ Mismatched field type 'u8', expected 'u64'.
    │
    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original struct's fields for struct 'StructFieldMismatchChange' including the ordering.
 
 error[EUC01003]: ability mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:45:17
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:46:13
    │
-45 │     public enum EnumAbilityMismatchAdd has copy {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
+46 │ public enum EnumAbilityMismatchAdd has copy {
+   │             ^^^^^^^^^^^^^^^^^^^^^^ Unexpected ability: 'copy'
    │
    = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original abilities of the enum: none for enum 'EnumAbilityMismatchAdd'.
 
 error[EUC01003]: ability mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:50:17
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:51:13
    │
-50 │     public enum EnumAbilityMismatchRemove {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^ Missing ability: 'copy'
+51 │ public enum EnumAbilityMismatchRemove {
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^ Missing ability: 'copy'
    │
    = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original ability of the enum: 'copy' for enum 'EnumAbilityMismatchRemove'.
 
 error[EUC01003]: ability mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:55:17
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:56:13
    │
-55 │     public enum EnumAbilityMismatchChange has drop {
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'drop'
+56 │ public enum EnumAbilityMismatchChange has drop {
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^ Mismatched abilities: missing 'copy', unexpected 'drop'
    │
    = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original ability of the enum: 'copy' for enum 'EnumAbilityMismatchChange'.
 
 error[EUC02001]: variant mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:64:9
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:65:5
    │
-60 │     public enum EnumNewVariant {
-   │                 -------------- Enum definition
+61 │ public enum EnumNewVariant {
+   │             -------------- Enum definition
    ·
-64 │         D // new variant
-   │         ^ New unexpected variant 'D'.
+65 │     D, // new variant
+   │     ^ New unexpected variant 'D'.
    │
    = Enums are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original enum's variants for enum 'EnumNewVariant' including the ordering.
 
 error[EUC02001]: variant mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:68:17
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:69:13
    │
-68 │     public enum EnumVariantMissing {
-   │                 ^^^^^^^^^^^^^^^^^^ Missing variant 'B'.
+69 │ public enum EnumVariantMissing {
+   │             ^^^^^^^^^^^^^^^^^^ Missing variant 'B'.
    │
    = Enums are part of a module's public interface and cannot be changed during an upgrade.
    = Restore the original enum's variant 'B' for enum 'EnumVariantMissing' including the ordering.
 
 error[EUC01001]: missing public declaration
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:74:9
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:75:5
    │
-74 │     fun function_to_have_public_removed() {}
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function 'function_to_have_public_removed' has lost its public visibility
+75 │ fun function_to_have_public_removed() {}
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function 'function_to_have_public_removed' has lost its public visibility
    │
    = Functions are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original function's 'public' visibility for function 'function_to_have_public_removed'.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:82:16
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:83:12
    │
-82 │     public fun function_add_arg(a: u64) {}
-   │                ^^^^^^^^^^^^^^^^ Expected 0 parameters, found 1
+83 │ public fun function_add_arg(a: u64) {}
+   │            ^^^^^^^^^^^^^^^^ Expected 0 parameters, found 1
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameters for function 'function_add_arg', expected 0 parameters.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:85:16
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:86:12
    │
-85 │     public fun function_remove_arg() {}
-   │                ^^^^^^^^^^^^^^^^^^^ Expected 1 parameter, found 0
+86 │ public fun function_remove_arg() {}
+   │            ^^^^^^^^^^^^^^^^^^^ Expected 1 parameter, found 0
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'function_remove_arg', expected 1 parameter.
 
 error[EUC03001]: function signature mismatch
-   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:88:36
+   ┌─ /fixtures/upgrade_errors/all_v2/sources/UpgradeErrors.move:89:32
    │
-88 │     public fun function_change_arg(a: u8) {} // now has u8 instead of u64
-   │                                    ^ Unexpected parameter 'u8', expected 'u64'
+89 │ public fun function_change_arg(a: u8) {} // now has u8 instead of u64
+   │                                ^ Unexpected parameter 'u8', expected 'u64'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'function_change_arg'.

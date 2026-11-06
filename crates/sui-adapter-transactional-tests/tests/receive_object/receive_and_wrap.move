@@ -4,38 +4,38 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
+module tto::M1;
 
-    public struct Wrapper has key, store {
-        id: UID,
-        elem: B
-    }
+use sui::transfer::Receiving;
 
-    public struct A has key, store {
-        id: UID,
-    }
+public struct Wrapper has key, store {
+    id: UID,
+    elem: B,
+}
 
-    public struct B has key, store {
-        id: UID,
-    }
+public struct A has key, store {
+    id: UID,
+}
 
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-    }
+public struct B has key, store {
+    id: UID,
+}
 
-    public entry fun wrapper(parent: &mut A, x: Receiving<B>, ctx: &mut TxContext) {
-        let b = transfer::receive(&mut parent.id, x);
-        let wrapper = Wrapper {
-            id: object::new(ctx),
-            elem: b
-        };
-        transfer::public_transfer(wrapper, @tto);
-    }
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+}
+
+public entry fun wrapper(parent: &mut A, x: Receiving<B>, ctx: &mut TxContext) {
+    let b = transfer::receive(&mut parent.id, x);
+    let wrapper = Wrapper {
+        id: object::new(ctx),
+        elem: b,
+    };
+    transfer::public_transfer(wrapper, @tto);
 }
 
 //# run tto::M1::start

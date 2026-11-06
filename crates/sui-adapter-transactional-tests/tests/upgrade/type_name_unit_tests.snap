@@ -6,30 +6,30 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-13:
+task 1, lines 6-15:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6087600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-25:
+task 2, lines 17-31:
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 7189600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 4, lines 29-173:
+task 4, lines 35-180:
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 57874000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 5, line 175:
+task 5, line 182:
 //# run A2::m::cases --args @A0 @A1
 mutated: object(0,1)
 gas summary: computation_cost: 1130000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 6, line 177:
+task 6, line 184:
 //# run A2::m::generic_cases --args @A0 @A1
 mutated: object(0,1)
 gas summary: computation_cost: 34200000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

@@ -7,31 +7,31 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
-    public struct Obj has key, store {
-        id: UID,
-        value: u64,
-    }
+module test::m;
 
-    public fun id_ref<T>(x: &T): &T {
-        x
-    }
+public struct Obj has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public fun new_obj(value: u64, ctx: &mut TxContext): Obj {
-        Obj { id: object::new(ctx), value }
-    }
+public fun id_ref<T>(x: &T): &T {
+    x
+}
 
-    public fun borrow_value(o: &Obj): &u64 {
-        &o.value
-    }
+public fun new_obj(value: u64, ctx: &mut TxContext): Obj {
+    Obj { id: object::new(ctx), value }
+}
 
-    public fun take(o: Obj, ctx: &TxContext) {
-        transfer::public_transfer(o, ctx.sender())
-    }
+public fun borrow_value(o: &Obj): &u64 {
+    &o.value
+}
 
-    public fun check(value: u64, expected: u64) {
-        assert!(value == expected, 0);
-    }
+public fun take(o: Obj, ctx: &TxContext) {
+    transfer::public_transfer(o, ctx.sender())
+}
+
+public fun check(value: u64, expected: u64) {
+    assert!(value == expected, 0);
 }
 
 // Read of a non-copy type

@@ -10,39 +10,40 @@
 //# init --addresses Dep_V1=0x0 Dep_V2=0x0 Root=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module Dep_V1::d;
+module Dep_V1::d {
+    public struct S has key, store { id: sui::object::UID, v: u64 }
 
-public struct S has key, store { id: sui::object::UID, v: u64 }
+    public fun make(ctx: &mut sui::tx_context::TxContext) {
+        sui::transfer::share_object(S { id: sui::object::new(ctx), v: 0 })
+    }
 
-public fun make(ctx: &mut sui::tx_context::TxContext) {
-    sui::transfer::share_object(S { id: sui::object::new(ctx), v: 0 })
+    public fun stamp(s: &mut S) { s.v = 1 }
+
+    public fun ping() {}
 }
 
-public fun stamp(s: &mut S) { s.v = 1 }
-
-public fun ping() {}
-
 //# publish --upgradeable --dependencies Dep_V1 --sender A
-module Root::m;
-use Dep_V1::d;
+module Root::m {
+    use Dep_V1::d;
 
-// Public: deps pinned `at_least`, so `Dep` may be upgraded under us.
-public fun go(s: &mut d::S) { d::stamp(s) }
+    // Public: deps pinned `at_least`, so `Dep` may be upgraded under us.
+    public fun go(s: &mut d::S) { d::stamp(s) }
+}
 
 //# run Dep_V1::d::make --sender A
 
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
-module Dep_V2::d;
+module Dep_V2::d {
+    public struct S has key, store { id: sui::object::UID, v: u64 }
 
-public struct S has key, store { id: sui::object::UID, v: u64 }
+    public fun make(ctx: &mut sui::tx_context::TxContext) {
+        sui::transfer::share_object(S { id: sui::object::new(ctx), v: 0 })
+    }
 
-public fun make(ctx: &mut sui::tx_context::TxContext) {
-    sui::transfer::share_object(S { id: sui::object::new(ctx), v: 0 })
+    public fun stamp(s: &mut S) { s.v = 2 }
+
+    public fun ping() {}
 }
-
-public fun stamp(s: &mut S) { s.v = 2 }
-
-public fun ping() {}
 
 //# programmable --sender A --inputs object(3,0)
 // Nothing else pins `Dep`, so `at_least(1)` resolves to v1 => writes 1.

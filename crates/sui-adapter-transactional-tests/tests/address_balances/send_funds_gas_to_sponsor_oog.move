@@ -11,7 +11,9 @@
 
 //# publish
 module test::big;
+
 public struct W has key, store { id: UID, data: vector<u8> }
+
 public fun make(size: u64, ctx: &mut TxContext) {
     let mut data = vector[];
     let mut i = 0;

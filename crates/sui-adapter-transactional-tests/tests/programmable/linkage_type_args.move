@@ -7,22 +7,26 @@
 //# init --addresses Test=0x0 DepV1=0x0 DepV2=0x0 Gen=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::M1;
-public struct A has drop { }
+module DepV1::M1 {
+    public struct A has drop {}
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 // `B` introduced in v2 => its defining id is v2 => a `B` type-arg pins Dep at_least 2.
-module DepV2::M1;
-public struct A has drop { }
-public struct B has drop { }
+module DepV2::M1 {
+    public struct A has drop {}
+    public struct B has drop {}
+}
 
 //# publish --sender A
-module Gen::m;
-public fun id<T>() { }
+module Gen::m {
+    public fun id<T>() {}
+}
 
 //# stage-package
-module Test::M;
-fun init(_ctx: &mut TxContext) { }
+module Test::M {
+    fun init(_ctx: &mut TxContext) {}
+}
 
 //# programmable --sender A --inputs @A
 // publish pins DepV1 exact (v1); B type-arg pins Dep at_least 2 => exact(1) < at_least(2) =>

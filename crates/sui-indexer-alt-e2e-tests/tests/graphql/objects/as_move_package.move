@@ -4,10 +4,10 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish
-module P::M {
-  public fun foo(): u64 {
+module P::M;
+
+public fun foo(): u64 {
     42
-  }
 }
 
 //# create-checkpoint

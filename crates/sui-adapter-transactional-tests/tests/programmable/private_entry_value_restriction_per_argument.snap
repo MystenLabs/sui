@@ -8,13 +8,13 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-15:
+task 1, lines 8-17:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4955200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 17-20:
+task 2, lines 19-22:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();
 //> 1: test::m1::r();
@@ -23,14 +23,14 @@ created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 22-24:
+task 3, lines 24-26:
 //# programmable --sender A --inputs object(2,0) object(2,1)
 //> test::m1::dirty(Input(1));
 //> test::m1::priv(Input(0), Input(1));
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3419658, non_refundable_storage_fee: 342
 
-task 4, lines 26-29:
+task 4, lines 28-31:
 //# programmable --sender A --inputs 0u64 object(2,1)
 //> test::m1::dirty(Input(1));
 // type error instead of dirty error

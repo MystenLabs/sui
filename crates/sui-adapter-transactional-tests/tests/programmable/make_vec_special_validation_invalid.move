@@ -6,30 +6,30 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    use std::string::{Self, String};
+module test::m1;
 
-    public entry fun vec_option_u64(mut v: vector<Option<u64>>) {
-        while (!vector::is_empty(&v)) {
-            let opt = vector::pop_back(&mut v);
-            if (option::is_some(&opt)) {
-                option::destroy_some(opt);
-            }
+use std::string::{Self, String};
+
+public entry fun vec_option_u64(mut v: vector<Option<u64>>) {
+    while (!vector::is_empty(&v)) {
+        let opt = vector::pop_back(&mut v);
+        if (option::is_some(&opt)) {
+            option::destroy_some(opt);
         }
     }
+}
 
-    public entry fun vec_option_string(mut v: vector<Option<String>>) {
-        while (!vector::is_empty(&v)) {
-            let opt = vector::pop_back(&mut v);
-            if (option::is_some(&opt)) {
-                string::utf8(*string::as_bytes(&option::destroy_some(opt)));
-            }
+public entry fun vec_option_string(mut v: vector<Option<String>>) {
+    while (!vector::is_empty(&v)) {
+        let opt = vector::pop_back(&mut v);
+        if (option::is_some(&opt)) {
+            string::utf8(*string::as_bytes(&option::destroy_some(opt)));
         }
     }
+}
 
-    public fun some_string(v: vector<String>): vector<Option<String>> {
-        v.map!(|s| option::some(s))
-    }
+public fun some_string(v: vector<String>): vector<Option<String>> {
+    v.map!(|s| option::some(s))
 }
 
 //# programmable --inputs vector[0u64,0u64]

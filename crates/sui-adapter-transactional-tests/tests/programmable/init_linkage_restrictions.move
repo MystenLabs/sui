@@ -8,39 +8,48 @@
 //# init --addresses Test=0x0 NoInit=0x0 DepV1=0x0 DepV2=0x0 V1Consumer=0x0 DepConsumerV1=0x0 DepConsumerV2=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::M1;
-fun init(_ctx: &mut TxContext) { }
-public fun f1() { }
+module DepV1::M1 {
+    fun init(_ctx: &mut TxContext) {}
+
+    public fun f1() {}
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::M1;
-fun init(_ctx: &mut TxContext) { }
-public fun f1() { }
-public fun f2() { }
+module DepV2::M1 {
+    fun init(_ctx: &mut TxContext) {}
+
+    public fun f1() {}
+
+    public fun f2() {}
+}
 
 //# stage-package
-module Test::M;
-fun init(_ctx: &mut TxContext) { }
+module Test::M {
+    fun init(_ctx: &mut TxContext) {}
+}
 
 //# stage-package
-module NoInit::M;
-public fun f() { }
+module NoInit::M {
+    public fun f() {}
+}
 
 //# publish --dependencies DepV1 --sender A
 // Depends on DepV1, reached via a private entry fn => deps pinned exact => DepV1 (v1) exact.
-module V1Consumer::M;
-entry fun consume_v1() { DepV1::M1::f1() }
+module V1Consumer::M {
+    entry fun consume_v1() { DepV1::M1::f1() }
+}
 
 //# publish --upgradeable --dependencies DepV1 --sender A
 // Upgradeable consumer: published vs Dep v1, upgraded to v2 (fresh publish can't depend on a
 // non-root version). Public fn => deps pinned at_least => calling v2 pins Dep at_least 2.
-module DepConsumerV1::M;
-public fun consume() { DepV1::M1::f1() }
+module DepConsumerV1::M {
+    public fun consume() { DepV1::M1::f1() }
+}
 
 //# upgrade --package DepConsumerV1 --upgrade-capability 6,1 --dependencies DepV2 --sender A
-module DepConsumerV2::M;
-public fun consume() { DepV2::M1::f2() }
-
+module DepConsumerV2::M {
+    public fun consume() { DepV2::M1::f2() }
+}
 
 //# programmable --sender A --inputs 10 @A
 // publish pins DepV2 exact; direct call pins DepV1 exact => exact/exact conflict.

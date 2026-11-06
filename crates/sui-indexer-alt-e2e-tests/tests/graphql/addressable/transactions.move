@@ -4,18 +4,18 @@
 //# init --protocol-version 108 --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
-module Test::M1 {
-    public struct Object has key, store {
-        id: UID,
-        value: u64,
-    }
+module Test::M1;
 
-    public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        transfer::public_transfer(
-            Object { id: object::new(ctx), value },
-            recipient
-        )
-    }
+public struct Object has key, store {
+    id: UID,
+    value: u64,
+}
+
+public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
+    transfer::public_transfer(
+        Object { id: object::new(ctx), value },
+        recipient,
+    )
 }
 
 // A sends transaction to A (affects A, sent by A)
@@ -23,7 +23,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-// A sends transaction to B (affects B, sent by A)  
+// A sends transaction to B (affects B, sent by A)
 //# run Test::M1::create --sender A --args 1 @B
 
 //# create-checkpoint

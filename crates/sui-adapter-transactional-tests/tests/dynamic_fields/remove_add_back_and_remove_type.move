@@ -9,42 +9,42 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public struct Object has key, store {
-        id: UID,
-    }
+module test::m1;
 
-    public struct C1 has key, store {
-        id: UID,
-    }
+public struct Object has key, store {
+    id: UID,
+}
 
-    public struct C2 has key, store {
-        id: UID,
-    }
+public struct C1 has key, store {
+    id: UID,
+}
 
-    public entry fun create(ctx: &mut TxContext) {
-        let o = Object { id: object::new(ctx) };
-        transfer::public_transfer(o, tx_context::sender(ctx))
-    }
+public struct C2 has key, store {
+    id: UID,
+}
 
-    public entry fun test_dof(parent: &mut Object, ctx: &mut TxContext) {
-        let c1 = C1 { id: object::new(ctx) };
-        sui::dynamic_object_field::add(&mut parent.id, 0u64, c1);
-        let C1 { id } = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
-        object::delete(id);
+public entry fun create(ctx: &mut TxContext) {
+    let o = Object { id: object::new(ctx) };
+    transfer::public_transfer(o, tx_context::sender(ctx))
+}
 
-        let c2 = C2 { id: object::new(ctx) };
-        sui::dynamic_object_field::add(&mut parent.id, 0u64, c2);
-        let C2 { id } = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
-        object::delete(id);
-    }
+public entry fun test_dof(parent: &mut Object, ctx: &mut TxContext) {
+    let c1 = C1 { id: object::new(ctx) };
+    sui::dynamic_object_field::add(&mut parent.id, 0u64, c1);
+    let C1 { id } = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+    object::delete(id);
 
-    public entry fun test_df(parent: &mut Object) {
-        sui::dynamic_field::add(&mut parent.id, 0u64, b"true");
-        let _: vector<u8> = sui::dynamic_field::remove(&mut parent.id, 0u64);
-        sui::dynamic_field::add(&mut parent.id, 0u64, true);
-        let _: bool = sui::dynamic_field::remove(&mut parent.id, 0u64);
-    }
+    let c2 = C2 { id: object::new(ctx) };
+    sui::dynamic_object_field::add(&mut parent.id, 0u64, c2);
+    let C2 { id } = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+    object::delete(id);
+}
+
+public entry fun test_df(parent: &mut Object) {
+    sui::dynamic_field::add(&mut parent.id, 0u64, b"true");
+    let _: vector<u8> = sui::dynamic_field::remove(&mut parent.id, 0u64);
+    sui::dynamic_field::add(&mut parent.id, 0u64, true);
+    let _: bool = sui::dynamic_field::remove(&mut parent.id, 0u64);
 }
 
 //# run test::m1::create --sender A

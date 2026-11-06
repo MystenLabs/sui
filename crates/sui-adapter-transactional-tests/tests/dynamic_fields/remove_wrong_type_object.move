@@ -8,7 +8,7 @@
 //# init --addresses a=0x0 --accounts A
 
 //# publish
-module a::m {
+module a::m;
 
 use sui::dynamic_object_field::{add, remove};
 
@@ -29,8 +29,6 @@ entry fun t1(ctx: &mut TxContext) {
 entry fun t2(obj: &mut Obj) {
     let Fake { id } = remove<u64, Fake>(&mut obj.id, 0);
     object::delete(id);
-}
-
 }
 
 //# run a::m::t1 --sender A

@@ -17,14 +17,14 @@ module test::clever_error_post_v48 {
 module test::clever_error_post_v48 {
     #[error]
     const ESimpleError: vector<u8> = b"Clever error from v2";
-    
+
     #[error]
     const ENewError: vector<u8> = b"New error in v2";
 
     public entry fun test_clever_error() {
         abort ESimpleError
     }
-    
+
     public entry fun test_new_error() {
         abort ENewError
     }
@@ -65,5 +65,3 @@ module test::clever_error_post_v48 {
   }
 }
 */
-
-

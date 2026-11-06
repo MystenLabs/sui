@@ -6,12 +6,12 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
-    public struct Object has key, store { id: UID }
+module test::m;
 
-    public fun return_object(ctx: &mut TxContext): Object {
-        Object { id: object::new(ctx) }
-    }
+public struct Object has key, store { id: UID }
+
+public fun return_object(ctx: &mut TxContext): Object {
+    Object { id: object::new(ctx) }
 }
 
 //# programmable --sender A --dry-run

@@ -7,72 +7,72 @@
 
 //# publish
 
-module test::m {
-    use sui::dynamic_field as field;
+module test::m;
 
-    public struct Obj has key, store {
+use sui::dynamic_field as field;
+
+public struct Obj has key, store {
+    id: UID,
+    value: u64,
+}
+
+public enum Enum has store {
+    V {
         id: UID,
         value: u64,
-    }
+    },
+}
 
-    public enum Enum has store {
-        V {
-            id: UID,
-            value: u64,
-        }
-    }
+const KEY: u64 = 0;
 
-    const KEY: u64 = 0;
+//////////////////////////////////////////////////////////////
+// new
 
-    //////////////////////////////////////////////////////////////
-    // new
+public fun new(ctx: &mut TxContext): Obj {
+    let mut grand = Obj { id: object::new(ctx), value: 0 };
+    let mut parent = Enum::V { id: object::new(ctx), value: 0 };
+    let child = Enum::V { id: object::new(ctx), value: 0 };
+    match (&mut parent) {
+        Enum::V { id, .. } => {
+            field::add(id, KEY, child);
+        },
+    };
+    field::add(&mut grand.id, KEY, parent);
+    grand
+}
 
-    public fun new(ctx: &mut TxContext): Obj {
-        let mut grand = Obj { id: object::new(ctx), value: 0 };
-        let mut parent = Enum::V { id: object::new(ctx), value: 0 };
-        let child = Enum::V { id: object::new(ctx), value: 0 };
-        match (&mut parent) {
-            Enum::V { id, .. } => {
-                field::add(id, KEY, child);
+//////////////////////////////////////////////////////////////
+// set
+
+public fun set(grand: &mut Obj, v: u64) {
+    let parent: &mut Enum = field::borrow_mut(&mut grand.id, KEY);
+    match (parent) {
+        Enum::V { id, .. } => {
+            match (field::borrow_mut(id, KEY)) {
+                Enum::V { value, .. } => {
+                    *value = v;
+                },
             }
-        };
-        field::add(&mut grand.id, KEY, parent);
-        grand
-    }
+        },
+    };
+}
 
-    //////////////////////////////////////////////////////////////
-    // set
+//////////////////////////////////////////////////////////////
+// check
 
-    public fun set(grand: &mut Obj, v: u64) {
-        let parent: &mut Enum = field::borrow_mut(&mut grand.id, KEY);
-        match (parent) {
-            Enum::V { id, ..} => {
-                match (field::borrow_mut(id, KEY)) {
-                    Enum::V { value, .. } => {
-                        *value = v;
-                    }
-                }
+public fun check(grand: &Obj, expected: u64) {
+    assert!(grand.value == 0, 0);
+    let parent: &Enum = field::borrow(&grand.id, KEY);
+    match (parent) {
+        Enum::V { id, value } => {
+            assert!(value == 0, 0);
+            match (field::borrow(id, KEY)) {
+                Enum::V { value, .. } => {
+                    assert!(value == expected, 0);
+                },
             }
-        };
-    }
-
-    //////////////////////////////////////////////////////////////
-    // check
-
-    public fun check(grand: &Obj, expected: u64) {
-        assert!(grand.value == 0, 0);
-        let parent: &Enum = field::borrow(&grand.id, KEY);
-        match (parent) {
-            Enum::V { id, value } => {
-                assert!(value == 0, 0);
-                match (field::borrow(id, KEY)) {
-                    Enum::V { value, .. } => {
-                        assert!(value == expected, 0);
-                    }
-                }
-            }
-        };
-    }
+        },
+    };
 }
 
 //# programmable --sender A --inputs @A

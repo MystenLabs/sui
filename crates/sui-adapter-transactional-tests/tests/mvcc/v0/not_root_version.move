@@ -7,48 +7,46 @@
 
 //# publish
 
-module test::m {
-    use sui::dynamic_field as field;
+module test::m;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::dynamic_field as field;
 
-    public struct B has key, store {
-        id: UID,
-    }
-
-    const KEY: u64 = 0;
-
-    public fun a(ctx: &mut TxContext): A {
-        A { id: object::new(ctx) }
-    }
-
-    public fun b(ctx: &mut TxContext): B {
-        let mut b = B { id: object::new(ctx) };
-        field::add(&mut b.id, KEY, 0u64);
-        b
-
-    }
-
-    public fun bump(b: &mut B) {
-        let f = field::borrow_mut<_, u64>(&mut b.id, KEY);
-        *f = *f + 1;
-    }
-
-    public fun append(a: &mut A, b: B) {
-        field::add(&mut a.id, KEY, b);
-    }
-
-    public fun check(a: &A, expected: u64) {
-        let b: &B = field::borrow(&a.id, KEY);
-        let v = *field::borrow(&b.id, KEY);
-        assert!(v == expected, 0);
-    }
-
-    public fun nop() {
-    }
+public struct A has key, store {
+    id: UID,
 }
+
+public struct B has key, store {
+    id: UID,
+}
+
+const KEY: u64 = 0;
+
+public fun a(ctx: &mut TxContext): A {
+    A { id: object::new(ctx) }
+}
+
+public fun b(ctx: &mut TxContext): B {
+    let mut b = B { id: object::new(ctx) };
+    field::add(&mut b.id, KEY, 0u64);
+    b
+}
+
+public fun bump(b: &mut B) {
+    let f = field::borrow_mut<_, u64>(&mut b.id, KEY);
+    *f = *f + 1;
+}
+
+public fun append(a: &mut A, b: B) {
+    field::add(&mut a.id, KEY, b);
+}
+
+public fun check(a: &A, expected: u64) {
+    let b: &B = field::borrow(&a.id, KEY);
+    let v = *field::borrow(&b.id, KEY);
+    assert!(v == expected, 0);
+}
+
+public fun nop() {}
 
 // Create object A and bump the version to 4
 
@@ -64,7 +62,6 @@ module test::m {
 
 //# view-object 2,0
 
-
 // Create object B witha version 2 and 3 for it's dynamic field
 
 //# programmable --sender P2 --inputs @P2
@@ -77,7 +74,6 @@ module test::m {
 //> 0: test::m::bump(Input(0));
 
 //# view-object 6,1
-
 
 // Append object B to object A, but using version 2 of object B. And ensure that
 // when we later read the dynamic field of object B, we get the version 2 value.

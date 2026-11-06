@@ -8,13 +8,15 @@
 
 //# publish --upgradeable --sender A
 module v0::m {
+
 }
 
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 module v1::m {
+
 }
 module v1::has_otw {
-    public struct HAS_OTW has drop {
-    }
+    public struct HAS_OTW has drop {}
+
     fun init(_: &mut sui::tx_context::TxContext) {}
 }

@@ -4,22 +4,22 @@
 //# init --protocol-version 108 --accounts A B --addresses test=0x0 --simulator
 
 //# publish
-module test::dependency_test {
-    public struct TestObject has key, store {
-        id: UID,
-        value: u64,
-    }
+module test::dependency_test;
 
-    public fun create_object(value: u64, ctx: &mut TxContext): TestObject {
-        TestObject {
-            id: object::new(ctx),
-            value,
-        }
-    }
+public struct TestObject has key, store {
+    id: UID,
+    value: u64,
+}
 
-    public fun object_value(obj: &TestObject): u64 {
-        obj.value
+public fun create_object(value: u64, ctx: &mut TxContext): TestObject {
+    TestObject {
+        id: object::new(ctx),
+        value,
     }
+}
+
+public fun object_value(obj: &TestObject): u64 {
+    obj.value
 }
 
 // Transaction 1: Create an object

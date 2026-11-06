@@ -7,47 +7,47 @@
 
 //# publish
 
-module test::m {
-    use sui::dynamic_field as field;
+module test::m;
 
-    public struct Obj has key, store {
-        id: UID,
-        value: u64,
-    }
+use sui::dynamic_field as field;
 
-    const KEY: u64 = 0;
+public struct Obj has key, store {
+    id: UID,
+    value: u64,
+}
 
-    //////////////////////////////////////////////////////////////
-    // new
+const KEY: u64 = 0;
 
-    public fun new(ctx: &mut TxContext): Obj {
-        let mut grand = Obj { id: object::new(ctx), value: 0 };
-        let mut parent = Obj { id: object::new(ctx), value: 0 };
-        let child = Obj { id: object::new(ctx), value: 0 };
-        field::add(&mut parent.id, KEY, child);
-        field::add(&mut grand.id, KEY, parent);
-        grand
-    }
+//////////////////////////////////////////////////////////////
+// new
 
-    //////////////////////////////////////////////////////////////
-    // set
+public fun new(ctx: &mut TxContext): Obj {
+    let mut grand = Obj { id: object::new(ctx), value: 0 };
+    let mut parent = Obj { id: object::new(ctx), value: 0 };
+    let child = Obj { id: object::new(ctx), value: 0 };
+    field::add(&mut parent.id, KEY, child);
+    field::add(&mut grand.id, KEY, parent);
+    grand
+}
 
-    public fun set(grand: &mut Obj, v: u64) {
-        let parent: &mut Obj = field::borrow_mut(&mut grand.id, KEY);
-        let child: &mut Obj = field::borrow_mut(&mut parent.id, KEY);
-        child.value = v;
-    }
+//////////////////////////////////////////////////////////////
+// set
 
-    //////////////////////////////////////////////////////////////
-    // check
+public fun set(grand: &mut Obj, v: u64) {
+    let parent: &mut Obj = field::borrow_mut(&mut grand.id, KEY);
+    let child: &mut Obj = field::borrow_mut(&mut parent.id, KEY);
+    child.value = v;
+}
 
-    public fun check(grand: &Obj, expected: u64) {
-        assert!(grand.value == 0, 0);
-        let parent: &Obj = field::borrow(&grand.id, KEY);
-        assert!(parent.value == 0, 0);
-        let child: &Obj = field::borrow(&parent.id, KEY);
-        assert!(child.value == expected, 0);
-    }
+//////////////////////////////////////////////////////////////
+// check
+
+public fun check(grand: &Obj, expected: u64) {
+    assert!(grand.value == 0, 0);
+    let parent: &Obj = field::borrow(&grand.id, KEY);
+    assert!(parent.value == 0, 0);
+    let child: &Obj = field::borrow(&parent.id, KEY);
+    assert!(child.value == expected, 0);
 }
 
 //# programmable --sender A --inputs @A

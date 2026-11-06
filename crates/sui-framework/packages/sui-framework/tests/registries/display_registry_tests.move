@@ -63,7 +63,10 @@ fun claim_legacy() {
         let publisher = new_publisher(scenario);
         let legacy_display = display::new_for_testing<MyKeyOnlyType>(&publisher, scenario.ctx());
         // create a second legacy display so we can destroy it after claiming.
-        let another_legacy_display = display::new_for_testing<MyKeyOnlyType>(&publisher, scenario.ctx());
+        let another_legacy_display = display::new_for_testing<MyKeyOnlyType>(
+            &publisher,
+            scenario.ctx(),
+        );
 
         let cap = take_migration_cap(scenario);
 
@@ -98,7 +101,10 @@ fun claim_legacy() {
 fun migrate_legacy() {
     test_tx!(|registry, scenario| {
         let publisher = new_publisher(scenario);
-        let mut legacy_display = display::new_for_testing<MyKeyOnlyType>(&publisher, scenario.ctx());
+        let mut legacy_display = display::new_for_testing<MyKeyOnlyType>(
+            &publisher,
+            scenario.ctx(),
+        );
 
         legacy_display.add(DEMO_NAME_KEY.to_string(), DEMO_NAME_VALUE.to_string());
 
@@ -289,7 +295,10 @@ fun fails_when_migrating_twice() {
     test_tx!(|registry, scenario| {
         let publisher = new_publisher(scenario);
         let legacy_display = display::new_for_testing<MyKeyOnlyType>(&publisher, scenario.ctx());
-        let another_legacy_display = display::new_for_testing<MyKeyOnlyType>(&publisher, scenario.ctx());
+        let another_legacy_display = display::new_for_testing<MyKeyOnlyType>(
+            &publisher,
+            scenario.ctx(),
+        );
 
         // Migrate Display using v1 to v2 successfully
         let (_display, _cap) = registry.migrate_v1_to_v2(legacy_display, scenario.ctx());

@@ -6,13 +6,13 @@ processed 3 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-16:
+task 1, lines 6-45:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3876000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 18-25:
+task 2, lines 47-54:
 // Every call takes all 16 reference results from the preceding call and returns 16 references.
 // The regex borrow graph must preserve all possible paths through each call, while the set-based
 // verifier represents each result as a node with 16 parents.

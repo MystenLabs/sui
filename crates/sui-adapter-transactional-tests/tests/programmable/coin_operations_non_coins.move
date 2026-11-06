@@ -6,20 +6,19 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    // not a native coin, but same type structure and BCS layout
-    public struct Coin<phantom T> has key, store {
-        id: UID,
-        value: u64,
-    }
+module test::m1;
 
-    public fun mint<T>(ctx: &mut TxContext): Coin<T> {
-        Coin {
-            id: object::new(ctx),
-            value: 1000000,
-        }
-    }
+// not a native coin, but same type structure and BCS layout
+public struct Coin<phantom T> has key, store {
+    id: UID,
+    value: u64,
+}
 
+public fun mint<T>(ctx: &mut TxContext): Coin<T> {
+    Coin {
+        id: object::new(ctx),
+        value: 1000000,
+    }
 }
 
 // split non-coin

@@ -6,47 +6,44 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
+module test::m;
 
-    public struct Pair has copy, drop, store {
-        x: u64,
-        y: u64,
-    }
+public struct Pair has copy, drop, store {
+    x: u64,
+    y: u64,
+}
 
-    public fun pair(): Pair { Pair { x: 0 , y: 0 } }
+public fun pair(): Pair { Pair { x: 0, y: 0 } }
 
-    public fun borrow_mut<T>(t: &mut T): &mut T {
-        t
-    }
+public fun borrow_mut<T>(t: &mut T): &mut T {
+    t
+}
 
-    public fun freeze_ref<T>(t: &mut T): &T {
-        t
-    }
+public fun freeze_ref<T>(t: &mut T): &T {
+    t
+}
 
-    public fun use_ref<T>(_: &T) {
-    }
+public fun use_ref<T>(_: &T) {}
 
-    public fun write_pair(p: &mut Pair) {
-        p.x = p.x + 1;
-        p.y = p.y + 1;
-    }
+public fun write_pair(p: &mut Pair) {
+    p.x = p.x + 1;
+    p.y = p.y + 1;
+}
 
-    public fun borrow_x_mut(p: &mut Pair): &mut u64 {
-        &mut p.x
-    }
+public fun borrow_x_mut(p: &mut Pair): &mut u64 {
+    &mut p.x
+}
 
-    public fun borrow_x_y_mut(p: &mut Pair): (&mut u64, &mut u64) {
-        (&mut p.x, &mut p.y)
-    }
+public fun borrow_x_y_mut(p: &mut Pair): (&mut u64, &mut u64) {
+    (&mut p.x, &mut p.y)
+}
 
-    public fun borrow_x_mut_y_imm(p: &mut Pair): (&mut u64, &u64) {
-        (&mut p.x, &p.y)
-    }
+public fun borrow_x_mut_y_imm(p: &mut Pair): (&mut u64, &u64) {
+    (&mut p.x, &p.y)
+}
 
-    public fun write_u64(p: &mut u64) {
-        *p = *p + 1;
-    }
-
+public fun write_u64(p: &mut u64) {
+    *p = *p + 1;
 }
 
 //# programmable --dev-inspect

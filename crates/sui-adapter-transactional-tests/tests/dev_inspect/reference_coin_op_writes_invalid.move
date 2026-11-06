@@ -6,18 +6,14 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m {
+module test::m;
 
-    public fun borrow_mut(
-        c: &mut sui::coin::Coin<sui::sui::SUI>,
-    ): &mut sui::coin::Coin<sui::sui::SUI> {
-        c
-    }
+public fun borrow_mut(c: &mut sui::coin::Coin<sui::sui::SUI>): &mut sui::coin::Coin<sui::sui::SUI> {
+    c
+}
 
-    public fun new_mut(): &mut sui::coin::Coin<sui::sui::SUI> {
-        abort 0
-    }
-
+public fun new_mut(): &mut sui::coin::Coin<sui::sui::SUI> {
+    abort 0
 }
 
 //# programmable --inputs 10 @A

@@ -23,7 +23,6 @@
 
 //# create-checkpoint
 
-
 //# run-graphql
 /*
 { # Fetch each checkpoint individually, and then in a multi-get

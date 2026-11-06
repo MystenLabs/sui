@@ -500,17 +500,17 @@ Response: {
   ]
 }
 
-task 8, lines 99-116:
+task 8, lines 99-108:
 //# publish --upgradeable --sender A
 created: object(8,0), object(8,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6095200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 9, line 118:
+task 9, line 110:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 10, lines 120-127:
+task 10, lines 112-119:
 //# run-graphql
 Response: {
   "data": {
@@ -538,17 +538,17 @@ Response: {
   ]
 }
 
-task 11, lines 129-146:
+task 11, lines 121-130:
 //# upgrade --package P0 --upgrade-capability 8,1 --sender A
 created: object(11,0)
 mutated: object(0,0), object(8,1)
 gas summary: computation_cost: 1000000, storage_cost: 6095200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 12, line 148:
+task 12, line 132:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 13, lines 150-161:
+task 13, lines 134-145:
 //# run-graphql
 Response: {
   "data": {

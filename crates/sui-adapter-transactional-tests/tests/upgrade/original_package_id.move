@@ -10,12 +10,12 @@
 
 //# publish --upgradeable --sender A
 module test_v1::m {
-    public fun f() { }
+    public fun f() {}
 }
 
 //# upgrade --package test_v1 --upgrade-capability 1,1 --sender A
 module test_v2::m {
-    public fun f() { }
+    public fun f() {}
 }
 
 //# publish --sender A
@@ -41,7 +41,7 @@ module helper::h {
 
 //# upgrade --package test_v2 --upgrade-capability 1,1 --sender A
 module test_v3::m {
-    public fun f() { }
+    public fun f() {}
 }
 
 // Happy path after two upgrades: original ID is stable across versions.
@@ -51,7 +51,7 @@ module test_v3::m {
 // resolved original ID equals the package's own address.
 //# publish --upgradeable --sender A
 module solo::m {
-    public fun f() { }
+    public fun f() {}
 }
 
 //# run helper::h::check --args object(7,1) @solo --sender A

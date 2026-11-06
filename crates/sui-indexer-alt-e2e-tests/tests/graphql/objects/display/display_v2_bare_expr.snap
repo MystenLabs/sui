@@ -6,13 +6,13 @@ processed 6 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-52:
+task 1, lines 6-51:
 //# publish --sender A
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10883200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 54-56:
+task 2, lines 53-55:
 //# programmable --sender A --inputs object(0xd) @A
 //> 0: test::mod::display(Input(0));
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -20,7 +20,7 @@ created: object(2,0), object(2,1), object(2,2)
 mutated: 0x000000000000000000000000000000000000000000000000000000000000000d, object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 9446800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, lines 58-60:
+task 3, lines 57-59:
 //# programmable --sender A --inputs @A
 //> 0: test::mod::new();
 //> 1: TransferObjects([Result(0)], Input(0))
@@ -28,11 +28,11 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2629600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, line 62:
+task 4, line 61:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 64-78:
+task 5, lines 63-77:
 //# run-graphql
 Response: {
   "data": {

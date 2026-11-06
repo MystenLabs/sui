@@ -8,26 +8,26 @@
 //# publish
 
 #[allow(always_errors)]
-module test::m {
-    entry fun abort_() {
-        // should be offset 1
-        abort 0
-    }
+module test::m;
 
-    entry fun loop_() {
-        // should be offset 0
-        loop {}
-    }
+entry fun abort_() {
+    // should be offset 1
+    abort 0
+}
 
-    entry fun math() {
-        // should be offset 2
-        0 - 1u64;
-    }
+entry fun loop_() {
+    // should be offset 0
+    loop {}
+}
 
-    entry fun vector_() {
-        // should be offset 4
-        std::vector::borrow(&vector[0u64], 1);
-    }
+entry fun math() {
+    // should be offset 2
+    0 - 1u64;
+}
+
+entry fun vector_() {
+    // should be offset 4
+    std::vector::borrow(&vector[0u64], 1);
 }
 
 //# run test::m::abort_

@@ -5,49 +5,49 @@ processed 9 tasks
 
 // tests various valid positions for TxContext parameters
 
-task 1, lines 8-27:
+task 1, lines 8-21:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4879200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 29-30:
+task 2, lines 23-24:
 //# programmable --inputs 0 0
 //> test::m::mut_0(Input(0), Input(1));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 32-33:
+task 3, lines 26-27:
 //# programmable --inputs 0 0
 //> test::m::mut_1(Input(0), Input(1));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 35-36:
+task 4, lines 29-30:
 //# programmable --inputs 0 0
 //> test::m::mut_2(Input(0), Input(1));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 38-39:
+task 5, lines 32-33:
 //# programmable --inputs 0 0
 //> test::m::imm_0(Input(0), Input(1));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 41-42:
+task 6, lines 35-36:
 //# programmable --inputs 0 0
 //> test::m::imm_1(Input(0), Input(1));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 44-45:
+task 7, lines 38-39:
 //# programmable --inputs 0 0
 //> test::m::imm_2(Input(0), Input(1));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 47-53:
+task 8, lines 41-47:
 //# programmable --inputs 0 0
 //> test::m::mut_0(Input(0), Input(1));
 //> test::m::mut_1(Input(0), Input(1));

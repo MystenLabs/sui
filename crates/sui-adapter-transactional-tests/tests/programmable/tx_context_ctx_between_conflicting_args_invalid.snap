@@ -6,13 +6,13 @@ processed 3 tasks
 // Conflicting user arguments around an injected `&mut TxContext` are still rejected, and
 // reported argument indices count the injected TxContext.
 
-task 1, lines 9-31:
+task 1, lines 9-30:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5563200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 33-37:
+task 2, lines 32-36:
 //# programmable
 // the same object as `&mut X` and `&X` in one call must fail, ctx injected between them
 //> 0: test::m::new();

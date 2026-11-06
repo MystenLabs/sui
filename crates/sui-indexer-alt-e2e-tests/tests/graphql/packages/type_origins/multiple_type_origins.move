@@ -5,13 +5,13 @@
 
 //# publish --upgradeable --sender A
 module P1::M {
-  public struct S1 { }
+    public struct S1 {}
 }
 
 //# upgrade --package P1 --upgrade-capability 1,1 --sender A
 module P2::M {
-  public struct S1 { }
-  public struct S2 { }
+    public struct S1 {}
+    public struct S2 {}
 }
 
 //# create-checkpoint

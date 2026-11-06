@@ -11,17 +11,195 @@
 //# publish
 module test::m;
 
-public fun refs16(v: &vector<u64>): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) { (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11], &v[12], &v[13], &v[14], &v[15]) }
-public fun refs15(v: &vector<u64>): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) { (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11], &v[12], &v[13], &v[14]) }
-public fun refs11(v: &vector<u64>): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) { (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10]) }
-public fun refs16_and_value(v: &vector<u64>): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, u64) { (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10], &v[11], &v[12], &v[13], &v[14], &v[15], 0) }
+public fun refs16(
+    v: &vector<u64>,
+): (
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+) {
+    (
+        &v[0],
+        &v[1],
+        &v[2],
+        &v[3],
+        &v[4],
+        &v[5],
+        &v[6],
+        &v[7],
+        &v[8],
+        &v[9],
+        &v[10],
+        &v[11],
+        &v[12],
+        &v[13],
+        &v[14],
+        &v[15],
+    )
+}
+
+public fun refs15(
+    v: &vector<u64>,
+): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) {
+    (
+        &v[0],
+        &v[1],
+        &v[2],
+        &v[3],
+        &v[4],
+        &v[5],
+        &v[6],
+        &v[7],
+        &v[8],
+        &v[9],
+        &v[10],
+        &v[11],
+        &v[12],
+        &v[13],
+        &v[14],
+    )
+}
+
+public fun refs11(
+    v: &vector<u64>,
+): (&u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64, &u64) {
+    (&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10])
+}
+
+public fun refs16_and_value(
+    v: &vector<u64>,
+): (
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    &u64,
+    u64,
+) {
+    (
+        &v[0],
+        &v[1],
+        &v[2],
+        &v[3],
+        &v[4],
+        &v[5],
+        &v[6],
+        &v[7],
+        &v[8],
+        &v[9],
+        &v[10],
+        &v[11],
+        &v[12],
+        &v[13],
+        &v[14],
+        &v[15],
+        0,
+    )
+}
+
 public fun one(v: &vector<u64>): &u64 { &v[0] }
+
 public fun three_in_two_out(a: &u64, b: &u64, _c: &u64): (&u64, &u64) { (a, b) }
-public fun use16(_: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64) {}
-public fun use15(_: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64) {}
-public fun use11(_: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64, _: &u64) {}
+
+public fun use16(
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+) {}
+
+public fun use15(
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+) {}
+
+public fun use11(
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+    _: &u64,
+) {}
+
 public fun use1(_: &u64) {}
-public fun many_ctx(_: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext, _: &TxContext) {}
+
+public fun many_ctx(
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+    _: &TxContext,
+) {}
 
 // --- live references ---
 

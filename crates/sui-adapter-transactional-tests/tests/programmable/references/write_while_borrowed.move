@@ -13,7 +13,9 @@ use sui::coin::Coin;
 use sui::sui::SUI;
 
 public fun id_mut<T>(t: &mut T): &mut T { t }
+
 public fun use_mut<T>(_: &mut T) {}
+
 public fun amount_ref(_: &Coin<SUI>, x: &u64): &u64 { x }
 
 //# programmable --sender A --inputs 1000 @B

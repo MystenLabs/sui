@@ -4,23 +4,26 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
-module test::random {
-    use sui::clock::Clock;
-    use sui::random::Random;
+module test::random;
 
-    public struct Obj has key, store {
-        id: object::UID,
-    }
+use sui::clock::Clock;
+use sui::random::Random;
 
-    public entry fun create(ctx: &mut TxContext) {
-        transfer::public_share_object(Obj { id: object::new(ctx) })
-    }
-
-    public fun use_clock(_clock: &Clock) {}
-    public fun use_random(_random: &Random) {}
-    public fun use_random_twice(_random1: &Random, _random2: &Random) {}
-    public fun use_value(_value: u64) {}
+public struct Obj has key, store {
+    id: object::UID,
 }
+
+public entry fun create(ctx: &mut TxContext) {
+    transfer::public_share_object(Obj { id: object::new(ctx) })
+}
+
+public fun use_clock(_clock: &Clock) {}
+
+public fun use_random(_random: &Random) {}
+
+public fun use_random_twice(_random1: &Random, _random2: &Random) {}
+
+public fun use_value(_value: u64) {}
 
 // Good tx - use Random
 //# programmable --sender A --inputs immshared(8)

@@ -7,43 +7,46 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module test::regulated_coin {
-    use sui::coin;
-    use sui::coin::Coin;
-    use sui::transfer::Receiving;
+module test::regulated_coin;
 
-    public struct REGULATED_COIN has drop {}
+use sui::coin::{Self, Coin};
+use sui::transfer::Receiving;
 
-    public struct Wallet has key {
-        id: UID,
-    }
+public struct REGULATED_COIN has drop {}
 
-    fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
-        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
-            otw,
-            9,
-            b"RC",
-            b"REGULATED_COIN",
-            b"A new regulated coin",
-            option::none(),
-            ctx
-        );
-        let coin = coin::mint(&mut treasury_cap, 10000, ctx);
-        let wallet = Wallet {
-            id: object::new(ctx),
-        };
-        transfer::public_transfer(coin, object::id_address(&wallet));
-        transfer::transfer(wallet, tx_context::sender(ctx));
+public struct Wallet has key {
+    id: UID,
+}
 
-        transfer::public_transfer(deny_cap, tx_context::sender(ctx));
-        transfer::public_freeze_object(treasury_cap);
-        transfer::public_freeze_object(metadata);
-    }
+fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
+    let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
+        otw,
+        9,
+        b"RC",
+        b"REGULATED_COIN",
+        b"A new regulated coin",
+        option::none(),
+        ctx,
+    );
+    let coin = coin::mint(&mut treasury_cap, 10000, ctx);
+    let wallet = Wallet {
+        id: object::new(ctx),
+    };
+    transfer::public_transfer(coin, object::id_address(&wallet));
+    transfer::transfer(wallet, tx_context::sender(ctx));
 
-    public fun receive_coin(wallet: &mut Wallet, coin: Receiving<Coin<REGULATED_COIN>>, ctx: &TxContext) {
-        let coin = transfer::public_receive(&mut wallet.id, coin);
-        transfer::public_transfer(coin, tx_context::sender(ctx));
-    }
+    transfer::public_transfer(deny_cap, tx_context::sender(ctx));
+    transfer::public_freeze_object(treasury_cap);
+    transfer::public_freeze_object(metadata);
+}
+
+public fun receive_coin(
+    wallet: &mut Wallet,
+    coin: Receiving<Coin<REGULATED_COIN>>,
+    ctx: &TxContext,
+) {
+    let coin = transfer::public_receive(&mut wallet.id, coin);
+    transfer::public_transfer(coin, tx_context::sender(ctx));
 }
 
 //# view-object 1,6

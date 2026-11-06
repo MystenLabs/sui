@@ -11,7 +11,7 @@ module test::m;
 
 use sui::event;
 
-public enum X1 has copy, drop, store  {
+public enum X1 has copy, drop, store {
     Big1(u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8),
 }
 
@@ -37,7 +37,7 @@ public struct S has key, store {
 }
 
 entry fun x1(): X1 {
-    X1::Big1(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    X1::Big1(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
 entry fun x3(): X3 {

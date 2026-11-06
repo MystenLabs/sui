@@ -6,20 +6,19 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public entry fun t1<T: key>(_: &T) {
-    }
-    public fun t2<T: key>(_: &T) {
-    }
-    entry fun t3<T: key>(_: &T) {
-    }
-    public entry fun t4<T: key>(_: &mut T) {
-    }
-    public fun t5<T: key>(_: &mut T) {
-    }
-    entry fun t6<T: key>(_: &mut T) {
-    }
-}
+module test::m1;
+
+public entry fun t1<T: key>(_: &T) {}
+
+public fun t2<T: key>(_: &T) {}
+
+entry fun t3<T: key>(_: &T) {}
+
+public entry fun t4<T: key>(_: &mut T) {}
+
+public fun t5<T: key>(_: &mut T) {}
+
+entry fun t6<T: key>(_: &mut T) {}
 
 // can pass to Move function by ref
 //# programmable --sender A

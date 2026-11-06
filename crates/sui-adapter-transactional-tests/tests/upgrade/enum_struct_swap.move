@@ -9,7 +9,7 @@ module Test_V0::base_module {
         V0 {
             field0: u64,
             field1: u64,
-        }
+        },
     }
 
     public fun public_fun(): u64 { 0 }

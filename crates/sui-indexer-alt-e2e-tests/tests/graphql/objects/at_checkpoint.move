@@ -4,24 +4,24 @@
 //# init --protocol-version 108 --accounts A --addresses P=0x0 --simulator
 
 //# publish
-module P::M {
-  use sui::coin::Coin;
-  use sui::sui::SUI;
+module P::M;
 
-  public struct Wrapper has key, store {
+use sui::coin::Coin;
+use sui::sui::SUI;
+
+public struct Wrapper has key, store {
     id: UID,
     coin: Coin<SUI>,
-  }
+}
 
-  public fun wrap(coin: Coin<SUI>, ctx: &mut TxContext): Wrapper {
+public fun wrap(coin: Coin<SUI>, ctx: &mut TxContext): Wrapper {
     Wrapper { id: object::new(ctx), coin }
-  }
+}
 
-  public fun unwrap(wrapper: Wrapper): Coin<SUI> {
+public fun unwrap(wrapper: Wrapper): Coin<SUI> {
     let Wrapper { id, coin } = wrapper;
     id.delete();
     coin
-  }
 }
 
 //# create-checkpoint

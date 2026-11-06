@@ -8,14 +8,14 @@
 // 2. the type is primitive (and could never have a Display format).
 
 //# publish
-module test::mod {
-  public struct Foo has key, store {
-    id: UID,
-  }
+module test::mod;
 
-  public fun new(ctx: &mut TxContext): Foo {
+public struct Foo has key, store {
+    id: UID,
+}
+
+public fun new(ctx: &mut TxContext): Foo {
     Foo { id: object::new(ctx) }
-  }
 }
 
 //# programmable --sender A --inputs @A

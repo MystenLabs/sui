@@ -4,34 +4,35 @@
 //# init --addresses tto=0x0
 
 //# publish
-module tto::M1 {
-    use sui::transfer::Receiving;
+module tto::M1;
 
-    public struct A has key, store {
-        id: UID,
-    }
+use sui::transfer::Receiving;
 
-    public struct B has key, store {
-        id: UID,
-    }
-
-    public fun start(ctx: &mut TxContext) {
-        let a = A { id: object::new(ctx) };
-        let a_address = object::id_address(&a);
-        let b = B { id: object::new(ctx) };
-        transfer::public_transfer(a, tx_context::sender(ctx));
-        transfer::public_transfer(b, a_address);
-    }
-
-    public entry fun send_back(parent: &mut A, x: Receiving<B>) {
-        let b = transfer::receive(&mut parent.id, x);
-        let parent_address = object::id_address(parent);
-        transfer::public_transfer(b, parent_address);
-    }
-
-    public entry fun nop(_parent: &mut A) { }
-    public entry fun nop_with_receiver(_parent: &mut A, _x: Receiving<B>) { }
+public struct A has key, store {
+    id: UID,
 }
+
+public struct B has key, store {
+    id: UID,
+}
+
+public fun start(ctx: &mut TxContext) {
+    let a = A { id: object::new(ctx) };
+    let a_address = object::id_address(&a);
+    let b = B { id: object::new(ctx) };
+    transfer::public_transfer(a, tx_context::sender(ctx));
+    transfer::public_transfer(b, a_address);
+}
+
+public entry fun send_back(parent: &mut A, x: Receiving<B>) {
+    let b = transfer::receive(&mut parent.id, x);
+    let parent_address = object::id_address(parent);
+    transfer::public_transfer(b, parent_address);
+}
+
+public entry fun nop(_parent: &mut A) {}
+
+public entry fun nop_with_receiver(_parent: &mut A, _x: Receiving<B>) {}
 
 //# run tto::M1::start
 

@@ -23,6 +23,7 @@ public fun a(ctx: &mut TxContext): A {
 public fun id_imm<T>(r: &T): &T {
     r
 }
+
 public fun id_mut<T>(r: &mut T): &mut T {
     r
 }
@@ -30,9 +31,11 @@ public fun id_mut<T>(r: &mut T): &mut T {
 public fun heat_val<T>(t: T): (T, Hot) {
     (t, Hot {})
 }
+
 public fun heat_imm<T>(_: &T): Hot {
     Hot {}
 }
+
 public fun heat_mut<T>(_: &mut T): Hot {
     Hot {}
 }
@@ -42,8 +45,11 @@ public fun cool(hot: Hot) {
 }
 
 entry fun play_a(_: &A) {}
+
 entry fun play_coin(_: &Coin<SUI>) {}
+
 entry fun play_u64(_: u64) {}
+
 entry fun play_receiving(_: sui::transfer::Receiving<A>) {}
 
 public fun delete(a: A) {

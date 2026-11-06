@@ -221,7 +221,7 @@ Response: {
   }
 }
 
-task 6, lines 95-125:
+task 6, lines 94-124:
 //# run-graphql --cursors 2
 Response: {
   "data": {
@@ -269,7 +269,7 @@ Response: {
   }
 }
 
-task 7, lines 127-157:
+task 7, lines 126-156:
 //# run-graphql --cursors 5
 Response: {
   "data": {

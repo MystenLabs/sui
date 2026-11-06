@@ -6,18 +6,18 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public entry fun t1<T>(_: T) {
-        abort 0
-    }
+module test::m1;
 
-    public fun t2<T>(_: T) {
-        abort 0
-    }
+public entry fun t1<T>(_: T) {
+    abort 0
+}
 
-    entry fun t3<T>(_: T) {
-        abort 0
-    }
+public fun t2<T>(_: T) {
+    abort 0
+}
+
+entry fun t3<T>(_: T) {
+    abort 0
 }
 
 // cannot pass to Move function

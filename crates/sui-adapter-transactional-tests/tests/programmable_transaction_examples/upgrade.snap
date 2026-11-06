@@ -26,7 +26,7 @@ created: object(3,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3450400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 36-41:
+task 5, lines 37-42:
 //# programmable --sender A --inputs 10 @A object(2,1) 0u8 digest(q_2)
 //> 0: sui::package::authorize_upgrade(Input(2), Input(3), Input(4));
 //> 1: SplitCoins(Gas, [Input(0)]);
@@ -37,27 +37,27 @@ created: object(5,0), object(5,1)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 6, lines 43-45:
+task 6, lines 44-46:
 //# programmable --sender A
 //> 0: q::m::x();
 //> p::m::foo(Result(0))
 Error: Transaction Effects Status: Move Runtime Abort. Location: p::n::bar (function index 0) at offset 6, Abort Code: 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: p, name: Identifier("n") }, function: 0, instruction: 6, function_name: Some("bar") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("p::n::bar at offset 6"), exec_state: None, location: Module(ModuleId { address: p, name: Identifier("n") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 6)] }), command: Some(1) } }
 
-task 8, lines 49-51:
+task 8, lines 50-52:
 //# programmable --sender A
 //> 0: q_2::m::x();
 //> p::m::foo(Result(0))
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 53-58:
+task 9, lines 54-59:
 //# publish --dependencies p q_2 r
 created: object(9,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5776000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, line 60:
+task 10, line 61:
 //# run s::all::foo_x
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

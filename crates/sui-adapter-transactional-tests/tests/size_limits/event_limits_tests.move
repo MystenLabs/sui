@@ -8,48 +8,48 @@
 //# publish
 
 /// Test event limits enforced
-module Test::M1 {
-    use sui::event;
-    use sui::bcs;
+module Test::M1;
 
-    public struct NewValueEvent has copy, drop {
-        contents: vector<u8>
-    }
+use sui::bcs;
+use sui::event;
 
-    // emit an event of size n
-    public fun emit_event_with_size(mut n: u64) {
-        // 46 seems to be the added size from event size derivation for `NewValueEvent`
-        assert!(n > 46, 0);
-        n = n - 46;
-        // minimum object size for NewValueEvent is 1 byte for vector length
-        assert!(n > 1, 0);
-        let mut contents = vector[];
-        let mut i = 0;
-        let bytes_to_add = n - 1;
-        while (i < bytes_to_add) {
-            vector::push_back(&mut contents, 9);
-            i = i + 1;
-        };
-        let mut s = NewValueEvent { contents };
-        let mut size = vector::length(&bcs::to_bytes(&s));
-        // shrink by 1 byte until we match size. mismatch happens because of len(UID) + vector length byte
-        while (size > n) {
-            let _ = vector::pop_back(&mut s.contents);
-            // hack: assume this doesn't change the size of the BCS length byte
-            size = size - 1;
-        };
+public struct NewValueEvent has copy, drop {
+    contents: vector<u8>,
+}
 
-        event::emit(s);
-    }
+// emit an event of size n
+public fun emit_event_with_size(mut n: u64) {
+    // 46 seems to be the added size from event size derivation for `NewValueEvent`
+    assert!(n > 46, 0);
+    n = n - 46;
+    // minimum object size for NewValueEvent is 1 byte for vector length
+    assert!(n > 1, 0);
+    let mut contents = vector[];
+    let mut i = 0;
+    let bytes_to_add = n - 1;
+    while (i < bytes_to_add) {
+        vector::push_back(&mut contents, 9);
+        i = i + 1;
+    };
+    let mut s = NewValueEvent { contents };
+    let mut size = vector::length(&bcs::to_bytes(&s));
+    // shrink by 1 byte until we match size. mismatch happens because of len(UID) + vector length byte
+    while (size > n) {
+        let _ = vector::pop_back(&mut s.contents);
+        // hack: assume this doesn't change the size of the BCS length byte
+        size = size - 1;
+    };
 
-    // Emit small (less than max size) events to test that the number of events is limited to the max count
-    public entry fun emit_n_small_events(n: u64, _ctx: &mut TxContext) {
-        let mut i = 0;
-        while (i < n) {
-            emit_event_with_size(50);
-            i = i + 1;
-        };
-    }
+    event::emit(s);
+}
+
+// Emit small (less than max size) events to test that the number of events is limited to the max count
+public entry fun emit_n_small_events(n: u64, _ctx: &mut TxContext) {
+    let mut i = 0;
+    while (i < n) {
+        emit_event_with_size(50);
+        i = i + 1;
+    };
 }
 // Check count limits
 // emit below event count limit should succeed

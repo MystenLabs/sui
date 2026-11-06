@@ -7,18 +7,24 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module test::usdc {
-    use sui::coin;
+module test::usdc;
 
-    public struct USDC has drop {}
+use sui::coin;
 
-    fun init(otw: USDC, ctx: &mut TxContext) {
-        let (treasury_cap, metadata) = coin::create_currency(
-            otw, 6, b"USDC", b"USD Coin", b"", option::none(), ctx,
-        );
-        transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury_cap, ctx.sender());
-    }
+public struct USDC has drop {}
+
+fun init(otw: USDC, ctx: &mut TxContext) {
+    let (treasury_cap, metadata) = coin::create_currency(
+        otw,
+        6,
+        b"USDC",
+        b"USD Coin",
+        b"",
+        option::none(),
+        ctx,
+    );
+    transfer::public_freeze_object(metadata);
+    transfer::public_transfer(treasury_cap, ctx.sender());
 }
 
 //# gasless-allow-token test::usdc::USDC

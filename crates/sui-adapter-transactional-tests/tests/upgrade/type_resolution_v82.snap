@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 16 tasks
 
@@ -19,31 +18,31 @@ created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5631600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 3, lines 17-23:
+task 3, lines 17-24:
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6194000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 4, lines 25-26:
+task 4, lines 26-27:
 // Resolves fine
 //# run A2::m::call --type-args A0::m::A --sender A
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 28-29:
+task 5, lines 29-30:
 // Resolves fine
 //# run A2::m::call --type-args A1::m::A --sender A
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 31-32:
+task 6, lines 32-33:
 // Resolves fine
 //# run A2::m::call --type-args A2::m::A --sender A
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 34-35:
+task 7, lines 35-36:
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args 0x0::m::A --sender A
 Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
@@ -71,25 +70,25 @@ task 11, lines 47-48:
 //# run A2::m::call --type-args 0x0::m::B --sender A
 Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
-task 12, lines 51-52:
+task 12, lines 50-51:
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args A0::m::C --sender A
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 13, lines 54-55:
+task 13, lines 53-54:
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args A1::m::C --sender A
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 14, lines 57-58:
+task 14, lines 56-57:
 // Resolves fine
 //# run A2::m::call --type-args A2::m::C --sender A
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 15, lines 60-61:
+task 15, lines 59-60:
 // Fails to resolve (but error will differ slightly after this version)
 //# run A2::m::call --type-args 0x0::m::C --sender A
 Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000

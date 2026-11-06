@@ -4,26 +4,26 @@
 //# init --addresses Test=0x0 --accounts A
 
 //# publish
-module Test::M {
-    public struct Obj has key {
-        id: sui::object::UID,
-        value: u64
-    }
+module Test::M;
 
-    public entry fun mint(ctx: &mut TxContext) {
-        sui::transfer::transfer(
-            Obj { id: sui::object::new(ctx), value: 0 },
-            tx_context::sender(ctx),
-        )
-    }
+public struct Obj has key {
+    id: sui::object::UID,
+    value: u64,
+}
 
-    public entry fun set_to_epoch(obj: &mut Obj, ctx: &TxContext) {
-        obj.value = tx_context::epoch(ctx)
-    }
+public entry fun mint(ctx: &mut TxContext) {
+    sui::transfer::transfer(
+        Obj { id: sui::object::new(ctx), value: 0 },
+        tx_context::sender(ctx),
+    )
+}
 
-    public entry fun check_is_epoch(obj: &Obj, ctx: &TxContext) {
-        assert!(obj.value == tx_context::epoch(ctx), 0)
-    }
+public entry fun set_to_epoch(obj: &mut Obj, ctx: &TxContext) {
+    obj.value = tx_context::epoch(ctx)
+}
+
+public entry fun check_is_epoch(obj: &Obj, ctx: &TxContext) {
+    assert!(obj.value == tx_context::epoch(ctx), 0)
 }
 
 //# run Test::M::mint --sender A

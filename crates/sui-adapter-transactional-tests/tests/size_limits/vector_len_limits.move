@@ -8,22 +8,21 @@
 //# publish
 
 /// Test vector length limits enforced
-module Test::M1 {
+module Test::M1;
 
-    public entry fun push_n_items(n: u64) {
-        let mut v: vector<u64> = vector[];
-        let mut i = 0;
-        while (i < n) {
-            vector::push_back(&mut v, i);
-            i = i + 1;
-        };
-        i = 0;
-        while (i < n) {
-            let _ = vector::pop_back(&mut v);
-            i = i + 1;
-        };
-        vector::destroy_empty(v);
-    }
+public entry fun push_n_items(n: u64) {
+    let mut v: vector<u64> = vector[];
+    let mut i = 0;
+    while (i < n) {
+        vector::push_back(&mut v, i);
+        i = i + 1;
+    };
+    i = 0;
+    while (i < n) {
+        let _ = vector::pop_back(&mut v);
+        i = i + 1;
+    };
+    vector::destroy_empty(v);
 }
 
 // tests below all fail with OOG on realistic prices

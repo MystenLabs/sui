@@ -11,47 +11,82 @@
 module test::m;
 
 public struct Obj has key, store { id: UID, inner: Inner }
-public struct Inner has store, copy, drop { f: u64, g: u64 }
+public struct Inner has copy, drop, store { f: u64, g: u64 }
 public struct Potato { v: u64 }
 public struct NoCopy has drop { value: u64 }
 
 public fun new(ctx: &mut TxContext): Obj {
     Obj { id: object::new(ctx), inner: Inner { f: 0, g: 0 } }
 }
+
 public fun inner(o: &Obj): &Inner { &o.inner }
+
 public fun inner_mut(o: &mut Obj): &mut Inner { &mut o.inner }
+
 public fun f(i: &Inner): &u64 { &i.f }
+
 public fun f_mut(i: &mut Inner): &mut u64 { &mut i.f }
+
 public fun g_mut(i: &mut Inner): &mut u64 { &mut i.g }
+
 public fun f_g_mut(i: &mut Inner): (&mut u64, &mut u64) { (&mut i.f, &mut i.g) }
+
 public fun f_mut_g(i: &mut Inner): (&mut u64, &u64) { (&mut i.f, &i.g) }
+
 public fun id<T>(t: &T): &T { t }
+
 public fun id_mut<T>(t: &mut T): &mut T { t }
+
 public struct Pair has copy, drop, store { left: vector<u64>, right: vector<u64> }
+
 public fun pair(): Pair { Pair { left: vector[1], right: vector[2] } }
+
 public fun split(p: &mut Pair): (&mut vector<u64>, &mut vector<u64>) { (&mut p.left, &mut p.right) }
+
 public fun split_mixed(p: &mut Pair): (&mut vector<u64>, &vector<u64>) { (&mut p.left, &p.right) }
+
 public fun first(v: &vector<u64>): &u64 { &v[0] }
+
 public fun first_mut(v: &mut vector<u64>): &mut u64 { &mut v[0] }
+
 public fun replace(v: &mut vector<u64>) { *v = vector[] }
+
 public fun replace_pair(p: &mut Pair) { *p = pair() }
+
 public fun uid_mut(o: &mut Obj): &mut UID { &mut o.id }
+
 public fun use_imm<T>(_: &T) {}
+
 public fun use_mut<T>(_: &mut T) {}
+
 public fun two_imm_inner(_: &Inner, _: &Inner) {}
+
 public fun two_mut(a: &mut u64, b: &mut u64) { *a = *a + 1; *b = *b + 1 }
+
 public fun mut_imm(a: &mut u64, b: &u64) { *a = *b }
+
 public fun two_views<A, B>(_: &mut A, _: &mut B) {}
+
 public fun write(r: &mut u64, v: u64) { *r = v }
+
 public fun write_u8(r: &mut u8, v: u8) { *r = v }
+
 public fun check(r: &u64, v: u64) { assert!(*r == v, 0) }
+
 public fun check_len(v: &vector<u64>, n: u64) { assert!(v.length() == n, 0) }
+
 public fun open(o: &mut Obj): (Potato, &mut Inner) { (Potato { v: 1 }, &mut o.inner) }
+
 public fun close(p: Potato, i: &mut Inner) { let Potato { v } = p; i.f = v }
+
 public fun no_copy(value: u64): NoCopy { NoCopy { value } }
+
 public fun value_ref(n: &NoCopy): &u64 { &n.value }
+
 public fun read_then_mut(x: u64, n: &mut NoCopy) { n.value = x + 1 }
+
 public fun mut_then_read(n: &mut NoCopy, x: u64) { n.value = x + 1 }
+
 public fun delete(o: Obj) { let Obj { id, inner: _ } = o; object::delete(id) }
 
 // --- the same reference twice in one call ---

@@ -53,12 +53,12 @@
 
 //# publish --upgradeable --sender A
 module P0::M {
-  public fun foo(): u64 { 42 }
+    public fun foo(): u64 { 42 }
 }
 
 //# upgrade --package P0 --upgrade-capability 8,1 --sender A
 module P1::M {
-  public fun foo(): u64 { 43 }
+    public fun foo(): u64 { 43 }
 }
 
 //# create-checkpoint

@@ -5,15 +5,21 @@
 
 //# publish --upgradeable --sender A
 module A0::base {
-    public enum Foo<phantom T> { V }
+    public enum Foo<phantom T> {
+        V,
+    }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
-    public enum Foo<T> { V }
+    public enum Foo<T> {
+        V,
+    }
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::base {
-    public enum Foo<T: store> { V }
+    public enum Foo<T: store> {
+        V,
+    }
 }

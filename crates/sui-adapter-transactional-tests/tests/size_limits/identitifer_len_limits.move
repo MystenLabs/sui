@@ -9,25 +9,20 @@
 
 /// Test Identifer length limits enforced for module name
 module Test::M1_1234567891234567890123456789012345678912345678901234567890123456789123456789012345678908901234567891234567890123456789078912345678901234567890 {
-
-    public entry fun create_n_idscreate_n_idscreate_n_() {
-    }
+    public entry fun create_n_idscreate_n_idscreate_n_() {}
 }
 
 //# publish
 
 /// Test Identifer length limits enforced for function name
 module Test::M1_12345678912345678901234567890 {
-    public entry fun create_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_ids() {
-    }
+    public entry fun create_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_ids() {}
 }
-
 
 //# publish
 
 /// Test normal Identifer lengths
 module Test::M1_1234567891234567890123456789012345678912345678901234567 {
-
     public entry fun create_n_(n: u64, ctx: &mut TxContext) {
         let mut v: vector<UID> = vector[];
         let mut i = 0;

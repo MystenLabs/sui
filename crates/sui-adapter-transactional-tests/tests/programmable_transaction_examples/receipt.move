@@ -4,22 +4,21 @@
 //# init --addresses test=0x0 A=0x42
 
 //# publish
-module test::m1 {
-    public struct PrologueReceipt {}
-    public struct Witness has key { id: UID }
+module test::m1;
 
-    public fun prologue(): PrologueReceipt {
-        PrologueReceipt {}
-    }
+public struct PrologueReceipt {}
+public struct Witness has key { id: UID }
 
-    public fun execute(_: &PrologueReceipt, ctx: &mut TxContext) {
-        transfer::transfer(Witness { id: object::new(ctx) }, tx_context::sender(ctx))
-    }
+public fun prologue(): PrologueReceipt {
+    PrologueReceipt {}
+}
 
-    public fun epilogue(r: PrologueReceipt) {
-        let PrologueReceipt {} = r;
-    }
+public fun execute(_: &PrologueReceipt, ctx: &mut TxContext) {
+    transfer::transfer(Witness { id: object::new(ctx) }, tx_context::sender(ctx))
+}
 
+public fun epilogue(r: PrologueReceipt) {
+    let PrologueReceipt {} = r;
 }
 
 //# programmable

@@ -8,13 +8,13 @@ processed 14 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-167:
+task 1, lines 8-165:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 18164000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 169-171:
+task 2, lines 167-169:
 //# programmable --sender A --inputs @A
 //> 0: test::m::new();
 //> TransferObjects([Result(0)], Input(0))
@@ -22,7 +22,7 @@ created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 34002400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 173:
+task 3, line 171:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 2
@@ -93,13 +93,13 @@ Contents: test::m::S {
     ],
 }
 
-task 4, lines 175-176:
+task 4, lines 173-174:
 //# programmable --sender A --inputs object(2,0) 112
 //> test::m::set(Input(0), Input(1))
 mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8)
 gas summary: computation_cost: 1000000, storage_cost: 14364000,  storage_rebate: 14362564, non_refundable_storage_fee: 1436
 
-task 5, line 178:
+task 5, line 176:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 3
@@ -170,14 +170,14 @@ Contents: test::m::S {
     ],
 }
 
-task 6, lines 180-181:
+task 6, lines 178-179:
 //# programmable --sender A --inputs object(2,0) 112
 //> test::m::remove(Input(0))
 mutated: object(0,0), object(2,0)
 deleted: object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9), object(2,10), object(2,11), object(2,12), object(2,13), object(2,14), object(2,15), object(2,16)
 gas summary: computation_cost: 1000000, storage_cost: 3967200,  storage_rebate: 33999000, non_refundable_storage_fee: 3400
 
-task 7, line 183:
+task 7, line 181:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 4
@@ -250,19 +250,19 @@ Contents: test::m::S {
 
 // dev-inspect with 'check' and correct values
 
-task 8, lines 187-188:
+task 8, lines 185-186:
 //# programmable --sender A --inputs object(2,0)@2 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 3967200,  storage_rebate: 2978902, non_refundable_storage_fee: 298
 
-task 9, lines 190-191:
+task 9, lines 188-189:
 //# programmable --sender A --inputs object(2,0)@3 vector[112] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 3967200,  storage_rebate: 2978902, non_refundable_storage_fee: 298
 
-task 10, lines 193-194:
+task 10, lines 191-192:
 //# programmable --sender A --inputs object(2,0)@4 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
@@ -270,21 +270,21 @@ gas summary: computation_cost: 500000, storage_cost: 3967200,  storage_rebate: 2
 
 // dev-inspect with 'check' and _incorrect_ values
 
-task 11, lines 198-200:
+task 11, lines 196-198:
 // Should fail since the field exists but with a different field.
 //# programmable --sender A --inputs object(2,0)@3 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 14, instruction: 18, function_name: Some("check_") }, 0) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 14, instruction: 18, function_name: Some("check_") }, 0) in command 0
 
-task 12, lines 202-204:
+task 12, lines 200-202:
 // Should fail since the field has been deleted.
 //# programmable --sender A --inputs object(2,0)@4 vector[112] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 14, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 14, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
 
-task 13, lines 206-208:
+task 13, lines 204-206:
 // Should fail since at the version of the object we're passing in the field exists still
 //# programmable --sender A --inputs object(2,0)@2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1))

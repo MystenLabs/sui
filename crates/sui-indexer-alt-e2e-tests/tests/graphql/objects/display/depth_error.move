@@ -16,14 +16,16 @@
 
 //# publish --sender A
 #[allow(deprecated_usage)]
-module test::mod {
-  use std::string::utf8;
-  use sui::display;
-  use sui::package;
+module test::mod;
 
-  public struct MOD() has drop;
+use std::string::utf8;
+use sui::display;
+use sui::package;
 
-  public struct Foo has key, store {
+public struct MOD() has drop;
+
+// prettier-ignore
+public struct Foo has key, store {
     id: UID,
     deep: Deep<Deep<Deep<Deep<
           Deep<Deep<Deep<Deep<
@@ -36,42 +38,41 @@ module test::mod {
           Deep<u8>
           >>>>>>>>>>>>>>>>
           >>>>>>>>>>>>>>>>,
-  }
+}
 
+public struct Deep<T: store>(T) has store;
 
-  public struct Deep<T: store>(T) has store;
-
-  fun init(otw: MOD, ctx: &mut TxContext) {
+fun init(otw: MOD, ctx: &mut TxContext) {
     let publisher = package::claim(otw, ctx);
     let mut d = display::new_with_fields<Foo>(
-      &publisher,
-      // Too deep to display
-      vector[utf8(b"deep")],
-      vector[utf8(b"{d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d}")],
-      ctx,
+        &publisher,
+        // Too deep to display
+        vector[utf8(b"deep")],
+        vector[utf8(b"{d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d}")],
+        ctx,
     );
 
     d.update_version();
     transfer::public_transfer(publisher, ctx.sender());
     transfer::public_transfer(d, ctx.sender());
-  }
+}
 
-  public fun new(d: u8, ctx: &mut TxContext): Foo {
+// prettier-ignore
+public fun new(d: u8, ctx: &mut TxContext): Foo {
     Foo {
-      id: object::new(ctx),
-      deep: Deep(Deep(Deep(Deep(
-            Deep(Deep(Deep(Deep(
-            Deep(Deep(Deep(Deep(
-            Deep(Deep(Deep(Deep(
-            Deep(Deep(Deep(Deep(
-            Deep(Deep(Deep(Deep(
-            Deep(Deep(Deep(Deep(
-            Deep(Deep(Deep(Deep(
-            Deep(d)
-            ))))))))))))))))
-            ))))))))))))))))
+        id: object::new(ctx),
+        deep: Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(Deep(Deep(Deep(
+              Deep(d)
+              ))))))))))))))))
+              )))))))))))))))),
     }
-  }
 }
 
 //# programmable --sender A --inputs 42u8 @A

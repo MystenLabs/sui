@@ -11,7 +11,7 @@ module test::m1;
 use std::string::String;
 
 public fun name(): String {
-  b"A".to_string()
+    b"A".to_string()
 }
 
 //# programmable --sender A --inputs object(0xc) @A 6u8

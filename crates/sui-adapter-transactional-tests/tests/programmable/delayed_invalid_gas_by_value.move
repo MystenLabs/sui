@@ -6,11 +6,13 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish
-module test::m1 {
-    public fun take<T: key>(_: T) { abort 0 }
-    public fun imm<T: key>(_: &T, _: T) { abort 0 }
-    public fun mut_<T: key>(_: &mut T, _: T) { abort 0 }
-}
+module test::m1;
+
+public fun take<T: key>(_: T) { abort 0 }
+
+public fun imm<T: key>(_: &T, _: T) { abort 0 }
+
+public fun mut_<T: key>(_: &mut T, _: T) { abort 0 }
 
 //# programmable --sender A --inputs @A
 //> TransferObjects([Gas], Input(0));

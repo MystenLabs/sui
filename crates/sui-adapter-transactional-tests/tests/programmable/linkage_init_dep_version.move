@@ -14,67 +14,72 @@
 //# init --addresses Dep_V1=0x0 Dep_V2=0x0 ConsumerV1=0x0 ConsumerV2=0x0 PInitV1=0x0 PInitOld=0x0 PPtb=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module Dep_V1::d;
+module Dep_V1::d {
+    public fun val(): u64 { 1 }
 
-public fun val(): u64 { 1 }
-
-public fun ping() {}
+    public fun ping() {}
+}
 
 //# publish --upgradeable --dependencies Dep_V1 --sender A
-module ConsumerV1::c;
-use Dep_V1::d;
+module ConsumerV1::c {
+    use Dep_V1::d;
 
-// Public consumer: calling `consume` pins `Dep` `at_least` the version this package depends on.
-public fun consume() { d::ping() }
+    // Public consumer: calling `consume` pins `Dep` `at_least` the version this package depends on.
+    public fun consume() { d::ping() }
+}
 
 //# publish --dependencies Dep_V1 --sender A
-module PInitV1::m;
-use Dep_V1::d;
+module PInitV1::m {
+    use Dep_V1::d;
 
-public struct Config has key { id: sui::object::UID, v: u64 }
+    public struct Config has key { id: sui::object::UID, v: u64 }
 
-// Published while only Dep v1 exists => init runs against v1 => v = 1.
-fun init(ctx: &mut sui::tx_context::TxContext) {
-    sui::transfer::share_object(Config { id: sui::object::new(ctx), v: d::val() })
+    // Published while only Dep v1 exists => init runs against v1 => v = 1.
+    fun init(ctx: &mut sui::tx_context::TxContext) {
+        sui::transfer::share_object(Config { id: sui::object::new(ctx), v: d::val() })
+    }
 }
 
 //# view-object 3,1
 
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
-module Dep_V2::d;
+module Dep_V2::d {
+    public fun val(): u64 { 2 }
 
-public fun val(): u64 { 2 }
-
-public fun ping() {}
+    public fun ping() {}
+}
 
 //# upgrade --package ConsumerV1 --upgrade-capability 2,1 --dependencies Dep_V2 --sender A
-module ConsumerV2::c;
-use Dep_V2::d;
+module ConsumerV2::c {
+    use Dep_V2::d;
 
-// v2 of the consumer depends on Dep v2 => calling `consume` pins `Dep` `at_least` 2.
-public fun consume() { d::ping() }
+    // v2 of the consumer depends on Dep v2 => calling `consume` pins `Dep` `at_least` 2.
+    public fun consume() { d::ping() }
+}
 
 //# publish --dependencies Dep_V1 --sender A
-module PInitOld::m;
-use Dep_V1::d;
+module PInitOld::m {
+    use Dep_V1::d;
 
-public struct Config has key { id: sui::object::UID, v: u64 }
+    public struct Config has key { id: sui::object::UID, v: u64 }
 
-// Published against Dep v1 even though v2 now exists => init still runs against v1 => v = 1.
-fun init(ctx: &mut sui::tx_context::TxContext) {
-    sui::transfer::share_object(Config { id: sui::object::new(ctx), v: d::val() })
+    // Published against Dep v1 even though v2 now exists => init still runs against v1 => v = 1.
+    fun init(ctx: &mut sui::tx_context::TxContext) {
+        sui::transfer::share_object(Config { id: sui::object::new(ctx), v: d::val() })
+    }
 }
 
 //# view-object 7,1
 
 //# stage-package
-module PPtb::m;
-use Dep_V1::d;
+module PPtb::m {
+    use Dep_V1::d;
 
-public struct Config has key { id: sui::object::UID, v: u64 }
+    public struct Config has key { id: sui::object::UID, v: u64 }
 
-fun init(ctx: &mut sui::tx_context::TxContext) {
-    sui::transfer::share_object(Config { id: sui::object::new(ctx), v: d::val() })
+    fun init(ctx: &mut sui::tx_context::TxContext) {
+        sui::transfer::share_object(Config { id: sui::object::new(ctx), v: d::val() })
+    }
 }
 
 //# programmable --sender A --inputs @A
