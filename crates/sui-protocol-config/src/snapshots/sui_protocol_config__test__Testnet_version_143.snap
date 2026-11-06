@@ -82,6 +82,7 @@ feature_flags:
   soft_bundle: true
   enable_coin_deny_list_v2: true
   passkey_auth: true
+  mldsa65_auth: true
   secp256r1_ecrecover_checks_x_below_p: true
   complete_effects_size_estimate: true
   authority_capabilities_v2: true
