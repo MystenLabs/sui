@@ -664,6 +664,71 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     );
 }
 
+/// The fork loads a system package as of the fork checkpoint, so its index has no rows for the
+/// versions that package replaced before the fork. `GetPackage` refuses those versions as pruned
+/// rather than as versions that never existed.
+#[tokio::test]
+async fn test_system_package_versions_replaced_before_the_fork_are_pruned() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+    // A system package at version 3, upgraded in place twice before the fork.
+    let package_id = ObjectID::random();
+    let mut module = move_binary_format::file_format::empty_module();
+    module.address_identifiers[0] = package_id.into();
+    let package = sui_types::object::Object::new_package_from_data(
+        sui_types::object::Data::Package(sui_types::move_package::MovePackage::new_system(
+            SequenceNumber::from_u64(3),
+            &[module],
+            [],
+        )),
+        TransactionDigest::genesis_marker(),
+    );
+    store
+        .local_store()
+        .restore_seed_objects(&[package])
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let get_version = |version| {
+        let mut request = GetPackageRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.selector = Some(Selector::Version(version));
+        service.get_package(tonic::Request::new(request))
+    };
+
+    for version in [1, 2] {
+        let error = get_version(version).await.unwrap_err();
+        assert_eq!(
+            error.code(),
+            tonic::Code::OutOfRange,
+            "v{version}: {error:?}"
+        );
+        assert_eq!(
+            error.message(),
+            "requested data below earliest available; lowest available checkpoint is 100",
+            "v{version}"
+        );
+    }
+
+    let package = get_version(3).await.unwrap().into_inner().package.unwrap();
+    assert_eq!(package.version, Some(3));
+
+    // Versions this lineage never had.
+    for version in [0, 4] {
+        let error = get_version(version).await.unwrap_err();
+        assert_eq!(error.code(), tonic::Code::NotFound, "v{version}: {error:?}");
+    }
+}
+
 #[tokio::test]
 async fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp, _gql_server) = test_simulacrum().await;
