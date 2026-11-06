@@ -848,6 +848,10 @@ pub enum SuiErrorKind {
         "This validator is outside the transaction's staggered-submission proposer set; submit to one of its proposers."
     )]
     StaggeredSubmissionNotProposer,
+
+    // The field is the same on every validator, so that the driver aggregates the rejections.
+    #[error("Transaction is not valid until its min_timestamp {min_timestamp} (Unix seconds).")]
+    TransactionNotYetValid { min_timestamp: u64 },
 }
 
 #[repr(u64)]
@@ -1077,6 +1081,9 @@ impl SuiErrorKind {
             // Retriable at another validator: one of the transaction's proposers.
             SuiErrorKind::StaggeredSubmissionNotProposer => true,
 
+            // The transaction becomes valid at its `min_timestamp`.
+            SuiErrorKind::TransactionNotYetValid { .. } => true,
+
             // The transaction is already being processed by consensus, so a fresh
             // submission is pointless. The client should retry by waiting for effects
             // rather than resubmitting.
@@ -1183,6 +1190,8 @@ impl SuiErrorKind {
             // Not a fault of the validator: the client simply asked a non-proposer. It
             // retries at the next target without backoff, like any aborted submission.
             SuiErrorKind::StaggeredSubmissionNotProposer => ErrorCategory::Aborted,
+
+            SuiErrorKind::TransactionNotYetValid { .. } => ErrorCategory::Aborted,
 
             // Other variants are assumed to be retriable with new transaction submissions.
             _ => ErrorCategory::Aborted,

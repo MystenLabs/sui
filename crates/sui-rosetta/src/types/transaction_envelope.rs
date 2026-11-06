@@ -248,9 +248,8 @@ mod tests {
     /// representations — `TransactionData` ↔ proto `Transaction` ↔
     /// `sui_sdk_types::Transaction` — through four hand-written conversions.
     /// Nothing compiler-checks that they agree, and they have drifted before:
-    /// the `ValidDuring` ms-vs-seconds mismatch pinned by
-    /// `test_ab_gas_valid_during_timestamps_are_none` is exactly a case where
-    /// the encode and decode directions disagree. Two extra wrinkles specific
+    /// the `ValidDuring` timestamps were once encoded as ms and decoded as
+    /// seconds. Two extra wrinkles specific
     /// to our usage: `encode_inner_proto` clears the opaque `bcs` blob, so this
     /// also proves the *structured* fields alone are lossless; and proto3
     /// elides default/empty values, so an absent-vs-zero mapping bug only
@@ -383,13 +382,9 @@ mod tests {
         assert_canonical(&data, "ab_gas_valid_during");
     }
 
-    /// §10.5 / §13.6 pin: rosetta-built address-balance-gas transactions must
-    /// keep the `ValidDuring` `min/max_timestamp` fields `None`. The proto
-    /// round-trip for those timestamps has a latent ms-vs-seconds mismatch
-    /// (encode treats the value as ms via `ms_to_timestamp`, decode reads
-    /// `.seconds`); it is inert only while both stay `None`. Do not start
-    /// populating them — if this test ever needs changing, fix the conversion
-    /// first.
+    /// §10.5 / §13.6 pin: rosetta-built address-balance-gas transactions keep
+    /// the `ValidDuring` `min/max_timestamp` fields `None`. Validators reject
+    /// timestamps unless `enable_timestamp_transaction_expiration` is set.
     #[test]
     fn test_ab_gas_valid_during_timestamps_are_none() {
         use crate::types::internal_operation::pay_sui_pt_ab_gas;

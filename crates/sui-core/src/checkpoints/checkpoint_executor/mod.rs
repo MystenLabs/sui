@@ -954,6 +954,23 @@ impl CheckpointExecutor {
                             env = env.with_insufficient_funds();
                         }
 
+                        // Any timestamp after `max_timestamp` reproduces the expiry that effects
+                        // record. This relies on the early-error order in
+                        // `get_early_execution_error`.
+                        // TODO: Use the timestamp of the consensus commit prologue that precedes
+                        // the transaction instead of relying on effects.
+                        if let &ExecutionStatus::Failure(ExecutionFailure {
+                            error: ExecutionErrorKind::TransactionExpired,
+                            ..
+                        }) = effects.status()
+                            && let Some(timestamp_ms) = txn
+                                .transaction_data()
+                                .expiration()
+                                .first_expired_timestamp_ms()
+                        {
+                            env = env.with_consensus_commit_timestamp(timestamp_ms);
+                        }
+
                         Some((tx_digest, (txn.clone(), env)))
                     }
                 },

@@ -6,27 +6,24 @@
 use crate::crypto::SuiSignature;
 use nonempty::NonEmpty;
 
-fn ms_to_timestamp(ms: u64) -> prost_types::Timestamp {
+fn seconds_to_timestamp(seconds: u64) -> prost_types::Timestamp {
     prost_types::Timestamp {
-        seconds: (ms / 1000) as _,
-        nanos: ((ms % 1000) * 1_000_000) as _,
+        seconds: i64::try_from(seconds).unwrap_or(i64::MAX),
+        nanos: 0,
     }
 }
 
-fn timestamp_to_ms(timestamp: &prost_types::Timestamp) -> Result<u64, &'static str> {
-    let seconds: u64 = timestamp
+/// Transaction expiration timestamps are whole Unix seconds, so a fractional second is rejected.
+fn timestamp_to_seconds(timestamp: &prost_types::Timestamp) -> Result<u64, &'static str> {
+    if timestamp.nanos != 0 {
+        return Err("invalid timestamp: expiration timestamps must be whole seconds");
+    }
+    timestamp
         .seconds
         .try_into()
-        .map_err(|_| "invalid timestamp: negative seconds")?;
-    let nanos: u64 = timestamp
-        .nanos
-        .try_into()
-        .map_err(|_| "invalid timestamp: negative nanos")?;
-    seconds
-        .checked_mul(1000)
-        .and_then(|ms| ms.checked_add(nanos / 1_000_000))
-        .ok_or("invalid timestamp: out of range")
+        .map_err(|_| "invalid timestamp: negative seconds")
 }
+
 use crate::message_envelope::Message as _;
 use fastcrypto::traits::ToFromBytes;
 use sui_rpc::field::FieldMaskTree;
@@ -1420,6 +1417,9 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
+            // TODO: map to a dedicated kind once the sui-rpc proto has one. The description
+            // still carries the error text.
+            E::TransactionExpired => ExecutionErrorKind::Unknown,
         };
 
         message.set_kind(kind);
@@ -2335,8 +2335,8 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
             } => {
                 message.epoch = max_epoch;
                 message.min_epoch = min_epoch;
-                message.min_timestamp = min_timestamp.map(ms_to_timestamp);
-                message.max_timestamp = max_timestamp.map(ms_to_timestamp);
+                message.min_timestamp = min_timestamp.map(seconds_to_timestamp);
+                message.max_timestamp = max_timestamp.map(seconds_to_timestamp);
                 message.set_chain(sui_sdk_types::Digest::new(*chain.as_bytes()));
                 message.set_nonce(nonce);
 
@@ -2353,8 +2353,8 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
             } => {
                 message.epoch = max_epoch;
                 message.min_epoch = min_epoch;
-                message.min_timestamp = min_timestamp.map(ms_to_timestamp);
-                message.max_timestamp = max_timestamp.map(ms_to_timestamp);
+                message.min_timestamp = min_timestamp.map(seconds_to_timestamp);
+                message.max_timestamp = max_timestamp.map(seconds_to_timestamp);
                 message.set_chain(sui_sdk_types::Digest::new(*chain.as_bytes()));
                 message.set_nonce(nonce);
                 if let Some(allowed) = allowed_proposers {
@@ -2400,12 +2400,12 @@ impl TryFrom<&TransactionExpiration> for crate::transaction::TransactionExpirati
                 let min_timestamp = value
                     .min_timestamp
                     .as_ref()
-                    .map(timestamp_to_ms)
+                    .map(timestamp_to_seconds)
                     .transpose()?;
                 let max_timestamp = value
                     .max_timestamp
                     .as_ref()
-                    .map(timestamp_to_ms)
+                    .map(timestamp_to_seconds)
                     .transpose()?;
                 let min_epoch = value.min_epoch;
                 let max_epoch = value.epoch;
@@ -3689,6 +3689,40 @@ impl TryFrom<&ObjectSet> for crate::full_checkpoint_content::ObjectSet {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn test_expiration_timestamp_conversions() {
+        assert_eq!(
+            seconds_to_timestamp(1_700_000_000),
+            prost_types::Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }
+        );
+        assert_eq!(seconds_to_timestamp(u64::MAX).seconds, i64::MAX);
+        assert_eq!(
+            timestamp_to_seconds(&prost_types::Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 0,
+            }),
+            Ok(1_700_000_000)
+        );
+        assert!(
+            timestamp_to_seconds(&prost_types::Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 500_000_000,
+            })
+            .is_err()
+        );
+        assert!(
+            timestamp_to_seconds(&prost_types::Timestamp {
+                seconds: -1,
+                nanos: 0,
+            })
+            .is_err()
+        );
+    }
+    use super::{seconds_to_timestamp, timestamp_to_seconds};
     use crate::effects::TransactionEffectsAPI;
 
     #[test]

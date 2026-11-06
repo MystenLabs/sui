@@ -8,8 +8,11 @@ use nonempty::NonEmpty;
 use once_cell::sync::Lazy;
 
 use crate::{
-    base_types::SequenceNumber, digests::TransactionDigest, execution_status::CongestedObjects,
-    execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
+    base_types::SequenceNumber,
+    digests::TransactionDigest,
+    execution_status::CongestedObjects,
+    execution_status::ExecutionErrorKind,
+    transaction::{CheckedInputObjects, TransactionExpiration},
 };
 
 /// Execution inputs computed before running a transaction: whether to fail it early (and with
@@ -85,6 +88,8 @@ pub fn get_early_execution_error(
     input_objects: &CheckedInputObjects,
     config_certificate_deny_set: &HashSet<TransactionDigest>,
     funds_withdraw_status: &FundsWithdrawStatus,
+    expiration: &TransactionExpiration,
+    consensus_commit_timestamp_ms: Option<u64>,
 ) -> Option<NonEmpty<ExecutionErrorKind>> {
     let mut errors = vec![];
     if is_certificate_denied(transaction_digest, config_certificate_deny_set) {
@@ -118,6 +123,16 @@ pub fn get_early_execution_error(
     if matches!(funds_withdraw_status, FundsWithdrawStatus::Insufficient) {
         assert_reachable!("insufficient funds for withdraw");
         errors.push(ExecutionErrorKind::InsufficientFundsForWithdraw);
+    }
+
+    // Expiry goes last, so that effects report any other early error, and the insufficient-funds
+    // short-circuit still applies. Checkpoint execution depends on this order: it sets the
+    // timestamp only when effects report `TransactionExpired` as the head error, so it must get
+    // the same effects when expiry follows another error that it reproduces without expiry.
+    // Do not add an early error after this one, or make execution depend on expiry when it is
+    // not the head error.
+    if consensus_commit_timestamp_ms.is_some_and(|ts| expiration.is_expired_at(ts)) {
+        errors.push(ExecutionErrorKind::TransactionExpired);
     }
 
     NonEmpty::from_vec(errors)
@@ -190,6 +205,8 @@ mod tests {
             &input_objects,
             &deny_set,
             &FundsWithdrawStatus::Insufficient,
+            &TransactionExpiration::None,
+            None,
         );
         assert_eq!(
             result.unwrap().into_iter().collect::<Vec<_>>(),
@@ -202,8 +219,57 @@ mod tests {
             &input_objects,
             &deny_set,
             &FundsWithdrawStatus::MaybeSufficient,
+            &TransactionExpiration::None,
+            None,
         );
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_early_execution_error_expired() {
+        let tx_digest = crate::digests::TransactionDigest::random();
+        let input_objects = create_test_input_objects();
+        let deny_set = HashSet::new();
+        let expiration = TransactionExpiration::ValidDuring {
+            min_epoch: None,
+            max_epoch: None,
+            min_timestamp: Some(1000),
+            max_timestamp: Some(2000),
+            chain: crate::digests::ChainIdentifier::default(),
+            nonce: 0,
+        };
+        let errors = |status: &FundsWithdrawStatus, timestamp_ms: Option<u64>| {
+            get_early_execution_error(
+                &tx_digest,
+                &input_objects,
+                &deny_set,
+                status,
+                &expiration,
+                timestamp_ms,
+            )
+            .map(|e| e.into_iter().collect::<Vec<_>>())
+        };
+
+        // `max_timestamp` covers the whole second, and `min_timestamp` is not checked.
+        assert_eq!(errors(&FundsWithdrawStatus::MaybeSufficient, None), None);
+        assert_eq!(errors(&FundsWithdrawStatus::MaybeSufficient, Some(0)), None);
+        assert_eq!(
+            errors(&FundsWithdrawStatus::MaybeSufficient, Some(2_000_999)),
+            None
+        );
+        assert_eq!(
+            errors(&FundsWithdrawStatus::MaybeSufficient, Some(2_001_000)),
+            Some(vec![ExecutionErrorKind::TransactionExpired])
+        );
+        // Expiry follows other early errors.
+        assert_eq!(
+            errors(&FundsWithdrawStatus::Insufficient, Some(2_001_000)),
+            Some(vec![
+                ExecutionErrorKind::InsufficientFundsForWithdraw,
+                ExecutionErrorKind::TransactionExpired,
+            ])
+        );
+        assert_eq!(expiration.first_expired_timestamp_ms(), Some(2_001_000));
     }
 
     #[test]
@@ -219,6 +285,8 @@ mod tests {
             &input_objects,
             &deny_set,
             &FundsWithdrawStatus::Insufficient,
+            &TransactionExpiration::None,
+            None,
         );
         assert_eq!(
             result.unwrap().into_iter().collect::<Vec<_>>(),
@@ -246,6 +314,8 @@ mod tests {
             &CheckedInputObjects::new_for_replay(input_objects),
             &deny_set,
             &FundsWithdrawStatus::Insufficient,
+            &TransactionExpiration::None,
+            None,
         );
         assert_eq!(
             result.unwrap().into_iter().collect::<Vec<_>>(),
@@ -271,6 +341,8 @@ mod tests {
             &CheckedInputObjects::new_for_replay(input_objects),
             &deny_set,
             &FundsWithdrawStatus::Insufficient,
+            &TransactionExpiration::None,
+            None,
         );
         let result: Vec<_> = result.unwrap().into_iter().collect();
         assert_eq!(result.len(), 2);

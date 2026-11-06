@@ -1630,3 +1630,106 @@ async fn test_pool_mode_reports_processed_transactions_per_transaction() {
         other => panic!("expected the live transaction to be submitted, got: {other:?}"),
     }
 }
+
+/// Admission rejects a transaction before its `min_timestamp`, or more than the grace period
+/// after its `max_timestamp`, by the local clock. A retry of an executed transaction gets its
+/// effects even after its `max_timestamp`.
+#[sim_test]
+async fn test_submit_transaction_timestamp_window() {
+    // The flag is devnet-only, and simtest-mainnet runs with the mainnet chain.
+    let _guard = sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+        c.set_enable_timestamp_transaction_expiration_for_testing(true);
+        c
+    });
+    let test_context = TestContext::new_with_consensus(
+        false,
+        (0..4)
+            .map(|_| with_block_status(BlockStatus::Sequenced(BlockRef::MIN)))
+            .collect(),
+    )
+    .await;
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let build = |min_timestamp, max_timestamp, nonce| {
+        let mut tx_data = TestTransactionBuilder::new(
+            test_context.sender,
+            test_context.gas_object_ref,
+            test_context
+                .state
+                .reference_gas_price_for_testing()
+                .unwrap(),
+        )
+        .transfer_sui(None, test_context.sender)
+        .build();
+        *tx_data.expiration_mut_for_testing() = TransactionExpiration::ValidDuring {
+            min_epoch: Some(epoch_store.epoch()),
+            max_epoch: Some(epoch_store.epoch()),
+            min_timestamp,
+            max_timestamp,
+            chain: test_context.state.get_chain_identifier(),
+            nonce,
+        };
+        to_sender_signed_transaction(tx_data, &test_context.keypair)
+    };
+    let submit = |transaction: Transaction| {
+        let request = test_context.build_submit_request(transaction);
+        async { test_context.client.submit_transaction(request, None).await }
+    };
+
+    let rejection = |response: Result<SubmitTxResponse, SuiError>| match response {
+        Err(error) => error,
+        Ok(response) => match &response.results[0] {
+            SubmitTxResult::Rejected { error } => error.clone(),
+            other => panic!("expected a rejection, got {other:?}"),
+        },
+    };
+
+    let error = rejection(submit(build(Some(now_secs + 3_600), None, 0)).await);
+    assert!(
+        matches!(
+            error.as_inner(),
+            SuiErrorKind::TransactionNotYetValid { .. }
+        ),
+        "{error:?}"
+    );
+
+    let error = rejection(submit(build(None, Some(now_secs - 60), 1)).await);
+    assert!(
+        matches!(error.as_inner(), SuiErrorKind::TransactionExpired),
+        "{error:?}"
+    );
+
+    // Within the grace period after `max_timestamp`.
+    let response = submit(build(None, Some(now_secs - 2), 2)).await.unwrap();
+    assert!(
+        matches!(response.results[0], SubmitTxResult::Submitted { .. }),
+        "{response:?}"
+    );
+
+    let response = submit(build(Some(now_secs - 60), Some(now_secs + 3_600), 3))
+        .await
+        .unwrap();
+    assert!(
+        matches!(response.results[0], SubmitTxResult::Submitted { .. }),
+        "{response:?}"
+    );
+
+    let executed = build(None, Some(now_secs - 60), 4);
+    let verified_transaction = VerifiedExecutableTransaction::new_from_checkpoint(
+        VerifiedTransaction::new_unchecked(executed.clone()),
+        epoch_store.epoch(),
+        1,
+    );
+    test_context
+        .state
+        .try_execute_immediately(&verified_transaction, ExecutionEnv::new(), &epoch_store)
+        .unwrap();
+    let response = submit(executed).await.unwrap();
+    assert!(
+        matches!(response.results[0], SubmitTxResult::Executed { .. }),
+        "{response:?}"
+    );
+}

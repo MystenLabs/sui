@@ -318,6 +318,8 @@ fn derive_on_chain_status(effects: &TransactionEffects) -> OnChainStatus {
                 f.error,
                 ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. }
                     | ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable
+                    // Depends on the consensus commit timestamp, which the backtest does not pass.
+                    | ExecutionErrorKind::TransactionExpired
             ),
             is_success: false,
         },

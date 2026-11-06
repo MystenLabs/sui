@@ -938,6 +938,24 @@ impl ValidatorService {
                 continue;
             }
 
+            // The rate-limiter slot is not refunded, so a gasless transaction before its
+            // `min_timestamp` is rejected first.
+            if is_gasless
+                && let Err(error) = epoch_store
+                    .check_timestamp_expiration_at_submission(transaction.data().transaction_data())
+                && matches!(
+                    error.as_inner(),
+                    SuiErrorKind::TransactionNotYetValid { .. }
+                )
+            {
+                metrics
+                    .submission_rejected_transactions
+                    .with_label_values(&[error.to_variant_name()])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
+            }
+
             if is_gasless
                 && !self
                     .gasless_limiter
@@ -1141,6 +1159,23 @@ impl ValidatorService {
                     ?tx_digest,
                     "handle_submit_transaction: consensus message already processed"
                 );
+                continue;
+            }
+
+            // Checked after the lookups above, so that a retry of a transaction that already
+            // executed gets its effects rather than an expiry error.
+            if let Err(error) = epoch_store.check_timestamp_expiration_at_submission(
+                verified_transaction.tx().data().transaction_data(),
+            ) {
+                debug!(
+                    ?tx_digest,
+                    "Transaction rejected during submission: {error}"
+                );
+                metrics
+                    .submission_rejected_transactions
+                    .with_label_values(&[error.to_variant_name()])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }
 
