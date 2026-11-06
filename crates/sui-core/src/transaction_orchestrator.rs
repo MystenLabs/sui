@@ -26,7 +26,9 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{ErrorCategory, SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
+use sui_types::transaction::{
+    Transaction, TransactionData, TransactionDataAPI as _, VerifiedTransaction,
+};
 use sui_types::transaction_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
     ExecuteTransactionResponseV3, FinalizedEffects, IsTransactionExecutedLocally,
@@ -185,7 +187,7 @@ where
         (ExecuteTransactionResponseV3, IsTransactionExecutedLocally),
         TransactionSubmissionError,
     > {
-        let timer = Instant::now();
+        let timer = Instant::now() + min_timestamp_wait(request.transaction.transaction_data());
         let tx_type = if request.transaction.is_consensus_tx() {
             TxType::SharedObject
         } else {
@@ -267,7 +269,7 @@ where
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError> {
-        let timer = Instant::now();
+        let timer = Instant::now() + min_timestamp_wait(request.transaction.transaction_data());
         let tx_type = if request.transaction.is_consensus_tx() {
             TxType::SharedObject
         } else {
@@ -714,7 +716,7 @@ where
         client_addr: Option<SocketAddr>,
         finality_timeout: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
-        let timer = Instant::now();
+        let timer = Instant::now() + min_timestamp_wait(verified_transaction.transaction_data());
         let tx_digest = *verified_transaction.digest();
         let tx_type = if verified_transaction.is_consensus_tx() {
             TxType::SharedObject
@@ -1221,4 +1223,15 @@ impl Drop for TransactionSubmissionGuard {
             debug!(?self.tx_digest, "Cleaned up transaction in pending log");
         }
     }
+}
+
+/// The time until the transaction's `min_timestamp`, which the transaction driver waits before it
+/// submits. Latency timers start after it, because the client chose the delay.
+fn min_timestamp_wait(transaction_data: &TransactionData) -> Duration {
+    let now_ms = AuthorityState::unixtime_now_ms();
+    transaction_data
+        .expiration()
+        .first_valid_timestamp_ms()
+        .map(|valid_from_ms| Duration::from_millis(valid_from_ms.saturating_sub(now_ms)))
+        .unwrap_or_default()
 }
