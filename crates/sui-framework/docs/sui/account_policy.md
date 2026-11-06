@@ -4,9 +4,10 @@ title: Module `sui::account_policy`
 
 Opt-in account policies that bound what a transaction signed by the account key alone may do.
 
-Policies are dynamic fields of the singleton <code><a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a></code>, keyed by owner address.
-Every transaction implicitly reads the registry at the version consensus assigned to it, so
-execution can look up the sender's policy without the transaction declaring it. While a policy
+A policy is a shared object whose ID is derived from its owner's address; the singleton
+<code><a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a></code> only serves as the derivation parent, so creation cannot race. Every
+transaction from an owner with an active policy implicitly reads it at the version consensus
+assigned, so the transaction need not declare it. While a policy
 is active, execution enforces a per-epoch outflow limit for each coin type (gas included for
 SUI), a package allowlist, and that the owner's objects stay with the owner
 unless they go to a listed recipient or are taken by a package with custody permission, itself
@@ -39,7 +40,6 @@ guardian's co-signature.
 -  [Function `remove_package`](#sui_account_policy_remove_package)
 -  [Function `exists`](#sui_account_policy_exists)
 -  [Function `activation_epoch`](#sui_account_policy_activation_epoch)
--  [Function `policy_mut`](#sui_account_policy_policy_mut)
 -  [Function `authorize`](#sui_account_policy_authorize)
 
 
@@ -49,6 +49,7 @@ guardian's co-signature.
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/derived_object.md#sui_derived_object">sui::derived_object</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
@@ -65,7 +66,7 @@ guardian's co-signature.
 
 ## Struct `AccountPolicyRegistry`
 
-Singleton shared object holding every account policy as a dynamic field.
+Singleton shared object from which every policy's ID is derived.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a> <b>has</b> key
@@ -92,7 +93,7 @@ Singleton shared object holding every account policy as a dynamic field.
 
 ## Struct `PolicyKey`
 
-Dynamic field key of an owner's policy.
+Derived-object key of an owner's policy.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a> <b>has</b> <b>copy</b>, drop, store
@@ -208,7 +209,7 @@ What a listed package may do with the owner's objects. Field layout is mirrored 
 The policy itself. Field layout is mirrored by <code>sui_types::account_policy::AccountPolicy</code>.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a> <b>has</b> store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a> <b>has</b> key
 </code></pre>
 
 
@@ -218,6 +219,11 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 
 
 <dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+</dt>
+<dd>
+</dd>
 <dt>
 <code>owner: <b>address</b></code>
 </dt>
@@ -313,6 +319,16 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 
 
 
+<a name="sui_account_policy_ENotOwner"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_ENotOwner">ENotOwner</a>: vector&lt;u8&gt; = b"Only the policy owner can change it.";
+</code></pre>
+
+
+
 <a name="sui_account_policy_create"></a>
 
 ## Function `create`
@@ -358,18 +374,15 @@ Opt the sender in with an empty rule set. The policy is enforced from
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, guardian: <b>address</b>, ctx: &TxContext) {
     <b>let</b> owner = ctx.sender();
-    df::add(
-        &<b>mut</b> registry.id,
-        <a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a>(owner),
-        <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a> {
-            owner,
-            guardian,
-            <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>: ctx.epoch() + <a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a>,
-            coin_limits: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
-            recipients: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(),
-            packages: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
-        },
-    );
+    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a> {
+        id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, <a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a>(owner)),
+        owner,
+        guardian,
+        <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>: ctx.epoch() + <a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a>,
+        coin_limits: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+        recipients: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(),
+        packages: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+    });
 }
 </code></pre>
 
@@ -385,7 +398,7 @@ Cancel the sender's policy before it becomes active. Needs only the owner's key,
 attacker who enabled a policy on a stolen key cannot lock the owner out.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_cancel">cancel</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_cancel">cancel</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -394,8 +407,8 @@ attacker who enabled a policy on a stolen key cannot lock the owner out.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_cancel">cancel</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, ctx: &TxContext) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_cancel">cancel</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, ctx: &TxContext) {
+    <b>assert</b>!(ctx.sender() == policy.owner, <a href="../sui/account_policy.md#sui_account_policy_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(ctx.epoch() &lt; policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>, <a href="../sui/account_policy.md#sui_account_policy_EAlreadyActive">EAlreadyActive</a>);
     policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a> = <a href="../sui/account_policy.md#sui_account_policy_DISABLED">DISABLED</a>;
 }
@@ -412,7 +425,7 @@ attacker who enabled a policy on a stolen key cannot lock the owner out.
 Stop enforcing the sender's active policy. The guardian must co-sign.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -421,8 +434,7 @@ Stop enforcing the sender's active policy. The guardian must co-sign.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, ctx: &TxContext) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, ctx: &TxContext) {
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a> = <a href="../sui/account_policy.md#sui_account_policy_DISABLED">DISABLED</a>;
 }
@@ -438,7 +450,7 @@ Stop enforcing the sender's active policy. The guardian must co-sign.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_guardian">set_guardian</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_guardian">set_guardian</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, guardian: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -447,8 +459,7 @@ Stop enforcing the sender's active policy. The guardian must co-sign.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_guardian">set_guardian</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, guardian: <b>address</b>, ctx: &TxContext) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_guardian">set_guardian</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, guardian: <b>address</b>, ctx: &TxContext) {
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     policy.guardian = guardian;
 }
@@ -465,7 +476,7 @@ Stop enforcing the sender's active policy. The guardian must co-sign.
 Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href="../sui/sui.md#sui_sui_SUI">0x2::sui::SUI</a></code>).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, coin_type: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, limit: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, coin_type: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, limit: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -475,12 +486,11 @@ Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href=".
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(
-    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
+    policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>,
     coin_type: String,
     limit: u64,
     ctx: &TxContext,
 ) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     <b>if</b> (policy.coin_limits.contains(&coin_type)) {
         *policy.coin_limits.get_mut(&coin_type) = limit;
@@ -500,7 +510,7 @@ Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href=".
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_add_recipient">add_recipient</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, recipient: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_add_recipient">add_recipient</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, recipient: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -509,8 +519,7 @@ Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href=".
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_add_recipient">add_recipient</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, recipient: <b>address</b>, ctx: &TxContext) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_add_recipient">add_recipient</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, recipient: <b>address</b>, ctx: &TxContext) {
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     <b>if</b> (!policy.recipients.contains(&recipient)) {
         policy.recipients.insert(recipient);
@@ -528,7 +537,7 @@ Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href=".
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_recipient">remove_recipient</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, recipient: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_recipient">remove_recipient</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, recipient: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -538,11 +547,10 @@ Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href=".
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_recipient">remove_recipient</a>(
-    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
+    policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>,
     recipient: <b>address</b>,
     ctx: &TxContext,
 ) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     <b>if</b> (policy.recipients.contains(&recipient)) {
         policy.recipients.remove(&recipient);
@@ -562,7 +570,7 @@ Allow calling <code><a href="../sui/package.md#sui_package">package</a></code> (
 limited to <code>custody_types</code> (empty for any) and to <code>custody_limit</code> objects per epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_package">set_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, custody: bool, custody_types: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, custody_limit: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_package">set_package</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, custody: bool, custody_types: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, custody_limit: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -572,14 +580,13 @@ limited to <code>custody_types</code> (empty for any) and to <code>custody_limit
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_package">set_package</a>(
-    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
+    policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>,
     <a href="../sui/package.md#sui_package">package</a>: ID,
     custody: bool,
     custody_types: vector&lt;String&gt;,
     custody_limit: Option&lt;u64&gt;,
     ctx: &TxContext,
 ) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     <b>let</b> permission = <a href="../sui/account_policy.md#sui_account_policy_PackagePermission">PackagePermission</a> { custody, custody_types, custody_limit };
     <b>if</b> (policy.packages.contains(&<a href="../sui/package.md#sui_package">package</a>)) {
@@ -600,7 +607,7 @@ limited to <code>custody_types</code> (empty for any) and to <code>custody_limit
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_package">remove_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_package">remove_package</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -609,8 +616,7 @@ limited to <code>custody_types</code> (empty for any) and to <code>custody_limit
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_package">remove_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: ID, ctx: &TxContext) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_package">remove_package</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, <a href="../sui/package.md#sui_package">package</a>: ID, ctx: &TxContext) {
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     <b>if</b> (policy.packages.contains(&<a href="../sui/package.md#sui_package">package</a>)) {
         policy.packages.remove(&<a href="../sui/package.md#sui_package">package</a>);
@@ -638,7 +644,7 @@ limited to <code>custody_types</code> (empty for any) and to <code>custody_limit
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_exists">exists</a>(registry: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, owner: <b>address</b>): bool {
-    df::exists(&registry.id, <a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a>(owner))
+    <a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&registry.id, <a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a>(owner))
 }
 </code></pre>
 
@@ -652,7 +658,7 @@ limited to <code>custody_types</code> (empty for any) and to <code>custody_limit
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>(registry: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, owner: <b>address</b>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>): u64
 </code></pre>
 
 
@@ -661,32 +667,8 @@ limited to <code>custody_types</code> (empty for any) and to <code>custody_limit
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>(registry: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, owner: <b>address</b>): u64 {
-    df::borrow&lt;<a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a>, <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>&gt;(&registry.id, <a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a>(owner)).<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_account_policy_policy_mut"></a>
-
-## Function `policy_mut`
-
-
-
-<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, owner: <b>address</b>): &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, owner: <b>address</b>): &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a> {
-    df::borrow_mut(&<b>mut</b> registry.id, <a href="../sui/account_policy.md#sui_account_policy_PolicyKey">PolicyKey</a>(owner))
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>): u64 {
+    policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>
 }
 </code></pre>
 
@@ -711,6 +693,7 @@ A pending policy is the owner's to shape; an active one changes only with the gu
 
 
 <pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, ctx: &TxContext) {
+    <b>assert</b>!(ctx.sender() == policy.owner, <a href="../sui/account_policy.md#sui_account_policy_ENotOwner">ENotOwner</a>);
     <b>if</b> (ctx.epoch() &gt;= policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>) {
         <b>assert</b>!(ctx.co_signers().contains(&policy.guardian), <a href="../sui/account_policy.md#sui_account_policy_ENotCoSignedByGuardian">ENotCoSignedByGuardian</a>);
     }

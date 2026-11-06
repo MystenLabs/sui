@@ -506,10 +506,6 @@ impl WritebackCache {
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
     ) -> Option<Object> {
-        assert!(
-            sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
-            "{object_id} is not an implicitly read system object"
-        );
         let ConsensusObjectVersion {
             initial_shared_version,
             version,

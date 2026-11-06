@@ -3,9 +3,10 @@
 
 /// Opt-in account policies that bound what a transaction signed by the account key alone may do.
 ///
-/// Policies are dynamic fields of the singleton `AccountPolicyRegistry`, keyed by owner address.
-/// Every transaction implicitly reads the registry at the version consensus assigned to it, so
-/// execution can look up the sender's policy without the transaction declaring it. While a policy
+/// A policy is a shared object whose ID is derived from its owner's address; the singleton
+/// `AccountPolicyRegistry` only serves as the derivation parent, so creation cannot race. Every
+/// transaction from an owner with an active policy implicitly reads it at the version consensus
+/// assigned, so the transaction need not declare it. While a policy
 /// is active, execution enforces a per-epoch outflow limit for each coin type (gas included for
 /// SUI), a package allowlist, and that the owner's objects stay with the owner
 /// unless they go to a listed recipient or are taken by a package with custody permission, itself
@@ -20,7 +21,7 @@
 module sui::account_policy;
 
 use std::ascii::String;
-use sui::dynamic_field as df;
+use sui::derived_object;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
 
@@ -34,13 +35,15 @@ const ENotSystemAddress: vector<u8> = b"Only the system can create the account p
 const EAlreadyActive: vector<u8> = b"Only a pending policy can be cancelled with the key alone.";
 #[error(code = 2)]
 const ENotCoSignedByGuardian: vector<u8> = b"The guardian must co-sign this transaction.";
+#[error(code = 3)]
+const ENotOwner: vector<u8> = b"Only the policy owner can change it.";
 
-/// Singleton shared object holding every account policy as a dynamic field.
+/// Singleton shared object from which every policy's ID is derived.
 public struct AccountPolicyRegistry has key {
     id: UID,
 }
 
-/// Dynamic field key of an owner's policy.
+/// Derived-object key of an owner's policy.
 public struct PolicyKey(address) has copy, drop, store;
 
 /// Accumulator type of a policy's per-epoch spend counter for `T`: a coin type for coin outflow,
@@ -62,7 +65,8 @@ public struct PackagePermission has copy, drop, store {
 }
 
 /// The policy itself. Field layout is mirrored by `sui_types::account_policy::AccountPolicy`.
-public struct AccountPolicy has store {
+public struct AccountPolicy has key {
+    id: UID,
     owner: address,
     guardian: address,
     /// First epoch in which the policy is enforced; `DISABLED` if cancelled or disabled.
@@ -88,49 +92,43 @@ fun create(ctx: &TxContext) {
 /// `ACTIVATION_DELAY_EPOCHS` epochs from now; configure it before then with the `set_*` calls.
 public fun enable(registry: &mut AccountPolicyRegistry, guardian: address, ctx: &TxContext) {
     let owner = ctx.sender();
-    df::add(
-        &mut registry.id,
-        PolicyKey(owner),
-        AccountPolicy {
-            owner,
-            guardian,
-            activation_epoch: ctx.epoch() + ACTIVATION_DELAY_EPOCHS,
-            coin_limits: vec_map::empty(),
-            recipients: vec_set::empty(),
-            packages: vec_map::empty(),
-        },
-    );
+    transfer::share_object(AccountPolicy {
+        id: derived_object::claim(&mut registry.id, PolicyKey(owner)),
+        owner,
+        guardian,
+        activation_epoch: ctx.epoch() + ACTIVATION_DELAY_EPOCHS,
+        coin_limits: vec_map::empty(),
+        recipients: vec_set::empty(),
+        packages: vec_map::empty(),
+    });
 }
 
 /// Cancel the sender's policy before it becomes active. Needs only the owner's key, so an
 /// attacker who enabled a policy on a stolen key cannot lock the owner out.
-public fun cancel(registry: &mut AccountPolicyRegistry, ctx: &TxContext) {
-    let policy = registry.policy_mut(ctx.sender());
+public fun cancel(policy: &mut AccountPolicy, ctx: &TxContext) {
+    assert!(ctx.sender() == policy.owner, ENotOwner);
     assert!(ctx.epoch() < policy.activation_epoch, EAlreadyActive);
     policy.activation_epoch = DISABLED;
 }
 
 /// Stop enforcing the sender's active policy. The guardian must co-sign.
-public fun disable(registry: &mut AccountPolicyRegistry, ctx: &TxContext) {
-    let policy = registry.policy_mut(ctx.sender());
+public fun disable(policy: &mut AccountPolicy, ctx: &TxContext) {
     policy.authorize(ctx);
     policy.activation_epoch = DISABLED;
 }
 
-public fun set_guardian(registry: &mut AccountPolicyRegistry, guardian: address, ctx: &TxContext) {
-    let policy = registry.policy_mut(ctx.sender());
+public fun set_guardian(policy: &mut AccountPolicy, guardian: address, ctx: &TxContext) {
     policy.authorize(ctx);
     policy.guardian = guardian;
 }
 
 /// Set the per-epoch outflow limit of `coin_type` (e.g. `0x2::sui::SUI`).
 public fun set_coin_limit(
-    registry: &mut AccountPolicyRegistry,
+    policy: &mut AccountPolicy,
     coin_type: String,
     limit: u64,
     ctx: &TxContext,
 ) {
-    let policy = registry.policy_mut(ctx.sender());
     policy.authorize(ctx);
     if (policy.coin_limits.contains(&coin_type)) {
         *policy.coin_limits.get_mut(&coin_type) = limit;
@@ -139,8 +137,7 @@ public fun set_coin_limit(
     }
 }
 
-public fun add_recipient(registry: &mut AccountPolicyRegistry, recipient: address, ctx: &TxContext) {
-    let policy = registry.policy_mut(ctx.sender());
+public fun add_recipient(policy: &mut AccountPolicy, recipient: address, ctx: &TxContext) {
     policy.authorize(ctx);
     if (!policy.recipients.contains(&recipient)) {
         policy.recipients.insert(recipient);
@@ -148,11 +145,10 @@ public fun add_recipient(registry: &mut AccountPolicyRegistry, recipient: addres
 }
 
 public fun remove_recipient(
-    registry: &mut AccountPolicyRegistry,
+    policy: &mut AccountPolicy,
     recipient: address,
     ctx: &TxContext,
 ) {
-    let policy = registry.policy_mut(ctx.sender());
     policy.authorize(ctx);
     if (policy.recipients.contains(&recipient)) {
         policy.recipients.remove(&recipient);
@@ -162,14 +158,13 @@ public fun remove_recipient(
 /// Allow calling `package` (its original ID), optionally with custody of the owner's objects,
 /// limited to `custody_types` (empty for any) and to `custody_limit` objects per epoch.
 public fun set_package(
-    registry: &mut AccountPolicyRegistry,
+    policy: &mut AccountPolicy,
     package: ID,
     custody: bool,
     custody_types: vector<String>,
     custody_limit: Option<u64>,
     ctx: &TxContext,
 ) {
-    let policy = registry.policy_mut(ctx.sender());
     policy.authorize(ctx);
     let permission = PackagePermission { custody, custody_types, custody_limit };
     if (policy.packages.contains(&package)) {
@@ -179,8 +174,7 @@ public fun set_package(
     }
 }
 
-public fun remove_package(registry: &mut AccountPolicyRegistry, package: ID, ctx: &TxContext) {
-    let policy = registry.policy_mut(ctx.sender());
+public fun remove_package(policy: &mut AccountPolicy, package: ID, ctx: &TxContext) {
     policy.authorize(ctx);
     if (policy.packages.contains(&package)) {
         policy.packages.remove(&package);
@@ -188,19 +182,16 @@ public fun remove_package(registry: &mut AccountPolicyRegistry, package: ID, ctx
 }
 
 public fun exists(registry: &AccountPolicyRegistry, owner: address): bool {
-    df::exists(&registry.id, PolicyKey(owner))
+    derived_object::exists(&registry.id, PolicyKey(owner))
 }
 
-public fun activation_epoch(registry: &AccountPolicyRegistry, owner: address): u64 {
-    df::borrow<PolicyKey, AccountPolicy>(&registry.id, PolicyKey(owner)).activation_epoch
-}
-
-fun policy_mut(registry: &mut AccountPolicyRegistry, owner: address): &mut AccountPolicy {
-    df::borrow_mut(&mut registry.id, PolicyKey(owner))
+public fun activation_epoch(policy: &AccountPolicy): u64 {
+    policy.activation_epoch
 }
 
 /// A pending policy is the owner's to shape; an active one changes only with the guardian.
 fun authorize(policy: &AccountPolicy, ctx: &TxContext) {
+    assert!(ctx.sender() == policy.owner, ENotOwner);
     if (ctx.epoch() >= policy.activation_epoch) {
         assert!(ctx.co_signers().contains(&policy.guardian), ENotCoSignedByGuardian);
     }

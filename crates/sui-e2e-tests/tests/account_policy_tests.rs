@@ -11,6 +11,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
     SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+    account_policy::account_policy_object_id,
     base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     effects::{TransactionEffects, TransactionEffectsAPI},
     execution_status::{
@@ -167,9 +168,24 @@ impl Env {
         effects
     }
 
-    /// An owner transaction calling `account_policy::<function>(registry, args.., ctx)`.
+    /// The owner's policy object as a mutable shared input.
+    async fn policy_arg(&self) -> CallArg {
+        let id = account_policy_object_id(self.owner);
+        let policy = self
+            .cluster
+            .get_object_from_fullnode_store(&id)
+            .await
+            .expect("policy is enabled");
+        CallArg::Object(ObjectArg::SharedObject {
+            id,
+            initial_shared_version: policy.owner().start_version().unwrap(),
+            mutability: SharedObjectMutability::Mutable,
+        })
+    }
+
+    /// An owner transaction calling `account_policy::<function>(policy, args.., ctx)`.
     async fn policy_call_tx(&self, function: &'static str, args: Vec<CallArg>) -> TransactionData {
-        let mut call_args = vec![self.registry.clone()];
+        let mut call_args = vec![self.policy_arg().await];
         call_args.extend(args);
         self.builder(self.owner)
             .await
@@ -185,8 +201,15 @@ impl Env {
     /// Opts the owner in with a SUI limit and one listed recipient, all while pending.
     async fn enable_policy(&self) {
         let tx = self
-            .policy_call_tx("enable", vec![pure(&self.guardian)])
-            .await;
+            .builder(self.owner)
+            .await
+            .move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                "account_policy",
+                "enable",
+                vec![self.registry.clone(), pure(&self.guardian)],
+            )
+            .build();
         self.execute_ok(tx).await;
         let tx = self
             .policy_call_tx(

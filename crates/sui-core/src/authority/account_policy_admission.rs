@@ -8,8 +8,8 @@
 //! for a local decision: a transaction that slips through here is still checked at execution.
 
 use sui_types::{
-    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    account_policy::{AccountPolicy, account_policy_field_id, counter_address, spent_type_tag},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    account_policy::{AccountPolicy, account_policy_object_id, counter_address, spent_type_tag},
     accumulator_root::{AccumulatorValue, UnsettledObjectFundsRead},
     error::{SuiResult, UserInputError},
     execution_status::AccountPolicyViolationKind,
@@ -35,18 +35,10 @@ impl AuthorityState {
         };
         let sender = tx_data.sender();
         let store = self.get_backing_store();
-        let Some(registry) = store.get_object(&SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID) else {
-            return Ok(());
-        };
-        let Some(field) = store.read_child_object(
-            &SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-            &account_policy_field_id(sender),
-            registry.version(),
-        )?
+        let Some(policy) = store
+            .get_object(&account_policy_object_id(sender))
+            .and_then(|object| AccountPolicy::from_object(&object))
         else {
-            return Ok(());
-        };
-        let Some(policy) = AccountPolicy::from_field_object(&field) else {
             return Ok(());
         };
         let epoch = epoch_store.epoch();

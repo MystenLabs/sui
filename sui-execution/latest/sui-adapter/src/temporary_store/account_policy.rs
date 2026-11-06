@@ -3,11 +3,9 @@
 
 //! Post-execution enforcement of the sender's account policy (`sui::account_policy`).
 //!
-//! The policy is looked up as a dynamic field of the account policy registry, bounded by the
-//! registry version consensus assigned to this transaction, so every validator sees the same
-//! policy. The registry read is only recorded in effects when the sender has a policy: a
-//! transaction whose sender has none behaves identically whether or not the version is pinned on
-//! replay.
+//! The sender's policy object is read at the version consensus assigned to this transaction, so
+//! every validator sees the same policy; consensus assigns one only for senders whose policy is
+//! active, so other transactions record nothing extra in effects.
 //!
 //! Per-epoch budgets are tracked in accumulator counters keyed by owner and epoch. The check reads
 //! the counter settled at the assigned accumulator root version plus the merges of earlier
@@ -19,9 +17,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use move_core_types::language_storage::TypeTag;
 use mysten_common::debug_fatal;
 use sui_types::{
-    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     account_policy::{
-        AccountPolicy, account_policy_field_id, counter_address, custody_type_tag, spent_type_tag,
+        AccountPolicy, account_policy_object_id, counter_address, custody_type_tag, spent_type_tag,
     },
     accumulator_event::AccumulatorEvent,
     accumulator_root::AccumulatorValue as AccumulatorRootValue,
@@ -327,35 +325,16 @@ impl TemporaryStore<'_> {
         settled.saturating_add(unsettled)
     }
 
-    /// The sender's policy as of the registry version assigned to this transaction, if any.
+    /// The sender's policy at the version assigned to this transaction, if consensus assigned one.
     fn load_sender_policy(&self, sender: SuiAddress) -> Option<AccountPolicy> {
-        let registry_version = self
-            .system_object_versions
-            .get(&SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID)?;
-        // Waiting for the registry at the assigned version guarantees the child read below
-        // cannot observe a stale policy.
-        let registry = self.store.load_implicitly_read_system_object(
-            &SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-            registry_version,
-        )?;
-        let field = self
-            .store
-            .read_child_object(
-                &SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-                &account_policy_field_id(sender),
-                registry.version(),
-            )
-            .ok()
-            .flatten()?;
-        let Some(policy) = AccountPolicy::from_field_object(&field) else {
-            debug_fatal!(
-                "account policy field {} has an unexpected layout",
-                field.id()
-            );
-            return None;
-        };
-        self.record_implicitly_read_system_object(&registry);
-        Some(policy)
+        let id = account_policy_object_id(sender);
+        self.system_object_versions.get(&id)?;
+        let object = self.load_implicitly_read_system_object(&id)?;
+        let policy = AccountPolicy::from_object(&object);
+        if policy.is_none() {
+            debug_fatal!("account policy object {id} has an unexpected layout");
+        }
+        policy
     }
 
     fn original_package_id(&self, package: ObjectID) -> Option<ObjectID> {

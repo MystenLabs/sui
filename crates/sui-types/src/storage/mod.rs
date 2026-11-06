@@ -8,6 +8,7 @@ mod shared_in_memory_store;
 mod write_store;
 
 use crate::IMPLICITLY_READ_SYSTEM_OBJECTS;
+use crate::account_policy::account_policy_object_id;
 use crate::base_types::{
     ConsensusObjectSequenceKey, ConsensusObjectVersion, FullObjectID, FullObjectRef, SuiAddress,
     SystemObjectVersions, TransactionDigest, VersionNumber,
@@ -845,14 +846,21 @@ pub fn get_transaction_output_objects(
 
 impl SystemObjectVersions {
     /// Obtains pinned system object versions from effects, queries the store for the initial shared versions.
-    pub fn from_effects(effects: &TransactionEffects, store: &dyn ObjectStore) -> Self {
+    pub fn from_effects(
+        effects: &TransactionEffects,
+        store: &dyn ObjectStore,
+        sender: SuiAddress,
+    ) -> Self {
+        let policy_id = account_policy_object_id(sender);
         Self::from_map(
             effects
                 .accessed_consensus_objects()
                 .into_iter()
                 .filter_map(|ico| {
                     let (id, version) = ico.id_and_version();
-                    if !id.is_implicitly_read_system_object() || version.is_cancelled() {
+                    if !(id.is_implicitly_read_system_object() || id == policy_id)
+                        || version.is_cancelled()
+                    {
                         return None;
                     }
                     let initial_shared_version = store
@@ -880,22 +888,25 @@ impl SystemObjectVersions {
     pub fn from_inputs_or_latest_in_store(
         input_objects: &InputObjects,
         store: &dyn ObjectStore,
+        sender: SuiAddress,
     ) -> Self {
         Self::from_map(
             IMPLICITLY_READ_SYSTEM_OBJECTS
                 .iter()
+                .copied()
+                .chain(std::iter::once(account_policy_object_id(sender)))
                 .filter_map(|id| {
                     let object = input_objects
                         .iter_objects()
-                        .find(|object| object.id() == *id)
+                        .find(|object| object.id() == id)
                         .cloned()
-                        .or_else(|| store.get_object(id))?;
+                        .or_else(|| store.get_object(&id))?;
                     let initial_shared_version = object
                         .owner()
                         .start_version()
                         .expect("implicitly read system objects must be consensus objects");
                     Some((
-                        *id,
+                        id,
                         ConsensusObjectVersion {
                             initial_shared_version,
                             version: object.version(),

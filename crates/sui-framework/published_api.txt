@@ -1141,9 +1141,6 @@ exists
 activation_epoch
 	public fun
 	0x2::account_policy
-policy_mut
-	fun
-	0x2::account_policy
 authorize
 	fun
 	0x2::account_policy

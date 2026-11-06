@@ -211,7 +211,8 @@ pub(crate) fn execute_one_transaction(
         }
     };
 
-    let system_object_versions = SystemObjectVersions::from_effects(&executed.effects, store);
+    let system_object_versions =
+        SystemObjectVersions::from_effects(&executed.effects, store, txn_data.sender());
 
     let gas_data = txn_data.gas_data().clone();
     let signer = txn_data.sender();

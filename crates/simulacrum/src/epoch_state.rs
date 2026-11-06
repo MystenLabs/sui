@@ -184,6 +184,7 @@ impl EpochState {
             sui_types::base_types::SystemObjectVersions::from_inputs_or_latest_in_store(
                 checked_input_objects.inner(),
                 store.backing_store(),
+                signer,
             );
         let (inner_temp_store, gas_status, effects, _timings, result) = self
             .executor

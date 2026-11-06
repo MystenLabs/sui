@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Account policies: an opt-in, per-address rule set that bounds what a transaction signed by the
-//! account key alone may do. Policies live as dynamic fields of the `AccountPolicyRegistry`
-//! system object, which every transaction implicitly reads at the version consensus assigned, so
-//! execution can look up the sender's policy deterministically and reject the transaction if the
-//! policy is active and any rule is violated. A transaction co-signed by the policy's guardian is
-//! exempt.
+//! account key alone may do. Each policy is a shared object whose ID is derived from its owner's
+//! address (claimed through the `AccountPolicyRegistry` system object, which only creation
+//! touches). Every transaction whose sender has an active policy implicitly reads that object at
+//! the version consensus assigned, so execution can check the policy deterministically and
+//! reject the transaction if any rule is violated. A transaction co-signed by the policy's
+//! guardian is exempt.
 
 use std::str::FromStr;
 
@@ -15,7 +16,8 @@ use crate::{
     base_types::{ObjectID, SuiAddress},
     collection_types::{VecMap, VecSet},
     crypto::DefaultHash,
-    dynamic_field::{Field, derive_dynamic_field_id},
+    derived_object::derive_object_id,
+    id::UID,
     object::Object,
 };
 use fastcrypto::hash::HashFunction;
@@ -69,21 +71,15 @@ pub fn counter_address(owner: SuiAddress, epoch: u64, package: Option<ObjectID>)
     SuiAddress::from_bytes(hasher.finalize().digest).expect("digest is address sized")
 }
 
-/// Mirrors `sui::account_policy::PolicyKey`, the dynamic field key of an owner's policy.
+/// Mirrors `sui::account_policy::PolicyKey`, the derived-object key of an owner's policy.
 #[derive(Serialize, Deserialize)]
 pub struct PolicyKey(pub SuiAddress);
 
-/// The ID of the dynamic field holding `owner`'s policy, whether or not it exists.
-pub fn account_policy_field_id(owner: SuiAddress) -> ObjectID {
-    let key_type = TypeTag::Struct(Box::new(StructTag {
-        address: SUI_FRAMEWORK_ADDRESS,
-        module: ACCOUNT_POLICY_MODULE_NAME.to_owned(),
-        name: POLICY_KEY_STRUCT_NAME.to_owned(),
-        type_params: vec![],
-    }));
-    derive_dynamic_field_id(
+/// The ID of `owner`'s policy object, whether or not it has been created.
+pub fn account_policy_object_id(owner: SuiAddress) -> ObjectID {
+    derive_object_id(
         SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-        &key_type,
+        &account_policy_struct(POLICY_KEY_STRUCT_NAME, vec![]),
         &bcs::to_bytes(&PolicyKey(owner)).expect("address serialization cannot fail"),
     )
     .expect("key type serialization cannot fail")
@@ -114,6 +110,7 @@ impl PackagePermission {
 /// Mirrors `sui::account_policy::AccountPolicy`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountPolicy {
+    pub id: UID,
     pub owner: SuiAddress,
     pub guardian: SuiAddress,
     /// First epoch in which the policy is enforced. `u64::MAX` means disabled.
@@ -128,11 +125,22 @@ pub struct AccountPolicy {
 }
 
 impl AccountPolicy {
-    /// Parses the policy out of its dynamic field object.
-    pub fn from_field_object(object: &Object) -> Option<Self> {
-        let field: Field<PolicyKey, AccountPolicy> =
-            bcs::from_bytes(object.data.try_as_move()?.contents()).ok()?;
-        Some(field.value)
+    pub fn from_object(object: &Object) -> Option<Self> {
+        bcs::from_bytes(object.data.try_as_move()?.contents()).ok()
+    }
+
+    /// The consensus sequence key of `object` if it is a policy that is enforced in `epoch`.
+    /// Only active policies are implicitly read: a policy activates at least one epoch after it
+    /// is created, so by then every node holds the object and its initial shared version.
+    pub fn active_sequence_key(
+        object: &Object,
+        epoch: u64,
+    ) -> Option<crate::base_types::ConsensusObjectSequenceKey> {
+        let policy = Self::from_object(object)?;
+        if !policy.is_active(epoch) {
+            return None;
+        }
+        Some((object.id(), object.owner().start_version()?))
     }
 
     pub fn is_active(&self, epoch: u64) -> bool {

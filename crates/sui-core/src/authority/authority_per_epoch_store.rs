@@ -33,10 +33,11 @@ use sui_execution::{self, Executor};
 use sui_macros::fail_point;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
+use sui_types::account_policy::{AccountPolicy, account_policy_object_id};
 use sui_types::authenticator_state::{ActiveJwk, get_authenticator_state};
 use sui_types::base_types::{
     AuthorityName, ConsensusObjectSequenceKey, EpochId, FullObjectID, ObjectID, SequenceNumber,
-    TransactionDigest,
+    SuiAddress, TransactionDigest,
 };
 use sui_types::base_types::{ConciseableName, ObjectRef};
 use sui_types::committee::Committee;
@@ -371,6 +372,10 @@ pub struct AuthorityPerEpochStore {
     mutex_table: MutexTable<TransactionDigest>,
     /// Mutex table for shared version assignment
     version_assignment_mutex_table: MutexTable<ObjectID>,
+    /// Whether each sender seen this epoch has an active account policy, and its sequence key.
+    /// Valid for the whole epoch: a policy enabled or re-enabled now activates no earlier than
+    /// next epoch, and a policy disabled now is harmless to keep reading.
+    account_policy_reads: RwLock<HashMap<SuiAddress, Option<ConsensusObjectSequenceKey>>>,
 
     /// The moment when the current epoch started locally on this validator. Note that this
     /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
@@ -1053,6 +1058,7 @@ impl AuthorityPerEpochStore {
             end_of_publish: Mutex::new(end_of_publish),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
+            account_policy_reads: Default::default(),
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
@@ -1193,6 +1199,25 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration
             .address_alias_state_obj_initial_shared_version()
             .is_some()
+    }
+
+    /// The policy object transactions from `sender` implicitly read this epoch, if any.
+    pub fn active_account_policy(
+        &self,
+        sender: SuiAddress,
+        cache_reader: &dyn ObjectCacheRead,
+    ) -> Option<ConsensusObjectSequenceKey> {
+        if !self.protocol_config().enable_account_policy() {
+            return None;
+        }
+        if let Some(cached) = self.account_policy_reads.read().get(&sender) {
+            return *cached;
+        }
+        let key = cache_reader
+            .get_object(&account_policy_object_id(sender))
+            .and_then(|object| AccountPolicy::active_sequence_key(&object, self.epoch()));
+        self.account_policy_reads.write().insert(sender, key);
+        key
     }
 
     pub fn forwarding_address_registry_exists(&self) -> bool {

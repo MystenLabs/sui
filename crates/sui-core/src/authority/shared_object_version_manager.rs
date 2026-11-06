@@ -11,11 +11,11 @@ use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use sui_types::SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+use sui_types::account_policy::account_policy_object_id;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
@@ -340,15 +340,20 @@ impl SharedObjVerManager {
     where
         T: AsTx + 'a,
     {
+        let account_policy_reads: Vec<Option<ConsensusObjectSequenceKey>> = assignables
+            .clone()
+            .map(|a| account_policy_read(epoch_store, cache_reader, a))
+            .collect();
         let mut shared_input_next_versions = get_or_init_versions(
             assignables
                 .clone()
                 .flat_map(|a| a.shared_input_objects(epoch_store)),
+            account_policy_reads.iter().flatten().copied(),
             epoch_store,
             cache_reader,
         )?;
         let mut assigned_versions = Vec::new();
-        for assignable in assignables {
+        for (assignable, account_policy_read) in assignables.zip_debug_eq(account_policy_reads) {
             assert!(
                 !matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
                     || epoch_store.accumulators_enabled(),
@@ -358,6 +363,7 @@ impl SharedObjVerManager {
             let cert_assigned_versions = Self::assign_versions_for_certificate(
                 epoch_store,
                 assignable,
+                account_policy_read,
                 &mut shared_input_next_versions,
                 cancelled_txns,
             );
@@ -387,15 +393,41 @@ impl SharedObjVerManager {
         // of a consensus object in an epoch by reading the current version from the object store.
         // This must be done before we mutate it the first time, otherwise we would be initializing
         // it with the wrong version.
+        let account_policy_reads: Vec<Option<ConsensusObjectSequenceKey>> = certs_and_effects
+            .iter()
+            .map(|(cert, effects, _)| {
+                // Effects say whether the sender's policy was read; the store holds the object
+                // since an active policy predates the epoch.
+                let id = account_policy_object_id(cert.transaction_data().sender());
+                let read = effects
+                    .accessed_consensus_objects()
+                    .iter()
+                    .any(|ico| ico.id_and_version().0 == id);
+                if !read {
+                    return None;
+                }
+                let Some(initial_shared_version) = cache_reader
+                    .get_object(&id)
+                    .and_then(|object| object.owner().start_version())
+                else {
+                    debug_fatal!("policy {id} read by {:?} is missing", cert.digest());
+                    return None;
+                };
+                Some((id, initial_shared_version))
+            })
+            .collect();
         let _ = get_or_init_versions(
             certs_and_effects.iter().flat_map(|(cert, _, _)| {
                 cert.transaction_data().shared_input_objects().into_iter()
             }),
+            account_policy_reads.iter().flatten().copied(),
             epoch_store,
             cache_reader,
         );
         let mut assigned_versions = Vec::new();
-        for (cert, effects, accumulator_version) in certs_and_effects {
+        for ((cert, effects, accumulator_version), account_policy_read) in
+            certs_and_effects.iter().zip_debug_eq(account_policy_reads)
+        {
             let initial_version_map: BTreeMap<_, _> = cert
                 .transaction_data()
                 .shared_input_objects()
@@ -416,8 +448,9 @@ impl SharedObjVerManager {
                         .map(|initial_version| ((*id, *initial_version), *version));
                     if v.is_none() {
                         debug_assert!(
-                            IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id),
-                            "accessed consensus object is neither a declared input nor a known implicitly read system object: \
+                            IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id)
+                                || account_policy_read.is_some_and(|(policy, _)| policy == *id),
+                            "accessed consensus object is neither a declared input nor a known implicitly read object: \
                              accessed={accessed_versions:?} declared={initial_version_map:?}"
                         );
                     }
@@ -441,6 +474,7 @@ impl SharedObjVerManager {
             let mut system_object_versions: BTreeMap<_, _> =
                 implicitly_read_system_objects(epoch_store)
                     .into_iter()
+                    .chain(account_policy_read)
                     .filter_map(|(id, initial_shared_version)| {
                         let version = *accessed_versions.get(&id)?;
                         // A cancelled sentinel only appears when the object was also a declared
@@ -495,6 +529,7 @@ impl SharedObjVerManager {
     pub fn assign_versions_for_certificate(
         epoch_store: &AuthorityPerEpochStore,
         assignable: &Schedulable<impl AsTx>,
+        account_policy_read: Option<ConsensusObjectSequenceKey>,
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> AssignedVersions {
@@ -503,6 +538,7 @@ impl SharedObjVerManager {
         let system_object_versions = SystemObjectVersions::from_map(
             implicitly_read_system_objects(epoch_store)
                 .into_iter()
+                .chain(account_policy_read)
                 .map(|(id, initial_shared_version)| {
                     let version = *shared_input_next_versions
                         .get(&(id, initial_shared_version))
@@ -667,20 +703,22 @@ fn implicitly_read_system_objects(
             initial_shared_version,
         ));
     }
-    if epoch_store.protocol_config().enable_account_policy()
-        && let Some(initial_shared_version) =
-            epoch_start_config.account_policy_registry_obj_initial_shared_version()
-    {
-        objects.push((
-            SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-            initial_shared_version,
-        ));
-    }
     objects
+}
+
+/// The policy object a user transaction implicitly reads: its sender's, when active.
+fn account_policy_read(
+    epoch_store: &AuthorityPerEpochStore,
+    cache_reader: &dyn ObjectCacheRead,
+    assignable: &Schedulable<impl AsTx>,
+) -> Option<ConsensusObjectSequenceKey> {
+    let tx = assignable.as_tx()?;
+    epoch_store.active_account_policy(tx.transaction_data().sender(), cache_reader)
 }
 
 fn get_or_init_versions<'a>(
     shared_input_objects: impl Iterator<Item = SharedInputObject> + 'a,
+    account_policy_reads: impl Iterator<Item = ConsensusObjectSequenceKey>,
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
 ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
@@ -689,6 +727,7 @@ fn get_or_init_versions<'a>(
         .collect();
 
     shared_input_objects.extend(implicitly_read_system_objects(epoch_store));
+    shared_input_objects.extend(account_policy_reads);
 
     shared_input_objects.sort();
     shared_input_objects.dedup();
@@ -733,19 +772,13 @@ mod tests {
             initial_shared_version: sui_types::object::OBJECT_START_VERSION,
             version: v,
         };
-        let mut system_object_versions = SystemObjectVersions::new(
-            accumulator_version.map(at_start_version),
-            forwarding_address_registry_version.map(at_start_version),
-        );
-        // The account policy registry is never written in these tests, so it stays at the same
-        // version as the forwarding address registry.
-        if let Some(version) = forwarding_address_registry_version {
-            system_object_versions.insert(
-                SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-                at_start_version(version),
-            );
-        }
-        AssignedVersions::new(shared_object_versions, system_object_versions)
+        AssignedVersions::new(
+            shared_object_versions,
+            SystemObjectVersions::new(
+                accumulator_version.map(at_start_version),
+                forwarding_address_registry_version.map(at_start_version),
+            ),
+        )
     }
 
     #[tokio::test]
@@ -1278,10 +1311,6 @@ mod tests {
             SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
             SequenceNumber::from_u64(1),
         ));
-        shared_input_next_versions.remove(&(
-            SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-            SequenceNumber::from_u64(1),
-        ));
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
@@ -1498,7 +1527,6 @@ mod tests {
             let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
             config.set_enable_accumulators_for_testing(true);
             config.set_enable_forwarding_addresses_for_testing(false);
-            config.set_enable_account_policy_for_testing(false);
             let authority = TestAuthorityBuilder::new()
                 .with_starting_objects(&shared_objects)
                 .with_protocol_config(config)

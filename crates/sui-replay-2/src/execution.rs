@@ -129,7 +129,8 @@ pub fn execute_transaction_to_effects(
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
-    let system_object_versions = SystemObjectVersions::from_effects(&expected_effects, &store);
+    let system_object_versions =
+        SystemObjectVersions::from_effects(&expected_effects, &store, txn_data.sender());
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(

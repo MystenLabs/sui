@@ -210,6 +210,7 @@ pub fn simulate_transaction(
     let system_object_versions = SystemObjectVersions::from_inputs_or_latest_in_store(
         checked_input_objects.inner(),
         backing_store,
+        signer,
     );
     let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
         &tracking_store,
