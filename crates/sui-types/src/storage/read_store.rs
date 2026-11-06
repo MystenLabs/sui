@@ -879,12 +879,16 @@ pub trait RpcIndexes: Send + Sync {
 
     /// The chain timestamp, in milliseconds, of the checkpoint at
     /// [`Self::get_highest_indexed_checkpoint_seq_number`], or `None` while
-    /// any index pipeline has no watermark yet.
+    /// any index pipeline has no watermark yet. `Some(0)` means a watermark
+    /// was written without a timestamp (e.g. a restore anchor that only
+    /// records its checkpoint), so the time is unknown.
     fn get_highest_indexed_checkpoint_timestamp_ms(&self) -> Result<Option<u64>>;
 
     /// The chain timestamp, in milliseconds, of the checkpoint at
     /// [`Self::get_highest_live_indexed_checkpoint_seq_number`], or `None` if
-    /// the live-object cohort has not committed any checkpoint yet.
+    /// the live-object cohort has not committed any checkpoint yet. `Some(0)`
+    /// means the time is unknown, as for
+    /// [`Self::get_highest_indexed_checkpoint_timestamp_ms`].
     ///
     /// Defaults to [`Self::get_highest_indexed_checkpoint_timestamp_ms`] for
     /// backends without a live/history cohort split.

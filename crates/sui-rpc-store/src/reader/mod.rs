@@ -149,9 +149,11 @@ impl<R: Reader> RpcStoreReader<R> {
     /// The lowest value of `field` across the watermarks of every
     /// pipeline in `pipelines`, or `None` if any of them has no
     /// watermark yet. Projecting `checkpoint_hi_inclusive` gives the
-    /// highest checkpoint they have all committed; projecting
+    /// highest checkpoint they have all committed. Projecting
     /// `timestamp_ms_hi_inclusive` gives that checkpoint's chain
-    /// timestamp, because checkpoint timestamps never decrease.
+    /// timestamp only if every watermark recorded one: watermarks
+    /// written with just a checkpoint (e.g. the embedded restore's
+    /// anchor) carry 0, which this minimum then returns.
     /// Private, but reachable from the sibling trait-impl modules
     /// (children of this module).
     fn min_watermark(
