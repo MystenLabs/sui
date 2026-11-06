@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@mysten/deepbook-v3": "^2.8.0",
-    "@mysten/sui": "^2.30.0"
+    "@mysten/sui": "^2.37.0"
   },
   "devDependencies": {
     "typescript": "^5.5.3"

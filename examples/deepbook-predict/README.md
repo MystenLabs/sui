@@ -33,12 +33,19 @@ order is placed now and filled or refunded shortly after, at Pyth's signed
 price for a fixed instant. `queue-mint.ts`, `queue-sell.ts` and
 `sessions-queue.ts` use that path. `mint.ts`, `mint-range.ts`, `redeem.ts` and
 the trade wrappers in `sessions-trade.ts` are the immediate path, which a
-network runs only before its delayed-execution cutover. Both networks have
-passed it, so those files now abort on both, and only Predict protocol version
-4 and Sessions protocol version 3 accept calls.
-`client.predict.read.executionMode()` reports which path a network is on. Mainnet needs `@mysten/deepbook-v3` 2.8.0 or later, the floor in
-`package.json`, because earlier releases call Predict and Sessions versions that
-the Mainnet cutover retired.
+network runs only before its delayed-execution cutover, so those files abort on
+both networks. Both networks run Predict protocol version 5, which also retires
+settled redemption, so `claimSettled` in `redeem.ts` and
+`claimSettledAsSession` in `sessions-trade.ts` abort too. The queue's
+settlement walk pays every queued fill with no claim. Only Predict protocol
+version 5, `deepbook_predict_orders` version 2 and Sessions version 4 accept
+calls. `client.predict.read.executionMode()` reports which path a network is
+on.
+
+Testnet works from `@mysten/deepbook-v3` 2.10.0, and Mainnet needs
+TBD-DBU-1166: SDK release or later, because earlier releases call the Predict,
+order-desk and Sessions versions that the Mainnet Version 5 cutover retired.
+The `package.json` floor moves to that release once it is published.
 
 The `sessions-*` files import from `@mysten/deepbook-v3/sessions`, a separate
 subpath from `/predict`. They build owner-signed grant transactions and
