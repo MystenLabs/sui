@@ -22,6 +22,7 @@ use crate::RpcError;
 use crate::RpcService;
 use crate::ledger_history::query_options::above_latest_available;
 use crate::ledger_history::query_options::below_serving_floor;
+use crate::reader::indexes_disabled;
 
 #[tracing::instrument(skip(service))]
 pub(super) fn get_checkpoint_object_proof(
@@ -36,6 +37,9 @@ pub(super) fn get_checkpoint_object_proof(
         )
     })?;
     check_checkpoint_indexed(service, checkpoint_seq)?;
+    // The proof loads the checkpoint's input objects and the object version it wrote, which a
+    // node without object version history deletes once they are replaced.
+    service.reader.require_object_version_history()?;
 
     let response = prove_object_at_checkpoint(service, object_id, checkpoint_seq);
 
@@ -94,13 +98,14 @@ fn parse_object_id(request: &GetCheckpointObjectProofRequest) -> Result<ObjectID
 }
 
 /// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) if the rpc index has not covered `checkpoint_seq` yet.
-/// The index only grows, so this holds for reads made after it.
+/// The index only grows, so this holds for reads made after it. `Unavailable` if the rpc indexes
+/// are disabled.
 fn check_checkpoint_indexed(service: &RpcService, checkpoint_seq: u64) -> Result<(), RpcError> {
     let indexes = service
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(indexes_disabled)?;
     // The lowest checkpoint the index has not covered: 0 when it has covered none.
     let first_unavailable = indexes
         .get_highest_indexed_checkpoint_seq_number()

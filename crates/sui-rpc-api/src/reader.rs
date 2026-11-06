@@ -407,7 +407,8 @@ impl AtCheckpointLowerBound {
     }
 }
 
-fn indexes_disabled() -> crate::RpcError {
+/// `Unavailable`: this node runs without rpc indexes, so reads that need them cannot be answered.
+pub(crate) fn indexes_disabled() -> crate::RpcError {
     crate::RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled")
 }
 

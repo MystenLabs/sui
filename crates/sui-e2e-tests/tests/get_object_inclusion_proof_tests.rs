@@ -166,6 +166,34 @@ async fn test_checkpoint_not_yet_indexed() {
     assert_eq!(error_info.metadata["requestedCheckpoint"], "999999");
 }
 
+/// Without rpc indexes the node cannot tell which checkpoints it can prove, so it refuses as
+/// unavailable rather than claiming the checkpoint does not exist.
+#[sim_test]
+async fn test_proof_without_rpc_indexes_is_unavailable() {
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(sui_config::RpcConfig {
+            enable_indexing: Some(false),
+            ..Default::default()
+        })
+        .build()
+        .await;
+
+    let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    let request = GetCheckpointObjectProofRequest::default()
+        .with_object_id(ObjectID::random().to_string())
+        .with_checkpoint(0);
+
+    let err = proof_client
+        .get_checkpoint_object_proof(request)
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::Unavailable, "{err:?}");
+    assert_eq!(err.message(), "rpc indexes are disabled");
+}
+
 /// A proof at a checkpoint whose contents were pruned is out of range, also while the object
 /// versions it wrote are still stored, as when checkpoints are retained for fewer epochs than
 /// objects.
