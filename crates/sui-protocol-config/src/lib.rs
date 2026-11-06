@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 143;
+const MAX_PROTOCOL_VERSION: u64 = 144;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -440,6 +440,7 @@ const MAINNET_USDB: &str =
 //              Disable forwarding addresses on devnet.
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 //              Enable ML-DSA-65 account signatures on testnet.
+// Version 144: Enable timestamp-based transaction expiration on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1402,6 +1403,13 @@ struct FeatureFlags {
     // id.
     #[serde(skip_serializing_if = "is_false")]
     disable_id_leak_verifier: bool,
+
+    // If true, `min_timestamp` and `max_timestamp` in `ValidDuring` and `Validity` expirations
+    // are accepted. Validators reject a transaction before its `min_timestamp` by their local
+    // clocks, and a transaction scheduled by a commit after its `max_timestamp` fails with
+    // `TransactionExpired`.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_timestamp_transaction_expiration: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -5048,6 +5056,11 @@ impl ProtocolConfig {
                     cfg.package_publish_charge_per_dependency = Some(10_000_000);
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.mldsa65_auth = true;
+                    }
+                }
+                144 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_timestamp_transaction_expiration = true;
                     }
                 }
                 // Use this template when making changes:
