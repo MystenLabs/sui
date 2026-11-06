@@ -1,0 +1,364 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use move_binary_format::CompiledModule;
+use move_trace_format::format::MoveTraceBuilder;
+use move_vm_config::verifier::{MeterConfig, VerifierConfig};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+use sui_protocol_config::ProtocolConfig;
+use sui_types::execution::ExecutionTiming;
+use sui_types::execution_params::ExecutionOrEarlyError;
+use sui_types::transaction::GasData;
+use sui_types::{
+    accumulator_root::{EmptyUnsettledObjectFunds, UnsettledObjectFundsRead},
+    base_types::{SuiAddress, SystemObjectVersions, TxContext},
+    committee::EpochId,
+    digests::TransactionDigest,
+    effects::TransactionEffects,
+    error::{ExecutionError, ExecutionErrorTrait, SuiError, SuiResult},
+    execution::{ExecutionResult, TypeLayoutStore},
+    execution_status::ExecutionFailure,
+    gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
+    layout_resolver::LayoutResolver,
+    metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
+    transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
+};
+
+use move_bytecode_verifier_meter::Meter;
+use move_vm_runtime_v4::runtime::MoveRuntime;
+use mysten_common::debug_fatal;
+use sui_adapter_v4::adapter::{new_move_runtime, run_metered_move_bytecode_verifier};
+use sui_adapter_v4::execution_engine::{
+    ExecutionOutput, execute_genesis_state_update, execute_transaction_to_effects,
+};
+use sui_adapter_v4::type_layout_resolver::TypeLayoutResolver;
+use sui_move_natives_v4::all_natives;
+use sui_types::storage::BackingStore;
+use sui_verifier_v4::meter::SuiVerifierMeter;
+
+use crate::executor;
+use crate::verifier;
+use sui_adapter_v4::execution_mode;
+
+pub(crate) struct Executor(Arc<MoveRuntime>);
+
+pub(crate) struct Verifier<'m> {
+    config: VerifierConfig,
+    metrics: &'m Arc<BytecodeVerifierMetrics>,
+}
+
+impl Executor {
+    pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
+        Ok(Executor(Arc::new(new_move_runtime(
+            all_natives(silent, protocol_config),
+            protocol_config,
+        )?)))
+    }
+}
+
+impl<'m> Verifier<'m> {
+    pub(crate) fn new(config: VerifierConfig, metrics: &'m Arc<BytecodeVerifierMetrics>) -> Self {
+        Verifier { config, metrics }
+    }
+}
+
+impl executor::Executor for Executor {
+    fn execute_transaction_to_effects(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionFailure>,
+    ) {
+        let ExecutionOutput {
+            inner_store: store_out,
+            gas_status: gas_status_out,
+            effects,
+            timings,
+            execution_result: result,
+        } = execute_transaction_to_effects::<execution_mode::Normal>(
+            store,
+            input_objects,
+            system_object_versions,
+            unsettled_object_funds,
+            gas,
+            gas_status,
+            transaction_kind,
+            rewritten_inputs,
+            transaction_signer,
+            transaction_digest,
+            &self.0,
+            epoch_id,
+            epoch_timestamp_ms,
+            protocol_config,
+            metrics,
+            enable_expensive_checks,
+            execution_params,
+            trace_builder_opt,
+        );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
+        (store_out, gas_status_out, effects, timings, result)
+    }
+
+    fn execute_transaction_to_effects_and_execution_error(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionError>,
+    ) {
+        let ExecutionOutput {
+            inner_store: store_out,
+            gas_status: gas_status_out,
+            effects,
+            timings,
+            execution_result: result,
+        } = execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+            store,
+            input_objects,
+            system_object_versions,
+            unsettled_object_funds,
+            gas,
+            gas_status,
+            transaction_kind,
+            rewritten_inputs,
+            transaction_signer,
+            transaction_digest,
+            &self.0,
+            epoch_id,
+            epoch_timestamp_ms,
+            protocol_config,
+            metrics,
+            enable_expensive_checks,
+            execution_params,
+            trace_builder_opt,
+        );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
+        (store_out, gas_status_out, effects, timings, result)
+    }
+
+    fn dev_inspect_transaction(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        system_object_versions: SystemObjectVersions,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        skip_all_checks: bool,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Result<Vec<ExecutionResult>, ExecutionError>,
+    ) {
+        // The two arms return different `ExecutionOutput<Mode>` types, so each destructures
+        // into the common tuple.
+        let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
+            let ExecutionOutput {
+                inner_store,
+                gas_status,
+                effects,
+                timings: _,
+                execution_result,
+            } = execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
+                store,
+                input_objects,
+                system_object_versions,
+                // Dev-inspect and dry-run results are never committed, so they do not need to
+                // account for unsettled withdrawals from other transactions.
+                &EmptyUnsettledObjectFunds,
+                gas,
+                gas_status,
+                transaction_kind,
+                rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                &mut None,
+            );
+            (inner_store, gas_status, effects, execution_result)
+        } else {
+            let ExecutionOutput {
+                inner_store,
+                gas_status,
+                effects,
+                timings: _,
+                execution_result,
+            } = execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
+                store,
+                input_objects,
+                system_object_versions,
+                // Dev-inspect and dry-run results are never committed, so they do not need to
+                // account for unsettled withdrawals from other transactions.
+                &EmptyUnsettledObjectFunds,
+                gas,
+                gas_status,
+                transaction_kind,
+                rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                &mut None,
+            );
+            (inner_store, gas_status, effects, execution_result)
+        };
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
+        (inner_temp_store, gas_status, effects, result)
+    }
+
+    fn update_genesis_state(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        epoch_id: EpochId,
+        epoch_timestamp_ms: u64,
+        transaction_digest: &TransactionDigest,
+        input_objects: CheckedInputObjects,
+        pt: ProgrammableTransaction,
+    ) -> Result<InnerTemporaryStore, ExecutionError> {
+        debug_assert!(input_objects.inner().is_empty());
+        let tx_context = TxContext::new_from_components(
+            &SuiAddress::default(),
+            transaction_digest,
+            &epoch_id,
+            epoch_timestamp_ms,
+            // genesis transaction: RGP: 1, budget: 1M, sponsor: None
+            1,
+            1,
+            1_000_000,
+            None,
+            protocol_config,
+        );
+        let tx_context = Rc::new(RefCell::new(tx_context));
+        execute_genesis_state_update(store, protocol_config, metrics, &self.0, tx_context, pt)
+    }
+
+    fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
+        &'vm self,
+        protocol_config: &'vm ProtocolConfig,
+        store: Box<dyn TypeLayoutStore + 'store>,
+    ) -> Box<dyn LayoutResolver + 'r> {
+        Box::new(TypeLayoutResolver::new(&self.0, protocol_config, store))
+    }
+}
+
+impl verifier::Verifier for Verifier<'_> {
+    fn meter(&self, config: MeterConfig) -> Box<dyn Meter> {
+        Box::new(SuiVerifierMeter::new(config))
+    }
+
+    fn override_deprecate_global_storage_ops_during_deserialization(&self) -> Option<bool> {
+        Some(true)
+    }
+
+    fn meter_compiled_modules(
+        &mut self,
+        _protocol_config: &ProtocolConfig,
+        modules: &[CompiledModule],
+        meter: &mut dyn Meter,
+    ) -> SuiResult<()> {
+        run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
+    }
+}
+
+fn log_execution_error<E>(transaction_digest: TransactionDigest, error: &E)
+where
+    E: ExecutionErrorTrait + std::error::Error,
+{
+    use sui_types::execution_status::ExecutionErrorKind as K;
+
+    match error.kind() {
+        K::InvariantViolation | K::VMInvariantViolation => {
+            debug_fatal!(
+                "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
+                transaction_digest,
+                std::error::Error::source(error)
+            );
+        }
+        K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Verification Error. Source: {:?}",
+                std::error::Error::source(error),
+            );
+        }
+        K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Publish/Upgrade Error. Source: {:?}",
+                std::error::Error::source(error),
+            );
+        }
+        _ => (),
+    }
+}

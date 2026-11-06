@@ -1,0 +1,9 @@
+---
+source: crates/move-vm-runtime/src/unit_tests/value_tests.rs
+expression: output
+---
+size of "(&) 0": 8, 
+size of "(&) [1, 2, 3]": 8, 
+size of "(&) 1": 8, 
+size of "(&) {  }": 8, 
+traversed size of "(&) {  }": 10,
