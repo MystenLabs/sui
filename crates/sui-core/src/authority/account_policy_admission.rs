@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Admission-time account policy checks. Execution enforces the policy authoritatively; these
-//! checks let a validator refuse to sign a transaction that cannot pass, so the rejection costs
-//! the sender no gas. They read the latest state rather than a sequenced version, which is fine
+//! checks let a validator refuse to sign a transaction that cannot pass (an unlisted package, or
+//! a gas budget the epoch's SUI budget no longer covers), so the rejection costs the sender no
+//! gas. They read the latest state rather than a sequenced version, which is fine
 //! for a local decision: a transaction that slips through here is still checked at execution.
 
 use sui_types::{
@@ -54,29 +55,20 @@ impl AuthorityState {
         }
         let violation = |kind| Err(UserInputError::AccountPolicyViolation { kind }.into());
 
-        let gas_budget = tx_data.gas_budget();
-        if gas_budget > policy.gas_budget_cap {
-            return violation(AccountPolicyViolationKind::GasBudgetExceeded);
-        }
         for command in &pt.commands {
-            match command {
-                Command::MoveCall(call) => {
-                    let original = self
-                        .get_backing_package_store()
-                        .get_package_object(&call.package)?
-                        .map(|package| package.move_package().original_package_id());
-                    if !original.is_some_and(|original| policy.allows_package(original)) {
-                        return violation(AccountPolicyViolationKind::PackageNotAllowed);
-                    }
+            if let Command::MoveCall(call) = command {
+                let original = self
+                    .get_backing_package_store()
+                    .get_package_object(&call.package)?
+                    .map(|package| package.move_package().original_package_id());
+                if !original.is_some_and(|original| policy.allows_package(original)) {
+                    return violation(AccountPolicyViolationKind::PackageNotAllowed);
                 }
-                Command::Publish(..) | Command::Upgrade(..) => {
-                    return violation(AccountPolicyViolationKind::PublishNotAllowed);
-                }
-                _ => {}
             }
         }
 
         // The gas budget alone must fit in what is left of this epoch's SUI budget.
+        let gas_budget = tx_data.gas_budget();
         let Some(root) = store.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID) else {
             return Ok(());
         };

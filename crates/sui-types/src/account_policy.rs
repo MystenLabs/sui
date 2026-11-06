@@ -116,7 +116,6 @@ impl PackagePermission {
 pub struct AccountPolicy {
     pub owner: SuiAddress,
     pub guardian: SuiAddress,
-    pub gas_budget_cap: u64,
     /// First epoch in which the policy is enforced. `u64::MAX` means disabled.
     pub activation_epoch: u64,
     /// Per-epoch net outflow limit by coin type string, gas included for SUI. Types without an

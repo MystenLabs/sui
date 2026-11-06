@@ -7,8 +7,8 @@ Opt-in account policies that bound what a transaction signed by the account key 
 Policies are dynamic fields of the singleton <code><a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a></code>, keyed by owner address.
 Every transaction implicitly reads the registry at the version consensus assigned to it, so
 execution can look up the sender's policy without the transaction declaring it. While a policy
-is active, execution enforces a gas budget cap, a per-epoch outflow limit for each coin type
-(gas included for SUI), a package allowlist, and that the owner's objects stay with the owner
+is active, execution enforces a per-epoch outflow limit for each coin type (gas included for
+SUI), a package allowlist, and that the owner's objects stay with the owner
 unless they go to a listed recipient or are taken by a package with custody permission, itself
 optionally capped per epoch. Spend is tracked in accumulator counters keyed by owner and epoch,
 so it needs no sequencing between the owner's transactions. A transaction co-signed by the
@@ -32,7 +32,6 @@ guardian's co-signature.
 -  [Function `cancel`](#sui_account_policy_cancel)
 -  [Function `disable`](#sui_account_policy_disable)
 -  [Function `set_guardian`](#sui_account_policy_set_guardian)
--  [Function `set_gas_budget_cap`](#sui_account_policy_set_gas_budget_cap)
 -  [Function `set_coin_limit`](#sui_account_policy_set_coin_limit)
 -  [Function `add_recipient`](#sui_account_policy_add_recipient)
 -  [Function `remove_recipient`](#sui_account_policy_remove_recipient)
@@ -230,11 +229,6 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 <dd>
 </dd>
 <dt>
-<code>gas_budget_cap: u64</code>
-</dt>
-<dd>
-</dd>
-<dt>
 <code><a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>: u64</code>
 </dt>
 <dd>
@@ -353,7 +347,7 @@ Opt the sender in with an empty rule set. The policy is enforced from
 <code><a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a></code> epochs from now; configure it before then with the <code>set_*</code> calls.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, gas_budget_cap: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -362,12 +356,7 @@ Opt the sender in with an empty rule set. The policy is enforced from
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(
-    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
-    guardian: <b>address</b>,
-    gas_budget_cap: u64,
-    ctx: &TxContext,
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, guardian: <b>address</b>, ctx: &TxContext) {
     <b>let</b> owner = ctx.sender();
     df::add(
         &<b>mut</b> registry.id,
@@ -375,7 +364,6 @@ Opt the sender in with an empty rule set. The policy is enforced from
         <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a> {
             owner,
             guardian,
-            gas_budget_cap,
             <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>: ctx.epoch() + <a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a>,
             coin_limits: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
             recipients: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(),
@@ -463,36 +451,6 @@ Stop enforcing the sender's active policy. The guardian must co-sign.
     <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     policy.guardian = guardian;
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_account_policy_set_gas_budget_cap"></a>
-
-## Function `set_gas_budget_cap`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_gas_budget_cap">set_gas_budget_cap</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, gas_budget_cap: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_gas_budget_cap">set_gas_budget_cap</a>(
-    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
-    gas_budget_cap: u64,
-    ctx: &TxContext,
-) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
-    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
-    policy.gas_budget_cap = gas_budget_cap;
 }
 </code></pre>
 

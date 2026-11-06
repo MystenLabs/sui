@@ -10,16 +10,12 @@ AccountAddress:
 AccountPolicyViolationKind:
   ENUM:
     0:
-      GasBudgetExceeded: UNIT
-    1:
       PackageNotAllowed: UNIT
-    2:
-      PublishNotAllowed: UNIT
-    3:
+    1:
       CoinOutflowExceeded: UNIT
-    4:
+    2:
       ObjectTransferNotAllowed: UNIT
-    5:
+    3:
       CustodyLimitExceeded: UNIT
 AccumulatorAddress:
   STRUCT:

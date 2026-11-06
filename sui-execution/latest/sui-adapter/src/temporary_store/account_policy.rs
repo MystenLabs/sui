@@ -41,7 +41,6 @@ use crate::temporary_store::TemporaryStore;
 /// What the policy check needs to know about each PTB command.
 enum CommandSummary {
     MoveCall(ObjectID),
-    Publish,
     Other,
 }
 
@@ -69,7 +68,6 @@ impl AccountPolicyTxInputs {
             .iter()
             .map(|command| match command {
                 Command::MoveCall(call) => CommandSummary::MoveCall(call.package),
-                Command::Publish(..) | Command::Upgrade(..) => CommandSummary::Publish,
                 _ => CommandSummary::Other,
             })
             .collect();
@@ -95,7 +93,7 @@ pub(super) struct AccountPolicySpend {
 impl TemporaryStore<'_> {
     /// Rejects the transaction if the sender has an active account policy that it violates.
     /// Runs after execution so it sees final ownership and balances, and before gas is charged,
-    /// so gas is checked against the budget cap and the gas budget rather than what was used.
+    /// so gas counts against the SUI budget as the gas budget rather than what was used.
     pub(crate) fn check_account_policy(&mut self) -> Result<(), ExecutionError> {
         let Some(inputs) = &self.post_execution_check_inputs.account_policy else {
             return Ok(());
@@ -134,11 +132,8 @@ impl TemporaryStore<'_> {
                 ExecutionErrorKind::AccountPolicyViolation { kind },
             ))
         };
-        if inputs.gas_budget > policy.gas_budget_cap {
-            return violation(AccountPolicyViolationKind::GasBudgetExceeded);
-        }
-
-        // Which package each command calls, by original ID so upgrades keep working.
+        // Which package each command calls, by original ID so upgrades keep working. Publishing
+        // needs no rule of its own: a freshly published package is not on the allowlist.
         let mut called_packages: Vec<Option<ObjectID>> = Vec::with_capacity(inputs.commands.len());
         for command in &inputs.commands {
             called_packages.push(match command {
@@ -150,9 +145,6 @@ impl TemporaryStore<'_> {
                         return violation(AccountPolicyViolationKind::PackageNotAllowed);
                     }
                     Some(original)
-                }
-                CommandSummary::Publish => {
-                    return violation(AccountPolicyViolationKind::PublishNotAllowed);
                 }
                 CommandSummary::Other => None,
             });

@@ -308,12 +308,8 @@ pub enum ExecutionErrorKind {
 /// Which rule of the sender's account policy a transaction broke.
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash, Error)]
 pub enum AccountPolicyViolationKind {
-    #[error("gas budget exceeds the policy cap")]
-    GasBudgetExceeded,
     #[error("a called package is not allowed by the policy")]
     PackageNotAllowed,
-    #[error("publishing or upgrading packages is not allowed by the policy")]
-    PublishNotAllowed,
     #[error("coin outflow exceeds the policy limit for its type")]
     CoinOutflowExceeded,
     #[error("an object left the sender's ownership")]

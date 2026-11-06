@@ -1120,9 +1120,6 @@ disable
 set_guardian
 	public fun
 	0x2::account_policy
-set_gas_budget_cap
-	public fun
-	0x2::account_policy
 set_coin_limit
 	public fun
 	0x2::account_policy

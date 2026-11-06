@@ -6,8 +6,8 @@
 /// Policies are dynamic fields of the singleton `AccountPolicyRegistry`, keyed by owner address.
 /// Every transaction implicitly reads the registry at the version consensus assigned to it, so
 /// execution can look up the sender's policy without the transaction declaring it. While a policy
-/// is active, execution enforces a gas budget cap, a per-epoch outflow limit for each coin type
-/// (gas included for SUI), a package allowlist, and that the owner's objects stay with the owner
+/// is active, execution enforces a per-epoch outflow limit for each coin type (gas included for
+/// SUI), a package allowlist, and that the owner's objects stay with the owner
 /// unless they go to a listed recipient or are taken by a package with custody permission, itself
 /// optionally capped per epoch. Spend is tracked in accumulator counters keyed by owner and epoch,
 /// so it needs no sequencing between the owner's transactions. A transaction co-signed by the
@@ -65,7 +65,6 @@ public struct PackagePermission has copy, drop, store {
 public struct AccountPolicy has store {
     owner: address,
     guardian: address,
-    gas_budget_cap: u64,
     /// First epoch in which the policy is enforced; `DISABLED` if cancelled or disabled.
     activation_epoch: u64,
     /// Per-epoch net outflow limit (in the coin's smallest unit) by coin type string, gas
@@ -87,12 +86,7 @@ fun create(ctx: &TxContext) {
 
 /// Opt the sender in with an empty rule set. The policy is enforced from
 /// `ACTIVATION_DELAY_EPOCHS` epochs from now; configure it before then with the `set_*` calls.
-public fun enable(
-    registry: &mut AccountPolicyRegistry,
-    guardian: address,
-    gas_budget_cap: u64,
-    ctx: &TxContext,
-) {
+public fun enable(registry: &mut AccountPolicyRegistry, guardian: address, ctx: &TxContext) {
     let owner = ctx.sender();
     df::add(
         &mut registry.id,
@@ -100,7 +94,6 @@ public fun enable(
         AccountPolicy {
             owner,
             guardian,
-            gas_budget_cap,
             activation_epoch: ctx.epoch() + ACTIVATION_DELAY_EPOCHS,
             coin_limits: vec_map::empty(),
             recipients: vec_set::empty(),
@@ -128,16 +121,6 @@ public fun set_guardian(registry: &mut AccountPolicyRegistry, guardian: address,
     let policy = registry.policy_mut(ctx.sender());
     policy.authorize(ctx);
     policy.guardian = guardian;
-}
-
-public fun set_gas_budget_cap(
-    registry: &mut AccountPolicyRegistry,
-    gas_budget_cap: u64,
-    ctx: &TxContext,
-) {
-    let policy = registry.policy_mut(ctx.sender());
-    policy.authorize(ctx);
-    policy.gas_budget_cap = gas_budget_cap;
 }
 
 /// Set the per-epoch outflow limit of `coin_type` (e.g. `0x2::sui::SUI`).

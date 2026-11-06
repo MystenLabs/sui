@@ -26,6 +26,8 @@ const MIST_PER_SUI: u64 = 1_000_000_000;
 const SUI_LIMIT: u64 = MIST_PER_SUI;
 /// Gas budget of every test transaction; the policy counts it against `SUI_LIMIT`.
 const GAS_BUDGET: u64 = 50_000_000;
+/// A larger budget, for a transaction meant to overrun what is left of `SUI_LIMIT`.
+const LARGE_GAS_BUDGET: u64 = 2 * GAS_BUDGET;
 const SUI_TYPE: &str = "0x2::sui::SUI";
 
 struct Env {
@@ -37,7 +39,6 @@ struct Env {
     /// Not listed anywhere.
     stranger: SuiAddress,
     rgp: u64,
-    gas_cap: u64,
     registry: CallArg,
     _guard: sui_protocol_config::OverrideGuard,
 }
@@ -89,7 +90,6 @@ impl Env {
             recipient: addresses[2],
             stranger: addresses[3],
             rgp,
-            gas_cap: 2 * GAS_BUDGET,
             registry,
             _guard: guard,
         }
@@ -185,7 +185,7 @@ impl Env {
     /// Opts the owner in with a SUI limit and one listed recipient, all while pending.
     async fn enable_policy(&self) {
         let tx = self
-            .policy_call_tx("enable", vec![pure(&self.guardian), pure(&self.gas_cap)])
+            .policy_call_tx("enable", vec![pure(&self.guardian)])
             .await;
         self.execute_ok(tx).await;
         let tx = self
@@ -386,26 +386,8 @@ async fn test_account_policy_enforced_after_activation() {
     env.execute_ok(env.transfer_sui_tx(SUI_LIMIT / 2, env.stranger).await)
         .await;
 
-    // Rules visible from the transaction alone are enforced at admission, costing no gas.
-    let tx = env
-        .builder(env.owner)
-        .await
-        .transfer_sui(Some(1), env.stranger)
-        .with_gas_budget(env.gas_cap + 1)
-        .build();
-    env.execute_rejected(tx).await;
-
-    let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/move_test_code_account_policy");
-    let tx = env
-        .builder(env.owner)
-        .await
-        .publish_async(path)
-        .await
-        .build();
-    env.execute_rejected(tx).await;
-
-    // Unlisted packages may not be called, not even a read-only framework function.
+    // Unlisted packages are refused at admission, costing no gas; not even a read-only
+    // framework function passes.
     let tx = env
         .builder(env.owner)
         .await
@@ -636,7 +618,7 @@ async fn test_account_policy_budget_spans_the_epoch() {
         .builder(env.owner)
         .await
         .transfer_sui(Some(1), env.stranger)
-        .with_gas_budget(env.gas_cap)
+        .with_gas_budget(LARGE_GAS_BUDGET)
         .build();
     env.execute_rejected(tx).await;
 
