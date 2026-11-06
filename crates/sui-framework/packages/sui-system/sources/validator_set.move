@@ -15,6 +15,7 @@ use sui::vec_set::VecSet;
 use sui_system::staking_pool::{
     PoolTokenExchangeRate,
     StakedSui,
+    StakingPool,
     pool_id,
     FungibleStakedSui,
     fungible_staked_sui_pool_id,
@@ -686,6 +687,27 @@ public(package) fun validator_by_pool_id(self: &mut ValidatorSet, pool_id: ID): 
     };
 
     validator
+}
+
+/// Borrow the staking pool of a validator in any state without upgrading any validator.
+public(package) fun staking_pool_by_pool_id(self: &ValidatorSet, pool_id: ID): &StakingPool {
+    // If the pool id is not recorded in the mapping, then it must be inactive.
+    if (!self.staking_pool_mappings.contains(pool_id)) {
+        return self.inactive_validators[pool_id].staking_pool_ref()
+    };
+    let validator_address = self.staking_pool_mappings[pool_id];
+    let active_idx = find_validator(&self.active_validators, validator_address);
+    if (active_idx.is_some()) {
+        return self.active_validators[active_idx.destroy_some()].get_staking_pool_ref()
+    };
+    let pending_idx = find_validator_from_table_vec(
+        &self.pending_active_validators,
+        validator_address,
+    );
+    if (pending_idx.is_some()) {
+        return self.pending_active_validators[pending_idx.destroy_some()].get_staking_pool_ref()
+    };
+    self.validator_candidates[validator_address].staking_pool_ref()
 }
 
 /// Get the total number of validators in the next epoch.

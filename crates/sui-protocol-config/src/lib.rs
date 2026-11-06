@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 142;
+const MAX_PROTOCOL_VERSION: u64 = 143;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -435,6 +435,7 @@ const MAINNET_USDB: &str =
 //              Reject an overflowing x-coordinate in `secp256r1_ecrecover`.
 //              Configure explicit Move binary format encoding limits.
 //              Enable defer_owned_object_double_spend on all networks.
+// Version 143: Make `sui_system::calculate_rewards` public and take `&SuiSystemState`.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4998,6 +4999,7 @@ impl ProtocolConfig {
                     cfg.binary_format_limits_profile = Some(BinaryFormatLimitsProfile::V1);
                     cfg.feature_flags.defer_owned_object_double_spend = true;
                 }
+                143 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
