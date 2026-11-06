@@ -2184,7 +2184,8 @@ mod test {
         });
 
         // Validators sometimes admit a transaction outside its timestamp window, as a validator
-        // with a clock that is ahead or behind would, so that voting and consensus see it.
+        // with a clock that is ahead or behind would, so that voting sees transactions before
+        // their min_timestamp. The pool still rejects a transaction past its expiry deadline.
         register_fail_point_if("skip-timestamp-expiration-check-at-submission", || {
             thread_rng().gen_bool(0.2)
         });

@@ -1416,8 +1416,9 @@ impl AuthorityPerEpochStore {
         {
             return Ok(());
         }
-        // Simulates a validator whose clock differs from the voters' clocks, so that voting and
-        // execution see transactions outside their windows.
+        // Simulates a validator whose clock differs from the voters' clocks, so that voting sees
+        // transactions before their `min_timestamp`. The pool and the admission queue still
+        // reject a transaction past its expiry deadline.
         #[allow(unused_mut)]
         let mut skip = false;
         fail_point_if!("skip-timestamp-expiration-check-at-submission", || {
