@@ -595,11 +595,13 @@ async fn test_availability_floor_below_the_fork_passes_through() {
 
 /// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
 /// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
-/// checkpoint are rejected even when the remote's retention reaches further back.
+/// checkpoint are rejected even when the remote's retention reaches further back; at the fork
+/// checkpoint they are served.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
     use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
     use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
@@ -635,7 +637,29 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         .restore_seed_objects(&[package])
         .unwrap();
     let service = RpcService::new(Arc::new(store));
+
+    let list = |at_checkpoint| {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.at_checkpoint = Some(at_checkpoint);
+        tonic::Request::new(request)
+    };
+    let error = service
+        .list_package_versions(list(fork_checkpoint - 1))
+        .await
+        .unwrap_err();
     let below_floor = "requested data below earliest available; lowest available checkpoint is 100";
+    assert_eq!(error.code(), tonic::Code::OutOfRange);
+    assert_eq!(error.message(), below_floor);
+    let versions = service
+        .list_package_versions(list(fork_checkpoint))
+        .await
+        .unwrap()
+        .into_inner()
+        .versions;
+    assert_eq!(versions.len(), 1);
+    assert_eq!(versions[0].version, Some(1));
+    assert_eq!(versions[0].checkpoint, None);
 
     let mut request = GetPackageRequest::default();
     request.package_id = Some(package_id.to_string());
@@ -646,22 +670,6 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         .unwrap_err();
     assert_eq!(error.code(), tonic::Code::OutOfRange);
     assert_eq!(error.message(), below_floor);
-
-    // The fork checkpoint itself is served: the loaded rows hold the state at its end. Both
-    // bounds accept it and the read finds the package, whose response then fails to build only
-    // because this seeded package has no modules.
-    let mut request = GetPackageRequest::default();
-    request.package_id = Some(package_id.to_string());
-    request.selector = Some(Selector::AtCheckpoint(fork_checkpoint));
-    let error = service
-        .get_package(tonic::Request::new(request))
-        .await
-        .unwrap_err();
-    assert_eq!(error.code(), tonic::Code::Internal, "{error:?}");
-    assert_eq!(
-        error.message(),
-        format!("Package has no modules: {package_id}")
-    );
 }
 
 /// The fork loads a system package as of the fork checkpoint, so its index has no rows for the

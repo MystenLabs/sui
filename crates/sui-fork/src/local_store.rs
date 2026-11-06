@@ -487,7 +487,7 @@ impl LocalStore {
         ObjectByOwner.restore(schema, object, batch)?;
         ObjectByType.restore(schema, object, batch)?;
         Balance.restore(schema, object, batch)?;
-        PackageVersions.restore(schema, object, batch)?;
+        PackageVersions::default().restore(schema, object, batch)?;
         self.stage_restored_object_version(batch, object)
     }
 
@@ -673,7 +673,7 @@ impl LocalStore {
         batch: &mut sui_consistent_store::Batch,
         object: &Object,
     ) -> anyhow::Result<()> {
-        PackageVersions.restore(self.schema.as_ref(), object, batch)
+        PackageVersions::default().restore(self.schema.as_ref(), object, batch)
     }
 }
 

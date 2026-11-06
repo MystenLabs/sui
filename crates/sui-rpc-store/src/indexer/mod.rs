@@ -57,6 +57,7 @@ use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::pipeline::sequential::{self};
 use sui_indexer_alt_framework::service::Service;
@@ -447,11 +448,14 @@ impl Indexer {
         add!(self::effects::Effects, effects);
         add!(self::events::Events, events);
         add!(self::objects::Objects, objects);
-        // `object_version_by_checkpoint` needs its restore anchor `T` so
-        // its processor scopes floor candidates to the backfill window
-        // `[L, T]`. The restore (if any) has already run by the time
-        // pipelines are registered, so read it once here.
-        let ovbc_anchor = self::object_version_by_checkpoint::restored_anchor(self.store().db())?;
+        // `object_version_by_checkpoint` and `package_versions` need their
+        // restore anchor `T` so their processors scope the input scan to the
+        // backfill window `[L, T]`. The restore (if any) has already run by
+        // the time pipelines are registered, so read it once here.
+        let ovbc_anchor = self::object_version_by_checkpoint::restored_anchor(
+            self.store().db(),
+            self::object_version_by_checkpoint::ObjectVersionByCheckpoint::NAME,
+        )?;
         add!(
             self::object_version_by_checkpoint::ObjectVersionByCheckpoint::with_anchor(ovbc_anchor),
             object_version_by_checkpoint
@@ -461,7 +465,14 @@ impl Indexer {
         add!(self::object_by_owner::ObjectByOwner, object_by_owner);
         add!(self::object_by_type::ObjectByType, object_by_type);
         add!(self::balance::Balance, balance);
-        add!(self::package_versions::PackageVersions, package_versions);
+        let package_versions_anchor = self::object_version_by_checkpoint::restored_anchor(
+            self.store().db(),
+            self::package_versions::PackageVersions::NAME,
+        )?;
+        add!(
+            self::package_versions::PackageVersions::with_anchor(package_versions_anchor),
+            package_versions
+        );
         add!(
             self::transaction_bitmap::TransactionBitmap,
             transaction_bitmap
