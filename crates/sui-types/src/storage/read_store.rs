@@ -877,6 +877,21 @@ pub trait RpcIndexes: Send + Sync {
         self.get_highest_indexed_checkpoint_seq_number()
     }
 
+    /// The chain timestamp, in milliseconds, of the checkpoint at
+    /// [`Self::get_highest_indexed_checkpoint_seq_number`], or `None` while
+    /// any index pipeline has no watermark yet.
+    fn get_highest_indexed_checkpoint_timestamp_ms(&self) -> Result<Option<u64>>;
+
+    /// The chain timestamp, in milliseconds, of the checkpoint at
+    /// [`Self::get_highest_live_indexed_checkpoint_seq_number`], or `None` if
+    /// the live-object cohort has not committed any checkpoint yet.
+    ///
+    /// Defaults to [`Self::get_highest_indexed_checkpoint_timestamp_ms`] for
+    /// backends without a live/history cohort split.
+    fn get_highest_live_indexed_checkpoint_timestamp_ms(&self) -> Result<Option<u64>> {
+        self.get_highest_indexed_checkpoint_timestamp_ms()
+    }
+
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
 
     fn ledger_tx_seq_digest_multi_get(
