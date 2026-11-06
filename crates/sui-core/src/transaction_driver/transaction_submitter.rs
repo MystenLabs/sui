@@ -394,7 +394,13 @@ fn is_staggered_rejection(error: &SuiError) -> bool {
 
 // Whether the failure is caused by the peer validator, as opposed to the user or this node.
 fn is_validator_error(error: &SuiError) -> bool {
-    if is_staggered_rejection(error) {
+    // A rejection before `min_timestamp` is caused by the client's timing.
+    if is_staggered_rejection(error)
+        || matches!(
+            error.as_inner(),
+            SuiErrorKind::TransactionNotYetValid { .. }
+        )
+    {
         return false;
     }
     matches!(
@@ -404,4 +410,19 @@ fn is_validator_error(error: &SuiError) -> bool {
             | ErrorCategory::ValidatorOverloaded
             | ErrorCategory::Unavailable
     )
+}
+
+#[cfg(test)]
+mod validator_error_tests {
+    use super::*;
+
+    #[test]
+    fn test_not_yet_valid_is_not_a_validator_error() {
+        let not_yet_valid: SuiError =
+            SuiErrorKind::TransactionNotYetValid { timestamp_ms: 0 }.into();
+        assert_eq!(not_yet_valid.categorize(), ErrorCategory::Aborted);
+        assert!(!is_validator_error(&not_yet_valid));
+        let overloaded: SuiError = SuiErrorKind::TooManyTransactionsPendingConsensus.into();
+        assert!(is_validator_error(&overloaded));
+    }
 }
