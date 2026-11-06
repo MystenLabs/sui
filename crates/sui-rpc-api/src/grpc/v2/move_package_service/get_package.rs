@@ -5,13 +5,14 @@ use crate::{
     ErrorReason, Result, RpcError, RpcService,
     grpc::v2::move_package_service::{
         conversions::{convert_error, convert_module},
-        load_package, load_package_by_id, parse_package_id,
+        load_package, load_package_by_id, load_package_by_id_and_version, parse_package_id,
     },
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::{GetPackageRequest, GetPackageResponse, Package};
 use sui_types::move_package::MovePackage;
+use sui_types::object::OBJECT_START_VERSION;
 
 #[tracing::instrument(skip(service))]
 pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<GetPackageResponse> {
@@ -45,6 +46,12 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
 ///
 /// Package-version index rows are keyed by the lineage's original package id,
 /// so a member's storage id is mapped to that original id before the lookup.
+/// The package object can be pruned: system packages are upgraded in place, so
+/// pruning deletes their replaced versions, and nodes without object version
+/// history drop them at once. A node restored from a snapshot also has no
+/// index rows for the system-package versions replaced before the snapshot.
+/// A version this node no longer stores is refused: as unavailable on nodes
+/// without object version history, otherwise as pruned.
 fn load_package_at_version(
     service: &RpcService,
     package_id_str: &str,
@@ -64,10 +71,24 @@ fn load_package_at_version(
 
     let storage_id = indexes
         .get_package_version_storage_id(original_id, version)
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        .ok_or_else(RpcError::not_found)?;
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+    let stored = match storage_id {
+        Some(storage_id) => load_package_by_id_and_version(service, storage_id, version)?,
+        // A lineage's versions run from `OBJECT_START_VERSION` up without gaps, so a version
+        // below the loaded package's existed, and this node no longer has it.
+        None if (OBJECT_START_VERSION.value()..package.version().value()).contains(&version) => {
+            None
+        }
+        None => return Err(RpcError::not_found()),
+    };
 
-    load_package_by_id(service, storage_id)
+    match stored {
+        Some(package) => Ok(package),
+        None => {
+            service.reader.require_object_version_history()?;
+            Err(service.reader.at_checkpoint_lower_bound()?.pruned())
+        }
+    }
 }
 
 /// Load the latest package in `package_id_str`'s upgrade lineage that
@@ -105,7 +126,10 @@ fn load_package_at_checkpoint(
             .get_package_at_checkpoint(package.original_package_id(), at_checkpoint)
             .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
             .ok_or_else(RpcError::not_found)
-            .and_then(|(_, storage_id)| load_package_by_id(service, storage_id))
+            .and_then(|(version, storage_id)| {
+                load_package_by_id_and_version(service, storage_id, version)?
+                    .ok_or_else(RpcError::not_found)
+            })
     });
 
     service
