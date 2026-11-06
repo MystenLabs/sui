@@ -310,8 +310,8 @@ pub enum ExecutionErrorKind {
 pub enum AccountPolicyViolationKind {
     #[error("a called package is not allowed by the policy")]
     PackageNotAllowed,
-    #[error("coin outflow exceeds the policy limit for its type")]
-    CoinOutflowExceeded,
+    #[error("balance outflow exceeds the policy limit for its coin type")]
+    BalanceOutflowExceeded,
     #[error("an object left the sender's ownership")]
     ObjectTransferNotAllowed,
     #[error("a package took more of the sender's objects than its per-epoch custody limit")]

@@ -24,6 +24,7 @@ use sui_types::{
     accumulator_event::AccumulatorEvent,
     accumulator_root::AccumulatorValue as AccumulatorRootValue,
     base_types::{ObjectID, SuiAddress},
+    coin::TreasuryCap,
     effects::{AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1},
     error::ExecutionError,
     execution_status::{AccountPolicyViolationKind, ExecutionErrorKind},
@@ -38,7 +39,7 @@ use crate::temporary_store::TemporaryStore;
 
 /// What the policy check needs to know about each PTB command.
 enum CommandSummary {
-    MoveCall(ObjectID),
+    MoveCall(ObjectID, String),
     Other,
 }
 
@@ -65,7 +66,9 @@ impl AccountPolicyTxInputs {
             .commands
             .iter()
             .map(|command| match command {
-                Command::MoveCall(call) => CommandSummary::MoveCall(call.package),
+                Command::MoveCall(call) => {
+                    CommandSummary::MoveCall(call.package, call.module.clone())
+                }
                 _ => CommandSummary::Other,
             })
             .collect();
@@ -82,7 +85,7 @@ impl AccountPolicyTxInputs {
 pub(super) struct AccountPolicySpend {
     owner: SuiAddress,
     epoch: u64,
-    /// Net coin outflow by type; only charged if the transaction succeeds.
+    /// Net balance outflow by type; only charged if the transaction succeeds.
     coin_outflows: BTreeMap<TypeTag, u64>,
     /// Objects taken by each package (original ID); only charged if the transaction succeeds.
     custody_counts: BTreeMap<ObjectID, u64>,
@@ -135,11 +138,11 @@ impl TemporaryStore<'_> {
         let mut called_packages: Vec<Option<ObjectID>> = Vec::with_capacity(inputs.commands.len());
         for command in &inputs.commands {
             called_packages.push(match command {
-                CommandSummary::MoveCall(package) => {
+                CommandSummary::MoveCall(package, module) => {
                     let Some(original) = self.original_package_id(*package) else {
                         return violation(AccountPolicyViolationKind::PackageNotAllowed);
                     };
-                    if !policy.allows_package(original) {
+                    if !policy.allows_call(original, module) {
                         return violation(AccountPolicyViolationKind::PackageNotAllowed);
                     }
                     Some(original)
@@ -194,12 +197,18 @@ impl TemporaryStore<'_> {
             }
         }
 
-        // Net outflow per coin type: value held before, minus value still with the sender or
-        // sent to a listed recipient afterwards, plus net address-balance withdrawals.
+        // Net outflow per coin type: value held before, plus value minted through the sender's
+        // treasury caps, minus value still with the sender or sent to a listed recipient
+        // afterwards, plus net address-balance withdrawals.
         let mut outflows: BTreeMap<TypeTag, i128> = BTreeMap::new();
-        for object in before.values() {
+        for (id, object) in &before {
             if let Some((coin_type, value)) = coin_value(object) {
                 *outflows.entry(coin_type).or_default() += value as i128;
+            }
+            if let Some(after) = self.execution_results.written_objects.get(id)
+                && let Some((coin_type, minted)) = minted_supply(object, after)
+            {
+                *outflows.entry(coin_type).or_default() += minted as i128;
             }
         }
         for object in self.execution_results.written_objects.values() {
@@ -248,9 +257,9 @@ impl TemporaryStore<'_> {
                 spent_type_tag(coin_type.clone()),
             );
             if spent + u128::from(outflow) + u128::from(gas)
-                > u128::from(policy.coin_limit(&coin_type))
+                > u128::from(policy.balance_limit(&coin_type))
             {
-                return violation(AccountPolicyViolationKind::CoinOutflowExceeded);
+                return violation(AccountPolicyViolationKind::BalanceOutflowExceeded);
             }
             if outflow > 0 {
                 spend.coin_outflows.insert(coin_type, outflow);
@@ -259,7 +268,7 @@ impl TemporaryStore<'_> {
         Ok(())
     }
 
-    /// Merges this transaction's spend into the sender's per-epoch counters. Coin outflow and
+    /// Merges this transaction's spend into the sender's per-epoch counters. Balance outflow and
     /// custody only count for a successful transaction, whose writes stand; gas counts always.
     pub(crate) fn record_account_policy_spend(&mut self, gas_used: u64, succeeded: bool) {
         let Some(spend) = self.account_policy_spend.take() else {
@@ -410,6 +419,23 @@ fn coin_value(object: &Object) -> Option<(TypeTag, u64)> {
         return Some((GAS::type_tag(), principal));
     }
     None
+}
+
+/// Supply added to a treasury cap between `before` and `after`, with its coin type. Burns do not
+/// offset: destroyed value is still value the owner lost.
+fn minted_supply(before: &Object, after: &Object) -> Option<(TypeTag, u64)> {
+    let type_ = before.type_()?;
+    if !type_.is_treasury_cap() {
+        return None;
+    }
+    let coin_type = type_.type_params().into_iter().next()?.into_owned();
+    let supply = |object: &Object| {
+        TreasuryCap::from_bcs_bytes(object.data.try_as_move()?.contents())
+            .ok()
+            .map(|cap| cap.total_supply.value)
+    };
+    let minted = supply(after)?.checked_sub(supply(before)?)?;
+    Some((coin_type, minted))
 }
 
 /// `T` for a `Balance<T>` accumulator type.

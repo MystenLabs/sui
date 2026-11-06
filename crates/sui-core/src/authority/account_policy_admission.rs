@@ -53,7 +53,7 @@ impl AuthorityState {
                     .get_backing_package_store()
                     .get_package_object(&call.package)?
                     .map(|package| package.move_package().original_package_id());
-                if !original.is_some_and(|original| policy.allows_package(original)) {
+                if !original.is_some_and(|original| policy.allows_call(original, &call.module)) {
                     return violation(AccountPolicyViolationKind::PackageNotAllowed);
                 }
             }
@@ -81,9 +81,9 @@ impl AuthorityState {
             })
             .unwrap_or(0);
         if settled + unsettled + u128::from(gas_budget)
-            > u128::from(policy.coin_limit(&GAS::type_tag()))
+            > u128::from(policy.balance_limit(&GAS::type_tag()))
         {
-            return violation(AccountPolicyViolationKind::CoinOutflowExceeded);
+            return violation(AccountPolicyViolationKind::BalanceOutflowExceeded);
         }
         Ok(())
     }

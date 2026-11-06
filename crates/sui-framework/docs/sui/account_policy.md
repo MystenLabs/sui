@@ -33,7 +33,7 @@ guardian's co-signature.
 -  [Function `cancel`](#sui_account_policy_cancel)
 -  [Function `disable`](#sui_account_policy_disable)
 -  [Function `set_guardian`](#sui_account_policy_set_guardian)
--  [Function `set_coin_limit`](#sui_account_policy_set_coin_limit)
+-  [Function `set_balance_limit`](#sui_account_policy_set_balance_limit)
 -  [Function `add_recipient`](#sui_account_policy_add_recipient)
 -  [Function `remove_recipient`](#sui_account_policy_remove_recipient)
 -  [Function `set_package`](#sui_account_policy_set_package)
@@ -120,7 +120,7 @@ Derived-object key of an owner's policy.
 
 ## Struct `Spent`
 
-Accumulator type of a policy's per-epoch spend counter for <code>T</code>: a coin type for coin outflow,
+Accumulator type of a policy's per-epoch spend counter for <code>T</code>: a coin type for balance outflow,
 or <code><a href="../sui/account_policy.md#sui_account_policy_Custody">Custody</a></code> for objects taken by a package. Written by execution, never by Move code.
 
 
@@ -241,7 +241,7 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
  First epoch in which the policy is enforced; <code><a href="../sui/account_policy.md#sui_account_policy_DISABLED">DISABLED</a></code> if cancelled or disabled.
 </dd>
 <dt>
-<code>coin_limits: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, u64&gt;</code>
+<code>balance_limits: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, u64&gt;</code>
 </dt>
 <dd>
  Per-epoch net outflow limit (in the coin's smallest unit) by coin type string, gas
@@ -379,7 +379,7 @@ Opt the sender in with an empty rule set. The policy is enforced from
         owner,
         guardian,
         <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>: ctx.epoch() + <a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a>,
-        coin_limits: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+        balance_limits: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
         recipients: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(),
         packages: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
     });
@@ -469,14 +469,14 @@ Stop enforcing the sender's active policy. The guardian must co-sign.
 
 </details>
 
-<a name="sui_account_policy_set_coin_limit"></a>
+<a name="sui_account_policy_set_balance_limit"></a>
 
-## Function `set_coin_limit`
+## Function `set_balance_limit`
 
 Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href="../sui/sui.md#sui_sui_SUI">0x2::sui::SUI</a></code>).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, coin_type: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, limit: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_balance_limit">set_balance_limit</a>(policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, coin_type: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, limit: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -485,17 +485,17 @@ Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href=".
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_balance_limit">set_balance_limit</a>(
     policy: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>,
     coin_type: String,
     limit: u64,
     ctx: &TxContext,
 ) {
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
-    <b>if</b> (policy.coin_limits.contains(&coin_type)) {
-        *policy.coin_limits.get_mut(&coin_type) = limit;
+    <b>if</b> (policy.balance_limits.contains(&coin_type)) {
+        *policy.balance_limits.get_mut(&coin_type) = limit;
     } <b>else</b> {
-        policy.coin_limits.insert(coin_type, limit);
+        policy.balance_limits.insert(coin_type, limit);
     }
 }
 </code></pre>

@@ -12,7 +12,8 @@
 use std::str::FromStr;
 
 use crate::{
-    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
+    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_SYSTEM_PACKAGE_ID,
     base_types::{ObjectID, SuiAddress},
     collection_types::{VecMap, VecSet},
     crypto::DefaultHash,
@@ -29,6 +30,17 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 pub const ACCOUNT_POLICY_MODULE_NAME: &IdentStr = ident_str!("account_policy");
+
+/// Framework modules every policy may call without listing them: they only move balances and
+/// coins, which the balance rule accounts for (minting through an owned treasury cap counts as
+/// outflow of the minted amount), or transfer objects, which the object rule accounts for. They
+/// never get custody unless the framework package is listed with it.
+pub const ACCOUNT_POLICY_FRAMEWORK_MODULES: &[&IdentStr] = &[
+    ident_str!("balance"),
+    ident_str!("coin"),
+    ident_str!("pay"),
+    ident_str!("transfer"),
+];
 pub const POLICY_KEY_STRUCT_NAME: &IdentStr = ident_str!("PolicyKey");
 pub const SPENT_STRUCT_NAME: &IdentStr = ident_str!("Spent");
 pub const CUSTODY_STRUCT_NAME: &IdentStr = ident_str!("Custody");
@@ -117,7 +129,7 @@ pub struct AccountPolicy {
     pub activation_epoch: u64,
     /// Per-epoch net outflow limit by coin type string, gas included for SUI. Types without an
     /// entry may not flow out at all.
-    pub coin_limits: VecMap<String, u64>,
+    pub balance_limits: VecMap<String, u64>,
     /// Addresses (or object IDs) that coins and objects may be sent to without limit.
     pub recipients: VecSet<SuiAddress>,
     /// Packages that may be called, by original package ID.
@@ -152,8 +164,8 @@ impl AccountPolicy {
         co_signers.contains(&self.guardian)
     }
 
-    pub fn coin_limit(&self, coin_type: &TypeTag) -> u64 {
-        self.coin_limits
+    pub fn balance_limit(&self, coin_type: &TypeTag) -> u64 {
+        self.balance_limits
             .contents
             .iter()
             .find(|entry| type_string_matches(&entry.key, coin_type))
@@ -164,10 +176,15 @@ impl AccountPolicy {
         self.recipients.contents.contains(&address)
     }
 
-    /// Whether a package may be called. The system package is always callable: it only moves
-    /// value between the sender's coins and the sender's stake.
-    pub fn allows_package(&self, original_package_id: ObjectID) -> bool {
+    /// Whether a call into `module` of a package may be made. The system package is always
+    /// callable, as are the framework modules that only move value (`ACCOUNT_POLICY_FRAMEWORK_MODULES`);
+    /// the rest of the framework, such as kiosks and allowances, must be listed like any package.
+    pub fn allows_call(&self, original_package_id: ObjectID, module: &str) -> bool {
         original_package_id == SUI_SYSTEM_PACKAGE_ID
+            || (original_package_id == SUI_FRAMEWORK_PACKAGE_ID
+                && ACCOUNT_POLICY_FRAMEWORK_MODULES
+                    .iter()
+                    .any(|allowed| allowed.as_str() == module))
             || self
                 .packages
                 .contents

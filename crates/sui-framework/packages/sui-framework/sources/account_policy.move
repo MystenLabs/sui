@@ -46,7 +46,7 @@ public struct AccountPolicyRegistry has key {
 /// Derived-object key of an owner's policy.
 public struct PolicyKey(address) has copy, drop, store;
 
-/// Accumulator type of a policy's per-epoch spend counter for `T`: a coin type for coin outflow,
+/// Accumulator type of a policy's per-epoch spend counter for `T`: a coin type for balance outflow,
 /// or `Custody` for objects taken by a package. Written by execution, never by Move code.
 public struct Spent<phantom T> has drop {}
 
@@ -73,7 +73,7 @@ public struct AccountPolicy has key {
     activation_epoch: u64,
     /// Per-epoch net outflow limit (in the coin's smallest unit) by coin type string, gas
     /// included for SUI. Types without an entry may not flow out at all.
-    coin_limits: VecMap<String, u64>,
+    balance_limits: VecMap<String, u64>,
     /// Addresses (or object IDs) that coins and objects may be sent to without limit.
     recipients: VecSet<address>,
     /// Packages that may be called, by original package ID. The system package is always
@@ -97,7 +97,7 @@ public fun enable(registry: &mut AccountPolicyRegistry, guardian: address, ctx: 
         owner,
         guardian,
         activation_epoch: ctx.epoch() + ACTIVATION_DELAY_EPOCHS,
-        coin_limits: vec_map::empty(),
+        balance_limits: vec_map::empty(),
         recipients: vec_set::empty(),
         packages: vec_map::empty(),
     });
@@ -123,17 +123,17 @@ public fun set_guardian(policy: &mut AccountPolicy, guardian: address, ctx: &TxC
 }
 
 /// Set the per-epoch outflow limit of `coin_type` (e.g. `0x2::sui::SUI`).
-public fun set_coin_limit(
+public fun set_balance_limit(
     policy: &mut AccountPolicy,
     coin_type: String,
     limit: u64,
     ctx: &TxContext,
 ) {
     policy.authorize(ctx);
-    if (policy.coin_limits.contains(&coin_type)) {
-        *policy.coin_limits.get_mut(&coin_type) = limit;
+    if (policy.balance_limits.contains(&coin_type)) {
+        *policy.balance_limits.get_mut(&coin_type) = limit;
     } else {
-        policy.coin_limits.insert(coin_type, limit);
+        policy.balance_limits.insert(coin_type, limit);
     }
 }
 

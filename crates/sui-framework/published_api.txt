@@ -1120,7 +1120,7 @@ disable
 set_guardian
 	public fun
 	0x2::account_policy
-set_coin_limit
+set_balance_limit
 	public fun
 	0x2::account_policy
 add_recipient

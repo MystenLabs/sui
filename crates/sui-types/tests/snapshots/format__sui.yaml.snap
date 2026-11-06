@@ -12,7 +12,7 @@ AccountPolicyViolationKind:
     0:
       PackageNotAllowed: UNIT
     1:
-      CoinOutflowExceeded: UNIT
+      BalanceOutflowExceeded: UNIT
     2:
       ObjectTransferNotAllowed: UNIT
     3:

@@ -8,7 +8,7 @@ use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     account_policy::account_policy_object_id,
@@ -213,7 +213,7 @@ impl Env {
         self.execute_ok(tx).await;
         let tx = self
             .policy_call_tx(
-                "set_coin_limit",
+                "set_balance_limit",
                 vec![pure(&SUI_TYPE.to_string()), pure(&SUI_LIMIT)],
             )
             .await;
@@ -254,6 +254,15 @@ impl Env {
     /// still bumps the versions of its inputs.
     async fn latest(&self, object: ObjectID) -> ObjectRef {
         self.cluster.get_latest_object_ref(&object).await
+    }
+
+    /// Sends `amount` SUI from the gas coin into the stranger's address balance.
+    async fn to_address_balance_tx(&self, amount: u64) -> TransactionData {
+        let gas = self.gas_objects(self.owner).await[0];
+        TestTransactionBuilder::new(self.owner, gas, self.rgp)
+            .with_gas_budget(GAS_BUDGET)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, self.stranger)])
+            .build()
     }
 
     async fn transfer_object_tx(&self, object: ObjectID, to: SuiAddress) -> TransactionData {
@@ -345,6 +354,19 @@ impl Env {
 
     /// Mints `amount` of the test coin to the owner and returns the coin.
     async fn mint_policy_coin(&self, package: &TestPackage, amount: u64) -> ObjectID {
+        let effects = self
+            .execute_ok(self.mint_policy_coin_tx(package, amount, self.owner).await)
+            .await;
+        owned_created(&effects, self.owner).0
+    }
+
+    /// Mints `amount` of the test coin to `recipient` with the owner's treasury cap.
+    async fn mint_policy_coin_tx(
+        &self,
+        package: &TestPackage,
+        amount: u64,
+        recipient: SuiAddress,
+    ) -> TransactionData {
         let treasury_cap = self.latest(package.treasury_cap).await;
         let mut builder = self.builder(self.owner).await;
         let ptb = builder.ptb_builder_mut();
@@ -357,9 +379,8 @@ impl Env {
             vec![],
             vec![cap, amount],
         );
-        ptb.transfer_arg(self.owner, coin);
-        let effects = self.execute_ok(builder.build()).await;
-        owned_created(&effects, self.owner).0
+        ptb.transfer_arg(recipient, coin);
+        builder.build()
     }
 }
 
@@ -404,7 +425,7 @@ async fn test_account_policy_enforced_after_activation() {
     assert_violation(
         &env.execute(env.transfer_sui_tx(2 * SUI_LIMIT, env.stranger).await)
             .await,
-        AccountPolicyViolationKind::CoinOutflowExceeded,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
     );
     env.execute_ok(env.transfer_sui_tx(SUI_LIMIT / 2, env.stranger).await)
         .await;
@@ -439,11 +460,27 @@ async fn test_account_policy_enforced_after_activation() {
     let tx = env.transfer_sui_tx(2 * SUI_LIMIT, env.stranger).await;
     assert_violation(
         &env.execute_co_signed(tx, env.stranger).await,
-        AccountPolicyViolationKind::CoinOutflowExceeded,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
     );
 
     // A transaction co-signed by the guardian is exempt from every rule.
     env.execute_with_guardian(env.transfer_sui_tx(2 * SUI_LIMIT, env.stranger).await)
+        .await;
+}
+
+#[sim_test]
+async fn test_account_policy_address_balance_outflow() {
+    let env = Env::new().await;
+    env.enable_policy().await;
+    env.cluster.trigger_reconfiguration().await;
+
+    // SUI leaving through an address balance counts like a coin transfer.
+    assert_violation(
+        &env.execute(env.to_address_balance_tx(2 * SUI_LIMIT).await)
+            .await,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
+    );
+    env.execute_ok(env.to_address_balance_tx(SUI_LIMIT / 2).await)
         .await;
 }
 
@@ -474,7 +511,7 @@ async fn test_account_policy_listed_recipients() {
     assert_violation(
         &env.execute(env.transfer_sui_tx(5 * SUI_LIMIT, env.recipient).await)
             .await,
-        AccountPolicyViolationKind::CoinOutflowExceeded,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
     );
 }
 
@@ -491,12 +528,12 @@ async fn test_account_policy_coin_type_limits() {
     assert_violation(
         &env.execute(env.transfer_object_tx(small_coin, env.stranger).await)
             .await,
-        AccountPolicyViolationKind::CoinOutflowExceeded,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
     );
 
     let tx = env
         .policy_call_tx(
-            "set_coin_limit",
+            "set_balance_limit",
             vec![pure(&package.coin_type()), pure(&100u64)],
         )
         .await;
@@ -506,7 +543,22 @@ async fn test_account_policy_coin_type_limits() {
     assert_violation(
         &env.execute(env.transfer_object_tx(coin, env.stranger).await)
             .await,
-        AccountPolicyViolationKind::CoinOutflowExceeded,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
+    );
+
+    // Minting with the owner's treasury cap is outflow of the minted amount unless it stays
+    // with the owner.
+    env.execute_with_guardian(env.set_package_tx(package.id, false, vec![], None).await)
+        .await;
+    env.cluster.trigger_reconfiguration().await;
+    env.execute_ok(env.mint_policy_coin_tx(&package, 1_000, env.owner).await)
+        .await;
+    env.execute_ok(env.mint_policy_coin_tx(&package, 50, env.stranger).await)
+        .await;
+    assert_violation(
+        &env.execute(env.mint_policy_coin_tx(&package, 200, env.stranger).await)
+            .await,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
     );
 }
 
@@ -607,7 +659,7 @@ async fn test_account_policy_disable_requires_guardian_co_signature() {
     assert_violation(
         &env.execute(env.transfer_sui_tx(2 * SUI_LIMIT, env.stranger).await)
             .await,
-        AccountPolicyViolationKind::CoinOutflowExceeded,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
     );
 
     env.execute_with_guardian(env.policy_call_tx("disable", vec![]).await)
@@ -629,7 +681,7 @@ async fn test_account_policy_budget_spans_the_epoch() {
     assert_violation(
         &env.execute(env.transfer_sui_tx(SUI_LIMIT * 6 / 10, env.stranger).await)
             .await,
-        AccountPolicyViolationKind::CoinOutflowExceeded,
+        AccountPolicyViolationKind::BalanceOutflowExceeded,
     );
     env.execute_ok(env.transfer_sui_tx(SUI_LIMIT / 10, env.stranger).await)
         .await;
