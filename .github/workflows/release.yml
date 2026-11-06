@@ -129,12 +129,14 @@ jobs:
           # has no SHA256SUMS entry for it, the archive cannot be verified, so
           # clear s3_existing_archive and build from source instead. A hash
           # mismatch fails the job.
+          # A SHA256SUMS line is "<hash>  <name>", or "<hash> *<name>" when written in binary mode
+          # (sha256sum on Windows / Git Bash), so the name is matched with any leading '*' removed.
           archive_name="$(basename "$s3_existing_archive")"
           source_tag="${archive_name#sui-}"
           source_tag="${source_tag%-${os_type}.tgz}"
           mkdir -p ./tmp/s3-verify
           if ! curl -fsSL -o ./tmp/s3-verify/SHA256SUMS "https://github.com/${GITHUB_REPOSITORY}/releases/download/${source_tag}/SHA256SUMS" \
-            || [ -z "$(awk -v f="$archive_name" '$2 == f' ./tmp/s3-verify/SHA256SUMS)" ]; then
+            || [ -z "$(awk -v f="$archive_name" '{n = $2; sub(/^\*/, "", n)} n == f' ./tmp/s3-verify/SHA256SUMS)" ]; then
             echo "::warning::${source_tag} publishes no checksum for ${archive_name}; building from source"
             echo "s3_existing_archive=" >> "$GITHUB_ENV"
             exit 0
@@ -143,7 +145,7 @@ jobs:
           # relies on that), so no AWS credentials are needed here
           curl -fSs -o "./tmp/s3-verify/${archive_name}" "https://sui-releases.s3.us-east-1.amazonaws.com/${s3_existing_archive}"
           sha256=sha256sum; command -v sha256sum >/dev/null || sha256="shasum -a 256"
-          (cd ./tmp/s3-verify && awk -v f="$archive_name" '$2 == f' SHA256SUMS | $sha256 -c -)
+          (cd ./tmp/s3-verify && awk -v f="$archive_name" '{n = $2; sub(/^\*/, "", n)} n == f' SHA256SUMS | $sha256 -c -)
           mv "./tmp/s3-verify/${archive_name}" "./tmp/sui-${sui_tag}-${os_type}.tgz"
           mkdir -p ${{ env.TMP_BUILD_DIR }}
           tar -xf "./tmp/sui-${sui_tag}-${os_type}.tgz" -C ${{ env.TMP_BUILD_DIR }}
