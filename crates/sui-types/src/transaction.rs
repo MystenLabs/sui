@@ -2551,13 +2551,10 @@ impl TransactionExpiration {
     /// Whether `timestamp_ms` is after `max_timestamp`, which is in seconds. The bound covers
     /// the whole second it names. The transaction can never become valid.
     pub fn is_expired_at(&self, timestamp_ms: u64) -> bool {
-        match self {
-            TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
-            TransactionExpiration::ValidDuring { max_timestamp, .. }
-            | TransactionExpiration::Validity { max_timestamp, .. } => {
-                max_timestamp.is_some_and(|max| timestamp_ms / 1000 > max)
-            }
-        }
+        // Defined through `first_expired_timestamp_ms`, so that checkpoint execution, which
+        // uses that timestamp, reproduces the expiry by construction.
+        self.first_expired_timestamp_ms()
+            .is_some_and(|first_expired_ms| timestamp_ms >= first_expired_ms)
     }
 
     /// The `min_timestamp` (Unix seconds), if there is one.
