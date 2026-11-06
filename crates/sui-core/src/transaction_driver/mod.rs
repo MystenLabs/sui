@@ -10,7 +10,6 @@ mod transaction_submitter;
 
 /// Exports
 pub use error::TransactionDriverError;
-use error::{AggregatedEffectsDigests, AggregatedRequestErrors};
 pub use metrics::*;
 pub use reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 
@@ -251,8 +250,9 @@ where
             match check_timestamp_window(expiration, now_ms) {
                 Ok(()) => {}
                 // Validators would reject the transaction until `min_timestamp`, so the driver
-                // waits until then. The wait counts against the finality timeout, and a wait
-                // that would outlast it fails at once with a retriable error.
+                // waits until then. The wait counts against the finality timeout. A wait that
+                // would outlast it fails at once with a non-retriable error, so that no
+                // background retry submits the transaction after the client sees the failure.
                 Err(error)
                     if matches!(
                         error.as_inner(),
@@ -262,13 +262,8 @@ where
                     let valid_from_ms = expiration.first_valid_timestamp_ms().unwrap_or(now_ms);
                     let wait = Duration::from_millis(valid_from_ms.saturating_sub(now_ms));
                     if timeout_duration.is_some_and(|timeout| wait >= timeout) {
-                        return Err(TransactionDriverError::Aborted {
-                            submission_non_retriable_errors: AggregatedRequestErrors::default(),
-                            submission_retriable_errors: AggregatedRequestErrors {
-                                errors: vec![(error.to_string(), vec![], 0, error.categorize())],
-                                total_stake: 0,
-                            },
-                            observed_effects_digests: AggregatedEffectsDigests { digests: vec![] },
+                        return Err(TransactionDriverError::ValidationFailed {
+                            error: error.to_string(),
                         });
                     }
                     not_yet_valid_wait = Some(wait);
