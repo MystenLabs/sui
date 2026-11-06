@@ -2560,16 +2560,19 @@ impl TransactionExpiration {
         }
     }
 
-    /// The earliest timestamp (Unix ms) at which `is_not_yet_valid_at` is false, if there is a
-    /// `min_timestamp`.
-    pub fn first_valid_timestamp_ms(&self) -> Option<u64> {
+    /// The `min_timestamp` (Unix seconds), if there is one.
+    pub fn min_timestamp(&self) -> Option<u64> {
         match self {
             TransactionExpiration::None | TransactionExpiration::Epoch(_) => None,
             TransactionExpiration::ValidDuring { min_timestamp, .. }
-            | TransactionExpiration::Validity { min_timestamp, .. } => {
-                min_timestamp.and_then(|min| min.checked_mul(1000))
-            }
+            | TransactionExpiration::Validity { min_timestamp, .. } => *min_timestamp,
         }
+    }
+
+    /// The earliest timestamp (Unix ms) at which `is_not_yet_valid_at` is false, if there is a
+    /// `min_timestamp`.
+    pub fn first_valid_timestamp_ms(&self) -> Option<u64> {
+        self.min_timestamp().and_then(|min| min.checked_mul(1000))
     }
 
     /// The earliest timestamp (Unix ms) at which `is_expired_at` is true, if there is one.

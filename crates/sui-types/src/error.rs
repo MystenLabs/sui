@@ -849,8 +849,9 @@ pub enum SuiErrorKind {
     )]
     StaggeredSubmissionNotProposer,
 
-    #[error("Transaction is not valid until its min_timestamp (now {timestamp_ms}).")]
-    TransactionNotYetValid { timestamp_ms: u64 },
+    // The field is the same on every validator, so that the driver aggregates the rejections.
+    #[error("Transaction is not valid until its min_timestamp {min_timestamp} (Unix seconds).")]
+    TransactionNotYetValid { min_timestamp: u64 },
 }
 
 #[repr(u64)]
