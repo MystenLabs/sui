@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use crate::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::ExecutionCacheTraitPointers;
@@ -475,6 +476,18 @@ impl RestReadStore {
     }
 }
 
+/// [`RpcStateReader::retains_object_version_history`] for the node `state` runs on: `false` when
+/// it runs the tidehunter objects compactor.
+fn retains_object_version_history(state: &AuthorityState) -> bool {
+    !AuthorityPerpetualTablesOptions::objects_compactor_enabled(
+        state.config.intended_node_role().is_validator(),
+        state
+            .config
+            .authority_store_pruning_config
+            .num_epochs_to_retain,
+    )
+}
+
 impl ObjectStore for RestReadStore {
     fn get_object(&self, object_id: &sui_types::base_types::ObjectID) -> Option<Object> {
         self.rocks.get_object(object_id)
@@ -663,6 +676,10 @@ impl RpcStateReader for RestReadStore {
             .get_highest_pruned_checkpoint()
             .map(|cp| cp + 1)
             .unwrap_or(0))
+    }
+
+    fn retains_object_version_history(&self) -> bool {
+        retains_object_version_history(&self.state)
     }
 
     fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
@@ -946,6 +963,10 @@ impl RpcStateReader for RpcStoreReadStore {
         Ok(perpetual.max(rpc_store))
     }
 
+    fn retains_object_version_history(&self) -> bool {
+        retains_object_version_history(&self.state)
+    }
+
     fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
         Ok(self.state.get_chain_identifier())
     }
@@ -1052,10 +1073,23 @@ impl RpcIndexes for RpcStoreReadStore {
             .get_package_at_checkpoint(original_id, checkpoint)
     }
 
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<SequenceNumber>> {
+        self.reader
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>> {
         self.reader.get_highest_indexed_checkpoint_seq_number()
+    }
+
+    fn is_history_backfill_pending(&self) -> Result<bool> {
+        self.reader.is_history_backfill_pending()
     }
 
     fn get_highest_live_indexed_checkpoint_seq_number(

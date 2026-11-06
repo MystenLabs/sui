@@ -20,7 +20,7 @@
 //! - **Synthetic floor rows** `(id, 0) -> window-entry version` -- for
 //!   an object that existed before the available window `[L, T]` and
 //!   first changes within it, this records the version it entered the
-//!   window with, so a read in `[L, first-change)` resolves to that
+//!   window with, so a read in `[L - 1, first-change)` resolves to that
 //!   instead of the newer restore floor. Written during the embedded
 //!   backfill only: past `T` the restore floor already covers
 //!   pre-window objects, so the dedup read is skipped. The row is keyed
