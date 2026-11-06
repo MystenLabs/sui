@@ -479,18 +479,6 @@ pub enum CommandOutput {
     ZkLoginSigVerify(ZkLoginSigVerifyResponse),
 }
 
-/// Offline verification has no protocol config, so accept every signature
-/// type, like the RPC verify endpoint. The network enforces the protocol
-/// flags at submission.
-fn offline_verify_params() -> VerifyParams {
-    VerifyParams {
-        accept_zklogin_in_multisig: true,
-        accept_passkey_in_multisig: true,
-        accept_mldsa65_in_multisig: true,
-        ..Default::default()
-    }
-}
-
 impl KeyToolCommand {
     pub async fn execute(
         self,
@@ -565,7 +553,7 @@ impl KeyToolCommand {
                         &IntentMessage::new(Intent::sui_transaction(), tx_data),
                         address,
                         cur_epoch,
-                        &offline_verify_params(),
+                        &VerifyParams::default(),
                         Arc::new(VerifiedDigestCache::new_empty()),
                     );
 
@@ -596,7 +584,7 @@ impl KeyToolCommand {
                             &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
                             tx_data.sender(),
                             cur_epoch,
-                            &offline_verify_params(),
+                            &VerifyParams::default(),
                             Arc::new(VerifiedDigestCache::new_empty()),
                         );
                         CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {

@@ -30,7 +30,7 @@ use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::sync::Arc;
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct VerifyParams {
     // map from JwkId (iss, kid) => JWK
     pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
@@ -46,6 +46,26 @@ pub struct VerifyParams {
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     pub additional_multisig_checks: bool,
     pub validate_zklogin_public_identifier: bool,
+}
+
+/// Gates no signature type, for verifiers with no protocol config, like
+/// keytool. Validators set these flags from the protocol config.
+impl Default for VerifyParams {
+    fn default() -> Self {
+        Self {
+            oidc_provider_jwks: Default::default(),
+            supported_providers: Default::default(),
+            zk_login_env: Default::default(),
+            zklogin_circuit_mode: 0,
+            verify_legacy_zklogin_address: false,
+            accept_zklogin_in_multisig: true,
+            accept_passkey_in_multisig: true,
+            accept_mldsa65_in_multisig: true,
+            zklogin_max_epoch_upper_bound_delta: None,
+            additional_multisig_checks: false,
+            validate_zklogin_public_identifier: false,
+        }
+    }
 }
 
 impl VerifyParams {
