@@ -818,23 +818,83 @@ async fn keytool_verifies_mldsa65_offline() -> Result<(), anyhow::Error> {
         other => panic!("unexpected output {other}"),
     }
 
-    let multisig_pk = MultiSigPublicKey::new(vec![kp.public()], vec![1], 1)?;
-    let tx_data = pay_sui_from((&multisig_pk).into());
-    let sig = Signature::new_secure(
-        &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
-        &kp,
-    );
-    let multisig = MultiSig::combine(vec![GenericSignature::Signature(sig)], multisig_pk)?;
+    // (members, threshold, signers): ML-DSA-65 alone, both schemes signing, and a
+    // mixed committee where only the Ed25519 member signs.
+    let ed = SuiKeyPair::Ed25519(get_key_pair().1);
+    let cases = [
+        (vec![&kp], 1, vec![&kp]),
+        (vec![&kp, &ed], 2, vec![&kp, &ed]),
+        (vec![&kp, &ed], 1, vec![&ed]),
+    ];
+    for (members, threshold, signers) in cases {
+        let pks = members.iter().map(|k| k.public()).collect();
+        let multisig_pk = MultiSigPublicKey::new(pks, vec![1; members.len()], threshold)?;
+        let tx_data = pay_sui_from((&multisig_pk).into());
+        let msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+        let sigs = signers
+            .iter()
+            .map(|k| Signature::new_secure(&msg, *k).into())
+            .collect();
+        let multisig = MultiSig::combine(sigs, multisig_pk)?;
+        let res = decode_multisig(&mut context, multisig, &tx_data).await?;
+        assert_eq!(res, "OK");
+    }
+    Ok(())
+}
+
+async fn decode_multisig(
+    context: &mut WalletContext,
+    multisig: MultiSig,
+    tx_data: &TransactionData,
+) -> Result<String, anyhow::Error> {
     let out = KeyToolCommand::DecodeMultiSig {
         multisig,
-        tx_bytes: Some(Base64::encode(bcs::to_bytes(&tx_data)?)),
+        tx_bytes: Some(Base64::encode(bcs::to_bytes(tx_data)?)),
         cur_epoch: 0,
     }
-    .execute(&mut context)
+    .execute(context)
     .await?;
     match out {
-        CommandOutput::DecodeMultiSig(o) => assert_eq!(o.sig_verify_result, "OK"),
+        CommandOutput::DecodeMultiSig(o) => Ok(o.sig_verify_result),
         other => panic!("unexpected output {other}"),
     }
+}
+
+// A valid multisig says nothing about a transaction that does not need its signature.
+#[tokio::test]
+async fn keytool_decode_multisig_checks_the_signer() -> Result<(), anyhow::Error> {
+    let kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let multisig_pk = MultiSigPublicKey::new(vec![kp.public()], vec![1], 1)?;
+    let keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+    let mut context = WalletContext::new_for_tests(keystore, None, None);
+    let sign = |tx_data: &TransactionData| {
+        let msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+        let sig = Signature::new_secure(&msg, &kp).into();
+        MultiSig::combine(vec![sig], multisig_pk.clone())
+    };
+
+    // Someone else's transaction: the signature verifies, but the multisig is not a signer.
+    let other = SuiAddress::random_for_testing_only();
+    let tx_data = pay_sui_from(other);
+    let res = decode_multisig(&mut context, sign(&tx_data)?, &tx_data).await?;
+    assert!(res.contains("is not the sender or gas owner"), "{res}");
+
+    // As the gas owner of a sponsored transaction it is a required signer.
+    let gas = (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::random(),
+    );
+    let tx_data = TransactionData::new_transfer_sui_allow_sponsor(
+        SuiAddress::random_for_testing_only(),
+        other,
+        None,
+        gas,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        1,
+        (&multisig_pk).into(),
+    );
+    let res = decode_multisig(&mut context, sign(&tx_data)?, &tx_data).await?;
+    assert_eq!(res, "OK");
     Ok(())
 }
