@@ -126,7 +126,11 @@ pub fn get_early_execution_error(
     }
 
     // Expiry goes last, so that effects report any other early error, and the insufficient-funds
-    // short-circuit still applies.
+    // short-circuit still applies. Checkpoint execution depends on this order: it sets the
+    // timestamp only when effects report `TransactionExpired` as the head error, so it must get
+    // the same effects when expiry follows another error that it reproduces without expiry.
+    // Do not add an early error after this one, or make execution depend on expiry when it is
+    // not the head error.
     if consensus_commit_timestamp_ms.is_some_and(|ts| expiration.is_expired_at(ts)) {
         errors.push(ExecutionErrorKind::TransactionExpired);
     }
