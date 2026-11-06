@@ -297,11 +297,11 @@ pub struct KvRpcServer {
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) monotonic_read_wait_timeout: Duration,
     pub(crate) stages: StagesConfig,
-    // Object history reads (`at_checkpoint`) need the alpha
-    // [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`], backfilled from genesis, and the `objects_v2`
-    // table: they are served only with [`KvRpcConfig::enable_object_at_checkpoint`] on and
-    // [`ObjectSchema::V2`] (see [`KvRpcConfig::serves_object_history`]). Otherwise they are
-    // rejected with `Unimplemented`.
+    // Object history reads (`at_checkpoint`, which also serve the running epoch's
+    // `GetEpoch.system_state`) need the alpha [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`],
+    // backfilled from genesis, and the `objects_v2` table: they are served only with
+    // [`KvRpcConfig::enable_object_at_checkpoint`] on and [`ObjectSchema::V2`] (see
+    // [`KvRpcConfig::serves_object_history`]). Otherwise they are rejected.
     object_at_checkpoint_enabled: bool,
 }
 
