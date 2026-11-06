@@ -418,9 +418,10 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     }
 
     fn get_highest_indexed_checkpoint_timestamp_ms(&self) -> StorageResult<Option<u64>> {
-        // Same pipelines as `get_highest_indexed_checkpoint_seq_number`;
-        // checkpoint timestamps never decrease, so the lowest watermark
-        // timestamp is the timestamp of the lowest watermark checkpoint.
+        // Same pipelines as `get_highest_indexed_checkpoint_seq_number`.
+        // Checkpoint timestamps never decrease, so the lowest watermark
+        // timestamp is that checkpoint's, except that a watermark written
+        // without a timestamp contributes 0 (see `min_watermark`).
         self.min_watermark(self.pipelines.iter().copied(), |w| {
             w.timestamp_ms_hi_inclusive
         })
