@@ -22,4 +22,5 @@ sui-futures.workspace = true
 sui-pg-db = { workspace = true, optional = true }
 
 [features]
+default = ["postgres"]
 postgres = ["dep:sui-pg-db"]
