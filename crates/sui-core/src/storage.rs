@@ -1023,6 +1023,15 @@ impl RpcIndexes for RpcStoreReadStore {
         self.reader.get_highest_live_indexed_checkpoint_seq_number()
     }
 
+    fn get_highest_indexed_checkpoint_timestamp_ms(&self) -> Result<Option<u64>> {
+        self.reader.get_highest_indexed_checkpoint_timestamp_ms()
+    }
+
+    fn get_highest_live_indexed_checkpoint_timestamp_ms(&self) -> Result<Option<u64>> {
+        self.reader
+            .get_highest_live_indexed_checkpoint_timestamp_ms()
+    }
+
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {
         self.reader.ledger_tx_seq_digest(tx_seq)
     }
