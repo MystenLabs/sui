@@ -24,6 +24,7 @@ use sui_rpc_api::grpc::v2::move_package_service::get_function_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_package_response;
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::MovePackage;
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 
@@ -81,9 +82,7 @@ impl MovePackageService for KvRpcServer {
     }
 }
 
-/// Serve a package. `Version` and `AtCheckpoint` lookups are answered as of `served_height`;
-/// the bare-id path reads the package object by its storage ID, whose row records no
-/// checkpoint to compare against.
+/// Serve a package as of `served_height`: a package published above it is `NotFound`.
 async fn get_package(
     mut client: BigTableClient,
     served_height: ServedHeight,
@@ -96,16 +95,37 @@ async fn get_package(
     })?;
     let package_id = parse_package_id(package_id_str)?;
 
-    let selector = match request.selector {
+    let data = match request.selector {
         None => {
-            let package = load_package(client, package_id).await?;
-            return get_package_response(&package);
+            let package = load_package(client.clone(), package_id).await?;
+            let published = client
+                .get_packages_by_version(&[(
+                    package.original_package_id(),
+                    package.version().value(),
+                )])
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .pop()
+                .is_some_and(|data| data.cp_sequence_number <= served_height.checkpoint);
+            if published {
+                return get_package_response(&package);
+            }
+            // A storage ID holds one package version that never changes, except for system
+            // packages, which are upgraded in place: a version above the first one at the
+            // package's original ID. Decided from the package, not a list of system package IDs,
+            // which a kv-rpc build older than the chain would be missing entries from. An
+            // earlier version of such a package can be the one current at the served height.
+            let upgraded_in_place = package.version() > OBJECT_START_VERSION
+                && package.id() == package.original_package_id();
+            if !upgraded_in_place {
+                return Err(RpcError::not_found());
+            }
+            client
+                .get_package_latest(package_id, served_height.checkpoint)
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
         }
-        Some(selector) => selector,
-    };
-
-    let data = match selector {
-        Selector::Version(version) => {
+        Some(Selector::Version(version)) => {
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
             client
                 .get_packages_by_version(&[(original_id, version)])
@@ -114,7 +134,7 @@ async fn get_package(
                 .pop()
                 .filter(|data| data.cp_sequence_number <= served_height.checkpoint)
         }
-        Selector::AtCheckpoint(at_checkpoint) => {
+        Some(Selector::AtCheckpoint(at_checkpoint)) => {
             // The response does not echo the checkpoint it resolved at, so a bound above the
             // served height would let a caller persist a wrong answer; fail closed instead.
             AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
@@ -124,7 +144,7 @@ async fn get_package(
                 .await
                 .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
         }
-        _ => {
+        Some(_) => {
             return Err(FieldViolation::new("selector")
                 .with_description("unknown selector variant")
                 .with_reason(ErrorReason::FieldInvalid)
@@ -660,22 +680,144 @@ mod tests {
         assert_eq!(package.version, Some(2));
     }
 
+    /// The `google.rpc.ErrorInfo` reason among `status`'s details.
+    fn error_reason(status: &tonic::Status) -> String {
+        use prost::Message;
+        use sui_rpc::proto::google::rpc::{ErrorInfo, Status};
+
+        Status::decode(status.details())
+            .expect("details decode as google.rpc.Status")
+            .details
+            .iter()
+            .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+            .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"))
+            .reason
+    }
+
     #[tokio::test]
     async fn at_checkpoint_above_served_height_is_rejected() {
         let fixture = setup_lineage_fixture().await;
+        let unknown = ObjectID::from_single_byte(0xDD);
 
-        for at_checkpoint in [26u64, u64::MAX] {
-            let mut req = get_package_req(fixture.original_id);
-            req.selector = Some(Selector::AtCheckpoint(at_checkpoint));
-            let status = fetch_pkg_err(&fixture, req).await;
-            assert_eq!(status.code(), tonic::Code::OutOfRange, "{at_checkpoint}");
-            assert_eq!(
-                status.message(),
-                format!(
-                    "requested data above latest available; at_checkpoint is {at_checkpoint}, \
-                     and only checkpoints below 26 are available"
-                ),
+        for package_id in [fixture.original_id, unknown] {
+            for at_checkpoint in [26u64, u64::MAX] {
+                let mut req = get_package_req(package_id);
+                req.selector = Some(Selector::AtCheckpoint(at_checkpoint));
+                let status = fetch_pkg_err(&fixture, req).await;
+                assert_eq!(
+                    status.code(),
+                    tonic::Code::OutOfRange,
+                    "{package_id} at {at_checkpoint}"
+                );
+                assert_eq!(
+                    error_reason(&status),
+                    ErrorReason::AboveLatestAvailable.as_str_name()
+                );
+                assert_eq!(
+                    status.message(),
+                    format!(
+                        "requested data above latest available; at_checkpoint is \
+                         {at_checkpoint}, and only checkpoints below 26 are available"
+                    ),
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn bare_id_published_above_served_height_is_not_found() {
+        let fixture = setup_lineage_fixture().await;
+
+        // v1 is published at checkpoint 5, and v2 at checkpoint 20.
+        for (package_id, version, published_at) in
+            [(fixture.original_id, 1, 5), (fixture.upgraded_id, 2, 20)]
+        {
+            for (served_checkpoint, found) in [(published_at - 1, false), (published_at, true)] {
+                let served_height = ServedHeight {
+                    checkpoint: served_checkpoint,
+                    epoch: 0,
+                };
+                let result = get_package(
+                    fixture.client.clone(),
+                    served_height,
+                    get_package_req(package_id),
+                )
+                .await;
+                let context = format!("v{version} at served height {served_checkpoint}");
+                match result {
+                    Ok(response) => {
+                        assert!(found, "{context}: served");
+                        assert_eq!(response.package.and_then(|p| p.version), Some(version));
+                    }
+                    Err(err) => {
+                        assert!(!found, "{context}: hidden");
+                        let status: tonic::Status = err.into();
+                        assert_eq!(status.code(), tonic::Code::NotFound, "{context}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// A package upgraded in place resolves to the version current at the served height, and is
+    /// `NotFound` below its first version, whether or not this binary knows its ID as a system
+    /// package's.
+    #[tokio::test]
+    async fn bare_id_of_package_upgraded_in_place_resolves_the_version_at_served_height() {
+        use bytes::Bytes;
+        use move_binary_format::file_format::empty_module;
+        use move_core_types::account_address::AccountAddress;
+
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        // An ID outside the binary's list of system packages, as a system package added by a
+        // protocol upgrade newer than the build would be: version 1 at checkpoint 5, upgraded
+        // in place to version 2 at checkpoint 10.
+        let package_id = ObjectID::from_single_byte(0xDD);
+        assert!(!sui_types::is_system_package(package_id));
+        let mut module = empty_module();
+        module.address_identifiers[0] = AccountAddress::from(package_id);
+        for (version, checkpoint) in [(1u64, 5u64), (2, 10)] {
+            let object = Object::new_package_from_data(
+                Data::Package(MovePackage::new_system(
+                    SequenceNumber::from(version),
+                    std::slice::from_ref(&module),
+                    [],
+                )),
+                TransactionDigest::genesis_marker(),
             );
+            mock.insert_row(
+                tables::objects::NAME,
+                Bytes::from(tables::objects::encode_key(&ObjectKey(
+                    object.id(),
+                    object.version(),
+                ))),
+                tables::objects::encode(&object).expect("encode object"),
+            )
+            .await;
+            mock.insert_row(
+                tables::packages::NAME,
+                Bytes::from(tables::packages::encode_key(package_id.as_ref(), version)),
+                tables::packages::encode(checkpoint, package_id.as_ref(), true),
+            )
+            .await;
+        }
+
+        for (served_checkpoint, expected_version) in [(4, None), (9, Some(1)), (10, Some(2))] {
+            let served_height = ServedHeight {
+                checkpoint: served_checkpoint,
+                epoch: 0,
+            };
+            let result = get_package(client.clone(), served_height, get_package_req(package_id))
+                .await
+                .map(|response| response.package.and_then(|package| package.version))
+                .map_err(|err| tonic::Status::from(err).code());
+            let expected = expected_version.map(Some).ok_or(tonic::Code::NotFound);
+            assert_eq!(result, expected, "served height {served_checkpoint}");
         }
     }
 
