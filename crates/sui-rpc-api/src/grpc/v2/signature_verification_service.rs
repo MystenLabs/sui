@@ -4,8 +4,10 @@
 use std::collections::HashMap;
 use sui_crypto::Verifier;
 use sui_crypto::zklogin::ZkLoginCircuitMode;
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk_types::Jwk;
 use sui_sdk_types::JwkId;
+use sui_types::signature::{AuthenticatorTrait, GenericSignature};
 use tap::Pipe;
 
 use crate::ErrorReason;
@@ -173,6 +175,29 @@ fn verify_signature(
     // Building the zklogin verifier when the signature can actually contain a zklogin signature.
     let mut verifier = sui_crypto::UserSignatureVerifier::new();
     if signature_may_contain_zklogin(&signature) {
+        let system_state = service.reader.get_system_state_summary()?;
+        let protocol_config = ProtocolConfig::get_for_version_if_supported(
+            system_state.protocol_version.into(),
+            service.chain_id().chain(),
+        )
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!(
+                    "protocol version {} is not supported",
+                    system_state.protocol_version
+                ),
+            )
+        })?;
+        let authenticator = GenericSignature::try_from(signature.clone())?;
+        if let Err(error) = authenticator.verify_user_authenticator_epoch(
+            system_state.epoch,
+            protocol_config.zklogin_max_epoch_upper_bound_delta(),
+        ) {
+            message.is_valid = Some(false);
+            message.reason = Some(error.to_string());
+            return Ok(message);
+        }
         verifier.with_zklogin_verifier(build_zklogin_verifier(service, &request.jwks)?);
     }
 
