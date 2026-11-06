@@ -403,7 +403,9 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         // pin the reported tip forever. `None` while any registered
         // pipeline has no watermark yet: nothing is fully indexed,
         // so nothing is served (fail closed).
-        self.min_committed(self.pipelines.iter().copied())
+        self.min_watermark(self.pipelines.iter().copied(), |w| {
+            w.checkpoint_hi_inclusive
+        })
     }
 
     fn get_highest_live_indexed_checkpoint_seq_number(
@@ -413,6 +415,21 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         // ledger-history cohort backfills independently and is excluded so a
         // node is healthy as soon as its live-object reads are caught up.
         self.highest_live_committed_checkpoint()
+    }
+
+    fn get_highest_indexed_checkpoint_timestamp_ms(&self) -> StorageResult<Option<u64>> {
+        // Same pipelines as `get_highest_indexed_checkpoint_seq_number`;
+        // checkpoint timestamps never decrease, so the lowest watermark
+        // timestamp is the timestamp of the lowest watermark checkpoint.
+        self.min_watermark(self.pipelines.iter().copied(), |w| {
+            w.timestamp_ms_hi_inclusive
+        })
+    }
+
+    fn get_highest_live_indexed_checkpoint_timestamp_ms(&self) -> StorageResult<Option<u64>> {
+        self.min_watermark(crate::LIVE_COHORT.iter().copied(), |w| {
+            w.timestamp_ms_hi_inclusive
+        })
     }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
@@ -770,6 +787,69 @@ mod tests {
         assert_eq!(
             custom.get_highest_indexed_checkpoint_seq_number().unwrap(),
             Some(3),
+        );
+    }
+
+    /// The indexed-tip timestamps come from the watermarks' chain
+    /// timestamps, not their checkpoint numbers: the live timestamp
+    /// is bounded by the live cohort alone, the all-pipelines one by
+    /// the slowest registered pipeline, and either is `None` while a
+    /// pipeline it covers has no watermark.
+    #[test]
+    fn highest_indexed_timestamps_follow_watermarks() {
+        use sui_consistent_store::FrameworkSchema;
+        use sui_consistent_store::PipelineTaskKey;
+        use sui_consistent_store::Watermark;
+
+        let (_dir, db, reader) = setup();
+
+        let framework = FrameworkSchema::new(db.clone());
+        let stamp = |names: &[&str], hi: u64, timestamp_ms: u64| {
+            let mut batch = db.batch();
+            for name in names {
+                batch
+                    .put(
+                        &framework.watermarks,
+                        &PipelineTaskKey::new(*name),
+                        &Watermark::for_checkpoint(hi).with_timestamp_ms_hi_inclusive(timestamp_ms),
+                    )
+                    .unwrap();
+            }
+            batch.commit().unwrap();
+        };
+
+        // Live cohort committed, history not yet seeded: the live
+        // timestamp is known, the all-pipelines one is not.
+        stamp(crate::LIVE_COHORT, 40, 1_700_000_040_000);
+        assert_eq!(
+            reader
+                .get_highest_live_indexed_checkpoint_timestamp_ms()
+                .unwrap(),
+            Some(1_700_000_040_000),
+        );
+        assert_eq!(
+            reader
+                .get_highest_indexed_checkpoint_timestamp_ms()
+                .unwrap(),
+            None,
+        );
+
+        // History backfilling behind the live frontier: the slowest
+        // history pipeline bounds the all-pipelines timestamp, and the
+        // live timestamp is unaffected.
+        stamp(crate::HISTORY_COHORT, 40, 1_700_000_040_000);
+        stamp(&[crate::HISTORY_COHORT[0]], 25, 1_700_000_025_000);
+        assert_eq!(
+            reader
+                .get_highest_indexed_checkpoint_timestamp_ms()
+                .unwrap(),
+            Some(1_700_000_025_000),
+        );
+        assert_eq!(
+            reader
+                .get_highest_live_indexed_checkpoint_timestamp_ms()
+                .unwrap(),
+            Some(1_700_000_040_000),
         );
     }
 
