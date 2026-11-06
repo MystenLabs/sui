@@ -3,11 +3,12 @@
 
 // docs::#sessions-queue
 import type { MarketDescriptor, Side } from '@mysten/deepbook-v3/predict';
-import { binaryRangeTicks, priceToRaw, snapStrike } from '@mysten/deepbook-v3/predict';
+import { binaryRangeTicks, priceToRaw } from '@mysten/deepbook-v3/predict';
 import { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
 import { UNDERLYING } from './config.js';
 import { tradeableMarket } from './markets.js';
+import { strikeInBand } from './queue-mint.js';
 import { sessions, wrapperId } from './sessions-authorize.js';
 
 // The queued session wrappers place an order in the market's queue as the
@@ -46,15 +47,8 @@ export async function queueMintAsSession(params: {
 }): Promise<Transaction> {
 	const { owner, session, side, amount, slippageCents } = params;
 	const market = await tradeableMarket();
-	const pricer = await client.predict.read.pricer({
-		underlying: UNDERLYING,
-		expiryMs: market.expiryMs,
-	});
-	const atTheMoney = pricer.strikeAtProbability(0.5);
-	if (atTheMoney === null) {
-		throw new Error(`Market ${market.id} has no strike near 50 cents.`);
-	}
-	const strike = snapStrike(atTheMoney, market.admissionTickSize);
+	// Aim inside the market's own entry band, as `queue-mint.ts` explains.
+	const strike = await strikeInBand(market, side);
 
 	const descriptor: MarketDescriptor = {
 		underlying: UNDERLYING,
