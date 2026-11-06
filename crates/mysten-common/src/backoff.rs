@@ -45,7 +45,7 @@ impl ExponentialBackoff {
     pub fn new(initial_delay: Duration, max_delay: Duration) -> ExponentialBackoff {
         ExponentialBackoff {
             initial_delay,
-            next: initial_delay,
+            next: initial_delay.min(max_delay),
             factor: 1.2,
             max_delay,
             max_jitter: initial_delay,
@@ -54,7 +54,7 @@ impl ExponentialBackoff {
 
     /// Resets the backoff to the initial delay.
     pub fn reset(&mut self) {
-        self.next = self.initial_delay;
+        self.next = self.initial_delay.min(self.max_delay);
     }
 
     /// Sets the approximate ratio of consecutive backoff delays, before jitters are applied.
@@ -91,10 +91,29 @@ impl Iterator for ExponentialBackoff {
         };
         self.next = current
             .mul_f64(self.factor)
-            .min(self.max_delay)
-            .saturating_add(jitter);
+            .saturating_add(jitter)
+            .min(self.max_delay);
 
         Some(current)
+    }
+}
+
+#[test]
+fn test_backoff_maximum() {
+    let max_delay = Duration::from_millis(100);
+    let mut backoff = ExponentialBackoff::new(Duration::from_secs(1), max_delay)
+        .max_jitter(Duration::ZERO);
+    assert_eq!(backoff.next(), Some(max_delay));
+}
+
+#[test]
+fn test_backoff_jitter_capped_at_max() {
+    let max_delay = Duration::from_millis(100);
+    let mut backoff = ExponentialBackoff::new(Duration::from_millis(90), max_delay)
+        .max_jitter(Duration::from_millis(50));
+    for _ in 0..50 {
+        let delay = backoff.next().unwrap();
+        assert!(delay <= max_delay);
     }
 }
 
