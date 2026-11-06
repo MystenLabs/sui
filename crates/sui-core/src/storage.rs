@@ -9,15 +9,19 @@ use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use sui_rpc_store::RpcStoreReader;
+use sui_types::base_types::ExecutionData;
+use sui_types::base_types::ExecutionDigests;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::VerifiedExecutionData;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -257,6 +261,16 @@ impl ReadStore for RocksDbStore {
             .multi_get_executed_effects(digests)
     }
 
+    fn get_execution_data(&self, digests: &ExecutionDigests) -> Option<ExecutionData> {
+        let reader = &self.cache_traits.transaction_cache_reader;
+        let transaction = reader.get_transaction_block(&digests.transaction)?;
+        let effects = reader.get_effects(&digests.effects)?;
+        Some(ExecutionData::new(
+            (*transaction).clone().into_inner(),
+            effects,
+        ))
+    }
+
     fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.cache_traits
             .transaction_cache_reader
@@ -409,6 +423,33 @@ impl WriteStore for RocksDbStore {
             .multi_insert_transaction_and_effects(contents.transactions());
         self.checkpoint_store
             .insert_verified_checkpoint_contents(checkpoint, contents)
+            .map_err(Into::into)
+    }
+
+    fn insert_transactions_and_effects(
+        &self,
+        data: &[VerifiedExecutionData],
+    ) -> Result<(), sui_types::storage::error::Error> {
+        self.cache_traits
+            .state_sync_store
+            .multi_insert_transaction_and_effects(data);
+        Ok(())
+    }
+
+    fn insert_checkpoint_contents_digests(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: CheckpointContents,
+    ) -> Result<(), sui_types::storage::error::Error> {
+        debug_assert!(
+            contents
+                .iter()
+                .all(|digests| self.get_execution_data(digests).is_some()),
+            "checkpoint {} contents inserted before its transactions and effects",
+            checkpoint.sequence_number()
+        );
+        self.checkpoint_store
+            .insert_checkpoint_contents_digests(checkpoint, &contents)
             .map_err(Into::into)
     }
 

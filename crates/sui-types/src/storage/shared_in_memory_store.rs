@@ -3,10 +3,11 @@
 
 use super::ObjectStore;
 use super::error::Result;
-use crate::base_types::{EpochId, ExecutionData, TransactionDigest};
+use crate::base_types::{EpochId, ExecutionData, TransactionDigest, VerifiedExecutionData};
 use crate::committee::Committee;
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
 use crate::effects::{TransactionEffects, TransactionEvents};
+use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint, VerifiedCheckpointContents,
     VersionedFullCheckpointContents,
@@ -115,16 +116,20 @@ impl ReadStore for SharedInMemoryStore {
 
     fn get_checkpoint_contents_by_digest(
         &self,
-        _digest: &CheckpointContentsDigest,
+        digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        todo!()
+        self.inner().get_checkpoint_contents(digest).cloned()
     }
 
     fn get_checkpoint_contents_by_sequence_number(
         &self,
-        _sequence_number: CheckpointSequenceNumber,
+        sequence_number: CheckpointSequenceNumber,
     ) -> Option<CheckpointContents> {
-        todo!()
+        let inner = self.inner();
+        let checkpoint = inner.get_checkpoint_by_sequence_number(sequence_number)?;
+        inner
+            .get_checkpoint_contents(&checkpoint.content_digest)
+            .cloned()
     }
 }
 
@@ -170,6 +175,21 @@ impl WriteStore for SharedInMemoryStore {
     ) -> Result<()> {
         self.inner_mut()
             .insert_checkpoint_contents(checkpoint, contents);
+        Ok(())
+    }
+
+    fn insert_transactions_and_effects(&self, data: &[VerifiedExecutionData]) -> Result<()> {
+        self.inner_mut().insert_transactions_and_effects(data);
+        Ok(())
+    }
+
+    fn insert_checkpoint_contents_digests(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: CheckpointContents,
+    ) -> Result<()> {
+        self.inner_mut()
+            .insert_checkpoint_contents_digests(checkpoint, contents);
         Ok(())
     }
 
@@ -322,6 +342,42 @@ impl InMemoryStore {
         self.full_checkpoint_contents
             .insert(*checkpoint.sequence_number(), contents.clone());
         let contents = contents.into_checkpoint_contents();
+        self.checkpoint_contents
+            .insert(*contents.digest(), contents);
+    }
+
+    pub fn has_full_checkpoint_contents(&self, sequence_number: CheckpointSequenceNumber) -> bool {
+        self.full_checkpoint_contents.contains_key(&sequence_number)
+    }
+
+    pub fn insert_transactions_and_effects(&mut self, data: &[VerifiedExecutionData]) {
+        for tx in data {
+            self.transactions
+                .insert(*tx.transaction.digest(), tx.transaction.to_owned());
+            self.effects
+                .insert(*tx.transaction.digest(), tx.effects.to_owned());
+        }
+    }
+
+    pub fn insert_checkpoint_contents_digests(
+        &mut self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: CheckpointContents,
+    ) {
+        assert_eq!(&checkpoint.content_digest, contents.digest());
+        debug_assert!(
+            contents.iter().all(|digests| {
+                self.transactions.contains_key(&digests.transaction)
+                    && self
+                        .effects
+                        .get(&digests.transaction)
+                        .is_some_and(|effects| effects.digest() == digests.effects)
+            }),
+            "checkpoint {} contents inserted before its transactions and effects",
+            checkpoint.sequence_number()
+        );
+        self.contents_digest_to_sequence_number
+            .insert(checkpoint.content_digest, *checkpoint.sequence_number());
         self.checkpoint_contents
             .insert(*contents.digest(), contents);
     }
@@ -556,16 +612,17 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
 
     fn get_checkpoint_contents_by_digest(
         &self,
-        _digest: &CheckpointContentsDigest,
+        digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        todo!()
+        self.0.get_checkpoint_contents_by_digest(digest)
     }
 
     fn get_checkpoint_contents_by_sequence_number(
         &self,
-        _sequence_number: CheckpointSequenceNumber,
+        sequence_number: CheckpointSequenceNumber,
     ) -> Option<CheckpointContents> {
-        todo!()
+        self.0
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
     }
 }
 
@@ -605,6 +662,25 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
         }
         self.0.insert_checkpoint_contents(checkpoint, contents)?;
         Ok(())
+    }
+
+    fn insert_transactions_and_effects(&self, data: &[VerifiedExecutionData]) -> Result<()> {
+        self.0.insert_transactions_and_effects(data)
+    }
+
+    fn insert_checkpoint_contents_digests(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: CheckpointContents,
+    ) -> Result<()> {
+        {
+            let mut locked = self.0.0.write().unwrap();
+            locked.contents_digest_to_sequence_number.clear();
+            locked.full_checkpoint_contents.clear();
+            locked.checkpoint_contents.clear();
+        }
+        self.0
+            .insert_checkpoint_contents_digests(checkpoint, contents)
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<()> {
