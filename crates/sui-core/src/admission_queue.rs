@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use sui_macros::handle_fail_point_if;
 use sui_network::tonic;
 use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::coin_reservation::ParsedDigest;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
@@ -36,6 +37,7 @@ pub struct QueueEntry {
     pub position_sender: oneshot::Sender<Result<Vec<ConsensusPosition>, tonic::Status>>,
     pub submitter_client_addr: Option<IpAddr>,
     pub enqueue_time: Instant,
+    dedup_keys: Vec<DedupKey>,
 }
 
 /// What `PriorityAdmissionQueue::pop_batch_while` does with an examined entry.
@@ -56,15 +58,44 @@ pub enum PopAction {
 /// slot and defeat the one-holder rule.
 pub type DedupKey = (ObjectID, SequenceNumber);
 
+/// Dedup keys of the gas payment objects of the user transactions in `transactions`, sorted
+/// with duplicates removed. Coin reservation refs are excluded: they name a reusable address
+/// balance rather than an exclusive object, so distinct transactions may share one.
+pub fn gas_dedup_keys(transactions: &[ConsensusTransaction]) -> Vec<DedupKey> {
+    let mut keys: Vec<DedupKey> = transactions
+        .iter()
+        .filter_map(|transaction| transaction.kind.as_user_transaction())
+        .flat_map(|tx| tx.transaction_data().gas_data().payment.iter())
+        .filter(|object_ref| !ParsedDigest::is_coin_reservation_digest(&object_ref.2))
+        .map(|object_ref| (object_ref.0, object_ref.1))
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    keys
+}
+
+pub fn owned_object_conflict_error(object_id: ObjectID) -> SuiError {
+    SuiErrorKind::TooManyTransactionsPendingOnObject {
+        object_id,
+        queue_len: 2,
+        threshold: 1,
+    }
+    .into()
+}
+
 pub trait AdmissionQueueEntry {
     fn gas_price(&self) -> u64;
     fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey>;
-    /// Keys this entry is deduped on, by `(id, version)`: two queued entries sharing one can
-    /// never both execute, so only the highest-priced is admitted. Both lanes supply the gas
-    /// payment objects, the only inputs that are unambiguously owned without a state read.
-    fn dedup_keys(&self) -> impl Iterator<Item = DedupKey>;
+    /// Keys this entry is deduped on, sorted with duplicates removed: two queued entries
+    /// sharing one can never both execute, so only the highest-priced is admitted. Both lanes
+    /// supply [`gas_dedup_keys`], the gas payment objects being the only inputs that are
+    /// unambiguously owned without a state read.
+    fn dedup_keys(&self) -> &[DedupKey];
     fn notify_evicted(self, min_gas_price: u64);
     fn notify_rejected(self, min_gas_price: u64);
+    /// A queued entry lost `object_id` to an entry that took priority over it.
+    fn notify_replaced(self, object_id: ObjectID);
+    /// An entry was refused because a queued entry already holds `object_id`.
     fn notify_owned_object_conflict(self, object_id: ObjectID);
 }
 
@@ -83,8 +114,8 @@ enum Outcome<E> {
         newly_inserted: bool,
         /// The lowest-priced entry evicted to make room, if any.
         evicted: Option<E>,
-        /// Lower-priced entries on the same owned object this entry outbid and replaced.
-        replaced: Vec<E>,
+        /// Queued entries this entry displaced from an owned object, with that object.
+        replaced: Vec<(E, ObjectID)>,
         /// The inserted entry's gas price.
         gas_price: u64,
     },
@@ -122,8 +153,8 @@ impl<E: AdmissionQueueEntry> InsertOutcome<E> {
                 replaced,
                 gas_price,
             } => {
-                for entry in replaced {
-                    entry.notify_evicted(gas_price);
+                for (entry, object_id) in replaced {
+                    entry.notify_replaced(object_id);
                 }
                 if let Some(evicted) = evicted {
                     evicted.notify_evicted(gas_price);
@@ -144,12 +175,7 @@ impl<E: AdmissionQueueEntry> InsertOutcome<E> {
             }
             Outcome::OwnedObjectConflict { entry, object_id } => {
                 entry.notify_owned_object_conflict(object_id);
-                Err(SuiErrorKind::TooManyTransactionsPendingOnObject {
-                    object_id,
-                    queue_len: 2,
-                    threshold: 1,
-                }
-                .into())
+                Err(owned_object_conflict_error(object_id))
             }
         }
     }
@@ -175,20 +201,8 @@ impl AdmissionQueueEntry for QueueEntry {
         self.transactions.iter().map(ConsensusTransaction::key)
     }
 
-    fn dedup_keys(&self) -> impl Iterator<Item = DedupKey> {
-        let mut keys = Vec::new();
-        for transaction in &self.transactions {
-            if let Some(tx) = transaction.kind.as_user_transaction() {
-                keys.extend(
-                    tx.transaction_data()
-                        .gas_data()
-                        .payment
-                        .iter()
-                        .map(|object_ref| (object_ref.0, object_ref.1)),
-                );
-            }
-        }
-        keys.into_iter()
+    fn dedup_keys(&self) -> &[DedupKey] {
+        &self.dedup_keys
     }
 
     fn notify_evicted(self, min_gas_price: u64) {
@@ -204,32 +218,42 @@ impl AdmissionQueueEntry for QueueEntry {
         // outbid error via the insert result instead.
     }
 
+    fn notify_replaced(self, object_id: ObjectID) {
+        self.notify_owned_object_conflict(object_id);
+    }
+
     fn notify_owned_object_conflict(self, object_id: ObjectID) {
         let _ = self
             .position_sender
-            .send(Err(tonic::Status::from(SuiError::from(
-                SuiErrorKind::TooManyTransactionsPendingOnObject {
-                    object_id,
-                    queue_len: 2,
-                    threshold: 1,
-                },
+            .send(Err(tonic::Status::from(owned_object_conflict_error(
+                object_id,
             ))));
     }
 }
 
 impl QueueEntry {
+    pub fn new(
+        gas_price: u64,
+        transactions: Vec<ConsensusTransaction>,
+        position_sender: oneshot::Sender<Result<Vec<ConsensusPosition>, tonic::Status>>,
+        submitter_client_addr: Option<IpAddr>,
+    ) -> Self {
+        Self {
+            gas_price,
+            dedup_keys: gas_dedup_keys(&transactions),
+            transactions,
+            position_sender,
+            submitter_client_addr,
+            enqueue_time: Instant::now(),
+        }
+    }
+
     #[cfg(test)]
     pub fn new_for_test(
         gas_price: u64,
         position_sender: oneshot::Sender<Result<Vec<ConsensusPosition>, tonic::Status>>,
     ) -> Self {
-        Self {
-            gas_price,
-            transactions: vec![],
-            position_sender,
-            submitter_client_addr: None,
-            enqueue_time: Instant::now(),
-        }
+        Self::new(gas_price, vec![], position_sender, None)
     }
 }
 
@@ -483,28 +507,12 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
 
         let gas_price = entry.gas_price();
 
-        // A given owned object can be consumed by only one transaction, so at most one entry
-        // per object is kept queued. Its holder is the strictly-highest bidder: a newcomer
-        // that outbids the pending entry on a shared object replaces it, while a tie or a
-        // lower bid is refused. A resubmission of a still-queued transaction is just such a
-        // tie against its own copy, so it is refused too rather than queued a second time;
-        // the queued copy keeps its position and will drain.
-        let owned = Self::dedup_keys_of(&entry);
-        let incumbent_gas = owned
-            .iter()
-            .filter_map(|key| self.queued_dedup_objects.get(key))
-            .copied()
-            .max();
-        let replaced = match incumbent_gas {
-            None => Vec::new(),
-            Some(incumbent_gas) if gas_price > incumbent_gas => self.remove_owned_conflicts(&owned),
-            Some(_) => {
-                let object_id = owned
-                    .iter()
-                    .find(|key| self.queued_dedup_objects.contains_key(*key))
-                    .map(|key| key.0)
-                    .expect("a colliding owned object exists");
-                self.metrics.owned_object_conflicts.inc();
+        // A newcomer must strictly outbid the queued holder of an owned gas object. A
+        // resubmission of a still-queued transaction ties against its own copy, so it is
+        // refused and the queued copy keeps its position.
+        let replaced = match self.resolve_owned_conflicts(entry.dedup_keys(), gas_price, false) {
+            Ok(replaced) => replaced,
+            Err(object_id) => {
                 return InsertOutcome::new(Outcome::OwnedObjectConflict { entry, object_id });
             }
         };
@@ -513,7 +521,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         // admitted even when a dropped-proposal reinsert has transiently pushed the queue over
         // capacity; only a newcomer that displaced nothing is subject to the capacity bound.
         if !replaced.is_empty() || self.total_len < self.capacity {
-            self.push_entry(entry, keys, &owned, false);
+            self.push_entry(entry, keys, false);
             return InsertOutcome::new(Outcome::Inserted {
                 newly_inserted,
                 evicted: None,
@@ -525,7 +533,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         let min_gas_price = self.min_gas_price().unwrap();
         if gas_price > min_gas_price {
             let evicted = self.evict_lowest();
-            self.push_entry(entry, keys, &owned, false);
+            self.push_entry(entry, keys, false);
             self.metrics.evictions.inc();
             return InsertOutcome::new(Outcome::Inserted {
                 newly_inserted,
@@ -535,9 +543,6 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             });
         }
 
-        // A newcomer that displaced an owned-object incumbent was admitted above, so the
-        // queue-full rejection is reached only when nothing was displaced.
-        debug_assert!(replaced.is_empty());
         self.metrics.rejections.inc();
         InsertOutcome::new(Outcome::Rejected {
             entry,
@@ -545,11 +550,39 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         })
     }
 
-    /// Removes every queued entry that consumes one of `owned`, returning them so the
-    /// caller can notify them outside the lock. Runs only when a strictly higher-priced
-    /// newcomer replaces them. Every queued holder of an object sits at the gas price
-    /// recorded for it, so only those price levels are scanned rather than the whole queue.
-    fn remove_owned_conflicts(&mut self, owned: &[DedupKey]) -> Vec<E> {
+    /// Resolves an incoming entry's claims on owned objects against their queued holders.
+    /// Returns the holders it displaces, or the contested object when it does not outbid
+    /// them. `tie_wins` decides an equal bid.
+    fn resolve_owned_conflicts(
+        &mut self,
+        owned: &[DedupKey],
+        gas_price: u64,
+        tie_wins: bool,
+    ) -> Result<Vec<(E, ObjectID)>, ObjectID> {
+        let incumbent = owned
+            .iter()
+            .filter_map(|key| {
+                self.queued_dedup_objects
+                    .get(key)
+                    .map(|&price| (price, key.0))
+            })
+            .max_by_key(|&(price, _)| price);
+        let Some((incumbent_gas, object_id)) = incumbent else {
+            return Ok(Vec::new());
+        };
+        if gas_price > incumbent_gas || (tie_wins && gas_price == incumbent_gas) {
+            Ok(self.remove_owned_conflicts(owned))
+        } else {
+            self.metrics.owned_object_conflicts.inc();
+            Err(object_id)
+        }
+    }
+
+    /// Removes every queued entry that consumes one of `owned` (sorted), returning each with
+    /// the object it lost so the caller can notify it outside the lock. Only the price levels
+    /// recorded for those objects are walked, but each walk covers a whole level, and most
+    /// traffic sits at one price, so a replacement can walk most of the queue.
+    fn remove_owned_conflicts(&mut self, owned: &[DedupKey]) -> Vec<(E, ObjectID)> {
         let mut levels: Vec<u64> = owned
             .iter()
             .filter_map(|key| self.queued_dedup_objects.get(key))
@@ -570,16 +603,20 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             };
             let mut source = std::mem::take(deque);
             while let Some(entry) = source.pop_front() {
-                if entry.dedup_keys().any(|key| owned.contains(&key)) {
-                    removed.push(entry);
-                } else {
-                    deque.push_back(entry);
+                let lost = entry
+                    .dedup_keys()
+                    .iter()
+                    .find(|key| owned.binary_search(key).is_ok())
+                    .map(|key| key.0);
+                match lost {
+                    Some(object_id) => removed.push((entry, object_id)),
+                    None => deque.push_back(entry),
                 }
             }
         }
         self.map.retain(|_, deque| !deque.is_empty());
         self.total_len -= removed.len();
-        for entry in &removed {
+        for (entry, _) in &removed {
             self.remove_keys(entry);
         }
         if !removed.is_empty() {
@@ -675,28 +712,13 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         let keys: Vec<_> = entry.transaction_keys().collect();
         let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
         let gas_price = entry.gas_price();
-        let owned = Self::dedup_keys_of(&entry);
-        let incumbent_gas = owned
-            .iter()
-            .filter_map(|key| self.queued_dedup_objects.get(key))
-            .copied()
-            .max();
-        let replaced = match incumbent_gas {
-            None => Vec::new(),
-            Some(incumbent_gas) if gas_price >= incumbent_gas => {
-                self.remove_owned_conflicts(&owned)
-            }
-            Some(_) => {
-                let object_id = owned
-                    .iter()
-                    .find(|key| self.queued_dedup_objects.contains_key(*key))
-                    .map(|key| key.0)
-                    .expect("a colliding owned object exists");
-                self.metrics.owned_object_conflicts.inc();
+        let replaced = match self.resolve_owned_conflicts(entry.dedup_keys(), gas_price, true) {
+            Ok(replaced) => replaced,
+            Err(object_id) => {
                 return InsertOutcome::new(Outcome::OwnedObjectConflict { entry, object_id });
             }
         };
-        self.push_entry(entry, keys, &owned, true);
+        self.push_entry(entry, keys, true);
         InsertOutcome::new(Outcome::Inserted {
             newly_inserted,
             evicted: None,
@@ -705,32 +727,14 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         })
     }
 
-    /// Collects an entry's dedup keys with duplicates removed. A transaction may list the
-    /// same owned object more than once, or two gas-payment refs that share an id and
-    /// version, and the queue records each key once; recording and removal both work on the
-    /// deduplicated set so they stay symmetric.
-    fn dedup_keys_of(entry: &E) -> Vec<DedupKey> {
-        let mut keys: Vec<DedupKey> = entry.dedup_keys().collect();
-        keys.sort_unstable();
-        keys.dedup();
-        keys
-    }
-
-    fn push_entry(
-        &mut self,
-        entry: E,
-        keys: Vec<ConsensusTransactionKey>,
-        owned: &[DedupKey],
-        front: bool,
-    ) {
+    fn push_entry(&mut self, entry: E, keys: Vec<ConsensusTransactionKey>, front: bool) {
         for key in keys {
             *self.queued_keys.entry(key).or_insert(0) += 1;
         }
         let gas_price = entry.gas_price();
-        for key in owned {
-            // One object has at most one holder: a tie or under-bid is refused and a higher
-            // bid evicts the incumbent before the newcomer is pushed, so a key is never
-            // already present at a different price.
+        for key in entry.dedup_keys() {
+            // A losing bid is refused and a winning one removes the holder before the
+            // newcomer is pushed, so a key is never already present at a different price.
             let previous = self.queued_dedup_objects.insert(*key, gas_price);
             debug_assert!(previous.is_none_or(|price| price == gas_price));
         }
@@ -774,8 +778,8 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                 slot.remove();
             }
         }
-        for key in Self::dedup_keys_of(entry) {
-            if self.queued_dedup_objects.remove(&key).is_none() {
+        for key in entry.dedup_keys() {
+            if self.queued_dedup_objects.remove(key).is_none() {
                 debug_fatal!("remove_keys on absent owned object");
             }
         }
@@ -822,13 +826,7 @@ impl AdmissionQueueHandle {
         bool,
     )> {
         let (position_tx, position_rx) = oneshot::channel();
-        let entry = QueueEntry {
-            gas_price,
-            transactions,
-            position_sender: position_tx,
-            submitter_client_addr,
-            enqueue_time: Instant::now(),
-        };
+        let entry = QueueEntry::new(gas_price, transactions, position_tx, submitter_client_addr);
 
         let (resp_tx, resp_rx) = oneshot::channel();
         let cmd = InsertCommand {
@@ -1103,16 +1101,26 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
     use sui_macros::sim_test;
-    use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
-    use sui_types::digests::TransactionDigest;
+    use sui_types::base_types::{AuthorityName, ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
+    use sui_types::coin_reservation::encode_object_ref;
+    use sui_types::crypto::{AccountKeyPair, get_key_pair};
+    use sui_types::digests::{ChainIdentifier, TransactionDigest};
+    use sui_types::transaction::PlainTransactionWithClaims;
 
     /// Minimal entry for exercising the queue's ordering and owned-object dedup without
     /// building real transactions. Records which notification it received.
     struct MockEntry {
         gas_price: u64,
         key: ConsensusTransactionKey,
-        owned: Vec<ObjectRef>,
+        owned: Vec<DedupKey>,
         outcome: Arc<Mutex<Option<&'static str>>>,
+    }
+
+    fn keys_of(owned: &[ObjectRef]) -> Vec<DedupKey> {
+        let mut keys: Vec<DedupKey> = owned.iter().map(|r| (r.0, r.1)).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        keys
     }
 
     fn mock_entry(
@@ -1123,7 +1131,7 @@ mod tests {
         let entry = MockEntry {
             gas_price,
             key: ConsensusTransactionKey::Certificate(TransactionDigest::random()),
-            owned,
+            owned: keys_of(&owned),
             outcome: outcome.clone(),
         };
         (entry, outcome)
@@ -1144,17 +1152,17 @@ mod tests {
         fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey> {
             std::iter::once(self.key.clone())
         }
-        fn dedup_keys(&self) -> impl Iterator<Item = DedupKey> {
-            self.owned
-                .clone()
-                .into_iter()
-                .map(|object_ref| (object_ref.0, object_ref.1))
+        fn dedup_keys(&self) -> &[DedupKey] {
+            &self.owned
         }
         fn notify_evicted(self, _min_gas_price: u64) {
             *self.outcome.lock().unwrap() = Some("evicted");
         }
         fn notify_rejected(self, _min_gas_price: u64) {
             *self.outcome.lock().unwrap() = Some("rejected");
+        }
+        fn notify_replaced(self, _object_id: ObjectID) {
+            *self.outcome.lock().unwrap() = Some("replaced");
         }
         fn notify_owned_object_conflict(self, _object_id: ObjectID) {
             *self.outcome.lock().unwrap() = Some("conflict");
@@ -1171,10 +1179,9 @@ mod tests {
 
         assert!(q.insert(low).unwrap());
         assert_eq!(q.len(), 1);
-        // The higher-priced transaction on the same object replaces the cheaper one.
         assert!(q.insert(high).unwrap());
         assert_eq!(q.len(), 1);
-        assert_eq!(*low_outcome.lock().unwrap(), Some("evicted"));
+        assert_eq!(*low_outcome.lock().unwrap(), Some("replaced"));
         assert_eq!(q.pop_batch(10).first().map(|e| e.gas_price), Some(200));
     }
 
@@ -1219,22 +1226,18 @@ mod tests {
         let (first, _) = mock_entry(200, vec![gas]);
 
         assert!(q.insert(first).unwrap());
-        // The entry is drained into a proposal, freeing its object.
         let taken = q.pop_batch(1).pop().unwrap();
         assert_eq!(q.len(), 0);
 
-        // A lower-priced entry claims the now-free object while the first is out with the
-        // proposer.
         let (newcomer, newcomer_outcome) = mock_entry(100, vec![gas]);
         assert!(q.insert(newcomer).unwrap());
 
-        // The block was dropped, so the first entry is requeued and reclaims its object.
         let outcome = q.reinsert_front(taken);
         assert!(outcome.was_inserted());
         outcome.notify().unwrap();
         assert_eq!(q.len(), 1);
         assert_eq!(q.pop_batch(10).first().map(|e| e.gas_price), Some(200));
-        assert_eq!(*newcomer_outcome.lock().unwrap(), Some("evicted"));
+        assert_eq!(*newcomer_outcome.lock().unwrap(), Some("replaced"));
     }
 
     #[test]
@@ -1247,8 +1250,7 @@ mod tests {
         assert!(q.insert(first).unwrap());
         let taken = q.pop_batch(1).pop().unwrap();
 
-        // An equal-priced entry takes the free object; the requeued entry held it first,
-        // so the tie is resolved in its favour.
+        // The requeued entry held the object first, so it wins the tie.
         let (newcomer, newcomer_outcome) = mock_entry(100, vec![gas]);
         assert!(q.insert(newcomer).unwrap());
 
@@ -1256,7 +1258,7 @@ mod tests {
         assert!(outcome.was_inserted());
         outcome.notify().unwrap();
         assert_eq!(q.len(), 1);
-        assert_eq!(*newcomer_outcome.lock().unwrap(), Some("evicted"));
+        assert_eq!(*newcomer_outcome.lock().unwrap(), Some("replaced"));
     }
 
     #[test]
@@ -1269,8 +1271,6 @@ mod tests {
         assert!(q.insert(first).unwrap());
         let taken = q.pop_batch(1).pop().unwrap();
 
-        // A higher-priced entry claims the free object; the requeued entry is outbid and
-        // refused rather than reinserted.
         let (newcomer, _) = mock_entry(200, vec![gas]);
         assert!(q.insert(newcomer).unwrap());
 
@@ -1295,8 +1295,6 @@ mod tests {
         let (second, _) = mock_entry(100, vec![(id, version, ObjectDigest::MAX)]);
 
         assert!(q.insert(first).unwrap());
-        // The digest differs but the id and version match, so the second entry collides on
-        // the same dedup key and is refused rather than taking a second slot.
         assert!(matches!(
             q.try_insert(second).notify().unwrap_err().as_inner(),
             SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
@@ -1309,15 +1307,12 @@ mod tests {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
         let gas = owned_ref(1, 6);
-        // An entry naming the same gas object twice records one key; draining it must remove
-        // that key once without tripping the bookkeeping guard.
         let (entry, _) = mock_entry(100, vec![gas, gas]);
 
         assert!(q.insert(entry).unwrap());
         assert_eq!(q.len(), 1);
         assert_eq!(q.pop_batch(1).len(), 1);
         assert_eq!(q.len(), 0);
-        // The key was fully removed, so a fresh entry on the same object is admitted.
         let (next, _) = mock_entry(100, vec![gas]);
         assert!(q.insert(next).unwrap());
     }
@@ -1329,26 +1324,23 @@ mod tests {
         let obj_a = owned_ref(1, 6);
         let obj_b = owned_ref(2, 6);
 
-        // Fill the single slot with a low-priced entry on object A, then drain it.
         let (low, low_outcome) = mock_entry(50, vec![obj_a]);
         assert!(q.insert(low).unwrap());
         let taken = q.pop_batch(1).pop().unwrap();
 
-        // A high-priced entry on object B takes the slot.
         let (high, _) = mock_entry(200, vec![obj_b]);
         assert!(q.insert(high).unwrap());
 
-        // The dropped proposal requeues the low entry, transiently exceeding capacity.
+        // The requeue transiently exceeds capacity.
         q.reinsert_front(taken).notify().unwrap();
         assert_eq!(q.len(), 2);
 
-        // A newcomer outbids the low incumbent on A but not the queue minimum (200). Removing
-        // the incumbent freed a slot, so it must be admitted and the displaced entry returned
-        // for notification rather than dropped.
+        // The newcomer outbids the incumbent on A but not the queue minimum. Displacing the
+        // incumbent frees a slot, so the newcomer is admitted.
         let (newcomer, _) = mock_entry(100, vec![obj_a]);
         q.try_insert(newcomer).notify().unwrap();
         assert_eq!(q.len(), 2);
-        assert_eq!(*low_outcome.lock().unwrap(), Some("evicted"));
+        assert_eq!(*low_outcome.lock().unwrap(), Some("replaced"));
     }
 
     #[test]
@@ -1360,17 +1352,15 @@ mod tests {
         let first = MockEntry {
             gas_price: 100,
             key: key.clone(),
-            owned: vec![gas],
+            owned: keys_of(&[gas]),
             outcome: Arc::new(Mutex::new(None)),
         };
         assert!(q.insert(first).unwrap());
 
-        // Resubmitting the same transaction at the same gas price is refused rather than
-        // queued a second time; the queued copy keeps its place and will drain.
         let resubmit = MockEntry {
             gas_price: 100,
             key: key.clone(),
-            owned: vec![gas],
+            owned: keys_of(&[gas]),
             outcome: Arc::new(Mutex::new(None)),
         };
         assert!(matches!(
@@ -1379,11 +1369,10 @@ mod tests {
         ));
         assert_eq!(q.len(), 1);
 
-        // A higher-priced resubmission still replaces the queued copy.
         let bump = MockEntry {
             gas_price: 200,
             key,
-            owned: vec![gas],
+            owned: keys_of(&[gas]),
             outcome: Arc::new(Mutex::new(None)),
         };
         q.insert(bump).unwrap();
@@ -1397,7 +1386,6 @@ mod tests {
         let mut q = PriorityAdmissionQueue::new(10, metrics);
         let target = owned_ref(1, 6);
         let (incumbent, incumbent_outcome) = mock_entry(100, vec![target]);
-        // Another entry at the incumbent's price on an unrelated object must survive.
         let (bystander, bystander_outcome) = mock_entry(100, vec![owned_ref(2, 6)]);
         let (bump, _) = mock_entry(200, vec![target]);
 
@@ -1405,7 +1393,7 @@ mod tests {
         assert!(q.insert(bystander).unwrap());
         assert!(q.insert(bump).unwrap());
         assert_eq!(q.len(), 2);
-        assert_eq!(*incumbent_outcome.lock().unwrap(), Some("evicted"));
+        assert_eq!(*incumbent_outcome.lock().unwrap(), Some("replaced"));
         assert_eq!(*bystander_outcome.lock().unwrap(), None);
     }
 
@@ -1422,6 +1410,51 @@ mod tests {
     }
 
     #[test]
+    fn queue_entry_dedups_gas_objects_but_not_coin_reservations() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+
+        // Reservations on one address balance share (id, version) and differ only in the
+        // amount carried in the digest.
+        let balance_id = ObjectID::random();
+        let version = SequenceNumber::from_u64(5);
+        let mut receivers = Vec::new();
+        for amount in [100, 200] {
+            let gas = encode_object_ref(balance_id, version, 0, amount, ChainIdentifier::default());
+            let (entry, receiver) = make_dup_entry(100, user_transaction_with_gas(gas));
+            receivers.push(receiver);
+            assert!(q.insert(entry).unwrap());
+        }
+        assert_eq!(q.len(), 2);
+
+        let gas = owned_ref(1, 6);
+        let (first, _first_receiver) = make_dup_entry(100, user_transaction_with_gas(gas));
+        let (second, _second_receiver) = make_dup_entry(100, user_transaction_with_gas(gas));
+        assert!(q.insert(first).unwrap());
+        assert!(matches!(
+            q.insert(second).unwrap_err().as_inner(),
+            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+        ));
+        assert_eq!(q.len(), 3);
+    }
+
+    fn user_transaction_with_gas(gas: ObjectRef) -> ConsensusTransaction {
+        let (sender, keypair) = get_key_pair::<AccountKeyPair>();
+        let transaction = crate::test_utils::make_transfer_sui_transaction(
+            gas,
+            sender,
+            Some(1),
+            sender,
+            &keypair,
+            1,
+        );
+        ConsensusTransaction::new_user_transaction_v2_message(
+            &AuthorityName::ZERO,
+            PlainTransactionWithClaims::no_aliases(transaction),
+        )
+    }
+
+    #[test]
     fn owned_object_freed_after_pop() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
@@ -1429,7 +1462,6 @@ mod tests {
         let (first, _) = mock_entry(100, vec![gas]);
         assert!(q.insert(first).unwrap());
         assert_eq!(q.pop_batch(10).len(), 1);
-        // Once the entry leaves the queue the object is free to be queued again.
         let (again, _) = mock_entry(100, vec![gas]);
         assert!(q.insert(again).unwrap());
         assert_eq!(q.len(), 1);
@@ -1705,14 +1737,10 @@ mod tests {
         oneshot::Receiver<Result<Vec<ConsensusPosition>, tonic::Status>>,
     ) {
         let (position_tx, position_rx) = oneshot::channel();
-        let entry = QueueEntry {
-            gas_price,
-            transactions: vec![tx],
-            position_sender: position_tx,
-            submitter_client_addr: None,
-            enqueue_time: Instant::now(),
-        };
-        (entry, position_rx)
+        (
+            QueueEntry::new(gas_price, vec![tx], position_tx, None),
+            position_rx,
+        )
     }
 
     #[test]

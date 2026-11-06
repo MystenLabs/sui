@@ -19,6 +19,7 @@
 
 use crate::admission_queue::{
     AdmissionQueueEntry, AdmissionQueueMetrics, DedupKey, PopAction, PriorityAdmissionQueue,
+    gas_dedup_keys, owned_object_conflict_error,
 };
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::{
@@ -44,7 +45,6 @@ use std::sync::Weak;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef};
-use sui_types::coin_reservation::ParsedDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -210,12 +210,9 @@ impl ProcessedWatch {
 /// included in a block atomically or not at all.
 struct PoolEntry {
     transactions: Vec<Transaction>,
-    /// Owned gas payment objects consumed by this entry, captured before serialization
-    /// so the admission queue can dedup on them without re-parsing the consensus bytes.
-    /// Coin reservation refs are excluded: they name a reusable address balance rather
-    /// than an exclusive object, so distinct transactions may share one and must not
-    /// dedup against each other.
-    gas_payment_objects: Vec<ObjectRef>,
+    /// Captured before serialization so the admission queue can dedup without re-parsing
+    /// the consensus bytes.
+    dedup_keys: Vec<DedupKey>,
     total_bytes: usize,
     gas_price: u64,
     tx_type: &'static str, // tx label for metrics
@@ -264,10 +261,8 @@ impl AdmissionQueueEntry for PoolEntry {
         self.ack.keys.iter().cloned()
     }
 
-    fn dedup_keys(&self) -> impl Iterator<Item = DedupKey> {
-        self.gas_payment_objects
-            .iter()
-            .map(|object_ref| (object_ref.0, object_ref.1))
+    fn dedup_keys(&self) -> &[DedupKey] {
+        &self.dedup_keys
     }
 
     fn notify_evicted(self, min_gas_price: u64) {
@@ -289,15 +284,19 @@ impl AdmissionQueueEntry for PoolEntry {
         );
     }
 
+    fn notify_replaced(self, object_id: ObjectID) {
+        self.metrics.pool_depth.with_label_values(&["user"]).dec();
+        self.metrics
+            .pool_bytes
+            .with_label_values(&["user"])
+            .sub(self.total_bytes as i64);
+        self.ack
+            .resolve_error(owned_object_conflict_error(object_id));
+    }
+
     fn notify_owned_object_conflict(self, object_id: ObjectID) {
-        self.ack.resolve_error(
-            SuiErrorKind::TooManyTransactionsPendingOnObject {
-                object_id,
-                queue_len: 2,
-                threshold: 1,
-            }
-            .into(),
-        );
+        self.ack
+            .resolve_error(owned_object_conflict_error(object_id));
     }
 }
 
@@ -542,17 +541,7 @@ impl ConsensusTransactionPool {
             .iter()
             .filter_map(|transaction| transaction.kind.as_user_transaction())
             .collect();
-        let gas_payment_objects: Vec<ObjectRef> = user_transactions
-            .iter()
-            .flat_map(|tx| {
-                tx.transaction_data()
-                    .gas_data()
-                    .payment
-                    .iter()
-                    .filter(|object_ref| !ParsedDigest::is_coin_reservation_digest(&object_ref.2))
-                    .copied()
-            })
-            .collect();
+        let dedup_keys = gas_dedup_keys(&transactions);
         let staggered_slot = self
             .stagger_quota
             .submission_slot(&user_transactions, &self.epoch_store)?;
@@ -560,7 +549,7 @@ impl ConsensusTransactionPool {
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: serialized,
-            gas_payment_objects,
+            dedup_keys,
             total_bytes,
             gas_price,
             tx_type,
@@ -649,7 +638,7 @@ impl ConsensusTransactionPool {
         };
         let entry = PoolEntry {
             transactions: serialized,
-            gas_payment_objects: Vec::new(),
+            dedup_keys: Vec::new(),
             total_bytes,
             gas_price: 0,
             tx_type: tx_type_label(transactions),
@@ -1807,7 +1796,7 @@ mod tests {
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: vec![Transaction::new(serialized.clone())],
-            gas_payment_objects: Vec::new(),
+            dedup_keys: Vec::new(),
             total_bytes: serialized.len(),
             gas_price: 1,
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
