@@ -18,7 +18,7 @@ use sui_types::{
     },
 };
 
-/// How a transaction is metered
+// How a transaction is metered
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Metering {
     Unmetered,
@@ -64,21 +64,21 @@ impl Metering {
 struct GasConfig {
     gas_model_version: u64,
     cost_table: CostTable,
-    /// Internal gas units per byte of input object read.
+    // Internal gas units per byte of input object read.
     read_cost_per_byte: u64,
-    /// Internal gas units per KiB of package read. Packages use `read_cost_per_byte` when
-    /// unset.
+    // Internal gas units per KiB of package read. Packages use `read_cost_per_byte` when
+    // unset.
     package_read_per_kb_cost: Option<u64>,
-    /// Internal gas units per byte of published module.
+    // Internal gas units per byte of published module.
     publish_cost_per_byte: u64,
-    /// Cap, in gas units, on the execution meter budget.
+    // Cap, in gas units, on the execution meter budget.
     max_computation_bucket: u64,
-    /// Minimum computation charge in gas units: the base transaction cost.
+    // Minimum computation charge in gas units: the base transaction cost.
     min_computation_units: u64,
     storage_gas_price: u64,
     storage_per_byte_cost: u64,
     rebate_rate: u64,
-    /// RGP multiplier capping the effective gas price of aborted transactions.
+    // RGP multiplier capping the effective gas price of aborted transactions.
     abort_price_factor: Option<u64>,
 }
 
@@ -101,24 +101,24 @@ impl GasConfig {
     }
 }
 
-/// Gas state of a transaction, in MIST. The phases are pre-execution, execution (input
-/// objects and the PTB) and storage. Each phase settles once against the budget in MIST.
-/// A computation phase that does not fit marks the state out of gas. A storage
-/// tier that does not fit leaves the state unchanged.
+// Gas state of a transaction, in MIST. The phases are pre-execution, execution (input
+// objects and the PTB) and storage. Each phase settles once against the budget in MIST.
+// A computation phase that does not fit marks the state out of gas. A storage
+// tier that does not fit leaves the state unchanged.
 #[derive(Debug)]
 pub(crate) struct GasState {
     metering: Metering,
     config: GasConfig,
-    /// MIST owed before the VM runs.
+    // MIST owed before the VM runs.
     pre_execution: u64,
     computation: Computation,
     storage: StorageCharge,
-    /// A computation check failed, or storage settled at `RebatesOnly`.
+    // A computation check failed, or storage settled at `RebatesOnly`.
     out_of_gas: bool,
 }
 
-/// The units the execution meter used, input objects included, and the price fixed when
-/// execution settles.
+// The units the execution meter used, input objects included, and the price fixed when
+// execution settles.
 #[derive(Debug, Default)]
 struct Computation {
     units: u64,
@@ -132,14 +132,14 @@ impl Computation {
     }
 }
 
-/// The write set storage settles on. Tiers only advance.
+// The write set storage settles on. Tiers only advance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum StorageTier {
-    /// Every write of the transaction.
+    // Every write of the transaction.
     Full,
-    /// The bumped mutable inputs and the re-smashed gas.
+    // The bumped mutable inputs and the re-smashed gas.
     InputsOnly,
-    /// The rebates of the smashed coins, with the whole budget reported as computation.
+    // The rebates of the smashed coins, with the whole budget reported as computation.
     RebatesOnly,
 }
 
@@ -171,8 +171,8 @@ impl GasState {
         self.metering.reference_gas_price()
     }
 
-    /// MIST charged so far: pre-execution plus computation. Computation counts only once
-    /// execution settles.
+    // MIST charged so far: pre-execution plus computation. Computation counts only once
+    // execution settles.
     fn charged(&self) -> u64 {
         let computation = self.computation.settled_price.map_or(0, |price| {
             self.computation
@@ -214,9 +214,9 @@ impl GasState {
 
     // Execution phase.
 
-    /// Open the execution phase. The meter budget is the execution limit, capped by the
-    /// computation bucket.
-    pub fn move_meter(&mut self) -> Result<MoveMeter, ExecutionError> {
+    // Open the execution phase. The meter budget is the execution limit, capped by the
+    // computation bucket.
+    pub fn execution_meter(&mut self) -> Result<ExecutionMeter, ExecutionError> {
         assert_invariant!(
             self.computation.settled_price.is_none(),
             "the execution phase opens before it settles"
@@ -233,7 +233,7 @@ impl GasState {
             }
             Metering::Unmetered => GasStatus::new_unmetered(),
         };
-        Ok(MoveMeter::new(
+        Ok(ExecutionMeter::new(
             status,
             InputRates {
                 cost_per_byte: self.config.read_cost_per_byte,
@@ -243,7 +243,7 @@ impl GasState {
         ))
     }
 
-    /// Close the execution phase at the signed price, or at the capped price on abort.
+    // Close the execution phase at the signed price, or at the capped price on abort.
     pub fn settle_execution(&mut self, units: u64, aborted: bool) -> Result<(), ExecutionError> {
         assert_invariant!(
             self.computation.settled_price.is_none(),
@@ -283,8 +283,8 @@ impl GasState {
         }
     }
 
-    /// `Full` and `InputsOnly` must fit net of the sender's rebate, and leave the state
-    /// unchanged when they do not. `RebatesOnly` always settles and runs the budget out.
+    // `Full` and `InputsOnly` must fit net of the sender's rebate, and leave the state
+    // unchanged when they do not. `RebatesOnly` always settles and runs the budget out.
     pub fn settle_storage(
         &mut self,
         charge: StorageCharge,
@@ -307,8 +307,8 @@ impl GasState {
 
     // Reporting.
 
-    /// Computation is the whole budget once out of gas. Storage settled only if it fit, so
-    /// the net charge never exceeds the budget.
+    // Computation is the whole budget once out of gas. Storage settled only if it fit, so
+    // the net charge never exceeds the budget.
     pub fn summary(&self) -> GasCostSummary {
         let storage_rebate = self.storage.rebate;
         let sender_rebate = sender_rebate(storage_rebate, self.config.rebate_rate);
@@ -358,13 +358,13 @@ impl GasState {
     }
 }
 
-/// Rounds down, as the Move meter does.
+// Rounds down, as the Move meter does.
 fn to_gas_units(internal_units: u64) -> u64 {
     let units: Gas = InternalGas::new(internal_units).to_unit_round_down();
     u64::from(units)
 }
 
-/// Round up to half the digits: 1234 becomes 1240, 123456 becomes 123500.
+// Round up to half the digits: 1234 becomes 1240, 123456 becomes 123500.
 fn half_digits_rounding(n: u64) -> u64 {
     if n < 10 {
         return n;
@@ -375,7 +375,7 @@ fn half_digits_rounding(n: u64) -> u64 {
     n.div_ceil(base).saturating_mul(base)
 }
 
-/// Rates of the input objects, in internal gas units.
+// Rates of the input objects, in internal gas units.
 #[derive(Debug, Clone, Copy)]
 struct InputRates {
     cost_per_byte: u64,
@@ -391,16 +391,17 @@ impl InputRates {
     }
 }
 
-/// The Move meter of the execution phase, with byte charges for input objects and the PTB.
+// The meter of the execution phase: the Move gas status, with byte charges for input objects
+// and the PTB.
 #[derive(Debug)]
-pub(crate) struct MoveMeter {
+pub(crate) struct ExecutionMeter {
     status: GasStatus,
     initial_internal_units: u64,
     input_rates: InputRates,
     publish_cost_per_byte: u64,
 }
 
-impl MoveMeter {
+impl ExecutionMeter {
     fn new(status: GasStatus, input_rates: InputRates, publish_cost_per_byte: u64) -> Self {
         // A fresh meter has its whole budget left.
         let initial_internal_units = u64::from(status.gas_left);
@@ -412,7 +413,7 @@ impl MoveMeter {
         }
     }
 
-    /// A meter that charges nothing, for genesis.
+    // A meter that charges nothing, for genesis.
     pub fn unmetered(config: &ProtocolConfig) -> Self {
         Self::new(
             GasStatus::new_unmetered(),
@@ -468,7 +469,7 @@ fn out_of_gas(e: PartialVMError) -> ExecutionError {
     ExecutionErrorKind::InsufficientGas.into()
 }
 
-/// Rates of the storage phase. Unmetered transactions track only their rebate.
+// Rates of the storage phase. Unmetered transactions track only their rebate.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct StorageRates {
     price: u64,
@@ -486,9 +487,9 @@ impl StorageRates {
     }
 }
 
-/// Storage cost and rebate of a write set, with the per-object breakdown. The store builds
-/// it and the state settles it. `unmetered_rebate` is the rebate of an unmetered
-/// transaction, which the charger moves to the system state object.
+// Storage cost and rebate of a write set, with the per-object breakdown. The store builds
+// it and the state settles it. `unmetered_rebate` is the rebate of an unmetered
+// transaction, which the charger moves to the system state object.
 #[derive(Debug, Default)]
 pub(crate) struct StorageCharge {
     cost: u64,
@@ -498,8 +499,8 @@ pub(crate) struct StorageCharge {
 }
 
 impl StorageCharge {
-    /// Track a written object, or a deleted one with `new_size` zero. Returns the new storage
-    /// rebate, or `None` on overflow.
+    // Track a written object, or a deleted one with `new_size` zero. Returns the new storage
+    // rebate, or `None` on overflow.
     pub fn track_mutation(
         &mut self,
         rates: &StorageRates,

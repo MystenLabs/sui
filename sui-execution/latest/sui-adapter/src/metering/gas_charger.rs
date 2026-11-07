@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metering::gas_state::{
-    GasState, Metering, MoveMeter, StorageCharge, StorageRates, StorageTier,
+    ExecutionMeter, GasState, Metering, StorageCharge, StorageRates, StorageTier,
 };
 use crate::temporary_store::TemporaryStore;
 use indexmap::IndexMap;
@@ -24,8 +24,8 @@ use sui_types::{
 };
 use tracing::trace;
 
-/// The gas state and the payment of a transaction. The engine settles each phase here, and
-/// `charge` applies the final charge to the payment.
+// The gas state and the payment of a transaction. The engine settles each phase here, and
+// `charge` applies the final charge to the payment.
 #[derive(Debug)]
 pub(crate) struct GasCharger {
     tx_digest: TransactionDigest,
@@ -33,69 +33,69 @@ pub(crate) struct GasCharger {
     state: GasState,
 }
 
-/// Internal representation of how a transaction's gas is being paid.
-/// `Unmetered` for no payment (dev inspect and system transactions).
-/// `Gasless` for metered-but-free transactions (gas is metered but not charged).
-/// `Unsmashed` until `smash_gas` combines the signed payment methods.
-/// `Smash` when one or more user-provided payment methods have been combined into a single
-/// source.
+// Internal representation of how a transaction's gas is being paid.
+// `Unmetered` for no payment (dev inspect and system transactions).
+// `Gasless` for metered-but-free transactions (gas is metered but not charged).
+// `Unsmashed` until `smash_gas` combines the signed payment methods.
+// `Smash` when one or more user-provided payment methods have been combined into a single
+// source.
 #[derive(Debug)]
 enum PaymentMetadata {
     Unmetered,
     Gasless,
-    /// Never empty.
+    // Never empty.
     Unsmashed(Vec<PaymentMethod>),
-    /// Contains the list of payments (coins and address balances) and additional metadata
+    // Contains the list of payments (coins and address balances) and additional metadata
     Smash(SmashMetadata),
 }
 
-/// State produced by smashing the gas payment sources into one. The charge goes to the smash
-/// target unless the PTB moved the gas coin.
+// State produced by smashing the gas payment sources into one. The charge goes to the smash
+// target unless the PTB moved the gas coin.
 #[derive(Debug)]
 struct SmashMetadata {
-    /// Where the PTB moved the gas coin, if it did.
+    // Where the PTB moved the gas coin, if it did.
     moved_to: Option<PaymentLocation>,
-    /// The total balance of all smashed payment methods.
+    // The total balance of all smashed payment methods.
     total_smashed: u64,
-    /// The primary payment method, which receives `total_smashed`.
+    // The primary payment method, which receives `total_smashed`.
     smash_target: PaymentMethod,
-    /// The original payment methods to be smashed into the `smash_target`. It does not include
-    /// the `smash_target` itself. Keyed by location to guarantee uniqueness.
+    // The original payment methods to be smashed into the `smash_target`. It does not include
+    // the `smash_target` itself. Keyed by location to guarantee uniqueness.
     smashed_payments: IndexMap<PaymentLocation, PaymentMethod>,
 }
 
-/// A single source of SUI used to pay for gas: either a coin object or a withdrawal
-/// reservation from an address balance.
+// A single source of SUI used to pay for gas: either a coin object or a withdrawal
+// reservation from an address balance.
 #[derive(Debug, Clone, Copy)]
 enum PaymentMethod {
     Coin(ObjectRef),
     AddressBalance(SuiAddress, /* withdrawal reservation */ u64),
 }
 
-/// Identifies where a gas payment lives, independent of its value (`ObjectRef` or reservation).
-/// Used often as a key, e.g. during smashing and during gas final charging.
+// Identifies where a gas payment lives, independent of its value (`ObjectRef` or reservation).
+// Used often as a key, e.g. during smashing and during gas final charging.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub(crate) enum PaymentLocation {
     Coin(ObjectID),
     AddressBalance(SuiAddress),
 }
 
-/// A resolved gas payment: the location that will receive the final charge or refund,
-/// paired with the total SUI available after smashing. Produced by
-/// `GasMeter::payment` and consumed by PTB execution to set up the
-/// runtime gas coin.
+// A resolved gas payment: the location that will receive the final charge or refund,
+// paired with the total SUI available after smashing. Produced by
+// `GasMeter::payment` and consumed by PTB execution to set up the
+// runtime gas coin.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GasPayment {
-    /// The location of the gas payment (coin or address balance), which also serves as the
-    /// target for smashed gas payments.
+    // The location of the gas payment (coin or address balance), which also serves as the
+    // target for smashed gas payments.
     pub location: PaymentLocation,
-    /// The total amount available for gas payment after smashing
+    // The total amount available for gas payment after smashing
     pub amount: u64,
 }
 
 impl GasCharger {
-    /// Budget and price follow the rule signing uses. The store is untouched until
-    /// `smash_gas`.
+    // Budget and price follow the rule signing uses. The store is untouched until
+    // `smash_gas`.
     pub fn new(
         tx_digest: TransactionDigest,
         gas_data: &GasData,
@@ -142,17 +142,17 @@ impl GasCharger {
         matches!(self.payment, PaymentMetadata::Gasless)
     }
 
-    /// The price the transaction is metered at, zero when unmetered.
+    // The price the transaction is metered at, zero when unmetered.
     pub fn gas_price(&self) -> u64 {
         self.state.price()
     }
 
-    /// The reference gas price of the epoch, zero when unmetered.
+    // The reference gas price of the epoch, zero when unmetered.
     pub fn reference_gas_price(&self) -> u64 {
         self.state.reference_gas_price()
     }
 
-    /// The smash target and the total smashed. `None` for unmetered and gasless.
+    // The smash target and the total smashed. `None` for unmetered and gasless.
     fn gas_payment(&self) -> Option<GasPayment> {
         match &self.payment {
             PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
@@ -164,15 +164,15 @@ impl GasCharger {
         }
     }
 
-    /// The gas usage so far, for the exits that skip `charge`.
+    // The gas usage so far, for the exits that skip `charge`.
     pub fn gas_usage_report(&self) -> GasUsageReport {
         self.state.gas_usage_report()
     }
 
     // Payment setup.
 
-    /// Smash the signed payments into the first one. Input checks validate the gas coins, so
-    /// a bad coin panics.
+    // Smash the signed payments into the first one. Input checks validate the gas coins, so
+    // a bad coin panics.
     pub fn smash_gas(
         &mut self,
         temporary_store: &mut TemporaryStore<'_>,
@@ -190,7 +190,7 @@ impl GasCharger {
         Ok(())
     }
 
-    /// Smash again after the writes were dropped. The charge goes back to the smash target.
+    // Smash again after the writes were dropped. The charge goes back to the smash target.
     pub fn resmash(&mut self, temporary_store: &mut TemporaryStore<'_>) {
         if let PaymentMetadata::Smash(metadata) = &mut self.payment {
             metadata.reset_charge_location();
@@ -204,10 +204,10 @@ impl GasCharger {
         self.state.settle_pre_execution(mist)
     }
 
-    /// Open the execution phase. `settle_execution` closes it.
+    // Open the execution phase. `settle_execution` closes it.
     pub fn gas_meter(&mut self) -> Result<GasMeter, ExecutionError> {
         Ok(GasMeter {
-            move_meter: self.state.move_meter()?,
+            execution_meter: self.state.execution_meter()?,
             payment: self.gas_payment(),
             budget: self.state.budget(),
             unmetered: self.state.is_unmetered(),
@@ -215,14 +215,14 @@ impl GasCharger {
         })
     }
 
-    /// An execution error wins over running out of gas.
+    // An execution error wins over running out of gas.
     pub fn settle_execution<T, E: ExecutionErrorTrait>(
         &mut self,
         gas_meter: GasMeter,
         result: Result<T, E>,
     ) -> Result<T, E> {
         let GasMeter {
-            move_meter,
+            execution_meter,
             charge_location,
             ..
         } = gas_meter;
@@ -239,7 +239,7 @@ impl GasCharger {
         );
         let charge = self
             .state
-            .settle_execution(move_meter.used_internal_units(), is_move_abort);
+            .settle_execution(execution_meter.used_internal_units(), is_move_abort);
         match result {
             Ok(v) => charge.map(|_| v).map_err(Into::into),
             Err(e) => Err(e),
@@ -260,7 +260,7 @@ impl GasCharger {
 
     // Payment.
 
-    /// Apply the final charge to the payment.
+    // Apply the final charge to the payment.
     pub fn charge<T, E: ExecutionErrorTrait>(
         self,
         temporary_store: &mut TemporaryStore<'_>,
@@ -325,24 +325,24 @@ impl GasCharger {
     }
 }
 
-/// What the invariant checks and the effects need from the gas after the final charge.
+// What the invariant checks and the effects need from the gas after the final charge.
 #[derive(Debug)]
 pub(crate) struct ChargedGas {
     pub cost_summary: GasCostSummary,
     pub gas_report: GasUsageReport,
-    /// The smash target when it is a coin. The effects name it as the gas object.
+    // The smash target when it is a coin. The effects name it as the gas object.
     pub gas_coin: Option<ObjectID>,
-    /// Every coin the payment smashed, the smash target included.
+    // Every coin the payment smashed, the smash target included.
     pub used_coins: Vec<ObjectRef>,
-    /// Where the charge went. `None` without a payment (unmetered and gasless).
+    // Where the charge went. `None` without a payment (unmetered and gasless).
     pub charge_location: Option<PaymentLocation>,
 }
 
-/// The meter the PTB charges into during the execution phase, with the payment it may spend
-/// from.
+// The meter the PTB charges into during the execution phase, with the payment it may spend
+// from.
 #[derive(Debug)]
 pub(crate) struct GasMeter {
-    move_meter: MoveMeter,
+    execution_meter: ExecutionMeter,
     payment: Option<GasPayment>,
     budget: u64,
     unmetered: bool,
@@ -350,10 +350,10 @@ pub(crate) struct GasMeter {
 }
 
 impl GasMeter {
-    /// The meter for genesis: nothing is metered and there is no payment.
+    // The meter for genesis: nothing is metered and there is no payment.
     pub fn unmetered(protocol_config: &ProtocolConfig) -> Self {
         Self {
-            move_meter: MoveMeter::unmetered(protocol_config),
+            execution_meter: ExecutionMeter::unmetered(protocol_config),
             payment: None,
             budget: 0,
             unmetered: true,
@@ -364,11 +364,11 @@ impl GasMeter {
     // Move meter.
 
     pub fn move_gas_status(&self) -> &GasStatus {
-        self.move_meter.status()
+        self.execution_meter.status()
     }
 
     pub fn move_gas_status_mut(&mut self) -> &mut GasStatus {
-        self.move_meter.status_mut()
+        self.execution_meter.status_mut()
     }
 
     // Terms and payment.
@@ -381,12 +381,12 @@ impl GasMeter {
         self.unmetered
     }
 
-    /// The smash target and the total smashed. `None` for unmetered and gasless.
+    // The smash target and the total smashed. `None` for unmetered and gasless.
     pub fn payment(&self) -> Option<GasPayment> {
         self.payment
     }
 
-    /// Record where the PTB moved the gas coin.
+    // Record where the PTB moved the gas coin.
     pub fn set_charge_location(&mut self, location: PaymentLocation) -> Result<(), ExecutionError> {
         if self.payment.is_none() {
             invariant_violation!("Can only override gas charge location in the smash-gas case")
@@ -402,11 +402,11 @@ impl GasMeter {
         size: usize,
         is_package: bool,
     ) -> Result<(), ExecutionError> {
-        self.move_meter.charge_input_object(size, is_package)
+        self.execution_meter.charge_input_object(size, is_package)
     }
 
     pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
-        self.move_meter.charge_publish_package(size)
+        self.execution_meter.charge_publish_package(size)
     }
 
     pub fn charge_coin_transfers(
@@ -425,13 +425,13 @@ impl GasMeter {
         let owner_cost = bytes_read_per_owner
             .saturating_mul(cost_per_byte)
             .saturating_mul(num_non_gas_coin_owners as usize);
-        self.move_meter.charge_read_bytes(owner_cost)
+        self.execution_meter.charge_read_bytes(owner_cost)
     }
 }
 
 impl SmashMetadata {
-    /// The first payment is the smash target. Reservations on one address are summed. A
-    /// duplicate gas coin or an overflowing sum is an invariant violation.
+    // The first payment is the smash target. Reservations on one address are summed. A
+    // duplicate gas coin or an overflowing sum is an invariant violation.
     fn new(methods: &[PaymentMethod]) -> Result<Self, ExecutionError> {
         let invalid = || {
             ExecutionError::invariant_violation(
@@ -483,7 +483,7 @@ impl SmashMetadata {
 
     // Coin and balance operations.
 
-    /// Iterates over all payment methods: the smash target followed by the smashed payments.
+    // Iterates over all payment methods: the smash target followed by the smashed payments.
     fn payment_methods(&self) -> impl Iterator<Item = &'_ PaymentMethod> {
         std::iter::once(&self.smash_target).chain(self.smashed_payments.values())
     }
@@ -609,8 +609,8 @@ impl SmashMetadata {
         }
     }
 
-    /// Apply the net charge or refund to the gas coin, or to the address balance through an
-    /// accumulator event.
+    // Apply the net charge or refund to the gas coin, or to the address balance through an
+    // accumulator event.
     fn apply(
         &self,
         temporary_store: &mut TemporaryStore<'_>,
@@ -655,8 +655,8 @@ impl SmashMetadata {
 }
 
 impl PaymentMethod {
-    /// The payments as signed: each gas object is a coin, or an address balance reservation
-    /// when its digest encodes one. With no gas objects the budget is reserved on the owner.
+    // The payments as signed: each gas object is a coin, or an address balance reservation
+    // when its digest encodes one. With no gas objects the budget is reserved on the owner.
     fn from_gas_data(gas_data: &GasData) -> Vec<Self> {
         if gas_data.payment.is_empty() {
             return vec![PaymentMethod::AddressBalance(

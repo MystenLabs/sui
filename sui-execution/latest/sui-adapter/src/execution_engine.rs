@@ -388,8 +388,8 @@ pub(crate) mod checked {
         },
     }
 
-    /// The stage that bailed to the `BumpOnly` exit, with its error. Every variant except
-    /// `InsufficientFundsForWithdraw` is an execution bug.
+    // The stage that bailed to the `BumpOnly` exit, with its error. Every variant except
+    // `InsufficientFundsForWithdraw` is an execution bug.
     #[derive(Debug)]
     enum BumpOnly {
         InsufficientFundsForWithdraw,
@@ -417,7 +417,7 @@ pub(crate) mod checked {
             matches!(self, Self::InsufficientFundsForWithdraw)
         }
 
-        /// The error the transaction fails with.
+        // The error the transaction fails with.
         fn into_error<E: ExecutionErrorTrait>(self) -> E {
             match self {
                 Self::InsufficientFundsForWithdraw => {
@@ -581,7 +581,7 @@ pub(crate) mod checked {
         }
     }
 
-    /// The gas phases, then the effects limits. The first failure stops the stages.
+    // The gas phases, then the effects limits. The first failure stops the stages.
     #[instrument(name = "tx_execute", level = "debug", skip_all)]
     fn execute_stages<Mode: ExecutionMode>(
         store: &dyn BackingStore,
@@ -627,7 +627,7 @@ pub(crate) mod checked {
         Ok(results)
     }
 
-    /// Early errors do not run the VM, so they owe nothing.
+    // Early errors do not run the VM, so they owe nothing.
     fn charge_pre_execution(
         gas_charger: &mut GasCharger,
         transaction_kind: &TransactionKind,
@@ -642,8 +642,8 @@ pub(crate) mod checked {
         gas_charger.settle_pre_execution(charge)
     }
 
-    /// Charge the input objects, stop at an early error, else run the PTB. The meter settles
-    /// whatever the result.
+    // Charge the input objects, stop at an early error, else run the PTB. The meter settles
+    // whatever the result.
     fn charge_execution<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
@@ -702,7 +702,7 @@ pub(crate) mod checked {
             })
     }
 
-    /// Timings are written to `timings_out` on both Ok and Err.
+    // Timings are written to `timings_out` on both Ok and Err.
     fn execute_ptb<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
@@ -739,8 +739,8 @@ pub(crate) mod checked {
         }
     }
 
-    /// Gasless transactions must meet their requirements before the mutable inputs are bumped
-    /// into the write set.
+    // Gasless transactions must meet their requirements before the mutable inputs are bumped
+    // into the write set.
     fn charge_storage(
         gas_charger: &mut GasCharger,
         temporary_store: &mut TemporaryStore<'_>,
@@ -759,14 +759,14 @@ pub(crate) mod checked {
             StorageTier::Full | StorageTier::InputsOnly => {
                 temporary_store.collect_storage_and_rebate(&rates)?
             }
-            StorageTier::RebatesOnly => temporary_store.collect_rebate(&rates)?,
+            StorageTier::RebatesOnly => temporary_store.collect_rebate_only(&rates)?,
         };
         gas_charger.settle_storage(charge, tier)
     }
 
-    /// Settle the bumped inputs, or the smashed coins' rebates when the inputs do not fit. A
-    /// failed gasless transaction pays nothing, so it settles the rebates and its inputs keep
-    /// their storage rebates.
+    // Settle the bumped inputs, or the smashed coins' rebates when the inputs do not fit. A
+    // failed gasless transaction pays nothing, so it settles the rebates and its inputs keep
+    // their storage rebates.
     fn charge_storage_after_error(
         gas_charger: &mut GasCharger,
         temporary_store: &mut TemporaryStore<'_>,
@@ -776,14 +776,16 @@ pub(crate) mod checked {
             charge_storage(gas_charger, temporary_store, StorageTier::RebatesOnly)
         } else {
             charge_storage(gas_charger, temporary_store, StorageTier::InputsOnly).or_else(|_| {
+                // The inputs do not fit the remaining budget: the budget goes to computation and
+                // only the smashed coins' rebates settle.
                 reset_to_inputs(gas_charger, temporary_store);
                 charge_storage(gas_charger, temporary_store, StorageTier::RebatesOnly)
             })
         }
     }
 
-    /// Drop the execution writes and re-smash gas. The mutable inputs are touched again so their
-    /// versions still bump.
+    // Drop the execution writes and re-smash gas. The mutable inputs are touched again so their
+    // versions still bump.
     fn reset_to_inputs(gas_charger: &mut GasCharger, temporary_store: &mut TemporaryStore<'_>) {
         temporary_store.drop_writes();
         gas_charger.resmash(temporary_store);
