@@ -16,6 +16,9 @@ use diesel::QueryDsl;
 use diesel::sql_types::Bool;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::objects::VersionedObjectKey;
 use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
 use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
 use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
@@ -24,7 +27,6 @@ use sui_indexer_alt_schema::packages::StoredPackage;
 use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
-use sui_sql_macro::query;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::move_package::MovePackage as NativeMovePackage;
@@ -798,16 +800,19 @@ impl MovePackage {
         let native: NativeObject = bcs::from_bytes(&stored.serialized_object)
             .context("Failed to deserialize package as object")?;
 
-        let Some(package) = native.data.try_as_package().cloned() else {
-            return Ok(None);
-        };
+        Ok(Self::from_contents(scope, native))
+    }
 
+    /// Construct a `MovePackage` from the contents of its object, using `scope` as given. Returns
+    /// `None` if the object is not a package.
+    fn from_contents(scope: Scope, native: NativeObject) -> Option<Self> {
+        let package = native.data.try_as_package()?.clone();
         let super_ = Object::from_contents(scope, native);
-        Ok(Some(Self {
+        Some(Self {
             super_,
             native: Arc::new(OnceCell::from(Some(package))),
             parsed: Arc::new(OnceCell::new()),
-        }))
+        })
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
@@ -991,87 +996,73 @@ impl MovePackage {
         )
     }
 
-    /// Paginate through versions of a package, identified by its original ID. `address` points to
-    /// any package on-chain that has that original ID.
+    /// Paginate through the system packages that existed as of the end of `checkpoint`, ordered by
+    /// ID, each at its latest version as of that checkpoint.
+    ///
+    /// Returns `None` when the ledger service no longer serves `checkpoint`, because it lies below
+    /// the service's earliest available checkpoint.
     pub(crate) async fn paginate_system_packages(
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CSysPackage>,
         checkpoint: u64,
-    ) -> Result<Connection<String, MovePackage>, RpcError> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         query_limits::rich::debit(ctx)?;
-        let pg_reader: &PgReader = ctx.data()?;
+        let reader: &LedgerGrpcReader = ctx.data()?;
+        let kv_loader: &KvLoader = ctx.data()?;
 
-        let mut pagination = query!("");
-        if let Some(after) = page.after() {
-            pagination += query!(" AND {Bytea} <= original_id", after.as_slice());
-        }
-
-        if let Some(before) = page.before() {
-            pagination += query!(" AND original_id <= {Bytea}", before.as_slice());
-        }
-
-        let query = query!(
-            r#"
-            SELECT
-                v.*
-            FROM (
-                SELECT DISTINCT
-                    original_id
-                FROM
-                    kv_packages
-                WHERE
-                    is_system_package
-                AND cp_sequence_number <= {BigInt}
-                {}
-                ORDER BY {}
-                LIMIT {BigInt}
-            ) k
-            CROSS JOIN LATERAL (
-                SELECT
-                    *
-                FROM
-                    kv_packages
-                WHERE
-                    original_id = k.original_id
-                AND cp_sequence_number <= {BigInt}
-                ORDER BY
-                    cp_sequence_number DESC,
-                    package_version DESC
-                LIMIT
-                    1
-            ) v
-            "#,
-            checkpoint as i64,
-            pagination,
-            if page.is_from_front() {
-                query!("original_id")
-            } else {
-                query!("original_id DESC")
-            },
-            page.limit() as i64 + 2,
-            checkpoint as i64,
-        );
-
-        let mut c = pg_reader
-            .connect()
+        let Some(system_packages) = reader
+            .list_system_packages(checkpoint)
             .await
-            .context("Failed to connect to database")?;
+            .context("Failed to list system packages")?
+        else {
+            return Ok(None);
+        };
 
-        let mut results: Vec<StoredPackage> = c
-            .results(query)
+        // System packages are upgraded in place, so each package's ID is its original ID, and the
+        // ledger service returns them ordered by it. The page's cursors bound the IDs inclusively.
+        let in_bounds: Vec<_> = system_packages
+            .into_iter()
+            .filter(|(id, _)| {
+                let id: &[u8] = id.as_ref();
+                page.after().is_none_or(|after| after.as_slice() <= id)
+                    && page.before().is_none_or(|before| id <= before.as_slice())
+            })
+            .collect();
+
+        let limit = page.limit_with_overhead();
+        let selected = if page.is_from_front() {
+            &in_bounds[..limit.min(in_bounds.len())]
+        } else {
+            &in_bounds[in_bounds.len().saturating_sub(limit)..]
+        };
+
+        let keys: Vec<_> = selected
+            .iter()
+            .map(|(id, version)| VersionedObjectKey(*id, version.value()))
+            .collect();
+
+        let mut loaded = kv_loader
+            .load_many_objects(keys)
             .await
-            .context("Failed to read from database")?;
+            .context("Failed to load system packages")?;
 
-        if !page.is_from_front() {
-            results.reverse();
-        }
+        let objects = selected
+            .iter()
+            .map(|(id, version)| {
+                let version = version.value();
+                loaded
+                    .remove(&VersionedObjectKey(*id, version))
+                    .with_context(|| format!("System package {id} at version {version} not found"))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
         page.paginate_results(
-            results,
-            |p| BcsCursor::new(p.original_id.clone()),
-            |p| Ok(Self::from_stored(scope.clone(), p)?.context("Failed to instantiate package")?),
+            objects,
+            |o| BcsCursor::new(o.id().to_vec()),
+            |o| Ok(Self::from_contents(scope.clone(), o).context("Failed to instantiate package")?),
         )
+        .map(Some)
     }
 
     /// The package's address
