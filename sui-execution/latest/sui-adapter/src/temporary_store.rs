@@ -1029,8 +1029,8 @@ impl<'backing> TemporaryStore<'backing> {
 }
 
 impl TemporaryStore<'_> {
-    /// The storage cost of each written object and the rebate of each deleted object. Each
-    /// written object gets its new storage rebate.
+    // The storage cost of each written object and the rebate of each deleted object. Each
+    // written object gets its new storage rebate.
     pub(crate) fn collect_storage_and_rebate(
         &mut self,
         rates: &StorageRates,
@@ -1065,8 +1065,8 @@ impl TemporaryStore<'_> {
         Ok(charge)
     }
 
-    /// The rebates of the deleted objects only.
-    pub(crate) fn collect_rebate(
+    // The rebates of the deleted objects only.
+    pub(crate) fn collect_rebate_only(
         &self,
         rates: &StorageRates,
     ) -> Result<StorageCharge, ExecutionError> {
