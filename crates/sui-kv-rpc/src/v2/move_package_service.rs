@@ -913,10 +913,10 @@ mod tests {
             );
             mock.insert_row(
                 tables::objects::NAME,
-                Bytes::from(tables::objects::encode_key(&ObjectKey(
-                    object.id(),
-                    object.version(),
-                ))),
+                Bytes::from(tables::objects::encode_key(
+                    sui_kvstore::ObjectSchema::V1,
+                    &ObjectKey(object.id(), object.version()),
+                )),
                 tables::objects::encode(&object).expect("encode object"),
             )
             .await;

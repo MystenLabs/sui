@@ -7468,7 +7468,9 @@ async fn list_package_versions(
 }
 
 /// `(version, storage id, publish checkpoint)` of each listed version.
-fn listed_versions(response: &ListPackageVersionsResponse) -> Vec<(u64, String, Option<u64>)> {
+fn listed_package_versions(
+    response: &ListPackageVersionsResponse,
+) -> Vec<(u64, String, Option<u64>)> {
     response
         .versions
         .iter()
@@ -7521,7 +7523,7 @@ async fn test_list_package_versions_at_checkpoint() {
             .await
             .unwrap();
         assert_eq!(
-            listed_versions(&response),
+            listed_package_versions(&response),
             vec![entry_1.clone(), entry_2.clone(), entry_3.clone()],
             "at_checkpoint {at_checkpoint:?}"
         );
@@ -7542,7 +7544,7 @@ async fn test_list_package_versions_at_checkpoint() {
                 .await
                 .unwrap();
         assert_eq!(
-            listed_versions(&response),
+            listed_package_versions(&response),
             expected,
             "at_checkpoint {at_checkpoint}"
         );
@@ -7569,7 +7571,7 @@ async fn test_list_package_versions_at_checkpoint() {
         .await
         .unwrap();
     assert_eq!(
-        listed_versions(&response),
+        listed_package_versions(&response),
         vec![entry_1.clone(), entry_2.clone(), entry_3.clone()]
     );
 
@@ -7587,23 +7589,23 @@ async fn test_list_package_versions_at_checkpoint() {
         .await
         .unwrap();
     assert_eq!(
-        listed_versions(&first),
+        listed_package_versions(&first),
         vec![entry_1.clone(), entry_2.clone()]
     );
     let second = list_package_versions(&mut client, v1, Some(cp3), Some(2), first.next_page_token)
         .await
         .unwrap();
-    assert_eq!(listed_versions(&second), vec![entry_3.clone()]);
+    assert_eq!(listed_package_versions(&second), vec![entry_3.clone()]);
     assert!(second.next_page_token.is_none());
 
     let first = list_package_versions(&mut client, v1, Some(cp2), Some(1), None)
         .await
         .unwrap();
-    assert_eq!(listed_versions(&first), vec![entry_1.clone()]);
+    assert_eq!(listed_package_versions(&first), vec![entry_1.clone()]);
     let second = list_package_versions(&mut client, v1, Some(cp2), Some(1), first.next_page_token)
         .await
         .unwrap();
-    assert_eq!(listed_versions(&second), vec![entry_2.clone()]);
+    assert_eq!(listed_package_versions(&second), vec![entry_2.clone()]);
     assert!(second.next_page_token.is_none());
 }
 
