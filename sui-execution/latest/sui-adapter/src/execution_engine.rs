@@ -688,7 +688,7 @@ pub(crate) mod checked {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
         timings: &mut Vec<ExecutionTiming>,
     ) -> Result<Mode::ExecutionResults, Mode::Error> {
-        let mut gas_meter = gas_charger.gas_meter();
+        let mut gas_meter = gas_charger.gas_meter().map_err(Mode::Error::from)?;
         let result = charge_inputs(&mut gas_meter, temporary_store)
             .and_then(|()| match execution_params.into_early_errors() {
                 // Early errors fail without running the VM
