@@ -35,7 +35,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Object, ObjectPermissions, Owner};
 
 use crate::execution_mode::ExecutionMode;
-use crate::gas_charger::{ChargedGas, PaymentLocation};
+use crate::metering::gas_charger::{ChargedGas, PaymentLocation};
 use crate::temporary_store::TemporaryStore;
 use crate::type_layout_resolver::TypeLayoutResolver;
 
