@@ -1295,20 +1295,35 @@ async fn test_objects_v2() -> Result<()> {
                 "{id} at version {version}",
             );
 
-            let exact = v2.get_objects(&[ObjectKey(id, version)]).await?;
+            // The exact-version read and its contents-free form agree.
             let expected_exact = live_versions.contains(&version).then_some(version);
+            let exact = v2.get_objects(&[ObjectKey(id, version)]).await?;
             assert_eq!(
                 exact.first().map(|o| o.version()),
                 expected_exact,
                 "{id} exactly at version {version}",
             );
+            let existing = v2
+                .get_existing_object_keys(&[ObjectKey(id, version)])
+                .await?;
+            assert_eq!(
+                existing.first().map(|key| key.1),
+                expected_exact,
+                "{id} key exactly at version {version}",
+            );
         }
 
-        // Both objects end deleted, so neither has a latest version in `objects_v2`. `objects`
-        // has no tombstones, so its latest version is the last live one.
+        // Both objects end deleted, so neither has a latest version in `objects_v2`, with or
+        // without contents, even though their older live versions remain. `objects` has no
+        // tombstones, so its latest version is the last live one.
         assert!(
             v2.get_latest_object(&id).await?.is_none(),
             "{id} has a latest version after deletion",
+        );
+        assert_eq!(
+            v2.get_latest_object_version(&id).await?,
+            None,
+            "{id} has a latest version number after deletion",
         );
         assert_eq!(
             v1.get_latest_object(&id).await?.map(|o| o.version()),

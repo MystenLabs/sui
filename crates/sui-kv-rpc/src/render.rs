@@ -14,6 +14,7 @@ use move_core_types::language_storage::StructTag;
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_kvstore::{CheckpointData, TransactionData};
 use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageFields;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::{
     Checkpoint, Event, ExecutedTransaction, Object as ProtoObject, ObjectSet as ProtoObjectSet,
@@ -23,6 +24,7 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::full_checkpoint_content::Checkpoint as FullCheckpoint;
 use sui_types::full_checkpoint_content::ExecutedTransaction as FullExecutedTransaction;
 use sui_types::full_checkpoint_content::ObjectSet;
@@ -70,6 +72,35 @@ pub(crate) async fn object_to_response(
         .map(Box::new);
     }
     message.merge(source, mask);
+    message
+}
+
+/// Whether `mask` asks for no `Object` field beyond `object_id` and `version`, which is all an
+/// `object_versions_by_checkpoint` row or an `objects` row key provides. Every other field,
+/// including `digest` (a hash of the object's contents), needs the object itself.
+pub(crate) fn needs_only_object_id_and_version(mask: &FieldMaskTree) -> bool {
+    ProtoObject::FIELDS.iter().all(|field| {
+        field.name == ProtoObject::OBJECT_ID_FIELD.name
+            || field.name == ProtoObject::VERSION_FIELD.name
+            || !mask.contains(field.name)
+    })
+}
+
+/// Render an object known only by its id and version, as [`object_to_response`] would render
+/// those fields from the object. Only valid for a mask that
+/// [`needs_only_object_id_and_version`].
+pub(crate) fn object_version_to_response(
+    object_id: ObjectID,
+    version: SequenceNumber,
+    mask: &FieldMaskTree,
+) -> ProtoObject {
+    let mut message = ProtoObject::default();
+    if mask.contains(ProtoObject::OBJECT_ID_FIELD.name) {
+        message.object_id = Some(object_id.to_canonical_string(true));
+    }
+    if mask.contains(ProtoObject::VERSION_FIELD.name) {
+        message.version = Some(version.value());
+    }
     message
 }
 

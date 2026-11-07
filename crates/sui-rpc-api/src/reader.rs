@@ -6,8 +6,10 @@ use std::sync::Arc;
 
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_sdk_types::{EpochId, ValidatorCommittee};
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
@@ -282,8 +284,8 @@ impl StateReader {
         Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
     }
 
-    /// The upper bound for checkpoint-pinned reads (`GetPackage`'s `at_checkpoint`): the highest
-    /// checkpoint every rpc index has committed.
+    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_at_checkpoint`], and
+    /// `GetPackage`'s `at_checkpoint`): the highest checkpoint every rpc index has committed.
     ///
     /// Read it before the reads. It only grows, and the indexes only add data above it, so it
     /// stays valid for reads made after it was read. The lower bound is the opposite; see
@@ -343,6 +345,29 @@ impl StateReader {
                 .max(lowest_with_index_history)
                 .saturating_sub(1),
         })
+    }
+
+    /// The live object as of the end of `checkpoint`, or `None` if it did not exist yet or had
+    /// been deleted or wrapped. `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) if `checkpoint` is above
+    /// `upper_bound`; check the lower bound after the read with
+    /// [`Self::at_checkpoint_lower_bound`].
+    pub fn get_object_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: u64,
+        upper_bound: &AtCheckpointUpperBound,
+    ) -> Result<Option<Object>, crate::RpcError> {
+        upper_bound.check(checkpoint)?;
+
+        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
+        let Some(version) = indexes
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+            .map_err(index_error)?
+        else {
+            return Ok(None);
+        };
+        // A deletion or wrapping tombstone has no object at its version.
+        Ok(self.inner().get_object_by_key(&object_id, version))
     }
 }
 
