@@ -18,14 +18,21 @@ use sui_types::{
     },
 };
 
+// MIST amounts, and prices in MIST per gas unit.
+type Mist = u64;
+// Gas units, as the transaction is charged.
+type GasUnits = u64;
+// Internal gas units, as the Move gas status counts them.
+type InternalUnits = u64;
+
 // How a transaction is metered
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Metering {
     Unmetered,
     Metered {
-        budget: u64,
-        price: u64,
-        reference_gas_price: u64,
+        budget: Mist,
+        price: Mist,
+        reference_gas_price: Mist,
     },
 }
 
@@ -34,21 +41,21 @@ impl Metering {
         matches!(self, Metering::Unmetered)
     }
 
-    fn budget(&self) -> u64 {
+    fn budget(&self) -> Mist {
         match self {
             Metering::Unmetered => 0,
             Metering::Metered { budget, .. } => *budget,
         }
     }
 
-    fn price(&self) -> u64 {
+    fn price(&self) -> Mist {
         match self {
             Metering::Unmetered => 0,
             Metering::Metered { price, .. } => *price,
         }
     }
 
-    fn reference_gas_price(&self) -> u64 {
+    fn reference_gas_price(&self) -> Mist {
         match self {
             Metering::Unmetered => 0,
             Metering::Metered {
@@ -65,18 +72,18 @@ struct GasConfig {
     gas_model_version: u64,
     cost_table: CostTable,
     // Internal gas units per byte of input object read.
-    read_cost_per_byte: u64,
+    read_cost_per_byte: InternalUnits,
     // Internal gas units per KiB of package read. Packages use `read_cost_per_byte` when
     // unset.
-    package_read_per_kb_cost: Option<u64>,
+    package_read_per_kb_cost: Option<InternalUnits>,
     // Internal gas units per byte of published module.
-    publish_cost_per_byte: u64,
+    publish_cost_per_byte: InternalUnits,
     // Cap, in gas units, on the execution meter budget.
-    max_computation_bucket: u64,
+    max_computation_bucket: GasUnits,
     // Minimum computation charge in gas units: the base transaction cost.
-    min_computation_units: u64,
-    storage_gas_price: u64,
-    storage_per_byte_cost: u64,
+    min_computation_units: GasUnits,
+    storage_gas_price: Mist,
+    storage_per_byte_cost: GasUnits,
     rebate_rate: u64,
     // RGP multiplier capping the effective gas price of aborted transactions.
     abort_price_factor: Option<u64>,
@@ -110,7 +117,7 @@ pub(crate) struct GasState {
     metering: Metering,
     config: GasConfig,
     // MIST owed before the VM runs.
-    pre_execution: u64,
+    pre_execution: Mist,
     computation: Computation,
     storage: StorageCharge,
     // A computation check failed, or storage settled at `RebatesOnly`.
@@ -121,12 +128,12 @@ pub(crate) struct GasState {
 // execution settles.
 #[derive(Debug, Default)]
 struct Computation {
-    units: u64,
-    settled_price: Option<u64>,
+    units: InternalUnits,
+    settled_price: Option<Mist>,
 }
 
 impl Computation {
-    fn mist(&self, price: u64, min_units: u64) -> u64 {
+    fn mist(&self, price: Mist, min_units: GasUnits) -> Mist {
         let units = half_digits_rounding(to_gas_units(self.units)).max(min_units);
         units.saturating_mul(price)
     }
@@ -159,21 +166,21 @@ impl GasState {
         self.metering.is_unmetered()
     }
 
-    pub fn budget(&self) -> u64 {
+    pub fn budget(&self) -> Mist {
         self.metering.budget()
     }
 
-    pub fn price(&self) -> u64 {
+    pub fn price(&self) -> Mist {
         self.metering.price()
     }
 
-    pub fn reference_gas_price(&self) -> u64 {
+    pub fn reference_gas_price(&self) -> Mist {
         self.metering.reference_gas_price()
     }
 
     // MIST charged so far: pre-execution plus computation. Computation counts only once
     // execution settles.
-    fn charged(&self) -> u64 {
+    fn charged(&self) -> Mist {
         let computation = self.computation.settled_price.map_or(0, |price| {
             self.computation
                 .mist(price, self.config.min_computation_units)
@@ -182,22 +189,22 @@ impl GasState {
     }
 
     // First phase, just the budget
-    fn pre_execution_limit(&self) -> u64 {
+    fn pre_execution_limit(&self) -> Mist {
         self.budget()
     }
 
     // budget - pre_execution
-    fn execution_limit(&self) -> u64 {
+    fn execution_limit(&self) -> Mist {
         self.budget().saturating_sub(self.pre_execution)
     }
 
     // budget - computation - pre_execution
-    fn storage_limit(&self) -> u64 {
+    fn storage_limit(&self) -> Mist {
         self.budget().saturating_sub(self.charged())
     }
 
     // `charge` must stay below `limit`, else out of gas.
-    fn check_below_limit(&mut self, charge: u64, limit: u64) -> Result<(), ExecutionError> {
+    fn check_below_limit(&mut self, charge: Mist, limit: Mist) -> Result<(), ExecutionError> {
         if !self.is_unmetered() && charge >= limit {
             self.out_of_gas = true;
             return Err(ExecutionErrorKind::InsufficientGas.into());
@@ -207,7 +214,7 @@ impl GasState {
 
     // Pre execution phase.
 
-    pub fn settle_pre_execution(&mut self, mist: u64) -> Result<(), ExecutionError> {
+    pub fn settle_pre_execution(&mut self, mist: Mist) -> Result<(), ExecutionError> {
         self.pre_execution = mist;
         self.check_below_limit(self.pre_execution, self.pre_execution_limit())
     }
@@ -244,7 +251,11 @@ impl GasState {
     }
 
     // Close the execution phase at the signed price, or at the capped price on abort.
-    pub fn settle_execution(&mut self, units: u64, aborted: bool) -> Result<(), ExecutionError> {
+    pub fn settle_execution(
+        &mut self,
+        units: InternalUnits,
+        aborted: bool,
+    ) -> Result<(), ExecutionError> {
         assert_invariant!(
             self.computation.settled_price.is_none(),
             "the execution phase settles once"
@@ -353,13 +364,13 @@ impl GasState {
         }
     }
 
-    pub fn unmetered_storage_rebate(&self) -> u64 {
+    pub fn unmetered_storage_rebate(&self) -> Mist {
         self.storage.unmetered_rebate
     }
 }
 
 // Rounds down, as the Move meter does.
-fn to_gas_units(internal_units: u64) -> u64 {
+fn to_gas_units(internal_units: InternalUnits) -> GasUnits {
     let units: Gas = InternalGas::new(internal_units).to_unit_round_down();
     u64::from(units)
 }
@@ -378,12 +389,12 @@ fn half_digits_rounding(n: u64) -> u64 {
 // Rates of the input objects, in internal gas units.
 #[derive(Debug, Clone, Copy)]
 struct InputRates {
-    cost_per_byte: u64,
-    package_cost_per_kb: Option<u64>,
+    cost_per_byte: InternalUnits,
+    package_cost_per_kb: Option<InternalUnits>,
 }
 
 impl InputRates {
-    fn units(&self, size: usize, is_package: bool) -> u64 {
+    fn units(&self, size: usize, is_package: bool) -> InternalUnits {
         match (is_package, self.package_cost_per_kb) {
             (true, Some(cost_per_kb)) => package_read_internal_gas(size, cost_per_kb),
             _ => (size as u64).saturating_mul(self.cost_per_byte),
@@ -396,13 +407,17 @@ impl InputRates {
 #[derive(Debug)]
 pub(crate) struct ExecutionMeter {
     status: GasStatus,
-    initial_internal_units: u64,
+    initial_internal_units: InternalUnits,
     input_rates: InputRates,
-    publish_cost_per_byte: u64,
+    publish_cost_per_byte: InternalUnits,
 }
 
 impl ExecutionMeter {
-    fn new(status: GasStatus, input_rates: InputRates, publish_cost_per_byte: u64) -> Self {
+    fn new(
+        status: GasStatus,
+        input_rates: InputRates,
+        publish_cost_per_byte: InternalUnits,
+    ) -> Self {
         // A fresh meter has its whole budget left.
         let initial_internal_units = u64::from(status.gas_left);
         Self {
@@ -433,7 +448,7 @@ impl ExecutionMeter {
         &mut self.status
     }
 
-    pub fn used_internal_units(&self) -> u64 {
+    pub fn used_internal_units(&self) -> InternalUnits {
         self.initial_internal_units
             .saturating_sub(u64::from(self.status.gas_left))
     }
@@ -457,7 +472,11 @@ impl ExecutionMeter {
         self.charge_bytes(size, self.input_rates.cost_per_byte)
     }
 
-    fn charge_bytes(&mut self, size: usize, cost_per_byte: u64) -> Result<(), ExecutionError> {
+    fn charge_bytes(
+        &mut self,
+        size: usize,
+        cost_per_byte: InternalUnits,
+    ) -> Result<(), ExecutionError> {
         self.status
             .charge_bytes(size, cost_per_byte)
             .map_err(out_of_gas)
@@ -472,8 +491,8 @@ fn out_of_gas(e: PartialVMError) -> ExecutionError {
 // Rates of the storage phase. Unmetered transactions track only their rebate.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct StorageRates {
-    price: u64,
-    per_byte_cost: u64,
+    price: Mist,
+    per_byte_cost: GasUnits,
     metered: bool,
 }
 
@@ -492,9 +511,9 @@ impl StorageRates {
 // transaction, which the charger moves to the system state object.
 #[derive(Debug, Default)]
 pub(crate) struct StorageCharge {
-    cost: u64,
-    rebate: u64,
-    unmetered_rebate: u64,
+    cost: Mist,
+    rebate: Mist,
+    unmetered_rebate: Mist,
     per_object: Vec<(ObjectID, PerObjectStorage)>,
 }
 
@@ -506,8 +525,8 @@ impl StorageCharge {
         rates: &StorageRates,
         object_id: ObjectID,
         new_size: usize,
-        storage_rebate: u64,
-    ) -> Option<u64> {
+        storage_rebate: Mist,
+    ) -> Option<Mist> {
         if !rates.metered {
             self.unmetered_rebate = self.unmetered_rebate.checked_add(storage_rebate)?;
             return Some(0);
