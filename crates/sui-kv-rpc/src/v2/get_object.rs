@@ -663,16 +663,17 @@ async fn read_exact_versions(
 
 /// What a request's reads of the version index run with: the request-scoped gated client for
 /// their `object_versions_by_checkpoint` scans, and the served height that bounds them.
-struct AtCheckpointReads {
+pub(super) struct AtCheckpointReads {
     client: BigTableClient,
-    served_height: ServedHeight,
+    pub(super) served_height: ServedHeight,
 }
 
 impl KvRpcServer {
-    /// `Unimplemented` unless `at_checkpoint` and `max_version` object reads are enabled;
-    /// otherwise the scans read through `client`, the request's gated client, at
-    /// `served_height`, the height the request was admitted at (`Unavailable` if it had none).
-    fn at_checkpoint_reads(
+    /// `Unimplemented` unless object version history reads (`at_checkpoint` and `max_version`
+    /// object reads, and `ListObjectVersions`) are enabled; otherwise the scans read through
+    /// `client`, the request's gated client, at `served_height`, the height the request was
+    /// admitted at (`Unavailable` if it had none).
+    pub(super) fn at_checkpoint_reads(
         &self,
         client: BigTableClient,
         served_height: Result<ServedHeight, RpcError>,
@@ -680,7 +681,8 @@ impl KvRpcServer {
         if !self.object_at_checkpoint_enabled {
             return Err(RpcError::new(
                 tonic::Code::Unimplemented,
-                "at_checkpoint and max_version object reads are not enabled on this instance",
+                "at_checkpoint and max_version object reads, and ListObjectVersions, are not \
+                 enabled on this instance",
             ));
         }
         Ok(AtCheckpointReads {
@@ -692,7 +694,7 @@ impl KvRpcServer {
 
 impl AtCheckpointReads {
     /// The version and status `object_id` had at the end of `checkpoint`.
-    async fn version_at_checkpoint(
+    pub(super) async fn version_at_checkpoint(
         &self,
         object_id: ObjectID,
         checkpoint: u64,
@@ -705,9 +707,6 @@ impl AtCheckpointReads {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-    use std::time::Duration;
-
     use mysten_common::ZipDebugEqIteratorExt;
     use sui_kvstore::ObjectSchema;
     use sui_kvstore::tables::object_versions_by_checkpoint;
@@ -719,79 +718,12 @@ mod tests {
     use sui_types::object::Owner;
 
     use super::*;
-    use crate::KvRpcConfig;
-    use crate::LedgerHistoryConfig;
     use crate::StageConfig;
     use crate::StagesConfig;
-    use crate::service_info_watermark_pipelines;
-    use crate::tests::seed_watermarks;
-
-    /// A kv-rpc server over the mock BigTable at `addr`, reading the objects table of
-    /// `object_schema`, with every watermark it serves at checkpoint 10 and its service info
-    /// loaded.
-    async fn start_kv_rpc(
-        addr: SocketAddr,
-        stages: StagesConfig,
-        object_schema: ObjectSchema,
-        enable_object_at_checkpoint: bool,
-    ) -> KvRpcServer {
-        start_kv_rpc_at_heights(
-            addr,
-            stages,
-            object_schema,
-            enable_object_at_checkpoint,
-            |_| 10,
-        )
-        .await
-    }
-
-    /// [`start_kv_rpc`], with the watermark of each pipeline it serves at `height(pipeline)`.
-    async fn start_kv_rpc_at_heights(
-        addr: SocketAddr,
-        stages: StagesConfig,
-        object_schema: ObjectSchema,
-        enable_object_at_checkpoint: bool,
-        height: impl Fn(&str) -> u64,
-    ) -> KvRpcServer {
-        let mut client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".into())
-            .await
-            .expect("connect to mock BigTable");
-        let pipelines = service_info_watermark_pipelines(
-            LedgerHistoryConfig::default().bitmap_schema(),
-            object_schema,
-            enable_object_at_checkpoint && object_schema == ObjectSchema::V2,
-        );
-        seed_watermarks(&mut client, &pipelines, height).await;
-        let config = KvRpcConfig::default();
-        let kv_rpc = KvRpcServer::new_local_with_config(
-            addr.to_string(),
-            "test".to_string(),
-            None,
-            LedgerHistoryConfig::default(),
-            config.request_bigtable_concurrency(),
-            config.monotonic_read_wait_timeout(),
-            stages,
-            config.watermark_source(),
-            object_schema,
-            enable_object_at_checkpoint,
-        )
-        .await
-        .expect("start kv-rpc server");
-        tokio::time::timeout(
-            Duration::from_secs(5),
-            kv_rpc.cache.subscribe().wait_for(Option::is_some),
-        )
-        .await
-        .expect("service info never refreshed")
-        .expect("service info sender dropped");
-        kv_rpc
-    }
-
-    fn mask(paths: &[&str]) -> prost_types::FieldMask {
-        prost_types::FieldMask {
-            paths: paths.iter().map(|path| path.to_string()).collect(),
-        }
-    }
+    use crate::v2::test_utils::insert_history;
+    use crate::v2::test_utils::mask;
+    use crate::v2::test_utils::start_kv_rpc;
+    use crate::v2::test_utils::start_kv_rpc_at_heights;
 
     /// Writes `cells` at `key` of `schema`'s objects table.
     async fn insert_object_row(
@@ -1049,40 +981,6 @@ mod tests {
             }
 
             mock_server.abort();
-        }
-    }
-
-    /// Write `id`'s history, `(checkpoint, version, status)` for each change in order, to both
-    /// the `objects_v2` table (a live row or a tombstone) and the `object_versions_by_checkpoint`
-    /// index.
-    async fn insert_history(
-        mock: &MockBigtableServer,
-        id: ObjectID,
-        history: &[(u64, u64, ObjectStatus)],
-    ) {
-        for &(checkpoint, version, status) in history {
-            let version = SequenceNumber::from_u64(version);
-            let cells = match status {
-                ObjectStatus::Live => objects::encode(&Object::with_id_owner_version_for_testing(
-                    id,
-                    version,
-                    Owner::AddressOwner(SuiAddress::ZERO),
-                ))
-                .unwrap(),
-                removed => objects::encode_tombstone(removed).unwrap(),
-            };
-            mock.insert_row(
-                objects::NAME_V2,
-                objects::encode_key(ObjectSchema::V2, &ObjectKey(id, version)),
-                cells,
-            )
-            .await;
-            mock.insert_row(
-                object_versions_by_checkpoint::NAME,
-                object_versions_by_checkpoint::encode_key(&id, checkpoint),
-                object_versions_by_checkpoint::encode(version, status),
-            )
-            .await;
         }
     }
 
