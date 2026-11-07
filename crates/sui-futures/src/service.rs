@@ -81,7 +81,8 @@ impl Service {
         mut self,
         task: impl Future<Output = anyhow::Result<()>> + Send + 'static,
     ) -> Self {
-        self.fsts.spawn(task);
+        // Boxing means JoinSet's task machinery is instantiated once rather than per task type.
+        self.fsts.spawn(task.boxed());
         self
     }
 
@@ -92,7 +93,7 @@ impl Service {
         mut self,
         task: impl Future<Output = anyhow::Result<()>> + Send + 'static,
     ) -> Self {
-        let h = self.fsts.spawn(task);
+        let h = self.fsts.spawn(task.boxed());
         self.with_shutdown_signal(async move { h.abort() })
     }
 

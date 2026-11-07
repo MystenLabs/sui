@@ -19,4 +19,8 @@ tokio.workspace = true
 tracing.workspace = true
 
 sui-futures.workspace = true
-sui-pg-db.workspace = true
+sui-pg-db = { workspace = true, optional = true }
+
+[features]
+default = ["postgres"]
+postgres = ["dep:sui-pg-db"]

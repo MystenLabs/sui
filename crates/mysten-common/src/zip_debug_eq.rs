@@ -28,6 +28,17 @@ pub struct ZipDebugEq<A, B> {
     caller: &'static Location<'static>,
 }
 
+// Kept out of `ZipDebugEq::next` so the diagnostic is compiled once, not per iterator type.
+#[cold]
+#[inline(never)]
+fn report_length_mismatch(caller: &'static Location<'static>, shorter: &str, longer: &str) {
+    debug_fatal_at!(
+        &format!("{}:{}", caller.file(), caller.line()),
+        "zip_debug_eq: {shorter} iterator shorter than {longer} (created at {})",
+        caller
+    );
+}
+
 impl<A: Iterator, B: Iterator> Iterator for ZipDebugEq<A, B> {
     type Item = (A::Item, B::Item);
 
@@ -40,20 +51,12 @@ impl<A: Iterator, B: Iterator> Iterator for ZipDebugEq<A, B> {
             (None, None) => None,
             (None, Some(_)) => {
                 self.finished = true;
-                debug_fatal_at!(
-                    &format!("{}:{}", self.caller.file(), self.caller.line()),
-                    "zip_debug_eq: first iterator shorter than second (created at {})",
-                    self.caller
-                );
+                report_length_mismatch(self.caller, "first", "second");
                 None
             }
             (Some(_), None) => {
                 self.finished = true;
-                debug_fatal_at!(
-                    &format!("{}:{}", self.caller.file(), self.caller.line()),
-                    "zip_debug_eq: second iterator shorter than first (created at {})",
-                    self.caller
-                );
+                report_length_mismatch(self.caller, "second", "first");
                 None
             }
         }

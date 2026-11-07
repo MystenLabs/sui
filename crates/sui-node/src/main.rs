@@ -11,8 +11,8 @@ use tokio::time::sleep;
 use tracing::{error, info};
 
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
+use sui_config::NodeConfig;
 use sui_config::node::RunWithRange;
-use sui_config::{Config, NodeConfig};
 use sui_core::runtime::SuiRuntimes;
 use sui_telemetry::send_telemetry_event;
 use sui_types::committee::EpochId;
@@ -56,7 +56,7 @@ fn main() {
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
     let args = Args::parse();
-    let mut config = NodeConfig::load(&args.config_path).unwrap();
+    let mut config = NodeConfig::load_from_path(&args.config_path).unwrap();
     assert!(
         config.supported_protocol_versions.is_none(),
         "supported_protocol_versions cannot be read from the config file"

@@ -410,6 +410,7 @@ integer-encoding = "3.0.1"
 iso8601 = "0.6.3"
 itertools = "0.13.0"
 tikv-jemalloc-ctl = "^0.5"
+tikv-jemalloc-sys = "^0.5"
 tikv-jemallocator = { version = "^0.5", features = [
   "profiling",
   "disable_initial_exec_tls",
@@ -689,7 +690,7 @@ sui-indexer-alt-consistent-store = { path = "crates/sui-indexer-alt-consistent-s
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework", default-features = false }
 sui-indexer-alt-framework-store-traits = { path = "crates/sui-indexer-alt-framework-store-traits" }
 sui-indexer-alt-graphql = { path = "crates/sui-indexer-alt-graphql" }
-sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
+sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics", default-features = false }
 sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-alt-object-store = { path = "crates/sui-indexer-alt-object-store" }

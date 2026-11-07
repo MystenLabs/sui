@@ -10,11 +10,8 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-move-package.workspace = true
-move-package-compilation.workspace = true
 mysten-network.workspace = true
 sui-framework.workspace = true
-sui-move-build.workspace = true
 sui-types.workspace = true
 tempfile.workspace = true
 tracing.workspace = true

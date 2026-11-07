@@ -216,7 +216,7 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
                 match poll_fn(|cx| self_.as_mut().poll_next(cx)).now_or_never() {
                     Some(Some(item)) => {
                         permits -= 1;
-                        join_set.spawn(f(item));
+                        join_set.spawn(f(item).boxed());
                     }
                     Some(None) => {
                         // If the stream is empty, signal that the worker pool is going to
@@ -262,7 +262,7 @@ impl<S: Stream + Sized + 'static> TrySpawnStreamExt for S {
                     if !draining && permits > 0 => {
                     if let Some(item) = next {
                         permits -= 1;
-                        join_set.spawn(f(item));
+                        join_set.spawn(f(item).boxed());
                     } else {
                         draining = true;
                     }
@@ -468,11 +468,14 @@ where
                     let fut = f(item);
                     let tx = sender.clone();
                     let spawn_epoch = epoch;
-                    tasks.spawn(async move {
-                        let value = fut.await?;
-                        tx.send(value).await.map_err(|_| Break::Break)?;
-                        Ok(spawn_epoch)
-                    });
+                    tasks.spawn(
+                        async move {
+                            let value = fut.await?;
+                            tx.send(value).await.map_err(|_| Break::Break)?;
+                            Ok(spawn_epoch)
+                        }
+                        .boxed(),
+                    );
                     if tasks.len() >= limit {
                         was_saturated = true;
                     }
@@ -494,11 +497,14 @@ where
                     let fut = f(item);
                     let tx = sender.clone();
                     let spawn_epoch = epoch;
-                    tasks.spawn(async move {
-                        let value = fut.await?;
-                        tx.send(value).await.map_err(|_| Break::Break)?;
-                        Ok(spawn_epoch)
-                    });
+                    tasks.spawn(
+                        async move {
+                            let value = fut.await?;
+                            tx.send(value).await.map_err(|_| Break::Break)?;
+                            Ok(spawn_epoch)
+                        }
+                        .boxed(),
+                    );
                     if tasks.len() >= limit {
                         was_saturated = true;
                     }

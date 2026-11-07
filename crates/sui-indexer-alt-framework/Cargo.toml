@@ -66,6 +66,7 @@ default = ["cluster"]
 cluster = ["dep:tracing-subscriber", "postgres"]
 postgres = [
     "dep:sui-pg-db",
+    "sui-indexer-alt-metrics/postgres",
     "dep:diesel",
     "dep:diesel-async",
     "dep:diesel_migrations",

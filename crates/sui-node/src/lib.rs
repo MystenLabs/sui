@@ -13,6 +13,7 @@ use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
+use futures::FutureExt;
 use futures::future::BoxFuture;
 use mysten_common::debug_fatal;
 use mysten_common::in_test_configuration;
@@ -475,7 +476,17 @@ impl SuiNode {
         }
     }
 
-    pub async fn start_async(
+    /// Returns a boxed future so that node startup is compiled in this crate rather than in every
+    /// binary that starts a node.
+    pub fn start_async(
+        config: NodeConfig,
+        registry_service: RegistryService,
+        server_version: ServerVersion,
+    ) -> BoxFuture<'static, Result<Arc<SuiNode>>> {
+        Self::start_async_impl(config, registry_service, server_version).boxed()
+    }
+
+    async fn start_async_impl(
         config: NodeConfig,
         registry_service: RegistryService,
         server_version: ServerVersion,

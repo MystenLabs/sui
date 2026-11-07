@@ -7681,7 +7681,6 @@ dependencies = [
  "libc",
  "libz-sys",
  "lz4-sys",
- "tikv-jemalloc-sys",
  "zstd-sys",
 ]
 
@@ -15982,7 +15981,8 @@ name = "sui-package-management"
 version = "1.85.0"
 dependencies = [
  "anyhow",
- "sui-framework-snapshot",
+ "serde",
+ "serde_json",
  "sui-protocol-config",
  "sui-types",
  "thiserror 1.0.69",
@@ -16440,14 +16440,11 @@ dependencies = [
  "bcs",
  "fastcrypto",
  "lru 0.18.2",
- "move-package",
- "move-package-compilation",
  "msim",
  "mysten-network",
  "rand 0.8.5",
  "serde",
  "sui-framework",
- "sui-move-build",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -18561,6 +18558,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tidehunter",
+ "tikv-jemalloc-sys",
  "tokio",
  "tracing",
  "typed-store-derive",

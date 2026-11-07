@@ -19,6 +19,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tracing::info;
 
+#[cfg(feature = "postgres")]
 pub mod db;
 
 #[derive(clap::Args, Debug, Clone)]
