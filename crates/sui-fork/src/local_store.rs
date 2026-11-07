@@ -169,6 +169,26 @@ impl LocalStore {
         self.highest_status_at_or_before(id, upper_bound)
     }
 
+    /// Return the checkpoint and version of the object's earliest checkpoint-pinned row.
+    ///
+    /// The object rows are complete from that version upward. The row is either the object's
+    /// version at the fork checkpoint, resolved by a remote query pinned there, or the object's
+    /// first locally executed change, and every later version was executed locally. Below it, the
+    /// rows are a sparse cache of historical reads.
+    pub(crate) fn earliest_checkpoint_pinned_version(
+        &self,
+        id: ObjectID,
+    ) -> anyhow::Result<Option<(CheckpointSequenceNumber, SequenceNumber)>> {
+        let Some(row) = self.schema.iter_object_versions_by_checkpoint(id)?.next() else {
+            return Ok(None);
+        };
+        let (key, value) = row?;
+        Ok(Some((
+            key.checkpoint,
+            SequenceNumber::from_u64(value.into_inner().version),
+        )))
+    }
+
     /// Save an object version without changing current live state or indexes.
     ///
     /// Use this for exact-version and bounded historical reads, and choose a live-object write
@@ -399,6 +419,23 @@ impl LocalStore {
         }
         batch.commit().context("failed to save live object")?;
         Ok(())
+    }
+
+    /// Save an object fetched from a remote query pinned at the fork checkpoint, recording it as
+    /// the object's version at the fork checkpoint.
+    ///
+    /// Unlike [`Self::save_live_object_if_current`], this writes the fork-checkpoint row even when
+    /// local execution has changed or removed the object since. That row describes only the fork
+    /// checkpoint, and the rows of later checkpoints still outrank it, so it answers the
+    /// checkpoint-pinned reads from the fork checkpoint up to the object's first local change.
+    pub(crate) fn save_object_at_fork_checkpoint(&self, object: &Object) -> anyhow::Result<()> {
+        let mut batch = self.db.batch();
+        self.stage_object_version(&mut batch, object)?;
+        self.stage_package_version(&mut batch, object)?;
+        self.stage_restored_object_version(&mut batch, object)?;
+        batch
+            .commit()
+            .context("failed to save object at the fork checkpoint")
     }
 
     /// Report whether the seed load has already committed.

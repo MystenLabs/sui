@@ -195,8 +195,9 @@ Transactions executed locally will be found in the local store.
 
 ### Requests keyed by an object
 
-There are three ways to ask about an object: by an exact version, with no version at all, or
-bounded by a version. Each has different implications for how the fork can answer it.
+There are four ways to ask about an object: by an exact version, with no version at all,
+bounded by a version, or pinned at a checkpoint. Each has different implications for how the
+fork can answer it.
 
 - An exact version is an immutable key: a given version of an object never changes, so a local
 row can be served without further thought, and a miss can be resolved from the live network RPC
@@ -213,12 +214,25 @@ authoritative, no row means never fetched and sends the read to the remote. "The
 state" below sets out what may write to that index and why.
 
 - A request bounded by a version is the subtle one. It asks for the highest version at or
-below some bound, which is how child objects are read during execution. A stored row at or
-below the bound is only trustworthy if the fork knows nothing newer can exist below it, which
-holds when that row carries live-state authority or is a tombstone. Absent that, the sparse
-cache may hold some older version that an unrelated historical read left behind, and serving
-it would be wrong, so the bound must also be resolved against the live network and the
-higher of the two answers taken.
+below some bound, which is how child objects are read during execution and how `GetObject`
+serves `max_version`. The stored rows are complete only from the object's earliest
+checkpoint-pinned version upward, which is either its version at the fork point or its first
+local change, so they answer only a bound at or above that version. Below it, the sparse cache
+may hold some older version that an unrelated historical read left behind, and serving it would
+be wrong, so the live network answers instead. Its newest version within the bound may come
+from after the fork point, though, so the fork first asks for the object's version at the fork
+point, and records it there. That version answers if it is within the bound. Otherwise every
+version within the bound is older than the fork point, or the object was not live at the fork
+point, and a query pinned at the fork point returns the newest one that existed by then.
+
+- A request pinned at a checkpoint asks for the version the object had at the end of it, and
+`object_version_by_checkpoint` answers it whenever it holds a row at or below that checkpoint.
+Without one, the fork did not change the object between the fork point and that checkpoint, so
+the answer is the object's version at the fork point. That version is resolved from the live
+network RPC pinned at the fork point and recorded there as a floor row, even when the fork has
+changed the object since, because the row describes only the fork point and the rows of later
+checkpoints outrank it. Checkpoints below the fork point are refused, since the fork holds no
+history before it.
 
 ### Derived reads compose over policy
 
@@ -344,27 +358,6 @@ them. The gap is therefore a coin type's *history*, not the method. Closing it m
 type-keyed lookup against the live network when something asks, and cache the resulting
 object like any other. This is not a limit of forking — unlike the ledger range below — just
 work not done.
-
-The remote leg of a bounded read is not pinned at the fork point. Where the latest and
-exact-version object queries carry the fork checkpoint explicitly, the bounded query carries
-only its version bound, so it resolves against the live network's *current* state.
-Post-fork history on the other chain can therefore answer a read inside this fork, which is
-the one thing every other remote path is built to prevent. It reaches `read_child_object` on
-both the RPC and executor paths, so it can skew execution rather than only reads.
-
-That gap and the one below compound rather than merely coexisting, which is worth noticing
-before either is fixed: the fix proposed below is to merge the remote `RootVersion(bound)`
-result with the local candidate, and merging in an unpinned answer would make the remote leg
-authoritative precisely where it is least trustworthy. Pinning has to land first.
-
-Bounded child reads can also serve stale history. `get_object_lt_or_eq_version` trusts the
-highest *local* row at or below the bound, so a sparse cache polluted by an
-exact-historical-version read, an RPC client fetching an old dynamic-field version say, can
-hold a row lower than the true highest-≤-bound, which then wins without the remote ever
-being consulted. This affects `read_child_object` on both the RPC and executor paths, so it
-can skew execution and not only reads. Closing it means short-circuiting only on a live-state
-row or a tombstone, and otherwise merging the remote `RootVersion(bound)` result with the
-local candidate by maximum version.
 
 The fork's ledger index begins at the fork point, and the range below it is permanently
 empty. Positions are inherited rather than restarted: Simulacrum is seeded with the real

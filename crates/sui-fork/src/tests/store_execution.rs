@@ -250,6 +250,30 @@ async fn mock_system_packages(server: &MockServer, checkpoint: u64, packages: &[
         .await;
 }
 
+/// Serve `object` as the live version at `checkpoint`, the query that resolves a pre-fork object
+/// the fork holds no checkpoint-pinned row for, and expect it `requests` times.
+async fn mock_live_object_at_checkpoint(
+    server: &MockServer,
+    checkpoint: u64,
+    object: &Object,
+    requests: u64,
+) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [{
+                    "address": object.id().to_string(),
+                    "atCheckpoint": checkpoint,
+                }],
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(object)])))
+        .expect(requests)
+        .mount(server)
+        .await;
+}
+
 /// System package objects at `(id, version)`, each with the modules genesis publishes at `id`: a
 /// package past its first version names its original id through its modules' address.
 fn system_package_objects(versions: &[(ObjectID, u64)]) -> Vec<Object> {
@@ -284,7 +308,6 @@ fn system_package_objects(versions: &[(ObjectID, u64)]) -> Vec<Object> {
         })
         .collect()
 }
-
 #[tokio::test]
 async fn test_current_object_read_saves_into_rpc_store_when_attached() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -660,17 +683,19 @@ async fn test_availability_floor_below_the_fork_passes_through() {
     assert_eq!(store.get_lowest_available_checkpoint_objects().unwrap(), 10);
 }
 
-/// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
-/// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
-/// checkpoint are rejected even when the remote's retention reaches further back; at the fork
-/// checkpoint they are served. The listing of every package, which needs each version's publish
-/// checkpoint, starts after it.
+/// The fork's indexes record only the fork's own checkpoints and load pre-fork objects and
+/// packages as of the fork checkpoint, without the history before it, so checkpoint-pinned reads
+/// below the fork checkpoint are rejected even when the remote's retention reaches further back;
+/// at the fork checkpoint they are served. The listing of every package, which needs each
+/// version's publish checkpoint, starts after it.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetObjectRequest;
     use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
     use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
     use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
+    use sui_rpc_api::proto::sui::rpc::v2::ledger_service_server::LedgerService;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -700,9 +725,14 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         ),
         TransactionDigest::genesis_marker(),
     );
+    let coin = make_gas_object(
+        ObjectID::random(),
+        7,
+        Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+    );
     store
         .local_store()
-        .restore_seed_objects(&[package])
+        .restore_seed_objects(&[package, coin.clone()])
         .unwrap();
     let service = RpcService::new(Arc::new(store));
 
@@ -757,6 +787,27 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         .unwrap_err();
     assert_eq!(error.code(), tonic::Code::OutOfRange);
     assert_eq!(error.message(), below_floor);
+
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(coin.id().to_string());
+    request.at_checkpoint = Some(fork_checkpoint - 1);
+    let error = service
+        .get_object(tonic::Request::new(request))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::OutOfRange);
+    assert_eq!(error.message(), below_floor);
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(coin.id().to_string());
+    request.at_checkpoint = Some(fork_checkpoint);
+    let object = service
+        .get_object(tonic::Request::new(request))
+        .await
+        .unwrap()
+        .into_inner()
+        .object
+        .unwrap();
+    assert_eq!(object.version, Some(7));
 }
 
 /// The fork loads a system package as of the fork checkpoint, so its index has no rows for the
@@ -1060,6 +1111,97 @@ async fn test_seed_load_fails_without_a_core_system_package() {
     }
 }
 
+/// A pre-fork object the fork has never read was live at the fork checkpoint, so a read pinned at
+/// that checkpoint, or at a later one before the fork changes the object, resolves it from the
+/// remote pinned at the fork checkpoint. The fork records the answer, so the remote is asked once.
+#[tokio::test]
+async fn test_checkpoint_pinned_read_resolves_an_unread_pre_fork_object() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetObjectRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ledger_service_server::LedgerService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let object = make_gas_object(
+        ObjectID::random(),
+        7,
+        Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+    );
+    mock_live_object_at_checkpoint(&server, fork_checkpoint, &object, 1).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    // An empty seed load gives the indexes their watermark at the fork checkpoint.
+    store.local_store().restore_seed_objects(&[]).unwrap();
+    let service = RpcService::new(Arc::new(store.clone()));
+
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(object.id().to_string());
+    request.at_checkpoint = Some(fork_checkpoint);
+    let read = service
+        .get_object(tonic::Request::new(request))
+        .await
+        .expect("an object live at the fork checkpoint should be found")
+        .into_inner()
+        .object
+        .unwrap();
+    assert_eq!(read.version, Some(7));
+
+    assert_eq!(
+        store
+            .indexes()
+            .unwrap()
+            .get_object_version_at_checkpoint(object.id(), fork_checkpoint + 5)
+            .unwrap(),
+        Some(SequenceNumber::from_u64(7)),
+        "a later checkpoint before any local change resolves from the recorded row",
+    );
+}
+
+/// An object the fork read only by exact version and then changed has no row at the fork
+/// checkpoint, only one at the checkpoint that changed it. Reads pinned between the two still
+/// resolve the version it had at the fork checkpoint.
+#[tokio::test]
+async fn test_checkpoint_pinned_read_before_the_first_local_change_resolves_at_the_fork() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    let owner = Owner::AddressOwner(SuiAddress::random_for_testing_only());
+    let id = ObjectID::random();
+    let at_fork = make_gas_object(id, 7, owner.clone());
+    let changed = make_gas_object(id, 9, owner);
+    mock_live_object_at_checkpoint(&server, fork_checkpoint, &at_fork, 1).await;
+    let (mut store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+    store
+        .local_store()
+        .save_object_version_only(&at_fork)
+        .unwrap();
+    store.update_objects(BTreeMap::from([(id, changed)]), vec![]);
+    let checkpoint =
+        sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(fork_checkpoint + 3)
+            .build_checkpoint();
+    store.insert_checkpoint(VerifiedCheckpoint::new_unchecked(checkpoint.summary));
+    store.insert_checkpoint_contents(checkpoint.contents);
+
+    for (checkpoint, version) in [
+        (fork_checkpoint, 7),
+        (fork_checkpoint + 2, 7),
+        (fork_checkpoint + 3, 9),
+        (fork_checkpoint + 4, 9),
+    ] {
+        assert_eq!(
+            store
+                .indexes()
+                .unwrap()
+                .get_object_version_at_checkpoint(id, checkpoint)
+                .unwrap(),
+            Some(SequenceNumber::from_u64(version)),
+            "at checkpoint {checkpoint}",
+        );
+    }
+}
+
 #[tokio::test]
 async fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp, _gql_server) = test_simulacrum().await;
@@ -1234,28 +1376,43 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
     assert_eq!(infos[0].balance, Some(1_000_000));
 }
 
+/// The local rows answer a bounded read once it reaches the version recorded at the fork
+/// checkpoint, since every later version was executed locally. The dummy remote would surface as
+/// an error if the read fell through.
 #[test]
 fn test_read_child_object_uses_highest_local_version_within_bound() {
-    let (_temp, store) = data_store();
+    let (_temp, mut store) = data_store();
     let parent = ObjectID::random();
     let child_id = ObjectID::random();
     let child_v5 = make_gas_object(child_id, 5, Owner::ObjectOwner(parent.into()));
     let child_v7 = make_gas_object(child_id, 7, Owner::ObjectOwner(parent.into()));
 
-    let local_store = store.local_store();
-    local_store.save_object_version_only(&child_v5).unwrap();
-    local_store.save_object_version_only(&child_v7).unwrap();
+    store
+        .local_store()
+        .save_object_at_fork_checkpoint(&child_v5)
+        .unwrap();
+    store.update_objects(BTreeMap::from([(child_id, child_v7.clone())]), vec![]);
+    let checkpoint =
+        sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(1).build_checkpoint();
+    store.insert_checkpoint(VerifiedCheckpoint::new_unchecked(checkpoint.summary));
+    store.insert_checkpoint_contents(checkpoint.contents);
 
-    let child = sui_types::storage::RuntimeObjectResolver::read_child_object(
-        &store,
-        &parent,
-        &child_id,
-        SequenceNumber::from_u64(6),
-    )
-    .expect("bounded child read should not error")
-    .expect("child object should be found");
-
-    assert_eq!(child, child_v5);
+    for (bound, expected) in [
+        (5, &child_v5),
+        (6, &child_v5),
+        (7, &child_v7),
+        (8, &child_v7),
+    ] {
+        let child = sui_types::storage::RuntimeObjectResolver::read_child_object(
+            &store,
+            &parent,
+            &child_id,
+            SequenceNumber::from_u64(bound),
+        )
+        .expect("bounded child read should not error")
+        .expect("child object should be found");
+        assert_eq!(&child, expected, "at or below version {bound}");
+    }
 }
 
 /// Bounded child reads must see versions the in-flight checkpoint staged but has not yet sealed, or
@@ -1288,8 +1445,10 @@ fn test_read_child_object_sees_staged_versions_within_bound() {
     );
 }
 
+/// A child the fork holds no row for resolves from its version at the fork checkpoint, which the
+/// fork then records, so later reads within the bound stay local.
 #[tokio::test]
-async fn test_read_child_object_falls_back_to_remote_root_version() {
+async fn test_read_child_object_falls_back_to_the_remote_version_at_the_fork() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let checkpoint = 42;
     let parent = ObjectID::random();
@@ -1297,36 +1456,194 @@ async fn test_read_child_object_falls_back_to_remote_root_version() {
     let child = make_gas_object(child_id, 5, Owner::ObjectOwner(parent.into()));
 
     let server = MockServer::start().await;
+    mock_live_object_at_checkpoint(&server, checkpoint, &child, 1).await;
+
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    for _ in 0..2 {
+        let read = sui_types::storage::RuntimeObjectResolver::read_child_object(
+            &store,
+            &parent,
+            &child_id,
+            SequenceNumber::from_u64(6),
+        )
+        .expect("remote bounded child read should not error")
+        .expect("child object should be found");
+        assert_eq!(read, child);
+    }
+    assert_eq!(
+        store
+            .local_store()
+            .get_latest_object_status(child_id)
+            .unwrap(),
+        Some((SequenceNumber::from_u64(5), Status::Live(child))),
+    );
+}
+
+/// Serve the newest version of `object_id` at or below `root_version` that existed by
+/// `checkpoint`, as the checkpoint-scoped query answers it.
+async fn mock_root_version_at_checkpoint(
+    server: &MockServer,
+    checkpoint: u64,
+    object_id: ObjectID,
+    root_version: u64,
+    object: Option<&Object>,
+) {
+    let response = match object {
+        Some(object) => object_at_checkpoint_response(&[object]),
+        None => serde_json::json!({
+            "data": { "checkpoint": { "query": { "multiGetObjects": [null] } } }
+        }),
+    };
     Mock::given(method("POST"))
         .and(path("/"))
         .and(body_partial_json(serde_json::json!({
             "variables": {
-                "keys": [
-                    {
-                        "address": child_id.to_string(),
-                        "rootVersion": 6,
-                    },
-                ],
+                "sequenceNumber": checkpoint,
+                "keys": [{
+                    "address": object_id.to_string(),
+                    "rootVersion": root_version,
+                }],
             }
         })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(&child)])))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response))
+        .with_priority(1)
+        .mount(server)
+        .await;
+}
+
+/// Serve `object` as the live network's newest version at or below `root_version`, with no
+/// checkpoint scope, as the network answers after the fork checkpoint.
+async fn mock_unpinned_root_version(
+    server: &MockServer,
+    object_id: ObjectID,
+    root_version: u64,
+    object: &Object,
+) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [{
+                    "address": object_id.to_string(),
+                    "rootVersion": root_version,
+                }],
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(object)])))
+        .mount(server)
+        .await;
+}
+
+/// The live network's newest version within a bound may come from after the fork checkpoint, so
+/// a bounded read must not take it: an object live at the fork checkpoint answers with its version
+/// there, and one that did not exist yet answers with nothing.
+#[tokio::test]
+async fn test_bounded_read_never_serves_versions_created_after_the_fork() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetObjectRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ledger_service_server::LedgerService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let fork_checkpoint = 100;
+    let owner = Owner::AddressOwner(SuiAddress::random_for_testing_only());
+    let server = MockServer::start().await;
+    mock_available_range(&server, 10).await;
+
+    // Live at the fork checkpoint at version 10, then changed to 20 on the live network.
+    let id = ObjectID::random();
+    let before_fork = make_gas_object(id, 3, owner.clone());
+    let at_fork = make_gas_object(id, 10, owner.clone());
+    mock_live_object_at_checkpoint(&server, fork_checkpoint, &at_fork, 1).await;
+    mock_unpinned_root_version(&server, id, 50, &make_gas_object(id, 20, owner.clone())).await;
+    mock_root_version_at_checkpoint(&server, fork_checkpoint, id, 5, Some(&before_fork)).await;
+
+    // Created on the live network after the fork checkpoint.
+    let created_id = ObjectID::random();
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [{
+                    "address": created_id.to_string(),
+                    "atCheckpoint": fork_checkpoint,
+                }],
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[None])))
         .mount(&server)
         .await;
-
-    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), checkpoint);
-    let read = sui_types::storage::RuntimeObjectResolver::read_child_object(
-        &store,
-        &parent,
-        &child_id,
-        SequenceNumber::from_u64(6),
+    mock_unpinned_root_version(
+        &server,
+        created_id,
+        50,
+        &make_gas_object(created_id, 20, owner),
     )
-    .expect("remote bounded child read should not error")
-    .expect("child object should be found");
+    .await;
+    mock_root_version_at_checkpoint(&server, fork_checkpoint, created_id, 50, None).await;
 
-    assert_eq!(read, child);
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    store.local_store().restore_seed_objects(&[]).unwrap();
+    let bounded = |id: ObjectID, bound: u64| {
+        RpcStateReader::get_object_lt_or_eq_version(&store, &id, SequenceNumber::from_u64(bound))
+            .expect("bounded read should not error")
+            .map(|object| object.version().value())
+    };
+
+    // `GetObject` with `max_version` above both the version at the fork and the live network's
+    // later version answers with the version at the fork.
+    let service = RpcService::new(Arc::new(store.clone()));
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(id.to_string());
+    request.max_version = Some(50);
+    let read = service
+        .get_object(tonic::Request::new(request))
+        .await
+        .expect("max_version read should succeed")
+        .into_inner()
+        .object
+        .unwrap();
+    assert_eq!(read.version, Some(10), "the version at the fork answers");
+
     assert_eq!(
-        ForkStore::get_object_at_version(&store, &child_id, 5).unwrap(),
-        Some(child),
+        bounded(id, 15),
+        Some(10),
+        "the recorded version answers locally"
+    );
+    assert_eq!(
+        bounded(id, 5),
+        Some(3),
+        "an older version resolves pinned at the fork"
+    );
+    assert_eq!(bounded(created_id, 50), None);
+}
+
+/// A cached exact version below the object's version at the fork checkpoint is not the newest
+/// version within a bound, because the fork does not hold the versions between them.
+#[tokio::test]
+async fn test_bounded_read_ignores_cached_history_below_the_fork_version() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let fork_checkpoint = 100;
+    let owner = Owner::AddressOwner(SuiAddress::random_for_testing_only());
+    let id = ObjectID::random();
+    let cached = make_gas_object(id, 3, owner.clone());
+    let newest_within_bound = make_gas_object(id, 5, owner.clone());
+    let at_fork = make_gas_object(id, 10, owner);
+
+    let server = MockServer::start().await;
+    mock_live_object_at_checkpoint(&server, fork_checkpoint, &at_fork, 1).await;
+    mock_root_version_at_checkpoint(&server, fork_checkpoint, id, 6, Some(&newest_within_bound))
+        .await;
+
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    store
+        .local_store()
+        .save_object_version_only(&cached)
+        .unwrap();
+
+    assert_eq!(
+        RpcStateReader::get_object_lt_or_eq_version(&store, &id, SequenceNumber::from_u64(6))
+            .unwrap(),
+        Some(newest_within_bound),
     );
 }
 
@@ -1340,7 +1657,7 @@ fn test_read_child_object_rejects_wrong_owner_after_bounded_lookup() {
 
     store
         .local_store()
-        .save_object_version_only(&child)
+        .save_object_at_fork_checkpoint(&child)
         .unwrap();
 
     let err = sui_types::storage::RuntimeObjectResolver::read_child_object(

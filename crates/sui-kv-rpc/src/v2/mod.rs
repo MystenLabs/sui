@@ -7,8 +7,9 @@ use sui_rpc::proto::sui::rpc::v2::{
     BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
     GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
     GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest,
-    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListTransactionsRequest,
-    ListTransactionsResponse, ledger_service_server::LedgerService,
+    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListObjectVersionsRequest,
+    ListObjectVersionsResponse, ListTransactionsRequest, ListTransactionsResponse,
+    ledger_service_server::LedgerService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -26,6 +27,7 @@ mod get_object;
 pub(crate) mod get_transaction;
 mod list_checkpoints;
 mod list_events;
+mod list_object_versions;
 mod list_transactions;
 mod move_package_service;
 #[cfg(test)]
@@ -48,28 +50,30 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetObjectRequest>,
     ) -> Result<tonic::Response<GetObjectResponse>, tonic::Status> {
-        get_object::get_object(
-            self.client.clone(),
-            request.into_inner(),
-            &self.package_resolver,
-        )
-        .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
+        get_object::get_object(self, request)
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn batch_get_objects(
         &self,
         request: tonic::Request<BatchGetObjectsRequest>,
     ) -> Result<tonic::Response<BatchGetObjectsResponse>, tonic::Status> {
-        get_object::batch_get_objects(
-            self.client.clone(),
-            request.into_inner(),
-            &self.package_resolver,
-        )
-        .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
+        get_object::batch_get_objects(self, request)
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_object_versions(
+        &self,
+        request: tonic::Request<ListObjectVersionsRequest>,
+    ) -> Result<tonic::Response<ListObjectVersionsResponse>, tonic::Status> {
+        list_object_versions::list_object_versions(self, request)
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn get_transaction(
@@ -229,11 +233,17 @@ pub(crate) fn service_info(
 
 #[cfg(test)]
 pub(crate) mod test_utils {
+    use std::net::SocketAddr;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use prometheus::Registry;
     use prometheus::proto::{Counter, Histogram, MetricFamily};
     use sui_kvstore::BigTableClient as InnerBigTableClient;
+    use sui_kvstore::ObjectSchema;
+    use sui_kvstore::ObjectStatus;
+    use sui_kvstore::tables::object_versions_by_checkpoint;
+    use sui_kvstore::tables::objects;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_package_resolver::PackageStore;
     use sui_package_resolver::Resolver;
@@ -250,11 +260,15 @@ pub(crate) mod test_utils {
     use sui_rpc::proto::sui::rpc::v2::event_literal;
     use sui_rpc::proto::sui::rpc::v2::transaction_literal;
     use sui_types::balance_change::derive_balance_changes_2;
+    use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::full_checkpoint_content::Checkpoint;
+    use sui_types::object::{Object, Owner};
     use sui_types::storage::{ObjectKey, get_transaction_object_set};
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
+    use crate::KvRpcConfig;
     use crate::KvRpcMetrics;
+    use crate::KvRpcServer;
     use crate::LedgerHistoryConfig;
     use crate::LedgerHistoryMethodConfig;
     use crate::StageConfig;
@@ -263,6 +277,8 @@ pub(crate) mod test_utils {
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
     use crate::served_height::ServedHeight;
+    use crate::service_info_watermark_pipelines;
+    use crate::tests::seed_watermarks;
 
     /// A served height above every checkpoint and epoch, for tests of what a handler serves
     /// rather than of where the served height cuts it off.
@@ -431,6 +447,107 @@ pub(crate) mod test_utils {
             families.iter().all(|family| family.name() != name),
             "{name} unexpectedly registered"
         );
+    }
+
+    /// A kv-rpc server over the mock BigTable at `addr`, reading the objects table of
+    /// `object_schema`, with every watermark it serves at checkpoint 10 and its service info
+    /// loaded.
+    pub(crate) async fn start_kv_rpc(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        object_schema: ObjectSchema,
+        enable_object_at_checkpoint: bool,
+    ) -> KvRpcServer {
+        start_kv_rpc_at_heights(
+            addr,
+            stages,
+            object_schema,
+            enable_object_at_checkpoint,
+            |_| 10,
+        )
+        .await
+    }
+
+    /// [`start_kv_rpc`], with the watermark of each pipeline it serves at `height(pipeline)`.
+    pub(crate) async fn start_kv_rpc_at_heights(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        object_schema: ObjectSchema,
+        enable_object_at_checkpoint: bool,
+        height: impl Fn(&str) -> u64,
+    ) -> KvRpcServer {
+        let mut client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".into())
+            .await
+            .expect("connect to mock BigTable");
+        let pipelines = service_info_watermark_pipelines(
+            LedgerHistoryConfig::default().bitmap_schema(),
+            object_schema,
+            enable_object_at_checkpoint && object_schema == ObjectSchema::V2,
+        );
+        seed_watermarks(&mut client, &pipelines, height).await;
+        let config = KvRpcConfig::default();
+        let kv_rpc = KvRpcServer::new_local_with_config(
+            addr.to_string(),
+            "test".to_string(),
+            None,
+            LedgerHistoryConfig::default(),
+            config.request_bigtable_concurrency(),
+            config.monotonic_read_wait_timeout(),
+            stages,
+            config.watermark_source(),
+            object_schema,
+            enable_object_at_checkpoint,
+        )
+        .await
+        .expect("start kv-rpc server");
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            kv_rpc.cache.subscribe().wait_for(Option::is_some),
+        )
+        .await
+        .expect("service info never refreshed")
+        .expect("service info sender dropped");
+        kv_rpc
+    }
+
+    pub(crate) fn mask(paths: &[&str]) -> prost_types::FieldMask {
+        prost_types::FieldMask {
+            paths: paths.iter().map(|path| path.to_string()).collect(),
+        }
+    }
+
+    /// Write `id`'s history, `(checkpoint, version, status)` for each change in order, to both
+    /// the `objects_v2` table (a live row or a tombstone) and the `object_versions_by_checkpoint`
+    /// index.
+    pub(crate) async fn insert_history(
+        mock: &MockBigtableServer,
+        id: ObjectID,
+        history: &[(u64, u64, ObjectStatus)],
+    ) {
+        for &(checkpoint, version, status) in history {
+            let version = SequenceNumber::from_u64(version);
+            let cells = match status {
+                ObjectStatus::Live => objects::encode(&Object::with_id_owner_version_for_testing(
+                    id,
+                    version,
+                    Owner::AddressOwner(SuiAddress::ZERO),
+                ))
+                .unwrap(),
+                removed => objects::encode_tombstone(removed).unwrap(),
+            };
+            mock.insert_row(
+                objects::NAME_V2,
+                objects::encode_key(ObjectSchema::V2, &ObjectKey(id, version)),
+                cells,
+            )
+            .await;
+            mock.insert_row(
+                object_versions_by_checkpoint::NAME,
+                object_versions_by_checkpoint::encode_key(&id, checkpoint),
+                object_versions_by_checkpoint::encode(version, status),
+            )
+            .await;
+        }
     }
 
     pub(super) fn ascending_options() -> QueryOptions {
@@ -613,6 +730,8 @@ mod tests {
                 KvRpcConfig::default().monotonic_read_wait_timeout(),
                 StagesConfig::default(),
                 WatermarkSource::IndexerStreams(vec![]),
+                sui_kvstore::ObjectSchema::V1,
+                false,
             )
             .await
             .expect("create kv-rpc server");

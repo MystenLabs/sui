@@ -1436,31 +1436,52 @@ pub(crate) mod object_query {
         let mut results: Vec<Option<Option<(Object, u64)>>> = vec![None; keys.len()];
         let mut standard_indices: Vec<usize> = Vec::with_capacity(keys.len());
         let mut standard_keys: Vec<ObjectKey> = Vec::with_capacity(keys.len());
-        // Exact versions pinned at a checkpoint go through a checkpoint-scoped
+        // Keys pinned at a checkpoint go through a checkpoint-scoped
         // multi-get instead, so they batch too; grouped by checkpoint because
         // the pin lives on the query rather than on each key.
         let mut pinned: BTreeMap<u64, (Vec<usize>, Vec<ObjectKey>)> = BTreeMap::new();
 
-        for (idx, key) in keys.iter().cloned().enumerate() {
-            match key.version_query {
+        for (idx, key) in keys.iter().enumerate() {
+            let address = SuiAddress(key.object_id.to_string());
+            let (checkpoint, scoped_key) = match key.version_query {
+                VersionQuery::AtCheckpoint(checkpoint) => {
+                    standard_indices.push(idx);
+                    standard_keys.push(ObjectKey {
+                        address,
+                        version: None,
+                        root_version: None,
+                        at_checkpoint: Some(checkpoint),
+                    });
+                    continue;
+                }
                 VersionQuery::VersionAtCheckpoint {
                     version,
                     checkpoint,
-                } => {
-                    let (indices, keys) = pinned.entry(checkpoint).or_default();
-                    indices.push(idx);
-                    keys.push(ObjectKey {
-                        address: SuiAddress(key.object_id.to_string()),
+                } => (
+                    checkpoint,
+                    ObjectKey {
+                        address,
                         version: Some(version),
                         root_version: None,
                         at_checkpoint: None,
-                    });
-                }
-                _ => {
-                    standard_indices.push(idx);
-                    standard_keys.push(ObjectKey::from(key));
-                }
-            }
+                    },
+                ),
+                VersionQuery::RootVersionAtCheckpoint {
+                    root_version,
+                    checkpoint,
+                } => (
+                    checkpoint,
+                    ObjectKey {
+                        address,
+                        version: None,
+                        root_version: Some(root_version),
+                        at_checkpoint: None,
+                    },
+                ),
+            };
+            let (indices, keys) = pinned.entry(checkpoint).or_default();
+            indices.push(idx);
+            keys.push(scoped_key);
         }
 
         for (checkpoint, (indices, keys)) in pinned {
@@ -1510,13 +1531,14 @@ pub(crate) mod object_query {
             .collect())
     }
 
-    /// Fetch exact object versions, each returned only if it already existed at `checkpoint`.
+    /// Fetch objects by exact version or root version, each returned only if the version found
+    /// already existed at `checkpoint`.
     ///
     /// The checkpoint pins the *query scope* rather than each key, which is what lets these batch:
     /// `multiGetObjects` rejects a key carrying more than one bound, so a key with both a version
     /// and an `atCheckpoint` cannot be sent. Scoping instead keeps the guard intact — a scoped
-    /// exact-version read resolves through `Object::at_version`, which drops any version created
-    /// after the checkpoint in scope, so post-fork state still cannot leak into a diverged fork.
+    /// read drops any version created after the checkpoint in scope, without falling back to an
+    /// older one, so post-fork state still cannot leak into a diverged fork.
     async fn query_versions_at_checkpoint(
         keys: Vec<ObjectKey>,
         checkpoint: u64,
@@ -1574,70 +1596,9 @@ pub(crate) mod object_query {
         }
     }
 
-    impl From<GqlObjectKey> for ObjectKey {
-        fn from(key: GqlObjectKey) -> Self {
-            ObjectKey {
-                address: SuiAddress(key.object_id.to_string()),
-                version: match key.version_query {
-                    VersionQuery::VersionAtCheckpoint {
-                        version,
-                        checkpoint,
-                    } => Some(version),
-                    _ => None,
-                },
-                root_version: match key.version_query {
-                    VersionQuery::RootVersion(v) => Some(v),
-                    _ => None,
-                },
-                at_checkpoint: match key.version_query {
-                    VersionQuery::AtCheckpoint(v) => Some(v),
-                    VersionQuery::VersionAtCheckpoint {
-                        version,
-                        checkpoint,
-                    } => Some(checkpoint),
-                    _ => None,
-                },
-            }
-        }
-    }
-
     #[cfg(test)]
     mod tests {
-        use sui_types::base_types::ObjectID;
-
         use super::*;
-
-        #[test]
-        fn object_key_from_version_query_sets_only_selected_bound() {
-            let object_id = ObjectID::random();
-
-            let root_version_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::RootVersion(11),
-            });
-            assert_eq!(root_version_key.version, None);
-            assert_eq!(root_version_key.root_version, Some(11));
-            assert_eq!(root_version_key.at_checkpoint, None);
-
-            let checkpoint_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::AtCheckpoint(19),
-            });
-            assert_eq!(checkpoint_key.version, None);
-            assert_eq!(checkpoint_key.root_version, None);
-            assert_eq!(checkpoint_key.at_checkpoint, Some(19));
-
-            let object_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::VersionAtCheckpoint {
-                    version: 23,
-                    checkpoint: 29,
-                },
-            });
-            assert_eq!(object_key.version, Some(23));
-            assert_eq!(object_key.root_version, None);
-            assert_eq!(object_key.at_checkpoint, Some(29));
-        }
 
         #[test]
         fn decode_object_fragment_returns_none_for_missing_object() {

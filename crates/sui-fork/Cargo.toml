@@ -40,6 +40,7 @@ sui-rpc-api.workspace = true
 sui-rpc-store.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
+typed-store-error.workspace = true
 
 [dev-dependencies]
 move-binary-format.workspace = true

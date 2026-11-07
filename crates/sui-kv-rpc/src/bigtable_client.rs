@@ -26,6 +26,7 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -51,6 +52,8 @@ use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
+use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::ObjectStatus;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
@@ -59,6 +62,8 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::row_placement::RowPlacement;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -71,14 +76,15 @@ use tokio::sync::Semaphore;
 pub(crate) mod stage {
     pub const TRANSACTIONS: &str = "transactions";
     pub const OBJECTS: &str = "objects";
+    pub const OBJECT_VERSIONS_BY_CHECKPOINT: &str = "object_versions_by_checkpoint";
     pub const TX_SEQ_DIGEST: &str = "tx_seq_digest";
     pub const TX_CP_RESOLVE: &str = "tx_cp_resolve";
     pub const CHECKPOINTS: &str = "checkpoints";
 }
 
 /// Metrics for the request-scoped `BigTableClient` limiter and the reads it
-/// gates. Cardinality is bounded: per method, 5 stages for `permit_wait_ms`,
-/// `permit_hold_ms`, and `reads_started`, 5 stages × 3 outcomes for
+/// gates. Cardinality is bounded: per method, 6 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 6 stages × 3 outcomes for
 /// `reads_finished`, and one series each for the request-end `permits_peak`
 /// and `ops_total` histograms.
 #[derive(Clone)]
@@ -262,6 +268,56 @@ impl BigTableClient {
             .await
     }
 
+    /// The keys in `object_keys` at which the object is live, read without the
+    /// objects' contents. One multi-get, under one permit.
+    pub(crate) async fn get_existing_object_keys(
+        &self,
+        object_keys: Vec<ObjectKey>,
+    ) -> Result<Vec<ObjectKey>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::OBJECTS, async move {
+            inner.get_existing_object_keys(&object_keys).await
+        })
+        .await
+    }
+
+    /// The newest version of `object_id` at or below `version`, unless the
+    /// object was deleted or wrapped at that version. One single-row read of
+    /// the objects table, forward under `objects_v2`, under one permit.
+    pub(crate) async fn get_object_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECTS,
+            inner.get_object_lt_or_eq_version(object_id, version),
+        )
+        .await
+    }
+
+    /// Up to `limit` live versions of `object_id` in `versions`, in ascending
+    /// version order or descending if `descending`; versions at which the
+    /// object was deleted or wrapped are skipped and do not count toward
+    /// `limit`. One ReadRows of the `objects_v2` table, under one permit:
+    /// forward for a descending page, reversed over at most two ranges for an
+    /// ascending one.
+    pub(crate) async fn get_live_object_versions(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECTS,
+            inner.get_live_object_versions(object_id, versions, limit, descending),
+        )
+        .await
+    }
+
     pub(crate) async fn resolve_tx_digests_stream(
         &self,
         tx_sequence_numbers: Vec<u64>,
@@ -350,6 +406,22 @@ impl BigTableClient {
         self.call_gated(
             stage::TX_CP_RESOLVE,
             inner.resolve_tx_checkpoint_position(tx_seq),
+        )
+        .await
+    }
+
+    /// The version and status `object_id` had at the end of `checkpoint`, from
+    /// the `object_versions_by_checkpoint` index. One single-row forward scan,
+    /// under one permit.
+    pub(crate) async fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(SequenceNumber, ObjectStatus)>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECT_VERSIONS_BY_CHECKPOINT,
+            inner.get_object_version_at_checkpoint(object_id, checkpoint),
         )
         .await
     }

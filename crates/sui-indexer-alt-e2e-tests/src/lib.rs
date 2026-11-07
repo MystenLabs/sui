@@ -47,12 +47,11 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
-use sui_kvstore::BITMAP_INDEX_V2_PIPELINE;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BitmapSchema;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
-use sui_kvstore::EVENT_BITMAP_INDEX_V2_PIPELINE;
 use sui_kvstore::IndexerConfig as BtIndexerConfig;
 use sui_kvstore::IngestionConfig as BtIngestionConfig;
 use sui_kvstore::KeyValueStoreReader;
@@ -133,6 +132,10 @@ pub struct OffchainCluster {
 
     /// The pipelines that the indexer is populating.
     pipelines: Vec<&'static str>,
+
+    /// The BigTable archival indexer's pipelines: [`ALL_PIPELINE_NAMES`] and
+    /// [`ALPHA_PIPELINE_NAMES`].
+    bigtable_pipelines: Vec<&'static str>,
 
     /// Handles to all running services. Held on to so the services are not dropped (and therefore
     /// aborted) until the cluster is stopped.
@@ -264,7 +267,7 @@ impl FullCluster {
             .offchain
             .wait_for_graphql(checkpoint.sequence_number, timeout);
         let bigtable = self.offchain.wait_for_bigtable(
-            &ALL_PIPELINE_NAMES,
+            &self.offchain.bigtable_pipelines,
             checkpoint.sequence_number,
             timeout,
         );
@@ -521,6 +524,11 @@ impl OffchainCluster {
             bigtable_client,
             db,
             pipelines,
+            bigtable_pipelines: ALL_PIPELINE_NAMES
+                .iter()
+                .chain(&ALPHA_PIPELINE_NAMES)
+                .copied()
+                .collect(),
             services,
             bigtable_emulator,
             database,
@@ -901,11 +909,6 @@ pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Re
     Ok(())
 }
 
-/// Alpha BigTable pipelines the archival stack registers: the v2 bitmap pipelines, whose tables
-/// kv-rpc reads.
-const BIGTABLE_ALPHA_PIPELINES: [&str; 2] =
-    [BITMAP_INDEX_V2_PIPELINE, EVENT_BITMAP_INDEX_V2_PIPELINE];
-
 /// Start the archival stack: BigTable emulator, BigTable indexer, and sui-kv-rpc.
 async fn start_archival(
     client_args: ClientArgs,
@@ -941,7 +944,9 @@ async fn start_archival(
         CommitterConfig::default(),
         BtIndexerConfig::default(),
         bt_pipeline_layer,
-        &BIGTABLE_ALPHA_PIPELINES,
+        // Run the alpha pipelines too: kv-rpc reads the v2 bitmap tables, and tests can enable
+        // the reads the other alpha pipelines back.
+        &ALPHA_PIPELINE_NAMES,
         Chain::Unknown,
         registry,
     )
@@ -967,6 +972,8 @@ async fn start_archival(
         kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),
         kv_rpc_config.watermark_source(),
+        kv_rpc_config.object_schema(),
+        kv_rpc_config.enable_object_at_checkpoint(),
     )
     .await
     .context("Failed to create KvRpcServer")?;

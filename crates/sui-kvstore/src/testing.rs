@@ -22,6 +22,8 @@ use tokio::process::Command as TokioCommand;
 #[cfg(any(test, feature = "testing"))]
 use sui_types::full_checkpoint_content::Checkpoint;
 
+pub use crate::bigtable::client::ASCENDING_OBJECT_VERSIONS_NEWEST_RANGE;
+
 pub const INSTANCE_ID: &str = "bigtable_test_instance";
 
 /// New tables must be added here when introduced. The indexer will fail to write to missing
@@ -32,6 +34,7 @@ pub const TABLES: &[&str] = &[
     crate::tables::event_bitmap_index::NAME,
     crate::tables::event_bitmap_index::NAME_V2,
     crate::tables::objects::NAME,
+    crate::tables::objects::NAME_V2,
     crate::tables::object_versions_by_checkpoint::NAME,
     crate::tables::transactions::NAME,
     crate::tables::checkpoints::NAME,
@@ -183,7 +186,10 @@ pub async fn insert_checkpoint_rows(mock: &MockBigtableServer, checkpoint: &Chec
     let key = checkpoints::encode_key(checkpoint_number);
     mock.insert_row(checkpoints::NAME, key, row).await;
     for object in checkpoint.object_set.iter() {
-        let key = objects::encode_key(&ObjectKey(object.id(), object.version()));
+        let key = objects::encode_key(
+            crate::tables::ObjectSchema::V1,
+            &ObjectKey(object.id(), object.version()),
+        );
         let row = objects::encode(object).expect("encode object");
         mock.insert_row(objects::NAME, key, row).await;
     }

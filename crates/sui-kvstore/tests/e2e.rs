@@ -36,8 +36,9 @@ use sui_kvstore::BitmapQuery;
 use sui_kvstore::BitmapSchema;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
-use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
 use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
+use sui_kvstore::OBJECTS_V2_PIPELINE;
+use sui_kvstore::ObjectSchema;
 use sui_kvstore::ObjectStatus;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
@@ -1182,12 +1183,13 @@ async fn test_object_versions_by_checkpoint() -> Result<()> {
     Ok(())
 }
 
-/// Version-bounded object reads see the state left by the object's latest change at or below
-/// that version, through creation, mutation, wrapping, unwrapping, and deletion: tombstones hide
-/// the object at the versions where it was wrapped or deleted, and pages of live versions skip
-/// them.
+/// Version-bounded reads of `objects_v2` see the state left by the object's latest change at or
+/// below that version, through creation, mutation, wrapping, unwrapping, and deletion: tombstones
+/// hide the object at the versions where it was wrapped or deleted, and pages of live versions
+/// skip them. Reads of `objects`, which records no removals, resolve a removed object to its last
+/// live version.
 #[tokio::test]
-async fn test_object_tombstones() -> Result<()> {
+async fn test_objects_v2() -> Result<()> {
     let mut harness = TestHarness::new().await?;
 
     // Alpha pipelines are opt-in: an indexer that does not name them does not register them.
@@ -1195,7 +1197,7 @@ async fn test_object_tombstones() -> Result<()> {
     assert!(
         !default_indexer
             .pipeline_names()
-            .contains(&OBJECT_TOMBSTONES_PIPELINE),
+            .contains(&OBJECTS_V2_PIPELINE),
         "alpha pipeline registered by default",
     );
     drop(default_indexer);
@@ -1269,6 +1271,8 @@ async fn test_object_tombstones() -> Result<()> {
         .await?;
     changes.push((object, delete.lamport_version(), ObjectStatus::Deleted));
     harness.wait_for_watermark(last_cp, 0).await?;
+    let mut v1 = harness.bigtable_client().clone();
+    let mut v2 = v1.clone().with_object_schema(ObjectSchema::V2);
 
     let first_version = create.lamport_version().value();
     let last_version = delete.lamport_version().value();
@@ -1295,44 +1299,54 @@ async fn test_object_tombstones() -> Result<()> {
                 .and_then(|(changed_at, status)| {
                     (*status == ObjectStatus::Live).then_some(*changed_at)
                 });
-            let found = harness
-                .bigtable_client()
-                .get_object_lt_or_eq_version(id, version)
-                .await?;
+            let found = v2.get_object_lt_or_eq_version(id, version).await?;
             assert_eq!(
                 found.map(|o| (o.id(), o.version())),
                 expected.map(|live| (id, live)),
                 "{id} at version {version}",
             );
 
-            let exact = harness
-                .bigtable_client()
-                .get_objects(&[ObjectKey(id, version)])
-                .await?;
+            // The exact-version read and its contents-free form agree.
             let expected_exact = live_versions.contains(&version).then_some(version);
+            let exact = v2.get_objects(&[ObjectKey(id, version)]).await?;
             assert_eq!(
                 exact.first().map(|o| o.version()),
                 expected_exact,
                 "{id} exactly at version {version}",
             );
+            let existing = v2
+                .get_existing_object_keys(&[ObjectKey(id, version)])
+                .await?;
+            assert_eq!(
+                existing.first().map(|key| key.1),
+                expected_exact,
+                "{id} key exactly at version {version}",
+            );
         }
 
-        // Both objects end deleted, so neither has a latest version.
+        // Both objects end deleted, so neither has a latest version in `objects_v2`, with or
+        // without contents, even though their older live versions remain. `objects` has no
+        // tombstones, so its latest version is the last live one.
         assert!(
-            harness
-                .bigtable_client()
-                .get_latest_object(&id)
-                .await?
-                .is_none(),
+            v2.get_latest_object(&id).await?.is_none(),
             "{id} has a latest version after deletion",
+        );
+        assert_eq!(
+            v2.get_latest_object_version(&id).await?,
+            None,
+            "{id} has a latest version number after deletion",
+        );
+        assert_eq!(
+            v1.get_latest_object(&id).await?.map(|o| o.version()),
+            live_versions.last().copied(),
+            "{id} in objects",
         );
 
         // Pages of live versions skip the tombstones, which never take a slot in a page.
         let all_versions = SequenceNumber::MIN..=SequenceNumber::MAX;
         for limit in 1..=live_versions.len() + 1 {
             for descending in [false, true] {
-                let page: Vec<SequenceNumber> = harness
-                    .bigtable_client()
+                let page: Vec<SequenceNumber> = v2
                     .get_live_object_versions(id, all_versions.clone(), limit, descending)
                     .await?
                     .into_iter()
@@ -1353,8 +1367,7 @@ async fn test_object_tombstones() -> Result<()> {
 
     // A page bounded below a removal: the object's live versions before it was wrapped.
     let before_wrap = SequenceNumber::MIN..=wrap.lamport_version();
-    let page: Vec<SequenceNumber> = harness
-        .bigtable_client()
+    let page: Vec<SequenceNumber> = v2
         .get_live_object_versions(object, before_wrap, 10, true)
         .await?
         .into_iter()
