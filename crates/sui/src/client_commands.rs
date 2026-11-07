@@ -3388,15 +3388,15 @@ fn format_balance(
     let thousands = 10u128.pow(coin_decimals + 3);
     let units = 10u128.pow(coin_decimals);
 
-    let (whole, fractional) = if value > billions {
+    let (whole, fractional) = if value >= billions {
         coin_decimals += 9;
         suffix = format!("B{suffix}");
         divide(value, billions)
-    } else if value > millions {
+    } else if value >= millions {
         coin_decimals += 6;
         suffix = format!("M{suffix}");
         divide(value, millions)
-    } else if value > thousands {
+    } else if value >= thousands {
         coin_decimals += 3;
         suffix = format!("K{suffix}");
         divide(value, thousands)
@@ -4693,5 +4693,25 @@ mod tests {
 
         let table = gas_result(0, 42).to_string();
         assert!(table.contains("address balance"), "{table}");
+    }
+
+    /// 1000 whole SUI is exactly the K threshold and should render as 1.00K, not 1000.00.
+    #[test]
+    fn format_balance_uses_higher_unit_at_exact_threshold() {
+        let one_thousand_sui = 1_000u128 * 1_000_000_000;
+        assert_eq!(
+            format_balance(one_thousand_sui, 9, 2, Some("SUI")),
+            "1.00K SUI"
+        );
+        let one_million_sui = 1_000_000u128 * 1_000_000_000;
+        assert_eq!(
+            format_balance(one_million_sui, 9, 2, Some("SUI")),
+            "1.00M SUI"
+        );
+        let one_billion_sui = 1_000_000_000u128 * 1_000_000_000;
+        assert_eq!(
+            format_balance(one_billion_sui, 9, 2, Some("SUI")),
+            "1.00B SUI"
+        );
     }
 }
