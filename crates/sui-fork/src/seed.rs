@@ -158,11 +158,13 @@ pub(crate) async fn prepare_seed_manifest(
 }
 
 /// Load every manifest entry into the rpc-store with its full derived-index surface, once, before
-/// the fork executes anything.
+/// the fork executes anything, together with every system package live at the fork checkpoint.
 ///
 /// The manifest holds object references rather than objects, so each entry is fetched by id and
 /// version and handed to the restore pipelines, which rebuild the owned-object index and the rest
-/// of the derived surface. The load runs at most once per fork directory, because `Balance`
+/// of the derived surface. The system packages are loaded too, so the indexes hold each one's
+/// version at the fork checkpoint, which `ListSystemPackages` reads from the indexes alone rather
+/// than fetching on demand. The load runs at most once per fork directory, because `Balance`
 /// accumulates through a merge operator and a second pass would double-count every seeded coin, and
 /// it commits its own completion marker atomically with the rows to make that unrepeatable rather
 /// than merely unlikely.
@@ -181,6 +183,8 @@ pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> R
     for chunk in object_refs.chunks(OBJECTS_PER_QUERY) {
         objects.extend(store.fetch_seed_objects(chunk)?);
     }
+    // Manifest entries are address-owned objects, never packages, so no system package repeats.
+    objects.extend(store.fetch_system_packages()?);
 
     store.local_store().restore_seed_objects(&objects)
 }
