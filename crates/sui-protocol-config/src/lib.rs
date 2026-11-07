@@ -1327,6 +1327,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
 
+    // Charge a MIST-denominated amount for Publish and Upgrade commands before execution.
+    #[serde(skip_serializing_if = "is_false")]
+    package_publish_charge: bool,
+
     // Enable allowance-sourced funds withdrawals (`WithdrawFrom::SenderAllowance`).
     // Requires `enable_accumulators`.
     #[serde(skip_serializing_if = "is_false")]
@@ -1748,6 +1752,15 @@ pub struct ProtocolConfig {
 
     /// Cost per byte for a transaction that publishes a package
     package_publish_cost_per_byte: Option<u64>,
+
+    /// MIST charged per publish or upgrade command.
+    package_publish_charge_fixed: Option<u64>,
+
+    /// MIST charged per module of a publish or upgrade command.
+    package_publish_charge_per_module: Option<u64>,
+
+    /// MIST charged per dependency of a publish or upgrade command.
+    package_publish_charge_per_dependency: Option<u64>,
 
     // Per-byte cost of reading an object during transaction execution
     obj_access_cost_read_per_byte: Option<u64>,
@@ -2797,6 +2810,9 @@ impl ProtocolConfig {
             package_publish_cost_fixed: Some(1_000),
             base_tx_cost_per_byte: Some(0),
             package_publish_cost_per_byte: Some(80),
+            package_publish_charge_fixed: None,
+            package_publish_charge_per_module: None,
+            package_publish_charge_per_dependency: None,
             obj_access_cost_read_per_byte: Some(15),
             obj_access_cost_read_per_package_kb: None,
             obj_access_cost_mutate_per_byte: Some(40),

@@ -18,7 +18,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorTrait, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
-    gas::{GasUsageReport, SuiGasStatusAPI},
+    gas::GasUsageReport,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
@@ -133,7 +133,7 @@ impl executor::Executor for Executor {
     ) {
         let ExecutionOutput {
             inner_store: store_out,
-            gas_status: gas_status_out,
+            gas_report: gas_report_out,
             effects,
             timings,
             execution_result: result,
@@ -160,13 +160,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (
-            store_out,
-            gas_status_out.gas_usage_report(),
-            effects,
-            timings,
-            result,
-        )
+        (store_out, gas_report_out, effects, timings, result)
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -197,7 +191,7 @@ impl executor::Executor for Executor {
     ) {
         let ExecutionOutput {
             inner_store: store_out,
-            gas_status: gas_status_out,
+            gas_report: gas_report_out,
             effects,
             timings,
             execution_result: result,
@@ -224,13 +218,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (
-            store_out,
-            gas_status_out.gas_usage_report(),
-            effects,
-            timings,
-            result,
-        )
+        (store_out, gas_report_out, effects, timings, result)
     }
 
     fn dev_inspect_transaction(
@@ -259,10 +247,10 @@ impl executor::Executor for Executor {
     ) {
         // The two arms return different `ExecutionOutput<Mode>` types, so each destructures
         // into the common tuple.
-        let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
+        let (inner_temp_store, gas_report, effects, result) = if skip_all_checks {
             let ExecutionOutput {
                 inner_store,
-                gas_status,
+                gas_report,
                 effects,
                 timings: _,
                 execution_result,
@@ -288,11 +276,11 @@ impl executor::Executor for Executor {
                 execution_params,
                 &mut None,
             );
-            (inner_store, gas_status, effects, execution_result)
+            (inner_store, gas_report, effects, execution_result)
         } else {
             let ExecutionOutput {
                 inner_store,
-                gas_status,
+                gas_report,
                 effects,
                 timings: _,
                 execution_result,
@@ -318,17 +306,12 @@ impl executor::Executor for Executor {
                 execution_params,
                 &mut None,
             );
-            (inner_store, gas_status, effects, execution_result)
+            (inner_store, gas_report, effects, execution_result)
         };
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (
-            inner_temp_store,
-            gas_status.gas_usage_report(),
-            effects,
-            result,
-        )
+        (inner_temp_store, gas_report, effects, result)
     }
 
     fn update_genesis_state(
