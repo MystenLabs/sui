@@ -319,6 +319,11 @@ pub struct ConsensusTransactionPoolConfig {
     /// two maximum-size blocks per second (`max_transactions_in_block_bytes`).
     /// Must be greater than zero.
     pub max_user_bytes_per_second: Option<u64>,
+
+    /// Cap on the total serialized bytes of queued user-lane entries, enforced
+    /// alongside `max_pending_transactions`. Entries are evicted lowest gas price
+    /// first to stay within it. Defaults to 256 MiB when unset; 0 disables the cap.
+    pub max_pending_user_bytes: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -328,6 +333,7 @@ impl Default for ConsensusTransactionPoolConfig {
             max_pending_transactions: None,
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
+            max_pending_user_bytes: None,
         }
     }
 }
@@ -343,6 +349,14 @@ impl ConsensusTransactionPoolConfig {
             self.max_user_bytes_per_second
                 .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
         })
+    }
+
+    pub fn max_pending_user_bytes(&self) -> Option<u64> {
+        match self.max_pending_user_bytes {
+            Some(0) => None,
+            Some(bytes) => Some(bytes),
+            None => Some(256 * 1024 * 1024),
+        }
     }
 }
 
@@ -1948,6 +1962,27 @@ mod tests {
             round_tripped.rpc_store_bitmap_periodic_compaction_days,
             Some(17)
         );
+    }
+
+    #[test]
+    fn max_pending_user_bytes_defaults_and_disable() {
+        use super::ConsensusTransactionPoolConfig;
+
+        let default = ConsensusTransactionPoolConfig::default();
+        assert_eq!(default.max_pending_user_bytes(), Some(256 * 1024 * 1024));
+
+        let configured = ConsensusTransactionPoolConfig {
+            max_pending_user_bytes: Some(1024),
+            ..Default::default()
+        };
+        assert_eq!(configured.max_pending_user_bytes(), Some(1024));
+
+        // Zero disables the cap rather than rejecting every queued entry.
+        let disabled = ConsensusTransactionPoolConfig {
+            max_pending_user_bytes: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(disabled.max_pending_user_bytes(), None);
     }
 
     #[test]

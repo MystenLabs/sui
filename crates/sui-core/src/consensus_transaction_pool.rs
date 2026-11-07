@@ -257,6 +257,10 @@ impl AdmissionQueueEntry for PoolEntry {
         self.ack.keys.iter().cloned()
     }
 
+    fn byte_size(&self) -> usize {
+        self.total_bytes
+    }
+
     fn notify_evicted(self, min_gas_price: u64) {
         self.metrics.pool_depth.with_label_values(&["user"]).dec();
         self.metrics
@@ -367,6 +371,10 @@ struct ProposedEntry {
     created: Instant,
 }
 
+// One Inner exists per epoch pool, behind an Arc<Mutex<_>>, so the unused Closed
+// variant's layout slack is a single allocation; boxing Open would only add
+// indirection on take().
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     Open(Pool),
     Closed,
@@ -395,6 +403,7 @@ impl ConsensusTransactionPool {
         cache_writer: Arc<dyn ExecutionCacheWrite>,
         max_pending_transactions: usize,
         max_user_bytes_per_second: Option<u64>,
+        max_pending_user_bytes: Option<u64>,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -440,10 +449,10 @@ impl ConsensusTransactionPool {
                 metrics.pool_stagger_shadow_delay.clone(),
             ),
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
-                user: UserLane::Open(PriorityAdmissionQueue::new(
-                    max_pending_transactions,
-                    metrics,
-                )),
+                user: UserLane::Open(
+                    PriorityAdmissionQueue::new(max_pending_transactions, metrics)
+                        .with_byte_capacity(max_pending_user_bytes),
+                ),
                 user_byte_budget,
                 system: VecDeque::new(),
                 pings: VecDeque::new(),
@@ -463,6 +472,7 @@ impl ConsensusTransactionPool {
             epoch_store,
             cache_writer,
             max_pending_transactions,
+            None,
             None,
             metrics,
             ConsensusAdapterMetrics::new_test(),
@@ -1669,6 +1679,7 @@ mod tests {
             state.get_cache_writer().clone(),
             10,
             Some(max_user_bytes_per_second),
+            None,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
