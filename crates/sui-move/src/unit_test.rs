@@ -31,7 +31,7 @@ use sui_types::{
     base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
     gas::{SuiGasStatus, SuiGasStatusAPI},
-    gas_model::{tables::GasStatus, units_types::Gas},
+    gas_model::tables::GasStatus,
     metrics::ExecutionMetrics,
 };
 
@@ -193,12 +193,11 @@ impl VMTestSetup for SuiVMTestSetup {
         ))
     }
 
-    fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64 {
-        let gas_status = &meter.0;
-        Gas::new(execution_bound)
-            .checked_sub(gas_status.remaining_gas())
-            .unwrap()
-            .into()
+    fn used_gas<'a>(&'a self, _execution_bound: u64, meter: Self::Meter<'a>) -> u64 {
+        // `execution_bound` is the MIST budget. `remaining_gas` is in gas units
+        // (budget / gas price), so subtracting the two reports almost the whole budget
+        // before any bytecode runs. Report the meter's own pre-price usage instead.
+        meter.0.gas_used_pre_gas_price()
     }
 
     fn vm_config(&self) -> VMConfig {
@@ -270,5 +269,23 @@ impl Deref for SuiGasStatusTestWrapper {
 impl DerefMut for SuiGasStatusTestWrapper {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.move_gas_status_mut()
+    }
+}
+
+#[cfg(test)]
+mod gas_report_tests {
+    use super::*;
+
+    #[test]
+    fn fresh_meter_reports_zero_gas_used() {
+        let setup = SuiVMTestSetup::new();
+        // 1 SUI, in MIST. Nothing has executed, so reported gas must be zero.
+        let bound = 1_000_000_000u64;
+        let meter = setup.new_meter(Some(bound));
+        let used = VMTestSetup::used_gas(&setup, bound, meter);
+        assert_eq!(
+            used, 0,
+            "unused meter reported {used} gas against a {bound} MIST budget"
+        );
     }
 }
