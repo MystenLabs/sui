@@ -973,19 +973,7 @@ impl SuiNode {
                     .consensus_adapter
                     .recover_end_of_publish(&epoch_store);
 
-                // Start the gRPC server
-                components.validator_server_handle = Some(
-                    components
-                        .validator_server_handle
-                        .take()
-                        .unwrap()
-                        .start()
-                        .await,
-                );
-
-                // Set the consensus address updater so that we can update the consensus peer addresses when requested.
-                endpoint_manager
-                    .set_consensus_address_updater(components.consensus_manager.clone());
+                Self::start_validator_services(&mut components, &endpoint_manager).await;
             } else {
                 info!("Starting node as Observer — connecting to configured peers");
             }
@@ -1405,7 +1393,6 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Node is missing consensus config"))?;
 
         let client = Arc::new(UpdatableConsensusClient::new());
-        let inflight_slot_freed_notify = Arc::new(tokio::sync::Notify::new());
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             &committee,
             consensus_config,
@@ -1415,7 +1402,7 @@ impl SuiNode {
                 .clone(),
             client.clone(),
             checkpoint_store.clone(),
-            inflight_slot_freed_notify.clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
 
         let consensus_manager = Arc::new(ConsensusManager::new(
@@ -1424,7 +1411,6 @@ impl SuiNode {
             registry_service,
             client,
             transaction_pool_context.clone(),
-            node_role,
         ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
@@ -1438,40 +1424,21 @@ impl SuiNode {
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
-        let (validator_server_handle, admission_queue) = if node_role.is_validator() {
-            let (handle, queue) = Self::start_grpc_validator_service(
-                &config,
-                state.clone(),
-                consensus_adapter.clone(),
-                epoch_store.clone(),
-                &registry_service.default_registry(),
-                inflight_slot_freed_notify,
-                transaction_pool_context.clone(),
-            )
-            .await?;
-            (Some(handle), queue)
-        } else {
-            (None, None)
-        };
-
-        // Starts an overload monitor that monitors the execution of the authority.
-        // Don't start the overload monitor when max_load_shedding_percentage is 0.
-        let validator_overload_monitor_handle = if node_role.is_validator()
-            && config
-                .authority_overload_config
-                .max_load_shedding_percentage
-                > 0
-        {
-            let authority_state = Arc::downgrade(&state);
-            let overload_config = config.authority_overload_config.clone();
-            fail_point!("starting_overload_monitor");
-            Some(spawn_monitored_task!(overload_monitor(
-                authority_state,
-                overload_config,
-            )))
-        } else {
-            None
-        };
+        let (validator_server_handle, admission_queue, validator_overload_monitor_handle) =
+            if node_role.is_validator() {
+                let (handle, queue, monitor) = Self::build_validator_services(
+                    &config,
+                    &state,
+                    &consensus_adapter,
+                    &epoch_store,
+                    registry_service,
+                    &transaction_pool_context,
+                )
+                .await?;
+                (Some(handle), queue, monitor)
+            } else {
+                (None, None, None)
+            };
 
         Self::start_epoch_specific_validator_components(
             &config,
@@ -1496,6 +1463,73 @@ impl SuiNode {
             node_role,
         )
         .await
+    }
+
+    /// Starts the validator gRPC server and routes consensus address updates to this node's
+    /// consensus manager.
+    async fn start_validator_services(
+        components: &mut ValidatorComponents,
+        endpoint_manager: &EndpointManager,
+    ) {
+        components.validator_server_handle = Some(
+            components
+                .validator_server_handle
+                .take()
+                .expect("validator gRPC server must be built before it is started")
+                .start()
+                .await,
+        );
+        endpoint_manager.set_consensus_address_updater(components.consensus_manager.clone());
+    }
+
+    /// Builds the services that only a validator runs: the validator gRPC server (unstarted) with
+    /// its admission queue, and the overload monitor. Their metrics are registered in the default
+    /// registry, so this must run at most once per process.
+    async fn build_validator_services(
+        config: &NodeConfig,
+        state: &Arc<AuthorityState>,
+        consensus_adapter: &Arc<ConsensusAdapter>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        registry_service: &RegistryService,
+        transaction_pool_context: &Option<Arc<TransactionPoolContext>>,
+    ) -> Result<(
+        ValidatorGrpcServer,
+        Option<AdmissionQueueContext>,
+        Option<JoinHandle<()>>,
+    )> {
+        let (validator_server_handle, admission_queue) = Self::start_grpc_validator_service(
+            config,
+            state.clone(),
+            consensus_adapter.clone(),
+            epoch_store.clone(),
+            &registry_service.default_registry(),
+            consensus_adapter.inflight_slot_freed_notify(),
+            transaction_pool_context.clone(),
+        )
+        .await?;
+
+        // Don't start the overload monitor when max_load_shedding_percentage is 0.
+        let validator_overload_monitor_handle = if config
+            .authority_overload_config
+            .max_load_shedding_percentage
+            > 0
+        {
+            let authority_state = Arc::downgrade(state);
+            let overload_config = config.authority_overload_config.clone();
+            fail_point!("starting_overload_monitor");
+            Some(spawn_monitored_task!(overload_monitor(
+                authority_state,
+                overload_config,
+            )))
+        } else {
+            None
+        };
+
+        Ok((
+            validator_server_handle,
+            admission_queue,
+            validator_overload_monitor_handle,
+        ))
     }
 
     fn address_prober_enabled(config: &NodeConfig) -> bool {
@@ -2176,8 +2210,36 @@ impl SuiNode {
                 consensus_store_pruner.prune(next_epoch).await;
 
                 if new_role.runs_consensus() {
+                    // A node that ran consensus as an observer has none of the validator
+                    // services, so they are built when it joins the committee.
+                    let joined_committee =
+                        new_role.is_validator() && validator_server_handle.is_none();
+                    let (
+                        validator_server_handle,
+                        admission_queue,
+                        validator_overload_monitor_handle,
+                    ) = if joined_committee {
+                        info!("Observer joined the committee, building validator services");
+                        let (handle, queue, monitor) = Self::build_validator_services(
+                            &self.config,
+                            &self.state,
+                            &consensus_adapter,
+                            &new_epoch_store,
+                            &self.registry_service,
+                            &transaction_pool_context,
+                        )
+                        .await?;
+                        (Some(handle), queue, monitor)
+                    } else {
+                        (
+                            validator_server_handle,
+                            admission_queue,
+                            validator_overload_monitor_handle,
+                        )
+                    };
+
                     info!("Restarting consensus as {new_role}");
-                    let components = Self::start_epoch_specific_validator_components(
+                    let mut components = Self::start_epoch_specific_validator_components(
                         &self.config,
                         self.state.clone(),
                         consensus_adapter,
@@ -2200,6 +2262,10 @@ impl SuiNode {
                         new_role,
                     )
                     .await?;
+                    if joined_committee {
+                        Self::start_validator_services(&mut components, &self.endpoint_manager)
+                            .await;
+                    }
                     self.update_address_prober_epoch(
                         &new_epoch_store,
                         &components.consensus_manager,
@@ -2248,17 +2314,8 @@ impl SuiNode {
                     .await?;
 
                     if new_role.is_validator() {
-                        components.validator_server_handle = Some(
-                            components
-                                .validator_server_handle
-                                .take()
-                                .unwrap()
-                                .start()
-                                .await,
-                        );
-
-                        self.endpoint_manager
-                            .set_consensus_address_updater(components.consensus_manager.clone());
+                        Self::start_validator_services(&mut components, &self.endpoint_manager)
+                            .await;
                     }
 
                     self.update_address_prober_epoch(

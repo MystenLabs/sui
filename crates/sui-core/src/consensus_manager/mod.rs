@@ -21,7 +21,6 @@ use consensus_core::{
 use core::panic;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair as _;
-use mysten_common::debug_fatal;
 use mysten_metrics::{RegistryID, RegistryService};
 use mysten_network::Multiaddr;
 use prometheus::{
@@ -38,7 +37,6 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
-use sui_types::node_role::NodeRole;
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
@@ -183,10 +181,9 @@ fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolCon
 }
 
 /// Used by Sui to start consensus protocol for each epoch.
-/// Supports both validator mode (with protocol keypair) and observer mode (without).
+/// Runs as a validator (with protocol keypair) or as an observer (without), chosen per epoch.
 pub struct ConsensusManager {
     consensus_config: ConsensusConfig,
-    protocol_keypair: Option<ProtocolKeyPair>,
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     metrics: Arc<ConsensusManagerMetrics>,
@@ -227,21 +224,14 @@ impl ConsensusManager {
         registry_service: &RegistryService,
         consensus_client: Arc<UpdatableConsensusClient>,
         transaction_pool_context: Option<Arc<TransactionPoolContext>>,
-        node_role: NodeRole,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
             &registry_service.default_registry(),
         ));
         let client = Arc::new(LazyMysticetiClient::new());
         let (consumer_monitor_sender, _) = broadcast::channel(1);
-        let protocol_keypair = if node_role.is_validator() {
-            Some(ProtocolKeyPair::new(node_config.worker_key_pair().copy()))
-        } else {
-            None
-        };
         Self {
             consensus_config: consensus_config.clone(),
-            protocol_keypair,
             network_keypair: NetworkKeyPair::new(node_config.network_key_pair().copy()),
             storage_base_path: consensus_config.db_path().to_path_buf(),
             metrics,
@@ -294,12 +284,13 @@ impl ConsensusManager {
             protocol_config.version
         );
 
+        // The manager outlives role changes across epochs, so consensus runs as a validator only
+        // when this node is in the committee of the epoch being started. The consensus protocol
+        // key is the worker key in `NodeConfig`. It is read only then, because observers may not
+        // have a usable worker key configured.
         let is_validator = epoch_store.is_validator();
-        if is_validator && self.protocol_keypair.is_none() {
-            // The manager was built for a non-validator role and reused across a
-            // promotion to validator; consensus cannot sign proposals in this state.
-            debug_fatal!("validator epoch {epoch} started without a protocol keypair");
-        }
+        let protocol_keypair =
+            is_validator.then(|| ProtocolKeyPair::new(node_config.worker_key_pair().copy()));
         let pool_context = self
             .transaction_pool_context
             .as_ref()
@@ -396,7 +387,7 @@ impl ConsensusManager {
             committee.clone(),
             parameters.clone(),
             consensus_protocol_config,
-            self.protocol_keypair.clone(),
+            protocol_keypair,
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),

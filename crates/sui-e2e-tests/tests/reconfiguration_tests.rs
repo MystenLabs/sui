@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use consensus_config::ObserverParameters;
+use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
     AccountConfig, DEFAULT_GAS_AMOUNT, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
 };
+use sui_swarm_config::node_config_builder::{ValidatorConfigBuilder, observer_peer_record};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
@@ -20,6 +24,8 @@ use sui_types::error::SuiErrorKind;
 use sui_types::governance::{
     VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
 };
+use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResult};
+use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::sui_system_state::{
     SuiSystemStateTrait, get_validator_from_table,
     sui_system_state_summary::get_validator_by_pool_id,
@@ -423,6 +429,121 @@ async fn test_reconfig_with_committee_change_basic() {
             initial_num_validators
         );
     });
+}
+
+/// A node configured as a consensus observer that joins the committee must become a working
+/// validator: it serves validator gRPC and its consensus signs blocks, so a transaction submitted
+/// only to it gets sequenced and executed.
+#[sim_test]
+async fn test_consensus_observer_joins_committee() {
+    let initial_num_validators = 4;
+    let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
+    let address = (&new_validator.account_key_pair.public()).into();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![VALIDATOR_STARTING_STAKE * 1_000],
+            address: None,
+        }])
+        .with_num_validators(initial_num_validators)
+        .with_observer_fullnode()
+        .with_validator_candidates([address])
+        .build()
+        .await;
+
+    let total_stake = test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .total_stake
+    });
+    execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(total_stake / 10))
+        .await;
+
+    // The candidate subscribes to the observer server of the first validator, which
+    // `with_observer_fullnode` enables.
+    let mut config = ValidatorConfigBuilder::new()
+        .with_observer_config(ObserverParameters {
+            peers: vec![observer_peer_record(
+                &test_cluster.swarm.config().validator_configs()[0],
+            )],
+            ..Default::default()
+        })
+        .build(new_validator, test_cluster.swarm.config().genesis.clone());
+    config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+    let network_address = config.network_address.clone();
+    let network_public_key = config.network_key_pair().public().clone();
+    let new_validator_handle = test_cluster.swarm.spawn_new_node(config).await;
+
+    new_validator_handle.with(|node| {
+        assert_eq!(
+            node.state().epoch_store_for_testing().node_role(),
+            NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+        );
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+
+    new_validator_handle.with(|node| {
+        assert_eq!(
+            node.state().epoch_store_for_testing().node_role(),
+            NodeRole::Validator
+        );
+    });
+
+    let (sender, gas) = test_cluster
+        .wallet
+        .get_one_gas_object()
+        .await
+        .unwrap()
+        .unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .transfer_sui(Some(1), sender)
+                .build(),
+        )
+        .await;
+    let digest = *tx.digest();
+
+    // The epoch store switches to the new epoch before reconfiguration starts the validator gRPC
+    // server, so submission is retried until the server accepts connections.
+    let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key);
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let response = loop {
+        match client
+            .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
+            .await
+        {
+            Ok(response) => break response,
+            Err(e) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "new validator did not accept the transaction: {e:?}"
+                );
+                sleep(Duration::from_secs(1)).await;
+            }
+        }
+    };
+    assert!(
+        matches!(
+            response.results.as_slice(),
+            [SubmitTxResult::Submitted { .. } | SubmitTxResult::Executed { .. }]
+        ),
+        "unexpected submit result: {response:?}"
+    );
+
+    let fullnode_state = test_cluster.fullnode_handle.sui_node.state();
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        fullnode_state
+            .epoch_store_for_testing()
+            .transactions_executed_in_checkpoint_notify(vec![digest]),
+    )
+    .await
+    .expect("transaction submitted to the new validator was not executed");
 }
 
 /// A validator that leaves the committee must release the store of its last epoch as a
