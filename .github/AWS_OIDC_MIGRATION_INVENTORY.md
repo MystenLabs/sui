@@ -53,12 +53,12 @@ The decision is the OIDC `sub` of the run, which depends on the event + ref:
 
 ## Per-call-site map
 
-### `rust.yml` — 11 sites (`push`[main,devnet,testnet,mainnet,releases/sui-*-release] + `pull_request` + `workflow_dispatch`)
+### `rust.yml` — 10 sites (`push`[main,devnet,testnet,mainnet,releases/sui-*-release] + `pull_request` + `workflow_dispatch`)
 
 `test` (L97), `test-tidehunter` (L146), `test-extra` (L211), `benchmark-smoke`
 (L276), `windows-build` (L334), `windows-cli-tests` (L361), `simtest` (L386),
-`simtest-mainnet` (L422), `move-test` (L458), `clippy` (L554), `sui-excution-cut`
-(L635). Prefixes: `ubuntu-ghcloud` (×9), `windows-ghcloud` (×2).
+`move-test` (L458), `clippy` (L554), `sui-excution-cut`
+(L635). Prefixes: `ubuntu-ghcloud` (×8), `windows-ghcloud` (×2).
 
 ### `external.yml` — 2 sites (`push`[main,extensions,devnet] + `pull_request`)
 

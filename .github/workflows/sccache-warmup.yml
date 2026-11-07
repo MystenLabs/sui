@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env
-          scripts/simtest/cargo-simtest simtest build
+          scripts/simtest/cargo-simtest simtest build --tests
 
       # external-crates/move workspace (matches external.yml test/clippy jobs)
       - name: Build external-crates/move targets
