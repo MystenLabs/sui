@@ -237,9 +237,7 @@ impl GasCharger {
                 ..
             ))
         );
-        let charge = self
-            .state
-            .settle_execution(execution_meter.used_internal_units(), is_move_abort);
+        let charge = self.state.settle_execution(execution_meter, is_move_abort);
         match result {
             Ok(v) => charge.map(|_| v).map_err(Into::into),
             Err(e) => Err(e),

@@ -253,7 +253,7 @@ impl GasState {
     // Close the execution phase at the signed price, or at the capped price on abort.
     pub fn settle_execution(
         &mut self,
-        units: InternalUnits,
+        meter: ExecutionMeter,
         aborted: bool,
     ) -> Result<(), ExecutionError> {
         assert_invariant!(
@@ -272,7 +272,7 @@ impl GasState {
             ) if aborted => price.min(factor.saturating_mul(reference_gas_price)),
             (Metering::Metered { price, .. }, _) => price,
         };
-        self.computation.units = units;
+        self.computation.units = meter.used_internal_units();
         self.computation.settled_price = Some(price);
         let computation = self
             .computation
@@ -448,7 +448,7 @@ impl ExecutionMeter {
         &mut self.status
     }
 
-    pub fn used_internal_units(&self) -> InternalUnits {
+    fn used_internal_units(&self) -> InternalUnits {
         self.initial_internal_units
             .saturating_sub(u64::from(self.status.gas_left))
     }
