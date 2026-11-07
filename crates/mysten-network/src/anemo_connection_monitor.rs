@@ -295,14 +295,17 @@ mod tests {
         // THEN peer 2 should be already connected
         assert_network_peers(&metrics, 1).await;
 
-        // AND we should have collected connection stats
+        // AND we should have collected connection stats. The RTT gauge stores
+        // whole milliseconds, so a sub-millisecond loopback sample is 0. Sent
+        // packets come from that same snapshot and stay non-zero once the
+        // handshake has completed.
         let mut labels = HashMap::new();
         let peer_2_str = format!("{peer_2}");
         labels.insert("peer_id", peer_2_str.as_str());
         labels.insert("peer_label", "peer_2");
         assert_ne!(
             metrics
-                .network_peer_rtt
+                .network_peer_sent_packets
                 .get_metric_with(&labels)
                 .unwrap()
                 .get(),
