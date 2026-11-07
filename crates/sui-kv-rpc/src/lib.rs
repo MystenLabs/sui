@@ -19,7 +19,7 @@ pub use sui_kvstore::ChannelHealthConfig;
 use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
-use sui_kvstore::OBJECTS_PIPELINE;
+use sui_kvstore::ObjectSchema;
 use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
 use sui_kvstore::PACKAGES_PIPELINE;
 pub use sui_kvstore::PoolConfig;
@@ -442,6 +442,7 @@ impl KvRpcServer {
         monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         watermark_source: WatermarkSource,
+        object_schema: ObjectSchema,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -458,7 +459,8 @@ impl KvRpcServer {
             false,
         )
         .await?
-        .with_read_rows_retry(read_rows_retry);
+        .with_read_rows_retry(read_rows_retry)
+        .with_object_schema(object_schema);
         let genesis = client
             .get_checkpoints(&[0])
             .await?
@@ -493,8 +495,11 @@ impl KvRpcServer {
         monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         watermark_source: WatermarkSource,
+        object_schema: ObjectSchema,
     ) -> anyhow::Result<Self> {
-        let client = BigTableClient::new_local(host, instance_id).await?;
+        let client = BigTableClient::new_local(host, instance_id)
+            .await?
+            .with_object_schema(object_schema);
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
         // request-scoped BigTable wrapper still expects a handle.
         let metrics = KvRpcMetrics::new(&Registry::default());
@@ -530,14 +535,16 @@ impl KvRpcServer {
             BigTablePackageStore::new(client.clone()),
         ));
         let package_resolver = Arc::new(Resolver::new(package_store));
+        let service_info_watermark_pipelines = service_info_watermark_pipelines(
+            ledger_history.bitmap_schema(),
+            client.object_schema(),
+        );
 
         let server = Self {
             chain_id,
             client,
             server_version,
-            service_info_watermark_pipelines: service_info_watermark_pipelines(
-                ledger_history.bitmap_schema(),
-            ),
+            service_info_watermark_pipelines,
             cache,
             watermark_source,
             package_resolver,
@@ -674,14 +681,17 @@ impl KvRpcServer {
 
 /// Pipelines whose watermarks bound the checkpoint height reported by `GetServiceInfo`, so an
 /// instance does not advertise a height it cannot serve.
-pub fn service_info_watermark_pipelines(bitmap_schema: BitmapSchema) -> Vec<&'static str> {
+pub fn service_info_watermark_pipelines(
+    bitmap_schema: BitmapSchema,
+    object_schema: ObjectSchema,
+) -> Vec<&'static str> {
     let [transaction_bitmap, event_bitmap] = sui_kvstore::bitmap_index_pipelines(bitmap_schema);
     vec![
-        // Point lookups.
+        // Point lookups, which read the objects table of `object_schema`.
         CHECKPOINTS_PIPELINE,
         CHECKPOINTS_BY_DIGEST_PIPELINE,
         TRANSACTIONS_PIPELINE,
-        OBJECTS_PIPELINE,
+        sui_kvstore::objects_pipeline(object_schema),
         EPOCH_START_PIPELINE,
         EPOCH_END_PIPELINE,
         PACKAGES_PIPELINE,
@@ -696,6 +706,7 @@ pub fn service_info_watermark_pipelines(bitmap_schema: BitmapSchema) -> Vec<&'st
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
+    use sui_kvstore::OBJECTS_PIPELINE;
     use sui_kvstore::WatermarkV1;
     use sui_kvstore::tables::watermarks;
     use sui_kvstore::testing::MockBigtableServer;
@@ -748,6 +759,7 @@ mod tests {
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             WatermarkSource::Bigtable,
+            ObjectSchema::V1,
         )
         .await
         .expect("start kv-rpc server")
@@ -759,7 +771,7 @@ mod tests {
         client: &mut BigTableClient,
         checkpoint_of: impl Fn(&str) -> u64,
     ) {
-        for pipeline in service_info_watermark_pipelines(BitmapSchema::V2) {
+        for pipeline in service_info_watermark_pipelines(BitmapSchema::V2, ObjectSchema::V1) {
             let checkpoint = checkpoint_of(pipeline);
             client
                 .create_pipeline_watermark_if_absent(

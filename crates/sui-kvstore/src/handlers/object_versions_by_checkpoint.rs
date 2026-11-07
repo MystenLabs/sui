@@ -75,9 +75,9 @@ mod tests {
         entries
             .into_iter()
             .map(|entry| {
-                let key = entry.row_key.as_ref();
-                let object_id = ObjectID::from_bytes(&key[..ObjectID::LENGTH]).unwrap();
-                let cp = u64::from_be_bytes(key[ObjectID::LENGTH..].try_into().unwrap());
+                let (object_id, cp) =
+                    tables::object_versions_by_checkpoint::decode_key(entry.row_key.as_ref())
+                        .unwrap();
                 let cells: Vec<(Bytes, Bytes)> = entry
                     .mutations
                     .into_iter()

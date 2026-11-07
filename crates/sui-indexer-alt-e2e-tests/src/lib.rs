@@ -56,6 +56,7 @@ use sui_kvstore::EVENT_BITMAP_INDEX_V2_PIPELINE;
 use sui_kvstore::IndexerConfig as BtIndexerConfig;
 use sui_kvstore::IngestionConfig as BtIngestionConfig;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECTS_V2_PIPELINE;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -902,9 +903,12 @@ pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Re
 }
 
 /// Alpha BigTable pipelines the archival stack registers: the v2 bitmap pipelines, whose tables
-/// kv-rpc reads.
-const BIGTABLE_ALPHA_PIPELINES: [&str; 2] =
-    [BITMAP_INDEX_V2_PIPELINE, EVENT_BITMAP_INDEX_V2_PIPELINE];
+/// kv-rpc reads, and the v2 objects pipeline, which kv-rpc reads with `object-schema = "v2"`.
+const BIGTABLE_ALPHA_PIPELINES: [&str; 3] = [
+    BITMAP_INDEX_V2_PIPELINE,
+    EVENT_BITMAP_INDEX_V2_PIPELINE,
+    OBJECTS_V2_PIPELINE,
+];
 
 /// Start the archival stack: BigTable emulator, BigTable indexer, and sui-kv-rpc.
 async fn start_archival(
@@ -967,6 +971,7 @@ async fn start_archival(
         kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),
         kv_rpc_config.watermark_source(),
+        kv_rpc_config.object_schema(),
     )
     .await
     .context("Failed to create KvRpcServer")?;
