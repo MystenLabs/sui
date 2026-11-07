@@ -30,3 +30,10 @@ rand.workspace = true
 insta.workspace = true
 prost-types.workspace = true
 tempfile.workspace = true
+
+[features]
+testing = []
+
+[[test]]
+name = "base_overrides"
+required-features = ["testing"]

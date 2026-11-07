@@ -5189,7 +5189,31 @@ impl ProtocolConfig {
         OverrideGuard
     }
 
+    /// Install a base override that applies before the override from `apply_overrides_for_testing`,
+    /// so that one can replace values set here. Base overrides stack and apply in the order they
+    /// were installed. Each is removed when its guard is dropped.
+    #[cfg(feature = "testing")]
+    pub fn apply_base_overrides_for_testing(
+        override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + Sync + 'static,
+    ) -> BaseOverrideGuard {
+        info!("installing base ProtocolConfig override for testing");
+        let override_fn: Arc<OverrideFn> = Arc::new(override_fn);
+        BASE_CONFIG_OVERRIDES
+            .lock()
+            .unwrap()
+            .push(override_fn.clone());
+        BaseOverrideGuard { override_fn }
+    }
+
     fn apply_config_override(version: ProtocolVersion, mut ret: Self) -> Self {
+        // Copy the list so that the lock is not held while the closures run.
+        #[cfg(feature = "testing")]
+        {
+            let fns = BASE_CONFIG_OVERRIDES.lock().unwrap().clone();
+            for override_fn in fns {
+                ret = override_fn(version, ret);
+            }
+        }
         if let Some(override_fn) = CONFIG_OVERRIDE.lock().unwrap().as_ref() {
             warn!(
                 "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
@@ -5314,6 +5338,25 @@ impl Drop for OverrideGuard {
     fn drop(&mut self) {
         info!("restoring override fn");
         *CONFIG_OVERRIDE.lock().unwrap() = None;
+    }
+}
+
+#[cfg(feature = "testing")]
+static BASE_CONFIG_OVERRIDES: Mutex<Vec<Arc<OverrideFn>>> = Mutex::new(Vec::new());
+
+#[cfg(feature = "testing")]
+#[must_use]
+pub struct BaseOverrideGuard {
+    override_fn: Arc<OverrideFn>,
+}
+
+#[cfg(feature = "testing")]
+impl Drop for BaseOverrideGuard {
+    fn drop(&mut self) {
+        BASE_CONFIG_OVERRIDES
+            .lock()
+            .unwrap()
+            .retain(|f| !Arc::ptr_eq(f, &self.override_fn));
     }
 }
 
