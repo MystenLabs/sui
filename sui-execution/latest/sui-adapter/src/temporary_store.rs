@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_mode::ExecutionMode;
-use crate::gas_charger::ChargedGas;
-use crate::gas_state::{StorageCharge, StorageRates};
+use crate::metering::gas_charger::ChargedGas;
+use crate::metering::gas_state::{StorageCharge, StorageRates};
 use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;

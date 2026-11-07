@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    gas_charger::GasPayment,
+    metering::gas_charger::GasPayment,
     static_programmable_transactions::{
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         loading::ast::{self as L, PackagePayload},

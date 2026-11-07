@@ -17,7 +17,7 @@ use std::{
     rc::Rc,
     sync::{Arc, LazyLock},
 };
-use sui_adapter::gas_meter::SuiGasMeter;
+use sui_adapter::metering::gas_meter::SuiGasMeter;
 use sui_move_build::decorate_warnings;
 use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime,

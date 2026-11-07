@@ -5,8 +5,10 @@ use crate::{
     adapter,
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
-    gas_charger::{GasMeter, GasPayment, PaymentLocation},
-    gas_meter::SuiGasMeter,
+    metering::{
+        gas_charger::{GasMeter, GasPayment, PaymentLocation},
+        gas_meter::SuiGasMeter,
+    },
     sp,
     static_programmable_transactions::{
         env::Env,

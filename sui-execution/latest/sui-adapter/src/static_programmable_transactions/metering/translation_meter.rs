@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gas_charger::GasMeter;
+use crate::metering::gas_charger::GasMeter;
 use crate::static_programmable_transactions::loading::ast::{DeserializedPackage, PackagePayload};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::ExecutionErrorTrait;

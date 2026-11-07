@@ -35,8 +35,9 @@ pub(crate) mod checked {
     use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
-    use crate::gas_charger::{ChargedGas, GasCharger, GasMeter};
-    use crate::gas_state::StorageTier;
+    use crate::metering::gas_charger::{ChargedGas, GasCharger, GasMeter};
+    use crate::metering::gas_state::StorageTier;
+    use crate::metering::pre_execution;
     use crate::static_programmable_transactions as SPT;
     use crate::temporary_store::TemporaryStore;
     use move_core_types::ident_str;
@@ -636,40 +637,9 @@ pub(crate) mod checked {
         let charge = if execution_params.early_errors().is_some() {
             0
         } else {
-            publish_upgrade_charge(transaction_kind, protocol_config)
+            pre_execution::publish_upgrade_charge(transaction_kind, protocol_config)
         };
         gas_charger.settle_pre_execution(charge)
-    }
-
-    /// MIST owed for the Publish and Upgrade commands of a PTB.
-    fn publish_upgrade_charge(
-        transaction_kind: &TransactionKind,
-        protocol_config: &ProtocolConfig,
-    ) -> u64 {
-        if !protocol_config.package_publish_charge() {
-            return 0;
-        }
-        let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
-            return 0;
-        };
-        pt.commands
-            .iter()
-            .map(|command| match command {
-                Command::Publish(modules, dependencies)
-                | Command::Upgrade(modules, dependencies, _, _) => protocol_config
-                    .package_publish_charge_fixed()
-                    .saturating_add(
-                        (modules.len() as u64)
-                            .saturating_mul(protocol_config.package_publish_charge_per_module()),
-                    )
-                    .saturating_add(
-                        (dependencies.len() as u64).saturating_mul(
-                            protocol_config.package_publish_charge_per_dependency(),
-                        ),
-                    ),
-                _ => 0,
-            })
-            .fold(0u64, |total, charge| total.saturating_add(charge))
     }
 
     /// Charge the input objects, stop at an early error, else run the PTB. The meter settles

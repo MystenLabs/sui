@@ -12,7 +12,7 @@ use crate::{
     },
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
-    gas_charger::GasMeter,
+    metering::gas_charger::GasMeter,
     static_programmable_transactions::{
         env::Env, linkage::analysis::LinkageAnalyzer, metering::translation_meter,
     },

@@ -3,7 +3,7 @@
 
 use crate::{
     execution_mode::ExecutionMode,
-    gas_charger::GasPayment,
+    metering::gas_charger::GasPayment,
     static_programmable_transactions::{
         env::Env,
         linkage,

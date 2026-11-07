@@ -3,7 +3,7 @@
 
 use crate::{
     execution_mode::ExecutionMode,
-    gas_charger::GasMeter,
+    metering::gas_charger::GasMeter,
     object_runtime, sp,
     static_programmable_transactions::{
         env::Env,

@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gas_state::{
+use crate::metering::gas_state::{
     GasState, Metering, MoveMeter, StorageCharge, StorageRates, StorageTier,
 };
 use crate::temporary_store::TemporaryStore;
