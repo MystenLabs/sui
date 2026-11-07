@@ -641,11 +641,12 @@ pub struct KvRpcConfig {
     pub watermark_pipeline: Option<Vec<String>>,
 
     /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint` or
-    /// `max_version`, and every `ListObjectVersions` request (bounded by `at_checkpoint`, or by
-    /// the served height when it is unset), and fold the alpha
-    /// `kvstore_object_versions_by_checkpoint` pipeline into the `GetServiceInfo` checkpoint
-    /// height. Takes effect only with `object-schema = "v2"`. Defaults to `false`. While it is
-    /// off, or `object-schema` is `v1`, those requests are rejected with `Unimplemented`.
+    /// `max_version`, every `ListObjectVersions` request (bounded by `at_checkpoint`, or by the
+    /// served height when it is unset), and the running epoch's `GetEpoch.system_state`, and fold
+    /// the alpha `kvstore_object_versions_by_checkpoint` pipeline into the `GetServiceInfo`
+    /// checkpoint height. Takes effect only with `object-schema = "v2"`. Defaults to `false`.
+    /// While it is off, or `object-schema` is `v1`, those object requests are rejected with
+    /// `Unimplemented` and that `system_state` with `Unavailable`.
     ///
     /// Enable this only after `kvstore_object_versions_by_checkpoint` has been backfilled from
     /// genesis. Its table has no restore floor, so an object unchanged since before the

@@ -8068,3 +8068,131 @@ async fn test_get_datatype_and_function_unknown_member_is_not_found() {
         assert!(status.message().contains(message), "{status:?}");
     }
 }
+
+/// A `GetEpoch` request for the latest epoch, reading `paths`.
+fn latest_epoch_request(paths: &[&str]) -> sui_rpc::proto::sui::rpc::v2::GetEpochRequest {
+    sui_rpc::proto::sui::rpc::v2::GetEpochRequest::latest()
+        .with_read_mask(FieldMask::from_paths(paths.iter().copied()))
+}
+
+/// kv-rpc serves the running epoch's `system_state` as of the served checkpoint rather than the
+/// epoch-start snapshot: stake added mid-epoch shows in the validator's `next_epoch_stake`.
+/// Simulacrum's genesis system state is V1, so the stake is also the first mutable access that
+/// migrates it to V2 mid-epoch.
+#[tokio::test]
+async fn test_get_epoch_serves_the_running_epochs_system_state() {
+    /// The least `request_add_stake` accepts: 1 SUI.
+    const STAKE: u64 = 1_000_000_000;
+
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    cluster.create_checkpoint().await;
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let mask = ["system_state"];
+
+    let before = client
+        .get_epoch(latest_epoch_request(&mask))
+        .await
+        .expect("GetEpoch")
+        .into_inner()
+        .epoch
+        .unwrap();
+    let validator = before
+        .system_state
+        .as_ref()
+        .unwrap()
+        .validators
+        .as_ref()
+        .unwrap()
+        .active_validators[0]
+        .clone();
+    let validator_address: SuiAddress = validator.address.as_deref().unwrap().parse().unwrap();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(STAKE).unwrap();
+    let stake = builder.command(sui_types::transaction::Command::SplitCoins(
+        sui_types::transaction::Argument::GasCoin,
+        vec![amount],
+    ));
+    let system_state = builder
+        .obj(sui_types::transaction::ObjectArg::SUI_SYSTEM_MUT)
+        .unwrap();
+    let validator_arg = builder.pure(validator_address).unwrap();
+    builder.programmable_move_call(
+        sui_types::SUI_SYSTEM_PACKAGE_ID,
+        sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME.to_owned(),
+        sui_types::governance::ADD_STAKE_FUN_NAME.to_owned(),
+        vec![],
+        vec![system_state, stake, validator_arg],
+    );
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+    let (_, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("add stake");
+    assert!(err.is_none(), "add stake failed: {err:?}");
+    cluster.create_checkpoint().await;
+
+    let after = client
+        .get_epoch(latest_epoch_request(&mask))
+        .await
+        .expect("GetEpoch")
+        .into_inner()
+        .epoch
+        .unwrap();
+    let validator_after = after
+        .system_state
+        .as_ref()
+        .unwrap()
+        .validators
+        .as_ref()
+        .unwrap()
+        .active_validators
+        .iter()
+        .find(|v| v.address == validator.address)
+        .expect("validator still active");
+    assert_eq!(
+        validator_after.next_epoch_stake,
+        Some(validator.next_epoch_stake.unwrap() + STAKE),
+    );
+}
+
+/// Without `at_checkpoint` object reads (off by default), the running epoch's `system_state` is
+/// `UNAVAILABLE`. Its `committee` and the default read mask come from stored rows and are still
+/// served.
+#[tokio::test]
+async fn test_get_epoch_running_system_state_needs_object_at_checkpoint_reads() {
+    let mut cluster = FullCluster::new().await.expect("Failed to create cluster");
+    cluster.advance_epoch();
+    cluster.create_checkpoint().await;
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let status = client
+        .get_epoch(latest_epoch_request(&["system_state"]))
+        .await
+        .expect_err("the running epoch's system_state needs at_checkpoint reads");
+    assert_eq!(status.code(), tonic::Code::Unavailable, "{status:?}");
+
+    let running = client
+        .get_epoch(latest_epoch_request(&["epoch", "committee"]))
+        .await
+        .expect("committee is served without at_checkpoint reads")
+        .into_inner()
+        .epoch
+        .unwrap();
+    assert_eq!(running.epoch, Some(1));
+    assert!(!running.committee.unwrap().members.is_empty());
+    client
+        .get_epoch(sui_rpc::proto::sui::rpc::v2::GetEpochRequest::latest())
+        .await
+        .expect("the default read mask is served without at_checkpoint reads");
+}

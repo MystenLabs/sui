@@ -86,8 +86,8 @@ pub(crate) mod stage {
 }
 
 /// Metrics for the request-scoped `BigTableClient` limiter and the reads it
-/// gates. Cardinality is bounded: per method, 6 stages for `permit_wait_ms`,
-/// `permit_hold_ms`, and `reads_started`, 6 stages × 3 outcomes for
+/// gates. Cardinality is bounded: per method, 7 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 7 stages × 3 outcomes for
 /// `reads_finished`, and one series each for the request-end `permits_peak`
 /// and `ops_total` histograms.
 #[derive(Clone)]
