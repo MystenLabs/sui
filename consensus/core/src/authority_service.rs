@@ -555,14 +555,15 @@ impl SubscriptionCounter {
 
     fn decrement(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
+        let Some(peer_count) = counter.subscriptions_by_peer.get_mut(peer) else {
+            return;
+        };
+        *peer_count -= 1;
+        let last_subscription = *peer_count == 0;
         counter.count = counter.count.saturating_sub(1);
-        let peer_count = counter
-            .subscriptions_by_peer
-            .entry(peer.clone())
-            .or_default();
-        *peer_count = peer_count.saturating_sub(1);
 
-        if *peer_count == 0 {
+        if last_subscription {
+            counter.subscriptions_by_peer.remove(peer);
             match peer {
                 PeerId::Validator(authority) => {
                     let peer_hostname = &self.context.committee.authority(*authority).hostname;
@@ -711,7 +712,7 @@ mod tests {
 
     use async_trait::async_trait;
     use bytes::Bytes;
-    use consensus_config::AuthorityIndex;
+    use consensus_config::{AuthorityIndex, NetworkKeyPair};
     use consensus_types::block::{BlockDigest, BlockRef, Round};
     use parking_lot::{Mutex, RwLock};
     use tokio::{sync::broadcast, time::sleep};
@@ -727,7 +728,7 @@ mod tests {
     }
 
     use crate::{
-        authority_service::AuthorityService,
+        authority_service::{AuthorityService, BroadcastStream, SubscriptionCounter},
         block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
         block_sync_service::BlockSyncService,
         commit::{CertifiedCommits, CommitRange},
@@ -737,8 +738,9 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{
-            BlockStream, ExtendedSerializedBlock, ObserverNetworkClient, SerializedBlockForm,
-            SynchronizerClient, ValidatorNetworkClient, ValidatorNetworkService,
+            BlockStream, ExtendedSerializedBlock, ObserverNetworkClient, PeerId,
+            SerializedBlockForm, SynchronizerClient, ValidatorNetworkClient,
+            ValidatorNetworkService,
         },
         peers_pool::PeersPool,
         round_tracker::RoundTracker,
@@ -747,6 +749,67 @@ mod tests {
         test_dag_builder::DagBuilder,
         transaction_vote_tracker::TransactionVoteTracker,
     };
+
+    #[test]
+    fn subscription_counter_cleans_up_disconnected_peers() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let counter = Arc::new(SubscriptionCounter::new(context.clone()));
+        let observer = PeerId::Observer(Box::new(
+            NetworkKeyPair::generate(&mut rand::thread_rng()).public(),
+        ));
+        let validator = PeerId::Validator(AuthorityIndex::new_for_test(1));
+        let hostname = &context
+            .committee
+            .authority(AuthorityIndex::new_for_test(1))
+            .hostname;
+        let gauge = &context.metrics.node_metrics.subscribed_by;
+        let (sender, _) = broadcast::channel::<()>(1);
+        let stream = |peer| BroadcastStream::new(peer, sender.subscribe(), 1, counter.clone());
+
+        let first = stream(observer.clone());
+        let second = stream(observer.clone());
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 1);
+        assert_eq!(counter.counter.lock().count, 2);
+        drop(first);
+        assert_eq!(counter.counter.lock().subscriptions_by_peer[&observer], 1);
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 1);
+        drop(second);
+        assert!(counter.counter.lock().subscriptions_by_peer.is_empty());
+        assert_eq!(counter.counter.lock().count, 0);
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 0);
+
+        let reconnected = stream(observer.clone());
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 1);
+        drop(reconnected);
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 0);
+        counter.decrement(&observer);
+        assert!(counter.counter.lock().subscriptions_by_peer.is_empty());
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 0);
+
+        let validator_first = stream(validator.clone());
+        let validator_second = stream(validator.clone());
+        counter.decrement(&observer);
+        assert_eq!(counter.counter.lock().count, 2);
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 0);
+        assert_eq!(gauge.with_label_values(&[hostname]).get(), 1);
+        drop(validator_first);
+        assert_eq!(counter.counter.lock().subscriptions_by_peer[&validator], 1);
+        assert_eq!(gauge.with_label_values(&[hostname]).get(), 1);
+        drop(validator_second);
+        assert_eq!(gauge.with_label_values(&[hostname]).get(), 0);
+        assert!(counter.counter.lock().subscriptions_by_peer.is_empty());
+
+        for _ in 0..100 {
+            let peer = PeerId::Observer(Box::new(
+                NetworkKeyPair::generate(&mut rand::thread_rng()).public(),
+            ));
+            drop(stream(peer));
+        }
+        assert!(counter.counter.lock().subscriptions_by_peer.is_empty());
+        assert_eq!(counter.counter.lock().count, 0);
+        assert_eq!(gauge.with_label_values(&["observer"]).get(), 0);
+    }
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
     }
