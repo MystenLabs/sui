@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["place_event_cursor","place_tx_cursor","query"],"struct":["Connection","Edge","PageInfo"]};

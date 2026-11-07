@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StaggerDecision"],"fn":["proposers_metric_label","signal_band_label"],"struct":["CommitSignal","SignalBand","SignalConfig","StaggerParams","StaggerQuota","StaggeredSlot","StaggeredSubmission"]};

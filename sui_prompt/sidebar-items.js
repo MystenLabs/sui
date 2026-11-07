@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PromptCommand"],"fn":["execute_prompt_command"],"static":["CATEGORIES","SKILL_FILES"],"struct":["Prompt","PromptCategory","PromptSkillFile"]};

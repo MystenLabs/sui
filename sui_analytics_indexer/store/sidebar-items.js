@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StoreMode","WatermarkUpdateError"],"struct":["AnalyticsConnection","AnalyticsStore","Batch","FileRangeEntry","FileRangeIndex","LiveStore","MigrationStore"]};
