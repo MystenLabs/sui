@@ -192,9 +192,14 @@ impl GasCharger {
 
     // Smash again after the writes were dropped. The charge goes back to the smash target.
     pub fn resmash(&mut self, temporary_store: &mut TemporaryStore<'_>) {
-        if let PaymentMetadata::Smash(metadata) = &mut self.payment {
-            metadata.reset_charge_location();
-            metadata.smash_gas(&self.tx_digest, temporary_store);
+        match &mut self.payment {
+            PaymentMetadata::Smash(metadata) => {
+                metadata.reset_charge_location();
+                metadata.smash_gas(&self.tx_digest, temporary_store);
+            }
+            PaymentMetadata::Unmetered | PaymentMetadata::Gasless => {}
+            // A failed smash leaves through the BumpOnly exit before any reset.
+            PaymentMetadata::Unsmashed(_) => debug_assert!(false, "gas is smashed before a reset"),
         }
     }
 
