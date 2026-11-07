@@ -1119,7 +1119,7 @@ impl TransactionInfo {
     }
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, Debug)]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct EpochInfo {
     pub epoch: u64,
     pub protocol_version: Option<u64>,
@@ -1128,8 +1128,22 @@ pub struct EpochInfo {
     pub start_checkpoint: Option<u64>,
     pub end_checkpoint: Option<u64>,
     pub reference_gas_price: Option<u64>,
-    // System State as of the start of the epoch
+    /// System state as of the start of the epoch.
     pub system_state: Option<crate::sui_system_state::SuiSystemState>,
-    // pub end_of_epoch_transaction: Option<TransactionDigest>,
-    // pub epoch_commitments: Vec<sui_types::messages_checkpoint::CheckpointCommitment>,
+    /// `network_total_transactions` at the epoch's last checkpoint: one past the sequence number
+    /// of the epoch's last transaction.
+    pub tx_hi: Option<u64>,
+    pub safe_mode: Option<bool>,
+    pub epoch_commitments: Option<Vec<crate::messages_checkpoint::CheckpointCommitment>>,
+    // Counters from the epoch's `SystemEpochInfoEvent`, left `None` when the epoch ended in safe
+    // mode, which emits no such event.
+    pub total_stake: Option<u64>,
+    pub storage_fund_balance: Option<u64>,
+    pub storage_fund_reinvestment: Option<u64>,
+    pub storage_charge: Option<u64>,
+    pub storage_rebate: Option<u64>,
+    pub stake_subsidy_amount: Option<u64>,
+    pub total_gas_fees: Option<u64>,
+    pub total_stake_rewards_distributed: Option<u64>,
+    pub leftover_storage_fund_inflow: Option<u64>,
 }
