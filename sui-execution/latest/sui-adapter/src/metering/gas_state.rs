@@ -110,8 +110,8 @@ impl GasConfig {
 
 // Gas state of a transaction, in MIST. The phases are pre-execution, execution (input
 // objects and the PTB) and storage. Each phase settles once against the budget in MIST.
-// A computation phase that does not fit marks the state out of gas. A storage
-// tier that does not fit leaves the state unchanged.
+// A computation phase that does not fit marks the state out of gas. Storage that does not
+// fit leaves the state unchanged.
 #[derive(Debug)]
 pub(crate) struct GasState {
     metering: Metering,
@@ -139,14 +139,15 @@ impl Computation {
     }
 }
 
-// The write set storage settles on. Tiers only advance.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+// What storage charges for. A successful transaction settles AllWrites. After an error it
+// settles InputsOnly, or RebatesOnly when the inputs do not fit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StorageTier {
-    // Every write of the transaction.
-    Full,
-    // The bumped mutable inputs and the re-smashed gas.
+    // Every object the transaction wrote or deleted.
+    AllWrites,
+    // The mutable inputs, with their versions bumped, and the smashed gas coins.
     InputsOnly,
-    // The rebates of the smashed coins, with the whole budget reported as computation.
+    // Only the rebates of the smashed gas coins. The whole budget goes to computation.
     RebatesOnly,
 }
 
@@ -294,8 +295,8 @@ impl GasState {
         }
     }
 
-    // `Full` and `InputsOnly` must fit net of the sender's rebate, and leave the state
-    // unchanged when they do not. `RebatesOnly` always settles and runs the budget out.
+    // AllWrites and InputsOnly must fit net of the sender's rebate, and leave the state
+    // unchanged when they do not. RebatesOnly always settles.
     pub fn settle_storage(
         &mut self,
         charge: StorageCharge,
@@ -303,7 +304,7 @@ impl GasState {
     ) -> Result<(), ExecutionError> {
         match tier {
             StorageTier::RebatesOnly => self.out_of_gas = true,
-            StorageTier::Full | StorageTier::InputsOnly => {
+            StorageTier::AllWrites | StorageTier::InputsOnly => {
                 let net_cost = charge
                     .cost
                     .saturating_sub(sender_rebate(charge.rebate, self.config.rebate_rate));

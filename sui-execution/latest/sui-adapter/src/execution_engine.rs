@@ -617,7 +617,7 @@ pub(crate) mod checked {
             trace_builder_opt,
             timings,
         )?;
-        charge_storage(gas_charger, temporary_store, StorageTier::Full)?;
+        charge_storage(gas_charger, temporary_store, StorageTier::AllWrites)?;
         check_effects::<Mode>(
             temporary_store,
             !gas_charger.is_unmetered(),
@@ -746,7 +746,7 @@ pub(crate) mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         tier: StorageTier,
     ) -> Result<(), ExecutionError> {
-        if tier == StorageTier::Full && gas_charger.is_gasless() {
+        if tier == StorageTier::AllWrites && gas_charger.is_gasless() {
             temporary_store
                 .check_gasless_execution_requirements()
                 .map_err(|msg| {
@@ -756,7 +756,7 @@ pub(crate) mod checked {
         temporary_store.ensure_active_inputs_mutated();
         let rates = gas_charger.storage_rates();
         let charge = match tier {
-            StorageTier::Full | StorageTier::InputsOnly => {
+            StorageTier::AllWrites | StorageTier::InputsOnly => {
                 temporary_store.collect_storage_and_rebate(&rates)?
             }
             StorageTier::RebatesOnly => temporary_store.collect_rebate_only(&rates)?,
@@ -764,9 +764,7 @@ pub(crate) mod checked {
         gas_charger.settle_storage(charge, tier)
     }
 
-    // Settle the bumped inputs, or the smashed coins' rebates when the inputs do not fit. A
-    // failed gasless transaction pays nothing, so it settles the rebates and its inputs keep
-    // their storage rebates.
+    // A failed gasless transaction pays nothing, so it settles RebatesOnly directly.
     fn charge_storage_after_error(
         gas_charger: &mut GasCharger,
         temporary_store: &mut TemporaryStore<'_>,
@@ -776,8 +774,8 @@ pub(crate) mod checked {
             charge_storage(gas_charger, temporary_store, StorageTier::RebatesOnly)
         } else {
             charge_storage(gas_charger, temporary_store, StorageTier::InputsOnly).or_else(|_| {
-                // The inputs do not fit the remaining budget: the budget goes to computation and
-                // only the smashed coins' rebates settle.
+                // The inputs do not fit: the whole budget goes to computation and only the rebates
+                // settle.
                 reset_to_inputs(gas_charger, temporary_store);
                 charge_storage(gas_charger, temporary_store, StorageTier::RebatesOnly)
             })
