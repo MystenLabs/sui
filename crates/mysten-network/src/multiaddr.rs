@@ -329,7 +329,9 @@ pub(crate) fn parse_http_https<'a, T: Iterator<Item = Protocol<'a>>>(
     match protocols.next() {
         Some(Protocol::Http) => Ok("http"),
         Some(Protocol::Https) => Ok("https"),
-        _ => Ok("http"),
+        // A missing scheme defaults to HTTP. Any other protocol is not HTTP.
+        None => Ok("http"),
+        Some(other) => Err(eyre!("expected http or https, found {other}")),
     }
 }
 
@@ -519,6 +521,28 @@ mod test {
             Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_localhost_ip();
         assert_eq!(Some("127.0.0.1".to_string()), multi_addr_dns.hostname());
         assert_eq!(Some(10501u16), multi_addr_dns.port());
+    }
+
+    #[test]
+    fn parse_ip4_rejects_non_http_protocol() {
+        let addr: Multiaddr = "/ip4/127.0.0.1/tcp/80/ws".parse().unwrap();
+        let parsed = super::parse_ip4(&addr);
+        assert!(parsed.is_err(), "a /ws suffix was accepted as {parsed:?}");
+    }
+
+    #[test]
+    fn parse_dns_rejects_non_http_protocol() {
+        let addr: Multiaddr = "/dns/example.com/tcp/443/ws".parse().unwrap();
+        let parsed = super::parse_dns(&addr);
+        assert!(parsed.is_err(), "a /ws suffix was accepted as {parsed:?}");
+    }
+
+    #[test]
+    fn parse_ip4_without_scheme_defaults_to_http() {
+        let addr: Multiaddr = "/ip4/127.0.0.1/tcp/80".parse().unwrap();
+        let (socket, scheme) = super::parse_ip4(&addr).unwrap();
+        assert_eq!(socket.to_string(), "127.0.0.1:80");
+        assert_eq!(scheme, "http");
     }
 
     #[test]
