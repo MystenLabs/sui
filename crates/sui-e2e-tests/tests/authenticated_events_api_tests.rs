@@ -899,6 +899,7 @@ async fn list_authenticated_events_end_to_end() {
     let rpc_config = create_rpc_config_with_ledger_history();
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .disable_fullnode_pruning()
         .with_rpc_config(rpc_config)
         .with_epoch_duration_ms(10000)

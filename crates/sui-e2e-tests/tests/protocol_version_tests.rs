@@ -144,6 +144,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
@@ -164,6 +165,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
@@ -213,6 +215,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
@@ -249,6 +252,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
@@ -282,6 +286,7 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
@@ -325,6 +330,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx <= 1 {
@@ -454,6 +460,7 @@ mod sim_only_tests {
         framework_injection::set_override(sui_extra, fixture_modules("extra_package").await);
 
         let cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
@@ -515,6 +522,7 @@ mod sim_only_tests {
 
         override_sui_system_modules(to).await;
         TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object(from).await])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -728,6 +736,7 @@ mod sim_only_tests {
         // Even though a new framework is available, the required new protocol version is not.
         override_sui_system_modules("extend/compatible").await;
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_objects([sui_system_package_object("extend/base").await])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -748,6 +757,7 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -816,6 +826,7 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(40000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
@@ -850,6 +861,7 @@ mod sim_only_tests {
 
         override_sui_system_modules("mock_sui_systems/base").await;
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             // Overrides with a sui system package that would abort during epoch change txn
             .with_objects([sui_system_package_object("mock_sui_systems/safe_mode").await])
@@ -902,6 +914,7 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, START,
@@ -923,6 +936,7 @@ mod sim_only_tests {
         override_sui_system_modules("mock_sui_systems/shallow_upgrade").await;
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
@@ -960,6 +974,7 @@ mod sim_only_tests {
         override_sui_system_modules("mock_sui_systems/deep_upgrade").await;
 
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
@@ -1026,6 +1041,7 @@ mod sim_only_tests {
         // It's important to also handle the new protocol version in protocol-config/lib.rs.
         // The MAX_PROTOCOL_VERSION must not be changed yet when testing this.
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,

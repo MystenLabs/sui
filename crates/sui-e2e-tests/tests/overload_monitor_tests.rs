@@ -24,7 +24,10 @@ mod simtests {
 
         // Creates a cluster, and tests that number of nodes with overload monitor is equal to
         // the number of validators.
-        let test_cluster = TestClusterBuilder::new().build().await;
+        let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
+            .build()
+            .await;
         let nodes_with_overload_monitor = counter.load(Ordering::SeqCst);
         assert_eq!(
             nodes_with_overload_monitor,

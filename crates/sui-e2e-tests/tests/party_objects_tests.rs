@@ -58,6 +58,7 @@ async fn party_object_deletion_multiple_times() {
 
     let num_deletions = 20;
     let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_accounts(vec![AccountConfig {
             address: None,
             gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_deletions],
@@ -125,6 +126,7 @@ async fn party_object_deletion_multiple_times_cert_racing() {
 
     let num_deletions = 10;
     let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_accounts(vec![AccountConfig {
             address: None,
             gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_deletions],
@@ -313,7 +315,10 @@ async fn party_object_transfer_multiple_times() {
 async fn party_object_transfer_multi_certs() {
     telemetry_subscribers::init_for_testing();
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
 
     let (package, object) =
         publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
@@ -899,6 +904,7 @@ async fn party_object_stream_end_races_owned_mutation() {
 
     let iterations = 10;
     let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_accounts(vec![AccountConfig {
             address: None,
             gas_amounts: vec![DEFAULT_GAS_AMOUNT; 5 * iterations + 2],

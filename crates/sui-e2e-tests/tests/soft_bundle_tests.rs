@@ -11,6 +11,7 @@ use test_cluster::TestClusterBuilder;
 #[sim_test]
 async fn test_soft_bundle_rejects_mixed_gas_prices() {
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_accounts(vec![AccountConfig {
             address: None,
             gas_amounts: vec![DEFAULT_GAS_AMOUNT; 2],

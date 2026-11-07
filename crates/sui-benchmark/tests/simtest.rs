@@ -62,7 +62,9 @@ mod test {
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
     use sui_types::transaction::{TransactionDataAPI, TransactionKind};
-    use test_cluster::{TestCluster, TestClusterBuilder};
+    use test_cluster::{
+        DEFAULT_TEST_SPEED_OVERRIDES, TestCluster, TestClusterBuilder, TestSpeedOverrides,
+    };
     use tracing::{error, info, trace};
     use typed_store::traits::Map;
 
@@ -732,6 +734,7 @@ mod test {
             TestClusterBuilder::new()
                 .set_network_config(network_config)
                 .disable_fullnode_pruning()
+                .with_test_speed_overrides(BENCHMARK_SPEED_OVERRIDES)
                 .build()
                 .await,
         );
@@ -1230,6 +1233,14 @@ mod test {
             .into()
     }
 
+    // Checkpoint and randomness round timing stay at production values to keep coverage of
+    // checkpoint building and randomness throughput under load.
+    const BENCHMARK_SPEED_OVERRIDES: TestSpeedOverrides = TestSpeedOverrides {
+        random_beacon_min_round_interval_ms: None,
+        min_checkpoint_interval_ms: None,
+        ..DEFAULT_TEST_SPEED_OVERRIDES
+    };
+
     fn init_test_cluster_builder(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
@@ -1240,7 +1251,8 @@ mod test {
                 default_num_validators,
             ))
             .disable_fullnode_pruning()
-            .with_synthetic_execution_time_injection();
+            .with_synthetic_execution_time_injection()
+            .with_test_speed_overrides(BENCHMARK_SPEED_OVERRIDES);
         // The standard setup includes an observer fullnode subscribed to the first
         // validator, so that every scenario also exercises consensus block streaming.
         if get_var("SIM_STRESS_TEST_OBSERVER", 1u8) != 0 {
