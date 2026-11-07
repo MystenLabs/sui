@@ -131,9 +131,9 @@ struct CheckpointsResult {
 fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
     options.map(|o| o.ordering()).unwrap_or(Ordering::Ascending)
 }
-/// A cluster whose kv-rpc server serves the List APIs and `at_checkpoint` object reads, which
-/// need `object-schema = "v2"` too. Both are off by default, matching production, so every test
-/// in this file opts in, except to the schema when it names one.
+/// A cluster whose kv-rpc server serves the List APIs, and `at_checkpoint` and `max_version`
+/// object reads, which need `object-schema = "v2"` too. Both are off by default, matching
+/// production, so every test in this file opts in, except to the schema when it names one.
 async fn list_api_cluster() -> FullCluster {
     list_api_cluster_with_config(KvRpcConfig::default()).await
 }
@@ -1522,8 +1522,9 @@ fn pure_arg<T: serde::Serialize>(value: &T) -> CallArg {
 }
 
 /// One `basics::object_basics::Object` driven through create, set_value, wrap, unwrap, and delete,
-/// one step per checkpoint, with an empty checkpoint between create and set_value. Wrapping
-/// creates `wrapper`, and unwrapping deletes it.
+/// one step per checkpoint, with a checkpoint between create and set_value that only bumps the
+/// gas coin's version. `set_value` pays with that coin, so the object skips a version between
+/// create and set_value. Wrapping creates `wrapper`, and unwrapping deletes it.
 struct ObjectLifecycle {
     object: ObjectID,
     wrapper: ObjectID,
@@ -1566,8 +1567,9 @@ impl ObjectLifecycle {
             create.lamport_version().value(),
             true,
         ));
-        // Seal an empty checkpoint, in which the object is live but unchanged.
-        cluster.create_checkpoint().await;
+        // Bump the gas coin in a checkpoint of its own, in which the object is live but
+        // unchanged.
+        let gas = transfer_in_own_checkpoint(cluster, sender, kp, gas).await;
 
         let (set_value, set_value_checkpoint, gas) = call_object_basics(
             cluster,
@@ -1667,6 +1669,17 @@ fn object_request(
     req
 }
 
+/// A `GetObjectRequest` for `id` with the given `max_version` and `at_checkpoint`.
+fn max_version_request(
+    id: ObjectID,
+    max_version: u64,
+    at_checkpoint: Option<u64>,
+) -> GetObjectRequest {
+    let mut req = object_request(id, None, at_checkpoint);
+    req.max_version = Some(max_version);
+    req
+}
+
 fn batch_request(requests: Vec<GetObjectRequest>) -> BatchGetObjectsRequest {
     let mut req = BatchGetObjectsRequest::default();
     req.requests = requests;
@@ -1743,13 +1756,7 @@ fn assert_not_live_at_checkpoint(read: &ObjectRead, id: ObjectID, checkpoint: u6
         "Object {} at checkpoint {checkpoint} not found",
         id.to_canonical_string(true)
     );
-    match read {
-        Err((code, message)) => {
-            assert_eq!(*code, tonic::Code::NotFound, "{context}: {message}");
-            assert_eq!(message, &expected, "{context}");
-        }
-        Ok(object) => panic!("{context}: expected NotFound, got {object:?}"),
-    }
+    assert_not_found(read, &expected, context);
 }
 
 /// Assert `read` is the `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) for an `at_checkpoint` above the
@@ -1889,35 +1896,7 @@ async fn test_get_object_at_checkpoint() {
         }
     }
 
-    // 4. Setting both `version` and `at_checkpoint` is invalid, and fails the whole batch.
-    let both = || {
-        object_request(
-            object,
-            Some(set_value_version),
-            Some(lifecycle.set_value_checkpoint),
-        )
-    };
-    let read = get_object_read(&mut client, both()).await;
-    match read {
-        Err((code, message)) => {
-            assert_eq!(code, tonic::Code::InvalidArgument, "{message}");
-            assert!(message.contains("mutually exclusive"), "{message}");
-        }
-        Ok(object) => panic!("expected InvalidArgument, got {object:?}"),
-    }
-
-    let err = client
-        .batch_get_objects(batch_request(vec![
-            object_request(gas.0, None, None),
-            object_request(object, None, Some(lifecycle.set_value_checkpoint)),
-            both(),
-        ]))
-        .await
-        .unwrap_err();
-    assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
-    assert_eq!(bad_request_fields(&err), ["requests[2].at_checkpoint"]);
-
-    // 5. Every read above asks only for `object_id` and `version`, which the version index
+    // 4. Every read above asks only for `object_id` and `version`, which the version index
     // answers alone. A mask that needs more, such as `digest`, reads the object itself, and gets
     // the same object as an exact-version read of the version the index resolved.
     let digest_mask = || FieldMask::from_paths(["object_id", "version", "digest"]);
@@ -2023,15 +2002,193 @@ async fn assert_object_at_checkpoint_unimplemented(mut cluster: FullCluster) {
     assert_eq!(err.code(), tonic::Code::Unimplemented, "{err:?}");
 
     // Validation runs before the capability check.
+    let version = gas.1.value();
+    let mut both = max_version_request(gas.0, version, Some(checkpoint));
+    both.version = Some(version);
     let err = client
-        .batch_get_objects(batch_request(vec![object_request(
-            gas.0,
-            Some(gas.1.value()),
-            Some(checkpoint),
-        )]))
+        .batch_get_objects(batch_request(vec![both]))
         .await
         .unwrap_err();
     assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
+}
+
+/// Assert `read` is a `NotFound` with `message`.
+fn assert_not_found(read: &ObjectRead, message: &str, context: &str) {
+    match read {
+        Err((code, actual)) => {
+            assert_eq!(*code, tonic::Code::NotFound, "{context}: {actual}");
+            assert_eq!(actual, message, "{context}");
+        }
+        Ok(object) => panic!("{context}: expected NotFound, got {object:?}"),
+    }
+}
+
+/// `max_version` reads resolve an object to its newest version at or below the bound, through
+/// creation, mutation, wrapping, unwrapping, and deletion, and are `NotFound` from a deletion or
+/// wrap until the object is unwrapped. `at_checkpoint` bounds a `version` read to a version
+/// written by the end of the checkpoint, and has a `max_version` read select among the versions
+/// written by then. `GetObject` and `BatchGetObjects` agree item by item.
+#[tokio::test]
+async fn test_get_object_max_version_and_checkpoint_bounds() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
+    let ObjectLifecycle {
+        object, wrapper, ..
+    } = lifecycle;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let served_height = client
+        .get_service_info(GetServiceInfoRequest::default())
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint_height
+        .expect("served height should be set");
+    assert!(served_height >= lifecycle.delete_checkpoint);
+
+    // The expected outcome of each read, from the lifecycle's `(checkpoint, object, version,
+    // live)` changes: the version it returns, or `None` if it is `NotFound`.
+    let changes = |id: ObjectID| {
+        lifecycle
+            .changes
+            .iter()
+            .filter(move |(_, changed, _, _)| *changed == id)
+    };
+    // An exact version, kept only if it was made by the end of `at_checkpoint`.
+    let exact = |id: ObjectID, version: u64, at_checkpoint: Option<u64>| {
+        changes(id)
+            .find(|&&(_, _, changed, live)| live && changed == version)
+            .filter(|&&(changed_at, ..)| at_checkpoint.is_none_or(|bound| changed_at <= bound))
+            .map(|&(_, _, version, _)| version)
+    };
+    // The newest version at or below `version` among those made by the end of `at_checkpoint`,
+    // if the object is live at it.
+    let at_most = |id: ObjectID, version: u64, at_checkpoint: Option<u64>| {
+        changes(id)
+            .filter(|&&(changed_at, ..)| at_checkpoint.is_none_or(|bound| changed_at <= bound))
+            .rfind(|&&(_, _, changed, _)| changed <= version)
+            .filter(|&&(_, _, _, live)| live)
+            .map(|&(_, _, version, _)| version)
+    };
+
+    // Every version from just before creation to just after deletion, each read exactly and as a
+    // `max_version`, unbounded and bounded by every checkpoint from just before creation through
+    // deletion, for both objects.
+    let versions: Vec<u64> = lifecycle
+        .changes
+        .iter()
+        .map(|&(_, _, version, _)| version)
+        .collect();
+    let first_version = versions.iter().min().unwrap() - 1;
+    let last_version = versions.iter().max().unwrap() + 1;
+    let bounds: Vec<Option<u64>> = std::iter::once(None)
+        .chain((lifecycle.publish_checkpoint..=lifecycle.delete_checkpoint).map(Some))
+        .collect();
+    let mut cases: Vec<(GetObjectRequest, Option<u64>, String)> = Vec::new();
+    for id in [object, wrapper] {
+        let id_string = id.to_canonical_string(true);
+        for version in first_version..=last_version {
+            for &at_checkpoint in &bounds {
+                let at = at_checkpoint
+                    .map(|checkpoint| format!(" at checkpoint {checkpoint}"))
+                    .unwrap_or_default();
+                cases.push((
+                    object_request(id, Some(version), at_checkpoint),
+                    exact(id, version, at_checkpoint),
+                    format!("Object {id_string} with version {version}{at} not found"),
+                ));
+                cases.push((
+                    max_version_request(id, version, at_checkpoint),
+                    at_most(id, version, at_checkpoint),
+                    format!("Object {id_string} with version at most {version}{at} not found"),
+                ));
+            }
+        }
+    }
+
+    let assert_case = |read: &ObjectRead,
+                       req: &GetObjectRequest,
+                       expected: Option<u64>,
+                       message: &str,
+                       how: &str| {
+        let id: ObjectID = req.object_id.as_deref().unwrap().parse().unwrap();
+        let context = format!(
+            "{how}: version {:?}, max_version {:?}, at_checkpoint {:?}",
+            req.version, req.max_version, req.at_checkpoint,
+        );
+        match expected {
+            Some(version) => assert_object_found(read, id, version, &context),
+            None => assert_not_found(read, message, &context),
+        }
+    };
+    for (req, expected, message) in &cases {
+        let read = get_object_read(&mut client, req.clone()).await;
+        assert_case(&read, req, *expected, message, "GetObject");
+    }
+    let batch = batch_get_object_reads(
+        &mut client,
+        cases.iter().map(|(req, _, _)| req.clone()).collect(),
+    )
+    .await;
+    for (read, (req, expected, message)) in batch.iter().zip_eq(&cases) {
+        assert_case(read, req, *expected, message, "BatchGetObjects");
+    }
+
+    // The object skips a version between creation and the mutation, so the cases above include
+    // a `max_version` between two of its versions. One in that gap reads the created version,
+    // unbounded and bounded by the mutation's checkpoint.
+    let (_, _, create_version, _) = lifecycle.changes[0];
+    let set_value_version = lifecycle
+        .live_version_at(object, lifecycle.set_value_checkpoint)
+        .unwrap();
+    let in_gap = create_version + 1;
+    assert!(
+        in_gap < set_value_version,
+        "no version gap: {:?}",
+        lifecycle.changes
+    );
+    for at_checkpoint in [None, Some(lifecycle.set_value_checkpoint)] {
+        let read = get_object_read(
+            &mut client,
+            max_version_request(object, in_gap, at_checkpoint),
+        )
+        .await;
+        assert_object_found(
+            &read,
+            object,
+            create_version,
+            &format!("max_version {in_gap} at_checkpoint {at_checkpoint:?}"),
+        );
+    }
+
+    // Setting both `version` and `max_version` is invalid, and fails the whole batch.
+    let both = || {
+        let mut req = max_version_request(object, set_value_version, None);
+        req.version = Some(set_value_version);
+        req
+    };
+    let read = get_object_read(&mut client, both()).await;
+    match read {
+        Err((code, message)) => {
+            assert_eq!(code, tonic::Code::InvalidArgument, "{message}");
+            assert!(message.contains("mutually exclusive"), "{message}");
+        }
+        Ok(object) => panic!("expected InvalidArgument, got {object:?}"),
+    }
+
+    let err = client
+        .batch_get_objects(batch_request(vec![
+            object_request(object, None, None),
+            object_request(object, Some(set_value_version), None),
+            both(),
+        ]))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
+    assert_eq!(bad_request_fields(&err), ["requests[2].max_version"]);
 }
 
 #[tokio::test]

@@ -640,18 +640,20 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
 
-    /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint`, and fold the
-    /// alpha `kvstore_object_versions_by_checkpoint` pipeline into the `GetServiceInfo`
-    /// checkpoint height. Takes effect only with `object-schema = "v2"`. Defaults to `false`.
-    /// While it is off, or `object-schema` is `v1`, those requests are rejected with
-    /// `Unimplemented`.
+    /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint` or
+    /// `max_version`, and fold the alpha `kvstore_object_versions_by_checkpoint` pipeline into
+    /// the `GetServiceInfo` checkpoint height. Takes effect only with `object-schema = "v2"`.
+    /// Defaults to `false`. While it is off, or `object-schema` is `v1`, those requests are
+    /// rejected with `Unimplemented`.
     ///
     /// Enable this only after `kvstore_object_versions_by_checkpoint` has been backfilled from
     /// genesis. Its table has no restore floor, so an object unchanged since before the
     /// pipeline's first checkpoint would wrongly read as `NotFound`. The server cannot check
     /// this: a backfill run as a separate task writes its own watermark row, so the main
     /// pipeline's `reader_lo` does not say whether history is complete. Setting this flag is the
-    /// operator's statement that it is.
+    /// operator's statement that it is. A `max_version` read stops at the tombstone written where
+    /// the object was deleted or wrapped; `kvstore_objects_v2` writes those with the live
+    /// versions, and already bounds the served height under `object-schema = "v2"`.
     ///
     /// If this is on but the pipeline is not running, the pipeline has no watermark and the
     /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and

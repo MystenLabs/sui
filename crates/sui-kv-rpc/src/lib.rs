@@ -297,7 +297,7 @@ pub struct KvRpcServer {
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) monotonic_read_wait_timeout: Duration,
     pub(crate) stages: StagesConfig,
-    // Object history reads (`at_checkpoint`) need the alpha
+    // Object history reads (`at_checkpoint` and `max_version`) need the alpha
     // [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`], backfilled from genesis, and the `objects_v2`
     // table: they are served only with [`KvRpcConfig::enable_object_at_checkpoint`] on and
     // [`ObjectSchema::V2`] (see [`KvRpcConfig::serves_object_history`]). Otherwise they are
@@ -788,14 +788,14 @@ mod tests {
         .expect("start kv-rpc server")
     }
 
-    /// Write a watermark row for every pipeline a v2 replica serves, at the checkpoint
-    /// `checkpoint_of` names for it.
+    /// Write a watermark row for each of `pipelines`, at the checkpoint `checkpoint_of` names for
+    /// it.
     pub(crate) async fn seed_watermarks(
         client: &mut BigTableClient,
+        pipelines: &[&str],
         checkpoint_of: impl Fn(&str) -> u64,
     ) {
-        for pipeline in service_info_watermark_pipelines(BitmapSchema::V2, ObjectSchema::V1, false)
-        {
+        for &pipeline in pipelines {
             let checkpoint = checkpoint_of(pipeline);
             client
                 .create_pipeline_watermark_if_absent(
@@ -842,7 +842,8 @@ mod tests {
         let error = get_service_info(&server).await.unwrap_err();
         assert_eq!(error.code(), tonic::Code::Unavailable);
 
-        seed_watermarks(&mut client, |_| 20).await;
+        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, ObjectSchema::V1, false);
+        seed_watermarks(&mut client, &pipelines, |_| 20).await;
         timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
             .await
             .expect("service info never refreshed")
@@ -862,7 +863,8 @@ mod tests {
 
         // The objects pipeline lags, so it bounds the served checkpoint, and the timestamp must
         // come from its watermark rather than from a pipeline that is further ahead.
-        seed_watermarks(&mut client, |pipeline| {
+        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, ObjectSchema::V1, false);
+        seed_watermarks(&mut client, &pipelines, |pipeline| {
             if pipeline == OBJECTS_PIPELINE { 20 } else { 25 }
         })
         .await;
