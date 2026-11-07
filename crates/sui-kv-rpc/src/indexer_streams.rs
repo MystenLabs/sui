@@ -179,6 +179,7 @@ mod tests {
     use sui_kvstore::BitmapSchema;
     use sui_kvstore::EPOCH_END_PIPELINE;
     use sui_kvstore::OBJECTS_PIPELINE;
+    use sui_kvstore::ObjectSchema;
     use sui_kvstore::rpc::RpcService;
     use sui_kvstore::rpc::proto::v1alpha::watermark_service_server::WatermarkServiceServer;
     use sui_kvstore::rpc::watermark_service::WatermarkService;
@@ -219,7 +220,7 @@ mod tests {
     /// A watermark for every pipeline a replica serves, at the checkpoint `checkpoint` picks for
     /// it.
     fn served_watermarks(checkpoint: impl Fn(&str) -> u64) -> HashMap<String, CommitterWatermark> {
-        service_info_watermark_pipelines(BitmapSchema::V2)
+        service_info_watermark_pipelines(BitmapSchema::V2, ObjectSchema::V1)
             .iter()
             .map(|&pipeline| (pipeline.to_string(), watermark(checkpoint(pipeline))))
             .collect()
@@ -280,6 +281,7 @@ mod tests {
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             WatermarkSource::IndexerStreams(indexer_urls),
+            ObjectSchema::V1,
         )
         .await
         .expect("create kv-rpc server");

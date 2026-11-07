@@ -380,7 +380,10 @@ mod tests {
         let obj = Object::new_package_from_data(Data::Package(pkg), TransactionDigest::ZERO);
 
         // Insert package object into `objects` table
-        let obj_key = tables::objects::encode_key(&ObjectKey(original_id, SequenceNumber::from(1)));
+        let obj_key = tables::objects::encode_key(
+            tables::ObjectSchema::V1,
+            &ObjectKey(original_id, SequenceNumber::from(1)),
+        );
         let obj_cells = tables::objects::encode(&obj).unwrap();
         mock.insert_row(tables::objects::NAME, obj_key, obj_cells)
             .await;
@@ -532,7 +535,10 @@ mod tests {
         let plain = Object::with_id_owner_for_testing(plain_object_id, SuiAddress::ZERO);
 
         for object in [&v1, &v2, &plain] {
-            let key = tables::objects::encode_key(&ObjectKey(object.id(), object.version()));
+            let key = tables::objects::encode_key(
+                tables::ObjectSchema::V1,
+                &ObjectKey(object.id(), object.version()),
+            );
             mock.insert_row(
                 tables::objects::NAME,
                 Bytes::from(key),

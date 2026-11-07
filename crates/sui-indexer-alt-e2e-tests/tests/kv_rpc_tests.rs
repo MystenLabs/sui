@@ -15,6 +15,7 @@ use sui_kv_rpc::LedgerHistoryConfig;
 use sui_kv_rpc::LedgerHistoryMethodConfig;
 use sui_kv_rpc::StageConfig;
 use sui_kv_rpc::StagesConfig;
+use sui_kvstore::ObjectSchema;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::google::rpc::ErrorInfo;
@@ -65,6 +66,9 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::Argument;
+use sui_types::transaction::Command;
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
@@ -1161,11 +1165,31 @@ async fn test_json_read_mask() {
 
 #[tokio::test]
 async fn test_batch_get_objects() {
-    let mut cluster = list_api_cluster().await;
-    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    assert_batch_get_objects(list_api_cluster().await).await;
+}
 
-    let (pkg_id, gas) =
-        publish_package(&mut cluster, sender, &kp, gas, emit_test_event_pkg_path()).await;
+/// Latest and exact-version reads answer the same from `objects_v2` as from `objects`.
+#[tokio::test]
+async fn test_batch_get_objects_object_schema_v2() {
+    let kv_rpc_config = KvRpcConfig {
+        object_schema: Some(ObjectSchema::V2),
+        ..Default::default()
+    };
+    assert_batch_get_objects(list_api_cluster_with_config(kv_rpc_config).await).await;
+}
+
+async fn assert_batch_get_objects(mut cluster: FullCluster) {
+    let (sender, kp, funded_gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let (pkg_id, gas) = publish_package(
+        &mut cluster,
+        sender,
+        &kp,
+        funded_gas,
+        emit_test_event_pkg_path(),
+    )
+    .await;
+    assert!(funded_gas.1 < gas.1);
 
     cluster.create_checkpoint().await;
 
@@ -1182,6 +1206,21 @@ async fn test_batch_get_objects() {
         req.version = version;
         req
     };
+
+    // 0. An older version of an object is still readable by exact version.
+    {
+        let mut req = BatchGetObjectsRequest::default();
+        req.requests = vec![make_req(&gas.0, Some(funded_gas.1.value()))];
+        req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+
+        let response = client.batch_get_objects(req).await.unwrap().into_inner();
+        match &response.objects[0].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(obj.version, Some(funded_gas.1.value()));
+            }
+            other => panic!("expected the funded gas version, got: {other:?}"),
+        }
+    }
 
     // 1. A batch containing only unversioned (version: None) requests.
     {
@@ -1330,6 +1369,89 @@ async fn test_batch_get_objects() {
                 assert!(status.message.contains(&format!("version {wrong_version}")));
             }
             other => panic!("expected NotFound error at index 4, got: {other:?}"),
+        }
+    }
+}
+
+/// Under `object-schema = "v1"`, latest reads come from `objects`, which holds no tombstones, so a
+/// deleted coin's latest read still finds its last live version.
+#[tokio::test]
+async fn test_latest_read_of_deleted_object_object_schema_v1() {
+    assert_latest_read_of_deleted_object(ObjectSchema::V1).await;
+}
+
+/// Under `object-schema = "v2"`, latest reads come from `objects_v2`, which holds the deletion's
+/// tombstone, so a deleted coin's latest read is NOT_FOUND.
+#[tokio::test]
+async fn test_latest_read_of_deleted_object_object_schema_v2() {
+    assert_latest_read_of_deleted_object(ObjectSchema::V2).await;
+}
+
+/// Splits a coin off the gas coin, merges it back, which deletes it, and reads the coin's latest
+/// version from a kv-rpc server running `schema`.
+async fn assert_latest_read_of_deleted_object(schema: ObjectSchema) {
+    let kv_rpc_config = KvRpcConfig {
+        object_schema: Some(schema),
+        ..Default::default()
+    };
+    let mut cluster = list_api_cluster_with_config(kv_rpc_config).await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.transfer_sui(sender, Some(1_000_000));
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+    let (fx, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("split failed");
+    assert!(err.is_none(), "split failed: {err:?}");
+    let (coin, _) = fx.created().into_iter().next().expect("coin created");
+    let gas = fx.gas_object().expect("gas object").0;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap();
+    builder.command(Command::MergeCoins(Argument::GasCoin, vec![coin_arg]));
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+    let (fx, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("merge failed");
+    assert!(err.is_none(), "merge failed: {err:?}");
+    assert!(
+        fx.deleted().iter().any(|(id, _, _)| *id == coin.0),
+        "merge should delete the coin"
+    );
+    cluster.create_checkpoint().await;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(coin.0.to_canonical_string(true));
+    request.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+    let response = client.get_object(request).await;
+    match schema {
+        ObjectSchema::V1 => {
+            let object = response
+                .expect("v1 finds the last live version")
+                .into_inner()
+                .object
+                .expect("object should be present");
+            assert_eq!(object.version, Some(coin.1.value()));
+        }
+        ObjectSchema::V2 => {
+            let status = response.expect_err("v2 finds the tombstone");
+            assert_eq!(status.code(), tonic::Code::NotFound, "{status:?}");
         }
     }
 }

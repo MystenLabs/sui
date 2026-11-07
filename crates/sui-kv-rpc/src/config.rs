@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::BitmapSchema;
+use sui_kvstore::ObjectSchema;
 use sui_kvstore::PoolConfig;
 use sui_kvstore::ReadRowsRetryConfig;
 
@@ -693,6 +694,20 @@ pub struct KvRpcConfig {
     /// read ceiling.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stages: Option<StagesConfig>,
+
+    /// Which objects table `GetObject`, `BatchGetObjects`, the package reads and the object reads
+    /// of transactions and checkpoints use. `v1` reads `objects`, written by the
+    /// `kvstore_objects` pipeline: it records no deletions or wraps, so a removed object's latest
+    /// version is its last live one. `v2` reads `objects_v2`, written by the alpha
+    /// `kvstore_objects_v2` pipeline, which records them and orders each object's versions newest
+    /// first, so latest and version-bounded reads are single-row forward scans. The watermark of
+    /// the pipeline that writes the chosen table bounds the served checkpoint. `objects_v2` must
+    /// be backfilled from genesis before choosing `v2`, because exact-version reads do not check
+    /// any watermark.
+    ///
+    /// Defaults to `v1` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_schema: Option<ObjectSchema>,
 }
 
 impl KvRpcConfig {
@@ -808,6 +823,10 @@ impl KvRpcConfig {
 
     pub fn stages(&self) -> StagesConfig {
         self.stages.clone().unwrap_or_default()
+    }
+
+    pub fn object_schema(&self) -> ObjectSchema {
+        self.object_schema.unwrap_or(ObjectSchema::V1)
     }
 
     /// Where this instance learns how far the data in Bigtable goes: the watermark streams of the
@@ -1164,12 +1183,18 @@ render-ahead = 3
     fn bitmap_schema_selects_the_bitmap_pipelines_that_bound_the_height() {
         let v1 = KvRpcConfig::default();
         v1.validate().unwrap();
-        let v1_pipelines = service_info_watermark_pipelines(v1.ledger_history().bitmap_schema());
+        let v1_pipelines = service_info_watermark_pipelines(
+            v1.ledger_history().bitmap_schema(),
+            v1.object_schema(),
+        );
 
         let v2: KvRpcConfig =
             serde_yaml::from_str("ledger-history:\n  bitmap-schema: v2\n").unwrap();
         v2.validate().unwrap();
-        let v2_pipelines = service_info_watermark_pipelines(v2.ledger_history().bitmap_schema());
+        let v2_pipelines = service_info_watermark_pipelines(
+            v2.ledger_history().bitmap_schema(),
+            v2.object_schema(),
+        );
 
         for (pipeline, in_v1, in_v2) in [
             ("kvstore_tx_seq_digest", true, true),
@@ -1177,6 +1202,34 @@ render-ahead = 3
             ("kvstore_event_dimensions", true, false),
             ("kvstore_transaction_dimensions_v2", false, true),
             ("kvstore_event_dimensions_v2", false, true),
+        ] {
+            assert_eq!(v1_pipelines.contains(&pipeline), in_v1, "{pipeline} in v1");
+            assert_eq!(v2_pipelines.contains(&pipeline), in_v2, "{pipeline} in v2");
+        }
+    }
+
+    #[test]
+    fn object_schema_selects_the_objects_pipeline_that_bounds_the_height() {
+        let v1 = KvRpcConfig::default();
+        v1.validate().unwrap();
+        assert_eq!(v1.object_schema(), ObjectSchema::V1);
+        let v1_pipelines = service_info_watermark_pipelines(
+            v1.ledger_history().bitmap_schema(),
+            v1.object_schema(),
+        );
+
+        let v2: KvRpcConfig = toml::from_str("object-schema = \"v2\"\n").unwrap();
+        v2.validate().unwrap();
+        assert_eq!(v2.object_schema(), ObjectSchema::V2);
+        let v2_pipelines = service_info_watermark_pipelines(
+            v2.ledger_history().bitmap_schema(),
+            v2.object_schema(),
+        );
+
+        for (pipeline, in_v1, in_v2) in [
+            ("kvstore_checkpoints", true, true),
+            ("kvstore_objects", true, false),
+            ("kvstore_objects_v2", false, true),
         ] {
             assert_eq!(v1_pipelines.contains(&pipeline), in_v1, "{pipeline} in v1");
             assert_eq!(v2_pipelines.contains(&pipeline), in_v2, "{pipeline} in v2");

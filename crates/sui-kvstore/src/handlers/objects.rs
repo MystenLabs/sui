@@ -10,8 +10,9 @@ use sui_types::storage::ObjectKey;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BigTableProcessor;
 use crate::tables;
+use crate::tables::ObjectSchema;
 
-/// Pipeline that writes objects to BigTable.
+/// Pipeline that writes every live object version to the [`ObjectSchema::V1`] `objects` table.
 /// Wrap with `BigTableHandler` for the full `concurrent::Handler` implementation.
 pub struct ObjectsPipeline;
 
@@ -28,7 +29,7 @@ impl Processor for ObjectsPipeline {
             for object in txn.output_objects(&checkpoint.object_set) {
                 let object_key = ObjectKey(object.id(), object.version());
                 let entry = tables::make_entry(
-                    tables::objects::encode_key(&object_key),
+                    tables::objects::encode_key(ObjectSchema::V1, &object_key),
                     tables::objects::encode(object)?,
                     Some(timestamp_ms),
                 );

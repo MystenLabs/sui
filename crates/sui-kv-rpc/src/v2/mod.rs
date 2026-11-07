@@ -613,6 +613,7 @@ mod tests {
                 KvRpcConfig::default().monotonic_read_wait_timeout(),
                 StagesConfig::default(),
                 WatermarkSource::IndexerStreams(vec![]),
+                sui_kvstore::ObjectSchema::V1,
             )
             .await
             .expect("create kv-rpc server");

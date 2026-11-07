@@ -477,7 +477,9 @@ mod tests {
             .flat_map(|index| canonical_transaction_object_keys(&checkpoint, index))
             .collect::<BTreeSet<_>>()
             .into_iter()
-            .map(|key| sui_kvstore::tables::objects::encode_key(&key))
+            .map(|key| {
+                sui_kvstore::tables::objects::encode_key(sui_kvstore::ObjectSchema::V1, &key)
+            })
             .collect::<Vec<_>>();
         expected_object_rows.sort();
         assert_eq!(actual_object_rows, expected_object_rows);

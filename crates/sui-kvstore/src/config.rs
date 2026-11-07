@@ -380,6 +380,7 @@ pub struct PipelineLayer {
     pub checkpoints: ConcurrentLayer,
     pub checkpoints_by_digest: ConcurrentLayer,
     pub transactions: ConcurrentLayer,
+    /// Configures `kvstore_objects` and `kvstore_objects_v2`.
     pub objects: ConcurrentLayer,
     pub epoch_start: ConcurrentLayer,
     pub epoch_end: ConcurrentLayer,
@@ -394,7 +395,6 @@ pub struct PipelineLayer {
     /// Configures `kvstore_event_dimensions` and `kvstore_event_dimensions_v2`.
     pub event_bitmap_index: SequentialLayer,
     pub object_versions_by_checkpoint: ConcurrentLayer,
-    pub object_tombstones: ConcurrentLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
