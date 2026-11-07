@@ -11,7 +11,7 @@ use sui_rpc::proto::sui::rpc::v2::ProtocolConfig as RpcProtocolConfig;
 use sui_rpc::proto::sui::rpc::v2::{GetEpochRequest, GetEpochResponse};
 use sui_rpc_api::grpc::v2::ledger_service::set_epoch_end_fields;
 use sui_rpc_api::{
-    ErrorReason, RpcError,
+    EpochNotFoundError, ErrorReason, RpcError,
     grpc::v2::protocol_config_to_proto,
     proto::{google::rpc::bad_request::FieldViolation, timestamp_ms_to_proto},
 };
@@ -51,16 +51,14 @@ pub async fn get_epoch(
 
     let epoch = request.epoch.unwrap_or(served_height.epoch);
     if epoch > served_height.epoch {
-        return Ok(GetEpochResponse::default());
+        return Err(EpochNotFoundError::new(epoch).into());
     }
     let columns = epoch_columns(&read_mask);
-    let Some(mut epoch_info) = client
+    let mut epoch_info = client
         .get_epochs_filtered(&[epoch], Some(&columns))
         .await?
         .pop()
-    else {
-        return Ok(GetEpochResponse::default());
-    };
+        .ok_or_else(|| EpochNotFoundError::new(epoch))?;
     if epoch_info
         .end_checkpoint
         .is_some_and(|end_checkpoint| end_checkpoint > served_height.checkpoint)
@@ -261,6 +259,25 @@ mod tests {
             .expect("get_epoch succeeds")
     }
 
+    /// Assert that `GetEpoch` answers `NOT_FOUND` for `epoch`, as the fullnode does.
+    async fn assert_not_found(
+        client: &KvStoreClient,
+        served_height: ServedHeight,
+        epoch: Option<u64>,
+        expected_epoch: u64,
+    ) {
+        let status: tonic::Status = try_get(client, served_height, epoch, BOUNDS_MASK)
+            .await
+            .expect_err("epoch is not found")
+            .into();
+        assert_eq!(status.code(), tonic::Code::NotFound, "{epoch:?}");
+        assert_eq!(
+            status.message(),
+            format!("Epoch {expected_epoch} not found"),
+            "{epoch:?}"
+        );
+    }
+
     #[tokio::test]
     async fn epochs_are_served_as_of_the_served_height() {
         let mock = MockBigtableServer::new();
@@ -302,10 +319,7 @@ mod tests {
         // A mask asking only for `end` still hides it: `end_checkpoint` is read to decide.
         let end_only = get(&client, inside_epoch_0, Some(0), &["end"]).await;
         assert_eq!(end_only.end, None);
-        assert_eq!(
-            get(&client, inside_epoch_0, Some(1), BOUNDS_MASK).await,
-            Epoch::default()
-        );
+        assert_not_found(&client, inside_epoch_0, Some(1), 1).await;
 
         // At epoch 0's last checkpoint, epoch 0 has ended.
         let end_of_epoch_0 = ServedHeight {
@@ -327,6 +341,39 @@ mod tests {
         let latest = get(&client, inside_epoch_1, None, BOUNDS_MASK).await;
         assert_eq!(latest.epoch, Some(1));
         assert_eq!(latest.first_checkpoint, Some(10));
+    }
+
+    /// An epoch at or below the served epoch with no row is not found, whether named or latest.
+    #[tokio::test]
+    async fn epoch_without_a_row_is_not_found() {
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        mock.insert_row(
+            epochs::NAME,
+            epochs::encode_key(0),
+            [
+                u64_cell(col::EPOCH, 0),
+                u64_cell(col::START_CHECKPOINT, 0),
+                u64_cell(col::END_CHECKPOINT, 9),
+            ],
+        )
+        .await;
+        let inside_epoch_1 = ServedHeight {
+            checkpoint: 10,
+            epoch: 1,
+        };
+
+        assert_not_found(&client, inside_epoch_1, Some(1), 1).await;
+        assert_not_found(&client, inside_epoch_1, None, 1).await;
+        assert_eq!(
+            get(&client, inside_epoch_1, Some(0), BOUNDS_MASK)
+                .await
+                .epoch,
+            Some(0)
+        );
     }
 
     const END_MASK: &[&str] = &[
