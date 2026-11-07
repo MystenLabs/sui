@@ -53,6 +53,10 @@ pub trait AdmissionQueueEntry {
     fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey>;
     fn notify_evicted(self, min_gas_price: u64);
     fn notify_rejected(self, min_gas_price: u64);
+    /// When the entry was admitted, used to drop entries that outlive their time to live.
+    fn enqueue_time(&self) -> Instant;
+    /// The entry waited past its time to live and was dropped; the submitter should retry.
+    fn notify_expired(self, retry_after_secs: u64);
 }
 
 /// Outcome of [`PriorityAdmissionQueue::try_insert`]. Any displaced entry is
@@ -152,6 +156,18 @@ impl AdmissionQueueEntry for QueueEntry {
         // Nothing to do here in push mode. The rejected caller receives the
         // outbid error via the insert result instead.
     }
+
+    fn enqueue_time(&self) -> Instant {
+        self.enqueue_time
+    }
+
+    fn notify_expired(self, retry_after_secs: u64) {
+        let _ = self
+            .position_sender
+            .send(Err(tonic::Status::from(SuiError::from(
+                SuiErrorKind::ValidatorOverloadedRetryAfter { retry_after_secs },
+            ))));
+    }
 }
 
 impl QueueEntry {
@@ -179,6 +195,7 @@ pub struct AdmissionQueueMetrics {
     pub queue_wait_latency: HistogramVec,
     pub evictions: IntCounter,
     pub rejections: IntCounter,
+    pub expired: IntCounter,
     pub duplicate_inserts: IntCounter,
 
     pub pool_depth: IntGaugeVec,
@@ -226,6 +243,12 @@ impl AdmissionQueueMetrics {
             rejections: register_int_counter_with_registry!(
                 "admission_queue_rejections",
                 "Number of transactions rejected because the queue was full and their gas price was too low",
+                registry,
+            )
+            .unwrap(),
+            expired: register_int_counter_with_registry!(
+                "admission_queue_expired",
+                "Number of queued transactions dropped for exceeding their time to live",
                 registry,
             )
             .unwrap(),
@@ -503,6 +526,32 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         }
         self.metrics.queue_depth.set(self.total_len as i64);
         (included, excluded)
+    }
+
+    /// Drops queued entries admitted more than `ttl` before `now`, returning them
+    /// for the caller to notify. A backstop for entries that sit far longer than a
+    /// client waits. Within a price level entries are age-ordered (oldest at the
+    /// front), so the expired ones form a prefix: this pops that prefix and stops at
+    /// the first fresh entry, so a level with no expired entries costs one comparison.
+    /// Runs on every block proposal.
+    pub fn evict_expired(&mut self, now: Instant, ttl: Duration) -> Vec<E> {
+        let mut expired = Vec::new();
+        for deque in self.map.values_mut() {
+            while deque
+                .front()
+                .is_some_and(|entry| now.saturating_duration_since(entry.enqueue_time()) >= ttl)
+            {
+                expired.push(deque.pop_front().expect("front was just observed"));
+            }
+        }
+        self.total_len -= expired.len();
+        for entry in &expired {
+            self.remove_keys(entry);
+        }
+        self.map.retain(|_, deque| !deque.is_empty());
+        self.metrics.expired.inc_by(expired.len() as u64);
+        self.metrics.queue_depth.set(self.total_len as i64);
+        expired
     }
 
     pub fn is_empty(&self) -> bool {
@@ -926,6 +975,91 @@ mod tests {
         ));
         assert_eq!(q.len(), 1);
         assert!(rejected_rx.try_recv().is_err());
+    }
+
+    fn entry_at(
+        gas_price: u64,
+        enqueue_time: Instant,
+    ) -> (
+        QueueEntry,
+        oneshot::Receiver<Result<Vec<ConsensusPosition>, tonic::Status>>,
+    ) {
+        let (tx, rx) = oneshot::channel();
+        (
+            QueueEntry {
+                gas_price,
+                transactions: vec![],
+                position_sender: tx,
+                submitter_client_addr: None,
+                enqueue_time,
+            },
+            rx,
+        )
+    }
+
+    #[test]
+    fn evict_expired_drops_entries_past_ttl() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics.clone());
+        let (e1, mut rx1) = make_test_entry(100);
+        let (e2, _rx2) = make_test_entry(200);
+        q.insert(e1).unwrap();
+        q.insert(e2).unwrap();
+
+        let ttl = Duration::from_secs(60);
+        let expired = q.evict_expired(Instant::now() + Duration::from_secs(120), ttl);
+        assert_eq!(expired.len(), 2);
+        assert_eq!(q.len(), 0);
+        assert_eq!(metrics.expired.get(), 2);
+
+        for entry in expired {
+            entry.notify_expired(ttl.as_secs());
+        }
+        assert!(matches!(rx1.try_recv(), Ok(Err(_))));
+    }
+
+    #[test]
+    fn evict_expired_keeps_fresh_entries() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        q.insert(make_test_entry(100).0).unwrap();
+        q.insert(make_test_entry(200).0).unwrap();
+
+        let expired = q.evict_expired(Instant::now(), Duration::from_secs(60));
+        assert!(expired.is_empty());
+        assert_eq!(q.len(), 2);
+    }
+
+    #[test]
+    fn evict_expired_drops_only_entries_past_ttl() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        let now = Instant::now();
+        let (old, _old_rx) = entry_at(100, now);
+        let (fresh, _fresh_rx) = entry_at(200, now + Duration::from_secs(120));
+        q.insert(old).unwrap();
+        q.insert(fresh).unwrap();
+
+        let expired = q.evict_expired(now + Duration::from_secs(60), Duration::from_secs(60));
+        assert_eq!(expired.len(), 1);
+        assert_eq!(expired[0].gas_price(), 100);
+        assert_eq!(q.len(), 1);
+    }
+
+    #[test]
+    fn evict_expired_stops_at_first_fresh_entry_in_a_level() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        let now = Instant::now();
+        // Same price level, oldest first: an expired entry ahead of a fresh one.
+        let (old, _old_rx) = entry_at(100, now);
+        let (fresh, _fresh_rx) = entry_at(100, now + Duration::from_secs(120));
+        q.insert(old).unwrap();
+        q.insert(fresh).unwrap();
+
+        let expired = q.evict_expired(now + Duration::from_secs(60), Duration::from_secs(60));
+        assert_eq!(expired.len(), 1);
+        assert_eq!(q.len(), 1);
     }
 
     fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {

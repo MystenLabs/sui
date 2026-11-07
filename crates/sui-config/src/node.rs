@@ -319,6 +319,11 @@ pub struct ConsensusTransactionPoolConfig {
     /// two maximum-size blocks per second (`max_transactions_in_block_bytes`).
     /// Must be greater than zero.
     pub max_user_bytes_per_second: Option<u64>,
+
+    /// Drop user-lane entries that have waited longer than this many seconds,
+    /// bounding how long a transaction sits in the pool rather than only how many
+    /// are queued. Defaults to 60 seconds when unset; 0 disables expiry.
+    pub max_queue_age_secs: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -328,6 +333,7 @@ impl Default for ConsensusTransactionPoolConfig {
             max_pending_transactions: None,
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
+            max_queue_age_secs: None,
         }
     }
 }
@@ -343,6 +349,14 @@ impl ConsensusTransactionPoolConfig {
             self.max_user_bytes_per_second
                 .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
         })
+    }
+
+    pub fn max_queue_age(&self) -> Option<Duration> {
+        match self.max_queue_age_secs {
+            Some(0) => None,
+            Some(secs) => Some(Duration::from_secs(secs)),
+            None => Some(Duration::from_secs(60)),
+        }
     }
 }
 
@@ -1948,6 +1962,28 @@ mod tests {
             round_tripped.rpc_store_bitmap_periodic_compaction_days,
             Some(17)
         );
+    }
+
+    #[test]
+    fn max_queue_age_defaults_and_disable() {
+        use super::ConsensusTransactionPoolConfig;
+        use std::time::Duration;
+
+        let default = ConsensusTransactionPoolConfig::default();
+        assert_eq!(default.max_queue_age(), Some(Duration::from_secs(60)));
+
+        let configured = ConsensusTransactionPoolConfig {
+            max_queue_age_secs: Some(120),
+            ..Default::default()
+        };
+        assert_eq!(configured.max_queue_age(), Some(Duration::from_secs(120)));
+
+        // Zero disables expiry rather than evicting every queued entry.
+        let disabled = ConsensusTransactionPoolConfig {
+            max_queue_age_secs: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(disabled.max_queue_age(), None);
     }
 
     #[test]

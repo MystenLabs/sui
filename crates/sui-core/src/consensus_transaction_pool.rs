@@ -275,6 +275,20 @@ impl AdmissionQueueEntry for PoolEntry {
                 .into(),
         );
     }
+
+    fn enqueue_time(&self) -> Instant {
+        self.ack.created
+    }
+
+    fn notify_expired(self, retry_after_secs: u64) {
+        self.metrics.pool_depth.with_label_values(&["user"]).dec();
+        self.metrics
+            .pool_bytes
+            .with_label_values(&["user"])
+            .sub(self.total_bytes as i64);
+        self.ack
+            .resolve_error(SuiErrorKind::ValidatorOverloadedRetryAfter { retry_after_secs }.into());
+    }
 }
 
 /// Tracks the user lane's state, which is closed when user certs are no longer accepted.
@@ -386,6 +400,8 @@ pub struct ConsensusTransactionPool {
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
     stagger_quota: StaggerQuota,
+    /// When set, user-lane entries queued longer than this are dropped at proposal time.
+    max_queue_age: Option<Duration>,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -395,6 +411,7 @@ impl ConsensusTransactionPool {
         cache_writer: Arc<dyn ExecutionCacheWrite>,
         max_pending_transactions: usize,
         max_user_bytes_per_second: Option<u64>,
+        max_queue_age: Option<Duration>,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -432,6 +449,7 @@ impl ConsensusTransactionPool {
             cache_writer,
             metrics: metrics.clone(),
             adapter_metrics,
+            max_queue_age,
             stagger_quota: StaggerQuota::new(
                 max_pending_transactions,
                 metrics.pool_staggered_held.clone(),
@@ -463,6 +481,7 @@ impl ConsensusTransactionPool {
             epoch_store,
             cache_writer,
             max_pending_transactions,
+            None,
             None,
             metrics,
             ConsensusAdapterMetrics::new_test(),
@@ -1059,6 +1078,7 @@ impl TransactionPool for ConsensusTransactionPool {
             .epoch_store
             .get_reconfig_state_read_lock_guard()
             .should_accept_user_certs();
+        let max_queue_age = self.max_queue_age;
         #[allow(unused_mut)]
         let mut disabled = false;
         fail_point_if!("consensus_transaction_pool_disable_take", || {
@@ -1137,14 +1157,22 @@ impl TransactionPool for ConsensusTransactionPool {
             entries.push(TakenEntry::new(TakenLane::System, entry));
         }
 
+        let now = Instant::now();
         let mut excluded = Vec::new();
+        let mut expired_user = Vec::new();
+        // The time-to-live backstop runs on every proposal, independent of whether user
+        // transactions are drained this round. A saturated system lane leaves limit_reached
+        // non-empty and skips the drain below, but that overload is exactly when aged
+        // entries must still be shed, so expiry is not gated on it.
+        if let (Some(ttl), UserLane::Open(user)) = (max_queue_age, &mut pool.user) {
+            expired_user = user.evict_expired(now, ttl);
+        }
         if !user_take_disabled
             && matches!(limit_reached, LimitReached::AllTransactionsIncluded)
             && let UserLane::Open(user) = &mut pool.user
         {
             let mut pending_count = transactions.len();
             let mut pending_bytes = system_tx_total_bytes;
-            let now = Instant::now();
             let user_max_bytes = match &mut pool.user_byte_budget {
                 Some(budget) => {
                     max_bytes.min(system_tx_total_bytes.saturating_add(budget.available(now)))
@@ -1217,6 +1245,12 @@ impl TransactionPool for ConsensusTransactionPool {
 
         // Resolve flushed/processed items outside the mutex.
         self.resolve_flushed_user_entries(flushed);
+        if let Some(ttl) = max_queue_age {
+            let retry_after_secs = ttl.as_secs();
+            for entry in expired_user {
+                entry.notify_expired(retry_after_secs);
+            }
+        }
         for entry in abandoned {
             self.metrics
                 .pool_abandoned
@@ -1669,6 +1703,7 @@ mod tests {
             state.get_cache_writer().clone(),
             10,
             Some(max_user_bytes_per_second),
+            None,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
@@ -1683,6 +1718,23 @@ mod tests {
                 Instant::now(),
             )));
         }
+        (state, pool)
+    }
+
+    async fn test_state_and_ttl_pool(
+        capacity: usize,
+        max_queue_age: Duration,
+    ) -> (Arc<AuthorityState>, Arc<ConsensusTransactionPool>) {
+        let state = TestAuthorityBuilder::new().build().await;
+        let pool = Arc::new(ConsensusTransactionPool::new(
+            state.epoch_store_for_testing().clone(),
+            state.get_cache_writer().clone(),
+            capacity,
+            None,
+            Some(max_queue_age),
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+            ConsensusAdapterMetrics::new_test(),
+        ));
         (state, pool)
     }
 
@@ -1842,6 +1894,41 @@ mod tests {
         assert_eq!(pool.queue_depth("system"), 0);
         assert_eq!(pool.queue_depth("user"), 1);
         drop(ack);
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn expiry_runs_when_system_lane_saturates_the_block() {
+        let ttl = Duration::from_secs(1);
+        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let epoch = pool.epoch();
+
+        let (user_receiver, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction(&state)])
+            .unwrap();
+        assert_eq!(pool.queue_depth("user"), 1);
+
+        // Two system transactions so a count-limited take fills the block from the system
+        // lane alone, leaving limit_reached != AllTransactionsIncluded and skipping the user
+        // drain.
+        let _s1 = pool.submit(epoch, &[transaction()]).unwrap();
+        let _s2 = pool.submit(epoch, &[transaction()]).unwrap();
+
+        // Age the queued user entry past its TTL.
+        tokio::time::sleep(ttl + Duration::from_secs(1)).await;
+
+        let (transactions, ack, limit) = pool.take(1, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(limit, LimitReached::MaxNumOfTransactions);
+        ack(block(1));
+
+        // Expiry ran despite the saturated system lane: the aged user entry was evicted and
+        // its submitter received the retriable overload error.
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert!(matches!(
+            user_receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+        ));
         pool.close();
     }
 

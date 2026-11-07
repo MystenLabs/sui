@@ -316,6 +316,7 @@ impl ConsensusManager {
                         .protocol_config()
                         .max_transactions_in_block_bytes(),
                 ),
+                config.max_queue_age(),
                 context.metrics().clone(),
                 context.adapter_metrics().clone(),
             ));
