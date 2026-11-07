@@ -15,6 +15,7 @@ async fn test_checkpoint_rate() {
     });
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_production_config()
         .with_epoch_duration_ms(60000)
         .build()

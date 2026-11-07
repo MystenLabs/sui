@@ -438,6 +438,37 @@ impl<R> ConfigBuilder<R> {
     }
 }
 
+// A setting that differs between validators tests nothing with a single validator, so a test
+// that sets one most likely expects a larger committee. The funds-withdraw scheduler,
+// observer, and unpruned-validator settings are exempt because they work with a single
+// validator.
+fn check_no_per_validator_settings(
+    supported_protocol_versions_config: &Option<ProtocolVersionsConfig>,
+    global_state_hash_v2_enabled_config: &Option<GlobalStateHashV2EnabledConfig>,
+    has_peer_deny_sync_config: bool,
+) {
+    let setting = if matches!(
+        supported_protocol_versions_config,
+        Some(ProtocolVersionsConfig::PerValidator(_))
+    ) {
+        Some("supported protocol versions")
+    } else if matches!(
+        global_state_hash_v2_enabled_config,
+        Some(GlobalStateHashV2EnabledConfig::PerValidator(_))
+    ) {
+        Some("global state hash v2")
+    } else if has_peer_deny_sync_config {
+        Some("peer deny sync config")
+    } else {
+        None
+    };
+    if let Some(setting) = setting {
+        panic!(
+            "per-validator {setting} is set on a single-validator committee; set a larger committee size"
+        );
+    }
+}
+
 impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(self) -> NetworkConfig {
@@ -511,6 +542,14 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 configs
             }
         };
+
+        if validators.len() == 1 {
+            check_no_per_validator_settings(
+                &self.supported_protocol_versions_config,
+                &self.global_state_hash_v2_enabled_config,
+                self.peer_deny_sync_config.is_some(),
+            );
+        }
 
         let genesis_config = self
             .genesis_config

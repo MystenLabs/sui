@@ -315,7 +315,10 @@ async fn do_test_full_node_sync_flood() {
 
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
     let context = &mut test_cluster.wallet;
