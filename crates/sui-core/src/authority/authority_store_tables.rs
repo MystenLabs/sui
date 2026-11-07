@@ -46,6 +46,13 @@ pub struct AuthorityPerpetualTablesOptions {
 }
 
 impl AuthorityPerpetualTablesOptions {
+    /// Whether a node runs the tidehunter objects compactor: validators, which never prune, and
+    /// any node configured with `num_epochs_to_retain = 0`, the setting the compactor replaces.
+    /// Always `false` on RocksDB builds, which have no compactor.
+    pub fn objects_compactor_enabled(is_validator: bool, num_epochs_to_retain: u64) -> bool {
+        cfg!(tidehunter) && (is_validator || num_epochs_to_retain == 0)
+    }
+
     #[cfg(not(tidehunter))]
     fn apply_to(&self, mut db_options: DBOptions) -> DBOptions {
         if !self.enable_write_stall {

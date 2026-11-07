@@ -30,6 +30,8 @@ pub mod object_by_type;
 pub mod object_version_by_checkpoint;
 pub mod objects;
 pub mod package_versions;
+pub mod packages_by_checkpoint;
+pub mod packages_by_checkpoint_built;
 pub mod primitives;
 pub mod pruning_watermark;
 pub mod transaction_bitmap;
@@ -137,6 +139,13 @@ pub struct RpcStoreSchema<R: Reader = Db> {
     /// storage id under which each version lives.
     pub package_versions: DbMap<package_versions::Key, package_versions::Value, R>,
 
+    /// Every package version whose publish checkpoint is known, keyed
+    /// by `(checkpoint, original_id, version)` so package publishes
+    /// across all packages list in checkpoint order. Written in the same
+    /// batch as `package_versions`.
+    pub packages_by_checkpoint:
+        DbMap<packages_by_checkpoint::Key, packages_by_checkpoint::Value, R>,
+
     /// Inverted bitmap index over transaction-sequence space,
     /// supporting filtered transaction queries by indexed fields
     /// such as sender, called function, or input/changed object.
@@ -152,6 +161,12 @@ pub struct RpcStoreSchema<R: Reader = Db> {
     /// `checkpoint_seq`, and object version. Drives compaction
     /// filters and feeds `available_range` responses.
     pub pruning_watermark: DbMap<pruning_watermark::Key, pruning_watermark::Value, R>,
+
+    /// Singleton whose presence records that the startup build of
+    /// `packages_by_checkpoint` from `package_versions` has completed,
+    /// so later opens skip it.
+    pub packages_by_checkpoint_built:
+        DbMap<packages_by_checkpoint_built::Key, packages_by_checkpoint_built::Value, R>,
 }
 
 impl Schema for RpcStoreSchema {
@@ -191,6 +206,10 @@ impl Schema for RpcStoreSchema {
                 CfDescriptor::new(balance::NAME, balance::options(opts)),
                 CfDescriptor::new(package_versions::NAME, package_versions::options(opts)),
                 CfDescriptor::new(
+                    packages_by_checkpoint::NAME,
+                    packages_by_checkpoint::options(opts),
+                ),
+                CfDescriptor::new(
                     transaction_bitmap::NAME,
                     transaction_bitmap::options(opts, tx_seq_pruning_floor.clone()),
                 ),
@@ -199,6 +218,10 @@ impl Schema for RpcStoreSchema {
                     event_bitmap::options(opts, tx_seq_pruning_floor.clone()),
                 ),
                 CfDescriptor::new(pruning_watermark::NAME, pruning_watermark::options(opts)),
+                CfDescriptor::new(
+                    packages_by_checkpoint_built::NAME,
+                    packages_by_checkpoint_built::options(opts),
+                ),
             ],
         )?;
 
@@ -222,9 +245,14 @@ impl Schema for RpcStoreSchema {
             object_by_type: DbMap::new(db.clone(), object_by_type::NAME)?,
             balance: DbMap::new(db.clone(), balance::NAME)?,
             package_versions: DbMap::new(db.clone(), package_versions::NAME)?,
+            packages_by_checkpoint: DbMap::new(db.clone(), packages_by_checkpoint::NAME)?,
             transaction_bitmap: DbMap::new(db.clone(), transaction_bitmap::NAME)?,
             event_bitmap: DbMap::new(db.clone(), event_bitmap::NAME)?,
             pruning_watermark: DbMap::new(db.clone(), pruning_watermark::NAME)?,
+            packages_by_checkpoint_built: DbMap::new(
+                db.clone(),
+                packages_by_checkpoint_built::NAME,
+            )?,
         };
 
         if let Some(watermarks) = schema.get_pruning_watermarks().map_err(|error| {
@@ -233,6 +261,24 @@ impl Schema for RpcStoreSchema {
             schema
                 .tx_seq_pruning_floor
                 .store(watermarks.tx_seq_lo, Ordering::Relaxed);
+        }
+
+        // Build `packages_by_checkpoint` from `package_versions` until one
+        // build completes, so the index is complete before any pipeline
+        // or reader touches the store. A database created before the
+        // index existed, or whose build a crash interrupted, has no
+        // `packages_by_checkpoint_built` row.
+        let built = schema
+            .packages_by_checkpoint_built()
+            .map_err(|error| OpenError::with_source("read packages_by_checkpoint_built", error))?;
+        if !built {
+            let written = schema.build_packages_by_checkpoint(&db).map_err(|error| {
+                OpenError::with_source("build packages_by_checkpoint index", error)
+            })?;
+            tracing::info!(
+                rows = written,
+                "built packages_by_checkpoint index from package_versions"
+            );
         }
 
         Ok((db, schema))
@@ -259,9 +305,11 @@ impl SchemaAtSnapshot for RpcStoreSchema {
             object_by_type: self.object_by_type.at(snap),
             balance: self.balance.at(snap),
             package_versions: self.package_versions.at(snap),
+            packages_by_checkpoint: self.packages_by_checkpoint.at(snap),
             transaction_bitmap: self.transaction_bitmap.at(snap),
             event_bitmap: self.event_bitmap.at(snap),
             pruning_watermark: self.pruning_watermark.at(snap),
+            packages_by_checkpoint_built: self.packages_by_checkpoint_built.at(snap),
         }
     }
 }

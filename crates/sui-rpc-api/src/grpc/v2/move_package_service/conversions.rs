@@ -20,8 +20,18 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_types::base_types::ObjectID;
 
+/// A module, datatype or function missing from the package is the caller naming something that
+/// does not exist; every other resolver error is a server-side failure.
 pub fn convert_error(e: sui_package_resolver::error::Error) -> RpcError {
-    RpcError::new(tonic::Code::Internal, e.to_string())
+    use sui_package_resolver::error::Error;
+
+    let code = match e {
+        Error::ModuleNotFound(..) | Error::DatatypeNotFound(..) | Error::FunctionNotFound(..) => {
+            tonic::Code::NotFound
+        }
+        _ => tonic::Code::Internal,
+    };
+    RpcError::new(code, e.to_string())
 }
 
 pub fn convert_datatype(

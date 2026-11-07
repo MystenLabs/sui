@@ -770,7 +770,7 @@ async fn test_indexer_e2e() -> Result<()> {
     // get_package_versions: paginate versions
     let versions = harness
         .bigtable_client()
-        .get_package_versions(original_id, max_checkpoint, None, None, 10, false)
+        .get_package_versions(original_id, max_checkpoint, 0..u64::MAX, 10, false)
         .await?;
     assert_eq!(versions.len(), 1);
     assert_eq!(versions[0].package_version, package_version);
@@ -778,23 +778,34 @@ async fn test_indexer_e2e() -> Result<()> {
     // get_packages_by_checkpoint_range: should include the published package
     let by_cp = harness
         .bigtable_client()
-        .get_packages_by_checkpoint_range(None, None, 100, false)
+        .get_packages_by_checkpoint_range(
+            std::ops::Bound::Unbounded,
+            std::ops::Bound::Unbounded,
+            100,
+            false,
+        )
         .await?;
     assert!(
         by_cp.iter().any(|p| p.package_id == package_id.to_vec()),
         "published package should appear in checkpoint range scan",
     );
 
-    // get_system_packages: genesis system packages (0x1, 0x2, etc.)
-    let sys_pkgs = harness
-        .bigtable_client()
-        .get_system_packages(max_checkpoint, None, 100)
-        .await?;
-    assert!(
-        !sys_pkgs.is_empty(),
-        "there should be system packages from genesis"
-    );
-    for pkg in &sys_pkgs {
+    // get_system_package_ids: genesis system packages (0x1, 0x2, etc.), in ascending order, each
+    // with a system package version in `packages`.
+    let sys_ids = harness.bigtable_client().get_system_package_ids().await?;
+    for expected in [ObjectID::from_single_byte(1), ObjectID::from_single_byte(2)] {
+        assert!(
+            sys_ids.contains(&expected),
+            "genesis system package {expected} missing from {sys_ids:?}"
+        );
+    }
+    assert!(sys_ids.is_sorted(), "{sys_ids:?}");
+    for id in &sys_ids {
+        let pkg = harness
+            .bigtable_client()
+            .get_package_latest(*id, max_checkpoint)
+            .await?
+            .expect("system package has a version");
         assert!(pkg.is_system_package);
     }
 

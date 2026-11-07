@@ -1021,6 +1021,68 @@ impl TestCluster {
         Self::wait_for_rpc_index_on_handle(handle, highest_executed, true).await;
     }
 
+    /// Prune the rpc fullnode's checkpoint data (contents, transactions, effects) from every
+    /// epoch at least two before the epoch of its highest executed checkpoint, leaving object
+    /// versions in place, and return the highest pruned checkpoint. The checkpoint floor is then
+    /// above the object floor, as on a node that retains checkpoints for fewer epochs than
+    /// objects.
+    ///
+    /// Waits for the fullnode to execute a checkpoint of epoch 2, so epoch 0's checkpoints are
+    /// prunable, and for the rpc index to cover the checkpoints this prunes, since this prune is
+    /// not gated on the index. The cluster must be built with `disable_fullnode_pruning`, so that
+    /// this is the only checkpoint prune and the floor it leaves does not move.
+    pub async fn prune_fullnode_checkpoints_for_testing(&self) -> u64 {
+        let handle = &self.fullnode_handle.sui_node;
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while handle.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint()
+                .expect("db error")
+                .map_or(0, |checkpoint| checkpoint.epoch())
+        }) < 2
+        {
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for the fullnode to execute a checkpoint of epoch 2"
+            );
+            sleep(Duration::from_millis(100)).await;
+        }
+        self.wait_for_rpc_index_ready().await;
+
+        let name = handle.with(|node| node.state().name);
+        let mut config = self
+            .swarm
+            .fullnodes()
+            .find(|node| node.name() == name)
+            .expect("the rpc fullnode is in the swarm")
+            .config()
+            .clone();
+        let pruning_config = &mut config.authority_store_pruning_config;
+        // Unlimited object retention skips the clamp of checkpoint pruning to the object floor.
+        pruning_config.set_num_epochs_to_retain(u64::MAX);
+        pruning_config.set_num_epochs_to_retain_for_checkpoints(Some(2));
+        // Smoothing spreads pruning over the epoch, so one run could stop early.
+        pruning_config.smooth = false;
+        handle
+            .with_async(|node| async move {
+                let state = node.state();
+                state
+                    .prune_checkpoints_for_eligible_epochs_for_testing(
+                        config,
+                        sui_core::authority::authority_store_pruner::AuthorityStorePruningMetrics::new_for_test(),
+                    )
+                    .await
+                    .expect("checkpoint pruning failed");
+                state
+                    .get_checkpoint_store()
+                    .get_highest_pruned_checkpoint_seq_number()
+                    .expect("db error")
+                    .expect("epoch 0's checkpoints are pruned")
+            })
+            .await
+    }
+
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
     /// Also expects the effects status to be ExecutionStatus::Success.
     /// This function is recommended for transaction execution since it most resembles the

@@ -71,6 +71,10 @@ mod sim_only_tests {
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::Chain;
+    use sui_rpc::proto::sui::rpc::v2::{
+        GetPackageRequest, ListSystemPackagesRequest, PackageVersion,
+        get_package_request::Selector, move_package_service_client::MovePackageServiceClient,
+    };
     use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -360,6 +364,130 @@ mod sim_only_tests {
         assert_eq!(Some(SequenceNumber::from(2)), mutated_to);
     }
 
+    /// `ListSystemPackages` answers with the sui-system package's version as of the requested
+    /// checkpoint across its in-place upgrade, which lands in the last checkpoint of epoch 0.
+    #[sim_test]
+    async fn test_list_system_packages_across_framework_upgrade() {
+        let cluster = framework_upgrade_cluster("extend/base", "extend/compatible")
+            .await
+            // Keep epoch 0's object history, which the reads below need after it has ended.
+            .disable_fullnode_pruning()
+            .build()
+            .await;
+        expect_upgrade_succeeded(&cluster).await;
+        cluster.wait_for_rpc_index_ready().await;
+
+        let upgrade_checkpoint = framework_upgrade_checkpoint(&cluster);
+
+        let before = list_system_packages_at(&cluster, upgrade_checkpoint - 1).await;
+        let after = list_system_packages_at(&cluster, upgrade_checkpoint).await;
+
+        // Genesis publishes version 1 at checkpoint 0, and the upgrade publishes version 2 in
+        // the last checkpoint of epoch 0. No other system package is upgraded.
+        let sui_system_id = SUI_SYSTEM_PACKAGE_ID.to_canonical_string(true);
+        let sui_system_at = |version, checkpoint| {
+            PackageVersion::new(&SUI_SYSTEM_PACKAGE_ID.into(), version)
+                .with_checkpoint(checkpoint)
+                .with_original_id(sui_system_id.clone())
+        };
+        let split_sui_system = |packages: Vec<PackageVersion>| -> (Vec<_>, Vec<_>) {
+            packages
+                .into_iter()
+                .partition(|p| p.original_id.as_ref() == Some(&sui_system_id))
+        };
+        let (sui_system_before, others_before) = split_sui_system(before);
+        let (sui_system_after, others_after) = split_sui_system(after);
+        assert_eq!(sui_system_before, vec![sui_system_at(1, 0)]);
+        assert_eq!(sui_system_after, vec![sui_system_at(2, upgrade_checkpoint)]);
+        assert_eq!(others_before, others_after);
+        // The other system packages are listed too, each at the version genesis published.
+        assert!(
+            others_before
+                .iter()
+                .all(|p| p.version == Some(1) && p.checkpoint == Some(0)),
+            "{others_before:?}"
+        );
+        for package_id in [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID] {
+            let original_id = package_id.to_canonical_string(true);
+            assert!(
+                others_before
+                    .iter()
+                    .any(|p| p.original_id.as_ref() == Some(&original_id)),
+                "{package_id} missing from {others_before:?}"
+            );
+        }
+    }
+
+    /// The checkpoint a framework upgrade at the end of epoch 0 lands in: the epoch's last.
+    fn framework_upgrade_checkpoint(cluster: &TestCluster) -> u64 {
+        cluster.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_epoch_last_checkpoint_seq_number(0)
+                .unwrap()
+                .unwrap()
+        })
+    }
+
+    async fn list_system_packages_at(
+        cluster: &TestCluster,
+        at_checkpoint: u64,
+    ) -> Vec<PackageVersion> {
+        MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+            .await
+            .unwrap()
+            .list_system_packages(ListSystemPackagesRequest::new(at_checkpoint))
+            .await
+            .unwrap()
+            .into_inner()
+            .system_packages
+    }
+
+    #[sim_test]
+    async fn test_get_package_serves_system_package_versions_replaced_in_place() {
+        // The fullnode keeps every object version, so the package the upgrade replaced can
+        // still be served.
+        let cluster = framework_upgrade_cluster("extend/base", "extend/compatible")
+            .await
+            .disable_fullnode_pruning()
+            .build()
+            .await;
+        expect_upgrade_succeeded(&cluster).await;
+        // The fullnode has executed the upgrade, so once its indexes reach its highest executed
+        // checkpoint, every read below is served.
+        cluster.wait_for_rpc_index_ready().await;
+        let upgrade_checkpoint = framework_upgrade_checkpoint(&cluster);
+
+        let mut packages = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+        for (selector, version) in [
+            (Some(Selector::AtCheckpoint(upgrade_checkpoint)), 2),
+            (Some(Selector::AtCheckpoint(upgrade_checkpoint - 1)), 1),
+            (Some(Selector::Version(1)), 1),
+            (Some(Selector::Version(2)), 2),
+            (None, 2),
+        ] {
+            let mut request = GetPackageRequest::default();
+            request.package_id = Some(SUI_SYSTEM_PACKAGE_ID.to_string());
+            request.selector = selector;
+            let package = packages
+                .get_package(request.clone())
+                .await
+                .unwrap_or_else(|status| panic!("{request:?}: {status}"))
+                .into_inner()
+                .package
+                .unwrap();
+            assert_eq!(package.version, Some(version), "{request:?}");
+            // Only the upgraded package has `msim_extra_2`.
+            let has_new_module = package
+                .modules
+                .iter()
+                .any(|module| module.name() == "msim_extra_2");
+            assert_eq!(has_new_module, version == 2, "{request:?}");
+        }
+    }
+
     #[sim_test]
     async fn test_framework_incompatible_struct_layout() {
         // Upgrade attempts to change an existing struct layout
@@ -511,6 +639,12 @@ mod sim_only_tests {
     }
 
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
+        framework_upgrade_cluster(from, to).await.build().await
+    }
+
+    /// A cluster that starts with the sui-system package built from `from` and upgrades it in
+    /// place to the one built from `to` at the end of epoch 0.
+    async fn framework_upgrade_cluster(from: &str, to: &str) -> TestClusterBuilder {
         ProtocolConfig::poison_get_for_min_version();
 
         override_sui_system_modules(to).await;
@@ -520,8 +654,6 @@ mod sim_only_tests {
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
-            .build()
-            .await
     }
 
     async fn call_canary(cluster: &TestCluster) -> u64 {
