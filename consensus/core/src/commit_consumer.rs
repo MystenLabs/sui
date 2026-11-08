@@ -124,7 +124,7 @@ pub struct CommitProgress {
 /// This node's view of committee progress, assembled from data consensus already gathers.
 /// The round prober refreshes the round and stake fields after every complete probe. The commit
 /// syncer checks its quorum commit index on each scheduling pass and refreshes the commit index
-/// when it changed.
+/// when it rose.
 ///
 /// Embedders use this to tell their own isolation apart from a committee-wide stall. Both look
 /// the same on the commit stream, because no new commits arrive. The fields describe how fresh
@@ -171,7 +171,8 @@ pub struct PeerProgress {
     /// peers fail to answer leaves it unchanged.
     pub quorum_accepted_round: Round,
     /// Highest commit index that a quorum of stake has voted for, as observed by the commit
-    /// syncer. This is the value behind the `commit_sync_quorum_index` gauge.
+    /// syncer. This is the value behind the `commit_sync_quorum_index` gauge. It never
+    /// decreases.
     pub quorum_commit_index: CommitIndex,
     /// Total stake of the peers whose request completed in the last probe, excluding this node.
     /// A peer counts as responsive when its request succeeds, even if its payload is then rejected
@@ -182,6 +183,36 @@ pub struct PeerProgress {
     /// so it can differ from the system clock after a clock step. Judge freshness by comparing
     /// consecutive values. It is zero before the first probe.
     pub probed_at_ms: u64,
+}
+
+/// Receives [`PeerProgress`] updates from a [`CommitConsumerMonitor`].
+///
+/// Every method returns a copy of the value. A reader therefore never holds the lock that the
+/// round prober and the commit syncer need to publish updates, so a slow reader cannot delay
+/// consensus.
+#[derive(Clone, Debug)]
+pub struct PeerProgressReceiver {
+    receiver: watch::Receiver<PeerProgress>,
+}
+
+impl PeerProgressReceiver {
+    /// Returns the latest value and marks it as seen.
+    pub fn latest(&mut self) -> PeerProgress {
+        *self.receiver.borrow_and_update()
+    }
+
+    /// Returns true if a value that this receiver has not seen is available. Returns an error
+    /// if the monitor has been dropped.
+    pub fn has_changed(&self) -> Result<bool, watch::error::RecvError> {
+        self.receiver.has_changed()
+    }
+
+    /// Waits for a value that this receiver has not seen, marks it as seen and returns it.
+    /// Returns an error if the monitor has been dropped.
+    pub async fn changed(&mut self) -> Result<PeerProgress, watch::error::RecvError> {
+        self.receiver.changed().await?;
+        Ok(self.latest())
+    }
 }
 
 /// Tracks application progress, startup readiness, and the consensus head.
@@ -282,14 +313,16 @@ impl CommitConsumerMonitor {
     }
 
     /// Subscribes to committee progress. The round prober sends one update per complete probe,
-    /// and the commit syncer sends one when a scheduling pass finds a changed quorum commit index.
+    /// and the commit syncer sends one when a scheduling pass finds a higher quorum commit index.
     ///
     /// This is an integration API for external consensus consumers that run a liveness
     /// watchdog and need to tell their own isolation apart from a committee-wide stall.
     /// DO NOT REMOVE this entry point solely because it has no production callers in this
     /// workspace. Changes to this contract must account for downstream consumers.
-    pub fn subscribe_peer_progress(&self) -> watch::Receiver<PeerProgress> {
-        self.peer_progress.subscribe()
+    pub fn subscribe_peer_progress(&self) -> PeerProgressReceiver {
+        PeerProgressReceiver {
+            receiver: self.peer_progress.subscribe(),
+        }
     }
 
     /// Records the outcome of one round-prober pass. The quorum round is kept monotonic, because
@@ -309,10 +342,11 @@ impl CommitConsumerMonitor {
     }
 
     /// Records the quorum commit index observed by the commit syncer. Subscribers are notified
-    /// only when the index changes.
+    /// only when the index rises. A lower index is ignored, because a second consensus instance
+    /// that reuses this monitor starts its commit vote tracking from zero.
     pub(crate) fn report_quorum_commit_index(&self, quorum_commit_index: CommitIndex) {
         self.peer_progress.send_if_modified(|progress| {
-            if progress.quorum_commit_index == quorum_commit_index {
+            if quorum_commit_index <= progress.quorum_commit_index {
                 return false;
             }
             progress.quorum_commit_index = quorum_commit_index;
@@ -497,7 +531,7 @@ mod test {
         let monitor = CommitConsumerMonitor::new(0, Some(0));
         assert_eq!(monitor.peer_progress(), PeerProgress::default());
         assert_eq!(
-            *monitor.subscribe_peer_progress().borrow(),
+            monitor.subscribe_peer_progress().latest(),
             PeerProgress::default()
         );
     }
@@ -515,7 +549,7 @@ mod test {
             .unwrap()
             .unwrap();
         assert_eq!(
-            *peer_progress.borrow_and_update(),
+            peer_progress.latest(),
             PeerProgress {
                 quorum_accepted_round: 30,
                 quorum_commit_index: 0,
@@ -525,15 +559,17 @@ mod test {
         );
 
         monitor.report_quorum_commit_index(12);
-        timeout(Duration::from_secs(1), peer_progress.changed())
+        let updated = timeout(Duration::from_secs(1), peer_progress.changed())
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(peer_progress.borrow_and_update().quorum_commit_index, 12);
+        assert_eq!(updated.quorum_commit_index, 12);
 
-        // Repeating the same quorum commit index is not an update.
+        // Repeating or lowering the quorum commit index is not an update.
         monitor.report_quorum_commit_index(12);
+        monitor.report_quorum_commit_index(3);
         assert!(!peer_progress.has_changed().unwrap());
+        assert_eq!(monitor.peer_progress().quorum_commit_index, 12);
 
         // A probe that no peer answered keeps the quorum round and refreshes stake and time.
         monitor.report_probe(0, 0, 2_000);
@@ -542,7 +578,7 @@ mod test {
             .unwrap()
             .unwrap();
         assert_eq!(
-            *peer_progress.borrow_and_update(),
+            peer_progress.latest(),
             PeerProgress {
                 quorum_accepted_round: 30,
                 quorum_commit_index: 12,
@@ -550,7 +586,7 @@ mod test {
                 probed_at_ms: 2_000,
             }
         );
-        assert_eq!(monitor.peer_progress(), *peer_progress.borrow());
+        assert_eq!(monitor.peer_progress(), peer_progress.latest());
 
         // Peer progress does not notify the committed head or handled commit subscribers.
         assert!(!committed.has_changed().unwrap());

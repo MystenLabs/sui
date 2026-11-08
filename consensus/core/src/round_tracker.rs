@@ -123,8 +123,16 @@ impl RoundTracker {
         self.local_highest_received_rounds.clone()
     }
 
-    // Returns the propagation delay of own blocks.
-    pub(crate) fn calculate_propagation_delay(&self, last_proposed_round: Round) -> Round {
+    /// Returns the propagation delay of own blocks, and the highest round over all authorities at
+    /// which an authority's block is known to have been accepted by a quorum of stake.
+    ///
+    /// For each authority, the second value uses the low bound of its accepted quorum round,
+    /// the value reported by the `round_tracker_low_accepted_quorum_round` gauge, and takes the
+    /// maximum over authorities. The committee has advanced as soon as any authority's block at
+    /// a round has been accepted by a quorum. This differs from the network high quorum round in
+    /// `AncestorStateManager`, which folds the high bounds by stake to decide ancestor
+    /// inclusion. The second value is for reporting only and is not an input to consensus.
+    pub(crate) fn calculate_propagation_delay(&self, last_proposed_round: Round) -> (Round, Round) {
         let own_index = self.context.own_index;
         let node_metrics = &self.context.metrics.node_metrics;
         let received_quorum_rounds = self.compute_received_quorum_rounds();
@@ -197,7 +205,13 @@ impl RoundTracker {
                 round ({last_proposed_round})."
         );
 
-        propagation_delay
+        let highest_accepted_quorum_round = accepted_quorum_rounds
+            .iter()
+            .map(|(low, _high)| *low)
+            .max()
+            .unwrap_or(0);
+
+        (propagation_delay, highest_accepted_quorum_round)
     }
 
     pub(crate) fn compute_accepted_quorum_rounds(&self) -> Vec<QuorumRound> {
@@ -233,22 +247,6 @@ impl RoundTracker {
         );
 
         accepted_quorum_rounds
-    }
-
-    /// Returns the highest round, over all authorities, at which an authority's block is known
-    /// to have been accepted by a quorum of stake. For each authority this is the low bound of
-    /// its accepted quorum round, the value reported by the
-    /// `round_tracker_low_accepted_quorum_round` gauge. The maximum over authorities is used
-    /// because the committee has advanced as soon as any authority's block at a round has been
-    /// accepted by a quorum. This differs from the network high quorum round in
-    /// `AncestorStateManager`, which folds the high bounds by stake to decide ancestor
-    /// inclusion. This value is for reporting only and is not an input to consensus.
-    pub(crate) fn highest_accepted_quorum_round(&self) -> Round {
-        self.compute_accepted_quorum_rounds()
-            .into_iter()
-            .map(|(low, _high)| low)
-            .max()
-            .unwrap_or(0)
     }
 
     fn compute_received_quorum_rounds(&self) -> Vec<QuorumRound> {
@@ -549,7 +547,7 @@ mod test {
             ]
         );
 
-        let propagation_delay = round_tracker.calculate_propagation_delay(110);
+        let (propagation_delay, _) = round_tracker.calculate_propagation_delay(110);
 
         // 110 - 100 = 10
         assert_eq!(propagation_delay, 10);

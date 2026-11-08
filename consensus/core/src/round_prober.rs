@@ -212,13 +212,10 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         self.round_tracker
             .write()
             .update_from_probe(highest_accepted_rounds, highest_received_rounds);
-        let (propagation_delay, quorum_accepted_round) = {
-            let round_tracker = self.round_tracker.read();
-            (
-                round_tracker.calculate_propagation_delay(last_proposed_round),
-                round_tracker.highest_accepted_quorum_round(),
-            )
-        };
+        let (propagation_delay, quorum_accepted_round) = self
+            .round_tracker
+            .read()
+            .calculate_propagation_delay(last_proposed_round);
 
         let _ = self
             .core_thread_dispatcher
@@ -538,7 +535,7 @@ mod test {
         // for every authority, so 12 is the highest round accepted by a quorum.
         prober.probe().await;
         assert!(peer_progress.has_changed().unwrap());
-        let first = *peer_progress.borrow_and_update();
+        let first = peer_progress.latest();
         assert_eq!(first.quorum_accepted_round, 12);
         assert_eq!(first.responsive_stake, 3);
         assert_eq!(first.quorum_commit_index, 0);
@@ -551,7 +548,7 @@ mod test {
         tokio::time::advance(Duration::from_millis(1_000)).await;
         prober.probe().await;
         assert!(peer_progress.has_changed().unwrap());
-        let second = *peer_progress.borrow_and_update();
+        let second = peer_progress.latest();
         assert_eq!(second.quorum_accepted_round, 12);
         assert_eq!(second.responsive_stake, 0);
         assert!(second.probed_at_ms >= first.probed_at_ms + 1_000);
@@ -564,7 +561,7 @@ mod test {
         tokio::time::advance(Duration::from_millis(1_000)).await;
         prober.probe().await;
         assert!(peer_progress.has_changed().unwrap());
-        let third = *peer_progress.borrow_and_update();
+        let third = peer_progress.latest();
         assert_eq!(third.quorum_accepted_round, 20);
         assert_eq!(third.responsive_stake, 2);
         assert!(third.probed_at_ms >= second.probed_at_ms + 1_000);

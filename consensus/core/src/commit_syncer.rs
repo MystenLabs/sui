@@ -1288,7 +1288,7 @@ mod tests {
         assert_eq!(commit_syncer.highest_fetched_commit_index(), 0);
         assert_eq!(commit_syncer.synced_commit_index(), 0);
         let mut peer_progress = commit_consumer_monitor.subscribe_peer_progress();
-        assert_eq!(peer_progress.borrow_and_update().quorum_commit_index, 0);
+        assert_eq!(peer_progress.latest().quorum_commit_index, 0);
 
         // Observe round 15 blocks voting for commit 10 from authorities 0 to 2 in CommitVoteMonitor
         for i in 0..3 {
@@ -1310,7 +1310,7 @@ mod tests {
         assert_eq!(commit_syncer.synced_commit_index(), 0);
         // The quorum commit index is published to the commit consumer monitor.
         assert!(peer_progress.has_changed().unwrap());
-        assert_eq!(peer_progress.borrow_and_update().quorum_commit_index, 10);
+        assert_eq!(peer_progress.latest().quorum_commit_index, 10);
 
         // Observe round 40 blocks voting for commit 35 from authorities 0 to 2 in CommitVoteMonitor
         for i in 0..3 {
@@ -1330,7 +1330,7 @@ mod tests {
         let pending_fetches = commit_syncer.pending_fetches();
         assert_eq!(pending_fetches.len(), 5);
         assert!(peer_progress.has_changed().unwrap());
-        assert_eq!(peer_progress.borrow_and_update().quorum_commit_index, 35);
+        assert_eq!(peer_progress.latest().quorum_commit_index, 35);
 
         // Indicate commit index 25 is consumed, and try to schedule again.
         commit_consumer_monitor.set_highest_handled_commit(25);
