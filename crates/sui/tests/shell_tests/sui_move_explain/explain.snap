@@ -1,0 +1,272 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# The diagnostic index lists compiler and linter codes.
+sui move --client.config $CONFIG explain --list
+
+# Linter diagnostics resolve by code.
+sui move --client.config $CONFIG explain WSL02001
+
+# Compiler diagnostics resolve by code. Long-form markdown is optional.
+sui move --client.config $CONFIG explain EC01001
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+Move diagnostic codes. Use a code with `explain` for details.
+
+Move compiler
+  WC00001   DEPRECATED. will be removed
+  EC00002   DEPRECATED. unexpected spec item
+  EC00003   migration failed
+  EC01001   invalid character
+  EC01002   unexpected token
+  EC01003   invalid modifier
+  WC01004   invalid documentation comment
+  EC01005   invalid address
+  EC01006   invalid number literal
+  EC01007   invalid byte string
+  EC01008   invalid hex string
+  EC01009   invalid assignment
+  EC01010   syntax item restricted to spec contexts
+  EC01011   invalid spec block member
+  EC01012   invalid identifier escape
+  EC01013   invalid 'move' or 'copy'
+  EC01014   invalid expression label
+  EC01015   ambiguous 'as'
+  EC01016   invalid name
+  EC01017   invalid macro invocation
+  EC01018   invalid 'match'
+  EC01019   invalid string literal
+  EC02001   duplicate declaration, item, or annotation
+  EC02002   unnecessary or extraneous item
+  EC02003   invalid 'address' declaration
+  EC02004   invalid 'module' declaration
+  EC02005   invalid 'script' declaration
+  EC02006   invalid 'const' declaration
+  EC02007   invalid 'fun' declaration
+  EC02008   invalid 'struct' declaration
+  EC02009   invalid 'spec' declaration
+  EC02010   invalid declaration name
+  EC02011   invalid 'friend' declaration
+  EC02012   invalid 'acquires' item
+  EC02013   invalid phantom type parameter usage
+  WC02014   invalid non-phantom type parameter usage
+  EC02015   invalid attribute
+  EC02016   invalid visibility modifier
+  EC02017   invalid 'use fun' declaration
+  WC02018   unknown attribute
+  EC02019   invalid 'syntax' method type
+  EC02020   no valid 'syntax' declaration found
+  WC02021   duplicate alias
+  EC02022   invalid 'enum' declaration
+  WC02023   ambiguous address
+  EC03001   address with no value
+  EC03002   unbound module
+  EC03003   unbound module member
+  EC03004   unbound type
+  EC03005   unbound unscoped name
+  EC03006   unexpected name in this position
+  EC03007   too many type arguments
+  EC03008   too few type arguments
+  EC03009   unbound variable
+  EC03010   unbound field
+  EC03011   invalid use of reserved name
+  EC03012   unbound macro
+  EC03013   positional call mismatch
+  EC03014   invalid use of label
+  EC03015   unbound label
+  EC03016   invalid 'mut' declaration
+  EC03017   invalid macro parameter
+  EC03018   invalid type parameter
+  EC03019   invalid pattern
+  EC03020   unbound variant
+  EC03021   invalid type annotation
+  EC03022   invalid usage position
+  EC04001   restricted visibility
+  EC04002   requires script context
+  EC04003   built-in operation not supported
+  EC04004   expected a single non-reference type
+  EC04005   expected a single type
+  EC04006   invalid subtype
+  EC04007   incompatible types
+  EC04008   recursive type not allowed
+  EC04009   expected specific type
+  EC04010   cannot infer type
+  EC04011   invalid script signature
+  EC04012   invalid type for constant
+  EC04013   invalid statement or expression in constant
+  EC04014   invalid loop control
+  EC04015   invalid use of native item
+  EC04016   too few arguments
+  EC04017   too many arguments
+  EC04018   cyclic data
+  EC04019   cyclic type instantiation
+  EC04020   missing acquires annotation
+  EC04021   numeric literal out of range
+  WC04022   script function cannot be invoked with this signature (NOTE: this may become an error in the future)
+  EC04023   invalid method call
+  EC04024   invalid usage of immutable variable
+  EC04025   invalid control flow
+  EC04026   invalid 'copy' usage
+  EC04027   invalid 'move' usage
+  WC04028   implicit copy of a constant
+  EC04029   invalid function call
+  EC04030   invalid usage of lambda type
+  EC04031   invalid usage of lambda
+  EC04032   unable to expand macro function
+  EC04033   types are not equal
+  EC04034   'syntax' method types differ
+  EC04035   invalid constant usage in error context
+  EC04036   non-exhaustive pattern
+  WC04037   deprecated usage
+  EC04038   invalid string after type inference
+  WC04039   unable to determine literal's type
+  EC05001   ability constraint not satisfied
+  EC05002   type not implicitly copyable
+  EC06001   unused value without 'drop'
+  EC06002   use of unassigned variable
+  EC07001   referential transparency violated
+  EC07002   mutable borrow rule violated
+  EC07003   invalid operation, could create a dangling reference
+  EC07004   invalid return of locally borrowed state
+  EC07005   invalid reference transfer
+  EC07006   ambiguous variable usage
+  EC08001   cannot compute constant value
+  WC09001   unused alias
+  WC09002   unused variable
+  WC09003   unused assignment
+  WC09004   unnecessary trailing semicolon
+  WC09005   dead or unreachable code
+  WC09006   unused struct type parameter
+  WC09007   unused attribute
+  WC09008   unused function
+  WC09009   unused struct field
+  WC09010   unused function type parameter
+  WC09011   unused constant
+  WC09012   unused 'mut' modifiers
+  WC09013   unused mutable reference '&mut'
+  WC09014   unused mutable reference '&mut' parameter
+  EC10001   invalid duplicate attribute
+  EC10002   invalid attribute name
+  EC10003   invalid attribute value
+  EC10004   invalid usage of known attribute
+  EC10005   unable to generate test
+  EC10006   unknown bytecode instruction function
+  WC10007   issue with attribute value
+  EC10008   ambiguous attribute value
+  WC10009   unfulfilled '#[expect(...)]'
+  EC11001   test failure
+  ICEC12001 BYTECODE GENERATION FAILED
+  ICEC12002 BYTECODE VERIFICATION FAILED
+  ICEC12003 INTERNAL COMPILER ERROR
+  EC13001   feature is not supported in specified edition
+  EC13002   feature is deprecated in specified edition
+  EC13003   feature is under active development
+  EC14001   move 2024 migration: public struct
+  EC14002   move 2024 migration: let mut
+  EC14003   move 2024 migration: restricted identifier
+  EC14004   move 2024 migration: global qualification
+  EC14005   move 2024 migration: remove 'friend'
+  EC14006   move 2024 migration: make 'public(package)'
+  EC14007   move 2024 migration: address remove
+  EC14008   move 2024 migration: address add
+  NC15001   IDE dot autocomplete
+  NC15002   IDE macro call info
+  NC15003   IDE expanded lambda
+  NC15004   IDE missing match arms
+  NC15005   IDE ellipsis expansion
+  NC15006   IDE path autocomplete
+  NC15007   IDE string value
+
+Move lints
+  Complexity
+    WL01003   math operator can be simplified
+    WL01007   'if' expression can be removed
+    WL01009   redundant reference/dereference
+    WL01012   comparison operations condition can be simplified
+  Suspicious
+    WL02006   'loop' without 'break' or 'return'
+    WL02008   assignment preserves the same value
+    WL02011   redundant, always-equal operands for binary operation
+    WL02013   return value of a non-mutating call is discarded
+  Style
+    WL04001   constant should follow naming convention
+    WL04002   unnecessary 'while (true)', replace with 'loop'
+    WL04004   unneeded return
+    WL04005   'abort' or 'assert' without named constant
+    WL04010   unit `()` expression can be removed or simplified
+
+Sui compiler
+  ESC01001  invalid object construction
+  ESC02003  invalid 'init' function
+  ESC02004  invalid one-time witness declaration
+  ESC02005  invalid one-time witness usage
+  ESC02006  invalid 'init' call
+  ESC02007  invalid object declaration
+  ESC02008  invalid event
+  ESC02009  invalid private transfer call
+  ESC02010  invalid coin creation call
+  ESC02011  invalid internal permit call
+
+Sui lints
+  Correctness
+    WSL00012  it will not be possible to call this function
+  Complexity
+    WSL01011  unnecessary `entry` on a `public` function
+  Suspicious
+    WSL02001  possible owned object share
+    WSL02003  potentially unenforceable custom transfer/share/freeze policy
+    WSL02005  attempting to freeze wrapped objects
+    WSL02006  possibly useless collections compare
+    WSL02008  struct with id but missing key ability
+    WSL02009  freezing potential capability
+    WSL02013  unused object with fields
+  Security
+    WSL05007  risky use of 'sui::random'
+  Conventions
+    WSL06002  non-composable transfer to sender
+    WSL06004  sub-optimal 'sui::coin::Coin' field type
+    WSL06010  prefer '&mut TxContext' over '&TxContext'
+
+WSL02001: possible owned object share
+
+An object can become shared only in the transaction that created it. Sharing an object that may
+already be address-owned aborts. This lint flags `share_object` and `public_share_object` calls when
+the argument was not packed locally and its type can be owned: either the type has `store`, or the
+compiler finds a private transfer of that type.
+
+## When it's OK
+
+An object produced by a helper may still be fresh in the current transaction, but the local analysis
+cannot see through the call. This is a conservative false positive.
+
+A `key`-only type with no `store` and no private transfer call cannot be address-owned through the
+transfer API. The checker does not report that case.
+
+## Example
+
+Flagged:
+
+```move
+public struct Obj has key, store {
+    id: UID,
+}
+
+// `o` may already be address-owned.
+public fun share(o: Obj) {
+    transfer::public_share_object(o)
+}
+```
+
+Suppress a specific case with `#[allow(lint(share_owned))]`.
+EC01001: invalid character
+
+No detailed explanation is available for this diagnostic.
+
+----- stderr -----
