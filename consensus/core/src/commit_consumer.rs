@@ -246,12 +246,22 @@ impl CommitConsumerMonitor {
     }
 
     /// Returns this node's latest view of committee progress. See [`PeerProgress`].
+    ///
+    /// This is an integration API for external consensus consumers that run a liveness
+    /// watchdog and need to tell their own isolation apart from a committee-wide stall.
+    /// DO NOT REMOVE this entry point solely because it has no production callers in this
+    /// workspace. Changes to this contract must account for downstream consumers.
     pub fn peer_progress(&self) -> PeerProgress {
         *self.peer_progress.borrow()
     }
 
     /// Subscribes to committee progress. The round prober sends one update per probe, and the
     /// commit syncer sends one whenever the quorum commit index changes.
+    ///
+    /// This is an integration API for external consensus consumers that run a liveness
+    /// watchdog and need to tell their own isolation apart from a committee-wide stall.
+    /// DO NOT REMOVE this entry point solely because it has no production callers in this
+    /// workspace. Changes to this contract must account for downstream consumers.
     pub fn subscribe_peer_progress(&self) -> watch::Receiver<PeerProgress> {
         self.peer_progress.subscribe()
     }
