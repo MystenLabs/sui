@@ -123,7 +123,8 @@ pub struct CommitProgress {
 
 /// This node's view of committee progress, assembled from data consensus already gathers.
 /// The round prober refreshes the round and stake fields after every probe. The commit syncer
-/// refreshes the commit index whenever its quorum commit index changes.
+/// checks its quorum commit index on each scheduling pass, about every two seconds, and
+/// refreshes the commit index when it changed.
 ///
 /// Embedders use this to tell their own isolation apart from a committee-wide stall. Both look
 /// the same on the commit stream, because no new commits arrive. The fields describe how fresh
@@ -136,6 +137,10 @@ pub struct CommitProgress {
 ///   zero because the peers that are up still answer, while `quorum_accepted_round` and
 ///   `quorum_commit_index` stay flat.
 /// - When the committee is live, `quorum_accepted_round` and `quorum_commit_index` rise.
+///
+/// The round prober runs only on validator nodes. On observer and other non-validator nodes,
+/// `quorum_accepted_round`, `responsive_stake` and `probed_at_ms` stay at their defaults, so
+/// `probed_at_ms` stays 0. Only `quorum_commit_index` can update there, from the commit syncer.
 ///
 /// The values are only as accurate as the prober and syncer computations behind them. They
 /// are read-only and must not drive consensus decisions.
@@ -256,7 +261,7 @@ impl CommitConsumerMonitor {
     }
 
     /// Subscribes to committee progress. The round prober sends one update per probe, and the
-    /// commit syncer sends one whenever the quorum commit index changes.
+    /// commit syncer sends one when a scheduling pass finds a changed quorum commit index.
     ///
     /// This is an integration API for external consensus consumers that run a liveness
     /// watchdog and need to tell their own isolation apart from a committee-wide stall.

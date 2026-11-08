@@ -156,6 +156,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         // Stake of the peers whose request completed in this probe. This is reported to the
         // commit consumer monitor as a reachability signal and is not used by consensus.
         let mut responsive_stake: Stake = 0;
+        let mut interrupted_by_shutdown = false;
 
         loop {
             tokio::select! {
@@ -200,7 +201,10 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
                         },
                     }
                 }
-                _ = self.shutdown_notify.wait() => break,
+                _ = self.shutdown_notify.wait() => {
+                    interrupted_by_shutdown = true;
+                    break;
+                }
             }
         }
 
@@ -219,11 +223,15 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
             .core_thread_dispatcher
             .set_propagation_delay(propagation_delay);
 
-        self.commit_consumer_monitor.report_probe(
-            quorum_accepted_round,
-            responsive_stake,
-            self.context.clock.timestamp_utc_ms(),
-        );
+        // A probe cut short by shutdown has only a partial responsive stake, which would read as
+        // peers going silent. Skip the report in that case and keep the last complete probe.
+        if !interrupted_by_shutdown {
+            self.commit_consumer_monitor.report_probe(
+                quorum_accepted_round,
+                responsive_stake,
+                self.context.clock.timestamp_utc_ms(),
+            );
+        }
 
         propagation_delay
     }
@@ -231,7 +239,14 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+    use std::{
+        collections::BTreeSet,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Duration,
+    };
 
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -303,6 +318,8 @@ mod test {
     struct FakeNetworkClient {
         highest_received_rounds: RwLock<Vec<Vec<Round>>>,
         highest_accepted_rounds: RwLock<Vec<Vec<Round>>>,
+        // When set, requests never complete.
+        hanging: AtomicBool,
     }
 
     impl FakeNetworkClient {
@@ -313,6 +330,7 @@ mod test {
             Self {
                 highest_received_rounds: RwLock::new(highest_received_rounds),
                 highest_accepted_rounds: RwLock::new(highest_accepted_rounds),
+                hanging: AtomicBool::new(false),
             }
         }
 
@@ -382,6 +400,9 @@ mod test {
             peer: AuthorityIndex,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+            if self.hanging.load(Ordering::Relaxed) {
+                return std::future::pending().await;
+            }
             let received_rounds = self.highest_received_rounds.read()[peer].clone();
             let accepted_rounds = self.highest_accepted_rounds.read()[peer].clone();
             if received_rounds.is_empty() && accepted_rounds.is_empty() {
@@ -545,5 +566,50 @@ mod test {
         assert_eq!(third.quorum_accepted_round, 20);
         assert_eq!(third.responsive_stake, 2);
         assert!(third.probed_at_ms >= second.probed_at_ms + 1_000);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn round_prober_skips_peer_progress_when_shutdown_interrupts_probe() {
+        telemetry_subscribers::init_for_testing();
+        const NUM_AUTHORITIES: usize = 4;
+        let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
+        let answers = vec![
+            vec![],
+            vec![12; NUM_AUTHORITIES],
+            vec![12; NUM_AUTHORITIES],
+            vec![12; NUM_AUTHORITIES],
+        ];
+        let network_client = Arc::new(FakeNetworkClient::new(answers.clone(), answers));
+        let prober = RoundProber::new(
+            context.clone(),
+            Arc::new(FakeThreadDispatcher::new()),
+            round_tracker,
+            dag_state,
+            network_client.clone(),
+            commit_consumer_monitor.clone(),
+        );
+
+        // A complete probe publishes peer progress.
+        prober.probe().await;
+        let mut peer_progress = commit_consumer_monitor.subscribe_peer_progress();
+        let before = *peer_progress.borrow_and_update();
+        assert_eq!(before.responsive_stake, 3);
+        assert!(before.probed_at_ms > 0);
+
+        // Peers stop answering and shutdown interrupts the next probe while requests are pending.
+        network_client.hanging.store(true, Ordering::Relaxed);
+        tokio::time::advance(Duration::from_millis(1_000)).await;
+        let probe = prober.probe();
+        tokio::pin!(probe);
+        assert!(futures::poll!(&mut probe).is_pending());
+        prober.shutdown_notify.notify().unwrap();
+        probe.await;
+
+        assert!(!peer_progress.has_changed().unwrap());
+        assert_eq!(commit_consumer_monitor.peer_progress(), before);
     }
 }
