@@ -240,7 +240,9 @@ impl RoundTracker {
     /// its accepted quorum round, the value reported by the
     /// `round_tracker_low_accepted_quorum_round` gauge. The maximum over authorities is used
     /// because the committee has advanced as soon as any authority's block at a round has been
-    /// accepted by a quorum. This is for reporting only and does not drive consensus decisions.
+    /// accepted by a quorum. This differs from the network high quorum round in
+    /// `AncestorStateManager`, which folds the high bounds by stake to decide ancestor
+    /// inclusion. This value is for reporting only and is not an input to consensus.
     pub(crate) fn highest_accepted_quorum_round(&self) -> Round {
         self.compute_accepted_quorum_rounds()
             .into_iter()

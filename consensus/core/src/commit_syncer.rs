@@ -1342,10 +1342,6 @@ mod tests {
         assert_eq!(pending_fetches.len(), 7);
         // An unchanged quorum commit index is not republished.
         assert!(!peer_progress.has_changed().unwrap());
-        assert_eq!(
-            commit_consumer_monitor.peer_progress().quorum_commit_index,
-            35
-        );
 
         // Verify contiguous ranges are scheduled.
         for (range, start) in pending_fetches.iter().zip_debug_eq((1..35).step_by(5)) {

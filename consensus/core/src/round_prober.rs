@@ -202,7 +202,8 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
                     }
                 }
                 _ = self.shutdown_notify.wait() => {
-                    interrupted_by_shutdown = true;
+                    // Requests that have not completed make the responsive stake incomplete.
+                    interrupted_by_shutdown = !requests.is_empty();
                     break;
                 }
             }
@@ -223,8 +224,9 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
             .core_thread_dispatcher
             .set_propagation_delay(propagation_delay);
 
-        // A probe cut short by shutdown has only a partial responsive stake, which would read as
-        // peers going silent. Skip the report in that case and keep the last complete probe.
+        // A probe that shutdown interrupted has an incomplete responsive stake, which a reader
+        // would interpret as peers not responding. Skip the report in that case and keep the
+        // last complete probe.
         if !interrupted_by_shutdown {
             self.commit_consumer_monitor.report_probe(
                 quorum_accepted_round,
@@ -566,41 +568,9 @@ mod test {
         assert_eq!(third.quorum_accepted_round, 20);
         assert_eq!(third.responsive_stake, 2);
         assert!(third.probed_at_ms >= second.probed_at_ms + 1_000);
-    }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn round_prober_skips_peer_progress_when_shutdown_interrupts_probe() {
-        telemetry_subscribers::init_for_testing();
-        const NUM_AUTHORITIES: usize = 4;
-        let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
-        let answers = vec![
-            vec![],
-            vec![12; NUM_AUTHORITIES],
-            vec![12; NUM_AUTHORITIES],
-            vec![12; NUM_AUTHORITIES],
-        ];
-        let network_client = Arc::new(FakeNetworkClient::new(answers.clone(), answers));
-        let prober = RoundProber::new(
-            context.clone(),
-            Arc::new(FakeThreadDispatcher::new()),
-            round_tracker,
-            dag_state,
-            network_client.clone(),
-            commit_consumer_monitor.clone(),
-        );
-
-        // A complete probe publishes peer progress.
-        prober.probe().await;
-        let mut peer_progress = commit_consumer_monitor.subscribe_peer_progress();
-        let before = *peer_progress.borrow_and_update();
-        assert_eq!(before.responsive_stake, 3);
-        assert!(before.probed_at_ms > 0);
-
-        // Peers stop answering and shutdown interrupts the next probe while requests are pending.
+        // Peers stop answering and shutdown interrupts the next probe while requests are
+        // pending. The interrupted probe is not reported.
         network_client.hanging.store(true, Ordering::Relaxed);
         tokio::time::advance(Duration::from_millis(1_000)).await;
         let probe = prober.probe();
@@ -608,8 +578,7 @@ mod test {
         assert!(futures::poll!(&mut probe).is_pending());
         prober.shutdown_notify.notify().unwrap();
         probe.await;
-
         assert!(!peer_progress.has_changed().unwrap());
-        assert_eq!(commit_consumer_monitor.peer_progress(), before);
+        assert_eq!(commit_consumer_monitor.peer_progress(), third);
     }
 }
