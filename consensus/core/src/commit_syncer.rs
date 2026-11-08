@@ -198,6 +198,9 @@ where
         metrics
             .commit_sync_quorum_index
             .set(quorum_commit_index as i64);
+        self.inner
+            .commit_consumer_monitor
+            .report_quorum_commit_index(quorum_commit_index);
         metrics
             .commit_sync_local_index
             .set(local_commit_index as i64);
@@ -1284,6 +1287,8 @@ mod tests {
         assert!(commit_syncer.highest_scheduled_index().is_none());
         assert_eq!(commit_syncer.highest_fetched_commit_index(), 0);
         assert_eq!(commit_syncer.synced_commit_index(), 0);
+        let mut peer_progress = commit_consumer_monitor.subscribe_peer_progress();
+        assert_eq!(peer_progress.borrow_and_update().quorum_commit_index, 0);
 
         // Observe round 15 blocks voting for commit 10 from authorities 0 to 2 in CommitVoteMonitor
         for i in 0..3 {
@@ -1303,6 +1308,9 @@ mod tests {
         assert_eq!(commit_syncer.highest_scheduled_index(), Some(10));
         assert_eq!(commit_syncer.highest_fetched_commit_index(), 0);
         assert_eq!(commit_syncer.synced_commit_index(), 0);
+        // The quorum commit index is published to the commit consumer monitor.
+        assert!(peer_progress.has_changed().unwrap());
+        assert_eq!(peer_progress.borrow_and_update().quorum_commit_index, 10);
 
         // Observe round 40 blocks voting for commit 35 from authorities 0 to 2 in CommitVoteMonitor
         for i in 0..3 {
@@ -1321,6 +1329,8 @@ mod tests {
         assert_eq!(commit_syncer.highest_scheduled_index(), Some(25));
         let pending_fetches = commit_syncer.pending_fetches();
         assert_eq!(pending_fetches.len(), 5);
+        assert!(peer_progress.has_changed().unwrap());
+        assert_eq!(peer_progress.borrow_and_update().quorum_commit_index, 35);
 
         // Indicate commit index 25 is consumed, and try to schedule again.
         commit_consumer_monitor.set_highest_handled_commit(25);
@@ -1330,6 +1340,12 @@ mod tests {
         assert_eq!(commit_syncer.highest_scheduled_index(), Some(35));
         let pending_fetches = commit_syncer.pending_fetches();
         assert_eq!(pending_fetches.len(), 7);
+        // An unchanged quorum commit index is not republished.
+        assert!(!peer_progress.has_changed().unwrap());
+        assert_eq!(
+            commit_consumer_monitor.peer_progress().quorum_commit_index,
+            35
+        );
 
         // Verify contiguous ranges are scheduled.
         for (range, start) in pending_fetches.iter().zip_debug_eq((1..35).step_by(5)) {

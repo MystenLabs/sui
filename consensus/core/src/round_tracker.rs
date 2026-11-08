@@ -235,6 +235,20 @@ impl RoundTracker {
         accepted_quorum_rounds
     }
 
+    /// Returns the highest round, over all authorities, at which an authority's block is known
+    /// to have been accepted by a quorum of stake. For each authority this is the low bound of
+    /// its accepted quorum round, the value reported by the
+    /// `round_tracker_low_accepted_quorum_round` gauge. The maximum over authorities is used
+    /// because the committee has advanced as soon as any authority's block at a round has been
+    /// accepted by a quorum. This is for reporting only and does not drive consensus decisions.
+    pub(crate) fn highest_accepted_quorum_round(&self) -> Round {
+        self.compute_accepted_quorum_rounds()
+            .into_iter()
+            .map(|(low, _high)| low)
+            .max()
+            .unwrap_or(0)
+    }
+
     fn compute_received_quorum_rounds(&self) -> Vec<QuorumRound> {
         let received_quorum_rounds = self
             .context

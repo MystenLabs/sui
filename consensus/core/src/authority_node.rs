@@ -475,6 +475,7 @@ where
                     round_tracker.clone(),
                     dag_state.clone(),
                     validator_client,
+                    commit_consumer_monitor.clone(),
                 )
                 .start(),
             );
