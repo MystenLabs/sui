@@ -94,6 +94,12 @@ ignore = [
     # request decompression via tonic, remote checkpoint ingestion).
     "RUSTSEC-2026-0391",
     "RUSTSEC-2026-0403",
+    # `pin-utils` is unmaintained (repo archived 2026-10-01), no patched release.
+    # Transitive only: aws-smithy-http 0.62 / aws-smithy-runtime / aws-smithy-types
+    # (aws-config, aws-sdk-kms in the sui crate), futures-util 0.3.31 and
+    # scoped-futures. futures-util >= 0.3.34 dropped it; remove once the AWS SDK
+    # crates are upgraded past their pin-utils dependency.
+    "RUSTSEC-2026-0441",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
