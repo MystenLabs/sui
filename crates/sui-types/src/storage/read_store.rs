@@ -743,7 +743,7 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     /// runtime package store is unavailable or uses a different read policy override this.
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         Box::new(self)
-        }
+    }
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
