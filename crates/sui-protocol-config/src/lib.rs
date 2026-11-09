@@ -5107,7 +5107,13 @@ impl ProtocolConfig {
 
         use rand::{Rng, SeedableRng, rngs::StdRng};
         let mut rng = StdRng::from_seed(*seed);
-        let max_txns = rng.gen_range(10..=100u64);
+        // Caps of 2-3 put ordinary simtest load above max_tx per min_checkpoint_interval_ms,
+        // so most commits force a flush. Production reaches that regime only at high TPS.
+        let max_txns = if rng.gen_bool(0.25) {
+            rng.gen_range(2..=3u64)
+        } else {
+            rng.gen_range(10..=100u64)
+        };
         info!("seeded test override: max_transactions_per_checkpoint = {max_txns}");
         self.max_transactions_per_checkpoint = Some(max_txns);
     }
