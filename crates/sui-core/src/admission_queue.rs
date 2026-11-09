@@ -489,7 +489,8 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
 
     /// On success, returns `Ok(true)` or `Ok(false)` to indicate whether the
     /// value was newly inserted. Returns `Err` if the queue was full and the
-    /// tx's gas price was not high enough to evict an existing entry.
+    /// tx's gas price was not high enough to evict an existing entry, or if a
+    /// queued entry consumes the same owned gas object at an equal or higher price.
     pub fn insert(&mut self, entry: E) -> SuiResult<bool> {
         self.try_insert(entry).notify()
     }
@@ -580,8 +581,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
 
     /// Removes every queued entry that consumes one of `owned` (sorted), returning each with
     /// the object it lost so the caller can notify it outside the lock. Only the price levels
-    /// recorded for those objects are walked, but each walk covers a whole level, and most
-    /// traffic sits at one price, so a replacement can walk most of the queue.
+    /// recorded for those objects are walked.
     fn remove_owned_conflicts(&mut self, owned: &[DedupKey]) -> Vec<(E, ObjectID)> {
         let mut levels: Vec<u64> = owned
             .iter()
@@ -815,7 +815,7 @@ impl AdmissionQueueHandle {
     }
 
     /// Returns `(position_receiver, newly_inserted)` on admission. Returns `Err` on outbid
-    /// rejection.
+    /// rejection or on an owned gas object conflict with a queued entry.
     pub async fn try_insert(
         &self,
         gas_price: u64,
