@@ -1,10 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::AuthorityState;
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, earliest_expiry_deadline_ms,
+};
 use crate::consensus_adapter::ConsensusAdapter;
+use crate::consensus_handler::SequencedConsensusTransactionKey;
 use crate::staggered_submission::proposers_metric_label;
 use arc_swap::ArcSwap;
+use itertools::Itertools as _;
 use mysten_common::debug_fatal;
 use mysten_metrics::{COUNT_BUCKETS, spawn_monitored_task};
 use prometheus::{
@@ -180,6 +185,7 @@ pub struct AdmissionQueueMetrics {
     pub evictions: IntCounter,
     pub rejections: IntCounter,
     pub duplicate_inserts: IntCounter,
+    pub expired_at_drain: IntCounter,
 
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
@@ -232,6 +238,12 @@ impl AdmissionQueueMetrics {
             duplicate_inserts: register_int_counter_with_registry!(
                 "admission_queue_duplicate_inserts",
                 "Transactions admitted to the queue whose ConsensusTransactionKey duplicated an entry already present. Tallied as spam for DoS protection.",
+                registry,
+            )
+            .unwrap(),
+            expired_at_drain: register_int_counter_with_registry!(
+                "admission_queue_expired_at_drain",
+                "Queue entries rejected when drained because a transaction was past its max_timestamp by more than the grace period",
                 registry,
             )
             .unwrap(),
@@ -316,7 +328,7 @@ impl AdmissionQueueMetrics {
             .unwrap(),
             pool_rejected_at_proposal: register_int_counter_vec_with_registry!(
                 "consensus_transaction_pool_rejected_at_proposal",
-                "User submissions dropped at proposal time because their owned input objects no longer match live state, by error",
+                "User submissions dropped at proposal time because their owned input objects no longer match live state or a transaction expired, by error",
                 &["error"],
                 registry,
             )
@@ -841,7 +853,22 @@ impl AdmissionQueueEventLoop {
         if entries.is_empty() {
             return;
         }
+        let now_ms = AuthorityState::unixtime_now_ms();
         for entry in entries {
+            // An entry that was already processed goes on to the adapter, which reports it as
+            // processed.
+            if earliest_expiry_deadline_ms(&entry.transactions).is_some_and(|d| now_ms >= d)
+                && !self.all_processed(&entry.transactions)
+            {
+                debug!(
+                    keys = ?entry.transactions.iter().map(|t| t.key()).collect::<Vec<_>>(),
+                    "Admission queue entry rejected at drain: transaction expired"
+                );
+                self.queue.metrics.expired_at_drain.inc();
+                let error: SuiError = SuiErrorKind::TransactionExpired.into();
+                let _ = entry.position_sender.send(Err(error.into()));
+                continue;
+            }
             let proposers = proposers_metric_label(&entry.transactions, &self.epoch_store);
             self.queue
                 .metrics
@@ -853,6 +880,42 @@ impl AdmissionQueueEventLoop {
             spawn_monitored_task!(submit_queue_entry(entry, adapter, es));
         }
         *self.last_drain.lock().unwrap() = Instant::now();
+    }
+
+    /// Whether every transaction in `transactions` was processed by consensus or executed from
+    /// a checkpoint, as `ConsensusAdapter` checks before it submits.
+    fn all_processed(&self, transactions: &[ConsensusTransaction]) -> bool {
+        let consensus_processed = self.epoch_store.check_consensus_messages_processed(
+            transactions
+                .iter()
+                .map(|transaction| SequencedConsensusTransactionKey::External(transaction.key())),
+        );
+        let unprocessed: Vec<_> = transactions
+            .iter()
+            .zip_eq(consensus_processed)
+            .filter(|(_, processed)| !processed)
+            .map(|(transaction, _)| transaction)
+            .collect();
+        if unprocessed.is_empty() {
+            return true;
+        }
+        let Some(digests) = unprocessed
+            .iter()
+            .map(|transaction| {
+                transaction
+                    .kind
+                    .as_user_transaction()
+                    .map(|tx| *tx.digest())
+            })
+            .collect::<Option<Vec<_>>>()
+        else {
+            return false;
+        };
+        self.epoch_store
+            .multi_get_transaction_checkpoint(&digests)
+            .expect("Storage error when checking transaction executed in checkpoint")
+            .iter()
+            .all(Option::is_some)
     }
 
     fn handle_insert(&mut self, cmd: InsertCommand) {

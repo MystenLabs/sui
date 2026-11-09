@@ -2423,6 +2423,9 @@ pub fn is_gasless_transaction(gas_data: &GasData, transaction_kind: &Transaction
     is_gas_paid_from_address_balance(gas_data, transaction_kind) && gas_data.price == 0
 }
 
+/// The largest `min_timestamp` or `max_timestamp` (Unix seconds), 9999-12-31T23:59:59Z.
+pub const MAX_EXPIRATION_TIMESTAMP_SECS: u64 = 253_402_300_799;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
@@ -2444,9 +2447,13 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. A quorum
+        /// must vote to accept the transaction at or after this time by their local clocks, so
+        /// the commit timestamp can be slightly earlier. A rejected transaction can be submitted
+        /// again.
         min_timestamp: Option<u64>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
+        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2460,9 +2467,13 @@ pub enum TransactionExpiration {
         min_epoch: Option<EpochId>,
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Earliest time (Unix seconds, inclusive) at which the transaction is valid. A quorum
+        /// must vote to accept the transaction at or after this time by their local clocks, so
+        /// the commit timestamp can be slightly earlier. A rejected transaction can be submitted
+        /// again.
         min_timestamp: Option<u64>,
-        /// Future support for sub-epoch timing (not yet implemented)
+        /// Latest consensus commit time (Unix seconds, inclusive) at which the transaction is
+        /// valid. A transaction scheduled by a later commit fails with `TransactionExpired`.
         max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
@@ -2523,6 +2534,53 @@ impl TransactionExpiration {
                 ..
             } if *max_epoch == *min_epoch || *max_epoch == min_epoch.saturating_add(1)
         )
+    }
+
+    /// Whether `timestamp_ms` is before `min_timestamp`, which is in seconds. The transaction can
+    /// become valid later.
+    pub fn is_not_yet_valid_at(&self, timestamp_ms: u64) -> bool {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => false,
+            TransactionExpiration::ValidDuring { min_timestamp, .. }
+            | TransactionExpiration::Validity { min_timestamp, .. } => {
+                min_timestamp.is_some_and(|min| timestamp_ms / 1000 < min)
+            }
+        }
+    }
+
+    /// Whether `timestamp_ms` is after `max_timestamp`, which is in seconds. The bound covers
+    /// the whole second it names. The transaction can never become valid.
+    pub fn is_expired_at(&self, timestamp_ms: u64) -> bool {
+        // Defined through `first_expired_timestamp_ms`, so that checkpoint execution, which
+        // uses that timestamp, reproduces the expiry by construction.
+        self.first_expired_timestamp_ms()
+            .is_some_and(|first_expired_ms| timestamp_ms >= first_expired_ms)
+    }
+
+    /// The `min_timestamp` (Unix seconds), if there is one.
+    pub fn min_timestamp(&self) -> Option<u64> {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => None,
+            TransactionExpiration::ValidDuring { min_timestamp, .. }
+            | TransactionExpiration::Validity { min_timestamp, .. } => *min_timestamp,
+        }
+    }
+
+    /// The earliest timestamp (Unix ms) at which `is_not_yet_valid_at` is false, if there is a
+    /// `min_timestamp`.
+    pub fn first_valid_timestamp_ms(&self) -> Option<u64> {
+        self.min_timestamp().and_then(|min| min.checked_mul(1000))
+    }
+
+    /// The earliest timestamp (Unix ms) at which `is_expired_at` is true, if there is one.
+    pub fn first_expired_timestamp_ms(&self) -> Option<u64> {
+        match self {
+            TransactionExpiration::None | TransactionExpiration::Epoch(_) => None,
+            TransactionExpiration::ValidDuring { max_timestamp, .. }
+            | TransactionExpiration::Validity { max_timestamp, .. } => max_timestamp
+                .and_then(|max| max.checked_add(1))
+                .and_then(|secs| secs.checked_mul(1000)),
+        }
     }
 
     /// The validators allowed to propose this transaction in consensus during `epoch`.
@@ -3522,10 +3580,38 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
 
                 if min_timestamp.is_some() || max_timestamp.is_some() {
-                    return Err(UserInputError::Unsupported(
-                        "Timestamp-based transaction expiration is not yet supported".to_string(),
-                    )
-                    .into());
+                    fp_ensure!(
+                        config.enable_timestamp_transaction_expiration(),
+                        UserInputError::Unsupported(
+                            "Timestamp-based transaction expiration is not yet supported"
+                                .to_string(),
+                        )
+                        .into()
+                    );
+                    // gRPC carries the bounds as protobuf `Timestamp` seconds, which end at
+                    // 9999-12-31T23:59:59Z. The bound also rejects millisecond values.
+                    for timestamp in [min_timestamp, max_timestamp].into_iter().flatten() {
+                        fp_ensure!(
+                            *timestamp <= MAX_EXPIRATION_TIMESTAMP_SECS,
+                            UserInputError::InvalidExpiration {
+                                error: format!(
+                                    "timestamp {timestamp} is greater than {MAX_EXPIRATION_TIMESTAMP_SECS}"
+                                ),
+                            }
+                            .into()
+                        );
+                    }
+                    if let (Some(min), Some(max)) = (min_timestamp, max_timestamp) {
+                        fp_ensure!(
+                            min <= max,
+                            UserInputError::InvalidExpiration {
+                                error: format!(
+                                    "min_timestamp {min} is greater than max_timestamp {max}"
+                                ),
+                            }
+                            .into()
+                        );
+                    }
                 }
 
                 // Legacy behavior: If a validity window is present, it must have either one- or

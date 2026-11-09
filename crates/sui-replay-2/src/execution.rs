@@ -133,6 +133,9 @@ pub fn execute_transaction_to_effects(
         &config_certificate_deny_set,
         // TODO(address-balances): Support balance withdraw status for replay
         &FundsWithdrawStatus::MaybeSufficient,
+        txn_data.expiration(),
+        // Replay skips transactions with an early error, including expired ones.
+        None,
     );
     let system_object_versions = SystemObjectVersions::from_effects(&expected_effects, &store);
     let mut kind = txn_data.kind().clone();

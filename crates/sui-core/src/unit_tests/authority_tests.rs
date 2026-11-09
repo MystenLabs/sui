@@ -3103,6 +3103,121 @@ async fn test_implicit_clock_read_uses_pinned_version() {
     assert_eq!(value, 200);
 }
 
+#[tokio::test]
+async fn test_timestamp_expiration_at_execution() {
+    // The flag is devnet-only, and simtest-mainnet runs with the mainnet chain.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_timestamp_transaction_expiration_for_testing(true);
+        config
+    });
+    // Execution compares `max_timestamp` with the commit timestamp in `ExecutionEnv`. It does not
+    // check `min_timestamp`, and it does not read the Clock.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_ids = [
+        ObjectID::random(),
+        ObjectID::random(),
+        ObjectID::random(),
+        ObjectID::random(),
+    ];
+    let (authority_state, package_object_ref) = init_state_with_ids_and_object_basics(
+        gas_object_ids
+            .iter()
+            .map(|id| (sender, *id))
+            .collect::<Vec<_>>(),
+    )
+    .await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    // The window is the Unix seconds [1000, 2000].
+    let execute = async |gas_object_id: ObjectID, env: ExecutionEnv| {
+        let gas_ref =
+            Object::with_id_owner_for_testing(gas_object_id, sender).compute_object_reference();
+        let mut tx_data = TransactionData::new_move_call(
+            sender,
+            package_object_ref.0,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("create").to_owned(),
+            /* type_args */ vec![],
+            gas_ref,
+            vec![
+                CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+            ],
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+            rgp,
+        )
+        .unwrap();
+        *tx_data.expiration_mut_for_testing() = TransactionExpiration::ValidDuring {
+            min_epoch: Some(epoch_store.epoch()),
+            max_epoch: Some(epoch_store.epoch()),
+            min_timestamp: Some(1000),
+            max_timestamp: Some(2000),
+            chain: epoch_store.get_chain_identifier(),
+            nonce: 0,
+        };
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(to_sender_signed_transaction(
+                tx_data,
+                &sender_key,
+            ))
+            .unwrap()
+            .into_tx();
+        let executable =
+            VerifiedExecutableTransaction::new_from_consensus(transaction, epoch_store.epoch());
+        let (effects, _) = authority_state
+            .try_execute_executable_for_test(&executable, env)
+            .await;
+        effects.inner().data().clone()
+    };
+    let assert_no_clock_read = |effects: &TransactionEffects| {
+        assert!(
+            effects
+                .unchanged_consensus_objects()
+                .iter()
+                .all(|(id, _)| *id != SUI_CLOCK_OBJECT_ID),
+            "{:?}",
+            effects.unchanged_consensus_objects()
+        );
+    };
+
+    let effects = execute(gas_object_ids[0], ExecutionEnv::new()).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert_eq!(effects.created().len(), 1);
+    assert_no_clock_read(&effects);
+
+    // The bound is inclusive, and a commit before `min_timestamp` is not checked.
+    for (gas_object_id, timestamp_ms) in [(gas_object_ids[1], 2_000_999), (gas_object_ids[2], 0)] {
+        let effects = execute(
+            gas_object_id,
+            ExecutionEnv::new().with_consensus_commit_timestamp(timestamp_ms),
+        )
+        .await;
+        assert!(effects.status().is_ok(), "{:?}", effects.status());
+    }
+
+    let effects = execute(
+        gas_object_ids[3],
+        ExecutionEnv::new().with_consensus_commit_timestamp(2_001_000),
+    )
+    .await;
+    assert!(
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::TransactionExpired,
+                ..
+            })
+        ),
+        "{:?}",
+        effects.status()
+    );
+    assert!(effects.created().is_empty());
+    // The gas object is still charged and bumped, consuming the owned-object lock.
+    assert!(effects.gas_cost_summary().net_gas_usage() > 0);
+    assert_no_clock_read(&effects);
+}
+
 #[sim_test]
 async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
@@ -6037,7 +6152,7 @@ where
         let assigned_versions = schedulables
             .iter()
             .map(|s| s.key())
-            .zip_debug_eq(versions)
+            .zip_debug_eq(versions.into_iter().map(|env| env.assigned_versions))
             .collect();
         (schedulables, assigned_versions)
     }

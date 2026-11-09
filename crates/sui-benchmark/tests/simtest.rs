@@ -2183,6 +2183,13 @@ mod test {
             config
         });
 
+        // Validators sometimes admit a transaction outside its timestamp window, as a validator
+        // with a clock that is ahead or behind would, so that voting sees transactions before
+        // their min_timestamp. The pool still rejects a transaction past its expiry deadline.
+        register_fail_point_if("skip-timestamp-expiration-check-at-submission", || {
+            thread_rng().gen_bool(0.2)
+        });
+
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
@@ -2224,6 +2231,7 @@ mod test {
             deny_probability: 0.2,
             multisig_probability: 0.2,
             allowed_proposers_probability: 0.2,
+            timestamp_expiration_probability: 0.3,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
