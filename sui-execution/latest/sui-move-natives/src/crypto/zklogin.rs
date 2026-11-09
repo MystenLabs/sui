@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::FastCryptoError;
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::u256::U256;
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::{
     execution::{
         Type,
         values::{Value, VectorRef},
     },
-    natives::functions::{NativeResult, PartialVMError},
+    natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -57,14 +57,14 @@ pub fn check_zklogin_id_internal(
         context,
         check_zklogin_id_cost_params
             .check_zklogin_id_cost_base
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for check_zklogin_id not available".to_string())
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Gas cost for check_zklogin_id not available"
+            ))?
     );
 
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 6);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 6);
 
     // Poseidon hash of the user's pin code
     let pin_hash = pop_arg!(args, U256);
@@ -157,14 +157,14 @@ pub fn check_zklogin_issuer_internal(
         context,
         check_zklogin_issuer_cost_params
             .check_zklogin_issuer_cost_base
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for check_zklogin_issuer not available".to_string())
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Gas cost for check_zklogin_issuer not available"
+            ))?
     );
 
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     // The issuer (identity provider) id
     let issuer = pop_arg!(args, VectorRef);

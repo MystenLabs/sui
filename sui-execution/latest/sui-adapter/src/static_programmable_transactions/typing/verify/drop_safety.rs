@@ -128,12 +128,6 @@ mod refine {
         ast: &mut T::Transaction,
         moved_locations: &BTreeSet<T::Location>,
     ) -> Result<(), Mode::Error> {
-        // withdrawal conversions not empty ==> accumulators enabled
-        assert_invariant!(
-            ast.withdrawal_compatibility_conversions.is_empty()
-                || env.protocol_config.enable_accumulators(),
-            "Withdrawal conversions should be empty if accumulators are not enabled"
-        );
         for conversion_info in
             ast.withdrawal_compatibility_conversions
                 .values()
@@ -186,7 +180,7 @@ mod refine {
                     COIN_MODULE_NAME,
                     SEND_FUNDS_FUNC_NAME,
                     vec![inner_ty.clone()],
-                    ast.unified_linkage.as_ref(),
+                    &ast.unified_linkage,
                 )?,
                 arguments: vec![move_result, owner_arg],
             }));

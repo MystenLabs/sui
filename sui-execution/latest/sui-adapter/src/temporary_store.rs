@@ -75,14 +75,10 @@ struct PostExecutionCheckInputs {
 }
 
 impl PostExecutionCheckInputs {
-    fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
+    fn new(transaction: (&TransactionKind, &GasData, SuiAddress)) -> Self {
         let (transaction_kind, gas_data, transaction_signer) = transaction;
-        let (input_reservations, allowance_ids) = compute_input_reservations(
-            transaction_kind,
-            gas_data,
-            transaction_signer,
-            enable_gasless,
-        );
+        let (input_reservations, allowance_ids) =
+            compute_input_reservations(transaction_kind, gas_data, transaction_signer);
         Self {
             input_reservations,
             allowance_ids,
@@ -166,8 +162,7 @@ impl<'backing> TemporaryStore<'backing> {
         transaction: (&TransactionKind, &GasData, SuiAddress),
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
-        let post_execution_check_inputs =
-            PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
+        let post_execution_check_inputs = PostExecutionCheckInputs::new(transaction);
         Self::new_with_input_objects(
             store,
             input_objects,
@@ -543,7 +538,6 @@ impl<'backing> TemporaryStore<'backing> {
         mut self,
         shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
-        mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
         gas_coin: Option<ObjectID>,
@@ -562,22 +556,6 @@ impl<'backing> TemporaryStore<'backing> {
         // This must happens before merge_accumulator_events.
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
         self.merge_accumulator_events();
-
-        if !self.protocol_config.disable_effects_tx_dependencies() {
-            // Even on abort, successfully receiving an object creates a dependency.
-            for (id, expected_version, expected_digest) in &self.receiving_objects {
-                if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {
-                    // A dynamic-field load can spoof a receiving input, so authenticate the
-                    // version, digest and owner before registering its dependency.
-                    let loaded_via_receive = obj_meta.version == *expected_version
-                        && obj_meta.digest == *expected_digest
-                        && obj_meta.owner.is_address_owned();
-                    if loaded_via_receive {
-                        transaction_dependencies.insert(obj_meta.previous_transaction);
-                    }
-                }
-            }
-        }
 
         assert!(self.protocol_config.enable_effects_v2());
 
@@ -609,7 +587,7 @@ impl<'backing> TemporaryStore<'backing> {
             } else {
                 Some(inner.events.digest())
             },
-            transaction_dependencies.into_iter().collect(),
+            vec![],
         );
 
         (inner, effects)
@@ -732,8 +710,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Consume this (post-execution) store and return the store used by a `BumpOnly` exit: keep
     /// the input-derived state as well as information about the execution needed for replay,
-    /// discard everything related to the execution results, then bump the mutable
-    /// inputs. Dependencies are retained only when enabled by the protocol.
+    /// discard everything related to the execution results, then bump the mutable inputs.
     pub(crate) fn into_bump_only(self) -> Self {
         let Self {
             // Input-derived - reused verbatim.
@@ -890,39 +867,14 @@ impl<'backing> TemporaryStore<'backing> {
             .fold(0, |sum, obj| sum + obj.object_size_for_gas_metering())
     }
 
-    /// Validates gasless post-execution requirements using the reservations cached when the store
-    /// is constructed.
-    pub(crate) fn check_gasless_execution_requirements(&self) -> Result<(), String> {
-        use sui_types::balance::Balance;
-
-        // Gasless requirements are expressed in coin types `T`, while the shared input reservation
-        // budget is keyed by accumulator types `Balance<T>`.
-        let withdrawal_reservations = self
-            .post_execution_check_inputs
-            .input_reservations
-            .iter()
-            .filter_map(|((owner, ty), amount)| {
-                Balance::maybe_get_balance_type_param(ty)
-                    .map(|coin_type| ((*owner, coin_type), *amount))
-            })
-            .collect();
-        self.check_gasless_execution_requirements_with_reservations(Some(&withdrawal_reservations))
-    }
-
     /// Validates gasless post-execution requirements:
     /// - No new objects were created or existing objects mutated (written_objects is empty)
     /// - The set of deleted objects exactly equals the set of input Coin objects
     /// - Each recipient receives at least the minimum transfer amount per token type
     /// - Unused withdrawal reservation (reservation - actual split) is 0 or >= min_amount
-    ///
-    /// Parameterized entry for the legacy path, which computes its (flag-gated) reservations
-    /// out-of-band. Deleted with legacy at the next execution cut.
-    // TODO: This is kept as pub due to legacy callers. Once the legacy path is deleted in a
-    // newer executor, we can fold this into `check_gasless_execution_requirements`.
-    pub(crate) fn check_gasless_execution_requirements_with_reservations(
-        &self,
-        withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
-    ) -> Result<(), String> {
+    pub(crate) fn check_gasless_execution_requirements(&self) -> Result<(), String> {
+        use sui_types::balance::Balance;
+
         if !self.execution_results.written_objects.is_empty() {
             return Err("Gasless transactions cannot create or mutate objects".to_string());
         }
@@ -971,23 +923,32 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        if let Some(reservations) = withdrawal_reservations {
-            for ((owner, token_type), &reserved) in reservations {
-                let net = net_totals
-                    .get(&(*owner, token_type.clone()))
-                    .copied()
-                    .unwrap_or(0);
-                let remaining = (reserved as i128).saturating_add(net);
-                if remaining > 0
-                    && let Some(&min_balance_remaining) = allowed_types.get(token_type)
-                    && min_balance_remaining > 0
-                    && remaining < min_balance_remaining as i128
-                {
-                    return Err(format!(
-                        "Gasless withdrawal leaves {remaining} unused for {owner}, \
-                         below minimum {min_balance_remaining} for token type {token_type}"
-                    ));
-                }
+        // Gasless requirements are expressed in coin types `T`, while the shared input reservation
+        // budget is keyed by accumulator types `Balance<T>`.
+        let withdrawal_reservations: BTreeMap<(SuiAddress, TypeTag), u64> = self
+            .post_execution_check_inputs
+            .input_reservations
+            .iter()
+            .filter_map(|((owner, ty), amount)| {
+                Balance::maybe_get_balance_type_param(ty)
+                    .map(|coin_type| ((*owner, coin_type), *amount))
+            })
+            .collect();
+        for ((owner, token_type), &reserved) in &withdrawal_reservations {
+            let net = net_totals
+                .get(&(*owner, token_type.clone()))
+                .copied()
+                .unwrap_or(0);
+            let remaining = (reserved as i128).saturating_add(net);
+            if remaining > 0
+                && let Some(&min_balance_remaining) = allowed_types.get(token_type)
+                && min_balance_remaining > 0
+                && remaining < min_balance_remaining as i128
+            {
+                return Err(format!(
+                    "Gasless withdrawal leaves {remaining} unused for {owner}, \
+                     below minimum {min_balance_remaining} for token type {token_type}"
+                ));
             }
         }
 
@@ -1307,13 +1268,12 @@ fn compute_input_reservations(
     transaction_kind: &TransactionKind,
     gas_data: &GasData,
     transaction_signer: SuiAddress,
-    enable_gasless: bool,
 ) -> (BTreeMap<(SuiAddress, TypeTag), u64>, AllowanceIds) {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
-    let is_gasless = enable_gasless && is_gasless_transaction(gas_data, transaction_kind);
+    let is_gasless = is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
     let mut allowance_ids = AllowanceIds::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());

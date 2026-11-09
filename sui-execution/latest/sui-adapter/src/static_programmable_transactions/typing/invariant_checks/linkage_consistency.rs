@@ -24,15 +24,8 @@ use sui_types::{base_types::ObjectID, error::ExecutionErrorTrait};
 pub fn verify<Mode: ExecutionMode>(
     env: &env::Env<Mode>,
     tt: &T::Transaction,
-    unified_linkage: Option<&ExecutableLinkage>,
+    unified_linkage: &ExecutableLinkage,
 ) -> Result<(), Mode::Error> {
-    if !env.protocol_config.harden_linkage_consistency() {
-        return Ok(());
-    }
-    let Some(unified_linkage) = unified_linkage else {
-        invariant_violation!("unified linkage is enabled but was not recorded on the transaction")
-    };
-
     // Every package selected by the transaction linkage must be resolved to a version id,
     // and that version id must resolve back to the same original id in the resolution table.
     for (original_id, version_id) in &unified_linkage.0.linkage {
@@ -104,16 +97,6 @@ fn verify_command<Mode: ExecutionMode>(
             } else {
                 Ok(())
             }
-        }
-        T::Command__::Publish(PackagePayload::Serialized(_), ..) => {
-            invariant_violation!(
-                "Unexpected serialized package payload in linkage consistency check"
-            )
-        }
-        T::Command__::Upgrade(PackagePayload::Serialized(_), ..) => {
-            invariant_violation!(
-                "Unexpected serialized package payload in linkage consistency check"
-            )
         }
         T::Command__::MakeMoveVec(ty, _) => {
             verify_type_linkage::<Mode>(std::iter::once(ty), unified_linkage)

@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
+use move_binary_format::{safe_assert, safe_assert_eq};
+use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::execution::values::VectorSpecialization;
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
@@ -21,7 +23,6 @@ use sui_types::nitro_attestation::{parse_nitro_attestation, verify_nitro_attesta
 pub const NOT_SUPPORTED_ERROR: u64 = 0;
 pub const PARSE_ERROR: u64 = 1;
 pub const VERIFY_ERROR: u64 = 2;
-pub const INVALID_PCRS_ERROR: u64 = 3;
 
 // Gas related structs and functions.
 #[derive(Clone)]
@@ -34,13 +35,13 @@ pub struct NitroAttestationCostParams {
 
 macro_rules! native_charge_gas_early_exit_option {
     ($native_context:ident, $cost:expr) => {{
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
         native_charge_gas_early_exit!(
             $native_context,
             $cost.ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for nitro attestation is missing".to_string())
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Gas cost for nitro attestation is missing"
+                )
             })?
         );
     }};
@@ -52,31 +53,13 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_nitro_attestation())
 }
 
-fn is_upgraded(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .enable_nitro_attestation_upgraded_parsing())
-}
-
-fn is_all_nonzero_pcrs_included(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .enable_nitro_attestation_all_nonzero_pcrs_parsing())
-}
-
-fn is_always_include_required_pcrs(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .enable_nitro_attestation_always_include_required_pcrs_parsing())
-}
-
 pub fn load_nitro_attestation_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -100,9 +83,9 @@ pub fn load_nitro_attestation_internal(
 
     match parse_nitro_attestation(
         &attestation_bytes,
-        is_upgraded(context)?,
-        is_all_nonzero_pcrs_included(context)?,
-        is_always_include_required_pcrs(context)?,
+        /* is_upgraded */ true,
+        /* include_all_nonzero_pcrs */ true,
+        /* always_include_required_pcrs */ true,
     ) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();
@@ -118,11 +101,7 @@ pub fn load_nitro_attestation_internal(
             match verify_nitro_attestation(&signature, &signed_message, &payload, current_timestamp)
             {
                 Ok(()) => {
-                    let pcrs = if is_upgraded(context)? {
-                        to_indexed_struct(payload.pcr_map)?
-                    } else {
-                        to_indexed_struct_legacy(payload.pcr_vec)?
-                    };
+                    let pcrs = to_indexed_struct(payload.pcr_map)?;
                     // Encapsulate as a lambda and call to allow us to capture any `Err` returns.
                     // Could do this with `and_then` as well if desired.
                     let result = || {
@@ -169,24 +148,6 @@ fn to_indexed_struct(pcrs: BTreeMap<u8, Vec<u8>>) -> PartialVMResult<Value> {
     for (index, pcr) in sorted.into_iter() {
         indexed_struct.push(Value::struct_(Struct::pack(vec![
             Value::u8(*index),
-            Value::vector_u8(pcr.to_vec()),
-        ])));
-    }
-    Vector::pack(VectorSpecialization::Container, indexed_struct)
-}
-
-// Convert a list of PCRs into a vector of PCREntry struct with index and value,
-// where the indices are [0, 1, 2, 3, 4, 8] since AWS currently supports PCR0,
-// PCR1, PCR2, PCR3, PCR4, PCR8.
-fn to_indexed_struct_legacy(pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
-    let indices = [0, 1, 2, 3, 4, 8];
-    if pcrs.len() != indices.len() {
-        return Err(PartialVMError::new(StatusCode::ABORTED).with_sub_status(INVALID_PCRS_ERROR));
-    };
-    let mut indexed_struct = vec![];
-    for (index, pcr) in pcrs.iter().enumerate() {
-        indexed_struct.push(Value::struct_(Struct::pack(vec![
-            Value::u8(indices[index]),
             Value::vector_u8(pcr.to_vec()),
         ])));
     }

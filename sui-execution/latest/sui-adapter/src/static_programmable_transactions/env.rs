@@ -10,7 +10,6 @@ use crate::{
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     static_programmable_transactions::{
-        execution::context::subst_signature,
         linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
         loading::ast::{
             self as L, Datatype, DeserializedPackage, LoadedFunction, LoadedFunctionInstantiation,
@@ -191,7 +190,7 @@ where
         module: &IdentStr,
         function: &IdentStr,
         type_arguments: Vec<Type>,
-        unified_linkage: Option<&ExecutableLinkage>,
+        unified_linkage: &ExecutableLinkage,
     ) -> Result<LoadedFunction, Mode::Error> {
         let mut loaded = self.load_function(
             SUI_FRAMEWORK_PACKAGE_ID,
@@ -199,23 +198,16 @@ where
             function.to_string(),
             type_arguments,
         )?;
-        if self.protocol_config.harden_linkage_consistency() {
-            let Some(unified_linkage) = unified_linkage else {
-                invariant_violation!(
-                    "Unified linkage is required when hardened linkage consistency is enabled"
-                )
-            };
-            assert_invariant!(
-                loaded
-                    .linkage
-                    .0
-                    .linkage
-                    .keys()
-                    .all(|original_id| unified_linkage.0.linkage.contains_key(original_id)),
-                "transaction linkage drops a package resolved by a framework MoveCall"
-            );
-            loaded.linkage = unified_linkage.clone();
-        }
+        assert_invariant!(
+            loaded
+                .linkage
+                .0
+                .linkage
+                .keys()
+                .all(|original_id| unified_linkage.0.linkage.contains_key(original_id)),
+            "transaction linkage drops a package resolved by a framework MoveCall"
+        );
+        loaded.linkage = unified_linkage.clone();
         Ok(loaded)
     }
 
@@ -275,8 +267,6 @@ where
                     self.convert_linked_vm_error(e, &linkage)
                 }
             })?;
-        let runtime_signature = subst_signature(runtime_signature, &loaded_type_arguments)
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let parameters = runtime_signature
             .parameters
             .into_iter()
@@ -555,14 +545,6 @@ where
                     name,
                     type_arguments,
                 }))
-            }
-
-            VRT::Type::TyParam(_) => {
-                invariant_violation!(
-                    "Unexpected type parameter in VM type: {:?}. This should not happen as we should \
-                     have resolved all type parameters before this point.",
-                    vm_type
-                );
             }
         })
     }

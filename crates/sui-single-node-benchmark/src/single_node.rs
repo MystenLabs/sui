@@ -196,7 +196,7 @@ impl SingleValidator {
             .read_objects_for_execution(&executable.key(), assigned_versions, &input_objects)
             .unwrap();
 
-        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+        let input_objects = sui_transaction_checks::check_certificate_input(
             &executable,
             objects,
             self.epoch_store.protocol_config(),
@@ -219,7 +219,7 @@ impl SingleValidator {
                 // funds, so there are no unsettled withdrawals to account for.
                 &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
-                gas_status,
+                self.epoch_store.reference_gas_price(),
                 kind,
                 None, // compat_args
                 signer,

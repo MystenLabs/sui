@@ -9,7 +9,7 @@ use crate::{
         object_store::{CacheInfo, ObjectResult},
     },
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
 use move_binary_format::{partial_vm_error, safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress,
@@ -223,10 +223,10 @@ pub fn add_child_object(
     let tag = match context.type_to_type_tag(&child_ty)? {
         TypeTag::Struct(s) => *s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
 
@@ -238,12 +238,7 @@ pub fn add_child_object(
             .saturating_mul(struct_tag_size)
     );
 
-    if get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .generate_df_type_layouts()
-    {
-        context.type_to_type_layout(&child_ty)?;
-    }
+    context.type_to_type_layout(&child_ty)?;
 
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
@@ -312,7 +307,6 @@ pub fn borrow_child_object(
     }
     let child_ref = global_value.borrow_global().map_err(|err| {
         if err.major_status() == StatusCode::MISSING_DATA {
-            debug_assert!(false);
             partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "borrow_global returned MISSING_DATA after exists() was true"
@@ -403,7 +397,6 @@ pub fn remove_child_object(
     }
     let child = global_value.move_from().map_err(|err| {
         if err.major_status() == StatusCode::MISSING_DATA {
-            debug_assert!(false);
             partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "move_from returned MISSING_DATA after exists() was true"
@@ -524,10 +517,10 @@ pub fn has_child_object_with_ty(
     let tag: StructTag = match context.type_to_type_tag(&ty)? {
         TypeTag::Struct(s) => *s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
 

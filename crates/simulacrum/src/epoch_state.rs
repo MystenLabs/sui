@@ -27,7 +27,7 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     execution_params::ExecutionOrEarlyError,
-    gas::SuiGasStatus,
+    gas::GasUsageReport,
     inner_temporary_store::InnerTemporaryStore,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     sui_system_state::{
@@ -142,7 +142,7 @@ impl EpochState {
         transaction: &VerifiedTransaction,
     ) -> Result<(
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Result<(), sui_types::error::ExecutionError>,
     )> {
@@ -168,7 +168,7 @@ impl EpochState {
 
         // Run the transaction input checks that would run when submitting the txn to a validator
         // for signing
-        let (gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
+        let checked_input_objects = sui_transaction_checks::check_transaction_input(
             &self.protocol_config,
             self.epoch_start_state.reference_gas_price(),
             transaction.data().transaction_data(),
@@ -185,7 +185,7 @@ impl EpochState {
                 checked_input_objects.inner(),
                 store.backing_store(),
             );
-        let (inner_temp_store, gas_status, effects, _timings, result) = self
+        let (inner_temp_store, gas_report, effects, _timings, result) = self
             .executor
             .execute_transaction_to_effects_and_execution_error(
                 store.backing_store(),
@@ -200,7 +200,7 @@ impl EpochState {
                 system_object_versions.clone(),
                 self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead,
                 gas_data,
-                gas_status,
+                self.epoch_start_state.reference_gas_price(),
                 kind,
                 None, // compat_args
                 signer,
@@ -223,7 +223,7 @@ impl EpochState {
                     self.chain_identifier,
                 );
         }
-        Ok((inner_temp_store, gas_status, effects, result))
+        Ok((inner_temp_store, gas_report, effects, result))
     }
 
     pub(crate) fn commit_accumulator_versions(

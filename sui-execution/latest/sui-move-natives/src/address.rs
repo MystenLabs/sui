@@ -3,7 +3,7 @@
 
 use crate::{NativesCostTable, get_extension};
 use move_binary_format::errors::PartialVMResult;
-use move_binary_format::safe_unwrap;
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
@@ -31,8 +31,8 @@ pub fn from_bytes(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let address_from_bytes_cost_params = get_extension!(context, NativesCostTable)?
         .address_from_bytes_cost_params
@@ -68,8 +68,8 @@ pub fn to_u256(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let address_to_u256_cost_params = get_extension!(context, NativesCostTable)?
         .address_to_u256_cost_params
@@ -106,8 +106,8 @@ pub fn from_u256(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let address_from_u256_cost_params = get_extension!(context, NativesCostTable)?
         .address_from_u256_cost_params

@@ -18,7 +18,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorTrait, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
-    gas::SuiGasStatus,
+    gas::{GasUsageReport, SuiGasStatusAPI},
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
@@ -50,6 +50,47 @@ pub(crate) struct Verifier<'m> {
 
 impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
+        sui_protocol_config::assert_set!(
+            protocol_config,
+            fix_ptb_generated_reads,
+            enable_group_ops_native_functions,
+            native_charging_v2,
+            uncompressed_g1_group_elements,
+            enable_poseidon,
+            limit_groth16_pvk_inputs,
+            enable_nitro_attestation_upgraded_parsing,
+            enable_nitro_attestation_all_nonzero_pcrs_parsing,
+            enable_nitro_attestation_always_include_required_pcrs_parsing,
+            simple_conservation_checks,
+            object_runtime_charge_cache_load_gas,
+            gasless_transaction_drop_safety,
+            early_return_receive_object_mismatched_type,
+            generate_df_type_layouts,
+            private_generics_verifier_v2,
+            disable_id_leak_verifier,
+            disable_effects_tx_dependencies,
+            framework_tx_context_mut_restrictions,
+            additional_borrow_checks,
+            disallow_jump_orphans,
+            include_function_signatures_in_instantiation_limits,
+            disallow_self_identifier,
+            charge_ld_const_abstract_size,
+            granular_post_execution_checks,
+            enable_unified_linkage,
+            disable_entry_point_signature_check,
+            harden_linkage_consistency,
+            allow_references_in_ptbs,
+            enable_accumulators,
+            enable_address_balance_gas_payments,
+            enable_gasless,
+            enable_authenticated_event_streams,
+            convert_withdrawal_compatibility_ptb_arguments,
+            enable_init_on_upgrade,
+            enable_order_independent_upgrade_init_linkage,
+            ptb_tx_context_restrictions,
+            validate_ptb_argument_indices,
+        );
+
         Ok(Executor(Arc::new(new_move_runtime(
             all_natives(silent, protocol_config),
             protocol_config,
@@ -77,7 +118,7 @@ impl executor::Executor for Executor {
         system_object_versions: SystemObjectVersions,
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -85,7 +126,7 @@ impl executor::Executor for Executor {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionFailure>,
@@ -102,7 +143,7 @@ impl executor::Executor for Executor {
             system_object_versions,
             unsettled_object_funds,
             gas,
-            gas_status,
+            reference_gas_price,
             transaction_kind,
             rewritten_inputs,
             transaction_signer,
@@ -119,7 +160,13 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (store_out, gas_status_out, effects, timings, result)
+        (
+            store_out,
+            gas_status_out.gas_usage_report(),
+            effects,
+            timings,
+            result,
+        )
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -135,7 +182,7 @@ impl executor::Executor for Executor {
         system_object_versions: SystemObjectVersions,
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -143,7 +190,7 @@ impl executor::Executor for Executor {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
@@ -160,7 +207,7 @@ impl executor::Executor for Executor {
             system_object_versions,
             unsettled_object_funds,
             gas,
-            gas_status,
+            reference_gas_price,
             transaction_kind,
             rewritten_inputs,
             transaction_signer,
@@ -177,7 +224,13 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (store_out, gas_status_out, effects, timings, result)
+        (
+            store_out,
+            gas_status_out.gas_usage_report(),
+            effects,
+            timings,
+            result,
+        )
     }
 
     fn dev_inspect_transaction(
@@ -192,7 +245,7 @@ impl executor::Executor for Executor {
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -200,7 +253,7 @@ impl executor::Executor for Executor {
         skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
@@ -221,7 +274,7 @@ impl executor::Executor for Executor {
                 // account for unsettled withdrawals from other transactions.
                 &EmptyUnsettledObjectFunds,
                 gas,
-                gas_status,
+                reference_gas_price,
                 transaction_kind,
                 rewritten_inputs,
                 transaction_signer,
@@ -251,7 +304,7 @@ impl executor::Executor for Executor {
                 // account for unsettled withdrawals from other transactions.
                 &EmptyUnsettledObjectFunds,
                 gas,
-                gas_status,
+                reference_gas_price,
                 transaction_kind,
                 rewritten_inputs,
                 transaction_signer,
@@ -270,7 +323,12 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (inner_temp_store, gas_status, effects, result)
+        (
+            inner_temp_store,
+            gas_status.gas_usage_report(),
+            effects,
+            result,
+        )
     }
 
     fn update_genesis_state(

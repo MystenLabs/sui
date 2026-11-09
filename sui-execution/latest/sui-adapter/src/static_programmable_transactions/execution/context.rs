@@ -23,7 +23,7 @@ use indexmap::{IndexMap, IndexSet};
 use move_binary_format::{
     CompiledModule,
     compatibility::{Compatibility, InclusionCheck},
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMError},
     file_format::FunctionDefinitionIndex,
     normalized,
 };
@@ -36,21 +36,17 @@ use move_core_types::{
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::{
     execution::{
-        Type as VMType, TypeSubst as _,
+        Type as VMType,
         values::{VMValueCast, Value as VMValue},
-        vm::{LoadedFunctionInformation, MoveVM},
+        vm::MoveVM,
     },
     natives::extensions::NativeExtensions,
-    shared::{
-        gas::{GasMeter as _, SimpleInstruction},
-        linkage_context::LinkageHash,
-    },
+    shared::gas::{GasMeter as _, SimpleInstruction},
     validation::verification::ast::Package as VerifiedPackage,
 };
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
-use quick_cache::unsync::Cache as QCache;
 use serde::{Deserialize, de::DeserializeSeed};
 use std::{
     cell::RefCell,
@@ -157,29 +153,33 @@ macro_rules! charge_gas {
     ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
 
-// Helper macro to manage Move VM cache for different linkage contexts. If the given linkage is
-// found the VM is reused, otherwise a new VM is created and inserted into the cache.
+// Temporarily removes the transaction-wide VM from the context so callers can use other mutable
+// context methods while executing a Move call, then restores it for the next call.
 macro_rules! with_vm {
-    ($self:ident, $linkage:expr, $error:ty, $body:expr) => {{
-        let link_context = $linkage.linkage_context::<$error>()?;
-        let linkage_hash = link_context.to_linkage_hash();
-        let mut vm = if let Some((_, vm)) = $self.executable_vm_cache.remove(&linkage_hash) {
+    ($context:ident, $error:ty, $body:expr) => {{
+        let mut vm = if let Some(vm) = $context.executable_vm.take() {
             vm
         } else {
-            let data_store = &$self.env.linkable_store.package_store;
-            $self
+            let linkage = &$context.unified_linkage;
+            let link_context = linkage.linkage_context::<$error>()?;
+            let data_store = &$context.env.linkable_store.package_store;
+            $context
                 .env
                 .vm
                 .make_vm_with_native_extensions(
                     data_store,
-                    link_context.clone(),
-                    $self.native_extensions.clone(),
+                    link_context,
+                    $context.native_extensions.clone(),
                 )
-                .map_err(|e| $self.env.convert_linked_vm_error(e, $linkage))?
+                .map_err(|e| $context.env.convert_linked_vm_error(e, linkage))?
         };
-        let result = $body(&mut vm)?;
-        $self.executable_vm_cache.insert(linkage_hash, vm);
-        Ok(result)
+        let result = $body(&mut vm);
+        assert_invariant!(
+            $context.executable_vm.is_none(),
+            "unified-linkage VM cache was not empty"
+        );
+        $context.executable_vm = Some(vm);
+        result
     }};
 }
 
@@ -262,6 +262,8 @@ where
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<ExecutionMetrics>,
     pub native_extensions: NativeExtensions<'env>,
+    unified_linkage: ExecutableLinkage,
+    executable_vm: Option<MoveVM<'env>>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: Rc<RefCell<TxContext>>,
@@ -273,8 +275,6 @@ where
     locations: Locations,
     /// Tracks where the gas coin was sent, if it was moved by value
     gas_coin_transfer: Option<GasCoinTransfer>,
-    // cache of Move VMs created this transaction for different linkage contexts so that we can reuse them.
-    executable_vm_cache: QCache<LinkageHash, MoveVM<'env>>,
 }
 
 impl Locations {
@@ -339,6 +339,7 @@ where
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
         pure_input_metadata: Vec<T::PureInput>,
         receiving_input_metadata: Vec<T::ReceivingInput>,
+        unified_linkage: ExecutableLinkage,
     ) -> Result<Self, Mode::Error>
     where
         'pc: 'state,
@@ -362,21 +363,10 @@ where
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
         let mut new_gas_coin_id = None;
         let gas = match payment_location {
-            Some(gas_payment)
-                if matches!(gas_payment.location, PaymentLocation::AddressBalance(_))
-                    && !env.protocol_config.gasless_transaction_drop_safety() =>
-            {
-                None
-            }
             Some(gas_payment) => {
                 let ty = env.gas_coin_type()?;
                 let (gas_metadata, gas_value) = match gas_payment.location {
                     PaymentLocation::AddressBalance(sui_address) => {
-                        assert_invariant!(
-                            env.protocol_config.enable_address_balance_gas_payments(),
-                            "Address balance gas payments must be enabled to have an address \
-                             balance payment location"
-                        );
                         let max_gas_in_balance = gas_charger.gas_budget();
                         assert_invariant!(
                             gas_payment.amount >= max_gas_in_balance,
@@ -447,6 +437,8 @@ where
             env,
             metrics,
             native_extensions,
+            unified_linkage,
+            executable_vm: None,
             tx_context,
             gas_charger,
             user_events: vec![],
@@ -465,7 +457,6 @@ where
                 results: vec![],
             },
             gas_coin_transfer: None,
-            executable_vm_cache: QCache::new(1024),
         })
     }
 
@@ -473,12 +464,6 @@ where
         &mut self,
         transfer: GasCoinTransfer,
     ) -> Result<(), Mode::Error> {
-        // send funds transfer ==> accumulators/address balances are enabled
-        assert_invariant!(
-            !matches!(transfer, GasCoinTransfer::SendFunds { .. })
-                || self.env.protocol_config.enable_accumulators(),
-            "Gas coin transfers with send_funds are not allowed unless accumulators are enabled"
-        );
         if self.gas_coin_transfer.is_some() {
             invariant_violation!("Gas coin destination set more than once");
         }
@@ -968,9 +953,7 @@ where
         args: Vec<CtxValue>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, Mode::Error> {
-        with_vm!(self, &function.linkage, Mode::Error, |vm: &mut MoveVM<
-            'env,
-        >| {
+        with_vm!(self, Mode::Error, |vm: &mut MoveVM<'env>| {
             let ty_args = function
                 .type_arguments
                 .iter()
@@ -1033,23 +1016,10 @@ where
     pub fn deserialize_package(
         &mut self,
         package_payload: PackagePayload,
-        dep_ids: &[ObjectID],
+        _dep_ids: &[ObjectID],
     ) -> Result<DeserializedPackage, Mode::Error> {
-        Ok(match package_payload {
-            PackagePayload::Deserialized(deserialized_pkg) => deserialized_pkg,
-            PackagePayload::Serialized(module_bytes) => {
-                // This assertion is also checked in the call to `deserialize_modules`, but we
-                // want to check it here first to keep existing behavior around checking this
-                // invariant before the charge on pre-existing pathways.
-                assert_invariant!(
-                    !module_bytes.is_empty(),
-                    "empty package is checked in transaction input checker"
-                );
-                let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
-                self.gas_charger.charge_publish_package(total_bytes)?;
-                self.env.deserialize_package(&module_bytes, dep_ids)?
-            }
-        })
+        let PackagePayload::Deserialized(deserialized_pkg) = package_payload;
+        Ok(deserialized_pkg)
     }
 
     fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<Rc<MovePackage>, Mode::Error> {
@@ -1209,7 +1179,6 @@ where
             self.gas_charger.move_gas_status().stack_height_current(),
             expected_stack_height,
         );
-        let check_expected_inits = self.env.protocol_config.harden_linkage_consistency();
         for module in modules {
             let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
             else {
@@ -1231,13 +1200,11 @@ where
             // balance the stack after borrowing the tx context
             charge_gas!(self, charge_store_loc, &tx_context)?;
 
-            if check_expected_inits {
-                assert_invariant!(
-                    expected_inits.remove(module_name),
-                    "module {module_name} defines an `init` but was not recorded as doing so when \
-                     the package payload was deserialized"
-                );
-            }
+            assert_invariant!(
+                expected_inits.remove(module_name),
+                "module {module_name} defines an `init` but was not recorded as doing so when \
+                 the package payload was deserialized"
+            );
 
             let args = if has_otw {
                 vec![CtxValue(Value::one_time_witness()?), CtxValue(tx_context)]
@@ -1284,7 +1251,7 @@ where
 
         // Every module we expected to initialize from earlier was initialized.
         assert_invariant!(
-            !check_expected_inits || expected_inits.is_empty(),
+            expected_inits.is_empty(),
             "modules {expected_inits:?} define an `init` that was never run"
         );
 
@@ -1401,44 +1368,22 @@ where
             })
             .collect::<Vec<&CompiledModule>>();
 
-        if self.env.protocol_config.enable_init_on_upgrade() {
-            // Only newly added modules have their `init` functions called on upgrade.
-            let expected_inits: BTreeSet<Identifier> = modules_with_init
-                .into_iter()
-                .filter(|name| !current_module_names.contains(name.as_str()))
-                .collect();
-            self.push_package_and_init_selected_modules(
-                version_id,
-                package,
-                verified_pkg,
-                vm,
-                new_modules.iter().copied(),
-                expected_inits,
-                &linkage,
-                trace_builder_opt,
-                UPGRADE_INIT_EXPECTED_STACK_HEIGHT,
-            )?;
-        } else {
-            let new_module_has_init = new_modules.iter().any(|module| {
-                module.function_defs.iter().any(|fdef| {
-                    let fhandle = module.function_handle_at(fdef.function);
-                    let fname = module.identifier_at(fhandle.name);
-                    fname == INIT_FN_NAME
-                })
-            });
-            if new_module_has_init {
-                return Err(Mode::Error::new_with_source(
-                    ExecutionErrorKind::FeatureNotYetSupported,
-                    "`init` in new modules on upgrade is not yet supported",
-                ));
-            }
-
-            self.env.linkable_store.package_store.push_package(
-                version_id,
-                Rc::new(package),
-                verified_pkg,
-            )?;
-        }
+        // Only newly added modules have their `init` functions called on upgrade.
+        let expected_inits: BTreeSet<Identifier> = modules_with_init
+            .into_iter()
+            .filter(|name| !current_module_names.contains(name.as_str()))
+            .collect();
+        self.push_package_and_init_selected_modules(
+            version_id,
+            package,
+            verified_pkg,
+            vm,
+            new_modules.iter().copied(),
+            expected_inits,
+            &linkage,
+            trace_builder_opt,
+            UPGRADE_INIT_EXPECTED_STACK_HEIGHT,
+        )?;
 
         Ok(version_id)
     }
@@ -2027,41 +1972,6 @@ unsafe fn create_written_object<Mode: ExecutionMode>(
             Mode::packages_are_predefined(),
         )
     }
-}
-
-/// substitutes the type arguments into the parameter and return types
-pub fn subst_signature(
-    signature: LoadedFunctionInformation,
-    type_arguments: &[VMType],
-) -> VMResult<LoadedFunctionInformation> {
-    let LoadedFunctionInformation {
-        parameters,
-        return_,
-        is_entry,
-        is_native,
-        visibility,
-        index,
-        instruction_count,
-    } = signature;
-    let parameters = parameters
-        .into_iter()
-        .map(|ty| ty.subst(type_arguments))
-        .collect::<PartialVMResult<Vec<_>>>()
-        .map_err(|err| err.finish(Location::Undefined))?;
-    let return_ = return_
-        .into_iter()
-        .map(|ty| ty.subst(type_arguments))
-        .collect::<PartialVMResult<Vec<_>>>()
-        .map_err(|err| err.finish(Location::Undefined))?;
-    Ok(LoadedFunctionInformation {
-        parameters,
-        return_,
-        is_entry,
-        is_native,
-        visibility,
-        index,
-        instruction_count,
-    })
 }
 
 pub enum EitherError<E: ExecutionErrorTrait = ExecutionError> {

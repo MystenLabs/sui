@@ -1,9 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     IndexKind,
-    errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
+    errors::{Location, PartialVMResult, VMResult, verification_error},
     file_format::{
         Bytecode, CompiledModule, SignatureIndex, SignatureToken, StructFieldInformation,
         TableIndex,
@@ -59,7 +60,7 @@ impl<'a> LimitsVerifier<'a> {
         if let Some(limit) = config.max_generic_instantiation_length {
             for (idx, struct_handle) in self.module.datatype_handles().iter().enumerate() {
                 if struct_handle.type_parameters.len() > limit {
-                    return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
+                    return Err(partial_vm_error!(TOO_MANY_TYPE_PARAMETERS)
                         .at_index(IndexKind::DatatypeHandle, idx as u16));
                 }
             }
@@ -72,13 +73,13 @@ impl<'a> LimitsVerifier<'a> {
             if let Some(limit) = config.max_generic_instantiation_length
                 && function_handle.type_parameters.len() > limit
             {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
+                return Err(partial_vm_error!(TOO_MANY_TYPE_PARAMETERS)
                     .at_index(IndexKind::FunctionHandle, idx as u16));
             };
             if let Some(limit) = config.max_function_parameters
                 && self.module.signature_at(function_handle.parameters).0.len() > limit
             {
-                return Err(PartialVMError::new(StatusCode::TOO_MANY_PARAMETERS)
+                return Err(partial_vm_error!(TOO_MANY_PARAMETERS)
                     .at_index(IndexKind::FunctionHandle, idx as u16));
             };
         }
@@ -122,7 +123,7 @@ impl<'a> LimitsVerifier<'a> {
         if let Some(max) = &config.max_type_nodes
             && weighted_type_size(ty) > *max
         {
-            return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
+            return Err(partial_vm_error!(TOO_MANY_TYPE_NODES));
         }
         Ok(())
     }
@@ -132,16 +133,12 @@ impl<'a> LimitsVerifier<'a> {
         if let Some(max_function_definitions) = config.max_function_definitions
             && defs.len() > max_function_definitions
         {
-            return Err(PartialVMError::new(
-                StatusCode::MAX_FUNCTION_DEFINITIONS_REACHED,
-            ));
+            return Err(partial_vm_error!(MAX_FUNCTION_DEFINITIONS_REACHED));
         }
         if let Some(max_data_definitions) = config.max_data_definitions {
             let defs_len = self.module.struct_defs().len() + self.module.enum_defs().len();
             if defs_len > max_data_definitions {
-                return Err(PartialVMError::new(
-                    StatusCode::MAX_STRUCT_DEFINITIONS_REACHED,
-                ));
+                return Err(partial_vm_error!(MAX_STRUCT_DEFINITIONS_REACHED));
             }
         }
 
@@ -151,9 +148,7 @@ impl<'a> LimitsVerifier<'a> {
                     StructFieldInformation::Native => (),
                     StructFieldInformation::Declared(fields) => {
                         if fields.len() > max_fields_in_struct {
-                            return Err(PartialVMError::new(
-                                StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
-                            ));
+                            return Err(partial_vm_error!(MAX_FIELD_DEFINITIONS_REACHED));
                         }
                     }
                 }
@@ -167,15 +162,13 @@ impl<'a> LimitsVerifier<'a> {
                     .max_variants_in_enum
                     .is_some_and(|max| def.variants.len() > max as usize)
                 {
-                    return Err(PartialVMError::new(StatusCode::MAX_VARIANTS_REACHED));
+                    return Err(partial_vm_error!(MAX_VARIANTS_REACHED));
                 }
                 let mut num_fields = 0;
                 for variant in &def.variants {
                     num_fields += variant.fields.len();
                     if num_fields > max_fields_in_struct {
-                        return Err(PartialVMError::new(
-                            StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
-                        ));
+                        return Err(partial_vm_error!(MAX_FIELD_DEFINITIONS_REACHED));
                     }
                 }
             }
@@ -226,23 +219,15 @@ impl<'a> LimitsVerifier<'a> {
         let mut size_table = BTreeMap::new();
         let mut function_totals = vec![0; self.module.function_handles().len()];
 
-        if config.include_function_signatures_in_instantiation_limits {
-            for (idx, function_handle) in self.module.function_handles().iter().enumerate() {
-                let mut fn_total = 0;
-                let weight = self
-                    .signature_type_size(function_handle.return_, &mut size_table)
-                    .saturating_add(
-                        self.signature_type_size(function_handle.parameters, &mut size_table),
-                    );
-                Self::charge_type_nodes(
-                    max_fun,
-                    max_mod,
-                    &mut fn_total,
-                    &mut module_total,
-                    weight,
-                )?;
-                function_totals[idx] = fn_total;
-            }
+        for (idx, function_handle) in self.module.function_handles().iter().enumerate() {
+            let mut fn_total = 0;
+            let weight = self
+                .signature_type_size(function_handle.return_, &mut size_table)
+                .saturating_add(
+                    self.signature_type_size(function_handle.parameters, &mut size_table),
+                );
+            Self::charge_type_nodes(max_fun, max_mod, &mut fn_total, &mut module_total, weight)?;
+            function_totals[idx] = fn_total;
         }
 
         for func_def in self.module.function_defs() {
@@ -252,16 +237,8 @@ impl<'a> LimitsVerifier<'a> {
                 .copied()
                 .unwrap_or_default();
 
-            if config.include_function_signatures_in_instantiation_limits {
-                let weight = self.signature_type_size(code.locals, &mut size_table);
-                Self::charge_type_nodes(
-                    max_fun,
-                    max_mod,
-                    &mut fn_total,
-                    &mut module_total,
-                    weight,
-                )?;
-            }
+            let weight = self.signature_type_size(code.locals, &mut size_table);
+            Self::charge_type_nodes(max_fun, max_mod, &mut fn_total, &mut module_total, weight)?;
             for instr in &code.code {
                 let sig_idx = match instr {
                     Bytecode::CallGeneric(idx) => {
@@ -442,7 +419,7 @@ impl<'a> LimitsVerifier<'a> {
                 ));
             }
 
-            if config.disallow_self_identifier && identifier.as_str() == "<SELF>" {
+            if identifier.as_str() == "<SELF>" {
                 return Err(verification_error(
                     StatusCode::INVALID_IDENTIFIER,
                     IndexKind::Identifier,

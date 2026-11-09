@@ -3,13 +3,9 @@
 
 use std::collections::VecDeque;
 
-use move_binary_format::{
-    errors::{PartialVMError, PartialVMResult},
-    safe_assert_eq, safe_unwrap,
-};
-use move_core_types::{
-    account_address::AccountAddress, gas_algebra::InternalGas, u256::U256, vm_status::StatusCode,
-};
+use move_binary_format::partial_vm_error;
+use move_binary_format::{errors::PartialVMResult, safe_assert_eq, safe_unwrap};
+use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
 use move_vm_runtime::{
     execution::{
         Type,
@@ -32,7 +28,6 @@ use crate::{
 };
 
 const E_OVERFLOW: u64 = 0;
-const E_ADDRESS_BALANCE_NOT_ENABLED: u64 = 1;
 const E_ACCUMULATOR_TYPE_TOO_LARGE: u64 = 4;
 
 #[derive(Clone)]
@@ -46,8 +41,8 @@ pub fn add_to_accumulator_address(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     // TODO(address-balances): add specific cost for this
     let event_emit_cost_params = context
@@ -62,11 +57,10 @@ pub fn add_to_accumulator_address(
     let Some(value) = safe_unwrap!(args.pop_back()).value_as::<Struct>().ok() else {
         // TODO in the future this is guaranteed/checked via a custom verifier rule
         debug_assert!(false);
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "Balance should be guaranteed under current implementation".to_owned(),
-            ),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Balance should be guaranteed under current implementation"
+        ));
     };
     let recipient = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>());
     let accumulator: ObjectID =
@@ -76,28 +70,21 @@ pub fn add_to_accumulator_address(
     let Some([amount]): Option<[Value; 1]> = value.unpack().collect::<Vec<_>>().try_into().ok()
     else {
         debug_assert!(false);
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "Balance should be guaranteed under current implementation".to_owned(),
-            ),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Balance should be guaranteed under current implementation"
+        ));
     };
     let Some(amount) = amount.value_as::<u64>().ok() else {
         debug_assert!(false);
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "Balance should be guaranteed under current implementation".to_owned(),
-            ),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Balance should be guaranteed under current implementation"
+        ));
     };
 
     let cost = context.gas_used();
-
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-
-    if !obj_runtime.protocol_config.enable_accumulators() {
-        return Ok(NativeResult::err(cost, E_ADDRESS_BALANCE_NOT_ENABLED));
-    }
 
     if !check_accumulator_type_bounds(obj_runtime.protocol_config, &ty_tag) {
         return Ok(NativeResult::err(cost, E_ACCUMULATOR_TYPE_TOO_LARGE));
@@ -118,8 +105,8 @@ pub fn withdraw_from_accumulator_address(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     // TODO(address-balances): add specific cost for this
     // TODO(address-balances): determine storage cost for "Merge"
@@ -187,8 +174,9 @@ pub fn reserve_object_funds_for_withdrawal(
             .reserve_object_funds_for_withdrawal_cost_params
             .clone();
         let base_cost = cost_params.base_cost.ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "reserve_object_funds_for_withdrawal base gas cost is not set".to_string(),
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "reserve_object_funds_for_withdrawal base gas cost is not set"
             )
         })?;
         native_charge_gas_early_exit!(context, base_cost);
@@ -203,8 +191,9 @@ pub fn reserve_object_funds_for_withdrawal(
         // Check here so that we can charge gas before reading from storage.
         if obj_runtime.object_funds_sufficiency_needs_store_read(owner, &ty_tag, limit) {
             let cold_read_cost = cost_params.cold_read_cost.ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "reserve_object_funds_for_withdrawal cold read gas cost is not set".to_string(),
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "reserve_object_funds_for_withdrawal cold read gas cost is not set"
                 )
             })?;
             native_charge_gas_early_exit!(context, cold_read_cost);
@@ -220,9 +209,10 @@ pub fn reserve_object_funds_for_withdrawal(
             E_OBJECT_FUNDS_INSUFFICIENT,
         )),
         ObjectFundsSufficiency::Overflow => Ok(NativeResult::err(context.gas_used(), E_OVERFLOW)),
-        ObjectFundsSufficiency::LoadError(msg) => Err(PartialVMError::new(
-            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-        )
-        .with_message(msg)),
+        ObjectFundsSufficiency::LoadError(msg) => Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "{}",
+            msg
+        )),
     }
 }

@@ -30,23 +30,13 @@ pub fn transaction<Mode: ExecutionMode>(
     gas_payment: Option<GasPayment>,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, Mode::Error> {
-    if env.protocol_config.validate_ptb_argument_indices()
-        && let Err(err) = pt.validate_argument_indices()
-    {
+    if let Err(err) = pt.validate_argument_indices() {
         invariant_violation!(
             "PTB argument indices are checked at signing -- this should be impossible: {err}"
         );
     }
     metering::pre_translation::meter::<Mode::Error>(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
-    // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
-    assert_invariant!(
-        withdrawal_compatibility_inputs.is_none()
-            || env
-                .protocol_config
-                .convert_withdrawal_compatibility_ptb_arguments(),
-        "if withdrawal compatibility must be specified, then the flag is set in the protocol config"
-    );
     let withdrawal_compatibility_inputs =
         withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; inputs.len()]);
     assert_invariant!(
@@ -303,24 +293,16 @@ fn command<Mode: ExecutionMode>(
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = if env.protocol_config.enable_unified_linkage() {
-                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
-                PackagePayload::Deserialized(deserialized_pkg)
-            } else {
-                PackagePayload::Serialized(items)
-            };
+            let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+            let payload = PackagePayload::Deserialized(deserialized_pkg);
             L::Command::Publish(payload, dep_ids, resolved_linkage)
         }
         P::Command::Upgrade(items, dep_ids, object_id, argument) => {
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = if env.protocol_config.enable_unified_linkage() {
-                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
-                PackagePayload::Deserialized(deserialized_pkg)
-            } else {
-                PackagePayload::Serialized(items)
-            };
+            let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+            let payload = PackagePayload::Deserialized(deserialized_pkg);
             L::Command::Upgrade(payload, dep_ids, object_id, argument, resolved_linkage)
         }
     })

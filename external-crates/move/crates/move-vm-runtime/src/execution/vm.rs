@@ -5,12 +5,14 @@ use crate::{
     cache::identifier_interner::IdentifierInterner,
     dbg_println,
     execution::{
-        dispatch_tables::VMDispatchTables, interpreter, tracing::tracer::VMTracer, values::Value,
+        dispatch_tables::VMDispatchTables, interpreter, interpreter::state::TypeArguments,
+        tracing::tracer::VMTracer, values::Value,
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{Function, SizedArenaType, Type},
     natives::extensions::NativeExtensions,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
+        TypeLimits,
         gas::GasMeter,
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
@@ -55,12 +57,15 @@ pub struct MoveVM<'extensions> {
     pub(crate) native_extensions: NativeExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
+    /// The type traversal limits used for execution in this VM.
+    pub(crate) type_limits: Arc<TypeLimits>,
     /// The Move VM's interner.
     pub(crate) interner: Arc<IdentifierInterner>,
     /// The Move Runtime telemetry
     pub(crate) telemetry: Arc<TelemetryContext>,
 }
 
+/// `parameters` and `return_type` are already substituted with the queried type arguments.
 pub(crate) struct MoveVMFunction {
     function: VMPointer<Function>,
     pub(crate) parameters: Vec<Type>,
@@ -68,6 +73,7 @@ pub(crate) struct MoveVMFunction {
 }
 
 /// Externally visibile information about a function that can be asked and the VM will answer.
+/// `parameters` and `return_` are already substituted with the queried type arguments.
 pub struct LoadedFunctionInformation {
     pub is_entry: bool,
     pub is_native: bool,
@@ -143,6 +149,7 @@ impl<'extensions> MoveVM<'extensions> {
             None,
             gas_meter,
             bypass_declared_entry_check,
+            self.type_limits.clone(),
         )
     }
 
@@ -179,6 +186,7 @@ impl<'extensions> MoveVM<'extensions> {
             tracer,
             gas_meter,
             bypass_declared_entry_check,
+            self.type_limits.clone(),
         )
     }
 
@@ -337,6 +345,7 @@ impl<'extensions> MoveVM<'extensions> {
         tracer: Option<&mut MoveTraceBuilder>,
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
+        type_limits: Arc<TypeLimits>,
     ) -> VMResult<Vec<Value>> {
         let telemetry = Arc::clone(&self.telemetry);
         telemetry.with_transaction_telemetry(|txn_telemetry| {
@@ -349,7 +358,12 @@ impl<'extensions> MoveVM<'extensions> {
                     function,
                     parameters: _,
                     return_type: _,
-                } = self.find_function(original_id, function_name, &type_arguments)?;
+                } = self.find_function_with_type_limits(
+                    original_id,
+                    function_name,
+                    &type_arguments,
+                    &type_limits,
+                )?;
 
                 if args.len() != function.to_ref().parameters.len() {
                     return Err(partial_vm_error!(
@@ -386,6 +400,7 @@ impl<'extensions> MoveVM<'extensions> {
                     function,
                     type_arguments,
                     args,
+                    type_limits,
                 )
             };
 
@@ -405,6 +420,16 @@ impl<'extensions> MoveVM<'extensions> {
         function_name: &IdentStr,
         ty_args: &[Type],
     ) -> VMResult<MoveVMFunction> {
+        self.find_function_with_type_limits(original_id, function_name, ty_args, &self.type_limits)
+    }
+
+    fn find_function_with_type_limits(
+        &self,
+        original_id: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: &[Type],
+        type_limits: &TypeLimits,
+    ) -> VMResult<MoveVMFunction> {
         let function = self
             .virtual_tables
             .try_resolve_function_for_external(original_id, function_name)
@@ -418,23 +443,30 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
+        self.virtual_tables
+            .verify_ty_args(fun_ref.type_parameters(), ty_args)
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
+
+        // Pair the type arguments with their sizes so substitution goes through the checked
+        // dispatch-table path, which bounds each realized type against the traversal limits
+        // before building it.
+        let ty_args = TypeArguments::new(&self.virtual_tables, ty_args.to_vec(), type_limits)
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
+        let instantiate =
+            |ty: &SizedArenaType| self.virtual_tables.subst_type(ty, &ty_args, type_limits);
+
         let parameters = fun_ref
             .parameters
             .iter()
-            .map(|ty| ty.to_type())
+            .map(instantiate)
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let return_ = fun_ref
             .return_
             .iter()
-            .map(|ty| ty.to_type())
+            .map(instantiate)
             .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
-
-        // verify type arguments
-        self.virtual_tables
-            .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let function = MoveVMFunction {
@@ -455,11 +487,13 @@ impl<'extensions> MoveVM<'extensions> {
         func: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
+        type_limits: Arc<TypeLimits>,
     ) -> VMResult<Vec<Value>> {
         interpreter::run(
             &mut self.virtual_tables,
             txn_telemetry,
             self.vm_config.clone(),
+            type_limits,
             &mut *self.native_extensions.try_borrow_mut().map_err(|e| {
                 partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -490,6 +524,7 @@ impl std::fmt::Debug for MoveVM<'_> {
             .field("virtual_tables", &self.virtual_tables)
             .field("link_context", &self.link_context)
             .field("vm_config", &self.vm_config)
+            .field("type_limits", &self.type_limits)
             // Note: native_extensions is intentionally omitted
             .finish()
     }

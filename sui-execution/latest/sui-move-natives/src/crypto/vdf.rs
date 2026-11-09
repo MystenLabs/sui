@@ -7,14 +7,15 @@ use fastcrypto_vdf::class_group::discriminant::DISCRIMINANT_3072;
 use fastcrypto_vdf::vdf::VDF;
 use fastcrypto_vdf::vdf::wesolowski::DefaultVDF;
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
+use move_binary_format::{safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::{
     execution::{
         Type,
         values::{Value, VectorRef},
     },
-    natives::functions::{NativeResult, PartialVMError},
+    natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -67,14 +68,14 @@ pub fn vdf_verify_internal(
         context,
         cost_params
             .vdf_verify_cost
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for vdf_verify not available".to_string())
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Gas cost for vdf_verify not available"
+            ))?
     );
 
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 4);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 4);
 
     // The input is a reference to a vector of vector<u8>'s
     let iterations = pop_arg!(args, u64);
@@ -135,14 +136,14 @@ pub fn hash_to_input_internal(
         context,
         cost_params
             .hash_to_input_cost
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for hash_to_input not available".to_string())
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Gas cost for hash_to_input not available"
+            ))?
     );
 
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let message = pop_arg!(args, VectorRef);
 

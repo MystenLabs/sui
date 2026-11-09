@@ -727,7 +727,6 @@ mod test {
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
     use sui_types::execution_params::ExecutionOrEarlyError;
-    use sui_types::gas::SuiGasStatus;
     use sui_types::in_memory_storage::InMemoryStorage;
     use sui_types::metrics::ExecutionMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -787,7 +786,7 @@ mod test {
                 // unsettled withdrawals for it to account for.
                 &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
-                SuiGasStatus::new_unmetered(&protocol_config),
+                0, // reference gas price: unused, the genesis transaction is unmetered
                 kind,
                 None, // compat_args
                 signer,

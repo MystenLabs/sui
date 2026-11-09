@@ -6393,8 +6393,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         observations_chunk_size: Some(18),
     };
 
-    let mut protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    let mut protocol_config = ProtocolConfig::get_for_version(140.into(), Chain::Unknown);
     protocol_config.disable_accumulators_for_testing();
     protocol_config.set_per_object_congestion_control_mode_for_testing(
         PerObjectCongestionControlMode::ExecutionTimeEstimate(execution_time_params),
@@ -6671,42 +6670,42 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
         .build();
     let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
 
-    // The legacy short-circuit (gas model 14) and the bump-only exit (gas model 15) build
-    // effects on different paths, so check dependencies under both.
-    for gas_model_version in [14, 15] {
-        for disable_dependencies in [false, true] {
-            let mut config =
-                ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-            config.set_gas_model_version_for_testing(gas_model_version);
-            config.set_disable_effects_tx_dependencies_for_testing(disable_dependencies);
-            let state = TestAuthorityBuilder::new()
-                .with_protocol_config(config)
-                .with_starting_objects(&[gas_object.clone()])
-                .build()
-                .await;
-            let epoch_store = state.load_epoch_store_one_call_per_task();
-            let mut execution_env = ExecutionEnv::new();
-            execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
-            let (effects, execution_error) = state
-                .try_execute_immediately(&certificate, execution_env, &epoch_store)
-                .unwrap();
+    for (protocol_version, disable_dependencies) in [
+        (ProtocolVersion::new(137), false),
+        (ProtocolVersion::max(), true),
+    ] {
+        let config = ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+        assert_eq!(
+            config.disable_effects_tx_dependencies(),
+            disable_dependencies
+        );
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(config)
+            .with_starting_objects(&[gas_object.clone()])
+            .build()
+            .await;
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+        let mut execution_env = ExecutionEnv::new();
+        execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+        let (effects, execution_error) = state
+            .try_execute_immediately(&certificate, execution_env, &epoch_store)
+            .unwrap();
 
-            assert_eq!(
-                execution_error.unwrap().kind(),
-                &ExecutionErrorKind::InsufficientFundsForWithdraw
-            );
-            assert!(matches!(
-                effects.status(),
-                ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                    ..
-                })
-            ));
-            if disable_dependencies {
-                assert!(effects.dependencies().is_empty());
-            } else {
-                assert_eq!(effects.dependencies(), &[previous_transaction]);
-            }
+        assert_eq!(
+            execution_error.unwrap().kind(),
+            &ExecutionErrorKind::InsufficientFundsForWithdraw
+        );
+        assert!(matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+                ..
+            })
+        ));
+        if disable_dependencies {
+            assert!(effects.dependencies().is_empty());
+        } else {
+            assert_eq!(effects.dependencies(), &[previous_transaction]);
         }
     }
 }

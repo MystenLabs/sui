@@ -90,7 +90,7 @@ where
         withdrawal_compatibility_conversions: _,
         original_command_len: _,
         commands,
-        unified_linkage: _,
+        unified_linkage,
     } = ast;
     let mut context = Context::new(
         env,
@@ -103,6 +103,7 @@ where
         withdrawals,
         pure,
         receiving,
+        unified_linkage,
     )?;
 
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;

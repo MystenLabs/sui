@@ -58,6 +58,7 @@ use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::partial_vm_error;
 use move_binary_format::safe_unwrap;
 use move_core_types::{
     annotated_value as A,
@@ -65,7 +66,6 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value as R,
-    vm_status::StatusCode,
 };
 use move_vm_runtime::natives::{
     extensions::NativeExtensionMarker,
@@ -1566,10 +1566,10 @@ pub(crate) fn get_tag_and_layouts(
     let tag = match context.type_to_type_tag(ty)? {
         TypeTag::Struct(s) => s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
     let Some(layout) = context.type_to_type_layout(ty)? else {
@@ -1619,11 +1619,8 @@ macro_rules! charge_cache_or_load_gas {
         match $cache_info {
             CacheInfo::CachedObject | CacheInfo::CachedValue => (),
             CacheInfo::Loaded(bytes_opt) => {
-                let config = get_extension!($context, ObjectRuntime)?.protocol_config;
-                if config.object_runtime_charge_cache_load_gas() {
-                    let bytes = bytes_opt.unwrap_or(0).max(1);
-                    native_charge_gas_early_exit!($context, InternalGas::new(bytes as u64));
-                }
+                let bytes = bytes_opt.unwrap_or(0).max(1);
+                native_charge_gas_early_exit!($context, InternalGas::new(bytes as u64));
             }
         }
     }};

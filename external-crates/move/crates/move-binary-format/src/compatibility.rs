@@ -2,17 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::partial_vm_error;
 use std::collections::BTreeMap;
 
 use crate::inclusion_mode::{InclusionCheckExecutionMode, InclusionCheckMode};
 use crate::{
     compatibility_mode::{CompatibilityMode, ExecutionCompatibilityMode},
-    errors::{PartialVMError, PartialVMResult},
+    errors::PartialVMResult,
     file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
     normalized,
 };
-use move_core_types::vm_status::StatusCode;
 // ***************************************************************************
 // ******************* IMPORTANT NOTE ON COMPATIBILITY ***********************
 // ***************************************************************************
@@ -106,7 +106,7 @@ impl Compatibility {
     /// Check compatibility for `new_module` relative to old module `old_module`.
     pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
         self.check_with_mode::<ExecutionCompatibilityMode>(old_module, new_module)
-            .map_err(|_| PartialVMError::new(StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
+            .map_err(|_| partial_vm_error!(BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
     }
 
     pub fn check_with_mode<M: CompatibilityMode>(
@@ -373,7 +373,7 @@ pub enum InclusionCheck {
 impl InclusionCheck {
     pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
         self.check_with_mode::<InclusionCheckExecutionMode>(old_module, new_module)
-            .map_err(|_| PartialVMError::new(StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
+            .map_err(|_| partial_vm_error!(BACKWARD_INCOMPATIBLE_MODULE_UPDATE))
     }
 
     // Check that all code in `old_module` is included `new_module`. If `Exact` no new code can be

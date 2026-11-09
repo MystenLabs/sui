@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::PartialVMResult;
-use move_binary_format::safe_unwrap;
+use move_binary_format::{errors::PartialVMResult, safe_assert};
+use move_binary_format::{safe_assert_eq, safe_unwrap};
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
     execution::{Type, values::Value},
@@ -33,8 +33,8 @@ pub fn derive_id(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     let tx_context_derive_id_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_derive_id_cost_params
@@ -70,8 +70,8 @@ pub fn fresh_id(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_fresh_id_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_fresh_id_cost_params
@@ -105,8 +105,8 @@ pub fn sender(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_sender_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_sender_cost_params
@@ -138,8 +138,8 @@ pub fn epoch(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_epoch_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_epoch_cost_params
@@ -171,8 +171,8 @@ pub fn epoch_timestamp_ms(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_epoch_timestamp_ms_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_epoch_timestamp_ms_cost_params
@@ -204,8 +204,8 @@ pub fn sponsor(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_sponsor_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_sponsor_cost_params
@@ -237,8 +237,8 @@ pub fn rgp(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_rgp_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_rgp_cost_params
@@ -266,8 +266,8 @@ pub fn gas_price(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_gas_price_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_gas_price_cost_params
@@ -299,8 +299,8 @@ pub fn gas_budget(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_gas_budget_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_gas_budget_cost_params
@@ -332,8 +332,8 @@ pub fn ids_created(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_ids_created_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_ids_created_cost_params
@@ -382,9 +382,9 @@ pub fn replace(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
+    safe_assert!(ty_args.is_empty());
     let args_len = args.len();
-    debug_assert!(args_len == 8 || args_len == 9);
+    safe_assert!(args_len == 8 || args_len == 9);
 
     // use the `TxContextReplaceCostParams` for the cost of this function
     let tx_context_replace_cost_params: TxContextReplaceCostParams =
@@ -439,8 +439,8 @@ pub fn last_created_id(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let tx_context_derive_id_cost_params = get_extension!(context, NativesCostTable)?
         .tx_context_derive_id_cost_params

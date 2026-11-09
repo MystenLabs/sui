@@ -3,19 +3,14 @@
 
 use move_binary_format::{
     CompiledModule,
-    file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
+    file_format::{Bytecode, FunctionDefinition, Visibility},
 };
 use move_bytecode_utils::format_signature_token;
-use move_vm_config::verifier::VerifierConfig;
-use sui_types::randomness_state::is_mutable_random;
 use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, TxContext, TxContextKind},
-    clock::Clock,
     error::ExecutionError,
-    is_object, is_object_vector, is_primitive,
     move_package::{FnInfoMap, is_test_fun},
-    transfer::Receiving,
 };
 
 use crate::{INIT_FN_NAME, verification_failure};
@@ -39,7 +34,6 @@ use crate::{INIT_FN_NAME, verification_failure};
 pub fn verify_module(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
-    verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     // When verifying test functions, a check preventing explicit calls to init functions is
     // disabled.
@@ -57,15 +51,6 @@ pub fn verify_module(
             verify_init_function(module, func_def).map_err(verification_failure)?;
             continue;
         }
-
-        // find candidate entry functions and check their parameters
-        // (ignore other functions)
-        if !func_def.is_entry || verifier_config.disable_entry_point_signature_check {
-            // it's not an entry function or the check is now disabled
-            continue;
-        }
-        verify_entry_function_impl(module, func_def, verifier_config)
-            .map_err(verification_failure)?;
     }
     Ok(())
 }
@@ -165,96 +150,6 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
             TX_CONTEXT_MODULE_NAME,
             TX_CONTEXT_STRUCT_NAME,
             format_signature_token(module, &parameters[0]),
-        ))
-    }
-}
-
-fn verify_entry_function_impl(
-    view: &CompiledModule,
-    func_def: &FunctionDefinition,
-    verifier_config: &VerifierConfig,
-) -> Result<(), String> {
-    let handle = view.function_handle_at(func_def.function);
-    let params = view.signature_at(handle.parameters);
-
-    let all_non_ctx_params = match params.0.last() {
-        Some(last_param) if TxContext::kind(view, last_param) != TxContextKind::None => {
-            &params.0[0..params.0.len() - 1]
-        }
-        _ => &params.0,
-    };
-    for param in all_non_ctx_params {
-        verify_param_type(view, &handle.type_parameters, param, verifier_config)?;
-    }
-
-    for return_ty in &view.signature_at(handle.return_).0 {
-        verify_return_type(view, &handle.type_parameters, return_ty)?;
-    }
-
-    Ok(())
-}
-
-fn verify_return_type(
-    view: &CompiledModule,
-    type_parameters: &[AbilitySet],
-    return_ty: &SignatureToken,
-) -> Result<(), String> {
-    if matches!(
-        return_ty,
-        SignatureToken::Reference(_) | SignatureToken::MutableReference(_)
-    ) {
-        return Err("Invalid entry point return type. Expected a non reference type.".to_owned());
-    }
-    let abilities = view
-        .abilities(return_ty, type_parameters)
-        .map_err(|e| format!("Unexpected CompiledModule error: {}", e))?;
-    if abilities.has_drop() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Invalid entry point return type. \
-            The specified return type does not have the 'drop' ability: {}",
-            format_signature_token(view, return_ty),
-        ))
-    }
-}
-
-fn verify_param_type(
-    view: &CompiledModule,
-    function_type_args: &[AbilitySet],
-    param: &SignatureToken,
-    verifier_config: &VerifierConfig,
-) -> Result<(), String> {
-    // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable clock
-    // parameter.
-    if Clock::is_mutable(view, param) {
-        return Err(format!(
-            "Invalid entry point parameter type. Clock must be passed by immutable reference. got: \
-             {}",
-            format_signature_token(view, param),
-        ));
-    }
-
-    // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable Random
-    // parameter.
-    if verifier_config.reject_mutable_random_on_entry_functions && is_mutable_random(view, param) {
-        return Err(format!(
-            "Invalid entry point parameter type. Random must be passed by immutable reference. got: \
-             {}",
-            format_signature_token(view, param),
-        ));
-    }
-
-    if is_primitive(view, function_type_args, param)
-        || is_object(view, function_type_args, param)?
-        || is_object_vector(view, function_type_args, param)?
-        || Receiving::is_receiving(view, param)
-    {
-        Ok(())
-    } else {
-        Err(format!(
-            "Invalid entry point parameter type. Expected primitive or object type. Got: {}",
-            format_signature_token(view, param)
         ))
     }
 }

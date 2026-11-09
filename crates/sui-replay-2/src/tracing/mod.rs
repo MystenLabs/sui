@@ -39,7 +39,7 @@ pub fn save_trace_output(
         txn_data: _,
         execution_effects: _,
         expected_effects: _,
-        gas_status: _,
+        gas_report: _,
         object_cache,
         inner_store: tmp_store,
         checkpoint: _,

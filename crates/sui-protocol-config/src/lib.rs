@@ -5001,6 +5001,7 @@ impl ProtocolConfig {
                 }
                 143 => {
                     cfg.execution_version = Some(5);
+                    cfg.package_arena_size_in_bytes = Some(20_000_000);
                 }
                 // Use this template when making changes:
                 //
@@ -5347,6 +5348,20 @@ pub fn check_limit_in_range<T: Into<V>, U: Into<V>, V: PartialOrd + Into<u128>>(
     } else {
         LimitThresholdCrossed::Soft(x.into(), soft_limit.into())
     }
+}
+
+#[macro_export]
+macro_rules! assert_set {
+    ($protocol_config:expr, $($flag:ident),+ $(,)?) => {{
+        let protocol_config = $protocol_config;
+        $(
+            assert!(
+                protocol_config.$flag(),
+                "protocol config flag `{}` must be set",
+                stringify!($flag),
+            );
+        )+
+    }};
 }
 
 #[macro_export]

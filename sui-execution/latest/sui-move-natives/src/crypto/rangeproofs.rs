@@ -10,7 +10,7 @@ use fastcrypto::groups::FromTrustedByteArray;
 use fastcrypto::groups::ristretto255::RistrettoPoint;
 use fastcrypto::pedersen::PedersenCommitment;
 use move_binary_format::errors::PartialVMResult;
-use move_binary_format::partial_vm_error;
+use move_binary_format::{partial_vm_error, safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::execution::Type;
 use move_vm_runtime::execution::values::{Value, VectorRef};
@@ -66,8 +66,8 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 4);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 4);
 
     if !is_supported(context)? {
         return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED));

@@ -6,15 +6,11 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use crate::error::UserInputResult;
     use crate::gas::{GasCostSummary, GasUsageReport, SuiGasStatusAPI};
     pub use crate::gas_model::gas_common::PerObjectStorage;
-    use crate::gas_model::gas_common::{
-        StorageGas, check_gas_data, check_gas_objects, half_digits_rounding, sender_rebate,
-    };
-    use crate::gas_model::gas_predicates::{cost_table_for_version, txn_base_cost_as_multiplier};
+    use crate::gas_model::gas_common::{StorageGas, half_digits_rounding, sender_rebate};
+    use crate::gas_model::gas_predicates::cost_table_for_version;
     use crate::gas_model::units_types::CostTable;
-    use crate::transaction::ObjectReadResult;
     use crate::{
         ObjectID,
         error::ExecutionError,
@@ -75,11 +71,6 @@ mod checked {
 
     /// A list of constant costs of various operations in Sui.
     pub struct SuiCostTable {
-        /// A flat fee charged for every transaction. This is also the minimum amount of
-        /// gas charged for a transaction.
-        pub(crate) min_transaction_cost: u64,
-        /// Maximum allowable budget for a transaction.
-        pub(crate) max_gas_budget: u64,
         /// Computation cost per byte charged for package publish. This cost is primarily
         /// determined by the cost to verify and link a package. Note that this does not
         /// include the cost of writing the package to the store.
@@ -107,17 +98,8 @@ mod checked {
     }
 
     impl SuiCostTable {
-        pub(crate) fn new(c: &ProtocolConfig, gas_price: u64) -> Self {
-            // gas_price here is the Reference Gas Price, however we may decide
-            // to change it to be the price passed in the transaction
-            let min_transaction_cost = if txn_base_cost_as_multiplier(c) {
-                c.base_tx_cost_fixed() * gas_price
-            } else {
-                c.base_tx_cost_fixed()
-            };
+        pub(crate) fn new(c: &ProtocolConfig) -> Self {
             Self {
-                min_transaction_cost,
-                max_gas_budget: c.max_tx_gas(),
                 package_publish_per_byte_cost: c.package_publish_cost_per_byte(),
                 object_read_per_byte_cost: c.obj_access_cost_read_per_byte(),
                 storage_per_byte_cost: c.obj_data_cost_refundable(),
@@ -130,8 +112,6 @@ mod checked {
 
         pub(crate) fn unmetered() -> Self {
             Self {
-                min_transaction_cost: 0,
-                max_gas_budget: u64::MAX,
                 package_publish_per_byte_cost: 0,
                 object_read_per_byte_cost: 0,
                 storage_per_byte_cost: 0,
@@ -230,7 +210,7 @@ mod checked {
             } else {
                 gas_budget
             };
-            let sui_cost_table = SuiCostTable::new(config, gas_price);
+            let sui_cost_table = SuiCostTable::new(config);
             let gas_rounding_mode = if config.gas_rounding_halve_digits() {
                 GasRoundingMode::KeepHalfDigits
             } else if let Some(step) = config.gas_rounding_step_as_option() {
@@ -457,30 +437,6 @@ mod checked {
                 storage_gas_price: self.storage.storage_gas_price,
                 rebate_rate: self.rebate_rate,
             }
-        }
-
-        // Check whether gas arguments are legit:
-        // 1. Gas object has an address owner.
-        // 2. Gas budget is between min and max budget allowed
-        // 3. Gas balance (all gas coins together) is bigger or equal to budget
-        fn check_gas_balance(
-            &self,
-            gas_objs: &[&ObjectReadResult],
-            gas_budget: u64,
-            available_address_balance_gas: u64,
-        ) -> UserInputResult {
-            self.check_gas_objects(gas_objs)?;
-            check_gas_data(
-                gas_objs,
-                gas_budget,
-                available_address_balance_gas,
-                self.cost_table.min_transaction_cost,
-                self.cost_table.max_gas_budget,
-            )
-        }
-
-        fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
-            check_gas_objects(gas_objs)
         }
 
         fn per_object_storage(&self) -> &Vec<(ObjectID, PerObjectStorage)> {
