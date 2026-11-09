@@ -5527,6 +5527,49 @@ mod tests {
             assert!(queue.pending_roots.is_empty());
         }
 
+        // Commits arrive faster than min_checkpoint_interval_ms and carry more than max_tx
+        // transactions per interval, so forced flushes happen on most commits.
+        #[test]
+        fn test_queue_drains_under_sustained_load() {
+            let max_tx = 10;
+            let min_interval = 200;
+            let commit_spacing_ms = 100;
+            let txs_per_commit = 8;
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, max_tx, min_interval);
+            let versions = default_versions();
+
+            let mut height = 0;
+            let mut undrained_run = 0;
+            for commit in 1..=60u32 {
+                let ts = 1000 + u64::from(commit) * commit_spacing_ms;
+                // Mirrors create_pending_checkpoints: chunk by max_tx, push, then a time flush.
+                let mut remaining = txs_per_commit;
+                while remaining > 0 {
+                    let n = remaining.min(max_tx);
+                    remaining -= n;
+                    height += 1;
+                    queue.push_chunk(
+                        make_chunk(n, height),
+                        &versions,
+                        ts,
+                        make_commit_ref(commit),
+                        Digest::default(),
+                    );
+                }
+                queue.flush(ts, false);
+
+                if queue.record_commit_end(ts) {
+                    undrained_run = 0;
+                } else {
+                    undrained_run += 1;
+                }
+                assert!(
+                    undrained_run <= 3,
+                    "queue has not drained for {undrained_run} commits (commit {commit})"
+                );
+            }
+        }
+
         fn push_one(queue: &mut CheckpointQueue, height: u64, ts: u64) {
             queue.push_chunk(
                 make_chunk(1, height),
