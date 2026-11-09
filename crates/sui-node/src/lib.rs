@@ -169,7 +169,8 @@ struct ValidatorServices {
     admission_queue: Option<AdmissionQueueContext>,
     overload_monitor_handle: Option<JoinHandle<()>>,
     /// The registry holding the metrics of these services. It is removed on shutdown so that
-    /// the services can register their metrics again if the node rejoins the committee.
+    /// the services can register their metrics again if the node rejoins the committee. The
+    /// metrics therefore restart from zero after a rejoin.
     registry_id: RegistryID,
 }
 
@@ -182,7 +183,6 @@ impl ValidatorServices {
         if let Some(handle) = self.overload_monitor_handle {
             handle.abort();
         }
-        drop(self.admission_queue);
         registry_service.remove(self.registry_id);
     }
 }
@@ -1899,7 +1899,7 @@ impl SuiNode {
 
     #[cfg(feature = "testing")]
     pub fn prometheus_metrics_for_testing(&self) -> Vec<prometheus::proto::MetricFamily> {
-        self.registry_service.default_registry().gather()
+        self.registry_service.gather_all()
     }
 
     pub fn node_role(&self) -> NodeRole {

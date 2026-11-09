@@ -446,7 +446,9 @@ async fn test_consensus_observer_joins_committee() {
             address: None,
         }])
         .with_num_validators(4)
-        .with_observer_fullnode()
+        .with_validator_observer_config(Arc::new(|idx| {
+            (idx == 0).then(ObserverParameters::default)
+        }))
         .with_validator_candidates([address])
         .build()
         .await;
@@ -485,7 +487,9 @@ async fn test_validator_leaves_and_rejoins_committee() {
             address: None,
         }])
         .with_num_validators(4)
-        .with_observer_fullnode()
+        .with_validator_observer_config(Arc::new(|idx| {
+            (idx == 0).then(ObserverParameters::default)
+        }))
         .with_validator_candidates([address])
         .build()
         .await;
@@ -573,7 +577,7 @@ fn total_stake(test_cluster: &TestCluster) -> u64 {
 }
 
 /// Builds the config of a validator node that subscribes to the observer server of the first
-/// validator, which `with_observer_fullnode` enables, so that the node runs consensus as an
+/// validator, which the cluster must have enabled, so that the node runs consensus as an
 /// observer whenever it is not in the committee.
 fn consensus_observer_validator_config(
     test_cluster: &TestCluster,
@@ -595,8 +599,8 @@ fn consensus_observer_validator_config(
 
 /// Submits a transaction only to the validator behind `client` and waits until the cluster's
 /// fullnode executes it, which proves that the validator sequenced it through consensus.
-/// Submission is retried because the epoch store switches to the new epoch before
-/// reconfiguration starts the validator gRPC server.
+/// Submission is retried on transport errors because the epoch store switches to the new epoch
+/// before reconfiguration starts the validator gRPC server. Any other error fails the test.
 async fn submit_transaction_to_validator(
     test_cluster: &TestCluster,
     client: &NetworkAuthorityClient,
@@ -625,13 +629,14 @@ async fn submit_transaction_to_validator(
             .await
         {
             Ok(response) => break response,
-            Err(e) => {
+            Err(e) if matches!(e.as_inner(), SuiErrorKind::RpcError(..)) => {
                 assert!(
                     Instant::now() < deadline,
-                    "validator did not accept the transaction: {e:?}"
+                    "validator did not accept connections: {e:?}"
                 );
                 sleep(Duration::from_secs(1)).await;
             }
+            Err(e) => panic!("validator rejected the transaction: {e:?}"),
         }
     };
     assert!(
