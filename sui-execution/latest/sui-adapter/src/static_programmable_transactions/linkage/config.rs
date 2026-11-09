@@ -83,7 +83,7 @@ impl ResolutionConfig {
     >(
         &self,
         store: &S,
-        meter: &mut LinkageMeter<'_, E>,
+        meter: &mut dyn LinkageMeter<E>,
     ) -> Result<ResolutionTable, E> {
         let mut resolution_table = ResolutionTable::empty(self.clone());
         if self.0.linkage_config.always_include_system_packages {

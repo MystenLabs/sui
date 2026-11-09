@@ -8,13 +8,14 @@ use crate::{
         transaction_package_store::TransactionPackageStore,
     },
     execution_mode::{DevInspect, ExecutionMode, Genesis, Normal, System},
-    gas_charger::GasCharger,
+    metering::gas_charger::{GasCharger, GasMeter},
     static_programmable_transactions::{
         env::Env,
         linkage::{
             config::{NATIVE_PACKAGE_IDS, ResolutionConfig},
             resolution::{
-                PackageResolution, ResolutionTable, VersionConstraint, add_and_unify, get_package,
+                LinkageMeter, PackageResolution, ResolutionTable, UnmeteredLinkageMeter,
+                VersionConstraint, add_and_unify, get_package,
             },
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
             single_linkage,
@@ -50,7 +51,7 @@ use sui_types::{
     move_package::MovePackage,
     object::Object,
     transaction::{
-        Command, GasData, InputObjects, ProgrammableMoveCall, ProgrammableTransaction,
+        Argument, Command, GasData, InputObjects, ProgrammableMoveCall, ProgrammableTransaction,
         TransactionKind,
     },
 };
@@ -140,12 +141,31 @@ impl Packages {
         )
     }
 
-    fn charger(&self, budget: u64) -> GasCharger {
-        let mut charger = GasCharger::new_unmetered(TransactionDigest::ZERO, &self.config);
+    fn charger(&self, budget: u64) -> GasMeter {
+        let gas_data = GasData {
+            payment: vec![],
+            owner: SuiAddress::ZERO,
+            price: 1,
+            budget,
+        };
+        let transaction_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: vec![],
+            commands: vec![],
+        });
+        let mut charger = GasCharger::new(
+            TransactionDigest::ZERO,
+            &gas_data,
+            &transaction_kind,
+            1,
+            &self.config,
+        );
+        let mut state = self.state();
+        charger.smash_gas(&mut state).unwrap();
+        let mut meter = charger.gas_meter().unwrap();
+        assert!(!meter.is_unmetered());
         // These tests inspect internal units directly, without computation bucketing.
-        charger.move_gas_status_mut().set_metering(true);
-        charger.move_gas_status_mut().gas_left = InternalGas::new(budget);
-        charger
+        meter.move_gas_status_mut().gas_left = InternalGas::new(budget);
+        meter
     }
 }
 
@@ -178,14 +198,14 @@ fn linkage_meter_charges_work_and_skips_deduplicated_expansion() {
     let rate = p.config.translation_per_linkage_entry_charge();
     let mut table = ResolutionTable::empty(p.resolution_config());
     {
-        let mut meter = TranslationMeter::new(&p.config, &mut charger);
-        let mut charge = || meter.charge_num_linkage_entries::<ExecutionError>(1);
+        let meter: &mut dyn LinkageMeter<ExecutionError> =
+            &mut TranslationMeter::new(&p.config, &mut charger);
         // USER's metadata lookup, contribution, self-linkage entry, and dependency are charged once.
         table
-            .add_type_linkages_to_table([USER, USER], &store, &mut charge)
+            .add_type_linkages_to_table([USER, USER], &store, meter)
             .unwrap();
         table
-            .add_type_linkages_to_table([USER], &store, &mut charge)
+            .add_type_linkages_to_table([USER], &store, meter)
             .unwrap();
     }
     assert_eq!(
@@ -193,18 +213,11 @@ fn linkage_meter_charges_work_and_skips_deduplicated_expansion() {
         1000 - 4 * rate
     );
     {
-        let mut meter = TranslationMeter::new(&p.config, &mut charger);
-        let mut charge = || meter.charge_num_linkage_entries::<ExecutionError>(1);
+        let meter: &mut dyn LinkageMeter<ExecutionError> =
+            &mut TranslationMeter::new(&p.config, &mut charger);
         // Repeated direct contributions still perform unification and are charged.
         for _ in 0..2 {
-            add_and_unify(
-                &DEP,
-                &store,
-                &mut table,
-                VersionConstraint::at_least,
-                &mut charge,
-            )
-            .unwrap();
+            add_and_unify(&DEP, &store, &mut table, VersionConstraint::at_least, meter).unwrap();
         }
     }
     assert_eq!(
@@ -223,11 +236,10 @@ fn type_expansion_charges_before_loading_missing_package() {
     let mut charger = p.charger(100);
     let mut table = ResolutionTable::empty(p.resolution_config());
     {
-        let mut meter = TranslationMeter::new(&p.config, &mut charger);
+        let meter: &mut dyn LinkageMeter<ExecutionError> =
+            &mut TranslationMeter::new(&p.config, &mut charger);
         let err = table
-            .add_type_linkages_to_table([ObjectID::from_single_byte(255)], &store, &mut || {
-                meter.charge_num_linkage_entries::<ExecutionError>(1)
-            })
+            .add_type_linkages_to_table([ObjectID::from_single_byte(255)], &store, meter)
             .unwrap_err();
         assert_eq!(
             err.kind(),
@@ -251,11 +263,10 @@ fn native_package_seeding_is_metered() {
     let rate = p.config.translation_per_linkage_entry_charge();
     let mut charger = p.charger(3 * rate);
     let table = {
-        let mut meter = TranslationMeter::new(&p.config, &mut charger);
+        let meter: &mut dyn LinkageMeter<ExecutionError> =
+            &mut TranslationMeter::new(&p.config, &mut charger);
         let table = analyzer
-            .resolution_table_with_native_packages(&store, &mut || {
-                meter.charge_num_linkage_entries::<ExecutionError>(1)
-            })
+            .resolution_table_with_native_packages(&store, meter)
             .unwrap();
         assert_eq!(table.resolution_table.len(), 3);
         assert_eq!(
@@ -267,9 +278,7 @@ fn native_package_seeding_is_metered() {
             sui_types::SUI_FRAMEWORK_PACKAGE_ID
         );
         let err = analyzer
-            .resolution_table_with_native_packages(&store, &mut || {
-                meter.charge_num_linkage_entries::<ExecutionError>(1)
-            })
+            .resolution_table_with_native_packages(&store, meter)
             .unwrap_err();
         assert_eq!(err.kind(), &ExecutionErrorKind::InsufficientGas);
         table
@@ -313,8 +322,10 @@ fn native_package_linkage_invariant_is_mode_dependent() {
     ) -> Result<(), ExecutionError> {
         let store = p.store();
         let analyzer = ResolutionConfig::from_protocol_config::<Mode>(&p.config);
-        let table = analyzer
-            .resolution_table_with_native_packages(&store, &mut || Ok::<_, ExecutionError>(()))?;
+        let table = analyzer.resolution_table_with_native_packages::<ExecutionError, _>(
+            &store,
+            &mut UnmeteredLinkageMeter,
+        )?;
         let mut linkage = ResolvedLinkage::from_resolution_table(table);
         // Construct the VM before corrupting linkage to exercise the invariant, not VM linking.
         let vm = p
@@ -397,33 +408,14 @@ fn linkage_meter_charges_conflicts_and_exhausts_before_processing() {
     let mut charger = p.charger(2 * rate);
     let mut table = ResolutionTable::empty(p.resolution_config());
     {
-        let mut meter = TranslationMeter::new(&p.config, &mut charger);
-        let mut charge = || meter.charge_num_linkage_entries::<ExecutionError>(1);
-        add_and_unify(
-            &DEP,
-            &store,
-            &mut table,
-            VersionConstraint::exact,
-            &mut charge,
-        )
-        .unwrap();
-        let err = add_and_unify(
-            &DEP_V2,
-            &store,
-            &mut table,
-            VersionConstraint::exact,
-            &mut charge,
-        )
-        .unwrap_err();
+        let meter: &mut dyn LinkageMeter<ExecutionError> =
+            &mut TranslationMeter::new(&p.config, &mut charger);
+        add_and_unify(&DEP, &store, &mut table, VersionConstraint::exact, meter).unwrap();
+        let err = add_and_unify(&DEP_V2, &store, &mut table, VersionConstraint::exact, meter)
+            .unwrap_err();
         assert_eq!(err.kind(), &ExecutionErrorKind::InvalidLinkage);
-        let err = add_and_unify(
-            &DEP_V2,
-            &store,
-            &mut table,
-            VersionConstraint::exact,
-            &mut charge,
-        )
-        .unwrap_err();
+        let err = add_and_unify(&DEP_V2, &store, &mut table, VersionConstraint::exact, meter)
+            .unwrap_err();
         assert_eq!(err.kind(), &ExecutionErrorKind::InsufficientGas);
     }
     assert_eq!(u64::from(charger.move_gas_status().gas_left), 0);
@@ -608,7 +600,7 @@ fn transaction_type_limits_bound_recursive_normalization() {
 
 // Prepare a no-init publish against v2 alongside a v1 call and a normalized vector type.
 // Payload/order/publication linkage must be retained, runtime must stay on v1, and normal-mode
-// gas must include native seeding for both contexts plus the six other linkage events.
+// gas must include payload bytes, native seeding for both contexts and six other linkage events.
 #[test]
 fn prepared_ast_retains_publications_without_contributing_to_runtime() {
     let p = Packages::with_native_packages();
@@ -621,6 +613,7 @@ fn prepared_ast_retains_publications_without_contributing_to_runtime() {
     empty_module()
         .serialize_with_version(p.config.move_binary_format_version(), &mut bytes)
         .unwrap();
+    let byte_charge = bytes.len() as u64 * p.config.package_publish_cost_per_byte();
     let prepared = preparation::translate::transaction::<Normal<ExecutionError>>(
         &mut meter,
         &analyzer,
@@ -663,12 +656,212 @@ fn prepared_ast_retains_publications_without_contributing_to_runtime() {
     let base_charges = p.config.translation_per_input_base_charge()
         + 4 * p.config.translation_per_command_base_charge();
     let expected = base_charges
+        + byte_charge
         + (2 * NATIVE_PACKAGE_IDS.len() as u64 + 6)
             * p.config.translation_per_linkage_entry_charge();
     assert_eq!(
         u64::from(charger.move_gas_status().gas_left),
         10000 - expected
     );
+}
+
+// Prepare differently sized no-init payloads before conflicting v1/v2 calls. Both publication
+// commands must pay for their bytes even though preparation fails at the second call.
+#[test]
+fn publication_bytes_are_charged_before_linkage_conflicts() {
+    let p = Packages::with_native_packages();
+    let store = p.store();
+    let config = p.resolution_config();
+    let state = p.state();
+    let budget = 1_000_000;
+    let rate = p.config.package_publish_cost_per_byte();
+    assert!(rate > 0);
+    for upgrade in [false, true] {
+        let usage = [0, 64].map(|padding| {
+            let mut module = basic_test_module();
+            module.function_defs[0].visibility = Visibility::Public;
+            module
+                .identifiers
+                .push(format!("Padding{}", "x".repeat(padding)).parse().unwrap());
+            let mut bytes = vec![];
+            module
+                .serialize_with_version(p.config.move_binary_format_version(), &mut bytes)
+                .unwrap();
+            let size = bytes.len() as u64;
+            let publication = if upgrade {
+                Command::Upgrade(vec![bytes], vec![], DEP, Argument::GasCoin)
+            } else {
+                Command::Publish(vec![bytes], vec![])
+            };
+            let mut charger = p.charger(budget);
+            let mut meter = TranslationMeter::new(&p.config, &mut charger);
+            let err = preparation::translate::transaction::<Normal<ExecutionError>>(
+                &mut meter,
+                &config,
+                &store,
+                &state,
+                &p.config,
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![
+                        publication,
+                        call(vec![]),
+                        Command::move_call(
+                            DEP_V2,
+                            "DUMMY".parse().unwrap(),
+                            "foo".parse().unwrap(),
+                            vec![],
+                            vec![],
+                        ),
+                    ],
+                },
+            )
+            .unwrap_err();
+            assert_eq!(err.kind(), &ExecutionErrorKind::InvalidLinkage);
+            assert_eq!(err.command(), Some(2));
+            (size, budget - u64::from(charger.move_gas_status().gas_left))
+        });
+        let [(small_size, small_gas), (large_size, large_gas)] = usage;
+        assert!(large_size > small_size);
+        assert_eq!(large_gas - small_gas, (large_size - small_size) * rate);
+    }
+}
+
+// Prepare and load no-init publication commands without executing them. Payload bytes must be
+// charged during preparation, exactly once; ticket typing and execution are outside this test.
+#[test]
+fn publication_bytes_are_charged_once_before_loading() {
+    let p = Packages::with_native_packages();
+    let store = p.store();
+    let config = p.resolution_config();
+    let budget = 1_000_000;
+    let mut module = basic_test_module();
+    module.function_defs[0].visibility = Visibility::Public;
+    let mut bytes = vec![];
+    module
+        .serialize_with_version(p.config.move_binary_format_version(), &mut bytes)
+        .unwrap();
+    let byte_charge = bytes.len() as u64 * p.config.package_publish_cost_per_byte();
+    assert!(byte_charge > 0);
+    for upgrade in [false, true] {
+        let mut state = p.state();
+        let mut charger = p.charger(budget);
+        let publication = if upgrade {
+            Command::Upgrade(vec![bytes.clone()], vec![], DEP, Argument::GasCoin)
+        } else {
+            Command::Publish(vec![bytes.clone()], vec![])
+        };
+        let prepared = preparation::translate::transaction::<Normal<ExecutionError>>(
+            &mut TranslationMeter::new(&p.config, &mut charger),
+            &config,
+            &store,
+            &state,
+            &p.config,
+            ProgrammableTransaction {
+                inputs: vec![],
+                commands: vec![publication],
+            },
+        )
+        .unwrap();
+        let expected = p.config.translation_per_input_base_charge()
+            + (if upgrade { 3 } else { 1 }) * p.config.translation_per_command_base_charge()
+            + 2 * NATIVE_PACKAGE_IDS.len() as u64 * p.config.translation_per_linkage_entry_charge()
+            + byte_charge;
+        assert_eq!(
+            u64::from(charger.move_gas_status().gas_left),
+            budget - expected
+        );
+        let linkage = prepared.unified_linkage.clone();
+        let vm = p
+            .runtime
+            .make_vm(
+                &store.package_store,
+                linkage.linkage_context::<ExecutionError>().unwrap(),
+            )
+            .unwrap();
+        let env = Env::<Normal<ExecutionError>>::new(
+            &p.config, &p.runtime, &mut state, &store, &config, &vm, &linkage,
+        );
+        let tx_context = TxContext::new_from_components(
+            &SuiAddress::ZERO,
+            &TransactionDigest::ZERO,
+            &0,
+            0,
+            1,
+            1,
+            budget,
+            None,
+            &p.config,
+        );
+        loading::translate::transaction::<Normal<ExecutionError>>(
+            &mut TranslationMeter::new(&p.config, &mut charger),
+            &env,
+            &tx_context,
+            None,
+            None,
+            prepared,
+        )
+        .unwrap();
+        assert_eq!(
+            u64::from(charger.move_gas_status().gas_left),
+            budget - expected
+        );
+    }
+}
+
+// Use malformed payloads with enough gas for linkage but not their byte charge. OOG must win
+// before deserialization; a funded control must pay for the bytes and report the malformed module.
+#[test]
+fn publication_bytes_are_charged_before_deserialization() {
+    let p = Packages::with_native_packages();
+    let store = p.store();
+    let config = p.resolution_config();
+    let state = p.state();
+    let bytes = vec![0; 64];
+    let byte_charge = bytes.len() as u64 * p.config.package_publish_cost_per_byte();
+    assert!(byte_charge > 0);
+    for upgrade in [false, true] {
+        let before_bytes = p.config.translation_per_input_base_charge()
+            + (if upgrade { 3 } else { 1 }) * p.config.translation_per_command_base_charge()
+            + 2 * NATIVE_PACKAGE_IDS.len() as u64 * p.config.translation_per_linkage_entry_charge();
+        for (budget, expected_error) in [
+            (
+                before_bytes + byte_charge - 1,
+                ExecutionErrorKind::InsufficientGas,
+            ),
+            (
+                1_000_000,
+                ExecutionErrorKind::VMVerificationOrDeserializationError,
+            ),
+        ] {
+            let mut charger = p.charger(budget);
+            let publication = if upgrade {
+                Command::Upgrade(vec![bytes.clone()], vec![], DEP, Argument::GasCoin)
+            } else {
+                Command::Publish(vec![bytes.clone()], vec![])
+            };
+            let err = preparation::translate::transaction::<Normal<ExecutionError>>(
+                &mut TranslationMeter::new(&p.config, &mut charger),
+                &config,
+                &store,
+                &state,
+                &p.config,
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![publication],
+                },
+            )
+            .unwrap_err();
+            assert_eq!(err.kind(), &expected_error);
+            assert_eq!(err.command(), Some(0));
+            let expected_left = if expected_error == ExecutionErrorKind::InsufficientGas {
+                0
+            } else {
+                budget - before_bytes - byte_charge
+            };
+            assert_eq!(u64::from(charger.move_gas_status().gas_left), expected_left);
+        }
+    }
 }
 
 // Analyze a new-module initializer with the upgraded package absent, present and conflicting,
@@ -682,12 +875,12 @@ fn upgrade_membership_and_equality_checks_are_metered() {
     module.identifiers[1] = "init".parse().unwrap();
     let payload = PackagePayload::Deserialized(DeserializedPackage::new(vec![module], 0, [0; 32]));
     let mut publication = ResolutionTable::empty(p.resolution_config());
-    add_and_unify(
+    add_and_unify::<ExecutionError, _>(
         &DEP_V2,
         &store,
         &mut publication,
         VersionConstraint::exact,
-        &mut || Ok::<_, ExecutionError>(()),
+        &mut UnmeteredLinkageMeter,
     )
     .unwrap();
     let publication = ResolvedLinkage::from_resolution_table(publication);
@@ -698,20 +891,13 @@ fn upgrade_membership_and_equality_checks_are_metered() {
         (true, false, 0),
     ] {
         let mut table = ResolutionTable::empty(p.resolution_config());
-        let mut noop = || Ok::<_, ExecutionError>(());
+        let noop: &mut dyn LinkageMeter<ExecutionError> = &mut UnmeteredLinkageMeter;
         if participates {
             table
-                .add_type_linkages_to_table::<_, ExecutionError, _>([USER], &store, &mut noop)
+                .add_type_linkages_to_table::<_, ExecutionError, _>([USER], &store, noop)
                 .unwrap();
         } else {
-            add_and_unify(
-                &DEP,
-                &store,
-                &mut table,
-                VersionConstraint::at_least,
-                &mut noop,
-            )
-            .unwrap();
+            add_and_unify(&DEP, &store, &mut table, VersionConstraint::at_least, noop).unwrap();
         }
         if selects_v2 {
             add_and_unify(
@@ -719,21 +905,21 @@ fn upgrade_membership_and_equality_checks_are_metered() {
                 &store,
                 &mut table,
                 VersionConstraint::at_least,
-                &mut noop,
+                noop,
             )
             .unwrap();
         }
         let mut charger = p.charger(budget);
         let result = {
             let mut meter = TranslationMeter::new(&p.config, &mut charger);
-            single_linkage::analyze_upgrade_command(
+            single_linkage::analyze_upgrade_command::<ExecutionError>(
                 &payload,
                 &USER,
                 &publication,
                 &mut table,
                 &store,
                 &p.config,
-                &mut || meter.charge_num_linkage_entries::<ExecutionError>(1),
+                &mut meter,
             )
         };
         assert_eq!(
@@ -859,12 +1045,12 @@ fn runtime_invariants_reject_missing_mismatched_or_late_bound_versions() {
     let store = p.store();
     for corruption in 0..3 {
         let mut table = ResolutionTable::empty(p.resolution_config());
-        add_and_unify(
+        add_and_unify::<ExecutionError, _>(
             &DEP,
             &store,
             &mut table,
             VersionConstraint::exact,
-            &mut || Ok::<_, ExecutionError>(()),
+            &mut UnmeteredLinkageMeter,
         )
         .unwrap();
         let mut linkage = ResolvedLinkage::from_resolution_table(table);

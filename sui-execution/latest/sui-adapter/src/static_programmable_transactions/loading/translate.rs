@@ -40,7 +40,7 @@ pub(crate) fn transaction<Mode: ExecutionMode>(
     assert_invariant!(
         Rc::ptr_eq(&unified_linkage.0, &env.unified_linkage.0),
         "prepared transaction and environment must share linkage"
-        );
+    );
     let withdrawal_compatibility_inputs =
         withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; inputs.len()]);
     assert_invariant!(

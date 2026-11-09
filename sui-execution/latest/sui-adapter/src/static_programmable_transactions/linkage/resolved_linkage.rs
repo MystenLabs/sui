@@ -5,7 +5,9 @@ use crate::{
     data_store::VerifiedPackageStore,
     static_programmable_transactions::linkage::{
         config::ResolutionConfig,
-        resolution::{PackageResolution, ResolutionTable, VersionConstraint},
+        resolution::{
+            PackageResolution, ResolutionTable, UnmeteredLinkageMeter, VersionConstraint,
+        },
     },
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
@@ -36,7 +38,11 @@ impl ExecutableLinkage {
         I::Item: Borrow<ObjectID>,
     {
         let mut resolution_table = ResolutionTable::empty(config);
-        resolution_table.add_type_linkages_to_table(ids, store, &mut || Ok(()))?;
+        resolution_table.add_type_linkages_to_table::<_, E, _>(
+            ids,
+            store,
+            &mut UnmeteredLinkageMeter,
+        )?;
         Ok(Self::new(ResolvedLinkage::from_resolution_table(
             resolution_table,
         )))

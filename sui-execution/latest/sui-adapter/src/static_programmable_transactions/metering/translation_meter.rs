@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metering::gas_charger::GasMeter;
-use crate::static_programmable_transactions::loading::ast::{DeserializedPackage, PackagePayload};
+use crate::{
+    metering::gas_charger::GasMeter,
+    static_programmable_transactions::linkage::resolution::LinkageMeter,
+};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::ExecutionErrorTrait;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -111,10 +113,9 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
 
     pub fn charge_package_load<E: ExecutionErrorTrait>(
         &mut self,
-        payload: &PackagePayload,
+        total_bytes: usize,
     ) -> Result<(), E> {
-        let PackagePayload::Deserialized(DeserializedPackage { total_bytes, .. }) = payload;
-        self.gas_meter.charge_publish_package(*total_bytes)?;
+        self.gas_meter.charge_publish_package(total_bytes)?;
         Ok(())
     }
 
@@ -158,5 +159,15 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         E: ExecutionErrorTrait,
     {
         E::new_with_source(ExecutionErrorKind::InsufficientGas, e)
+    }
+}
+
+impl<E: ExecutionErrorTrait> LinkageMeter<E> for TranslationMeter<'_, '_> {
+    fn charge_linkage(&mut self) -> Result<(), E> {
+        self.charge_num_linkage_entries::<E>(1)
+    }
+
+    fn charge_package_load(&mut self, total_bytes: usize) -> Result<(), E> {
+        TranslationMeter::charge_package_load::<E>(self, total_bytes)
     }
 }

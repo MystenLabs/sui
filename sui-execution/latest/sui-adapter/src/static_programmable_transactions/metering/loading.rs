@@ -22,19 +22,6 @@ pub fn meter<E: ExecutionErrorTrait>(
         meter.charge_num_type_nodes(ty.node_count())?;
     }
 
-    for cmd in &transaction.commands {
-        match cmd {
-            L::Command::Publish(payload, _, _) | L::Command::Upgrade(payload, _, _, _, _) => {
-                meter.charge_package_load(payload)?;
-            }
-            L::Command::MoveCall(_)
-            | L::Command::MakeMoveVec(_, _)
-            | L::Command::TransferObjects(_, _)
-            | L::Command::SplitCoins(_, _)
-            | L::Command::MergeCoins(_, _) => (),
-        }
-    }
-
     Ok(())
 }
 

@@ -53,13 +53,14 @@ pub fn transaction<Mode: ExecutionMode>(
     }
 
     let P::ProgrammableTransaction { inputs, commands } = txn;
-    let mut charge = || meter.charge_num_linkage_entries::<Mode::Error>(1);
-    let mut table = config.resolution_table_with_native_packages(store, &mut charge)?;
+    // Fix Mode::Error once so subsequent linkage calls can infer their error type.
+    let meter: &mut dyn LinkageMeter<Mode::Error> = meter;
+    let mut table = config.resolution_table_with_native_packages(store, meter)?;
 
     // First prepare inputs and fold their type constraints, even for inputs no command uses.
     let prepared_inputs = inputs
         .into_iter()
-        .map(|arg| call_arg(arg, &mut table, store, state, &mut charge))
+        .map(|arg| call_arg(arg, &mut table, store, state, meter))
         .collect::<Result<Vec<_>, Mode::Error>>()?;
 
     // Second prepare commands and fold ordinary contributions in command order. Upgrade-init
@@ -68,9 +69,9 @@ pub fn transaction<Mode: ExecutionMode>(
         .into_iter()
         .enumerate()
         .map(|(i, cmd)| {
-            let cmd = command::<Mode::Error>(cmd, config, store, protocol_config, &mut charge)
+            let cmd = command::<Mode::Error>(cmd, config, store, protocol_config, meter)
                 .map_err(|e| e.with_command_index(i))?;
-            single_linkage::analyze_command(&cmd, &mut table, store, &mut charge)
+            single_linkage::analyze_command(&cmd, &mut table, store, meter)
                 .map_err(|e| e.with_command_index(i))?;
             Ok(cmd)
         })
@@ -87,7 +88,7 @@ pub fn transaction<Mode: ExecutionMode>(
                 &mut table,
                 store,
                 protocol_config,
-                &mut charge,
+                meter,
             )
             .map_err(|e| e.with_command_index(i))?;
         }
@@ -115,7 +116,7 @@ fn call_arg<E: ExecutionErrorTrait>(
     table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
     state: &dyn ExecutionState,
-    meter: &mut LinkageMeter<'_, E>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<CallArg, E> {
     match &arg {
         CallArg::Pure(_) | CallArg::Object(ObjectArg::Receiving(_)) => (),
@@ -148,7 +149,7 @@ fn command<E: ExecutionErrorTrait>(
     config: &ResolutionConfig,
     store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
-    meter: &mut LinkageMeter<'_, E>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<Command, E> {
     Ok(match cmd {
         P::Command::MoveCall(call) => {
@@ -203,12 +204,12 @@ fn command<E: ExecutionErrorTrait>(
         P::Command::MergeCoins(coin, coins) => Command::MergeCoins(coin, coins),
         P::Command::Publish(bytes, deps) => {
             let linkage = publication_linkage(config, &deps, store, meter)?;
-            let payload = deserialize_package(&bytes, &deps, store, protocol_config)?;
+            let payload = deserialize_package(&bytes, &deps, store, protocol_config, meter)?;
             Command::Publish(payload, deps, linkage)
         }
         P::Command::Upgrade(bytes, deps, current, ticket) => {
             let linkage = publication_linkage(config, &deps, store, meter)?;
-            let payload = deserialize_package(&bytes, &deps, store, protocol_config)?;
+            let payload = deserialize_package(&bytes, &deps, store, protocol_config, meter)?;
             Command::Upgrade(payload, deps, current, ticket, linkage)
         }
     })
@@ -218,7 +219,7 @@ fn publication_linkage<E: ExecutionErrorTrait>(
     config: &ResolutionConfig,
     deps: &[ObjectID],
     store: &VerifiedPackageStore<'_>,
-    meter: &mut LinkageMeter<'_, E>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<ResolvedLinkage, E> {
     let mut table = config.resolution_table_with_native_packages(store, meter)?;
     for id in deps {
@@ -305,6 +306,7 @@ fn deserialize_package<E: ExecutionErrorTrait>(
     dep_ids: &[ObjectID],
     store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<PackagePayload, E> {
     assert_invariant!(
         !module_bytes.is_empty(),
@@ -312,6 +314,7 @@ fn deserialize_package<E: ExecutionErrorTrait>(
     );
 
     let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
+    meter.charge_package_load(total_bytes)?;
 
     let binary_config = protocol_config.binary_config(None);
     let deserialized_modules = module_bytes

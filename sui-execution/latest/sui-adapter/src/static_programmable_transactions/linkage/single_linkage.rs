@@ -90,7 +90,7 @@ pub(crate) fn analyze_command<E: ExecutionErrorTrait>(
     command: &Command,
     resolution_table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
-    meter: &mut LinkageMeter<'_, E>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<(), E> {
     match command {
         Command::MoveCall(call) => {
@@ -148,7 +148,7 @@ pub(crate) fn analyze_upgrade_command<E: ExecutionErrorTrait>(
     resolution_table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
-    meter: &mut LinkageMeter<'_, E>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<(), E> {
     let current_pkg = get_package(current_package_id, store)?;
 
@@ -257,7 +257,7 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     resolved_linkage: &ResolvedLinkage,
     store: &VerifiedPackageStore<'_>,
     _protocol_config: &ProtocolConfig,
-    meter: &mut LinkageMeter<'_, E>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<(), E> {
     let current_pkg = get_package(current_package_id, store)?;
     let pkg_original_id: ObjectID = current_pkg.original_id().into();
@@ -283,7 +283,7 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     // Case 2: The upgraded package already participates. Each dependency must either be absent
     // or already select the declared version; init cannot replace an existing version selection.
     for (original_id, version_id) in &resolved_linkage.linkage {
-        meter()?;
+        meter.charge_linkage()?;
         match resolution_table.resolution_table.get(original_id) {
             None => {
                 // Case 2a: The dependency is absent, so introduce its declared Exact constraint.
@@ -331,7 +331,7 @@ pub(crate) fn add_type_packages<'a, E: ExecutionErrorTrait>(
     resolution_table: &mut ResolutionTable,
     types: impl IntoIterator<Item = &'a TypeTag>,
     store: &VerifiedPackageStore<'_>,
-    meter: &mut LinkageMeter<'_, E>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<(), E> {
     resolution_table.add_type_linkages_to_table(
         types
