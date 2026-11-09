@@ -5001,6 +5001,7 @@ impl ProtocolConfig {
                 }
                 143 => {
                     cfg.execution_version = Some(5);
+                    cfg.package_arena_size_in_bytes = Some(20_000_000);
                 }
                 // Use this template when making changes:
                 //
