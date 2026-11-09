@@ -2237,22 +2237,22 @@ impl SuiNode {
                 if new_role.runs_consensus() {
                     // A node that ran consensus as an observer has none of the validator
                     // services, so they are built when it joins the committee.
-                    let joined_committee = new_role.is_validator() && validator_services.is_none();
-                    let validator_services = if joined_committee {
-                        info!("Observer joined the committee, building validator services");
-                        Some(
-                            Self::build_validator_services(
-                                &self.config,
-                                &self.state,
-                                &consensus_adapter,
-                                &new_epoch_store,
-                                &self.registry_service,
-                                &transaction_pool_context,
+                    let validator_services = match validator_services {
+                        None if new_role.is_validator() => {
+                            info!("Observer joined the committee, building validator services");
+                            Some(
+                                Self::build_validator_services(
+                                    &self.config,
+                                    &self.state,
+                                    &consensus_adapter,
+                                    &new_epoch_store,
+                                    &self.registry_service,
+                                    &transaction_pool_context,
+                                )
+                                .await?,
                             )
-                            .await?,
-                        )
-                    } else {
-                        validator_services
+                        }
+                        other => other,
                     };
 
                     info!("Restarting consensus as {new_role}");
@@ -2277,7 +2277,7 @@ impl SuiNode {
                         new_role,
                     )
                     .await?;
-                    if joined_committee {
+                    if new_role.is_validator() {
                         Self::start_validator_services(&mut components, &self.endpoint_manager)
                             .await;
                     }
