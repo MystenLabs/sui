@@ -8,10 +8,13 @@
 //!
 //! Requires `gcloud`, `cbt`, and the BigTable emulator on PATH.
 
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -23,6 +26,12 @@ use tokio::process::Command as TokioCommand;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 pub const INSTANCE_ID: &str = "bigtable_test_instance";
+
+const CBTEMULATOR: &str = "platform/bigtable-emulator/cbtemulator";
+
+/// Without `-creds`, `cbt` starts `gcloud` to look up credentials. The emulator does not check
+/// credentials, so an empty credentials file avoids that cost.
+const CBT_EMULATOR_ARGS: [&str; 2] = ["-creds", "/dev/null"];
 
 /// New tables must be added here when introduced. The indexer will fail to write to missing
 /// tables, so test failures will signal when this list needs updating.
@@ -65,7 +74,27 @@ impl BigTableEmulator {
             .context("Failed to spawn BigTable emulator")?;
 
         let host = format!("localhost:{port}");
-        Ok(Self { child, host })
+        let mut emulator = Self { child, host };
+        emulator.wait_until_listening(port)?;
+        Ok(emulator)
+    }
+
+    /// The emulator accepts requests only after it binds its port, so callers that send requests
+    /// right after `start` would otherwise get connection errors.
+    fn wait_until_listening(&mut self, port: u16) -> Result<()> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if TcpStream::connect(("localhost", port)).is_ok() {
+                return Ok(());
+            }
+            if let Some(status) = self.child.try_wait()? {
+                bail!("BigTable emulator exited before listening: {status}");
+            }
+            if Instant::now() > deadline {
+                bail!("BigTable emulator did not listen on port {port} within 30 seconds");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     pub fn host(&self) -> &str {
@@ -94,6 +123,28 @@ pub(crate) fn get_available_port() -> u16 {
 /// Resolve the path to `cbtemulator` relative to the gcloud SDK root.
 /// Works regardless of whether gcloud was installed via apt, brew, or the standalone installer.
 pub fn cbtemulator_path() -> PathBuf {
+    let sdk_root = sdk_root_from_path().unwrap_or_else(sdk_root_from_gcloud);
+    let path = sdk_root.join(CBTEMULATOR);
+    assert!(
+        path.exists(),
+        "cbtemulator not found at {path:?} — run: gcloud components install bigtable"
+    );
+    path
+}
+
+/// The SDK root is the parent of the `bin` directory that holds the real `gcloud` executable.
+/// Finding it this way avoids starting `gcloud`, a Python program that takes a noticeable
+/// fraction of a second of CPU.
+fn sdk_root_from_path() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    let gcloud = std::env::split_paths(&path)
+        .map(|dir| dir.join("gcloud"))
+        .find(|candidate| candidate.is_file())?;
+    let sdk_root = gcloud.canonicalize().ok()?.parent()?.parent()?.to_owned();
+    sdk_root.join(CBTEMULATOR).exists().then_some(sdk_root)
+}
+
+fn sdk_root_from_gcloud() -> PathBuf {
     let output = Command::new("gcloud")
         .args(["info", "--format=value(installation.sdk_root)"])
         .output()
@@ -104,13 +155,7 @@ pub fn cbtemulator_path() -> PathBuf {
         .expect("non-utf8 gcloud sdk root")
         .trim()
         .to_string();
-
-    let path = PathBuf::from(sdk_root).join("platform/bigtable-emulator/cbtemulator");
-    assert!(
-        path.exists(),
-        "cbtemulator not found at {path:?} — run: gcloud components install bigtable"
-    );
-    path
+    PathBuf::from(sdk_root)
 }
 
 pub fn require_bigtable_emulator() {
@@ -129,6 +174,7 @@ pub async fn create_tables(host: &str, instance_id: &str) -> Result<()> {
         let table = *table;
         async move {
             let output = TokioCommand::new("cbt")
+                .args(CBT_EMULATOR_ARGS)
                 .args(["-instance", &instance_id, "-project", "emulator"])
                 .arg("createtable")
                 .arg(table)
@@ -144,6 +190,7 @@ pub async fn create_tables(host: &str, instance_id: &str) -> Result<()> {
             }
 
             let output = TokioCommand::new("cbt")
+                .args(CBT_EMULATOR_ARGS)
                 .args(["-instance", &instance_id, "-project", "emulator"])
                 .args(["createfamily", table, "sui"])
                 .env("BIGTABLE_EMULATOR_HOST", &host)
