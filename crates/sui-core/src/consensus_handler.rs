@@ -528,6 +528,19 @@ pub(crate) struct CheckpointQueue {
     max_tx: usize,
     min_checkpoint_interval_ms: u64,
     execution_scheduler_sender: ExecutionSchedulerSender,
+    undrained_run: Option<UndrainedRun>,
+}
+
+// The consensus output quarantine persists commit outputs only up to the last commit that
+// ended with an empty queue. A long run of commits that leave roots queued keeps every
+// output in memory and lengthens the replay after a restart.
+const MAX_UNDRAINED_COMMITS: u64 = 10;
+const MAX_UNDRAINED_MS: CheckpointTimestamp = 2_000;
+
+struct UndrainedRun {
+    start_timestamp: CheckpointTimestamp,
+    commits: u64,
+    reported: bool,
 }
 
 impl CheckpointQueue {
@@ -548,6 +561,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             execution_scheduler_sender,
+            undrained_run: None,
         }
     }
 
@@ -569,6 +583,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
+            undrained_run: None,
         }
     }
 
@@ -590,6 +605,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
+            undrained_run: None,
         }
     }
 
@@ -599,6 +615,35 @@ impl CheckpointQueue {
 
     pub(crate) fn is_empty(&self) -> bool {
         self.pending_roots.is_empty()
+    }
+
+    /// Called once at the end of each commit. Returns whether the queue is drained.
+    /// The commit-count threshold keeps a single commit after a consensus stall, whose
+    /// timestamp jumps ahead, from tripping the timestamp threshold.
+    pub(crate) fn record_commit_end(&mut self, commit_timestamp: CheckpointTimestamp) -> bool {
+        if self.pending_roots.is_empty() {
+            self.undrained_run = None;
+            return true;
+        }
+        let run = self.undrained_run.get_or_insert(UndrainedRun {
+            start_timestamp: commit_timestamp,
+            commits: 0,
+            reported: false,
+        });
+        run.commits += 1;
+        let span_ms = commit_timestamp.saturating_sub(run.start_timestamp);
+        if !run.reported && run.commits > MAX_UNDRAINED_COMMITS && span_ms > MAX_UNDRAINED_MS {
+            run.reported = true;
+            debug_fatal!(
+                "checkpoint queue has not drained for {} commits ({} ms of commit time); \
+                 consensus outputs cannot be persisted (max_tx={}, pending_tx_count={})",
+                run.commits,
+                span_ms,
+                self.max_tx,
+                self.pending_tx_count
+            );
+        }
+        false
     }
 
     fn next_height(&mut self) -> u64 {
@@ -1797,7 +1842,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             last.details.last_of_epoch = true;
         }
 
-        let queue_drained = checkpoint_queue.is_empty();
+        let queue_drained = checkpoint_queue.record_commit_end(commit_info.timestamp);
         drop(checkpoint_queue);
 
         for pending_checkpoint in pending_checkpoints {
@@ -5480,6 +5525,38 @@ mod tests {
             let pending = queue.flush(1000 + min_interval, false);
             assert!(pending.is_some());
             assert!(queue.pending_roots.is_empty());
+        }
+
+        fn push_one(queue: &mut CheckpointQueue, height: u64, ts: u64) {
+            queue.push_chunk(
+                make_chunk(1, height),
+                &default_versions(),
+                ts,
+                make_commit_ref(height as u32),
+                Digest::default(),
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "checkpoint queue has not drained")]
+        fn test_undrained_run_reported() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 200);
+            for i in 1..=MAX_UNDRAINED_COMMITS + 1 {
+                let ts = i * (MAX_UNDRAINED_MS / MAX_UNDRAINED_COMMITS + 1);
+                push_one(&mut queue, i, ts);
+                assert!(!queue.record_commit_end(ts));
+            }
+        }
+
+        #[test]
+        fn test_undrained_run_ignores_consensus_stall() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 200);
+            push_one(&mut queue, 1, 1000);
+            assert!(!queue.record_commit_end(1000));
+            push_one(&mut queue, 2, 1000 + 10 * MAX_UNDRAINED_MS);
+            assert!(!queue.record_commit_end(1000 + 10 * MAX_UNDRAINED_MS));
+            queue.flush(u64::MAX, true);
+            assert!(queue.record_commit_end(1000 + 10 * MAX_UNDRAINED_MS));
         }
 
         #[test]
