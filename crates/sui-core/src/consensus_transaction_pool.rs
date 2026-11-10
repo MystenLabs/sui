@@ -147,10 +147,6 @@ impl PendingAck {
     fn is_abandoned_system(&self) -> bool {
         matches!(&self.ack, Some(EntryAck::SystemOrPing(sender)) if sender.is_closed())
     }
-
-    fn is_abandoned_user(&self) -> bool {
-        matches!(&self.ack, Some(EntryAck::User(sender)) if sender.is_closed())
-    }
 }
 
 impl Drop for PendingAck {
@@ -822,20 +818,29 @@ impl ConsensusTransactionPool {
         }
     }
 
-    /// Resolves a user entry the sweep removed. An entry already committed elsewhere is
-    /// reported as processed rather than expired, so the submitter does not resubmit a
-    /// final transaction.
+    /// Resolves a user entry the sweep removed. An entry already committed elsewhere, or
+    /// one whose owned inputs were consumed, gets its final outcome rather than a retriable
+    /// overload error, so the submitter does not resubmit a transaction that cannot land.
     fn resolve_swept_user_entry(&self, mut entry: PoolEntry) {
         self.decrement_lane_metrics("user", &entry);
         if let Some(method) = all_processed(&mut entry.processed) {
             self.resolve_already_processed(entry, "sweep", method);
-        } else if entry.ack.is_abandoned_user() {
-            self.drop_abandoned_user_entry(entry);
+        } else if let Err(error) = self
+            .cache_writer
+            .validate_owned_object_versions(&entry.owned_object_refs)
+        {
+            self.metrics
+                .pool_rejected_at_proposal
+                .with_label_values(&[error.as_inner().to_variant_name()])
+                .inc();
+            entry.ack.resolve_error(error);
         } else {
             self.metrics.expired.inc();
+            // Longer than the recent-submission dedup window, so a retry that honours the
+            // hint is not rejected as already submitted.
             entry.ack.resolve_error(
                 SuiErrorKind::ValidatorOverloadedRetryAfter {
-                    retry_after_secs: 1,
+                    retry_after_secs: 2,
                 }
                 .into(),
             );
@@ -852,16 +857,6 @@ impl ConsensusTransactionPool {
             method,
         );
         entry.ack.resolve_error(error);
-    }
-
-    fn drop_abandoned_user_entry(&self, entry: PoolEntry) {
-        self.metrics
-            .pool_abandoned
-            .with_label_values(&["user"])
-            .inc();
-        entry
-            .ack
-            .drop_deliberately("submitter stopped waiting before proposal");
     }
 
     fn decrement_lane_metrics(&self, lane: &str, entry: &PoolEntry) {
@@ -1196,12 +1191,9 @@ impl TransactionPool for ConsensusTransactionPool {
         // drained this round. A saturated system lane leaves limit_reached non-empty and
         // skips the drain below, but that overload is exactly when aged entries must still
         // be shed, so the sweep is not gated on it.
-        if let UserLane::Open(user) = &mut pool.user {
-            swept_user = user.pop_front_while(|entry| {
-                entry.ack.is_abandoned_user()
-                    || max_queue_age
-                        .is_some_and(|ttl| now.saturating_duration_since(entry.ack.created) >= ttl)
-            });
+        if let (Some(ttl), UserLane::Open(user)) = (max_queue_age, &mut pool.user) {
+            swept_user = user
+                .pop_front_while(|entry| now.saturating_duration_since(entry.ack.created) >= ttl);
         }
         if !user_take_disabled
             && matches!(limit_reached, LimitReached::AllTransactionsIncluded)
@@ -1217,9 +1209,6 @@ impl TransactionPool for ConsensusTransactionPool {
             };
             let popped;
             (popped, excluded) = user.pop_batch_while(|entry| {
-                if entry.ack.is_abandoned_user() {
-                    return PopAction::Exclude;
-                }
                 // An already-processed entry is excluded without consuming block budget.
                 // Checked before the staggered hold, so a copy committed elsewhere
                 // resolves a held entry immediately instead of after its delay.
@@ -1313,11 +1302,9 @@ impl TransactionPool for ConsensusTransactionPool {
                 entry.ack.resolve_error(error);
                 continue;
             }
-            if let Some(method) = all_processed(&mut entry.processed) {
-                self.resolve_already_processed(entry, "proposal", method);
-            } else {
-                self.drop_abandoned_user_entry(entry);
-            }
+            let method = all_processed(&mut entry.processed)
+                .expect("excluded entries are already processed");
+            self.resolve_already_processed(entry, "proposal", method);
         }
 
         self.metrics
@@ -1900,14 +1887,11 @@ mod tests {
         let block_bytes = u64::try_from(serialized_len * 2).unwrap();
         let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
         let epoch = pool.epoch();
-        let _receivers: Vec<_> = [10, 20, 30]
-            .into_iter()
-            .map(|gas_price| {
-                pool.try_insert(epoch, gas_price, vec![transaction()])
-                    .unwrap()
-                    .0
-            })
-            .collect();
+        for gas_price in [10, 20, 30] {
+            let (_receiver, _) = pool
+                .try_insert(epoch, gas_price, vec![transaction()])
+                .unwrap();
+        }
 
         let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
         assert_eq!(transactions.len(), 2);
@@ -1947,7 +1931,6 @@ mod tests {
         let _s1 = pool.submit(epoch, &[transaction()]).unwrap();
         let _s2 = pool.submit(epoch, &[transaction()]).unwrap();
 
-        // Age the queued user entry past its TTL.
         tokio::time::sleep(ttl + Duration::from_secs(1)).await;
 
         let (transactions, ack, limit) = pool.take(1, usize::MAX);
@@ -1961,7 +1944,7 @@ mod tests {
         assert!(matches!(
             user_receiver.await.unwrap().unwrap_err().as_inner(),
             SuiErrorKind::ValidatorOverloadedRetryAfter {
-                retry_after_secs: 1
+                retry_after_secs: 2
             }
         ));
         pool.close();
@@ -2037,12 +2020,13 @@ mod tests {
             .try_insert(epoch, 10, vec![user_transaction(&state)])
             .unwrap();
 
+        tokio::time::sleep(ttl - Duration::from_millis(500)).await;
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
         assert_eq!(transactions.len(), 1);
         drop(ack);
         assert_eq!(pool.queue_depth("user"), 1);
 
-        tokio::time::sleep(ttl + Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
         assert!(transactions.is_empty());
         drop(ack);
@@ -2055,45 +2039,42 @@ mod tests {
     }
 
     #[sim_test]
-    async fn abandoned_user_entries_are_dropped_by_sweep_and_drain() {
-        let (state, pool) = test_state_and_pool(10).await;
+    async fn expiry_reports_consumed_owned_inputs_as_rejected() {
+        let ttl = Duration::from_secs(1);
+        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
         let epoch = pool.epoch();
+        let (sender, _) = get_key_pair::<AccountKeyPair>();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let gas_object_ref = gas_object.compute_object_reference();
+        state.insert_genesis_object(gas_object);
+        let (receiver, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(gas_object_ref)])
+            .unwrap();
+        state.get_cache_writer().write_object_entry_for_test(
+            Object::with_id_owner_version_for_testing(
+                gas_object_ref.0,
+                gas_object_ref.1.next(),
+                Owner::AddressOwner(sender),
+            ),
+        );
 
-        // The abandoned entry at the front of its level is removed by the sweep; the one
-        // behind a live entry is removed by the drain.
-        let (abandoned_front, _) = pool
-            .try_insert(epoch, 10, vec![user_transaction(&state)])
-            .unwrap();
-        let (live, _) = pool
-            .try_insert(epoch, 10, vec![user_transaction(&state)])
-            .unwrap();
-        let (abandoned_behind, _) = pool
-            .try_insert(epoch, 10, vec![user_transaction(&state)])
-            .unwrap();
-        drop(abandoned_front);
-        drop(abandoned_behind);
-
+        tokio::time::sleep(ttl + Duration::from_secs(1)).await;
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
-        assert_eq!(transactions.len(), 1);
-        ack(block(1));
-        assert_eq!(pool.queue_depth("user"), 0);
-        assert_eq!(pool.abandoned_count("user"), 2);
-        assert_eq!(live.await.unwrap().unwrap().len(), 1);
+        assert!(transactions.is_empty());
+        drop(ack);
 
-        // With a saturated system lane the drain is skipped, and the sweep alone removes
-        // an abandoned entry.
-        let (abandoned, _) = pool
-            .try_insert(epoch, 10, vec![user_transaction(&state)])
-            .unwrap();
-        drop(abandoned);
-        let _s1 = pool.submit(epoch, &[transaction()]).unwrap();
-        let _s2 = pool.submit(epoch, &[transaction()]).unwrap();
-        let (transactions, ack, limit) = pool.take(1, usize::MAX);
-        assert_eq!(transactions.len(), 1);
-        assert_eq!(limit, LimitReached::MaxNumOfTransactions);
-        ack(block(2));
         assert_eq!(pool.queue_depth("user"), 0);
-        assert_eq!(pool.abandoned_count("user"), 3);
+        assert_eq!(pool.metrics.expired.get(), 0);
+        assert_eq!(
+            pool.rejected_at_proposal_count("ObjectVersionUnavailableForConsumption"),
+            1
+        );
+        assert!(matches!(
+            receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption { .. }
+            }
+        ));
         pool.close();
     }
 

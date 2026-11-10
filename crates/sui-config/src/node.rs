@@ -320,7 +320,7 @@ pub struct ConsensusTransactionPoolConfig {
     /// Must be greater than zero.
     pub max_user_bytes_per_second: Option<u64>,
 
-    /// Drop user-lane entries that have waited longer than this many seconds,
+    /// Drop user-lane entries that have waited at least this many seconds,
     /// bounding how long a transaction sits in the pool rather than only how many
     /// are queued. Defaults to 60 seconds when unset; 0 disables expiry.
     pub max_queue_age_secs: Option<u64>,
