@@ -1458,15 +1458,11 @@ impl ValidatorService {
                     // here instead.
                     epoch_store.record_submitted_user_transactions(&txns, submitter_client_addr);
                     let gas_price = Self::extract_gas_price(&txns);
-                    let result = context
-                        .try_insert(epoch_store.epoch(), gas_price, txns)
-                        .await;
-                    if let Ok((_, false)) = &result {
-                        // Duplicate of an in-flight submission; flag the request as spam. The
-                        // per-tx result is still Submitted, so this is tracked separately.
-                        duplicate_at_admission = true;
-                    }
-                    receivers.push(result.map(|(receiver, _)| receiver));
+                    receivers.push(
+                        context
+                            .try_insert(epoch_store.epoch(), gas_price, txns)
+                            .await,
+                    );
                 }
                 let halted_rejections = context
                     .adapter_metrics()
@@ -1528,10 +1524,6 @@ impl ValidatorService {
                                     ?tx_digest,
                                     "handle_submit_transaction: transaction already queued"
                                 );
-                                metrics
-                                    .submission_suppressed_inflight
-                                    .with_label_values(&[req_type])
-                                    .inc();
                                 results[idx] = Some(SubmitTxResult::Rejected {
                                     error: SuiErrorKind::TransactionSubmitted { digest: tx_digest }
                                         .into(),

@@ -296,6 +296,8 @@ impl Default for TransactionDriverConfig {
         }
     }
 }
+/// The default cap on the consensus transaction pool user lane's total queued bytes.
+pub const DEFAULT_MAX_PENDING_USER_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -357,7 +359,7 @@ impl ConsensusTransactionPoolConfig {
         match self.max_pending_user_bytes {
             Some(0) => None,
             Some(bytes) => Some(bytes),
-            None => Some(256 * 1024 * 1024),
+            None => Some(DEFAULT_MAX_PENDING_USER_BYTES),
         }
     }
 }
@@ -1907,8 +1909,8 @@ mod tests {
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
     use super::{
-        AuthorityStorePruningConfig, ConsensusTransactionPoolConfig, ExecutionTimeObserverConfig,
-        Genesis, StateArchiveConfig,
+        AuthorityStorePruningConfig, ConsensusTransactionPoolConfig,
+        DEFAULT_MAX_PENDING_USER_BYTES, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
     };
     use crate::NodeConfig;
 
@@ -1970,7 +1972,10 @@ mod tests {
     #[test]
     fn max_pending_user_bytes_defaults_and_disable() {
         let default = ConsensusTransactionPoolConfig::default();
-        assert_eq!(default.max_pending_user_bytes(), Some(256 * 1024 * 1024));
+        assert_eq!(
+            default.max_pending_user_bytes(),
+            Some(DEFAULT_MAX_PENDING_USER_BYTES)
+        );
 
         let configured = ConsensusTransactionPoolConfig {
             max_pending_user_bytes: Some(1024),
