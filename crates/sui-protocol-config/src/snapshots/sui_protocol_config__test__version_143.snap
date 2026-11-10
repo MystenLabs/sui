@@ -194,6 +194,7 @@ feature_flags:
   granular_post_execution_checks: true
   early_exit_on_iffw: true
   enable_unified_linkage: true
+  package_publish_charge: true
   enable_allowances: true
   fix_ptb_generated_reads: true
   check_object_funds_withdraw_in_execution: true
@@ -287,6 +288,9 @@ base_tx_cost_fixed: 1000
 package_publish_cost_fixed: 1000
 base_tx_cost_per_byte: 0
 package_publish_cost_per_byte: 80
+package_publish_charge_fixed: 1000000000
+package_publish_charge_per_module: 10000000
+package_publish_charge_per_dependency: 10000000
 obj_access_cost_read_per_byte: 15
 obj_access_cost_read_per_package_kb: 154
 obj_access_cost_mutate_per_byte: 40
