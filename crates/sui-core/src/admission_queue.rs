@@ -53,11 +53,9 @@ pub trait AdmissionQueueEntry {
     fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey>;
     fn notify_evicted(self, min_gas_price: u64);
     fn notify_rejected(self, min_gas_price: u64);
-    /// Serialized transaction bytes this entry holds. Consulted only when the
-    /// queue has a byte capacity; the default suits entries that do not track it.
-    fn byte_size(&self) -> usize {
-        0
-    }
+    /// Serialized transaction bytes this entry holds, counted against the queue's
+    /// byte capacity. Must not change while the entry is queued.
+    fn byte_size(&self) -> usize;
 }
 
 /// Outcome of [`PriorityAdmissionQueue::try_insert`]. Any displaced entry is
@@ -143,6 +141,12 @@ impl AdmissionQueueEntry for QueueEntry {
 
     fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey> {
         self.transactions.iter().map(ConsensusTransaction::key)
+    }
+
+    /// The push-mode queue has no byte capacity, so its entries skip serializing
+    /// themselves to measure their size.
+    fn byte_size(&self) -> usize {
+        0
     }
 
     fn notify_evicted(self, min_gas_price: u64) {
@@ -401,6 +405,11 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.total_len
     }
 
+    #[cfg(test)]
+    pub fn byte_capacity(&self) -> Option<u64> {
+        self.byte_capacity
+    }
+
     pub fn min_gas_price(&self) -> Option<u64> {
         self.map.first_key_value().map(|(&k, _)| k)
     }
@@ -424,7 +433,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         }
 
         let gas_price = entry.gas_price();
-        let entry_bytes = self.byte_capacity.map_or(0, |_| entry.byte_size() as u64);
+        let entry_bytes = entry.byte_size() as u64;
 
         if self.fits(entry_bytes) {
             self.push_entry(entry, keys, false);
@@ -448,7 +457,12 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             }
             None => {
                 self.metrics.rejections.inc();
-                let min_gas_price = self.min_gas_price().unwrap_or(gas_price);
+                // Under the byte cap, a bid above the cheapest queued entry can still be
+                // refused. The hint must then exceed the refused bid, or a client that
+                // raises its price to just above the hint is refused again.
+                let min_gas_price = self
+                    .min_gas_price()
+                    .map_or(gas_price, |min| min.max(gas_price));
                 InsertOutcome::new(Outcome::Rejected {
                     entry,
                     min_gas_price,
@@ -483,7 +497,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             }
             for entry in deque {
                 freed_count += 1;
-                freed_bytes += self.byte_capacity.map_or(0, |_| entry.byte_size() as u64);
+                freed_bytes += entry.byte_size() as u64;
                 if fits_after(freed_count, freed_bytes) {
                     return Some(freed_count);
                 }
@@ -550,16 +564,12 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                     PopAction::Skip => deque.push_back(entry),
                     PopAction::Include => {
                         self.total_len -= 1;
-                        if self.byte_capacity.is_some() {
-                            self.total_bytes -= entry.byte_size() as u64;
-                        }
+                        self.total_bytes -= entry.byte_size() as u64;
                         included.push(entry);
                     }
                     PopAction::Exclude => {
                         self.total_len -= 1;
-                        if self.byte_capacity.is_some() {
-                            self.total_bytes -= entry.byte_size() as u64;
-                        }
+                        self.total_bytes -= entry.byte_size() as u64;
                         excluded.push(entry);
                     }
                 }
@@ -586,9 +596,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         for key in keys {
             *self.queued_keys.entry(key).or_insert(0) += 1;
         }
-        if self.byte_capacity.is_some() {
-            self.total_bytes += entry.byte_size() as u64;
-        }
+        self.total_bytes += entry.byte_size() as u64;
         let level = self.map.entry(entry.gas_price()).or_default();
         if front {
             level.push_front(entry);
@@ -614,9 +622,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         };
         self.remove_keys(&evicted);
         self.total_len -= 1;
-        if self.byte_capacity.is_some() {
-            self.total_bytes -= evicted.byte_size() as u64;
-        }
+        self.total_bytes -= evicted.byte_size() as u64;
         evicted
     }
 
@@ -1066,29 +1072,32 @@ mod tests {
     fn byte_cap_evicts_multiple_cheaper_entries_for_one_large() {
         let log = MockOutcomeLog::default();
         let mut q = byte_capped_queue(100, 1000);
-        // Three cheap small entries fill the byte budget.
         q.insert(mock_entry(1, 10, 300, &log)).unwrap();
         q.insert(mock_entry(2, 10, 300, &log)).unwrap();
         q.insert(mock_entry(3, 10, 300, &log)).unwrap();
-        // A larger, higher-priced entry needs two of them evicted to fit.
         q.insert(mock_entry(4, 20, 600, &log)).unwrap();
         assert_eq!(q.len(), 2);
         assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
         assert!(log.rejected.lock().unwrap().is_empty());
+        assert_eq!(q.metrics.evictions.get(), 2);
     }
 
     #[test]
     fn byte_cap_rejects_when_cheaper_entries_cannot_free_enough() {
         let log = MockOutcomeLog::default();
         let mut q = byte_capped_queue(100, 1000);
-        // A higher-priced entry already holds most of the budget and cannot be evicted.
         q.insert(mock_entry(1, 30, 700, &log)).unwrap();
         q.insert(mock_entry(2, 10, 200, &log)).unwrap();
-        // Even evicting the one cheaper entry leaves no room for the newcomer.
-        assert!(q.insert(mock_entry(3, 20, 500, &log)).is_err());
+        assert!(matches!(
+            q.insert(mock_entry(3, 20, 500, &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 20 }
+        ));
         assert_eq!(*log.rejected.lock().unwrap(), vec![3]);
         assert!(log.evicted.lock().unwrap().is_empty());
         assert_eq!(q.len(), 2);
+        assert_eq!(q.metrics.evictions.get(), 0);
     }
 
     #[test]
@@ -1101,15 +1110,49 @@ mod tests {
     }
 
     #[test]
+    fn byte_cap_never_evicts_equal_priced_entries() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(mock_entry(1, 10, 600, &log)).unwrap();
+        q.insert(mock_entry(2, 10, 300, &log)).unwrap();
+        assert!(q.insert(mock_entry(3, 10, 300, &log)).is_err());
+        assert_eq!(*log.rejected.lock().unwrap(), vec![3]);
+        assert!(log.evicted.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn entry_count_cap_binds_under_byte_cap() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(2, 1000);
+        q.insert(mock_entry(1, 10, 100, &log)).unwrap();
+        q.insert(mock_entry(2, 10, 100, &log)).unwrap();
+        q.insert(mock_entry(3, 20, 100, &log)).unwrap();
+        assert_eq!(q.len(), 2);
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1]);
+        assert!(q.insert(mock_entry(4, 5, 100, &log)).is_err());
+        assert_eq!(*log.rejected.lock().unwrap(), vec![4]);
+    }
+
+    #[test]
     fn byte_cap_frees_budget_when_entries_are_popped() {
         let log = MockOutcomeLog::default();
         let mut q = byte_capped_queue(100, 1000);
         q.insert(mock_entry(1, 10, 800, &log)).unwrap();
-        // A second large entry does not fit beside the first.
         assert!(q.insert(mock_entry(2, 5, 800, &log)).is_err());
-        // Draining the first frees its bytes, so the next one fits.
         assert_eq!(q.pop_batch(1).len(), 1);
         assert!(q.insert(mock_entry(3, 5, 800, &log)).is_ok());
+        assert_eq!(q.len(), 1);
+    }
+
+    #[test]
+    fn byte_cap_counts_reinserted_entries() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(mock_entry(1, 10, 800, &log)).unwrap();
+        let popped = q.pop_batch(1).pop().unwrap();
+        q.reinsert_front(popped);
+        assert!(q.insert(mock_entry(2, 5, 300, &log)).is_err());
+        assert_eq!(*log.rejected.lock().unwrap(), vec![2]);
         assert_eq!(q.len(), 1);
     }
 

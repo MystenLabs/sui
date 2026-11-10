@@ -323,6 +323,8 @@ pub struct ConsensusTransactionPoolConfig {
     /// Cap on the total serialized bytes of queued user-lane entries, enforced
     /// alongside `max_pending_transactions`. Entries are evicted lowest gas price
     /// first to stay within it. Defaults to 256 MiB when unset; 0 disables the cap.
+    /// A non-zero value below `max_transactions_in_block_bytes` is raised to it, so
+    /// that a maximum-size bundle can always be admitted to an empty queue.
     pub max_pending_user_bytes: Option<u64>,
 }
 
@@ -1905,7 +1907,8 @@ mod tests {
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
     use super::{
-        AuthorityStorePruningConfig, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
+        AuthorityStorePruningConfig, ConsensusTransactionPoolConfig, ExecutionTimeObserverConfig,
+        Genesis, StateArchiveConfig,
     };
     use crate::NodeConfig;
 
@@ -1966,8 +1969,6 @@ mod tests {
 
     #[test]
     fn max_pending_user_bytes_defaults_and_disable() {
-        use super::ConsensusTransactionPoolConfig;
-
         let default = ConsensusTransactionPoolConfig::default();
         assert_eq!(default.max_pending_user_bytes(), Some(256 * 1024 * 1024));
 
@@ -1977,7 +1978,6 @@ mod tests {
         };
         assert_eq!(configured.max_pending_user_bytes(), Some(1024));
 
-        // Zero disables the cap rather than rejecting every queued entry.
         let disabled = ConsensusTransactionPoolConfig {
             max_pending_user_bytes: Some(0),
             ..Default::default()
