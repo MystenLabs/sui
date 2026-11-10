@@ -1134,9 +1134,9 @@ async fn test_object_versions_by_checkpoint() -> Result<()> {
     let last_cp = changes.last().unwrap().0;
     harness.wait_for_watermark(last_cp, 0).await?;
 
-    // Check every checkpoint from just before creation through deletion. Checkpoints between two
-    // changes must resolve to the earlier change.
-    for checkpoint in first_cp - 1..=last_cp {
+    // Check every checkpoint from just before creation through deletion, and the last possible
+    // checkpoint. Checkpoints between two changes must resolve to the earlier change.
+    for checkpoint in (first_cp - 1..=last_cp).chain([u64::MAX]) {
         for id in [object, wrapper] {
             let expected = changes
                 .iter()
