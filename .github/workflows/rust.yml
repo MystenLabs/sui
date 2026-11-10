@@ -139,7 +139,8 @@ jobs:
           # the "cargo test (sui-graphql staging)" step below, not amid the full parallel suite
           # where their fixed stream timeouts flake under contention. sui-fork-e2e-tests runs in the
           # test-sui-fork job, because each of its shell tests starts a full local network and a fork.
-          cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !package(sui-fork-e2e-tests) and !(package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
+          # The indexer transactional and KV RPC tests run in test-extra, which balances the two jobs.
+          cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !package(sui-fork-e2e-tests) and !(package(sui-indexer-alt-e2e-tests) and (binary(graphql_subscription) | binary(transactional_tests) | binary(kv_rpc_tests)))'
       # The report can contain test output, which only the job log masks, so publish timings only.
       - name: extract test timings (test)
         if: ${{ !cancelled() }}
@@ -340,12 +341,40 @@ jobs:
           pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
           [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
           echo "$pg_bin" >> "$GITHUB_PATH"
+      - name: Install BigTable emulator
+        run: |
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+          curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          sudo apt-get update -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/google-cloud-sdk.list -o Dir::Etc::sourceparts=/dev/null
+          sudo apt-get install -y google-cloud-cli-cbt google-cloud-cli-bigtable-emulator
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
+      # Moved from the test job to balance the two jobs' run times.
+      - name: cargo test (indexer transactional and KV RPC)
+        run: |
+          cargo nextest run --profile ci --cargo-quiet -p sui-indexer-alt-e2e-tests --test transactional_tests --test kv_rpc_tests
+      - name: extract test timings (indexer transactional and KV RPC)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (indexer transactional and KV RPC)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-indexer-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
       - name: cargo test (sui-graphql staging)
         run: |
+          # Remove the previous run's report so that a failed run cannot upload it again.
+          rm -f target/nextest/ci/junit.xml
           cargo nextest run --profile ci --cargo-quiet -p sui-indexer-alt-graphql -p sui-indexer-alt-e2e-tests --features staging --lib --bins --test graphql_subscription
       # The report can contain test output, which only the job log masks, so publish timings only.
       - name: extract test timings (graphql staging)
