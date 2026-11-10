@@ -244,6 +244,12 @@ pub trait MoveTypeTagTrait {
     }
 }
 
+impl MoveTypeTagTrait for bool {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Bool
+    }
+}
+
 impl MoveTypeTagTrait for u8 {
     fn get_type_tag() -> TypeTag {
         TypeTag::U8

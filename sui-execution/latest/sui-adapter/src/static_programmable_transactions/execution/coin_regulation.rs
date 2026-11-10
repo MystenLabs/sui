@@ -9,13 +9,15 @@
 
 use crate::execution_value::ExecutionState;
 use move_binary_format::{errors::PartialVMResult, partial_vm_error};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use sui_move_natives::object_runtime::BalanceTracking;
 use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
 use sui_types::{
     TypeTag,
     base_types::{SequenceNumber, SuiAddress},
-    coin_regulation::{coin_type_name, get_coin_type_state, get_frozen_address_state},
+    coin_regulation::{
+        coin_type_name, get_coin_type_state, get_frozen_address_state, has_coin_type_state,
+    },
     error::{ExecutionError, SuiError, VMMemoryLimitExceededSubStatusCode},
     execution_status::ExecutionErrorKind,
     gas_coin::GAS,
@@ -133,6 +135,32 @@ pub(crate) fn check_touched_types<E: From<ExecutionError>>(
                 );
             }
         }
+    }
+    Ok(())
+}
+
+/// Removes from `coin_owners` the coin types with FreezeList state at the assigned version, which
+/// the legacy deny list ignores.
+///
+/// The FreezeList is loaded, and so recorded in effects, whenever a non-SUI type is present.
+pub(crate) fn remove_migrated_coin_types(
+    state_view: &dyn ExecutionState,
+    coin_owners: &mut BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
+) -> Result<(), ExecutionError> {
+    if coin_owners.keys().all(GAS::is_gas_type) {
+        return Ok(());
+    }
+    let Some(version) = state_view.freeze_list_version() else {
+        return Ok(());
+    };
+    let mut migrated = vec![];
+    for coin_type in coin_owners.keys().filter(|t| !GAS::is_gas_type(t)) {
+        if has_coin_type_state(state_view, version, coin_type).map_err(read_error)? {
+            migrated.push(coin_type.clone());
+        }
+    }
+    for coin_type in migrated {
+        coin_owners.remove(&coin_type);
     }
     Ok(())
 }

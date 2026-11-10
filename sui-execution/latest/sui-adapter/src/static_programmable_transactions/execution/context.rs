@@ -2462,7 +2462,24 @@ pub(crate) fn finish(
     let DenyListResult {
         result,
         num_non_gas_coin_owners,
-    } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+    } = if protocol_config.enable_coin_regulation() {
+        // Gas is charged for the owners of migrated types too, as before migration.
+        let num_non_gas_coin_owners = receiving_funds_type_and_owners
+            .iter()
+            .filter(|(coin_type, _)| !sui_types::gas_coin::GAS::is_gas_type(coin_type))
+            .map(|(_, owners)| owners.len() as u64)
+            .sum();
+        coin_regulation::remove_migrated_coin_types(
+            state_view,
+            &mut receiving_funds_type_and_owners,
+        )?;
+        DenyListResult {
+            num_non_gas_coin_owners,
+            ..state_view.check_coin_deny_list(receiving_funds_type_and_owners)
+        }
+    } else {
+        state_view.check_coin_deny_list(receiving_funds_type_and_owners)
+    };
     gas_meter.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
     result?;
 

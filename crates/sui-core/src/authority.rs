@@ -189,6 +189,7 @@ pub use crate::checkpoints::checkpoint_executor::utils::{
     CheckpointTimeoutConfig, init_checkpoint_timeout_config,
 };
 
+use sui_types::coin_regulation::{coin_type_name, has_latest_coin_type_state};
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
@@ -1225,12 +1226,33 @@ impl AuthorityState {
         }
 
         if epoch_store.protocol_config().enable_coin_deny_list_v2() {
+            let object_store = self.get_object_store();
+            let check_migrated = epoch_store.protocol_config().enable_coin_regulation();
+            // The deny list names coin types, and the FreezeList keys them by type tag.
+            let coin_types: BTreeMap<String, TypeTag> = checked_input_objects
+                .inner()
+                .iter_objects()
+                .chain(receiving_objects.iter_objects())
+                .filter_map(|object| object.coin_type_maybe())
+                .chain(
+                    declared_withdrawals
+                        .values()
+                        .filter_map(|(_, type_tag, _)| {
+                            Balance::maybe_get_balance_type_param(type_tag)
+                        }),
+                )
+                .map(|coin_type| (coin_type_name(&coin_type), coin_type))
+                .collect();
             check_coin_deny_list_v2_during_signing(
                 tx_data.sender(),
                 checked_input_objects,
                 receiving_objects,
                 funds_withdrawals,
-                &self.get_object_store(),
+                &object_store,
+                |name| match coin_types.get(name).filter(|_| check_migrated) {
+                    Some(coin_type) => has_latest_coin_type_state(object_store.as_ref(), coin_type),
+                    None => Ok(false),
+                },
             )?;
         }
 

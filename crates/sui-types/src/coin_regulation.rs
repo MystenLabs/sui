@@ -220,6 +220,19 @@ pub fn get_latest_frozen_address_state(
     load_latest(store, FrozenAddressKey::field(coin_type, addr))
 }
 
+/// Whether `coin_type` has a `CoinTypeKey` as of FreezeList version `freeze_list_version`.
+pub fn has_coin_type_state(
+    resolver: &dyn RuntimeObjectResolver,
+    freeze_list_version: SequenceNumber,
+    coin_type: &TypeTag,
+) -> SuiResult<bool> {
+    get_coin_type_state(resolver, freeze_list_version, coin_type).map(|s| s.is_some())
+}
+
+pub fn has_latest_coin_type_state(store: &dyn ObjectStore, coin_type: &TypeTag) -> SuiResult<bool> {
+    get_latest_coin_type_state(store, coin_type).map(|s| s.is_some())
+}
+
 /// Returns the `T`, frozen address, and `frozen_epoch` of a `SeizeAuth<T>` object, or `None` for any
 /// other object. Does not check the object's owner.
 pub fn parse_seize_auth(object: &Object) -> Option<(TypeTag, SuiAddress, EpochId)> {

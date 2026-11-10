@@ -252,6 +252,27 @@ fn bounded_reads_ignore_later_versions() {
 }
 
 #[test]
+fn has_coin_type_state_reads() {
+    let version = SequenceNumber::from_u64(5);
+    let with_state = GAS::type_tag();
+    let without_state = balance_of_sui();
+    let state = CoinTypeState {
+        paused: false,
+        num_frozen_addresses: 0,
+    };
+    let store = InMemoryStorage::new(vec![field_object(
+        CoinTypeKey::field(&with_state),
+        state,
+        version,
+    )]);
+
+    assert!(has_coin_type_state(&store, version, &with_state).unwrap());
+    assert!(!has_coin_type_state(&store, version, &without_state).unwrap());
+    assert!(has_latest_coin_type_state(&store, &with_state).unwrap());
+    assert!(!has_latest_coin_type_state(&store, &without_state).unwrap());
+}
+
+#[test]
 fn parse_seize_auth_objects() {
     let auth = SeizeAuth {
         id: UID::new(id("0x5e12e")),
