@@ -151,7 +151,7 @@ fn basic_telemetry() {
     let telemetry = adapter.get_telemetry_report();
     // Test that we can get telemetry, and it recorded reasonable things.
     assert_eq!(telemetry.package_cache_count, 1);
-    assert_eq!(telemetry.total_arena_size, 3392);
+    assert_eq!(telemetry.total_arena_size, 7424);
     assert_eq!(telemetry.module_count, 1);
     assert_eq!(telemetry.function_count, 2);
     assert_eq!(telemetry.type_count, 2);
@@ -168,7 +168,7 @@ fn basic_telemetry() {
     // === After call_foo ===
     let telemetry = adapter.get_telemetry_report();
     assert_eq!(telemetry.package_cache_count, 1);
-    assert_eq!(telemetry.total_arena_size, 3392);
+    assert_eq!(telemetry.total_arena_size, 7424);
     assert_eq!(telemetry.module_count, 1);
     assert_eq!(telemetry.function_count, 2);
     assert_eq!(telemetry.type_count, 2);
@@ -185,7 +185,7 @@ fn basic_telemetry() {
     // === After call_bar ===
     let telemetry = adapter.get_telemetry_report();
     assert_eq!(telemetry.package_cache_count, 1);
-    assert_eq!(telemetry.total_arena_size, 3392);
+    assert_eq!(telemetry.total_arena_size, 7424);
     assert_eq!(telemetry.module_count, 1);
     assert_eq!(telemetry.function_count, 2);
     assert_eq!(telemetry.type_count, 2);
@@ -233,7 +233,7 @@ fn parallel_telemetry_1() {
 
     // In our basic setup, before any calls:
     //   package_cache_count:   1
-    //   total_arena_size:      3392
+    //   total_arena_size:      7424
     //   module_count:          1
     //   function_count:        2
     //   type_count:            2
@@ -251,7 +251,7 @@ fn parallel_telemetry_1() {
 
     // All other fields remain unchanged.
     assert_eq!(telemetry.package_cache_count, 1);
-    assert_eq!(telemetry.total_arena_size, 3392);
+    assert_eq!(telemetry.total_arena_size, 7424);
     assert_eq!(telemetry.module_count, 1);
     assert_eq!(telemetry.function_count, 2);
     assert_eq!(telemetry.type_count, 2);
@@ -318,7 +318,7 @@ fn parallel_telemetry_2() {
 
     // All other fields remain unchanged.
     // assert_eq!(telemetry.package_cache_count, 2);
-    assert_eq!(telemetry.total_arena_size, 6784);
+    assert_eq!(telemetry.total_arena_size, 14848);
     assert_eq!(telemetry.module_count, 2);
     assert_eq!(telemetry.function_count, 4);
     assert_eq!(telemetry.type_count, 4);

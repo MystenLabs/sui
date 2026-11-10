@@ -11,8 +11,8 @@ use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
     execution::{interpreter::state::TypeArguments, vm::DatatypeInfo},
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, FieldType, Function, FunctionInstantiation,
-        Package, SizedArenaType, StructInstantiation, Type, VariantInstantiation,
+        ArenaType, Datatype, DatatypeDescriptor, Function, FunctionInstantiation, Package,
+        SizedArenaType, StructInstantiation, Type, VariantInstantiation,
     },
     shared::{
         TypeLimits, TypeTraversalBudget,
@@ -893,12 +893,21 @@ impl VMDispatchTables {
 
     fn substitute_field_type(
         &self,
-        field: &FieldType,
+        field: &SizedArenaType,
         ty_args: &[Type],
         arg_sizes: &[TypeSize],
     ) -> PartialVMResult<Type> {
-        let (type_size, type_depth) = field.syntactic_size.solve(arg_sizes)?;
-        check_syntactic_limits(&self.type_limits, type_size, type_depth)?;
+        let Some(size_formula) = &field.size_formula else {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "missing size formula for datatype field"
+            ));
+        };
+        check_syntactic_limits(
+            &self.type_limits,
+            size_formula.solve_type_size(arg_sizes)?,
+            size_formula.solve_type_depth(arg_sizes)?,
+        )?;
         field.ty.subst_unchecked(ty_args)
     }
 

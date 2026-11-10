@@ -11,7 +11,7 @@ use crate::{
         values::ConstantValue,
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
-    shared::type_size_formulae::{ArenaSyntacticSizeFormula, ArenaTypeSizeFormula},
+    shared::type_size_formulae::ArenaTypeSizeFormula,
     shared::{
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
@@ -203,7 +203,7 @@ pub(crate) struct StructDef {
     pub def_vtable_key: VMPointer<VirtualTableKey>,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
-    pub fields: ArenaVec<FieldType>,
+    pub fields: ArenaVec<SizedArenaType>,
     pub field_names: ArenaVec<IdentifierKey>,
 }
 
@@ -221,7 +221,7 @@ pub(crate) struct EnumDef {
 pub(crate) struct VariantDef {
     pub variant_tag: VariantTag,
     pub variant_name: IdentifierKey,
-    pub fields: ArenaVec<FieldType>,
+    pub fields: ArenaVec<SizedArenaType>,
     pub field_names: ArenaVec<IdentifierKey>,
     pub enum_def: VMPointer<EnumDef>,
 }
@@ -296,12 +296,6 @@ pub(crate) enum ArenaType {
     U16,
     U32,
     U256,
-}
-
-#[derive(Debug)]
-pub(crate) struct FieldType {
-    pub ty: VMPointer<ArenaType>,
-    pub syntactic_size: ArenaSyntacticSizeFormula,
 }
 
 /// A type *term* paired with its JIT-compiled size formula when runtime checks need it.
@@ -1540,12 +1534,6 @@ impl<B: std::fmt::Write> InternedDisplay<B> for VirtualTableKey {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         let str = self.to_short_string(interner);
         write!(f, "{}", str)
-    }
-}
-
-impl<B: std::fmt::Write> InternedDisplay<B> for FieldType {
-    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
-        self.ty.fmt(f, interner)
     }
 }
 

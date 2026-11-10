@@ -459,31 +459,6 @@ impl ArenaMaxPlusForm {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct ArenaSyntacticSizeFormula {
-    type_size: ArenaLinearForm,
-    type_depth: ArenaMaxPlusForm,
-}
-
-impl ArenaSyntacticSizeFormula {
-    pub(crate) fn from_term(ty: &ArenaType, arena: &ArenaBuilder) -> PartialVMResult<Self> {
-        let (type_size, type_depth) = syntactic_forms(ty);
-        Ok(Self {
-            type_size: type_size.into_arena(arena)?,
-            type_depth: type_depth.into_arena(arena)?,
-        })
-    }
-
-    pub(crate) fn solve(&self, args: &[TypeSize]) -> PartialVMResult<(u64, u64)> {
-        Ok((
-            self.type_size
-                .solve(&project(args, |size| size.type_size))?,
-            self.type_depth
-                .solve(&project(args, |size| size.type_depth))?,
-        ))
-    }
-}
-
 // -------------------------------------------------------------------------------------------------
 // PartialTypeSizeFormula
 // -------------------------------------------------------------------------------------------------
