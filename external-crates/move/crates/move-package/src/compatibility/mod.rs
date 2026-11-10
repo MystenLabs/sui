@@ -122,6 +122,11 @@ fn find_files(
     {
         return Ok(());
     }
+    let metadata = fs::metadata(dir)
+        .with_context(|| format!("Failed to inspect source path '{}'", dir.display()))?;
+    if !metadata.is_dir() {
+        return Ok(());
+    }
     let entries = fs::read_dir(dir)
         .with_context(|| format!("Failed to read source directory '{}'", dir.display()))?;
     for entry in entries {
@@ -215,18 +220,12 @@ mod tests {
     }
 
     #[test]
-    fn find_files_propagates_traversal_errors() {
+    fn find_files_accepts_a_file_root() {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("not_a_directory");
         fs::write(&file, "contents").unwrap();
 
-        let error = find_files(&mut vec![], &file, "move", 5).unwrap_err();
-
-        assert!(
-            error
-                .to_string()
-                .contains("Failed to read source directory")
-        );
+        assert!(find_files(&mut vec![], &file, "move", 5).is_ok());
     }
 
     #[test]

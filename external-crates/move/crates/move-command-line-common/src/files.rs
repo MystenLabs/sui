@@ -151,10 +151,30 @@ fn is_ignorable_walk_error(error: &walkdir::Error) -> bool {
     let target_is_unresolvable = matches!(
         io_error.kind(),
         std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
-    ) || cfg!(unix)
-        && matches!(io_error.raw_os_error(), Some(40 | 62));
+    ) || is_filesystem_loop(io_error);
     target_is_unresolvable
         && std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
+}
+
+fn is_filesystem_loop(error: &std::io::Error) -> bool {
+    let raw_error = error.raw_os_error();
+    if cfg!(any(target_os = "linux", target_os = "android")) {
+        raw_error == Some(40)
+    } else if cfg!(any(
+        target_vendor = "apple",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "dragonfly"
+    )) {
+        raw_error == Some(62)
+    } else if cfg!(any(target_os = "illumos", target_os = "solaris")) {
+        raw_error == Some(90)
+    } else if cfg!(windows) {
+        raw_error == Some(1921)
+    } else {
+        false
+    }
 }
 
 /// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
@@ -296,11 +316,7 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
         for entry in p.walk_dir().with_context(traversal_context)? {
             let entry = match entry {
                 std::result::Result::Ok(entry) => entry,
-                std::result::Result::Err(error)
-                    if matches!(error.kind(), VfsErrorKind::FileNotFound) =>
-                {
-                    continue;
-                }
+                std::result::Result::Err(error) if is_ignorable_vfs_error(&error) => continue,
                 std::result::Result::Err(error) => {
                     return Err(error).with_context(traversal_context);
                 }
@@ -313,6 +329,16 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
         }
     }
     Ok(result)
+}
+
+fn is_ignorable_vfs_error(error: &vfs::VfsError) -> bool {
+    match error.kind() {
+        VfsErrorKind::FileNotFound => true,
+        VfsErrorKind::IoError(error) => {
+            error.kind() == std::io::ErrorKind::NotADirectory || is_filesystem_loop(error)
+        }
+        _ => false,
+    }
 }
 
 /// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
@@ -356,8 +382,8 @@ pub fn find_move_filenames_vfs(
 #[cfg(all(test, unix))]
 mod tests {
     use super::{
-        find_filenames, find_filenames_and_keep_specified, find_filenames_vfs, try_exists,
-        try_exists_or_is_symlink,
+        MOVE_EXTENSION, extension_equals, find_filenames, find_filenames_and_keep_specified,
+        find_filenames_vfs, try_exists, try_exists_or_is_symlink,
     };
     use std::os::unix::fs::{PermissionsExt, symlink};
     use vfs::{VfsPath, impls::physical::PhysicalFS};
@@ -378,6 +404,10 @@ mod tests {
         let unreadable = temp_dir.path().join("unreadable");
         std::fs::create_dir(&unreadable).unwrap();
         std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read_dir(&unreadable).is_ok() {
+            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+            return;
+        }
 
         let result = find_filenames(&[temp_dir.path()], |_| true);
         std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -393,6 +423,10 @@ mod tests {
         let unreadable = temp_dir.path().join("unreadable");
         std::fs::create_dir(&unreadable).unwrap();
         std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read_dir(&unreadable).is_ok() {
+            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+            return;
+        }
 
         let result = find_filenames_and_keep_specified(&[temp_dir.path()], |_| true);
         std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -405,16 +439,30 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         symlink("missing.move", temp_dir.path().join("broken.move")).unwrap();
         symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+        symlink("self.move", temp_dir.path().join("self.move")).unwrap();
+        std::fs::write(temp_dir.path().join("file"), "contents").unwrap();
+        symlink("file/child", temp_dir.path().join("notdir.move")).unwrap();
 
         assert!(
-            find_filenames(&[temp_dir.path()], |_| true)
-                .unwrap()
-                .is_empty()
+            find_filenames(&[temp_dir.path()], |path| extension_equals(
+                path,
+                MOVE_EXTENSION
+            ))
+            .unwrap()
+            .is_empty()
         );
 
         let vfs_temp_dir = tempfile::tempdir().unwrap();
         symlink("missing.move", vfs_temp_dir.path().join("broken.move")).unwrap();
+        symlink(vfs_temp_dir.path(), vfs_temp_dir.path().join("loop")).unwrap();
+        std::fs::write(vfs_temp_dir.path().join("file"), "contents").unwrap();
+        symlink("file/child", vfs_temp_dir.path().join("notdir.move")).unwrap();
         let root = VfsPath::new(PhysicalFS::new(vfs_temp_dir.path()));
-        assert!(find_filenames_vfs(&[root], |_| true).unwrap().is_empty());
+        assert!(
+            find_filenames_vfs(&[root], |path| path.extension().as_deref()
+                == Some(MOVE_EXTENSION))
+            .unwrap()
+            .is_empty()
+        );
     }
 }

@@ -94,6 +94,10 @@ mod tests {
         let unreadable = templates.join("unreadable");
         create_dir(&unreadable).unwrap();
         set_permissions(&unreadable, Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read_dir(&unreadable).is_ok() {
+            set_permissions(&unreadable, Permissions::from_mode(0o700)).unwrap();
+            return;
+        }
 
         let result = find_root_doc_templates(temp_dir.path());
         set_permissions(&unreadable, Permissions::from_mode(0o700)).unwrap();

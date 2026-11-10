@@ -121,6 +121,11 @@ mod tests {
         fs::create_dir(&unreadable).expect("Failed to create unreadable directory");
         fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000))
             .expect("Failed to remove directory permissions");
+        if fs::read_dir(&unreadable).is_ok() {
+            fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o700))
+                .expect("Failed to restore directory permissions");
+            return;
+        }
         let package_path =
             PackagePath::new(temp_dir.path().to_path_buf()).expect("Failed to create package path");
 

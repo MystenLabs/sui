@@ -92,6 +92,10 @@ mod tests {
         let unreadable = temp_dir.path().join("unreadable");
         std::fs::create_dir(&unreadable).unwrap();
         std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read_dir(&unreadable).is_ok() {
+            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+            return;
+        }
 
         let result = find_matching_files(temp_dir.path().to_str().unwrap(), r".*\.move$");
         std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
