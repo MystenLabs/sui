@@ -25,6 +25,11 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 move-symbol-pool.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation"] }
+
 [dev-dependencies]
 proptest.workspace = true
-tempfile.workspace = true

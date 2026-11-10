@@ -25,7 +25,7 @@ use move_bytecode_source_map::utils::{
 };
 use move_command_line_common::files::{
     DEBUG_INFO_EXTENSION, FileHash, MOVE_BYTECODE_EXTENSION, MOVE_COMPILED_EXTENSION,
-    MOVE_EXTENSION, extension_equals, find_filenames, try_exists, try_exists_or_is_symlink,
+    MOVE_EXTENSION, extension_equals, find_filenames, try_exists, valid_path,
 };
 use move_disassembler::disassembler::Disassembler;
 use move_symbol_pool::Symbol;
@@ -46,6 +46,10 @@ pub struct OnDiskCompiledPackage {
     /// containing the `Move.toml` file for this package.
     pub root_path: PathBuf,
     pub package: OnDiskPackage,
+}
+
+fn path_context<'a>(message: &'static str, path: &'a Path) -> impl FnOnce() -> String + 'a {
+    move || format!("{message} '{}'", path.display())
 }
 
 impl OnDiskCompiledPackage {
@@ -98,30 +102,24 @@ impl OnDiskCompiledPackage {
             .root_path
             .join(self.package.compiled_package_info.package_name.as_str())
             .join(CompiledPackageLayout::CompiledDocs.path());
-        let docs_exist = try_exists_or_is_symlink(&docs_path).with_context(|| {
-            format!(
-                "Failed to inspect compiled docs at '{}'",
-                docs_path.display()
-            )
-        })?;
+        let docs_exist = valid_path(&docs_path).with_context(path_context(
+            "Failed to inspect compiled docs at",
+            &docs_path,
+        ))?;
         let compiled_docs = if docs_exist
             && std::fs::metadata(&docs_path)
-                .with_context(|| {
-                    format!(
-                        "Failed to inspect compiled docs at '{}'",
-                        docs_path.display()
-                    )
-                })?
+                .with_context(path_context(
+                    "Failed to inspect compiled docs at",
+                    &docs_path,
+                ))?
                 .is_dir()
         {
             Some(
                 find_filenames(&[&docs_path], |path| extension_equals(path, "md"))
-                    .with_context(|| {
-                        format!(
-                            "Failed to discover compiled docs at '{}'",
-                            docs_path.display()
-                        )
-                    })?
+                    .with_context(path_context(
+                        "Failed to discover compiled docs at",
+                        &docs_path,
+                    ))?
                     .into_iter()
                     .map(|path| {
                         let contents = std::fs::read_to_string(&path)
@@ -296,12 +294,10 @@ impl OnDiskCompiledPackage {
         };
         let mut compiled_unit_paths = vec![];
         let module_path = package_dir.join(CompiledPackageLayout::CompiledModules.path());
-        if try_exists_or_is_symlink(&module_path).with_context(|| {
-            format!(
-                "Failed to inspect compiled modules at '{}'",
-                module_path.display()
-            )
-        })? {
+        if valid_path(&module_path).with_context(path_context(
+            "Failed to inspect compiled modules at",
+            &module_path,
+        ))? {
             compiled_unit_paths.push(module_path);
         }
         find_filenames(&compiled_unit_paths, |path| {

@@ -3,7 +3,7 @@
 
 use crate::build_config::BuildConfig;
 use anyhow::{Context, Result};
-use move_command_line_common::files::{find_move_filenames, try_exists_or_is_symlink};
+use move_command_line_common::files::{find_move_filenames, valid_path};
 use move_compiler::shared::files::FileName;
 use move_package::{PackagePath, SourcePackageLayout};
 use std::path::{Path, PathBuf};
@@ -29,7 +29,7 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Result<
     let mut places_to_look = Vec::new();
     let mut add_path = |layout_path: SourcePackageLayout| -> Result<()> {
         let path = package_path.join(layout_path.path());
-        if try_exists_or_is_symlink(&path)
+        if valid_path(&path)
             .with_context(|| format!("Failed to inspect source path '{}'", path.display()))?
         {
             places_to_look.push(path);

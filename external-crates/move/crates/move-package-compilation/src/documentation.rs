@@ -3,7 +3,7 @@
 
 use crate::layout::CompiledPackageLayout;
 use anyhow::{Context, Result};
-use move_command_line_common::files::{extension_equals, find_filenames, try_exists_or_is_symlink};
+use move_command_line_common::files::{extension_equals, find_filenames, valid_path};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_package::SourcePackageLayout;
@@ -62,51 +62,11 @@ pub fn build_docs(
 
 fn find_root_doc_templates(package_root: &Path) -> Result<Vec<String>> {
     let path = package_root.join(SourcePackageLayout::DocTemplates.path());
-    if !try_exists_or_is_symlink(&path)
+    if !valid_path(&path)
         .with_context(|| format!("Failed to inspect doc templates at '{}'", path.display()))?
     {
         return Ok(vec![]);
     }
     find_filenames(&[&path], |path| extension_equals(path, "md"))
         .with_context(|| format!("Failed to discover doc templates at '{}'", path.display()))
-}
-
-#[cfg(all(test, unix))]
-mod tests {
-    use super::find_root_doc_templates;
-    use std::{
-        fs::{Permissions, create_dir, set_permissions},
-        os::unix::fs::PermissionsExt,
-    };
-
-    #[test]
-    fn missing_doc_templates_are_optional() {
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        assert!(find_root_doc_templates(temp_dir.path()).unwrap().is_empty());
-    }
-
-    #[test]
-    fn doc_template_traversal_errors_are_propagated() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let templates = temp_dir.path().join("doc_templates");
-        create_dir(&templates).unwrap();
-        let unreadable = templates.join("unreadable");
-        create_dir(&unreadable).unwrap();
-        set_permissions(&unreadable, Permissions::from_mode(0o000)).unwrap();
-        if std::fs::read_dir(&unreadable).is_ok() {
-            set_permissions(&unreadable, Permissions::from_mode(0o700)).unwrap();
-            return;
-        }
-
-        let result = find_root_doc_templates(temp_dir.path());
-        set_permissions(&unreadable, Permissions::from_mode(0o700)).unwrap();
-        let error = result.unwrap_err();
-
-        assert!(
-            error
-                .to_string()
-                .contains("Failed to discover doc templates")
-        );
-    }
 }

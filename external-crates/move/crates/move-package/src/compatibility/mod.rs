@@ -9,7 +9,7 @@ use crate::{
     package::layout::SourcePackageLayout, package::paths::PackagePath, schema::PackageName,
 };
 
-use move_command_line_common::files::try_exists_or_is_symlink;
+use move_command_line_common::files::valid_path;
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 
 use anyhow::{Context, Result};
@@ -117,7 +117,7 @@ fn find_files(
         return Ok(());
     }
 
-    if !try_exists_or_is_symlink(dir)
+    if !valid_path(dir)
         .with_context(|| format!("Failed to inspect source path '{}'", dir.display()))?
     {
         return Ok(());
@@ -129,6 +129,7 @@ fn find_files(
     }
     let entries = fs::read_dir(dir)
         .with_context(|| format!("Failed to read source directory '{}'", dir.display()))?;
+
     for entry in entries {
         let entry = entry
             .with_context(|| format!("Failed to read source directory '{}'", dir.display()))?;
@@ -144,6 +145,7 @@ fn find_files(
             find_files(files, &path, extension, max_depth - 1)?;
         }
     }
+
     Ok(())
 }
 

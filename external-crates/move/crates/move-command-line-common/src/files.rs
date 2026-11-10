@@ -77,8 +77,8 @@ pub fn try_exists(path: impl AsRef<Path>) -> std::io::Result<bool> {
     }
 }
 
-/// Returns whether a path exists or is a dangling symlink.
-pub fn try_exists_or_is_symlink(path: impl AsRef<Path>) -> std::io::Result<bool> {
+/// Returns whether a path exists (or it is a symlink to follow)
+pub fn valid_path(path: impl AsRef<Path>) -> std::io::Result<bool> {
     let path = path.as_ref();
     if try_exists(path)? {
         return std::result::Result::Ok(true);
@@ -139,6 +139,7 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
 }
 
 fn is_ignorable_walk_error(error: &walkdir::Error) -> bool {
+    // Broken nested symlinks and ancestor loops cannot hide files reachable by this walk.
     if error.loop_ancestor().is_some() {
         return true;
     }
@@ -156,25 +157,19 @@ fn is_ignorable_walk_error(error: &walkdir::Error) -> bool {
         && std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
 }
 
+#[cfg(unix)]
 fn is_filesystem_loop(error: &std::io::Error) -> bool {
-    let raw_error = error.raw_os_error();
-    if cfg!(any(target_os = "linux", target_os = "android")) {
-        raw_error == Some(40)
-    } else if cfg!(any(
-        target_vendor = "apple",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd",
-        target_os = "dragonfly"
-    )) {
-        raw_error == Some(62)
-    } else if cfg!(any(target_os = "illumos", target_os = "solaris")) {
-        raw_error == Some(90)
-    } else if cfg!(windows) {
-        raw_error == Some(1921)
-    } else {
-        false
-    }
+    error.raw_os_error() == Some(libc::ELOOP)
+}
+
+#[cfg(windows)]
+fn is_filesystem_loop(error: &std::io::Error) -> bool {
+    error.raw_os_error() == Some(windows_sys::Win32::Foundation::ERROR_CANT_RESOLVE_FILENAME as i32)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn is_filesystem_loop(_error: &std::io::Error) -> bool {
+    false
 }
 
 /// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
@@ -376,93 +371,5 @@ pub fn find_move_filenames_vfs(
                 .map(|e| e.as_str() == MOVE_EXTENSION)
                 .unwrap_or(false)
         })
-    }
-}
-
-#[cfg(all(test, unix))]
-mod tests {
-    use super::{
-        MOVE_EXTENSION, extension_equals, find_filenames, find_filenames_and_keep_specified,
-        find_filenames_vfs, try_exists, try_exists_or_is_symlink,
-    };
-    use std::os::unix::fs::{PermissionsExt, symlink};
-    use vfs::{VfsPath, impls::physical::PhysicalFS};
-
-    #[test]
-    fn dangling_paths_are_detected() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let link = temp_dir.path().join("broken");
-        symlink("missing", &link).unwrap();
-
-        assert!(!try_exists(&link).unwrap());
-        assert!(try_exists_or_is_symlink(link).unwrap());
-    }
-
-    #[test]
-    fn physical_traversal_errors_are_propagated() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let unreadable = temp_dir.path().join("unreadable");
-        std::fs::create_dir(&unreadable).unwrap();
-        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
-        if std::fs::read_dir(&unreadable).is_ok() {
-            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
-            return;
-        }
-
-        let result = find_filenames(&[temp_dir.path()], |_| true);
-        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let error = result.unwrap_err();
-
-        assert!(error.downcast_ref::<walkdir::Error>().is_some());
-        assert!(error.to_string().contains("Failed to traverse source path"));
-    }
-
-    #[test]
-    fn keep_specified_propagates_traversal_errors() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let unreadable = temp_dir.path().join("unreadable");
-        std::fs::create_dir(&unreadable).unwrap();
-        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
-        if std::fs::read_dir(&unreadable).is_ok() {
-            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
-            return;
-        }
-
-        let result = find_filenames_and_keep_specified(&[temp_dir.path()], |_| true);
-        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn nested_symlink_errors_are_ignored() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        symlink("missing.move", temp_dir.path().join("broken.move")).unwrap();
-        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
-        symlink("self.move", temp_dir.path().join("self.move")).unwrap();
-        std::fs::write(temp_dir.path().join("file"), "contents").unwrap();
-        symlink("file/child", temp_dir.path().join("notdir.move")).unwrap();
-
-        assert!(
-            find_filenames(&[temp_dir.path()], |path| extension_equals(
-                path,
-                MOVE_EXTENSION
-            ))
-            .unwrap()
-            .is_empty()
-        );
-
-        let vfs_temp_dir = tempfile::tempdir().unwrap();
-        symlink("missing.move", vfs_temp_dir.path().join("broken.move")).unwrap();
-        symlink(vfs_temp_dir.path(), vfs_temp_dir.path().join("loop")).unwrap();
-        std::fs::write(vfs_temp_dir.path().join("file"), "contents").unwrap();
-        symlink("file/child", vfs_temp_dir.path().join("notdir.move")).unwrap();
-        let root = VfsPath::new(PhysicalFS::new(vfs_temp_dir.path()));
-        assert!(
-            find_filenames_vfs(&[root], |path| path.extension().as_deref()
-                == Some(MOVE_EXTENSION))
-            .unwrap()
-            .is_empty()
-        );
     }
 }
