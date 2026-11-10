@@ -30,7 +30,7 @@ use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SubmitTxType,
 };
 use sui_types::object::Object;
-use sui_types::traffic_control::ClientIdSource;
+use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::transaction::{
     AllowedProposers, Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
 };
@@ -1634,6 +1634,7 @@ async fn test_pool_mode_reports_processed_transactions_per_transaction() {
 // A transaction whose submit request ended while its pool entry is still queued can pass the
 // handler's in-flight and recent-submission checks again. The pool attaches the resubmission to
 // the queued entry, so the transaction is queued once and the resubmitter receives its position.
+// The resubmission still counts as spam for traffic control.
 #[sim_test]
 async fn test_pool_mode_attaches_a_resubmission_to_the_queued_entry() {
     telemetry_subscribers::init_for_testing();
@@ -1722,10 +1723,11 @@ async fn test_pool_mode_attaches_a_resubmission_to_the_queued_entry() {
     assert_eq!(taken.len(), 2, "one copy of each transaction is proposed");
     ack(BlockRef::MIN);
 
-    let (response, _weight) = second
+    let (response, weight) = second
         .await
         .unwrap()
         .expect("an already queued transaction must not fail the request");
+    assert_eq!(weight.value(), Weight::one().value());
     let results = response.into_inner().results;
     assert_eq!(results.len(), 2);
     for (index, result) in results.into_iter().enumerate() {
