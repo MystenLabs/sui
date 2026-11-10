@@ -3,7 +3,7 @@
 
 use crate::layout::CompiledPackageLayout;
 use anyhow::Result;
-use move_command_line_common::files::{extension_equals, find_filenames};
+use move_command_line_common::files::{extension_equals, find_filenames, try_exists};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_package::SourcePackageLayout;
@@ -21,14 +21,7 @@ pub fn build_docs(
     deps: &[Symbol],
     install_dir: &Option<PathBuf>,
 ) -> Result<Vec<(String, String)>> {
-    let root_doc_templates = find_filenames(
-        &[package_root
-            .join(SourcePackageLayout::DocTemplates.path())
-            .to_string_lossy()
-            .to_string()],
-        |path| extension_equals(path, "md"),
-    )
-    .unwrap_or_else(|_| vec![]);
+    let root_doc_templates = find_root_doc_templates(package_root)?;
     let root_for_docs = if let Some(install_dir) = install_dir {
         install_dir.join(CompiledPackageLayout::Root.path())
     } else {
@@ -65,4 +58,37 @@ pub fn build_docs(
     };
     let docgen = Docgen::new(model, &doc_options);
     docgen.generate(model)
+}
+
+fn find_root_doc_templates(package_root: &Path) -> Result<Vec<String>> {
+    let path = package_root.join(SourcePackageLayout::DocTemplates.path());
+    if !try_exists(&path)? {
+        return Ok(vec![]);
+    }
+    find_filenames(&[path], |path| extension_equals(path, "md"))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::find_root_doc_templates;
+    use std::{fs::create_dir, os::unix::fs::symlink};
+
+    #[test]
+    fn missing_doc_templates_are_optional() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        assert!(find_root_doc_templates(temp_dir.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn doc_template_traversal_errors_are_propagated() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let templates = temp_dir.path().join("doc_templates");
+        create_dir(&templates).unwrap();
+        symlink(&templates, templates.join("loop")).unwrap();
+
+        let error = find_root_doc_templates(temp_dir.path()).unwrap_err();
+
+        assert!(error.to_string().contains("Failed to traverse source path"));
+    }
 }

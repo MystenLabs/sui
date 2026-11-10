@@ -99,7 +99,8 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
             continue;
         }
         for entry in walkdir::WalkDir::new(path).follow_links(true) {
-            let entry = entry?;
+            let entry = entry
+                .with_context(|| format!("Failed to traverse source path '{}'", path.display()))?;
             let entry_path = entry.path();
             if !entry.file_type().is_file() || !is_file_desired(entry_path) {
                 continue;
@@ -246,7 +247,9 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
             continue;
         }
         for entry in p.walk_dir()? {
-            let entry = entry?;
+            let entry = entry.with_context(|| {
+                format!("Failed to traverse virtual source path '{}'", p.as_str())
+            })?;
             if !entry.is_file()? || !is_file_desired(&entry) {
                 continue;
             }
@@ -295,16 +298,34 @@ pub fn find_move_filenames_vfs(
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::find_filenames;
+    use super::{find_filenames, find_filenames_vfs};
     use std::os::unix::fs::symlink;
+    use vfs::{VfsPath, impls::physical::PhysicalFS};
 
     #[test]
-    fn traversal_errors_are_propagated() {
+    fn physical_traversal_errors_are_propagated() {
         let temp_dir = tempfile::tempdir().unwrap();
         symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
 
         let error = find_filenames(&[temp_dir.path()], |_| true).unwrap_err();
 
         assert!(error.downcast_ref::<walkdir::Error>().is_some());
+        assert!(error.to_string().contains("Failed to traverse source path"));
+    }
+
+    #[test]
+    fn virtual_traversal_errors_are_propagated() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        symlink("missing.move", temp_dir.path().join("broken.move")).unwrap();
+        let root = VfsPath::new(PhysicalFS::new(temp_dir.path()));
+
+        let error = find_filenames_vfs(&[root], |_| true).unwrap_err();
+
+        assert!(error.downcast_ref::<vfs::VfsError>().is_some());
+        assert!(
+            error
+                .to_string()
+                .contains("Failed to traverse virtual source path")
+        );
     }
 }
