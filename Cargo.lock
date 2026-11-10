@@ -8574,6 +8574,7 @@ dependencies = [
  "dirs-next",
  "hex",
  "insta",
+ "libc",
  "move-binary-format",
  "move-core-types",
  "move-symbol-pool",
@@ -8582,6 +8583,7 @@ dependencies = [
  "sha2 0.9.9",
  "vfs",
  "walkdir",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
