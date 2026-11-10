@@ -98,18 +98,31 @@ impl OnDiskCompiledPackage {
             .root_path
             .join(self.package.compiled_package_info.package_name.as_str())
             .join(CompiledPackageLayout::CompiledDocs.path());
-        let compiled_docs = if docs_path.is_dir() {
+        let docs_metadata = try_exists(&docs_path)
+            .with_context(|| {
+                format!(
+                    "Failed to inspect compiled docs at '{}'",
+                    docs_path.display()
+                )
+            })?
+            .then(|| std::fs::metadata(&docs_path))
+            .transpose()
+            .with_context(|| {
+                format!(
+                    "Failed to inspect compiled docs at '{}'",
+                    docs_path.display()
+                )
+            })?;
+        let compiled_docs = if docs_metadata.is_some_and(|metadata| metadata.is_dir()) {
             Some(
-                find_filenames(&[docs_path.to_string_lossy().to_string()], |path| {
-                    extension_equals(path, "md")
-                })?
-                .into_iter()
-                .map(|path| {
-                    let contents = std::fs::read_to_string(&path)
-                        .with_context(|| format!("Failed to read compiled doc '{path}'"))?;
-                    Ok((path, contents))
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?,
+                find_filenames(&[&docs_path], |path| extension_equals(path, "md"))?
+                    .into_iter()
+                    .map(|path| {
+                        let contents = std::fs::read_to_string(&path)
+                            .with_context(|| format!("Failed to read compiled doc '{path}'"))?;
+                        Ok((path, contents))
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?,
             )
         } else {
             None

@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::build_config::BuildConfig;
-use anyhow::Result;
-use move_command_line_common::files::find_move_filenames;
+use anyhow::{Context, Result};
+use move_command_line_common::files::{find_move_filenames, try_exists};
 use move_compiler::shared::files::FileName;
 use move_package::{PackagePath, SourcePackageLayout};
 use std::path::{Path, PathBuf};
 
 // Find all the source files for a package at the given path
 pub fn get_sources(path: &PackagePath, config: &BuildConfig) -> Result<Vec<FileName>> {
-    let places_to_look = source_paths_for_config(path.path(), config);
+    let places_to_look = source_paths_for_config(path.path(), config)?;
     Ok(find_move_filenames(&places_to_look, false)?
         .into_iter()
         .map(FileName::from)
@@ -19,28 +19,27 @@ pub fn get_sources(path: &PackagePath, config: &BuildConfig) -> Result<Vec<FileN
 
 /// Get the source paths to look for source files in a package at the given path, based on the
 /// build config flags.
-fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<PathBuf> {
+fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Result<Vec<PathBuf>> {
     let mut places_to_look = Vec::new();
-    let mut add_path = |layout_path: SourcePackageLayout| {
+    let mut add_path = |layout_path: SourcePackageLayout| -> Result<()> {
         let path = package_path.join(layout_path.path());
-        if layout_path.is_optional() && !path.exists() {
-            return;
+        let exists = try_exists(&path)
+            .with_context(|| format!("Failed to inspect source path '{}'", path.display()))?;
+        if !layout_path.is_optional() || exists {
+            places_to_look.push(path);
         }
-        places_to_look.push(path)
+        Ok(())
     };
 
-    add_path(SourcePackageLayout::Sources);
-    add_path(SourcePackageLayout::Scripts);
+    add_path(SourcePackageLayout::Sources)?;
+    add_path(SourcePackageLayout::Scripts)?;
 
     if config.test_mode {
-        add_path(SourcePackageLayout::Examples);
-        add_path(SourcePackageLayout::Tests);
+        add_path(SourcePackageLayout::Examples)?;
+        add_path(SourcePackageLayout::Tests)?;
     }
 
-    places_to_look
-        .into_iter()
-        .filter(|path| path.exists())
-        .collect()
+    Ok(places_to_look)
 }
 
 #[cfg(test)]
@@ -123,6 +122,27 @@ mod tests {
         let error = get_sources(&package_path, &BuildConfig::default()).unwrap_err();
 
         assert!(error.to_string().contains("Failed to traverse source path"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_get_sources_rejects_dangling_source_root() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("Move.toml"),
+            "[package]\nname = \"test\"\nversion = \"0.0.1\"",
+        )
+        .expect("Failed to write Move.toml");
+        symlink("missing", temp_dir.path().join("sources"))
+            .expect("Failed to create dangling source root");
+        let package_path =
+            PackagePath::new(temp_dir.path().to_path_buf()).expect("Failed to create package path");
+
+        let error = get_sources(&package_path, &BuildConfig::default()).unwrap_err();
+
+        assert!(error.to_string().contains("Failed to inspect source path"));
     }
 
     #[test]
@@ -259,7 +279,7 @@ mod tests {
             ..Default::default()
         };
 
-        let paths = source_paths_for_config(package_path, &config);
+        let paths = source_paths_for_config(package_path, &config).unwrap();
 
         // In normal mode, should only include sources and scripts
         assert_eq!(paths.len(), 2);
@@ -283,7 +303,7 @@ mod tests {
             ..Default::default()
         };
 
-        let paths = source_paths_for_config(package_path, &config);
+        let paths = source_paths_for_config(package_path, &config).unwrap();
 
         // In test mode, should include sources, scripts, and tests
         assert_eq!(paths.len(), 3);

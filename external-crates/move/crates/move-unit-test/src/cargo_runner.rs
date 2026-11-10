@@ -14,8 +14,7 @@ pub fn run_tests_with_config_and_filter<V: VMTestSetup + Sync>(
     vm_test_setup: V,
 ) {
     if let Err(error) = run_tests(config, root_path, source_pattern, dep_root, vm_test_setup) {
-        eprintln!("{error:#}");
-        std::process::exit(1);
+        panic!("{error:#}");
     }
 }
 
@@ -28,7 +27,9 @@ fn run_tests<V: VMTestSetup + Sync>(
 ) -> anyhow::Result<()> {
     config.source_files = find_matching_files(root_path, source_pattern)?;
     if let Some(root) = dep_root {
-        config.dep_files = find_matching_files(root, r".*\.move$")?;
+        config
+            .dep_files
+            .extend(find_matching_files(root, r".*\.move$")?);
     }
     let test_plan = config
         .build_test_plan()
@@ -118,6 +119,24 @@ mod macro_tests {
             }
         },
         concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_sources"),
-        r".*/do_nothing\.move$"
+        r".*[\\/]do_nothing\.move$"
+    );
+}
+
+#[cfg(test)]
+mod macro_with_deps_tests {
+    crate::register_move_unit_tests!(
+        crate::UnitTestingConfig {
+            num_threads: 1,
+            gas_limit: Some(1000),
+            named_address_values: move_stdlib::named_addresses().into_iter().collect(),
+            report_stacktrace_on_abort: true,
+            deterministic_generation: true,
+            ..crate::UnitTestingConfig::default_with_bound(None)
+        },
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_sources"),
+        r".*[\\/]do_nothing\.move$",
+        &move_stdlib::modules_full_path(),
+        crate::vm_test_setup::DefaultVMTestSetup::legacy_default()
     );
 }

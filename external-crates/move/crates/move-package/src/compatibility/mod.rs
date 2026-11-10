@@ -11,7 +11,7 @@ use crate::{
 
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use regex::Regex;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -67,7 +67,7 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Option<
         &path.path().join(SourcePackageLayout::Sources.path()),
         "move",
         5,
-    );
+    )?;
 
     // TODO: Should we also look into tests folder, in case we're dealing with a `tests`-only package?
     let mut names = HashSet::new();
@@ -106,28 +106,42 @@ fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAdd
 }
 
 /// Find all files matching the extension in a given path.
-fn find_files(files: &mut Vec<PathBuf>, dir: &Path, extension: &str, max_depth: usize) {
+fn find_files(
+    files: &mut Vec<PathBuf>,
+    dir: &Path,
+    extension: &str,
+    max_depth: usize,
+) -> Result<()> {
     if max_depth == 0 {
-        return;
+        return Ok(());
     }
 
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.is_file() {
-                    if let Some(ext) = path.extension()
-                        && ext == extension
-                    {
-                        files.push(path);
-                    }
-                } else if metadata.is_dir() {
-                    find_files(files, &path, extension, max_depth - 1);
-                }
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("Failed to read source directory '{}'", dir.display()));
+        }
+    };
+    for entry in entries {
+        let entry = entry
+            .with_context(|| format!("Failed to read source directory '{}'", dir.display()))?;
+        let path = entry.path();
+        let metadata = entry
+            .metadata()
+            .with_context(|| format!("Failed to inspect source path '{}'", path.display()))?;
+        if metadata.is_file() {
+            if let Some(ext) = path.extension()
+                && ext == extension
+            {
+                files.push(path);
             }
+        } else if metadata.is_dir() {
+            find_files(files, &path, extension, max_depth - 1)?;
         }
     }
+    Ok(())
 }
 
 // Consider supporting the legacy `address { module {} }` format.
@@ -200,6 +214,27 @@ mod tests {
 
     fn set(vec: Vec<&str>) -> HashSet<String> {
         vec.into_iter().map(|s| s.to_string()).collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn find_files_propagates_traversal_errors() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let unreadable = temp_dir.path().join("unreadable");
+        fs::create_dir(&unreadable).unwrap();
+        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000)).unwrap();
+
+        let result = find_files(&mut vec![], temp_dir.path(), "move", 5);
+        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o700)).unwrap();
+        let error = result.unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("Failed to read source directory")
+        );
     }
 
     #[test]

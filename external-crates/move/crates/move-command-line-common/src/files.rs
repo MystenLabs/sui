@@ -70,9 +70,17 @@ pub const MOVE_BYTECODE_EXTENSION: &str = "mvb";
 /// removed and we should use that function instead.
 pub fn try_exists(path: impl AsRef<Path>) -> std::io::Result<bool> {
     use std::io::{ErrorKind, Result as R};
+    let path = path.as_ref();
     match std::fs::metadata(path) {
         R::Ok(_) => R::Ok(true),
-        R::Err(e) if e.kind() == ErrorKind::NotFound => R::Ok(false),
+        R::Err(error) if error.kind() == ErrorKind::NotFound => {
+            match std::fs::symlink_metadata(path) {
+                R::Ok(metadata) if metadata.file_type().is_symlink() => R::Err(error),
+                R::Ok(_) => R::Ok(true),
+                R::Err(link_error) if link_error.kind() == ErrorKind::NotFound => R::Ok(false),
+                R::Err(link_error) => R::Err(link_error),
+            }
+        }
         R::Err(e) => R::Err(e),
     }
 }
@@ -80,6 +88,7 @@ pub fn try_exists(path: impl AsRef<Path>) -> std::io::Result<bool> {
 /// - For each directory in `paths`, it will return all files that satisfy the predicate
 /// - Any file explicitly passed in `paths`, it will include that file in the result, regardless
 ///   of the file extension
+/// - Traversal errors, including errors from symlinks, are returned
 pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
     paths: &[impl AsRef<Path>],
     mut is_file_desired: Predicate,
@@ -298,9 +307,20 @@ pub fn find_move_filenames_vfs(
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::{find_filenames, find_filenames_and_keep_specified, find_filenames_vfs};
+    use super::{
+        find_filenames, find_filenames_and_keep_specified, find_filenames_vfs, try_exists,
+    };
     use std::os::unix::fs::symlink;
     use vfs::{VfsPath, impls::physical::PhysicalFS};
+
+    #[test]
+    fn dangling_paths_are_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let link = temp_dir.path().join("broken");
+        symlink("missing", &link).unwrap();
+
+        assert!(try_exists(link).is_err());
+    }
 
     #[test]
     fn physical_traversal_errors_are_propagated() {
