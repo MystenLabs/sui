@@ -98,14 +98,18 @@ pub struct ExpectedCall {
 }
 
 /// A single recorded `ReadRows` call: the resolved table name (suffix after
-/// `/tables/`), the row keys selected by the request, and the column
+/// `/tables/`), the row keys selected by the request, the column
 /// qualifiers its filter restricts the read to (sorted; `None` when the
-/// filter has no column qualifier restriction).
+/// filter has no column qualifier restriction), and the shape of the request:
+/// its row ranges, `rows_limit` and direction.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadRowsCall {
     pub table: String,
     pub row_keys: Vec<Bytes>,
     pub column_qualifiers: Option<Vec<Bytes>>,
+    pub row_ranges: Vec<RowRange>,
+    pub rows_limit: i64,
+    pub reversed: bool,
 }
 
 /// Order in which `ReadRows` emits matching rows relative to the request's
@@ -918,7 +922,7 @@ impl Bigtable for MockBigtableServer {
             ));
         }
 
-        let ranges = &row_set.row_ranges;
+        let ranges = row_set.row_ranges;
         let mut requested_keys = row_set.row_keys;
         if !ranges.is_empty() {
             requested_keys = state
@@ -965,6 +969,9 @@ impl Bigtable for MockBigtableServer {
                 qualifiers.sort_unstable();
                 qualifiers
             }),
+            row_ranges: ranges.clone(),
+            rows_limit: req.rows_limit,
+            reversed: req.reversed,
         });
         if ranges.is_empty()
             && state.read_rows_response_order == ReadRowsResponseOrder::ReverseRequestOrder
