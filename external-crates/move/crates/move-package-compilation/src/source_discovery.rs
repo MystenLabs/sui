@@ -3,7 +3,7 @@
 
 use crate::build_config::BuildConfig;
 use anyhow::{Context, Result};
-use move_command_line_common::files::{find_move_filenames, try_exists};
+use move_command_line_common::files::{find_move_filenames, try_exists_or_is_symlink};
 use move_compiler::shared::files::FileName;
 use move_package::{PackagePath, SourcePackageLayout};
 use std::path::{Path, PathBuf};
@@ -11,7 +11,13 @@ use std::path::{Path, PathBuf};
 // Find all the source files for a package at the given path
 pub fn get_sources(path: &PackagePath, config: &BuildConfig) -> Result<Vec<FileName>> {
     let places_to_look = source_paths_for_config(path.path(), config)?;
-    Ok(find_move_filenames(&places_to_look, false)?
+    Ok(find_move_filenames(&places_to_look, false)
+        .with_context(|| {
+            format!(
+                "Failed to discover sources for package '{}'",
+                path.path().display()
+            )
+        })?
         .into_iter()
         .map(FileName::from)
         .collect())
@@ -23,9 +29,9 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Result<
     let mut places_to_look = Vec::new();
     let mut add_path = |layout_path: SourcePackageLayout| -> Result<()> {
         let path = package_path.join(layout_path.path());
-        let exists = try_exists(&path)
-            .with_context(|| format!("Failed to inspect source path '{}'", path.display()))?;
-        if !layout_path.is_optional() || exists {
+        if try_exists_or_is_symlink(&path)
+            .with_context(|| format!("Failed to inspect source path '{}'", path.display()))?
+        {
             places_to_look.push(path);
         }
         Ok(())
@@ -121,7 +127,7 @@ mod tests {
 
         let error = get_sources(&package_path, &BuildConfig::default()).unwrap_err();
 
-        assert!(error.to_string().contains("Failed to traverse source path"));
+        assert!(format!("{error:#}").contains("Failed to traverse source path"));
     }
 
     #[cfg(unix)]
@@ -142,7 +148,7 @@ mod tests {
 
         let error = get_sources(&package_path, &BuildConfig::default()).unwrap_err();
 
-        assert!(error.to_string().contains("Failed to inspect source path"));
+        assert!(error.to_string().contains("Failed to discover sources"));
     }
 
     #[test]
@@ -201,6 +207,22 @@ mod tests {
         // Should only get the one file from sources
         assert_eq!(sources.len(), 1);
         assert!(sources[0].as_str().ends_with("module.move"));
+    }
+
+    #[test]
+    fn test_get_sources_without_source_directories() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("Move.toml"),
+            "[package]\nname = \"test\"\nversion = \"0.0.1\"",
+        )
+        .expect("Failed to write Move.toml");
+        let package_path =
+            PackagePath::new(temp_dir.path().to_path_buf()).expect("Failed to create package path");
+
+        let sources = get_sources(&package_path, &BuildConfig::default()).unwrap();
+
+        assert!(sources.is_empty());
     }
 
     #[test]

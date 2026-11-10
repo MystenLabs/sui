@@ -70,18 +70,27 @@ pub const MOVE_BYTECODE_EXTENSION: &str = "mvb";
 /// removed and we should use that function instead.
 pub fn try_exists(path: impl AsRef<Path>) -> std::io::Result<bool> {
     use std::io::{ErrorKind, Result as R};
-    let path = path.as_ref();
     match std::fs::metadata(path) {
         R::Ok(_) => R::Ok(true),
-        R::Err(error) if error.kind() == ErrorKind::NotFound => {
-            match std::fs::symlink_metadata(path) {
-                R::Ok(metadata) if metadata.file_type().is_symlink() => R::Err(error),
-                R::Ok(_) => R::Ok(true),
-                R::Err(link_error) if link_error.kind() == ErrorKind::NotFound => R::Ok(false),
-                R::Err(link_error) => R::Err(link_error),
-            }
-        }
+        R::Err(e) if e.kind() == ErrorKind::NotFound => R::Ok(false),
         R::Err(e) => R::Err(e),
+    }
+}
+
+/// Returns whether a path exists or is a dangling symlink.
+pub fn try_exists_or_is_symlink(path: impl AsRef<Path>) -> std::io::Result<bool> {
+    let path = path.as_ref();
+    if try_exists(path)? {
+        return std::result::Result::Ok(true);
+    }
+    match std::fs::symlink_metadata(path) {
+        std::result::Result::Ok(metadata) => {
+            std::result::Result::Ok(metadata.file_type().is_symlink())
+        }
+        std::result::Result::Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::result::Result::Ok(false)
+        }
+        std::result::Result::Err(error) => std::result::Result::Err(error),
     }
 }
 
@@ -108,8 +117,21 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
             continue;
         }
         for entry in walkdir::WalkDir::new(path).follow_links(true) {
-            let entry = entry
-                .with_context(|| format!("Failed to traverse source path '{}'", path.display()))?;
+            let entry = match entry {
+                std::result::Result::Ok(entry) => entry,
+                std::result::Result::Err(error)
+                    if error
+                        .io_error()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+                {
+                    continue;
+                }
+                std::result::Result::Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("Failed to traverse source path '{}'", path.display())
+                    });
+                }
+            };
             let entry_path = entry.path();
             if !entry.file_type().is_file() || !is_file_desired(entry_path) {
                 continue;
@@ -258,7 +280,17 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
             continue;
         }
         for entry in p.walk_dir().with_context(traversal_context)? {
-            let entry = entry.with_context(traversal_context)?;
+            let entry = match entry {
+                std::result::Result::Ok(entry) => entry,
+                std::result::Result::Err(error)
+                    if matches!(error.kind(), VfsErrorKind::FileNotFound) =>
+                {
+                    continue;
+                }
+                std::result::Result::Err(error) => {
+                    return Err(error).with_context(traversal_context);
+                }
+            };
             if !entry.is_file().with_context(traversal_context)? || !is_file_desired(&entry) {
                 continue;
             }
@@ -284,7 +316,9 @@ pub fn find_move_filenames_vfs(
         let mut file_paths = vec![];
         let mut other_paths = vec![];
         for p in paths {
-            if p.is_file()? {
+            if p.is_file().with_context(|| {
+                format!("Failed to inspect virtual source path '{}'", p.as_str())
+            })? {
                 file_paths.push(p.clone());
             } else {
                 other_paths.push(p.clone());
@@ -309,23 +343,25 @@ pub fn find_move_filenames_vfs(
 mod tests {
     use super::{
         find_filenames, find_filenames_and_keep_specified, find_filenames_vfs, try_exists,
+        try_exists_or_is_symlink,
     };
     use std::os::unix::fs::symlink;
     use vfs::{VfsPath, impls::physical::PhysicalFS};
 
     #[test]
-    fn dangling_paths_are_errors() {
+    fn dangling_paths_are_detected() {
         let temp_dir = tempfile::tempdir().unwrap();
         let link = temp_dir.path().join("broken");
         symlink("missing", &link).unwrap();
 
-        assert!(try_exists(link).is_err());
+        assert!(!try_exists(&link).unwrap());
+        assert!(try_exists_or_is_symlink(link).unwrap());
     }
 
     #[test]
     fn physical_traversal_errors_are_propagated() {
         let temp_dir = tempfile::tempdir().unwrap();
-        symlink("missing.move", temp_dir.path().join("broken.move")).unwrap();
+        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
 
         let error = find_filenames(&[temp_dir.path()], |_| true).unwrap_err();
 
@@ -344,18 +380,17 @@ mod tests {
     }
 
     #[test]
-    fn virtual_traversal_errors_are_propagated() {
+    fn dangling_entries_are_ignored() {
         let temp_dir = tempfile::tempdir().unwrap();
         symlink("missing.move", temp_dir.path().join("broken.move")).unwrap();
-        let root = VfsPath::new(PhysicalFS::new(temp_dir.path()));
 
-        let error = find_filenames_vfs(&[root], |_| true).unwrap_err();
-
-        assert!(error.downcast_ref::<vfs::VfsError>().is_some());
         assert!(
-            error
-                .to_string()
-                .contains("Failed to traverse virtual source path")
+            find_filenames(&[temp_dir.path()], |_| true)
+                .unwrap()
+                .is_empty()
         );
+
+        let root = VfsPath::new(PhysicalFS::new(temp_dir.path()));
+        assert!(find_filenames_vfs(&[root], |_| true).unwrap().is_empty());
     }
 }

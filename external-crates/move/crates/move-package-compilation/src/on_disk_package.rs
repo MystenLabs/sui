@@ -25,7 +25,7 @@ use move_bytecode_source_map::utils::{
 };
 use move_command_line_common::files::{
     DEBUG_INFO_EXTENSION, FileHash, MOVE_BYTECODE_EXTENSION, MOVE_COMPILED_EXTENSION,
-    MOVE_EXTENSION, extension_equals, find_filenames, try_exists,
+    MOVE_EXTENSION, extension_equals, find_filenames, try_exists, try_exists_or_is_symlink,
 };
 use move_disassembler::disassembler::Disassembler;
 use move_symbol_pool::Symbol;
@@ -98,21 +98,28 @@ impl OnDiskCompiledPackage {
             .root_path
             .join(self.package.compiled_package_info.package_name.as_str())
             .join(CompiledPackageLayout::CompiledDocs.path());
-        let docs_metadata = try_exists(&docs_path)
-            .with_context(|| {
-                format!(
-                    "Failed to inspect compiled docs at '{}'",
-                    docs_path.display()
-                )
-            })?
-            .then(|| std::fs::metadata(&docs_path))
-            .transpose()
-            .with_context(|| {
-                format!(
-                    "Failed to inspect compiled docs at '{}'",
-                    docs_path.display()
-                )
-            })?;
+        let docs_metadata = match std::fs::metadata(&docs_path) {
+            Ok(metadata) => Some(metadata),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if try_exists_or_is_symlink(&docs_path)? {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "Failed to inspect compiled docs at '{}'",
+                            docs_path.display()
+                        )
+                    });
+                }
+                None
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "Failed to inspect compiled docs at '{}'",
+                        docs_path.display()
+                    )
+                });
+            }
+        };
         let compiled_docs = if docs_metadata.is_some_and(|metadata| metadata.is_dir()) {
             Some(
                 find_filenames(&[&docs_path], |path| extension_equals(path, "md"))?
@@ -290,7 +297,7 @@ impl OnDiskCompiledPackage {
         };
         let mut compiled_unit_paths = vec![];
         let module_path = package_dir.join(CompiledPackageLayout::CompiledModules.path());
-        if try_exists(&module_path)? {
+        if try_exists_or_is_symlink(&module_path)? {
             compiled_unit_paths.push(module_path);
         }
         find_filenames(&compiled_unit_paths, |path| {

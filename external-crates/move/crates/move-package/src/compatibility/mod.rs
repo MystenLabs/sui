@@ -9,6 +9,7 @@ use crate::{
     package::layout::SourcePackageLayout, package::paths::PackagePath, schema::PackageName,
 };
 
+use move_command_line_common::files::try_exists_or_is_symlink;
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 
 use anyhow::{Context, Result};
@@ -116,29 +117,34 @@ fn find_files(
         return Ok(());
     }
 
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => {
-            return Err(error)
-                .with_context(|| format!("Failed to read source directory '{}'", dir.display()));
-        }
-    };
-    for entry in entries {
-        let entry = entry
-            .with_context(|| format!("Failed to read source directory '{}'", dir.display()))?;
-        let path = entry.path();
-        let metadata = entry
-            .metadata()
-            .with_context(|| format!("Failed to inspect source path '{}'", path.display()))?;
-        if metadata.is_file() {
-            if let Some(ext) = path.extension()
-                && ext == extension
+    if !try_exists_or_is_symlink(dir)
+        .with_context(|| format!("Failed to inspect source path '{}'", dir.display()))?
+    {
+        return Ok(());
+    }
+    for entry in walkdir::WalkDir::new(dir)
+        .max_depth(max_depth)
+        .follow_links(true)
+    {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error)
+                if error.depth() > 0
+                    && error
+                        .io_error()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
             {
-                files.push(path);
+                continue;
             }
-        } else if metadata.is_dir() {
-            find_files(files, &path, extension, max_depth - 1)?;
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("Failed to traverse source path '{}'", dir.display())
+                });
+            }
+        };
+        let path = entry.path();
+        if entry.file_type().is_file() && path.extension().is_some_and(|ext| ext == extension) {
+            files.push(path.to_path_buf());
         }
     }
     Ok(())
@@ -219,22 +225,14 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn find_files_propagates_traversal_errors() {
-        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::fs::symlink;
 
         let temp_dir = tempfile::tempdir().unwrap();
-        let unreadable = temp_dir.path().join("unreadable");
-        fs::create_dir(&unreadable).unwrap();
-        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000)).unwrap();
+        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
 
-        let result = find_files(&mut vec![], temp_dir.path(), "move", 5);
-        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o700)).unwrap();
-        let error = result.unwrap_err();
+        let error = find_files(&mut vec![], temp_dir.path(), "move", 5).unwrap_err();
 
-        assert!(
-            error
-                .to_string()
-                .contains("Failed to read source directory")
-        );
+        assert!(error.to_string().contains("Failed to traverse source path"));
     }
 
     #[test]

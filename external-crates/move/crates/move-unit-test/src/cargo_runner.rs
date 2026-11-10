@@ -27,9 +27,7 @@ fn run_tests<V: VMTestSetup + Sync>(
 ) -> anyhow::Result<()> {
     config.source_files = find_matching_files(root_path, source_pattern)?;
     if let Some(root) = dep_root {
-        config
-            .dep_files
-            .extend(find_matching_files(root, r".*\.move$")?);
+        config.dep_files = find_matching_files(root, r".*\.move$")?;
     }
     let test_plan = config
         .build_test_plan()

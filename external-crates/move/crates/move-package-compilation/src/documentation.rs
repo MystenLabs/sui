@@ -3,7 +3,7 @@
 
 use crate::layout::CompiledPackageLayout;
 use anyhow::{Context, Result};
-use move_command_line_common::files::{extension_equals, find_filenames, try_exists};
+use move_command_line_common::files::{extension_equals, find_filenames, try_exists_or_is_symlink};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_package::SourcePackageLayout;
@@ -62,7 +62,7 @@ pub fn build_docs(
 
 fn find_root_doc_templates(package_root: &Path) -> Result<Vec<String>> {
     let path = package_root.join(SourcePackageLayout::DocTemplates.path());
-    if !try_exists(&path)
+    if !try_exists_or_is_symlink(&path)
         .with_context(|| format!("Failed to inspect doc templates at '{}'", path.display()))?
     {
         return Ok(vec![]);
