@@ -74,7 +74,10 @@ fn find_root_doc_templates(package_root: &Path) -> Result<Vec<String>> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::find_root_doc_templates;
-    use std::{fs::create_dir, os::unix::fs::symlink};
+    use std::{
+        fs::{Permissions, create_dir, set_permissions},
+        os::unix::fs::PermissionsExt,
+    };
 
     #[test]
     fn missing_doc_templates_are_optional() {
@@ -88,9 +91,13 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let templates = temp_dir.path().join("doc_templates");
         create_dir(&templates).unwrap();
-        symlink(&templates, templates.join("loop")).unwrap();
+        let unreadable = templates.join("unreadable");
+        create_dir(&unreadable).unwrap();
+        set_permissions(&unreadable, Permissions::from_mode(0o000)).unwrap();
 
-        let error = find_root_doc_templates(temp_dir.path()).unwrap_err();
+        let result = find_root_doc_templates(temp_dir.path());
+        set_permissions(&unreadable, Permissions::from_mode(0o700)).unwrap();
+        let error = result.unwrap_err();
 
         assert!(
             error

@@ -97,7 +97,8 @@ pub fn try_exists_or_is_symlink(path: impl AsRef<Path>) -> std::io::Result<bool>
 /// - For each directory in `paths`, it will return all files that satisfy the predicate
 /// - Any file explicitly passed in `paths`, it will include that file in the result, regardless
 ///   of the file extension
-/// - Traversal errors, including errors from symlinks, are returned
+/// - Missing nested symlink targets and symlink loops are ignored
+/// - Other traversal errors are returned
 pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
     paths: &[impl AsRef<Path>],
     mut is_file_desired: Predicate,
@@ -119,13 +120,7 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
         for entry in walkdir::WalkDir::new(path).follow_links(true) {
             let entry = match entry {
                 std::result::Result::Ok(entry) => entry,
-                std::result::Result::Err(error)
-                    if error
-                        .io_error()
-                        .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
-                {
-                    continue;
-                }
+                std::result::Result::Err(error) if is_ignorable_walk_error(&error) => continue,
                 std::result::Result::Err(error) => {
                     return Err(error).with_context(|| {
                         format!("Failed to traverse source path '{}'", path.display())
@@ -141,6 +136,25 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
         }
     }
     Ok(result)
+}
+
+fn is_ignorable_walk_error(error: &walkdir::Error) -> bool {
+    if error.loop_ancestor().is_some() {
+        return true;
+    }
+    let Some(path) = error.path() else {
+        return false;
+    };
+    let Some(io_error) = error.io_error() else {
+        return false;
+    };
+    let target_is_unresolvable = matches!(
+        io_error.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    ) || cfg!(unix)
+        && matches!(io_error.raw_os_error(), Some(40 | 62));
+    target_is_unresolvable
+        && std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
 }
 
 /// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
@@ -345,7 +359,7 @@ mod tests {
         find_filenames, find_filenames_and_keep_specified, find_filenames_vfs, try_exists,
         try_exists_or_is_symlink,
     };
-    use std::os::unix::fs::symlink;
+    use std::os::unix::fs::{PermissionsExt, symlink};
     use vfs::{VfsPath, impls::physical::PhysicalFS};
 
     #[test]
@@ -361,9 +375,13 @@ mod tests {
     #[test]
     fn physical_traversal_errors_are_propagated() {
         let temp_dir = tempfile::tempdir().unwrap();
-        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+        let unreadable = temp_dir.path().join("unreadable");
+        std::fs::create_dir(&unreadable).unwrap();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
 
-        let error = find_filenames(&[temp_dir.path()], |_| true).unwrap_err();
+        let result = find_filenames(&[temp_dir.path()], |_| true);
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let error = result.unwrap_err();
 
         assert!(error.downcast_ref::<walkdir::Error>().is_some());
         assert!(error.to_string().contains("Failed to traverse source path"));
@@ -372,17 +390,21 @@ mod tests {
     #[test]
     fn keep_specified_propagates_traversal_errors() {
         let temp_dir = tempfile::tempdir().unwrap();
-        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+        let unreadable = temp_dir.path().join("unreadable");
+        std::fs::create_dir(&unreadable).unwrap();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
 
-        let error = find_filenames_and_keep_specified(&[temp_dir.path()], |_| true).unwrap_err();
+        let result = find_filenames_and_keep_specified(&[temp_dir.path()], |_| true);
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
 
-        assert!(error.downcast_ref::<walkdir::Error>().is_some());
+        assert!(result.is_err());
     }
 
     #[test]
-    fn dangling_entries_are_ignored() {
+    fn nested_symlink_errors_are_ignored() {
         let temp_dir = tempfile::tempdir().unwrap();
         symlink("missing.move", temp_dir.path().join("broken.move")).unwrap();
+        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
 
         assert!(
             find_filenames(&[temp_dir.path()], |_| true)
@@ -390,7 +412,9 @@ mod tests {
                 .is_empty()
         );
 
-        let root = VfsPath::new(PhysicalFS::new(temp_dir.path()));
+        let vfs_temp_dir = tempfile::tempdir().unwrap();
+        symlink("missing.move", vfs_temp_dir.path().join("broken.move")).unwrap();
+        let root = VfsPath::new(PhysicalFS::new(vfs_temp_dir.path()));
         assert!(find_filenames_vfs(&[root], |_| true).unwrap().is_empty());
     }
 }

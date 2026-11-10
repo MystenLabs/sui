@@ -122,29 +122,21 @@ fn find_files(
     {
         return Ok(());
     }
-    for entry in walkdir::WalkDir::new(dir)
-        .max_depth(max_depth)
-        .follow_links(true)
-    {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error)
-                if error.depth() > 0
-                    && error
-                        .io_error()
-                        .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
-            {
-                continue;
-            }
-            Err(error) => {
-                return Err(error).with_context(|| {
-                    format!("Failed to traverse source path '{}'", dir.display())
-                });
-            }
-        };
+    let entries = fs::read_dir(dir)
+        .with_context(|| format!("Failed to read source directory '{}'", dir.display()))?;
+    for entry in entries {
+        let entry = entry
+            .with_context(|| format!("Failed to read source directory '{}'", dir.display()))?;
         let path = entry.path();
-        if entry.file_type().is_file() && path.extension().is_some_and(|ext| ext == extension) {
-            files.push(path.to_path_buf());
+        let metadata = entry
+            .metadata()
+            .with_context(|| format!("Failed to inspect source path '{}'", path.display()))?;
+        if metadata.is_file() {
+            if path.extension().is_some_and(|ext| ext == extension) {
+                files.push(path);
+            }
+        } else if metadata.is_dir() {
+            find_files(files, &path, extension, max_depth - 1)?;
         }
     }
     Ok(())
@@ -222,17 +214,42 @@ mod tests {
         vec.into_iter().map(|s| s.to_string()).collect()
     }
 
-    #[cfg(unix)]
     #[test]
     fn find_files_propagates_traversal_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file = temp_dir.path().join("not_a_directory");
+        fs::write(&file, "contents").unwrap();
+
+        let error = find_files(&mut vec![], &file, "move", 5).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("Failed to read source directory")
+        );
+    }
+
+    #[test]
+    fn find_files_accepts_a_missing_root() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        assert!(find_files(&mut vec![], &temp_dir.path().join("missing"), "move", 5).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn find_files_rejects_a_dangling_root_and_ignores_nested_links() {
         use std::os::unix::fs::symlink;
 
         let temp_dir = tempfile::tempdir().unwrap();
-        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+        let dangling_root = temp_dir.path().join("dangling_root");
+        symlink("missing", &dangling_root).unwrap();
+        assert!(find_files(&mut vec![], &dangling_root, "move", 5).is_err());
 
-        let error = find_files(&mut vec![], temp_dir.path(), "move", 5).unwrap_err();
-
-        assert!(error.to_string().contains("Failed to traverse source path"));
+        let sources = temp_dir.path().join("sources");
+        fs::create_dir(&sources).unwrap();
+        symlink("missing.move", sources.join("broken.move")).unwrap();
+        assert!(find_files(&mut vec![], &sources, "move", 5).is_ok());
     }
 
     #[test]

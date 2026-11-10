@@ -113,19 +113,21 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_get_sources_propagates_traversal_errors() {
-        use std::os::unix::fs::symlink;
+        use std::os::unix::fs::PermissionsExt;
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         create_test_package_structure(temp_dir.path()).expect("Failed to create test structure");
-        symlink(
-            temp_dir.path().join("sources"),
-            temp_dir.path().join("sources/loop"),
-        )
-        .expect("Failed to create symlink loop");
+        let unreadable = temp_dir.path().join("sources/unreadable");
+        fs::create_dir(&unreadable).expect("Failed to create unreadable directory");
+        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000))
+            .expect("Failed to remove directory permissions");
         let package_path =
             PackagePath::new(temp_dir.path().to_path_buf()).expect("Failed to create package path");
 
-        let error = get_sources(&package_path, &BuildConfig::default()).unwrap_err();
+        let result = get_sources(&package_path, &BuildConfig::default());
+        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o700))
+            .expect("Failed to restore directory permissions");
+        let error = result.unwrap_err();
 
         assert!(format!("{error:#}").contains("Failed to traverse source path"));
     }

@@ -84,15 +84,18 @@ macro_rules! register_move_unit_tests {
 #[cfg(all(test, unix))]
 mod tests {
     use super::find_matching_files;
-    use std::os::unix::fs::symlink;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn source_traversal_errors_are_propagated() {
         let temp_dir = tempfile::tempdir().unwrap();
-        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+        let unreadable = temp_dir.path().join("unreadable");
+        std::fs::create_dir(&unreadable).unwrap();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
 
-        let error =
-            find_matching_files(temp_dir.path().to_str().unwrap(), r".*\.move$").unwrap_err();
+        let result = find_matching_files(temp_dir.path().to_str().unwrap(), r".*\.move$");
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let error = result.unwrap_err();
 
         assert!(
             error

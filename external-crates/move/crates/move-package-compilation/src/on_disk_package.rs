@@ -98,31 +98,30 @@ impl OnDiskCompiledPackage {
             .root_path
             .join(self.package.compiled_package_info.package_name.as_str())
             .join(CompiledPackageLayout::CompiledDocs.path());
-        let docs_metadata = match std::fs::metadata(&docs_path) {
-            Ok(metadata) => Some(metadata),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                if try_exists_or_is_symlink(&docs_path)? {
-                    return Err(error).with_context(|| {
-                        format!(
-                            "Failed to inspect compiled docs at '{}'",
-                            docs_path.display()
-                        )
-                    });
-                }
-                None
-            }
-            Err(error) => {
-                return Err(error).with_context(|| {
+        let docs_exist = try_exists_or_is_symlink(&docs_path).with_context(|| {
+            format!(
+                "Failed to inspect compiled docs at '{}'",
+                docs_path.display()
+            )
+        })?;
+        let compiled_docs = if docs_exist
+            && std::fs::metadata(&docs_path)
+                .with_context(|| {
                     format!(
                         "Failed to inspect compiled docs at '{}'",
                         docs_path.display()
                     )
-                });
-            }
-        };
-        let compiled_docs = if docs_metadata.is_some_and(|metadata| metadata.is_dir()) {
+                })?
+                .is_dir()
+        {
             Some(
-                find_filenames(&[&docs_path], |path| extension_equals(path, "md"))?
+                find_filenames(&[&docs_path], |path| extension_equals(path, "md"))
+                    .with_context(|| {
+                        format!(
+                            "Failed to discover compiled docs at '{}'",
+                            docs_path.display()
+                        )
+                    })?
                     .into_iter()
                     .map(|path| {
                         let contents = std::fs::read_to_string(&path)
@@ -297,11 +296,22 @@ impl OnDiskCompiledPackage {
         };
         let mut compiled_unit_paths = vec![];
         let module_path = package_dir.join(CompiledPackageLayout::CompiledModules.path());
-        if try_exists_or_is_symlink(&module_path)? {
+        if try_exists_or_is_symlink(&module_path).with_context(|| {
+            format!(
+                "Failed to inspect compiled modules at '{}'",
+                module_path.display()
+            )
+        })? {
             compiled_unit_paths.push(module_path);
         }
         find_filenames(&compiled_unit_paths, |path| {
             extension_equals(path, MOVE_COMPILED_EXTENSION)
+        })
+        .with_context(|| {
+            format!(
+                "Failed to discover compiled modules for package '{}'",
+                package_name
+            )
         })
     }
 }
