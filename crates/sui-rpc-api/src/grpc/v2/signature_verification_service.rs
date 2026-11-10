@@ -189,7 +189,14 @@ fn verify_signature(
                 ),
             )
         })?;
-        let authenticator = GenericSignature::try_from(signature.clone())?;
+        let authenticator = match GenericSignature::try_from(signature.clone()) {
+            Ok(authenticator) => authenticator,
+            Err(error) => {
+                message.is_valid = Some(false);
+                message.reason = Some(error.to_string());
+                return Ok(message);
+            }
+        };
         if let Err(error) = authenticator.verify_user_authenticator_epoch(
             system_state.epoch,
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
