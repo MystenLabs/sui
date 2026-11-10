@@ -478,9 +478,8 @@ jobs:
           swap-size-gb: 256
       - name: check simtest package list
         run: scripts/simtest/ci-packages.sh --check
-      # Builds the whole workspace, which checks msim-gated code in every crate, but runs only
-      # packages with simulator tests or msim-only code paths. Plain tests in other packages run
-      # in the `test` job.
+      # Builds the whole workspace, which checks msim-gated code in every crate, but skips the
+      # packages that ci-packages.sh excludes. Their tests run in the `test` job.
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast \
