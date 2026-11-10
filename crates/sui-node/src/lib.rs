@@ -10,7 +10,7 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::FutureExt;
@@ -187,6 +187,32 @@ impl ValidatorServices {
     }
 }
 
+/// The RPC services that only a fullnode runs. They are built once, when the node starts as a
+/// fullnode, and shut down when it joins the committee. They are not rebuilt if the node later
+/// leaves the committee, so such a node serves no RPC until it restarts, like a node that
+/// started as a validator.
+struct FullnodeRpcServices {
+    http_servers: HttpServers,
+    transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
+    /// Feeds executed checkpoints to the RPC subscription service, which panics on a gap in
+    /// the checkpoint sequence. A validator does not publish the checkpoints it builds, so the
+    /// checkpoint executor must stop using this sender once the node joins the committee.
+    subscription_service_checkpoint_sender: Option<broadcast::Sender<Arc<Checkpoint>>>,
+}
+
+impl FullnodeRpcServices {
+    /// Stops accepting RPC connections. Open connections receive GOAWAY and are closed after
+    /// the configured grace period, so this does not wait for them.
+    fn shutdown(&self) {
+        for server in [&self.http_servers.http, &self.http_servers.https]
+            .into_iter()
+            .flatten()
+        {
+            server.trigger_shutdown();
+        }
+    }
+}
+
 pub struct P2pComponents {
     p2p_network: Network,
     known_peers: HashMap<PeerId, String>,
@@ -281,12 +307,10 @@ pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
 
-    /// The http servers responsible for serving RPC traffic.
-    #[allow(unused)]
-    http_servers: HttpServers,
+    /// Present only on a node that started as a fullnode and has not joined the committee since.
+    fullnode_rpc_services: ArcSwapOption<FullnodeRpcServices>,
 
     state: Arc<AuthorityState>,
-    transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
     metrics: Arc<SuiNodeMetrics>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -332,8 +356,6 @@ pub struct SuiNode {
     // TODO: Eventually we can make this auth aggregator a shared reference so that this
     // update will automatically propagate to other uses.
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
-
-    subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 
     /// The embedded `sui-rpc-store`, present when the node is a fullnode
     /// with indexing enabled. Held for the node's lifetime so its tip
@@ -1046,12 +1068,19 @@ impl SuiNode {
         // setup shutdown channel
         let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
 
+        let fullnode_rpc_services = node_role.is_fullnode().then(|| {
+            Arc::new(FullnodeRpcServices {
+                http_servers,
+                transaction_orchestrator,
+                subscription_service_checkpoint_sender,
+            })
+        });
+
         let node = Self {
             config,
             validator_components: Mutex::new(validator_components),
-            http_servers,
+            fullnode_rpc_services: ArcSwapOption::new(fullnode_rpc_services),
             state,
-            transaction_orchestrator,
             registry_service,
             metrics: sui_node_metrics,
             checkpoint_metrics,
@@ -1079,7 +1108,6 @@ impl SuiNode {
             consensus_adapter_metrics,
 
             auth_agg,
-            subscription_service_checkpoint_sender,
             embedded_rpc_store,
         };
 
@@ -1953,15 +1981,17 @@ impl SuiNode {
     pub fn clone_authority_aggregator(
         &self,
     ) -> Option<Arc<AuthorityAggregator<NetworkAuthorityClient>>> {
-        self.transaction_orchestrator
-            .as_ref()
+        self.transaction_orchestrator()
             .map(|to| to.clone_authority_aggregator())
     }
 
     pub fn transaction_orchestrator(
         &self,
     ) -> Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>> {
-        self.transaction_orchestrator.clone()
+        self.fullnode_rpc_services
+            .load()
+            .as_ref()
+            .and_then(|services| services.transaction_orchestrator.clone())
     }
 
     /// This function awaits the completion of checkpoint execution of the current epoch,
@@ -1994,7 +2024,10 @@ impl SuiNode {
                 self.backpressure_manager.clone(),
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
-                self.subscription_service_checkpoint_sender.clone(),
+                self.fullnode_rpc_services
+                    .load()
+                    .as_ref()
+                    .and_then(|services| services.subscription_service_checkpoint_sender.clone()),
             );
 
             let run_with_range = self.config.run_with_range;
@@ -2187,6 +2220,15 @@ impl SuiNode {
                 && let Some(context) = &self.transaction_pool_context
             {
                 context.set_unavailable(next_epoch);
+            }
+
+            // A validator does not serve the fullnode RPC APIs. The embedded rpc-store indexer
+            // keeps running, because the pruner only prunes the checkpoints it has indexed.
+            if new_role.is_validator()
+                && let Some(services) = self.fullnode_rpc_services.swap(None)
+            {
+                info!("Node joined the committee, shutting down fullnode RPC services");
+                services.shutdown();
             }
 
             let new_validator_components = if let Some(ValidatorComponents {
@@ -3209,9 +3251,7 @@ fn https_rustls_config(cert: &str, key: &str) -> Result<sui_http::rustls::Server
 
 #[derive(Default)]
 struct HttpServers {
-    #[allow(unused)]
     http: Option<sui_http::ServerHandle>,
-    #[allow(unused)]
     https: Option<sui_http::ServerHandle>,
 }
 

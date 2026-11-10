@@ -464,9 +464,14 @@ async fn test_consensus_observer_joins_committee() {
         node_role(&new_validator_handle),
         NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
     );
+    assert!(new_validator_handle.with(|node| node.transaction_orchestrator().is_some()));
 
     test_cluster.trigger_reconfiguration().await;
     assert_eq!(node_role(&new_validator_handle), NodeRole::Validator);
+    assert!(
+        new_validator_handle.with(|node| node.transaction_orchestrator().is_none()),
+        "promoted validator must shut down the fullnode RPC services"
+    );
 
     let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key);
     submit_transaction_to_validator(&test_cluster, &client).await;
