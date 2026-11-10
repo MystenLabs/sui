@@ -8,6 +8,7 @@ module sui::deny_list;
 
 use sui::bag::{Self, Bag};
 use sui::config::{Self, Config};
+use sui::dynamic_field as df;
 use sui::dynamic_object_field as ofield;
 use sui::table::{Self, Table};
 use sui::vec_set::{Self, VecSet};
@@ -71,6 +72,10 @@ public struct AddressKey(address) has copy, drop, store;
 
 /// The setting key used to store the global pause setting in the `Config`.
 public struct GlobalPauseKey() has copy, drop, store;
+
+/// The dynamic field key on `DenyList` marking a type's deny list as migrated to
+/// `sui::coin_regulation`. The field exists iff the type has migrated.
+public struct MigratedKey(ConfigKey) has copy, drop, store;
 
 /// The event emitted when a new `Config` is created for a given type. This can be useful for
 /// tracking the `ID` of a type's `Config` object.
@@ -205,6 +210,23 @@ public(package) fun v2_is_global_pause_enabled_next_epoch(
 // ): bool {
 //    // TODO can read from the config directly once the ID is set
 // }
+
+/// Mark the type as migrated to `sui::coin_regulation`. Aborts if it is already marked.
+public(package) fun v2_mark_migrated(
+    deny_list: &mut DenyList,
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+) {
+    df::add(&mut deny_list.id, MigratedKey(ConfigKey { per_type_index, per_type_key }), true);
+}
+
+public(package) fun v2_is_migrated(
+    deny_list: &DenyList,
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+): bool {
+    df::exists(&deny_list.id, MigratedKey(ConfigKey { per_type_index, per_type_key }))
+}
 
 public(package) fun migrate_v1_to_v2(
     deny_list: &mut DenyList,

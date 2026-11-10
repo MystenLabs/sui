@@ -12,6 +12,7 @@ list.
 -  [Struct `ConfigKey`](#sui_deny_list_ConfigKey)
 -  [Struct `AddressKey`](#sui_deny_list_AddressKey)
 -  [Struct `GlobalPauseKey`](#sui_deny_list_GlobalPauseKey)
+-  [Struct `MigratedKey`](#sui_deny_list_MigratedKey)
 -  [Struct `PerTypeConfigCreated`](#sui_deny_list_PerTypeConfigCreated)
 -  [Struct `PerTypeList`](#sui_deny_list_PerTypeList)
 -  [Constants](#@Constants_0)
@@ -23,6 +24,8 @@ list.
 -  [Function `v2_disable_global_pause`](#sui_deny_list_v2_disable_global_pause)
 -  [Function `v2_is_global_pause_enabled_current_epoch`](#sui_deny_list_v2_is_global_pause_enabled_current_epoch)
 -  [Function `v2_is_global_pause_enabled_next_epoch`](#sui_deny_list_v2_is_global_pause_enabled_next_epoch)
+-  [Function `v2_mark_migrated`](#sui_deny_list_v2_mark_migrated)
+-  [Function `v2_is_migrated`](#sui_deny_list_v2_is_migrated)
 -  [Function `migrate_v1_to_v2`](#sui_deny_list_migrate_v1_to_v2)
 -  [Function `add_per_type_config`](#sui_deny_list_add_per_type_config)
 -  [Function `borrow_per_type_config_mut`](#sui_deny_list_borrow_per_type_config_mut)
@@ -201,6 +204,34 @@ The setting key used to store the global pause setting in the <code>Config</code
 
 
 <dl>
+</dl>
+
+
+</details>
+
+<a name="sui_deny_list_MigratedKey"></a>
+
+## Struct `MigratedKey`
+
+The dynamic field key on <code><a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a></code> marking a type's deny list as migrated to
+<code><a href="../sui/coin_regulation.md#sui_coin_regulation">sui::coin_regulation</a></code>. The field exists iff the type has migrated.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_MigratedKey">MigratedKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>0: <a href="../sui/deny_list.md#sui_deny_list_ConfigKey">sui::deny_list::ConfigKey</a></code>
+</dt>
+<dd>
+</dd>
 </dl>
 
 
@@ -605,6 +636,63 @@ meaningless to add them to the deny list.
     <b>let</b> per_type_config = <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_borrow_per_type_config">borrow_per_type_config</a>(per_type_index, per_type_key);
     <b>let</b> setting_name = <a href="../sui/deny_list.md#sui_deny_list_GlobalPauseKey">GlobalPauseKey</a>();
     per_type_config.read_setting_for_next_epoch(setting_name).destroy_or!(<b>false</b>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_v2_mark_migrated"></a>
+
+## Function `v2_mark_migrated`
+
+Mark the type as migrated to <code><a href="../sui/coin_regulation.md#sui_coin_regulation">sui::coin_regulation</a></code>. Aborts if it is already marked.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_v2_mark_migrated">v2_mark_migrated</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, per_type_index: u64, per_type_key: vector&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_v2_mark_migrated">v2_mark_migrated</a>(
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>,
+    per_type_index: u64,
+    per_type_key: vector&lt;u8&gt;,
+) {
+    df::add(&<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.id, <a href="../sui/deny_list.md#sui_deny_list_MigratedKey">MigratedKey</a>(<a href="../sui/deny_list.md#sui_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key }), <b>true</b>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_v2_is_migrated"></a>
+
+## Function `v2_is_migrated`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_v2_is_migrated">v2_is_migrated</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, per_type_index: u64, per_type_key: vector&lt;u8&gt;): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_v2_is_migrated">v2_is_migrated</a>(
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>,
+    per_type_index: u64,
+    per_type_key: vector&lt;u8&gt;,
+): bool {
+    df::exists(&<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.id, <a href="../sui/deny_list.md#sui_deny_list_MigratedKey">MigratedKey</a>(<a href="../sui/deny_list.md#sui_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key }))
 }
 </code></pre>
 

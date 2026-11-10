@@ -7,6 +7,8 @@
 /// unfrozen only in an epoch after the last `SeizeAuth` for it was destroyed.
 module sui::coin_regulation;
 
+use sui::coin::{Self, DenyCapV2};
+use sui::deny_list::DenyList;
 use sui::dynamic_field as df;
 use sui::event;
 use sui::vec_set::{Self, VecSet};
@@ -27,6 +29,8 @@ const EGlobalPauseNotAllowed: vector<u8> = b"The ComplianceCap does not allow gl
 #[error(code = 6)]
 const EUnfreezeTooEarly: vector<u8> =
     b"The address cannot be unfrozen until the epoch after its last SeizeAuth was destroyed.";
+#[error(code = 7)]
+const ECoinTypeStateExists: vector<u8> = b"The coin type already has freeze list state.";
 
 /// Singleton shared object holding the freeze and pause state of regulated coins.
 public struct FreezeList has key {
@@ -108,6 +112,12 @@ public struct CoinTypePaused<phantom T>() has copy, drop;
 
 /// Event: the global pause of `T` was lifted.
 public struct CoinTypeUnpaused<phantom T>() has copy, drop;
+
+/// Event: the `DenyCapV2` for `T` was replaced by the `ComplianceCap` `cap`, keeping its ID.
+public struct DenyCapMigrated<phantom T> has copy, drop {
+    /// The ID of the `ComplianceCap`, which is also the ID of the replaced `DenyCapV2`.
+    cap: ID,
+}
 
 // === Freezing ===
 
@@ -270,6 +280,43 @@ public fun frozen_epoch<T>(auth: &SeizeAuth<T>): u64 {
     auth.frozen_epoch
 }
 
+// === Package ===
+
+/// A new `ComplianceCap` for `T`, for a coin created through the coin registry.
+public(package) fun new_compliance_cap<T>(
+    allow_global_pause: bool,
+    ctx: &mut TxContext,
+): ComplianceCap<T> {
+    ComplianceCap { id: object::new(ctx), allow_global_pause }
+}
+
+/// Replace `cap` with a `ComplianceCap` that keeps its object ID, carrying over `T`'s legacy
+/// next-epoch global pause and freezing each of `frozen_addresses` denied in the legacy next-epoch
+/// list.
+public(package) fun migrate_from_deny_list<T>(
+    list: &mut FreezeList,
+    deny_list: &mut DenyList,
+    cap: DenyCapV2<T>,
+    frozen_addresses: vector<address>,
+    ctx: &TxContext,
+): ComplianceCap<T> {
+    let key = CoinTypeKey<T>();
+    assert!(!df::exists(&list.id, key), ECoinTypeStateExists);
+    let paused = coin::deny_list_v2_is_global_pause_enabled_next_epoch<T>(deny_list);
+    df::add(&mut list.id, key, CoinTypeState { paused, num_frozen_addresses: 0 });
+    let (id, allow_global_pause) = coin::destroy_deny_cap_v2(cap);
+    let cap = ComplianceCap<T> { id, allow_global_pause };
+    frozen_addresses.do!(|addr| {
+        if (
+            coin::deny_list_v2_contains_next_epoch<T>(deny_list, addr)
+                && !list.is_frozen<T>(addr)
+        ) list.add_frozen_address<T>(addr, false, ctx)
+    });
+    coin::deny_list_v2_mark_migrated<T>(deny_list);
+    event::emit(DenyCapMigrated<T> { cap: object::id(&cap) });
+    cap
+}
+
 // === Internals ===
 
 #[allow(unused_function)]
@@ -314,12 +361,6 @@ fun coin_type_state_mut_or_add<T>(list: &mut FreezeList): &mut CoinTypeState {
 /// Create and share the `FreezeList` in a test.
 public fun create_for_testing(ctx: &TxContext) {
     create(ctx);
-}
-
-#[test_only]
-/// A new `ComplianceCap` for `T` in a test.
-public fun new_cap_for_testing<T>(allow_global_pause: bool, ctx: &mut TxContext): ComplianceCap<T> {
-    ComplianceCap { id: object::new(ctx), allow_global_pause }
 }
 
 #[test_only]

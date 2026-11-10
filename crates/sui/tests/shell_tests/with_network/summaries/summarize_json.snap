@@ -504,6 +504,11 @@ vector.json
       },
       {
         "module_name": "deny_list",
+        "datatype_name": "MigratedKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
         "datatype_name": "PerTypeConfigCreated",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
@@ -545,61 +550,6 @@ vector.json
       {
         "module_name": "coin",
         "datatype_name": "DenyCap",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "CoinRegistry",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "ExtraField",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "CurrencyKey",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "LegacyMetadataKey",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "MetadataCap",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "Borrow",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "Currency",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "CurrencyInitializer",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "SupplyState",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "RegulatedState",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "coin_registry",
-        "datatype_name": "MetadataCapState",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
@@ -670,6 +620,66 @@ vector.json
       {
         "module_name": "coin_regulation",
         "datatype_name": "CoinTypeUnpaused",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_regulation",
+        "datatype_name": "DenyCapMigrated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "CoinRegistry",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "ExtraField",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "CurrencyKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "LegacyMetadataKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "MetadataCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "Borrow",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "Currency",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "CurrencyInitializer",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "SupplyState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "RegulatedState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "MetadataCapState",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {

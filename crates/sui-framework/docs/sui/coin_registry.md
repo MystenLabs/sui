@@ -24,6 +24,7 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `new_currency_with_otw`](#sui_coin_registry_new_currency_with_otw)
 -  [Function `claim_metadata_cap`](#sui_coin_registry_claim_metadata_cap)
 -  [Function `make_regulated`](#sui_coin_registry_make_regulated)
+-  [Function `make_compliance_regulated`](#sui_coin_registry_make_compliance_regulated)
 -  [Function `make_supply_fixed_init`](#sui_coin_registry_make_supply_fixed_init)
 -  [Function `make_supply_burn_only_init`](#sui_coin_registry_make_supply_burn_only_init)
 -  [Function `make_supply_fixed`](#sui_coin_registry_make_supply_fixed)
@@ -43,6 +44,7 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `delete_migrated_legacy_metadata`](#sui_coin_registry_delete_migrated_legacy_metadata)
 -  [Function `migrate_regulated_state_by_metadata`](#sui_coin_registry_migrate_regulated_state_by_metadata)
 -  [Function `migrate_regulated_state_by_cap`](#sui_coin_registry_migrate_regulated_state_by_cap)
+-  [Function `migrate_to_compliance_cap`](#sui_coin_registry_migrate_to_compliance_cap)
 -  [Function `borrow_legacy_metadata`](#sui_coin_registry_borrow_legacy_metadata)
 -  [Function `return_borrowed_legacy_metadata`](#sui_coin_registry_return_borrowed_legacy_metadata)
 -  [Function `decimals`](#sui_coin_registry_decimals)
@@ -84,6 +86,7 @@ supply information, regulatory status, and metadata capabilities.
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
 <b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
+<b>use</b> <a href="../sui/coin_regulation.md#sui_coin_regulation">sui::coin_regulation</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
 <b>use</b> <a href="../sui/derived_object.md#sui_derived_object">sui::derived_object</a>;
@@ -330,7 +333,7 @@ as well as supply states (optional) and regulatory status.
 <code>regulated: <a href="../sui/coin_registry.md#sui_coin_registry_RegulatedState">sui::coin_registry::RegulatedState</a></code>
 </dt>
 <dd>
- Regulatory status of the coin (regulated with deny cap or unknown)
+ Regulatory status of the coin (regulated with a deny cap or <code>ComplianceCap</code>, or unknown)
 </dd>
 <dt>
 <code><a href="../sui/coin_registry.md#sui_coin_registry_treasury_cap_id">treasury_cap_id</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>&gt;</code>
@@ -461,7 +464,8 @@ Variant <code>Unknown</code>
 ## Enum `RegulatedState`
 
 Regulated state of a coin type.
-- Regulated: <code>DenyCap</code> exists or a <code>RegulatedCoinMetadata</code> used to mark currency as regulated;
+- Regulated: <code>DenyCap</code> or <code>ComplianceCap</code> exists or a <code>RegulatedCoinMetadata</code> used to mark
+  currency as regulated;
 - Unregulated: the currency was created without deny list;
 - Unknown: the regulatory status is unknown.
 
@@ -480,7 +484,7 @@ Regulated state of a coin type.
 Variant <code>Regulated</code>
 </dt>
 <dd>
- Coin is regulated with a deny cap for address restrictions.
+ Coin is regulated with a deny cap or <code>ComplianceCap</code> for address restrictions.
  <code>allow_global_pause</code> is <code>None</code> if the information is unknown (has not been migrated from <code>DenyCapV2</code>).
 </dd>
 
@@ -741,6 +745,16 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 
+<a name="sui_coin_registry_EUnregulatedCurrency"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EUnregulatedCurrency">EUnregulatedCurrency</a>: vector&lt;u8&gt; = b"An unregulated <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a> cannot migrate to a ComplianceCap";
+</code></pre>
+
+
+
 <a name="sui_coin_registry_REGULATED_COIN_VERSION"></a>
 
 Incremental identifier for regulated coin versions in the deny list.
@@ -937,6 +951,44 @@ This action is irreversible.
             variant: <a href="../sui/coin_registry.md#sui_coin_registry_REGULATED_COIN_VERSION">REGULATED_COIN_VERSION</a>,
         };
     deny_cap
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_make_compliance_regulated"></a>
+
+## Function `make_compliance_regulated`
+
+Make the currency regulated by <code><a href="../sui/coin_regulation.md#sui_coin_regulation">coin_regulation</a></code> on init and return its <code>ComplianceCap</code>.
+Aborts if the currency is already regulated or coin regulation is not enabled.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_make_compliance_regulated">make_compliance_regulated</a>&lt;T&gt;(init: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">sui::coin_registry::CurrencyInitializer</a>&lt;T&gt;, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">sui::coin_regulation::ComplianceCap</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_make_compliance_regulated">make_compliance_regulated</a>&lt;T&gt;(
+    init: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a>&lt;T&gt;,
+    allow_global_pause: bool,
+    ctx: &<b>mut</b> TxContext,
+): ComplianceCap&lt;T&gt; {
+    <b>assert</b>!(init.currency.regulated == RegulatedState::Unregulated, <a href="../sui/coin_registry.md#sui_coin_registry_EDenyCapAlreadyCreated">EDenyCapAlreadyCreated</a>);
+    <b>let</b> cap = <a href="../sui/coin_regulation.md#sui_coin_regulation_new_compliance_cap">coin_regulation::new_compliance_cap</a>&lt;T&gt;(allow_global_pause, ctx);
+    init.currency.regulated =
+        RegulatedState::Regulated {
+            cap: <a href="../sui/object.md#sui_object_id">object::id</a>(&cap),
+            allow_global_pause: option::some(allow_global_pause),
+            variant: <a href="../sui/coin_registry.md#sui_coin_registry_REGULATED_COIN_VERSION">REGULATED_COIN_VERSION</a>,
+        };
+    cap
 }
 </code></pre>
 
@@ -1522,6 +1574,61 @@ Mark regulated state by showing the <code>DenyCapV2</code> object for the <code>
 
 </details>
 
+<a name="sui_coin_registry_migrate_to_compliance_cap"></a>
+
+## Function `migrate_to_compliance_cap`
+
+Replace <code>cap</code> with a <code>ComplianceCap</code> with the same ID and record it as the regulated state,
+aborting if the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> is <code>Unregulated</code>.
+WARNING: the legacy deny list is ignored for <code>T</code> from then on, and a denied address left out of
+<code>frozen_addresses</code> becomes unrestricted unless it is frozen in the same transaction. About 500
+addresses fit in one call; an issuer with more should pause <code>T</code> first.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_migrate_to_compliance_cap">migrate_to_compliance_cap</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, freeze_list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">sui::coin_regulation::FreezeList</a>, <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, cap: <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, frozen_addresses: vector&lt;<b>address</b>&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">sui::coin_regulation::ComplianceCap</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_migrate_to_compliance_cap">migrate_to_compliance_cap</a>&lt;T&gt;(
+    currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;,
+    freeze_list: &<b>mut</b> FreezeList,
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+    cap: DenyCapV2&lt;T&gt;,
+    frozen_addresses: vector&lt;<b>address</b>&gt;,
+    ctx: &<b>mut</b> TxContext,
+): ComplianceCap&lt;T&gt; {
+    <b>let</b> cap_id = <a href="../sui/object.md#sui_object_id">object::id</a>(&cap);
+    <b>let</b> variant = match (currency.regulated) {
+        RegulatedState::Unknown =&gt; <a href="../sui/coin_registry.md#sui_coin_registry_REGULATED_COIN_VERSION">REGULATED_COIN_VERSION</a>,
+        RegulatedState::Regulated { variant, .. } =&gt; variant,
+        RegulatedState::Unregulated =&gt; <b>abort</b> <a href="../sui/coin_registry.md#sui_coin_registry_EUnregulatedCurrency">EUnregulatedCurrency</a>,
+    };
+    <b>let</b> cap = <a href="../sui/coin_regulation.md#sui_coin_regulation_migrate_from_deny_list">coin_regulation::migrate_from_deny_list</a>(
+        freeze_list,
+        <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>,
+        cap,
+        frozen_addresses,
+        ctx,
+    );
+    currency.regulated =
+        RegulatedState::Regulated {
+            cap: cap_id,
+            allow_global_pause: option::some(cap.allow_global_pause()),
+            variant,
+        };
+    cap
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_coin_registry_borrow_legacy_metadata"></a>
 
 ## Function `borrow_legacy_metadata`
@@ -1835,7 +1942,7 @@ Get the treasury cap ID for this coin type, if registered.
 
 ## Function `deny_cap_id`
 
-Get the deny cap ID for this coin type, if it's a regulated coin.
+Get the deny cap or <code>ComplianceCap</code> ID for this coin type, if it's a regulated coin.
 Returns <code>None</code> if:
 - The <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> is not regulated;
 - The <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code> is migrated from legacy, and its regulated state has not been set;

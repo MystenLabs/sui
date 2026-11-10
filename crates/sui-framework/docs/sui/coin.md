@@ -62,6 +62,9 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `new_deny_cap_v2`](#sui_coin_new_deny_cap_v2)
 -  [Function `new_treasury_cap`](#sui_coin_new_treasury_cap)
 -  [Function `allow_global_pause`](#sui_coin_allow_global_pause)
+-  [Function `destroy_deny_cap_v2`](#sui_coin_destroy_deny_cap_v2)
+-  [Function `deny_list_v2_mark_migrated`](#sui_coin_deny_list_v2_mark_migrated)
+-  [Function `unmigrated_deny_list_v2_key`](#sui_coin_unmigrated_deny_list_v2_key)
 -  [Function `new_coin_metadata`](#sui_coin_new_coin_metadata)
 -  [Function `update_coin_metadata`](#sui_coin_update_coin_metadata)
 -  [Function `supply`](#sui_coin_supply)
@@ -404,6 +407,16 @@ Trying to split a coin more times than its balance allows.
 
 
 <pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_coin_ECoinTypeMigrated"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin.md#sui_coin_ECoinTypeMigrated">ECoinTypeMigrated</a>: vector&lt;u8&gt; = b"The <a href="../sui/coin.md#sui_coin">coin</a> type <b>has</b> migrated to <a href="../sui/coin_regulation.md#sui_coin_regulation">coin_regulation</a> and no longer uses the deny list.";
 </code></pre>
 
 
@@ -1150,7 +1163,7 @@ address will be unable to receive objects of this coin type.
     addr: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_add(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
 }
 </code></pre>
@@ -1183,7 +1196,7 @@ next epoch.
     addr: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_remove(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
 }
 </code></pre>
@@ -1214,7 +1227,7 @@ in the current epoch will be unable to receive objects of this coin type.
     addr: <b>address</b>,
     ctx: &TxContext,
 ): bool {
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_contains_current_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr, ctx)
 }
 </code></pre>
@@ -1242,7 +1255,7 @@ start of the next epoch, the address will be unable to receive objects of this c
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_contains_next_epoch">deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList, addr: <b>address</b>): bool {
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_contains_next_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, addr)
 }
 </code></pre>
@@ -1275,7 +1288,7 @@ addresses will be unable to receive objects of this coin type.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(deny_cap.<a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>, <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>);
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_enable_global_pause(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
 }
 </code></pre>
@@ -1308,7 +1321,7 @@ type will still be paused until the start of the next epoch.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(deny_cap.<a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>, <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>);
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_disable_global_pause(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
 }
 </code></pre>
@@ -1337,7 +1350,7 @@ Check if the global pause is enabled for the given coin type in the current epoc
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList,
     ctx: &TxContext,
 ): bool {
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_is_global_pause_enabled_current_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx)
 }
 </code></pre>
@@ -1363,7 +1376,7 @@ Check if the global pause is enabled for the given coin type in the next epoch.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList): bool {
-    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>let</b> ty = <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_is_global_pause_enabled_next_epoch(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty)
 }
 </code></pre>
@@ -1762,6 +1775,83 @@ Destroy legacy <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>&lt;T&gt;(cap: &<a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;): bool {
     cap.<a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_destroy_deny_cap_v2"></a>
+
+## Function `destroy_deny_cap_v2`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_destroy_deny_cap_v2">destroy_deny_cap_v2</a>&lt;T&gt;(cap: <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;): (<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, bool)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_destroy_deny_cap_v2">destroy_deny_cap_v2</a>&lt;T&gt;(cap: <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;): (UID, bool) {
+    <b>let</b> <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a> { id, <a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a> } = cap;
+    (id, <a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_deny_list_v2_mark_migrated"></a>
+
+## Function `deny_list_v2_mark_migrated`
+
+Mark <code>T</code> as migrated, after which every <code>deny_list_v2_*</code> function aborts for <code>T</code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_mark_migrated">deny_list_v2_mark_migrated</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_mark_migrated">deny_list_v2_mark_migrated</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> DenyList) {
+    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_mark_migrated(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_unmigrated_deny_list_v2_key"></a>
+
+## Function `unmigrated_deny_list_v2_key`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>): vector&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/coin.md#sui_coin_unmigrated_deny_list_v2_key">unmigrated_deny_list_v2_key</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &DenyList): vector&lt;u8&gt; {
+    <b>let</b> ty = type_name::with_defining_ids&lt;T&gt;().into_string().into_bytes();
+    <b>assert</b>!(!<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.v2_is_migrated(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty), <a href="../sui/coin.md#sui_coin_ECoinTypeMigrated">ECoinTypeMigrated</a>);
+    ty
 }
 </code></pre>
 
