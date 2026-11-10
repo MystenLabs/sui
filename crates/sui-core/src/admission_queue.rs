@@ -52,15 +52,14 @@ pub enum PopAction {
     Stop,
 }
 
-/// Identifies an owned object for deduplication by its id and version. The object digest
-/// is excluded on purpose: it is client-supplied and unverified before consensus, so
-/// keying on it would let distinct digests on the same object version each take a queue
-/// slot and defeat the one-holder rule.
+/// Identifies an owned object for deduplication by its id and version. Two transactions
+/// that consume the same object version conflict whatever digest they name.
 pub type DedupKey = (ObjectID, SequenceNumber);
 
 /// Dedup keys of the gas payment objects of the user transactions in `transactions`, sorted
 /// with duplicates removed. Coin reservation refs are excluded: they name a reusable address
-/// balance rather than an exclusive object, so distinct transactions may share one.
+/// balance rather than an exclusive object, so distinct transactions may share one. A soft
+/// bundle is one entry keyed on all its members' gas, so it is refused or displaced whole.
 pub fn gas_dedup_keys(transactions: &[ConsensusTransaction]) -> Vec<DedupKey> {
     let mut keys: Vec<DedupKey> = transactions
         .iter()
@@ -75,12 +74,7 @@ pub fn gas_dedup_keys(transactions: &[ConsensusTransaction]) -> Vec<DedupKey> {
 }
 
 pub fn owned_object_conflict_error(object_id: ObjectID) -> SuiError {
-    SuiErrorKind::TooManyTransactionsPendingOnObject {
-        object_id,
-        queue_len: 2,
-        threshold: 1,
-    }
-    .into()
+    SuiErrorKind::OwnedObjectConflict { object_id }.into()
 }
 
 pub trait AdmissionQueueEntry {
@@ -495,17 +489,13 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.try_insert(entry).notify()
     }
 
-    /// Same as `insert`, without notifying displaced entries. The evicted entry (on
-    /// success) or the refused entry itself (on rejection) is handed back in the
-    /// outcome for the caller to notify manually.
+    /// Same as `insert`, without notifying displaced entries. The evicted entry and the
+    /// holders replaced on an owned gas object (on success), or the refused entry itself
+    /// (on rejection), are handed back in the outcome for the caller to notify manually.
     #[track_caller]
     pub fn try_insert(&mut self, entry: E) -> InsertOutcome<E> {
         let keys: Vec<_> = entry.transaction_keys().collect();
         let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
-        if !newly_inserted {
-            self.metrics.duplicate_inserts.inc();
-        }
-
         let gas_price = entry.gas_price();
 
         // A newcomer must strictly outbid the queued holder of an owned gas object. A
@@ -517,6 +507,10 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                 return InsertOutcome::new(Outcome::OwnedObjectConflict { entry, object_id });
             }
         };
+
+        if !newly_inserted {
+            self.metrics.duplicate_inserts.inc();
+        }
 
         // Removing an owned-object incumbent frees a slot, so a replacing newcomer is always
         // admitted even when a dropped-proposal reinsert has transiently pushed the queue over
@@ -613,8 +607,10 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                     None => deque.push_back(entry),
                 }
             }
+            if deque.is_empty() {
+                self.map.remove(&gas_price);
+            }
         }
-        self.map.retain(|_, deque| !deque.is_empty());
         self.total_len -= removed.len();
         for (entry, _) in &removed {
             self.remove_keys(entry);
@@ -1197,7 +1193,7 @@ mod tests {
         let outcome = q.try_insert(low);
         assert!(matches!(
             outcome.notify().unwrap_err().as_inner(),
-            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+            SuiErrorKind::OwnedObjectConflict { .. }
         ));
         assert_eq!(q.len(), 1);
     }
@@ -1213,7 +1209,7 @@ mod tests {
         assert!(q.insert(first).unwrap());
         assert!(matches!(
             q.try_insert(second).notify().unwrap_err().as_inner(),
-            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+            SuiErrorKind::OwnedObjectConflict { .. }
         ));
         assert_eq!(q.len(), 1);
     }
@@ -1278,7 +1274,7 @@ mod tests {
         assert!(!outcome.was_inserted());
         assert!(matches!(
             outcome.notify().unwrap_err().as_inner(),
-            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+            SuiErrorKind::OwnedObjectConflict { .. }
         ));
         assert_eq!(q.len(), 1);
         assert_eq!(q.pop_batch(10).first().map(|e| e.gas_price), Some(200));
@@ -1297,24 +1293,48 @@ mod tests {
         assert!(q.insert(first).unwrap());
         assert!(matches!(
             q.try_insert(second).notify().unwrap_err().as_inner(),
-            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+            SuiErrorKind::OwnedObjectConflict { .. }
         ));
         assert_eq!(q.len(), 1);
     }
 
     #[test]
-    fn duplicate_owned_object_ref_does_not_panic_on_removal() {
+    fn soft_bundle_is_displaced_whole_by_a_higher_bid_on_one_member() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
-        let gas = owned_ref(1, 6);
-        let (entry, _) = mock_entry(100, vec![gas, gas]);
+        let contested = owned_ref(1, 6);
+        let uncontested = owned_ref(2, 6);
+        let bundle_txs = vec![
+            user_transaction_with_gas(contested),
+            user_transaction_with_gas(uncontested),
+        ];
+        assert_eq!(
+            gas_dedup_keys(&bundle_txs),
+            keys_of(&[contested, uncontested])
+        );
 
-        assert!(q.insert(entry).unwrap());
+        let (position_tx, mut bundle_receiver) = oneshot::channel();
+        let bundle = QueueEntry::new(100, bundle_txs, position_tx, None);
+        assert!(q.insert(bundle).unwrap());
+
+        let (tie, _tie_receiver) = make_dup_entry(100, user_transaction_with_gas(contested));
+        assert!(matches!(
+            q.insert(tie).unwrap_err().as_inner(),
+            SuiErrorKind::OwnedObjectConflict { .. }
+        ));
         assert_eq!(q.len(), 1);
-        assert_eq!(q.pop_batch(1).len(), 1);
-        assert_eq!(q.len(), 0);
-        let (next, _) = mock_entry(100, vec![gas]);
-        assert!(q.insert(next).unwrap());
+
+        let (bid, _bid_receiver) = make_dup_entry(200, user_transaction_with_gas(contested));
+        assert!(q.insert(bid).unwrap());
+        assert_eq!(q.len(), 1);
+        let status = bundle_receiver.try_recv().unwrap().unwrap_err();
+        assert!(matches!(
+            SuiError::from(status).as_inner(),
+            SuiErrorKind::OwnedObjectConflict { object_id } if *object_id == contested.0
+        ));
+
+        let (other, _other_receiver) = make_dup_entry(100, user_transaction_with_gas(uncontested));
+        assert!(q.insert(other).unwrap());
     }
 
     #[test]
@@ -1365,7 +1385,7 @@ mod tests {
         };
         assert!(matches!(
             q.try_insert(resubmit).notify().unwrap_err().as_inner(),
-            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+            SuiErrorKind::OwnedObjectConflict { .. }
         ));
         assert_eq!(q.len(), 1);
 
@@ -1433,7 +1453,7 @@ mod tests {
         assert!(q.insert(first).unwrap());
         assert!(matches!(
             q.insert(second).unwrap_err().as_inner(),
-            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+            SuiErrorKind::OwnedObjectConflict { .. }
         ));
         assert_eq!(q.len(), 3);
     }

@@ -503,7 +503,10 @@ impl ConsensusTransactionPool {
     /// eventual positions, and bool indicating whether all transactions in the
     /// group were newly inserted.
     /// Fails fast on epoch mismatch, a closed pool/user lane, block-limit
-    /// violations, or when outbid by the eviction policy.
+    /// violations, when outbid by the eviction policy, or when a queued entry
+    /// holds the same owned gas object at an equal or higher price. A later
+    /// higher-priced entry on that gas object resolves the receiver with the
+    /// conflict error.
     /// `gas_price` is the entry's priority in the user lane (proposed first, and
     /// outbids lower prices when the lane is full).
     pub fn try_insert(
@@ -911,9 +914,11 @@ impl TakenEntry {
 /// Holds the entries handed out by one `take()` until their fate is known:
 /// `acknowledge` (the proposer created a block) resolves every waiter with its
 /// position/inclusion ack, while dropping the guard uninvoked (failed proposal or
-/// shutdown) returns the entries to the front of their lanes so nothing is lost or
-/// reordered. All paths serialize on the pool mutex, so they compose correctly
-/// with `close()` running in between.
+/// shutdown) returns the entries to the front of their lanes in their original
+/// order. A returning entry that conflicts on an owned gas object with a newer,
+/// strictly higher-priced entry is resolved with the conflict error instead, and
+/// on an equal price it displaces the newer entry. All paths serialize on the
+/// pool mutex, so they compose correctly with `close()` running in between.
 struct TakenTransactionsGuard {
     epoch: EpochId,
     inner: Arc<Mutex<Inner>>,
@@ -1662,7 +1667,9 @@ mod tests {
     use consensus_types::block::BlockDigest;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::{AuthorityName, ObjectID, SequenceNumber, random_object_ref};
+    use sui_types::base_types::{
+        AuthorityName, ObjectID, SequenceNumber, SuiAddress, random_object_ref,
+    };
     use sui_types::coin_reservation::encode_object_ref;
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
     use sui_types::digests::ChainIdentifier;
@@ -2442,6 +2449,42 @@ mod tests {
         assert_eq!(pool.queue_depth("user"), 2);
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
         assert_eq!(transactions.len(), 2);
+        ack(block(1));
+    }
+
+    #[sim_test]
+    async fn higher_priced_gas_conflict_replaces_the_queued_holder() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), SuiAddress::ZERO);
+        let gas = gas_object.compute_object_reference();
+        state.insert_genesis_object(gas_object);
+
+        let (holder, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(gas)])
+            .unwrap();
+        let user_bytes = || pool.metrics.pool_bytes.with_label_values(&["user"]).get();
+        let one_entry_bytes = user_bytes();
+        let tie = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(gas)])
+            .unwrap_err();
+        assert!(matches!(
+            tie.as_inner(),
+            SuiErrorKind::OwnedObjectConflict { object_id } if *object_id == gas.0
+        ));
+
+        let (_replacement, _) = pool
+            .try_insert(epoch, 11, vec![user_transaction_with_gas(gas)])
+            .unwrap();
+        assert!(matches!(
+            holder.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::OwnedObjectConflict { object_id } if *object_id == gas.0
+        ));
+        assert_eq!(pool.queue_depth("user"), 1);
+        assert_eq!(user_bytes(), one_entry_bytes);
+
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
         ack(block(1));
     }
 

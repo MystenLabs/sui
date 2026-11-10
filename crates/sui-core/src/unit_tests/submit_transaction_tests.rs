@@ -1716,7 +1716,7 @@ async fn test_pool_mode_reports_owned_object_conflict_per_transaction() {
         SubmitTxResult::Rejected { error } => assert!(
             matches!(
                 error.as_inner(),
-                SuiErrorKind::TooManyTransactionsPendingOnObject { object_id, .. }
+                SuiErrorKind::OwnedObjectConflict { object_id }
                     if *object_id == gas_object_ref.0
             ),
             "expected an owned-object conflict, got: {error}"

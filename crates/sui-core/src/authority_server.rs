@@ -1577,10 +1577,7 @@ impl ValidatorService {
     }
 
     fn is_owned_object_conflict(error: &SuiError) -> bool {
-        matches!(
-            error.as_inner(),
-            SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
-        )
+        matches!(error.as_inner(), SuiErrorKind::OwnedObjectConflict { .. })
     }
 
     /// Traffic-control spam weight for a whole submit request. The request is spam unless it is

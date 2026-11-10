@@ -394,7 +394,9 @@ fn is_staggered_rejection(error: &SuiError) -> bool {
 
 // Whether the failure is caused by the peer validator, as opposed to the user or this node.
 fn is_validator_error(error: &SuiError) -> bool {
-    if is_staggered_rejection(error) {
+    if is_staggered_rejection(error)
+        || matches!(error.as_inner(), SuiErrorKind::OwnedObjectConflict { .. })
+    {
         return false;
     }
     matches!(
@@ -404,4 +406,24 @@ fn is_validator_error(error: &SuiError) -> bool {
             | ErrorCategory::ValidatorOverloaded
             | ErrorCategory::Unavailable
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_network::tonic;
+
+    use super::*;
+
+    #[test]
+    fn owned_object_conflict_is_retriable_and_not_a_validator_error() {
+        let error: SuiError = SuiErrorKind::OwnedObjectConflict {
+            object_id: ObjectID::random(),
+        }
+        .into();
+        let decoded = SuiError::from(tonic::Status::from(error.clone()));
+        assert_eq!(decoded, error);
+        assert!(!is_validator_error(&decoded));
+        assert_eq!(decoded.categorize(), ErrorCategory::Aborted);
+        assert!(decoded.categorize().is_submission_retriable());
+    }
 }
