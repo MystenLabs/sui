@@ -8,7 +8,7 @@ use std::{
 
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
-use fastcrypto_tbls::dkg_v1;
+use fastcrypto_threshold::dkg_v1;
 use itertools::Itertools;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;

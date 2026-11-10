@@ -7,7 +7,7 @@ use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::bls12381;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use fastcrypto_tbls::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId};
+use fastcrypto_threshold::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId};
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use mysten_common::debug_fatal;
@@ -117,7 +117,7 @@ impl DkgRole {
         authority_key_pair: Option<&AuthorityKeyPair>,
         nodes: nodes::Nodes<EncG>,
         t: u16,
-        random_oracle: fastcrypto_tbls::random_oracle::RandomOracle,
+        random_oracle: fastcrypto_threshold::random_oracle::RandomOracle,
     ) -> Option<Self> {
         let total_weight = nodes.total_weight();
         let num_nodes = nodes.num_nodes();
@@ -133,7 +133,7 @@ impl DkgRole {
             )
             .expect("should work to convert BLS key to Scalar");
             let party = match dkg_v1::Party::<PkG, EncG>::new(
-                fastcrypto_tbls::ecies_v1::PrivateKey::<bls12381::G2Element>::from(
+                fastcrypto_threshold::ecies_v1::PrivateKey::<bls12381::G2Element>::from(
                     randomness_private_key,
                 ),
                 nodes,
@@ -424,7 +424,7 @@ impl RandomnessManager {
                 return None;
             }
         };
-        let random_oracle = fastcrypto_tbls::random_oracle::RandomOracle::new(&format!(
+        let random_oracle = fastcrypto_threshold::random_oracle::RandomOracle::new(&format!(
             "dkg {} {}",
             Hex::encode(epoch_store.get_chain_identifier().as_bytes()),
             committee.epoch()
@@ -1117,7 +1117,7 @@ impl RandomnessManager {
     ) -> Vec<(
         u16,
         AuthorityName,
-        fastcrypto_tbls::ecies_v1::PublicKey<bls12381::G2Element>,
+        fastcrypto_threshold::ecies_v1::PublicKey<bls12381::G2Element>,
         StakeUnit,
     )> {
         committee
@@ -1140,7 +1140,7 @@ impl RandomnessManager {
                 (
                     index,
                     *name,
-                    fastcrypto_tbls::ecies_v1::PublicKey::from(pk),
+                    fastcrypto_threshold::ecies_v1::PublicKey::from(pk),
                     *stake,
                 )
             })
@@ -1206,7 +1206,7 @@ mod tests {
     use consensus_types::block::BlockRef;
     use fastcrypto::groups::bls12381;
     use fastcrypto::serde_helpers::ToFromByteArray;
-    use fastcrypto_tbls::{mocked_dkg, nodes};
+    use fastcrypto_threshold::{mocked_dkg, nodes};
     use std::num::NonZeroUsize;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
@@ -1810,7 +1810,7 @@ mod tests {
                 .expect("should work to convert BLS key to G2Element");
                 nodes::Node::<EncG> {
                     id: i as u16,
-                    pk: fastcrypto_tbls::ecies_v1::PublicKey::from(pk),
+                    pk: fastcrypto_threshold::ecies_v1::PublicKey::from(pk),
                     weight: 1,
                 }
             })
@@ -1831,7 +1831,7 @@ mod tests {
 
         let (nodes, t) = build_dkg_nodes(&network_config);
         let random_oracle =
-            fastcrypto_tbls::random_oracle::RandomOracle::new("test_dkg_role_party");
+            fastcrypto_threshold::random_oracle::RandomOracle::new("test_dkg_role_party");
 
         let role = DkgRole::try_new(
             Some(network_config.validator_configs[0].protocol_key_pair()),
@@ -1972,7 +1972,7 @@ mod tests {
 
         let (nodes, t) = build_dkg_nodes(&network_config);
         let random_oracle =
-            fastcrypto_tbls::random_oracle::RandomOracle::new("test_dkg_role_observer");
+            fastcrypto_threshold::random_oracle::RandomOracle::new("test_dkg_role_observer");
 
         let role = DkgRole::try_new(None, nodes, t, random_oracle);
         assert!(role.is_some());

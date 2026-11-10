@@ -5,7 +5,7 @@ use self::{auth::AllowedPeersUpdatable, metrics::Metrics};
 use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::{
+use fastcrypto_threshold::{
     dkg_v1,
     nodes::PartyId,
     tbls::ThresholdBls,

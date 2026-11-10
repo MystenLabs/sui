@@ -20,7 +20,7 @@ use bytes::Bytes;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg_v1;
+use fastcrypto_threshold::dkg_v1;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use mysten_common::debug_fatal;
 use schemars::JsonSchema;
@@ -501,11 +501,11 @@ pub enum ConsensusTransactionKind {
     RandomnessStateUpdate(u64, Vec<u8>), // deprecated
     // DKG is used to generate keys for use in the random beacon protocol.
     // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
-    // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
+    // Contents are a serialized `fastcrypto_threshold::dkg::Message`.
     RandomnessDkgMessage(AuthorityName, Vec<u8>),
     // `RandomnessDkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
-    // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
+    // Contents are a serialized `fastcrypto_threshold::dkg::Confirmation`.
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
 
     CapabilityNotificationV2(AuthorityCapabilitiesV2),

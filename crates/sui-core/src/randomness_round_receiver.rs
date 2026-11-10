@@ -8,7 +8,7 @@ use std::time::Duration;
 use parking_lot::Mutex;
 
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::{tbls::ThresholdBls, types::ThresholdBls12381MinSig};
+use fastcrypto_threshold::{tbls::ThresholdBls, types::ThresholdBls12381MinSig};
 use mysten_common::debug_fatal_no_invariant;
 use mysten_common::fatal;
 use mysten_metrics::spawn_monitored_task;

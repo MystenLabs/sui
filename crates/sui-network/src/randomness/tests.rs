@@ -3,7 +3,7 @@
 
 use crate::{randomness::*, utils};
 use fastcrypto::{groups::bls12381, serde_helpers::ToFromByteArray};
-use fastcrypto_tbls::{mocked_dkg, nodes};
+use fastcrypto_threshold::{mocked_dkg, nodes};
 use std::collections::BTreeSet;
 use sui_macros::sim_test;
 use sui_swarm_config::test_utils::CommitteeFixture;
@@ -500,9 +500,9 @@ fn node_from_committee(
             .expect("key length should match"),
     )
     .expect("should work to convert BLS key to G2Element");
-    fastcrypto_tbls::nodes::Node::<EncG> {
+    fastcrypto_threshold::nodes::Node::<EncG> {
         id,
-        pk: fastcrypto_tbls::ecies_v1::PublicKey::from(pk),
+        pk: fastcrypto_threshold::ecies_v1::PublicKey::from(pk),
         weight: stake.try_into().unwrap(),
     }
 }
