@@ -9,7 +9,9 @@ use move_core_types::language_storage::StructTag;
 use sui_move_build::BuildConfig;
 use sui_types::Identifier;
 use sui_types::SUI_COIN_REGISTRY_OBJECT_ID;
+use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::SUI_FREEZE_LIST_OBJECT_ID;
 use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -515,6 +517,74 @@ pub async fn migrate_deny_cap(
         .expect("Deny cap migration failed");
 
     assert!(error.is_none(), "Deny cap migration failed: {error:?}");
+    fx
+}
+
+/// Convert the currency's `DenyCapV2` into a `ComplianceCap` with the same ID, sent to `sender`.
+///
+/// - `sender` and `kp` describe the account that will sign and pay for the transaction.
+/// - `outputs` describes owned outputs of currency creation.
+/// - `currency` is the `Currency<T>` object.
+/// - `gas` is the gas object to use for the transaction, which must be owned by `sender`.
+///
+/// Returns the effects of running the migration transaction.
+pub async fn migrate_to_compliance_cap(
+    cluster: &mut FullCluster,
+    sender: SuiAddress,
+    kp: &Ed25519KeyPair,
+    outputs: &LegacyCoinOutputs,
+    currency: ObjectRef,
+    gas: ObjectRef,
+) -> TransactionEffects {
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let currency = builder
+        .obj(ObjectArg::SharedObject {
+            id: currency.0,
+            initial_shared_version: currency.1,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+
+    let mut genesis_shared = |id| {
+        builder
+            .obj(ObjectArg::SharedObject {
+                id,
+                initial_shared_version: 1.into(),
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap()
+    };
+    let freeze_list = genesis_shared(SUI_FREEZE_LIST_OBJECT_ID);
+    let deny_list = genesis_shared(SUI_DENY_LIST_OBJECT_ID);
+
+    let deny_cap = builder
+        .obj(ObjectArg::ImmOrOwnedObject(outputs.deny.unwrap()))
+        .unwrap();
+    let addresses = builder.pure(Vec::<SuiAddress>::new()).unwrap();
+
+    let compliance_cap = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("coin_registry").to_owned(),
+        ident_str!("migrate_to_compliance_cap").to_owned(),
+        vec![TypeTag::Struct(Box::new(outputs.coin_type.clone()))],
+        vec![currency, freeze_list, deny_list, deny_cap, addresses],
+    );
+    builder.transfer_arg(sender, compliance_cap);
+
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+
+    let (fx, error) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![kp]))
+        .expect("ComplianceCap migration failed");
+
+    assert!(error.is_none(), "ComplianceCap migration failed: {error:?}");
     fx
 }
 
