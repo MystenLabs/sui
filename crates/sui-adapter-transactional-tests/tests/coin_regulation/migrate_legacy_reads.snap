@@ -1,0 +1,76 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Every legacy deny list read aborts for a migrated coin type. The mutating wrappers need the
+// DenyCapV2 that migration consumes, so they are unreachable here.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-33:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 18399600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 35:
+//# run sui::coin_registry::migrate_legacy_metadata --args object(0xc) object(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7060400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, line 37:
+//# run sui::coin::deny_list_v2_contains_current_epoch --args immshared(0x403) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, line 39:
+//# run sui::coin::deny_list_v2_contains_next_epoch --args immshared(0x403) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, line 41:
+//# run sui::coin::deny_list_v2_is_global_pause_enabled_current_epoch --args immshared(0x403) --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, line 43:
+//# run sui::coin::deny_list_v2_is_global_pause_enabled_next_epoch --args immshared(0x403) --type-args test::regulated_coin::REGULATED_COIN --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 45-47:
+//# programmable --sender A --inputs object(2,0) object(0xcf) object(0x403) object(1,3) vector[@B] @A
+//> 0: sui::coin_registry::migrate_to_compliance_cap<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2), Input(3), Input(4));
+//> TransferObjects([Result(0)], Input(5))
+events: Event { package_id: sui, transaction_module: Identifier("coin_registry"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("DenyCapMigrated"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [188, 133, 153, 140, 247, 247, 44, 140, 71, 206, 242, 229, 56, 3, 25, 197, 201, 117, 171, 255, 22, 29, 201, 185, 251, 16, 226, 99, 229, 144, 244, 190] }
+created: object(7,0), object(7,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 13778800,  storage_rebate: 4969903, non_refundable_storage_fee: 497
+
+task 8, line 49:
+//# run sui::coin::deny_list_v2_contains_current_epoch --args immshared(0x403) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Move Abort in sui::coin::unmigrated_deny_list_v2_key (function index 49) at offset 12 at line 555 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("coin") }, function: 49, instruction: 12, function_name: Some("unmigrated_deny_list_v2_key") }, 13836186338896117765) at command Some(0)
+
+task 9, line 51:
+//# run sui::coin::deny_list_v2_contains_next_epoch --args immshared(0x403) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Move Abort in sui::coin::unmigrated_deny_list_v2_key (function index 49) at offset 12 at line 555 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("coin") }, function: 49, instruction: 12, function_name: Some("unmigrated_deny_list_v2_key") }, 13836186338896117765) at command Some(0)
+
+task 10, line 53:
+//# run sui::coin::deny_list_v2_is_global_pause_enabled_current_epoch --args immshared(0x403) --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Move Abort in sui::coin::unmigrated_deny_list_v2_key (function index 49) at offset 12 at line 555 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("coin") }, function: 49, instruction: 12, function_name: Some("unmigrated_deny_list_v2_key") }, 13836186338896117765) at command Some(0)
+
+task 11, line 55:
+//# run sui::coin::deny_list_v2_is_global_pause_enabled_next_epoch --args immshared(0x403) --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Move Abort in sui::coin::unmigrated_deny_list_v2_key (function index 49) at offset 12 at line 555 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("coin") }, function: 49, instruction: 12, function_name: Some("unmigrated_deny_list_v2_key") }, 13836186338896117765) at command Some(0)
