@@ -205,29 +205,42 @@ discards the implementation. When a reviewer changes the MDD, update the code to
 
 ## Step 3 — AI review
 
-Every tier requires an AI review of the full `$BASE...HEAD` diff by `/code-review max`. Run it
-locally, report each finding to the author, and wait until the author has accepted or rejected
-each one. Apply the accepted fixes. Do not post the findings to the PR. `/send-pr` Step 4 performs
-this review.
+Every tier requires an AI review of the full `$BASE...HEAD` diff by a review command from the
+table below. Run it locally, report each finding to the author, and wait until the author has
+accepted or rejected each one. Apply the accepted fixes. Do not post the findings to the PR.
+`/send-pr` Step 4 performs this review.
 
-A `max` review can take hours, so run it once, as the last review before writing the tag. Review
+Use the row for the harness that runs the authoring agent. The policy accepts only the commands
+in this table. To accept another harness, add a row.
+
+|Harness|Iteration review|Final review|`<command>` in the review tag|
+|---|---|---|---|
+|Claude Code|`/code-review high`|`/code-review max`|`/code-review max`|
+|omp|`/review`|`/review`|`omp /review`|
+
+A final review can take hours, so run it once, as the last review before writing the tag. Review
 in two phases:
 
-1. Iterate with `/code-review high` on the full diff. Resolve its findings with the author, and
-   run it again after each round of fixes. Stop iterating when a `high` run returns no finding
-   that the author accepts.
-2. Run `/code-review max` once on the final diff. Resolve its findings with the author. If the
-   accepted fixes are small and limited to the findings, they do not need another `max` run.
+1. Iterate with the iteration review on the full diff. Resolve its findings with the author, and
+   run it again after each round of fixes. Stop iterating when a run returns no finding that the
+   author accepts.
+2. Run the final review once on the final diff. Resolve its findings with the author. If the
+   accepted fixes are small and limited to the findings, they do not need another final review.
    If they change the design or add new code paths, go back to phase 1.
 
-Only the `max` run satisfies this step. Never write the review tag on the strength of a `high`
-run.
+Only a final review satisfies this step. In Claude Code, never write the review tag on the
+strength of a `high` run. In omp, `/review` has no effort level, so the iteration and final
+reviews are the same command, and the last `/review` run on the final diff is the final review.
 
 The review must run on a model in this list, identified by model ID:
 
 ```
 claude-opus-5-5
 ```
+
+Write the model ID without a provider prefix: `anthropic/claude-opus-5-5` is `claude-opus-5-5`.
+In omp, `/review` runs the `reviewer` task agent, and that agent can run on a model other than the
+session model. Check the model that the `reviewer` agent ran on.
 
 If the review would run on any other model, stop and tell the author. Do not write the review tag
 for a review that ran on a model outside the list.
@@ -259,12 +272,13 @@ The review tag records that the AI review in Step 3 ran and that the author deci
 finding:
 
 ```
-[🤖🔍 ai-review: /code-review max <model> <sha>]
+[🤖🔍 ai-review: <command> <model> <sha>]
 ```
 
-`<model>` is the model ID that ran the review. `<sha>` is the full hash of the PR head commit that
-the review covered, after the push. If commits are added after the tag, review the new commits
-with the two phases in Step 3 and update the tag to the new head.
+`<command>` is the final-review entry for the harness in the Step 3 table, such as
+`/code-review max` or `omp /review`. `<model>` is the model ID that ran the review. `<sha>` is the
+full hash of the PR head commit that the review covered, after the push. If commits are added after
+the tag, review the new commits with the two phases in Step 3 and update the tag to the new head.
 
 Refresh the tags whenever the diff changes. If the new diff fits a higher tier, raise the tier and
 meet the new tier's requirements. If the PR gains ineligible files, tell the author.
