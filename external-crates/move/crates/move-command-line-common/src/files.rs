@@ -98,11 +98,8 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
         if !path.is_dir() {
             continue;
         }
-        for entry in walkdir::WalkDir::new(path)
-            .follow_links(true)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry in walkdir::WalkDir::new(path).follow_links(true) {
+            let entry = entry?;
             let entry_path = entry.path();
             if !entry.file_type().is_file() || !is_file_desired(entry_path) {
                 continue;
@@ -248,7 +245,8 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
         if !p.is_dir()? {
             continue;
         }
-        for entry in p.walk_dir()?.filter_map(|e| e.ok()) {
+        for entry in p.walk_dir()? {
+            let entry = entry?;
             if !entry.is_file()? || !is_file_desired(&entry) {
                 continue;
             }
@@ -292,5 +290,21 @@ pub fn find_move_filenames_vfs(
                 .map(|e| e.as_str() == MOVE_EXTENSION)
                 .unwrap_or(false)
         })
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::find_filenames;
+    use std::os::unix::fs::symlink;
+
+    #[test]
+    fn traversal_errors_are_propagated() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+
+        let error = find_filenames(&[temp_dir.path()], |_| true).unwrap_err();
+
+        assert!(error.downcast_ref::<walkdir::Error>().is_some());
     }
 }

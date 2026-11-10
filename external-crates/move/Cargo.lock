@@ -2596,6 +2596,7 @@ dependencies = [
  "proptest",
  "serde",
  "sha2 0.9.9",
+ "tempfile",
  "vfs",
  "walkdir",
 ]
