@@ -2113,12 +2113,13 @@ impl KeyValueStoreReader for BigTableClient {
         object_id: ObjectID,
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Option<(SequenceNumber, ObjectStatus)>> {
-        // The newest row in `[(id, 0), (id, checkpoint)]` is the object's state at `checkpoint`.
+        // Rows sort newest checkpoint first, so the first row from `(id, checkpoint)` to
+        // `(id, 0)` is the object's state at `checkpoint`.
         let start_key = Bytes::from(tables::object_versions_by_checkpoint::encode_key(
-            &object_id, 0,
+            &object_id, checkpoint,
         ));
         let end_key = Bytes::from(tables::object_versions_by_checkpoint::encode_key(
-            &object_id, checkpoint,
+            &object_id, 0,
         ));
         let Some((_, row)) = self
             .range_scan(
@@ -2126,7 +2127,7 @@ impl KeyValueStoreReader for BigTableClient {
                 Some(start_key),
                 Some(end_key),
                 1,
-                true,
+                false,
                 None,
             )
             .await?
@@ -3383,6 +3384,87 @@ mod tests {
                 .unwrap()
                 .map(|o| o.version().value());
             assert_eq!(found, expected, "at version {version}");
+        }
+    }
+
+    /// The state at checkpoint `C` is the first index row from `(id, C)` to `(id, 0)`, read in one
+    /// forward request with `rows_limit` 1, and never a neighbouring object's row.
+    #[tokio::test]
+    async fn object_version_at_checkpoint_is_one_forward_row() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        let index = tables::object_versions_by_checkpoint::NAME;
+        let id = ObjectID::from_single_byte(0x42);
+        let neighbours = [
+            ObjectID::from_single_byte(0x41),
+            ObjectID::from_single_byte(0x43),
+        ];
+        let changes = [
+            (2, (3, ObjectStatus::Live)),
+            (5, (7, ObjectStatus::Wrapped)),
+            (9, (8, ObjectStatus::Live)),
+        ];
+        let insert = async |id: ObjectID, checkpoint: u64, version: u64, status| {
+            mock.insert_row(
+                index,
+                tables::object_versions_by_checkpoint::encode_key(&id, checkpoint),
+                tables::object_versions_by_checkpoint::encode(
+                    SequenceNumber::from_u64(version),
+                    status,
+                ),
+            )
+            .await;
+        };
+        for (checkpoint, (version, status)) in changes {
+            insert(id, checkpoint, version, status).await;
+        }
+        // Rows at the first and last checkpoints on both sides of `id`, so a read that ran past
+        // `id`'s rows in either direction would find one.
+        for neighbour in neighbours {
+            for checkpoint in [0, 1, u64::MAX] {
+                insert(neighbour, checkpoint, 1, ObjectStatus::Live).await;
+            }
+        }
+        mock.clear_read_rows_calls().await;
+
+        let model: std::collections::BTreeMap<u64, (u64, ObjectStatus)> =
+            changes.into_iter().collect();
+        for checkpoint in (0..=12).chain([u64::MAX - 1, u64::MAX]) {
+            let found = client
+                .get_object_version_at_checkpoint(id, checkpoint)
+                .await
+                .unwrap()
+                .map(|(version, status)| (version.value(), status));
+            let expected = model
+                .range(..=checkpoint)
+                .next_back()
+                .map(|(_, state)| *state);
+            assert_eq!(found, expected, "at checkpoint {checkpoint}");
+
+            let calls = mock.read_rows_calls().await;
+            mock.clear_read_rows_calls().await;
+            assert_eq!(calls.len(), 1, "one ReadRows per lookup: {calls:?}");
+            let call = &calls[0];
+            assert_eq!(call.table, index);
+            assert!(!call.reversed, "at checkpoint {checkpoint}");
+            assert_eq!(call.rows_limit, 1);
+            let key = |checkpoint| {
+                Bytes::from(tables::object_versions_by_checkpoint::encode_key(
+                    &id, checkpoint,
+                ))
+            };
+            assert_eq!(
+                call.row_ranges,
+                vec![RowRange {
+                    start_key: Some(StartKey::StartKeyClosed(key(checkpoint))),
+                    end_key: Some(EndKey::EndKeyClosed(key(0))),
+                }],
+            );
         }
     }
 
