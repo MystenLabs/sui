@@ -1632,10 +1632,10 @@ async fn test_pool_mode_reports_processed_transactions_per_transaction() {
 }
 
 // A transaction whose submit request ended while its pool entry is still queued can pass the
-// handler's in-flight and recent-submission checks again. The pool refuses the second copy,
-// and the handler reports that per transaction without failing the rest of the request.
+// handler's in-flight and recent-submission checks again. The pool attaches the resubmission to
+// the queued entry, so the transaction is queued once and the resubmitter receives its position.
 #[sim_test]
-async fn test_pool_mode_refuses_a_transaction_already_queued() {
+async fn test_pool_mode_attaches_a_resubmission_to_the_queued_entry() {
     telemetry_subscribers::init_for_testing();
     let (sender, keypair) = get_account_key_pair();
     let gas_objects: Vec<Object> = (0..2)
@@ -1728,21 +1728,11 @@ async fn test_pool_mode_refuses_a_transaction_already_queued() {
         .expect("an already queued transaction must not fail the request");
     let results = response.into_inner().results;
     assert_eq!(results.len(), 2);
-    let result: SubmitTxResult = results[0].clone().try_into().unwrap();
-    match result {
-        SubmitTxResult::Rejected { error } => assert!(
-            matches!(
-                error.as_inner(),
-                SuiErrorKind::TransactionSubmitted { digest }
-                    if *digest == *transactions[0].digest()
-            ),
-            "expected TransactionSubmitted, got: {error}"
-        ),
-        other => panic!("expected the queued transaction to be rejected, got: {other:?}"),
+    for (index, result) in results.into_iter().enumerate() {
+        let result: SubmitTxResult = result.try_into().unwrap();
+        assert!(
+            matches!(result, SubmitTxResult::Submitted { .. }),
+            "expected Submitted at index {index}, got: {result:?}"
+        );
     }
-    let result: SubmitTxResult = results[1].clone().try_into().unwrap();
-    assert!(
-        matches!(result, SubmitTxResult::Submitted { .. }),
-        "expected the fresh transaction to be submitted, got: {result:?}"
-    );
 }

@@ -1752,10 +1752,9 @@ mod pool_tests {
         let tx = test_user_transaction(state, sender, keypair, gas, vec![]).await;
         let consensus_tx =
             ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
-        let (receiver, newly_inserted) = pool
+        let receiver = pool
             .try_insert(pool.epoch(), 1, vec![consensus_tx.clone()])
             .unwrap();
-        assert!(newly_inserted);
         (receiver, consensus_tx)
     }
 
@@ -1956,8 +1955,7 @@ mod pool_tests {
             ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx_a.into()),
             ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx_b.into()),
         ];
-        let (_receiver, newly_inserted) = pool.try_insert(pool.epoch(), 1, bundle).unwrap();
-        assert!(newly_inserted);
+        let _receiver = pool.try_insert(pool.epoch(), 1, bundle).unwrap();
         let (transactions, ack, _) = pool.take(10, usize::MAX);
         assert!(
             transactions.is_empty(),

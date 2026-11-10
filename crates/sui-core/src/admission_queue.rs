@@ -202,6 +202,7 @@ pub struct AdmissionQueueMetrics {
     pub pool_gc_notified: IntCounter,
     pub pool_waiting_inserts: IntGauge,
     pub pool_already_processed: IntCounterVec,
+    pub pool_duplicate_submissions: IntCounterVec,
     pub pool_rejected_at_proposal: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
@@ -323,6 +324,13 @@ impl AdmissionQueueMetrics {
                 registry,
             )
             .unwrap(),
+            pool_duplicate_submissions: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_duplicate_submissions",
+                "User submissions containing a transaction already queued in the user lane, by outcome: attached to the queued entry, or refused because they only partly overlap it",
+                &["outcome"],
+                registry,
+            )
+            .unwrap(),
             pool_rejected_at_proposal: register_int_counter_vec_with_registry!(
                 "consensus_transaction_pool_rejected_at_proposal",
                 "User submissions dropped at proposal time because their owned input objects no longer match live state, by error",
@@ -365,23 +373,48 @@ impl AdmissionQueueMetrics {
     }
 }
 
-/// Entry count and serialized bytes of the queued entries. Every path that adds
-/// or removes an entry updates both through `add` and `remove`.
-#[derive(Default)]
-struct QueueTotals {
+/// Entry count and serialized bytes of a set of queued entries.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+struct Totals {
     len: usize,
     bytes: u64,
 }
 
+/// Totals of the queued entries, overall and per gas price level. Every path that
+/// adds or removes an entry updates them through `add` and `remove`.
+#[derive(Default)]
+struct QueueTotals {
+    len: usize,
+    bytes: u64,
+    levels: BTreeMap<u64, Totals>,
+}
+
 impl QueueTotals {
     fn add(&mut self, entry: &impl AdmissionQueueEntry) {
+        let bytes = entry.byte_size() as u64;
         self.len += 1;
-        self.bytes += entry.byte_size() as u64;
+        self.bytes += bytes;
+        let level = self.levels.entry(entry.gas_price()).or_default();
+        level.len += 1;
+        level.bytes += bytes;
     }
 
     fn remove(&mut self, entry: &impl AdmissionQueueEntry) {
+        let bytes = entry.byte_size() as u64;
         self.len -= 1;
-        self.bytes -= entry.byte_size() as u64;
+        self.bytes -= bytes;
+        let std::collections::btree_map::Entry::Occupied(mut level) =
+            self.levels.entry(entry.gas_price())
+        else {
+            debug_fatal!("removed an entry from an absent gas price level");
+            return;
+        };
+        let totals = level.get_mut();
+        totals.len -= 1;
+        totals.bytes -= bytes;
+        if totals.len == 0 {
+            level.remove();
+        }
     }
 }
 
@@ -433,6 +466,18 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.queued_keys.contains_key(key)
     }
 
+    /// The first queued entry at `gas_price` that satisfies `predicate`.
+    pub fn find_mut(
+        &mut self,
+        gas_price: u64,
+        mut predicate: impl FnMut(&E) -> bool,
+    ) -> Option<&mut E> {
+        self.map
+            .get_mut(&gas_price)?
+            .iter_mut()
+            .find(|entry| predicate(entry))
+    }
+
     #[cfg(test)]
     fn assert_totals_consistent(&self) {
         let entries = self.map.values().flatten();
@@ -441,6 +486,18 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             self.totals.bytes,
             entries.map(|entry| entry.byte_size() as u64).sum::<u64>()
         );
+        let levels: BTreeMap<u64, Totals> = self
+            .map
+            .iter()
+            .map(|(&price, deque)| {
+                let totals = Totals {
+                    len: deque.len(),
+                    bytes: deque.iter().map(|entry| entry.byte_size() as u64).sum(),
+                };
+                (price, totals)
+            })
+            .collect();
+        assert_eq!(self.totals.levels, levels);
     }
 
     pub fn min_gas_price(&self) -> Option<u64> {
@@ -478,7 +535,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         }
 
         match self.plan_eviction(gas_price, entry_bytes) {
-            Some(count) => {
+            Ok(count) => {
                 let evicted = self.evict_lowest_n(count);
                 self.push_entry(entry, keys, false);
                 self.metrics.evictions.inc_by(evicted.len() as u64);
@@ -488,14 +545,8 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                     gas_price,
                 })
             }
-            None => {
+            Err(min_gas_price) => {
                 self.metrics.rejections.inc();
-                // Under the byte cap, a bid above the cheapest queued entry can still be
-                // refused. The hint must then exceed the refused bid, or a client that
-                // raises its price to just above the hint is refused again.
-                let min_gas_price = self
-                    .min_gas_price()
-                    .map_or(gas_price, |min| min.max(gas_price));
                 InsertOutcome::new(Outcome::Rejected {
                     entry,
                     min_gas_price,
@@ -513,30 +564,48 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     }
 
     /// Number of entries to evict, cheapest first, to make room for an entry at
-    /// `gas_price` holding `entry_bytes`, or `None` if the entries priced strictly
-    /// below `gas_price` cannot free enough room.
-    fn plan_eviction(&self, gas_price: u64, entry_bytes: u64) -> Option<usize> {
-        let fits_after = |freed_count: usize, freed_bytes: u64| {
-            self.totals.len - freed_count < self.capacity
+    /// `gas_price` holding `entry_bytes`. Only entries priced strictly below
+    /// `gas_price` can be evicted. When they cannot free enough room, returns the gas
+    /// price that a bid must exceed to be admitted: the price level whose eviction
+    /// would complete the room the entry needs.
+    ///
+    /// Whole price levels are skipped using their totals, so the cost is linear in the
+    /// number of levels plus the entries of the one level that is partly evicted.
+    fn plan_eviction(&self, gas_price: u64, entry_bytes: u64) -> Result<usize, u64> {
+        let fits_after = |freed: Totals| {
+            self.totals.len - freed.len < self.capacity
                 && self
                     .byte_capacity
-                    .is_none_or(|cap| self.totals.bytes - freed_bytes + entry_bytes <= cap)
+                    .is_none_or(|cap| self.totals.bytes - freed.bytes + entry_bytes <= cap)
         };
-        let mut freed_count = 0;
-        let mut freed_bytes = 0;
-        for (&price, deque) in self.map.iter() {
-            if price >= gas_price {
-                break;
+        let mut freed = Totals::default();
+        for (&price, level) in &self.totals.levels {
+            let freed_with_level = Totals {
+                len: freed.len + level.len,
+                bytes: freed.bytes + level.bytes,
+            };
+            if !fits_after(freed_with_level) {
+                freed = freed_with_level;
+                continue;
             }
-            for entry in deque {
-                freed_count += 1;
-                freed_bytes += entry.byte_size() as u64;
-                if fits_after(freed_count, freed_bytes) {
-                    return Some(freed_count);
+            if price >= gas_price {
+                return Err(price);
+            }
+            for entry in self.map.get(&price).into_iter().flatten() {
+                freed.len += 1;
+                freed.bytes += entry.byte_size() as u64;
+                if fits_after(freed) {
+                    return Ok(freed.len);
                 }
             }
+            debug_fatal!("gas price level totals disagree with its entries");
+            return Err(price);
         }
-        None
+        Err(self
+            .totals
+            .levels
+            .last_key_value()
+            .map_or(gas_price, |(&price, _)| price.max(gas_price)))
     }
 
     fn evict_lowest_n(&mut self, count: usize) -> Vec<E> {
@@ -1123,12 +1192,28 @@ mod tests {
             q.insert(mock_entry(3, 20, 500, &log))
                 .unwrap_err()
                 .as_inner(),
-            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 20 }
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 30 }
         ));
         assert_eq!(*log.rejected.lock().unwrap(), vec![3]);
         assert!(log.evicted.lock().unwrap().is_empty());
         assert_eq!(q.len(), 2);
         assert_eq!(q.metrics.evictions.get(), 0);
+        q.insert(mock_entry(4, 31, 500, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![2, 1]);
+        q.assert_totals_consistent();
+    }
+
+    #[test]
+    fn byte_cap_evicts_across_price_levels() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(mock_entry(1, 10, 300, &log)).unwrap();
+        q.insert(mock_entry(2, 20, 200, &log)).unwrap();
+        q.insert(mock_entry(3, 20, 200, &log)).unwrap();
+        q.insert(mock_entry(4, 30, 300, &log)).unwrap();
+        q.insert(mock_entry(5, 40, 600, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3]);
+        assert_eq!(q.len(), 2);
         q.assert_totals_consistent();
     }
 

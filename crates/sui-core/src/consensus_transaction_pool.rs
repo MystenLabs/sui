@@ -74,10 +74,13 @@ type BlockInclusion = (
     oneshot::Receiver<BlockStatus>,
 );
 
+type PositionSender = oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>;
+
 /// How a queued submission is resolved once its fate is known.
 enum EntryAck {
-    /// RPC user path: positions on inclusion, error on eviction / epoch end.
-    User(oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>),
+    /// RPC user path: positions on inclusion, error on eviction / epoch end. A
+    /// resubmission of a queued entry adds a sender instead of a second entry.
+    User(Vec<PositionSender>),
     /// `ConsensusAdapter` path (system transactions and pings): block inclusion
     /// ack plus a `BlockStatus` subscription.
     SystemOrPing(oneshot::Sender<BlockInclusion>),
@@ -110,8 +113,8 @@ impl PendingAck {
         block: &mut ProposedBlock,
     ) {
         match self.ack.take().expect("ack must be pending") {
-            EntryAck::User(sender) => {
-                let positions = indices
+            EntryAck::User(senders) => {
+                let positions: Vec<_> = indices
                     .into_iter()
                     .map(|index| ConsensusPosition {
                         epoch,
@@ -119,7 +122,9 @@ impl PendingAck {
                         index,
                     })
                     .collect();
-                let _ = sender.send(Ok(positions));
+                for sender in senders {
+                    let _ = sender.send(Ok(positions.clone()));
+                }
             }
             EntryAck::SystemOrPing(sender) => {
                 let (status_sender, status_receiver) = oneshot::channel();
@@ -131,8 +136,10 @@ impl PendingAck {
 
     fn resolve_error(mut self, error: SuiError) {
         match self.ack.take().expect("ack must be pending") {
-            EntryAck::User(sender) => {
-                let _ = sender.send(Err(error));
+            EntryAck::User(senders) => {
+                for sender in senders {
+                    let _ = sender.send(Err(error.clone()));
+                }
             }
             EntryAck::SystemOrPing(sender) => {
                 drop(sender);
@@ -142,6 +149,28 @@ impl PendingAck {
 
     fn drop_deliberately(mut self, _reason: &'static str) {
         drop(self.ack.take().expect("ack must be pending"));
+    }
+
+    /// Adds a waiter for this user entry's outcome, dropping waiters whose receivers
+    /// are gone.
+    fn attach_user(&mut self, sender: PositionSender) {
+        let Some(EntryAck::User(senders)) = &mut self.ack else {
+            debug_fatal!("attach_user on an entry without a pending user ack");
+            return;
+        };
+        senders.retain(|sender| !sender.is_closed());
+        senders.push(sender);
+    }
+
+    /// Takes the single waiter of a user entry that was never queued.
+    fn take_user_sender(mut self) -> Option<PositionSender> {
+        match self.ack.take() {
+            Some(EntryAck::User(mut senders)) if senders.len() == 1 => senders.pop(),
+            other => {
+                self.ack = other;
+                None
+            }
+        }
     }
 
     fn is_abandoned_system(&self) -> bool {
@@ -235,17 +264,6 @@ struct PoolEntry {
     /// proposal and rolled back on drop otherwise. `None` submits on the next
     /// proposal.
     staggered_slot: Option<StaggeredSlot>,
-}
-
-/// An entry that shares a transaction with a queued entry would hold a second copy
-/// of the same bytes and occupy a second slot, so it is refused with the error the
-/// submit handler returns for a resubmission of an in-flight transaction.
-fn already_queued_error(key: &ConsensusTransactionKey) -> SuiError {
-    let digest = match key {
-        ConsensusTransactionKey::Certificate(digest) => *digest,
-        _ => TransactionDigest::default(),
-    };
-    SuiErrorKind::TransactionSubmitted { digest }.into()
 }
 
 /// `Some` once every watch has observed processing. Bundles are proposed
@@ -507,10 +525,12 @@ impl ConsensusTransactionPool {
     }
 
     /// Inserts user transactions to the pool. Returns the receiver for their
-    /// eventual positions, and bool indicating whether all transactions in the
-    /// group were newly inserted.
+    /// eventual positions.
+    /// A submission whose transactions exactly match a queued entry is attached to
+    /// that entry and receives its positions, so the lane holds one copy.
     /// Fails fast on epoch mismatch, a closed pool/user lane, block-limit
-    /// violations, a transaction already queued, or when outbid by the eviction policy.
+    /// violations, a partial overlap with queued transactions, or when outbid by the
+    /// eviction policy.
     /// `gas_price` is the entry's priority in the user lane (proposed first, and
     /// outbids lower prices when the lane is full).
     pub fn try_insert(
@@ -518,7 +538,7 @@ impl ConsensusTransactionPool {
         caller_epoch: EpochId,
         gas_price: u64,
         transactions: Vec<ConsensusTransaction>,
-    ) -> SuiResult<(PositionReceiver, bool)> {
+    ) -> SuiResult<PositionReceiver> {
         // Check whether the transactions were already processed by consensus or
         // checkpoint execution.
         let keys = transactions
@@ -540,6 +560,19 @@ impl ConsensusTransactionPool {
             ));
         }
 
+        let (sender, receiver) = oneshot::channel();
+        // Matching before serialization and the stagger quota keeps a resubmission from
+        // consuming either.
+        let sender = {
+            let mut inner = self.inner.lock();
+            let user = self.check_user_lane_open_locked(caller_epoch, &mut inner)?;
+            match self.attach_to_queued_locked(user, gas_price, &keys, sender) {
+                Ok(None) => return Ok(receiver),
+                Ok(Some(sender)) => sender,
+                Err(error) => return Err(error),
+            }
+        };
+
         let tx_type = tx_type_label(&transactions);
         let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
         let owned_object_refs = owned_object_refs(&transactions);
@@ -552,14 +585,13 @@ impl ConsensusTransactionPool {
             .stagger_quota
             .submission_slot(&user_transactions, &self.epoch_store)?;
         let stagger_delay = staggered_slot.as_ref().map(|slot| slot.delay());
-        let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: serialized,
             total_bytes,
             gas_price,
             tx_type,
             proposers: proposers_metric_label(&transactions, &self.epoch_store),
-            ack: PendingAck::new(EntryAck::User(sender), keys),
+            ack: PendingAck::new(EntryAck::User(vec![sender]), keys),
             metrics: self.metrics.clone(),
             processed,
             owned_object_refs,
@@ -576,17 +608,23 @@ impl ConsensusTransactionPool {
                 return Err(error);
             }
         };
-        if let Some(key) = entry.ack.keys.iter().find(|key| user.contains_key(key)) {
-            drop(inner);
-            self.metrics.duplicate_inserts.inc();
-            let error = already_queued_error(key);
-            entry.ack.resolve_error(error.clone());
-            return Err(error);
+        // A copy may have been queued while this entry was being built.
+        if entry.ack.keys.iter().any(|key| user.contains_key(key)) {
+            let PoolEntry { ack, .. } = entry;
+            let keys = ack.keys.clone();
+            let Some(sender) = ack.take_user_sender() else {
+                unreachable!("a newly built user entry has exactly one waiter");
+            };
+            return match self.attach_to_queued_locked(user, gas_price, &keys, sender) {
+                Ok(None) => Ok(receiver),
+                Ok(Some(_)) => unreachable!("a key of this entry is queued"),
+                Err(error) => Err(error),
+            };
         }
         let outcome = user.try_insert(entry);
         drop(inner);
 
-        let newly_inserted = outcome.notify()?;
+        outcome.notify()?;
         // Observed only for entries actually admitted, so the histogram records holds
         // that are really applied. The entry (and with it the slot) is in the pool, but
         // the slot's delay was captured at creation.
@@ -600,7 +638,41 @@ impl ConsensusTransactionPool {
             .pool_bytes
             .with_label_values(&["user"])
             .add(total_bytes as i64);
-        Ok((receiver, newly_inserted))
+        Ok(receiver)
+    }
+
+    /// Attaches `sender` to the queued entry whose transactions are exactly `keys`.
+    /// Returns the sender back when none of `keys` is queued. Refuses a submission that
+    /// shares only some of its transactions with queued entries, because it can neither
+    /// be attached nor queued without a second copy of the shared transactions.
+    fn attach_to_queued_locked(
+        &self,
+        user: &mut PriorityAdmissionQueue<PoolEntry>,
+        gas_price: u64,
+        keys: &[ConsensusTransactionKey],
+        sender: PositionSender,
+    ) -> SuiResult<Option<PositionSender>> {
+        if !keys.iter().any(|key| user.contains_key(key)) {
+            return Ok(Some(sender));
+        }
+        if let Some(queued) = user.find_mut(gas_price, |queued| queued.ack.keys == keys) {
+            queued.ack.attach_user(sender);
+            self.metrics
+                .pool_duplicate_submissions
+                .with_label_values(&["attached"])
+                .inc();
+            return Ok(None);
+        }
+        self.metrics
+            .pool_duplicate_submissions
+            .with_label_values(&["overlap"])
+            .inc();
+        Err(
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
+                min_gas_price: gas_price,
+            }
+            .into(),
+        )
     }
 
     /// Queues a submission from the `ConsensusAdapter` path. An empty slice is a
@@ -1501,7 +1573,7 @@ impl TransactionPoolContext {
         epoch: EpochId,
         gas_price: u64,
         transactions: Vec<ConsensusTransaction>,
-    ) -> SuiResult<(PositionReceiver, bool)> {
+    ) -> SuiResult<PositionReceiver> {
         self.wait_for_pool(epoch)
             .await?
             .try_insert(epoch, gas_price, transactions)
@@ -1789,7 +1861,7 @@ mod tests {
     async fn unresolved_pending_ack_panics() {
         let (sender, _receiver) = oneshot::channel();
         drop(PendingAck::new(
-            EntryAck::User(sender),
+            EntryAck::User(vec![sender]),
             vec![transaction().key()],
         ));
     }
@@ -1843,16 +1915,16 @@ mod tests {
             );
         }
 
-        let (first, _) = pool
+        let first = pool
             .try_insert(epoch, 10, vec![transactions[0].clone()])
             .unwrap();
-        let (_second, _) = pool
+        let _second = pool
             .try_insert(epoch, 10, vec![transactions[1].clone()])
             .unwrap();
         assert_eq!(pool.queue_depth("user"), 2);
         assert_eq!(user_lane_bytes(&pool), sizes[0] + sizes[1]);
 
-        let (_third, _) = pool
+        let _third = pool
             .try_insert(epoch, 20, vec![transactions[2].clone()])
             .unwrap();
         assert!(matches!(
@@ -1888,7 +1960,10 @@ mod tests {
             gas_price: 1,
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
             proposers: "na",
-            ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
+            ack: PendingAck::new(
+                EntryAck::User(vec![sender]),
+                vec![consensus_transaction.key()],
+            ),
             metrics,
             processed: Vec::new(),
             owned_object_refs: Vec::new(),
@@ -1952,7 +2027,7 @@ mod tests {
         let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
         let epoch = pool.epoch();
         for gas_price in [10, 20, 30] {
-            let (_receiver, _) = pool
+            let _receiver = pool
                 .try_insert(epoch, gas_price, vec![transaction()])
                 .unwrap();
         }
@@ -1984,7 +2059,7 @@ mod tests {
         let block_bytes = u64::try_from(serialized_len).unwrap();
         let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
         let epoch = pool.epoch();
-        let (_receiver, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let _receiver = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
 
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
         assert_eq!(transactions.len(), 1);
@@ -2008,8 +2083,8 @@ mod tests {
         let epoch = pool.epoch();
         let system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
         assert_eq!(pool.queue_depth("system"), 1);
-        let (low_receiver, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
-        let (high_receiver, _) = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
+        let low_receiver = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let high_receiver = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
 
         let (transactions, ack, limit) = pool.take(2, usize::MAX);
         assert_eq!(transactions.len(), 2);
@@ -2057,7 +2132,7 @@ mod tests {
     #[sim_test]
     async fn bundles_are_atomic() {
         let (_state, pool) = test_state_and_pool(10).await;
-        let (_receiver, _) = pool
+        let _receiver = pool
             .try_insert(pool.epoch(), 10, vec![transaction(), transaction()])
             .unwrap();
         let (transactions, ack, limit) = pool.take(1, usize::MAX);
@@ -2081,8 +2156,8 @@ mod tests {
     async fn dropped_ack_preserves_front_order() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
-        let (first, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
-        let (mut second, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let first = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let mut second = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
         let (_, ack, _) = pool.take(2, usize::MAX);
         drop(ack);
 
@@ -2162,10 +2237,10 @@ mod tests {
     async fn eviction_and_rejection_match_admission_queue() {
         let (_state, pool) = test_state_and_pool(2).await;
         let epoch = pool.epoch();
-        let (first, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
-        let (_second, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let first = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let _second = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
 
-        let (_high, _) = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
+        let _high = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
         assert!(matches!(
             first.await.unwrap().unwrap_err().as_inner(),
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 20 }
@@ -2181,30 +2256,54 @@ mod tests {
     }
 
     #[sim_test]
-    async fn queued_transaction_is_not_admitted_twice() {
+    async fn resubmission_attaches_to_the_queued_entry() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
         let queued = transaction();
         let queued_bytes = bcs::to_bytes(&queued).unwrap().len() as i64;
-        let (_receiver, newly_inserted) = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
-        assert!(newly_inserted);
-
-        for (gas_price, group) in [
-            (10, vec![queued.clone()]),
-            (20, vec![queued.clone()]),
-            (20, vec![transaction(), queued.clone()]),
-        ] {
-            assert!(matches!(
-                pool.try_insert(epoch, gas_price, group)
-                    .err()
-                    .unwrap()
-                    .as_inner(),
-                SuiErrorKind::TransactionSubmitted { .. }
-            ));
-        }
+        let first = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
+        drop(first);
+        let second = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
+        let third = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
         assert_eq!(pool.queue_depth("user"), 1);
         assert_eq!(user_lane_bytes(&pool), queued_bytes);
-        assert_eq!(pool.metrics.duplicate_inserts.get(), 3);
+
+        assert!(matches!(
+            pool.try_insert(epoch, 10, vec![transaction(), queued.clone()])
+                .err()
+                .unwrap()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
+        ));
+        assert_eq!(pool.queue_depth("user"), 1);
+        assert_eq!(user_lane_bytes(&pool), queued_bytes);
+        let duplicates = &pool.metrics.pool_duplicate_submissions;
+        assert_eq!(duplicates.with_label_values(&["attached"]).get(), 2);
+        assert_eq!(duplicates.with_label_values(&["overlap"]).get(), 1);
+
+        let (taken, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(taken.len(), 1);
+        ack(block(1));
+        let positions = second.await.unwrap().unwrap();
+        assert_eq!(positions.len(), 1);
+        assert_eq!(third.await.unwrap().unwrap(), positions);
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn eviction_resolves_every_attached_waiter() {
+        let (_state, pool) = test_state_and_pool(1).await;
+        let epoch = pool.epoch();
+        let queued = transaction();
+        let first = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
+        let second = pool.try_insert(epoch, 10, vec![queued]).unwrap();
+        let _high = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
+        for receiver in [first, second] {
+            assert!(matches!(
+                receiver.await.unwrap().unwrap_err().as_inner(),
+                SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
+            ));
+        }
         pool.close();
     }
 
@@ -2213,11 +2312,11 @@ mod tests {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
         let queued = transaction();
-        let (_first, _) = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
+        let _first = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
 
         let (taken, ack, _) = pool.take(usize::MAX, usize::MAX);
         assert_eq!(taken.len(), 1);
-        let (_second, _) = pool.try_insert(epoch, 10, vec![queued]).unwrap();
+        let _second = pool.try_insert(epoch, 10, vec![queued]).unwrap();
         drop(ack);
         assert_eq!(pool.queue_depth("user"), 2);
         pool.close();
@@ -2236,8 +2335,8 @@ mod tests {
                 SuiErrorKind::ValidatorHaltedAtEpochEnd
             ));
         }
-        let (pending, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
-        let (taken, _) = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
+        let pending = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let taken = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
         let (_, ack, _) = pool.take(1, usize::MAX);
         pool.close();
 
@@ -2263,7 +2362,7 @@ mod tests {
     async fn dropped_ack_after_close_does_not_requeue() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
-        let (receiver, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let receiver = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
         let system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
         let (_, ack, _) = pool.take(2, usize::MAX);
         pool.close();
@@ -2280,7 +2379,7 @@ mod tests {
     async fn take_closes_user_lane_when_epoch_stops_accepting_user_certs() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
-        let (user_receiver, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let user_receiver = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
         let system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
 
         let epoch_store = state.epoch_store_for_testing();
@@ -2311,7 +2410,7 @@ mod tests {
     async fn dropped_ack_after_user_lane_close_resolves_taken_entries() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
-        let (taken, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let taken = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
         let (transactions, ack, _) = pool.take(1, usize::MAX);
         assert_eq!(transactions.len(), 1);
 
@@ -2379,13 +2478,13 @@ mod tests {
         };
 
         // Block 1: one user transaction, later garbage collected.
-        let (_first, _) = pool
+        let _first = pool
             .try_insert(epoch, 1, vec![user_transaction(&state)])
             .unwrap();
         let (_, ack, _) = pool.take(1, usize::MAX);
         ack(block(1));
         // Block 2: one user transaction and one system transaction, committed.
-        let (_second, _) = pool
+        let _second = pool
             .try_insert(epoch, 1, vec![user_transaction(&state)])
             .unwrap();
         let _system = pool.submit(epoch, &[transaction()]).unwrap();
@@ -2459,13 +2558,13 @@ mod tests {
         // Both bid highest, so they head the pop order: one whose gas object never
         // existed, one whose gas object was consumed after it entered the pool.
         let missing = user_transaction_with_gas(random_object_ref());
-        let (missing_receiver, _) = pool.try_insert(epoch, 100, vec![missing]).unwrap();
+        let missing_receiver = pool.try_insert(epoch, 100, vec![missing]).unwrap();
         let (sender, _) = get_key_pair::<AccountKeyPair>();
         let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
         let gas_object_ref = gas_object.compute_object_reference();
         state.insert_genesis_object(gas_object);
         let stale = user_transaction_with_gas(gas_object_ref);
-        let (stale_receiver, _) = pool.try_insert(epoch, 90, vec![stale]).unwrap();
+        let stale_receiver = pool.try_insert(epoch, 90, vec![stale]).unwrap();
         state.get_cache_writer().write_object_entry_for_test(
             Object::with_id_owner_version_for_testing(
                 gas_object_ref.0,
@@ -2479,7 +2578,7 @@ mod tests {
             .map(|_| {
                 let transaction = user_transaction(&state);
                 live_bytes += bcs::to_bytes(&transaction).unwrap().len() as i64;
-                pool.try_insert(epoch, 10, vec![transaction]).unwrap().0
+                pool.try_insert(epoch, 10, vec![transaction]).unwrap()
             })
             .collect::<Vec<_>>();
 
@@ -2520,7 +2619,7 @@ mod tests {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
 
-        let (receiver, _) = pool
+        let receiver = pool
             .try_insert(
                 epoch,
                 10,
@@ -2554,16 +2653,15 @@ mod tests {
         // budget below if they were not skipped — one observed through consensus
         // output, one through checkpoint execution.
         let processed = user_transaction(&state);
-        let (processed_consensus, _) = pool
+        let processed_consensus = pool
             .try_insert(epoch, 100, vec![processed.clone()])
             .unwrap();
         let executed = user_transaction(&state);
-        let (processed_checkpoint, _) = pool.try_insert(epoch, 90, vec![executed.clone()]).unwrap();
+        let processed_checkpoint = pool.try_insert(epoch, 90, vec![executed.clone()]).unwrap();
         let live = (0..3)
             .map(|_| {
                 pool.try_insert(epoch, 10, vec![user_transaction(&state)])
                     .unwrap()
-                    .0
             })
             .collect::<Vec<_>>();
 
@@ -2605,7 +2703,7 @@ mod tests {
 
         let first = user_transaction(&state);
         let second = user_transaction(&state);
-        let (receiver, _) = pool
+        let receiver = pool
             .try_insert(epoch, 10, vec![first.clone(), second.clone()])
             .unwrap();
 
@@ -2685,7 +2783,7 @@ mod tests {
         let baseline = epoch_store.num_pending_processed_notifications();
 
         let evicted_tx = user_transaction(&state);
-        let (evicted, _) = pool
+        let evicted = pool
             .try_insert(epoch, 10, vec![evicted_tx.clone()])
             .unwrap();
         assert_eq!(
@@ -2694,7 +2792,7 @@ mod tests {
         );
 
         let taken_tx = user_transaction(&state);
-        let (taken, _) = pool.try_insert(epoch, 20, vec![taken_tx.clone()]).unwrap();
+        let taken = pool.try_insert(epoch, 20, vec![taken_tx.clone()]).unwrap();
         assert!(matches!(
             evicted.await.unwrap().unwrap_err().as_inner(),
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
@@ -2711,7 +2809,7 @@ mod tests {
         assert_eq!(epoch_store.num_pending_processed_notifications(), baseline);
 
         let closed_tx = user_transaction(&state);
-        let (closed, _) = pool.try_insert(epoch, 10, vec![closed_tx.clone()]).unwrap();
+        let closed = pool.try_insert(epoch, 10, vec![closed_tx.clone()]).unwrap();
         assert_eq!(
             epoch_store.num_pending_processed_notifications(),
             baseline + 2
