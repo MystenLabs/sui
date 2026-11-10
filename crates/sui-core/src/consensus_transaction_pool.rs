@@ -237,6 +237,17 @@ struct PoolEntry {
     staggered_slot: Option<StaggeredSlot>,
 }
 
+/// An entry that shares a transaction with a queued entry would hold a second copy
+/// of the same bytes and occupy a second slot, so it is refused with the error the
+/// submit handler returns for a resubmission of an in-flight transaction.
+fn already_queued_error(key: &ConsensusTransactionKey) -> SuiError {
+    let digest = match key {
+        ConsensusTransactionKey::Certificate(digest) => *digest,
+        _ => TransactionDigest::default(),
+    };
+    SuiErrorKind::TransactionSubmitted { digest }.into()
+}
+
 /// `Some` once every watch has observed processing. Bundles are proposed
 /// atomically, so a partially processed one is still proposed in full.
 fn all_processed(watches: &mut [ProcessedWatch]) -> Option<ProcessedMethod> {
@@ -499,7 +510,7 @@ impl ConsensusTransactionPool {
     /// eventual positions, and bool indicating whether all transactions in the
     /// group were newly inserted.
     /// Fails fast on epoch mismatch, a closed pool/user lane, block-limit
-    /// violations, or when outbid by the eviction policy.
+    /// violations, a transaction already queued, or when outbid by the eviction policy.
     /// `gas_price` is the entry's priority in the user lane (proposed first, and
     /// outbids lower prices when the lane is full).
     pub fn try_insert(
@@ -565,6 +576,13 @@ impl ConsensusTransactionPool {
                 return Err(error);
             }
         };
+        if let Some(key) = entry.ack.keys.iter().find(|key| user.contains_key(key)) {
+            drop(inner);
+            self.metrics.duplicate_inserts.inc();
+            let error = already_queued_error(key);
+            entry.ack.resolve_error(error.clone());
+            return Err(error);
+        }
         let outcome = user.try_insert(entry);
         drop(inner);
 
@@ -1640,6 +1658,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use consensus_config::AuthorityIndex;
     use consensus_types::block::BlockDigest;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{AuthorityName, ObjectID, random_object_ref};
@@ -1714,8 +1733,13 @@ mod tests {
         pool.metrics.pool_bytes.with_label_values(&["user"]).get()
     }
 
+    /// A transaction with a key distinct from every earlier call, and the same
+    /// serialized size.
     fn transaction() -> ConsensusTransaction {
-        ConsensusTransaction::new_end_of_publish(AuthorityName::ZERO)
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let mut name = AuthorityName::ZERO;
+        name.0[..8].copy_from_slice(&NEXT.fetch_add(1, Ordering::Relaxed).to_le_bytes());
+        ConsensusTransaction::new_end_of_publish(name)
     }
 
     /// A user transaction whose gas object exists in `state` at the referenced version, so
@@ -2135,13 +2159,11 @@ mod tests {
     }
 
     #[sim_test]
-    async fn eviction_rejection_and_duplicate_detection_match_admission_queue() {
+    async fn eviction_and_rejection_match_admission_queue() {
         let (_state, pool) = test_state_and_pool(2).await;
         let epoch = pool.epoch();
-        let (first, newly_inserted) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
-        assert!(newly_inserted);
-        let (_second, newly_inserted) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
-        assert!(!newly_inserted);
+        let (first, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+        let (_second, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
 
         let (_high, _) = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
         assert!(matches!(
@@ -2155,6 +2177,49 @@ mod tests {
                 .as_inner(),
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 10 }
         ));
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn queued_transaction_is_not_admitted_twice() {
+        let (_state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let queued = transaction();
+        let queued_bytes = bcs::to_bytes(&queued).unwrap().len() as i64;
+        let (_receiver, newly_inserted) = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
+        assert!(newly_inserted);
+
+        for (gas_price, group) in [
+            (10, vec![queued.clone()]),
+            (20, vec![queued.clone()]),
+            (20, vec![transaction(), queued.clone()]),
+        ] {
+            assert!(matches!(
+                pool.try_insert(epoch, gas_price, group)
+                    .err()
+                    .unwrap()
+                    .as_inner(),
+                SuiErrorKind::TransactionSubmitted { .. }
+            ));
+        }
+        assert_eq!(pool.queue_depth("user"), 1);
+        assert_eq!(user_lane_bytes(&pool), queued_bytes);
+        assert_eq!(pool.metrics.duplicate_inserts.get(), 3);
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn dropped_proposal_requeues_alongside_a_later_copy() {
+        let (_state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let queued = transaction();
+        let (_first, _) = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
+
+        let (taken, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(taken.len(), 1);
+        let (_second, _) = pool.try_insert(epoch, 10, vec![queued]).unwrap();
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 2);
         pool.close();
     }
 

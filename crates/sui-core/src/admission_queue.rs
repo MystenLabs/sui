@@ -365,6 +365,26 @@ impl AdmissionQueueMetrics {
     }
 }
 
+/// Entry count and serialized bytes of the queued entries. Every path that adds
+/// or removes an entry updates both through `add` and `remove`.
+#[derive(Default)]
+struct QueueTotals {
+    len: usize,
+    bytes: u64,
+}
+
+impl QueueTotals {
+    fn add(&mut self, entry: &impl AdmissionQueueEntry) {
+        self.len += 1;
+        self.bytes += entry.byte_size() as u64;
+    }
+
+    fn remove(&mut self, entry: &impl AdmissionQueueEntry) {
+        self.len -= 1;
+        self.bytes -= entry.byte_size() as u64;
+    }
+}
+
 /// Bounded priority queue that orders transactions by gas price. Uses a BTreeMap
 /// for efficient access at both ends: lowest gas price (for eviction) and highest
 /// gas price (for draining to consensus). Entries at the same gas price are FIFO.
@@ -376,8 +396,7 @@ pub struct PriorityAdmissionQueue<E: AdmissionQueueEntry> {
     map: BTreeMap<u64, VecDeque<E>>,
     /// Number of queue entries per transaction key, for duplicate detection.
     queued_keys: HashMap<ConsensusTransactionKey, u32>,
-    total_len: usize,
-    total_bytes: u64,
+    totals: QueueTotals,
     metrics: Arc<AdmissionQueueMetrics>,
 }
 
@@ -388,8 +407,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             byte_capacity: None,
             map: BTreeMap::new(),
             queued_keys: HashMap::new(),
-            total_len: 0,
-            total_bytes: 0,
+            totals: QueueTotals::default(),
             metrics,
         }
     }
@@ -402,12 +420,27 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     }
 
     pub fn len(&self) -> usize {
-        self.total_len
+        self.totals.len
     }
 
     #[cfg(test)]
     pub fn byte_capacity(&self) -> Option<u64> {
         self.byte_capacity
+    }
+
+    /// Whether an entry holding `key` is queued.
+    pub fn contains_key(&self, key: &ConsensusTransactionKey) -> bool {
+        self.queued_keys.contains_key(key)
+    }
+
+    #[cfg(test)]
+    fn assert_totals_consistent(&self) {
+        let entries = self.map.values().flatten();
+        assert_eq!(self.totals.len, entries.clone().count());
+        assert_eq!(
+            self.totals.bytes,
+            entries.map(|entry| entry.byte_size() as u64).sum::<u64>()
+        );
     }
 
     pub fn min_gas_price(&self) -> Option<u64> {
@@ -473,10 +506,10 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
 
     /// Whether an entry of `entry_bytes` can be admitted without evicting anything.
     fn fits(&self, entry_bytes: u64) -> bool {
-        self.total_len < self.capacity
+        self.totals.len < self.capacity
             && self
                 .byte_capacity
-                .is_none_or(|cap| self.total_bytes + entry_bytes <= cap)
+                .is_none_or(|cap| self.totals.bytes + entry_bytes <= cap)
     }
 
     /// Number of entries to evict, cheapest first, to make room for an entry at
@@ -484,10 +517,10 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     /// below `gas_price` cannot free enough room.
     fn plan_eviction(&self, gas_price: u64, entry_bytes: u64) -> Option<usize> {
         let fits_after = |freed_count: usize, freed_bytes: u64| {
-            self.total_len - freed_count < self.capacity
+            self.totals.len - freed_count < self.capacity
                 && self
                     .byte_capacity
-                    .is_none_or(|cap| self.total_bytes - freed_bytes + entry_bytes <= cap)
+                    .is_none_or(|cap| self.totals.bytes - freed_bytes + entry_bytes <= cap)
         };
         let mut freed_count = 0;
         let mut freed_bytes = 0;
@@ -563,13 +596,11 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                     }
                     PopAction::Skip => deque.push_back(entry),
                     PopAction::Include => {
-                        self.total_len -= 1;
-                        self.total_bytes -= entry.byte_size() as u64;
+                        self.totals.remove(&entry);
                         included.push(entry);
                     }
                     PopAction::Exclude => {
-                        self.total_len -= 1;
-                        self.total_bytes -= entry.byte_size() as u64;
+                        self.totals.remove(&entry);
                         excluded.push(entry);
                     }
                 }
@@ -579,12 +610,12 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         for entry in included.iter().chain(&excluded) {
             self.remove_keys(entry);
         }
-        self.metrics.queue_depth.set(self.total_len as i64);
+        self.metrics.queue_depth.set(self.totals.len as i64);
         (included, excluded)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.total_len == 0
+        self.totals.len == 0
     }
 
     pub fn reinsert_front(&mut self, entry: E) {
@@ -596,15 +627,14 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         for key in keys {
             *self.queued_keys.entry(key).or_insert(0) += 1;
         }
-        self.total_bytes += entry.byte_size() as u64;
+        self.totals.add(&entry);
         let level = self.map.entry(entry.gas_price()).or_default();
         if front {
             level.push_front(entry);
         } else {
             level.push_back(entry);
         }
-        self.total_len += 1;
-        self.metrics.queue_depth.set(self.total_len as i64);
+        self.metrics.queue_depth.set(self.totals.len as i64);
     }
 
     fn evict_lowest(&mut self) -> E {
@@ -621,8 +651,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             evicted
         };
         self.remove_keys(&evicted);
-        self.total_len -= 1;
-        self.total_bytes -= evicted.byte_size() as u64;
+        self.totals.remove(&evicted);
         evicted
     }
 
@@ -1066,6 +1095,7 @@ mod tests {
         assert_eq!(q.len(), 2);
         assert!(log.evicted.lock().unwrap().is_empty());
         assert!(log.rejected.lock().unwrap().is_empty());
+        q.assert_totals_consistent();
     }
 
     #[test]
@@ -1080,6 +1110,7 @@ mod tests {
         assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
         assert!(log.rejected.lock().unwrap().is_empty());
         assert_eq!(q.metrics.evictions.get(), 2);
+        q.assert_totals_consistent();
     }
 
     #[test]
@@ -1098,6 +1129,7 @@ mod tests {
         assert!(log.evicted.lock().unwrap().is_empty());
         assert_eq!(q.len(), 2);
         assert_eq!(q.metrics.evictions.get(), 0);
+        q.assert_totals_consistent();
     }
 
     #[test]
@@ -1107,6 +1139,7 @@ mod tests {
         assert!(q.insert(mock_entry(1, 10, 1001, &log)).is_err());
         assert_eq!(*log.rejected.lock().unwrap(), vec![1]);
         assert_eq!(q.len(), 0);
+        q.assert_totals_consistent();
     }
 
     #[test]
@@ -1118,6 +1151,7 @@ mod tests {
         assert!(q.insert(mock_entry(3, 10, 300, &log)).is_err());
         assert_eq!(*log.rejected.lock().unwrap(), vec![3]);
         assert!(log.evicted.lock().unwrap().is_empty());
+        q.assert_totals_consistent();
     }
 
     #[test]
@@ -1131,6 +1165,7 @@ mod tests {
         assert_eq!(*log.evicted.lock().unwrap(), vec![1]);
         assert!(q.insert(mock_entry(4, 5, 100, &log)).is_err());
         assert_eq!(*log.rejected.lock().unwrap(), vec![4]);
+        q.assert_totals_consistent();
     }
 
     #[test]
@@ -1140,8 +1175,10 @@ mod tests {
         q.insert(mock_entry(1, 10, 800, &log)).unwrap();
         assert!(q.insert(mock_entry(2, 5, 800, &log)).is_err());
         assert_eq!(q.pop_batch(1).len(), 1);
+        q.assert_totals_consistent();
         assert!(q.insert(mock_entry(3, 5, 800, &log)).is_ok());
         assert_eq!(q.len(), 1);
+        q.assert_totals_consistent();
     }
 
     #[test]
@@ -1150,10 +1187,12 @@ mod tests {
         let mut q = byte_capped_queue(100, 1000);
         q.insert(mock_entry(1, 10, 800, &log)).unwrap();
         let popped = q.pop_batch(1).pop().unwrap();
+        q.assert_totals_consistent();
         q.reinsert_front(popped);
         assert!(q.insert(mock_entry(2, 5, 300, &log)).is_err());
         assert_eq!(*log.rejected.lock().unwrap(), vec![2]);
         assert_eq!(q.len(), 1);
+        q.assert_totals_consistent();
     }
 
     fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {
@@ -1487,6 +1526,7 @@ mod tests {
         // Popping removes the key; reinserting the popped entry (the dropped-proposal
         // requeue path) must restore it, so a copy of `tx` is flagged as a duplicate.
         let popped = q.pop_batch(1).pop().unwrap();
+        q.assert_totals_consistent();
         q.reinsert_front(popped);
         assert_eq!(q.len(), 1);
         let (entry2, _rx2) = make_dup_entry(100, tx.clone());

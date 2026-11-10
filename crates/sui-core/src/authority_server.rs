@@ -1518,6 +1518,27 @@ impl ValidatorService {
                             results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
                         }
                     }
+                    // The transaction(s) in this group are already queued in the consensus
+                    // transaction pool. Report per-tx as a retriable rejection rather than
+                    // failing the whole request.
+                    Err(err)
+                        if matches!(err.as_inner(), SuiErrorKind::TransactionSubmitted { .. }) =>
+                    {
+                        for (idx, tx_digest) in txns_meta {
+                            debug!(
+                                ?tx_digest,
+                                "handle_submit_transaction: transaction already queued: {err}"
+                            );
+                            metrics
+                                .submission_suppressed_inflight
+                                .with_label_values(&[req_type])
+                                .inc();
+                            results[idx] = Some(SubmitTxResult::Rejected {
+                                error: SuiErrorKind::TransactionSubmitted { digest: tx_digest }
+                                    .into(),
+                            });
+                        }
+                    }
                     // The transaction(s) in this group are already being processed by consensus.
                     // Report per-tx as a retriable rejection rather than failing the whole request.
                     Err(err) => {
