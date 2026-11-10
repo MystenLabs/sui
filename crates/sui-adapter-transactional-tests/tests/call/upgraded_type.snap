@@ -10,25 +10,25 @@ task 1, lines 6-9:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5304800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5304800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 11-15:
 //# upgrade --package TestDepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5662000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 5662000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 17-22:
 //# upgrade --package TestDepV2 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6019200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 6019200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 4, lines 24-29:
 //# publish --upgradeable --dependencies TestDepV2 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 5783600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, line 31:
 //# run TestRoot::m::pub_fun --type-args TestDepV1::m::V1

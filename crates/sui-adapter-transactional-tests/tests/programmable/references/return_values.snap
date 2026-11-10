@@ -14,7 +14,7 @@ task 1, lines 10-83:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 13710400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 13710400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 90-92:
 //# programmable --sender A --inputs @A
@@ -243,7 +243,7 @@ task 20, lines 255-260:
 //> 3: TransferObjects([Result(0)], Input(0));
 created: object(20,0), object(20,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3990000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1011000000, storage_cost: 3990000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 21, lines 262-266:
 //# programmable --sender A --inputs object(3,0)

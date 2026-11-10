@@ -1,0 +1,121 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+// The charge of 1_030_000_000 MIST fits in each budget below. A later phase runs out of gas in
+// every task except the last one.
+// Running out of gas in execution charges the whole budget. Running out of gas in storage keeps
+// the charge and the execution and charges the gas coin storage only. The gas coin is viewed
+// after each failure.
+
+init:
+A: object(0,0)
+
+task 1, line 12:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300000000000000u64,
+    },
+}
+
+task 2, lines 14-18:
+// The budget covers the charge but not the minimum computation of 1_000_000 MIST.
+//# publish --sender A --gas-budget 1030500000
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: None, command: None } }
+
+task 3, line 20:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299998969500000u64,
+    },
+}
+
+task 4, lines 22-27:
+// The budget equals the charge plus the minimum computation, which leaves no room: computation
+// must stay below what the charge left.
+//# publish --sender A --gas-budget 1031000000
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: None, command: None } }
+
+task 5, line 29:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299997938500000u64,
+    },
+}
+
+task 6, lines 31-37:
+// The init function loops until the execution runs out of gas.
+//# publish --sender A --gas-budget 1100000000
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: _, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 0)] }), command: Some(0) } }
+
+task 7, line 39:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299996838500000u64,
+    },
+}
+
+task 8, lines 41-46:
+// The charge and the computation fit. The storage of the package and the gas coin, 3_366_800 MIST,
+// does not.
+//# publish --sender A --gas-budget 1032000000
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: None, command: None } }
+
+task 9, line 48:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 5
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299995806512000u64,
+    },
+}
+
+task 10, lines 50-54:
+// The charge, the computation and the storage fit.
+//# publish --sender A --gas-budget 1036000000
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 3366800,  storage_rebate: 987901, non_refundable_storage_fee: 99

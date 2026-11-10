@@ -14,13 +14,13 @@ task 1, lines 10-110:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 18962000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 18962000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 112-115:
 //# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4, lines 122-124:
 //# programmable --sender A --inputs @A

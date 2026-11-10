@@ -1,0 +1,81 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+// Upgrading reserves the same MIST charge as publishing: fixed plus per module plus per
+// dependency, 1_030_000_000 MIST for one module and two dependencies. The gas coin is viewed
+// after each failure. Each failure runs out of gas, so the balance drops by the whole budget.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-13:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 5000800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-18:
+//# publish --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 3366800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 20-23:
+//# publish --upgradeable --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 5000800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, lines 25-34:
+// An upgrade that adds a module and a dependency pays for both: two modules and three
+// dependencies, 1_050_000_000 MIST. It runs first because the runner compiles a task with
+// `--dependencies` against the sources of every earlier task.
+//# upgrade --package u --upgrade-capability 3,1 --sender A --dependencies dep
+created: object(4,0)
+mutated: object(0,0), object(3,1)
+gas summary: computation_cost: 1051000000, storage_cost: 6505600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 5, line 36:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 5
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299995840723540u64,
+    },
+}
+
+task 6, lines 38-44:
+// A budget equal to the charge leaves nothing for execution: the whole budget is charged.
+//# upgrade --package test --upgrade-capability 1,1 --sender A --gas-budget 1030000000
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: None, command: None } }
+
+task 7, line 46:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299994810723540u64,
+    },
+}
+
+task 8, lines 48-54:
+// A budget just above the charge succeeds.
+//# upgrade --package test --upgrade-capability 1,1 --sender A --gas-budget 1100000000
+created: object(8,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1031000000, storage_cost: 5114800,  storage_rebate: 2621738, non_refundable_storage_fee: 262

@@ -1,0 +1,209 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+// A failed publish or upgrade still owes its charge: 1_030_000_000 MIST for one module and two
+// dependencies. The charge counts the Publish and Upgrade commands of the PTB, so it is owed even
+// when the PTB fails before such a command runs. The gas coin is viewed after each failure: the
+// drop in its balance is the charge plus the execution and the gas coin storage. A failed upgrade
+// also pays for the storage of the UpgradeCap it mutates.
+
+init:
+A: object(0,0)
+
+task 1, lines 12-15:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 5000800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, line 43:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299998963999200u64,
+    },
+}
+
+task 7, lines 45-51:
+// The init function aborts.
+//# publish --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: _::m::init (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: _, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("init") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("_::m::init at offset 1"), exec_state: None, location: Module(ModuleId { address: _, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 8, line 53:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299997932999101u64,
+    },
+}
+
+task 9, lines 55-62:
+// The init function aborts at a gas price above the abort cap of 100 times the reference gas
+// price of 500. The cap lowers the price of the execution to 50_000, and the MIST charge stays.
+//# publish --sender A --gas-price 200000
+Error: Transaction Effects Status: Move Runtime Abort. Location: _::m::init (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: _, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("init") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("_::m::init at offset 1"), exec_state: None, location: Module(ModuleId { address: _, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 10, line 64:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299996852999002u64,
+    },
+}
+
+task 11, lines 66-71:
+// A command after the publish aborts.
+//# programmable --sender A --inputs @A
+//> 0: Publish(p, [sui, std]);
+//> 1: TransferObjects([Result(0)], Input(0));
+//> 2: MakeMoveVec<u64>([]);
+//> std::vector::pop_back<u64>(Result(2));
+Error: Transaction Effects Status: Move Runtime Abort. Location: std::vector::pop_back (function index 4) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: std, name: Identifier("vector") }, function: 4, instruction: 0, function_name: Some("pop_back") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: std, name: Identifier("vector") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 0)] }), command: Some(3) } }
+
+task 12, line 73:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 5
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299995821998903u64,
+    },
+}
+
+task 13, lines 75-80:
+// A command before the publish aborts, so the publish never runs.
+//# programmable --sender A --inputs @A
+//> 0: MakeMoveVec<u64>([]);
+//> 1: std::vector::pop_back<u64>(Result(0));
+//> 2: Publish(p, [sui, std]);
+//> TransferObjects([Result(2)], Input(0))
+Error: Transaction Effects Status: Move Runtime Abort. Location: std::vector::pop_back (function index 4) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: std, name: Identifier("vector") }, function: 4, instruction: 0, function_name: Some("pop_back") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: std, name: Identifier("vector") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 0)] }), command: Some(1) } }
+
+task 14, line 82:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299994790998804u64,
+    },
+}
+
+task 15, lines 84-88:
+// The upgrade ticket carries the digest of another package.
+//# programmable --sender A --inputs object(1,1) 0u8 digest(p)
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: Upgrade(v1, [sui, std], v0, Result(0));
+//> sui::package::commit_upgrade(Input(0), Result(1));
+Error: Transaction Effects Status: Invalid package upgrade. Digest in upgrade ticket and computed digest disagree
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: DigestDoesNotMatch { digest: [156, 164, 101, 181, 110, 169, 102, 124, 131, 79, 204, 119, 31, 237, 15, 197, 221, 66, 110, 227, 102, 224, 80, 243, 115, 33, 245, 25, 123, 88, 220, 99] } }, source: None, command: Some(1) } }
+
+task 16, line 90:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299993759998542u64,
+    },
+}
+
+task 17, lines 92-96:
+// The upgrade drops a public function, which the compatible policy rejects.
+//# programmable --sender A --inputs object(1,1) 0u8 digest(v1)
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: Upgrade(v1, [sui, std], v0, Result(0));
+//> sui::package::commit_upgrade(Input(0), Result(1));
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
+
+task 18, line 98:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 8
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299992728998280u64,
+    },
+}
+
+task 19, lines 100-104:
+// The publish lists no dependencies but uses sui: one module and no dependency, 1_010_000_000
+// MIST.
+//# programmable --sender A --inputs @A
+//> 0: Publish(nodeps, []);
+//> TransferObjects([Result(0)], Input(0))
+Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(0) } }
+
+task 20, line 106:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 9
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299991717998181u64,
+    },
+}
+
+task 21, lines 108-112:
+// A dependency listed twice is charged twice: one module and three dependencies, 1_040_000_000
+// MIST.
+//# programmable --sender A --inputs @A
+//> 0: Publish(dup, [sui, sui, std]);
+//> TransferObjects([Result(0)], Input(0))
+created: object(21,0), object(21,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1041000000, storage_cost: 5000800,  storage_rebate: 987901, non_refundable_storage_fee: 99
