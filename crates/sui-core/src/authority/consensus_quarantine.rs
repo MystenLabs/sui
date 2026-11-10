@@ -8,7 +8,7 @@ use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
 use crate::epoch::randomness::SINGLETON_KEY;
 use dashmap::DashMap;
-use fastcrypto_tbls::{dkg_v1, nodes::PartyId};
+use fastcrypto_threshold::{dkg_v1, nodes::PartyId};
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;

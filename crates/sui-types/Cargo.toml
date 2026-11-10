@@ -66,7 +66,7 @@ sui-enum-compat-util.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-pq = { workspace = true, features = ["native"] }
-fastcrypto-tbls.workspace = true
+fastcrypto-threshold.workspace = true
 fastcrypto-zkp.workspace = true
 passkey-types.workspace = true
 

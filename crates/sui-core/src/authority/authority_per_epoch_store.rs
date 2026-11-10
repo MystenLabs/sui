@@ -12,8 +12,8 @@ use std::time::Duration;
 
 use enum_dispatch::enum_dispatch;
 use fastcrypto::groups::bls12381;
-use fastcrypto_tbls::dkg_v1;
-use fastcrypto_tbls::nodes::PartyId;
+use fastcrypto_threshold::dkg_v1;
+use fastcrypto_threshold::nodes::PartyId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{Either, join_all};
