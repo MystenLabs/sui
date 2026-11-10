@@ -266,6 +266,89 @@ strip = 'none'
 # (recursive) stack frames by up to 10x, avoiding stack overflows.
 opt-level = 2
 
+# Tests spend most of their time compiling, verifying and running Move code, and doing
+# zkLogin and other cryptography. Unoptimized, these crates make test runs several times slower.
+[profile.test.package.move-symbol-pool]
+opt-level = 2
+
+[profile.test.package.move-core-types]
+opt-level = 2
+
+[profile.test.package.move-binary-format]
+opt-level = 2
+
+[profile.test.package.move-bytecode-verifier]
+opt-level = 2
+
+[profile.test.package.move-bytecode-verifier-meter]
+opt-level = 2
+
+[profile.test.package.move-borrow-graph]
+opt-level = 2
+
+[profile.test.package.move-regex-borrow-graph]
+opt-level = 2
+
+[profile.test.package.move-abstract-interpreter]
+opt-level = 2
+
+[profile.test.package.move-abstract-stack]
+opt-level = 2
+
+[profile.test.package.move-vm-runtime]
+opt-level = 2
+
+[profile.test.package.move-vm-config]
+opt-level = 2
+
+[profile.test.package.move-unit-test]
+opt-level = 2
+
+[profile.test.package.move-ir-types]
+opt-level = 2
+
+[profile.test.package.move-command-line-common]
+opt-level = 2
+
+[profile.test.package.move-bytecode-source-map]
+opt-level = 2
+
+[profile.test.package.ark-bn254]
+opt-level = 2
+
+[profile.test.package.ark-ec]
+opt-level = 2
+
+[profile.test.package.ark-ff]
+opt-level = 2
+
+[profile.test.package.ark-groth16]
+opt-level = 2
+
+[profile.test.package.ark-poly]
+opt-level = 2
+
+[profile.test.package.ark-serialize]
+opt-level = 2
+
+[profile.test.package.ark-std]
+opt-level = 2
+
+[profile.test.package.fastcrypto]
+opt-level = 2
+
+[profile.test.package.fastcrypto-zkp]
+opt-level = 2
+
+[profile.test.package.fastcrypto-tbls]
+opt-level = 2
+
+[profile.test.package.fastcrypto-vdf]
+opt-level = 2
+
+[profile.test.package.sui-move-natives-latest]
+opt-level = 2
+
 [profile.simulator]
 inherits = "test"
 debug = true
