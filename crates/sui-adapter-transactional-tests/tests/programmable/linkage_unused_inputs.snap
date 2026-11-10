@@ -59,7 +59,7 @@ task 8, line 57:
 //# run DepV2::m::fund --sender A
 created: object(8,0)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(8,1), A, sui::balance::Balance<DepV2::m::NewType>, Merge, 2)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 

@@ -14,7 +14,7 @@ task 1, lines 10-33:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1031000000, storage_cost: 18323600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 35-48:
@@ -33,7 +33,7 @@ task 2, lines 35-48:
 //> 10: sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(NestedResult(0,9), Input(11));
 //> 11: sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(NestedResult(0,10), Input(12));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), F1, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,1), F10, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,2), F11, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,3), F2, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,4), F3, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,5), F4, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,6), F5, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,7), F6, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,8), F7, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,9), F8, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,10), F9, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100)
 gas summary: computation_cost: 1820000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
 

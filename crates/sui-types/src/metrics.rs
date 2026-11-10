@@ -18,6 +18,7 @@ pub struct LimitsMetrics {
     pub excessive_transferred_move_object_ids: IntCounterVec,
     pub excessive_object_runtime_cached_objects: IntCounterVec,
     pub excessive_object_runtime_store_entries: IntCounterVec,
+    pub excessive_freeze_list_address_reads: IntCounterVec,
 }
 
 impl LimitsMetrics {
@@ -68,6 +69,13 @@ impl LimitsMetrics {
             excessive_object_runtime_store_entries: register_int_counter_vec_with_registry!(
                 "excessive_object_runtime_store_entries_size",
                 "Number of transactions with object runtime store entry count exceeding the limit",
+                &["metered", "limit_type"],
+                registry,
+            )
+                .unwrap(),
+            excessive_freeze_list_address_reads: register_int_counter_vec_with_registry!(
+                "excessive_freeze_list_address_reads",
+                "Number of transactions with FreezeList address read count exceeding the limit",
                 &["metered", "limit_type"],
                 registry,
             )

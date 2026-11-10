@@ -13,7 +13,7 @@ task 1, lines 9-33:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1031000000, storage_cost: 18399600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 35-38:
@@ -22,7 +22,7 @@ task 2, lines 35-38:
 //> 0: SplitCoins(Input(0), [Input(1)]);
 //> 1: sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1000)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
 
@@ -47,7 +47,7 @@ task 5, lines 47-51:
 //> 2: TransferObjects([Result(1)], Input(3));
 created: object(5,0)
 mutated: object(0,2), object(4,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Split, 100)
 gas summary: computation_cost: 1000000, storage_cost: 5745600,  storage_rebate: 3282872, non_refundable_storage_fee: 328
 

@@ -38,6 +38,7 @@ pub mod bridge;
 pub mod clock;
 pub mod coin;
 pub mod coin_registry;
+pub mod coin_regulation;
 pub mod coin_reservation;
 pub mod collection_types;
 pub mod committee;

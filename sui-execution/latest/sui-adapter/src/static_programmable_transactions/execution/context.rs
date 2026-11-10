@@ -15,7 +15,7 @@ use crate::{
         execution::{
             self,
             balance_tracking::{self, ObjectData},
-            trace_utils,
+            coin_regulation, trace_utils,
             values::{Local, Locals, Value},
         },
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
@@ -566,6 +566,7 @@ where
             tx_context,
             gas_meter,
             user_events,
+            metrics,
             ..
         } = self;
         let ref_context: &RefCell<TxContext> = &tx_context;
@@ -727,7 +728,17 @@ where
             generated_ids,
             results: results_v2,
         };
-        let _balance_tracking = balance_tracking::finish(before, balances_after, objects)?;
+        let balance_tracking = balance_tracking::finish(before, balances_after, objects)?;
+        if env.protocol_config.enable_coin_regulation() {
+            coin_regulation::check(env.state_view, &balance_tracking, |reads| {
+                coin_regulation::check_address_reads(
+                    env.protocol_config,
+                    &metrics.limits_metrics,
+                    reads,
+                )
+                .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))
+            })?;
+        }
         Ok(results)
     }
 
