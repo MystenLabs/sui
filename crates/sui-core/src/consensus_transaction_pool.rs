@@ -74,13 +74,10 @@ type BlockInclusion = (
     oneshot::Receiver<BlockStatus>,
 );
 
-type PositionSender = oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>;
-
 /// How a queued submission is resolved once its fate is known.
 enum EntryAck {
-    /// RPC user path: positions on inclusion, error on eviction / epoch end. A
-    /// resubmission of a queued entry adds a sender instead of a second entry.
-    User(Vec<PositionSender>),
+    /// RPC user path: positions on inclusion, error on eviction / epoch end.
+    User(oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>),
     /// `ConsensusAdapter` path (system transactions and pings): block inclusion
     /// ack plus a `BlockStatus` subscription.
     SystemOrPing(oneshot::Sender<BlockInclusion>),
@@ -113,8 +110,8 @@ impl PendingAck {
         block: &mut ProposedBlock,
     ) {
         match self.ack.take().expect("ack must be pending") {
-            EntryAck::User(senders) => {
-                let positions: Vec<_> = indices
+            EntryAck::User(sender) => {
+                let positions = indices
                     .into_iter()
                     .map(|index| ConsensusPosition {
                         epoch,
@@ -122,9 +119,7 @@ impl PendingAck {
                         index,
                     })
                     .collect();
-                for sender in senders {
-                    let _ = sender.send(Ok(positions.clone()));
-                }
+                let _ = sender.send(Ok(positions));
             }
             EntryAck::SystemOrPing(sender) => {
                 let (status_sender, status_receiver) = oneshot::channel();
@@ -136,10 +131,8 @@ impl PendingAck {
 
     fn resolve_error(mut self, error: SuiError) {
         match self.ack.take().expect("ack must be pending") {
-            EntryAck::User(senders) => {
-                for sender in senders {
-                    let _ = sender.send(Err(error.clone()));
-                }
+            EntryAck::User(sender) => {
+                let _ = sender.send(Err(error));
             }
             EntryAck::SystemOrPing(sender) => {
                 drop(sender);
@@ -149,17 +142,6 @@ impl PendingAck {
 
     fn drop_deliberately(mut self, _reason: &'static str) {
         drop(self.ack.take().expect("ack must be pending"));
-    }
-
-    /// Adds a waiter for this user entry's outcome, dropping waiters whose receivers
-    /// are gone.
-    fn attach_user(&mut self, sender: PositionSender) {
-        let Some(EntryAck::User(senders)) = &mut self.ack else {
-            debug_fatal!("attach_user on an entry without a pending user ack");
-            return;
-        };
-        senders.retain(|sender| !sender.is_closed());
-        senders.push(sender);
     }
 
     fn is_abandoned_system(&self) -> bool {
@@ -514,13 +496,10 @@ impl ConsensusTransactionPool {
     }
 
     /// Inserts user transactions to the pool. Returns the receiver for their
-    /// eventual positions, and bool indicating whether none of the transactions
-    /// was already queued.
-    /// A submission whose transactions exactly match a queued entry at the same gas
-    /// price is attached to that entry and receives its positions, so the lane holds
-    /// one copy.
-    /// Fails fast on epoch mismatch, a closed pool/user lane, block-limit
-    /// violations, or when outbid by the eviction policy.
+    /// eventual positions, and bool indicating whether all transactions in the
+    /// group were newly inserted.
+    /// Fails fast on epoch mismatch, a closed pool/user lane, a transaction that is
+    /// already queued, block-limit violations, or when outbid by the eviction policy.
     /// `gas_price` is the entry's priority in the user lane (proposed first, and
     /// outbids lower prices when the lane is full).
     pub fn try_insert(
@@ -550,17 +529,13 @@ impl ConsensusTransactionPool {
             ));
         }
 
-        let (sender, receiver) = oneshot::channel();
-        // Matching before serialization and the stagger quota keeps a resubmission from
+        // Checking before serialization and the stagger quota keeps a resubmission from
         // consuming either.
-        let sender = {
+        {
             let mut inner = self.inner.lock();
             let user = self.check_user_lane_open_locked(caller_epoch, &mut inner)?;
-            match self.attach_to_queued_locked(user, gas_price, &keys, sender) {
-                Ok(()) => return Ok((receiver, false)),
-                Err(sender) => sender,
-            }
-        };
+            self.check_not_queued_locked(user, &keys)?;
+        }
 
         let tx_type = tx_type_label(&transactions);
         let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
@@ -579,17 +554,15 @@ impl ConsensusTransactionPool {
         let mut inner = self.inner.lock();
         let user = self.check_user_lane_open_locked(caller_epoch, &mut inner)?;
         // A copy may have been queued while this entry was being built.
-        let sender = match self.attach_to_queued_locked(user, gas_price, &keys, sender) {
-            Ok(()) => return Ok((receiver, false)),
-            Err(sender) => sender,
-        };
+        self.check_not_queued_locked(user, &keys)?;
+        let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: serialized,
             total_bytes,
             gas_price,
             tx_type,
             proposers,
-            ack: PendingAck::new(EntryAck::User(vec![sender]), keys),
+            ack: PendingAck::new(EntryAck::User(sender), keys),
             metrics: self.metrics.clone(),
             processed,
             owned_object_refs,
@@ -616,21 +589,22 @@ impl ConsensusTransactionPool {
         Ok((receiver, newly_inserted))
     }
 
-    /// Attaches `sender` to the queued entry at `gas_price` whose transactions are
-    /// exactly `keys`, in order. Returns `sender` when no such entry is queued.
-    fn attach_to_queued_locked(
+    /// Rejects a submission holding a transaction that is already queued, with the
+    /// error the submit handler returns for a transaction it already has in flight.
+    fn check_not_queued_locked(
         &self,
-        user: &mut PriorityAdmissionQueue<PoolEntry>,
-        gas_price: u64,
+        user: &PriorityAdmissionQueue<PoolEntry>,
         keys: &[ConsensusTransactionKey],
-        sender: PositionSender,
-    ) -> Result<(), PositionSender> {
-        let Some(queued) = user.find_exact_mut(gas_price, keys) else {
-            return Err(sender);
+    ) -> SuiResult<()> {
+        let Some(queued) = keys.iter().find(|key| user.contains_key(key)) else {
+            return Ok(());
         };
-        queued.ack.attach_user(sender);
-        self.metrics.pool_attached_submissions.inc();
-        Ok(())
+        self.metrics.pool_queued_resubmissions.inc();
+        let digest = match queued {
+            ConsensusTransactionKey::Certificate(digest) => *digest,
+            _ => TransactionDigest::default(),
+        };
+        Err(SuiErrorKind::TransactionSubmitted { digest }.into())
     }
 
     /// Queues a submission from the `ConsensusAdapter` path. An empty slice is a
@@ -1819,7 +1793,7 @@ mod tests {
     async fn unresolved_pending_ack_panics() {
         let (sender, _receiver) = oneshot::channel();
         drop(PendingAck::new(
-            EntryAck::User(vec![sender]),
+            EntryAck::User(sender),
             vec![transaction().key()],
         ));
     }
@@ -1918,10 +1892,7 @@ mod tests {
             gas_price: 1,
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
             proposers: "na",
-            ack: PendingAck::new(
-                EntryAck::User(vec![sender]),
-                vec![consensus_transaction.key()],
-            ),
+            ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
             metrics,
             processed: Vec::new(),
             owned_object_refs: Vec::new(),
@@ -2216,110 +2187,35 @@ mod tests {
     }
 
     #[sim_test]
-    async fn resubmission_attaches_to_the_queued_entry() {
+    async fn resubmission_of_a_queued_transaction_is_rejected() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
         let queued = transaction();
         let queued_bytes = bcs::to_bytes(&queued).unwrap().len() as i64;
         let (first, newly_inserted) = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
         assert!(newly_inserted);
-        drop(first);
-        let mut attached = Vec::new();
-        for _ in 0..2 {
-            let (receiver, newly_inserted) =
-                pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
-            assert!(!newly_inserted);
-            attached.push(receiver);
+
+        for (gas_price, transactions) in [
+            (10, vec![queued.clone()]),
+            (20, vec![queued.clone()]),
+            (10, vec![transaction(), queued.clone()]),
+        ] {
+            assert!(matches!(
+                pool.try_insert(epoch, gas_price, transactions)
+                    .err()
+                    .unwrap()
+                    .as_inner(),
+                SuiErrorKind::TransactionSubmitted { .. }
+            ));
         }
         assert_eq!(pool.queue_depth("user"), 1);
         assert_eq!(user_lane_bytes(&pool), queued_bytes);
-        assert_eq!(pool.metrics.pool_attached_submissions.get(), 2);
-
-        // A copy at another gas price, or bundled with another transaction, is queued
-        // as its own entry and reported as a duplicate.
-        let (_repriced, newly_inserted) = pool.try_insert(epoch, 20, vec![queued.clone()]).unwrap();
-        assert!(!newly_inserted);
-        let (_overlap, newly_inserted) = pool
-            .try_insert(epoch, 10, vec![transaction(), queued.clone()])
-            .unwrap();
-        assert!(!newly_inserted);
-        assert_eq!(pool.queue_depth("user"), 3);
-        assert_eq!(pool.metrics.pool_attached_submissions.get(), 2);
+        assert_eq!(pool.metrics.pool_queued_resubmissions.get(), 3);
 
         let (taken, ack, _) = pool.take(usize::MAX, usize::MAX);
-        assert_eq!(taken.len(), 4);
+        assert_eq!(taken.len(), 1);
         ack(block(1));
-        let mut positions = Vec::new();
-        for receiver in attached {
-            positions.push(receiver.await.unwrap().unwrap());
-        }
-        assert_eq!(positions[0].len(), 1);
-        assert_eq!(positions[0], positions[1]);
-        pool.close();
-    }
-
-    #[sim_test]
-    async fn eviction_resolves_every_attached_waiter() {
-        let (_state, pool) = test_state_and_pool(1).await;
-        let epoch = pool.epoch();
-        let queued = transaction();
-        let (first, _) = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
-        let (second, _) = pool.try_insert(epoch, 10, vec![queued]).unwrap();
-        let (_high, _) = pool.try_insert(epoch, 20, vec![transaction()]).unwrap();
-        for receiver in [first, second] {
-            assert!(matches!(
-                receiver.await.unwrap().unwrap_err().as_inner(),
-                SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
-            ));
-        }
-        pool.close();
-    }
-
-    #[sim_test]
-    async fn close_resolves_every_attached_waiter() {
-        let (_state, pool) = test_state_and_pool(10).await;
-        let epoch = pool.epoch();
-        let queued = transaction();
-        let (first, _) = pool.try_insert(epoch, 10, vec![queued.clone()]).unwrap();
-        let (second, _) = pool.try_insert(epoch, 10, vec![queued]).unwrap();
-        pool.close();
-        for receiver in [first, second] {
-            assert!(matches!(
-                receiver.await.unwrap().unwrap_err().as_inner(),
-                SuiErrorKind::ValidatorHaltedAtEpochEnd
-            ));
-        }
-    }
-
-    #[sim_test]
-    async fn rejection_at_proposal_resolves_every_attached_waiter() {
-        let (state, pool) = test_state_and_pool(10).await;
-        let epoch = pool.epoch();
-        let (sender, _) = get_key_pair::<AccountKeyPair>();
-        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
-        let gas_object_ref = gas_object.compute_object_reference();
-        state.insert_genesis_object(gas_object);
-        let stale = user_transaction_with_gas(gas_object_ref);
-        let (first, _) = pool.try_insert(epoch, 10, vec![stale.clone()]).unwrap();
-        let (second, _) = pool.try_insert(epoch, 10, vec![stale]).unwrap();
-        state.get_cache_writer().write_object_entry_for_test(
-            Object::with_id_owner_version_for_testing(
-                gas_object_ref.0,
-                gas_object_ref.1.next(),
-                Owner::AddressOwner(sender),
-            ),
-        );
-
-        let (taken, _ack, _) = pool.take(usize::MAX, usize::MAX);
-        assert!(taken.is_empty());
-        for receiver in [first, second] {
-            assert!(matches!(
-                receiver.await.unwrap().unwrap_err().as_inner(),
-                SuiErrorKind::UserInputError {
-                    error: UserInputError::ObjectVersionUnavailableForConsumption { .. }
-                }
-            ));
-        }
+        assert_eq!(first.await.unwrap().unwrap().len(), 1);
         pool.close();
     }
 
