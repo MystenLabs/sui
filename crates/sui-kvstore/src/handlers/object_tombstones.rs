@@ -11,6 +11,7 @@ use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BigTableProcessor;
 use crate::object_status::removed_objects;
 use crate::tables;
+use crate::tables::ObjectSchema;
 
 /// Pipeline that writes a tombstone to the `objects` table at `(object_id, version)` for every
 /// object a transaction deletes or wraps, so version-bounded reads stop at the removal instead
@@ -29,7 +30,7 @@ impl Processor for ObjectTombstonesPipeline {
         for txn in &checkpoint.transactions {
             for (id, version, status) in removed_objects(&txn.effects) {
                 entries.push(tables::make_entry(
-                    tables::objects::encode_key(&ObjectKey(id, version)),
+                    tables::objects::encode_key(ObjectSchema::V1, &ObjectKey(id, version)),
                     tables::objects::encode_tombstone(status)?,
                     Some(timestamp_ms),
                 ));

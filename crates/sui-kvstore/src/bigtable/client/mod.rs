@@ -90,6 +90,7 @@ use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
 use crate::bigtable::proto::bigtable::v2::value_range;
 use crate::object_status::ObjectStatus;
 use crate::tables;
+use crate::tables::ObjectSchema;
 use crate::tables::objects::ObjectRow;
 use crate::tables::tx_seq_digest;
 
@@ -107,6 +108,16 @@ const DEFAULT_CHANNEL_TIMEOUT: Duration = Duration::from_secs(60);
 /// keeps comfortable headroom. This is a backend-owned invariant, not a
 /// user-tunable knob.
 pub(crate) const MAX_TX_DIGESTS_PER_REQUEST: usize = 10_000;
+
+/// Versions in the second of the two ranges an ascending [`ObjectSchema::V2`] object-versions page
+/// reads (see [`KeyValueStoreReader::get_live_object_versions`]): the newest 2^20 versions of the
+/// page's range, about three days of a shared object written every checkpoint. kv-rpc ends that
+/// range at the newest version the request may list, which at the served height is the object's
+/// newest version, so this range holds the rows BigTable has not compacted yet. BigTable reads the
+/// first range, from the page's lowest version up to these, first, and stops there once it has
+/// `limit` rows. The split is anchored at the range's top, not its bottom, because the default
+/// first page starts at version 0, far below the versions of most objects.
+pub const ASCENDING_OBJECT_VERSIONS_NEWEST_RANGE: u64 = 1 << 20;
 
 /// Inclusive checkpoints that produced the records in an emitted batch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -207,6 +218,8 @@ pub struct BigTableClient {
     flow_controller: Option<Arc<BatchWriteFlowController>>,
     app_profile_id: Option<String>,
     read_rows_retry: ReadRowsRetryConfig,
+    /// The objects table the object reads use.
+    object_schema: ObjectSchema,
 }
 
 impl BigTableClient {
@@ -258,6 +271,7 @@ impl BigTableClient {
             flow_controller,
             app_profile_id: None,
             read_rows_retry: ReadRowsRetryConfig::default(),
+            object_schema: ObjectSchema::default(),
         }
     }
 
@@ -356,6 +370,7 @@ impl BigTableClient {
             flow_controller,
             app_profile_id,
             read_rows_retry: ReadRowsRetryConfig::default(),
+            object_schema: ObjectSchema::default(),
         })
     }
 
@@ -363,6 +378,17 @@ impl BigTableClient {
     pub fn with_read_rows_retry(mut self, config: ReadRowsRetryConfig) -> Self {
         self.read_rows_retry = config;
         self
+    }
+
+    /// Read objects from the objects table of `schema`. Defaults to [`ObjectSchema::V1`].
+    pub fn with_object_schema(mut self, schema: ObjectSchema) -> Self {
+        self.object_schema = schema;
+        self
+    }
+
+    /// The objects table the object reads use.
+    pub fn object_schema(&self) -> ObjectSchema {
+        self.object_schema
     }
 
     pub(crate) fn with_backfill_through(mut self, checkpoint: u64) -> Self {
@@ -877,9 +903,46 @@ impl BigTableClient {
         Ok(())
     }
 
-    /// Generate a raw object key from ObjectKey.
-    pub fn raw_object_key(object_key: &ObjectKey) -> Vec<u8> {
-        tables::objects::encode_key(object_key)
+    /// The row key of `object_key` in the objects table of this client's schema.
+    fn object_row_key(&self, object_key: &ObjectKey) -> Vec<u8> {
+        tables::objects::encode_key(self.object_schema, object_key)
+    }
+
+    /// The objects table of this client's schema.
+    fn objects_table(&self) -> &'static str {
+        tables::objects::table_name(self.object_schema)
+    }
+
+    /// The newest row of `object_id` at or below `version`, live or tombstone, and its key, as one
+    /// single-row read: forward from `(object_id, version)` under [`ObjectSchema::V2`], whose keys
+    /// sort versions newest first, and reversed down to `(object_id, version)` under
+    /// [`ObjectSchema::V1`]. The far end of the range is the object's key bound, so no version
+    /// falls outside it. A `keys_only` read empties the row's cell values.
+    async fn newest_object_row(
+        &mut self,
+        object_id: ObjectID,
+        version: u64,
+        keys_only: bool,
+    ) -> Result<Option<(Bytes, Vec<(Bytes, Bytes)>)>> {
+        let (lowest, highest) = tables::objects::object_key_bounds(&object_id);
+        let at_version =
+            self.object_row_key(&ObjectKey(object_id, SequenceNumber::from_u64(version)));
+        let (start_key, end_key, reversed) = match self.object_schema {
+            ObjectSchema::V1 => (lowest, at_version, true),
+            ObjectSchema::V2 => (at_version, highest, false),
+        };
+        let (table, filter) = (self.objects_table(), keys_only.then(Self::keys_only_filter));
+        Ok(self
+            .range_scan(
+                table,
+                Some(Bytes::from(start_key)),
+                Some(Bytes::from(end_key)),
+                1,
+                reversed,
+                filter,
+            )
+            .await?
+            .pop())
     }
 
     pub async fn read_rows(
@@ -1313,9 +1376,32 @@ impl BigTableClient {
         reversed: bool,
         filter: Option<RowFilter>,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
+        let range = RowRange {
+            start_key: start_key.map(StartKey::StartKeyClosed),
+            end_key: end_key.map(EndKey::EndKeyClosed),
+        };
+        self.ranges_scan(table_name, vec![range], limit, reversed, filter)
+            .await
+    }
+
+    /// [`Self::range_scan`] over several ranges in one ReadRows. Rows come back in key order, or
+    /// reverse key order if `reversed`, whichever range they are in, and `limit` counts rows
+    /// across all ranges.
+    pub(crate) async fn ranges_scan(
+        &mut self,
+        table_name: &str,
+        ranges: Vec<RowRange>,
+        limit: i64,
+        reversed: bool,
+        filter: Option<RowFilter>,
+    ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
+        // BigTable reads the whole table for a row set without ranges or keys.
+        if ranges.is_empty() {
+            return Ok(vec![]);
+        }
         let start_time = Instant::now();
         let result = self
-            .range_scan_internal(table_name, start_key, end_key, limit, reversed, filter)
+            .ranges_scan_internal(table_name, ranges, limit, reversed, filter)
             .await;
         let elapsed_ms = start_time.elapsed().as_millis() as f64;
         let labels = [&self.client_name, table_name];
@@ -1341,19 +1427,14 @@ impl BigTableClient {
         }
     }
 
-    async fn range_scan_internal(
+    async fn ranges_scan_internal(
         &mut self,
         table_name: &str,
-        start_key: Option<Bytes>,
-        end_key: Option<Bytes>,
+        ranges: Vec<RowRange>,
         limit: i64,
         reversed: bool,
         filter: Option<RowFilter>,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
-        let range = RowRange {
-            start_key: start_key.map(StartKey::StartKeyClosed),
-            end_key: end_key.map(EndKey::EndKeyClosed),
-        };
         let version_filter = RowFilter {
             filter: Some(Filter::CellsPerColumnLimitFilter(1)),
         };
@@ -1370,7 +1451,7 @@ impl BigTableClient {
             rows_limit: limit,
             rows: Some(RowSet {
                 row_keys: vec![],
-                row_ranges: vec![range],
+                row_ranges: ranges,
             }),
             filter,
             reversed,
@@ -1665,10 +1746,12 @@ impl BigTableClient {
         &mut self,
         object_keys: Vec<ObjectKey>,
     ) -> Result<impl futures::Stream<Item = Result<Object>> + use<>> {
-        let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
-        let rows = self
-            .multi_get_stream(tables::objects::NAME, keys, None)
-            .await?;
+        let keys: Vec<Vec<u8>> = object_keys
+            .iter()
+            .map(|key| self.object_row_key(key))
+            .collect();
+        let table = self.objects_table();
+        let rows = self.multi_get_stream(table, keys, None).await?;
 
         Ok(async_stream::try_stream! {
             futures::pin_mut!(rows);
@@ -1987,9 +2070,13 @@ impl std::error::Error for PartialWriteError {}
 #[async_trait]
 impl KeyValueStoreReader for BigTableClient {
     async fn get_objects(&mut self, object_keys: &[ObjectKey]) -> Result<Vec<Object>> {
-        let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
+        let keys: Vec<Vec<u8>> = object_keys
+            .iter()
+            .map(|key| self.object_row_key(key))
+            .collect();
+        let table = self.objects_table();
         let mut objects = vec![];
-        for (_, row) in self.multi_get(tables::objects::NAME, keys, None).await? {
+        for (_, row) in self.multi_get(table, keys, None).await? {
             objects.extend(tables::objects::decode(&row)?.into_live());
         }
         Ok(objects)
@@ -1999,14 +2086,18 @@ impl KeyValueStoreReader for BigTableClient {
         &mut self,
         object_keys: &[ObjectKey],
     ) -> Result<Vec<ObjectKey>> {
-        let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
+        let keys: Vec<Vec<u8>> = object_keys
+            .iter()
+            .map(|key| self.object_row_key(key))
+            .collect();
+        let (schema, table) = (self.object_schema, self.objects_table());
         let mut existing = vec![];
         for (row_key, row) in self
-            .multi_get(tables::objects::NAME, keys, Some(Self::keys_only_filter()))
+            .multi_get(table, keys, Some(Self::keys_only_filter()))
             .await?
         {
             if tables::objects::is_live(&row)? {
-                existing.push(tables::objects::decode_key(&row_key)?);
+                existing.push(tables::objects::decode_key(schema, &row_key)?);
             }
         }
         Ok(existing)
@@ -2066,8 +2157,10 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
-        self.get_object_lt_or_eq_version(*object_id, SequenceNumber::MAX)
-            .await
+        let Some((_, row)) = self.newest_object_row(*object_id, u64::MAX, false).await? else {
+            return Ok(None);
+        };
+        Ok(tables::objects::decode(&row)?.into_live())
     }
 
     async fn get_object_lt_or_eq_version(
@@ -2075,21 +2168,9 @@ impl KeyValueStoreReader for BigTableClient {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Result<Option<Object>> {
-        // The newest row in `[(id, 0), (id, version)]`, live or tombstone, is the object's state
-        // at `version`.
-        let start_key = Bytes::from(Self::raw_object_key(&ObjectKey::min_for_id(&object_id)));
-        let end_key = Bytes::from(Self::raw_object_key(&ObjectKey(object_id, version)));
         let Some((_, row)) = self
-            .range_scan(
-                tables::objects::NAME,
-                Some(start_key),
-                Some(end_key),
-                1,
-                true,
-                None,
-            )
+            .newest_object_row(object_id, version.value(), false)
             .await?
-            .pop()
         else {
             return Ok(None);
         };
@@ -2108,23 +2189,41 @@ impl KeyValueStoreReader for BigTableClient {
             return Ok(vec![]);
         }
         let rows_limit = i64::try_from(limit).context("object versions limit exceeds i64")?;
-        let start_key = Bytes::from(Self::raw_object_key(&ObjectKey(
-            object_id,
-            *versions.start(),
-        )));
-        let end_key = Bytes::from(Self::raw_object_key(&ObjectKey(object_id, *versions.end())));
+        let (lo, hi) = (versions.start().value(), versions.end().value());
+        let key = |version: u64| {
+            Bytes::from(
+                self.object_row_key(&ObjectKey(object_id, SequenceNumber::from_u64(version))),
+            )
+        };
+        let closed = |start: Bytes, end: Bytes| RowRange {
+            start_key: Some(StartKey::StartKeyClosed(start)),
+            end_key: Some(EndKey::EndKeyClosed(end)),
+        };
+        let (ranges, reversed) = match (self.object_schema, descending) {
+            (ObjectSchema::V1, _) => (vec![closed(key(lo), key(hi))], descending),
+            // Keys sort newest first, so a descending page is a forward read.
+            (ObjectSchema::V2, true) => (vec![closed(key(hi), key(lo))], false),
+            // An ascending page is a reversed read, which reads every row of its range that
+            // BigTable has not compacted yet, even past the page. The range's newest versions are
+            // the least likely to be compacted, so they get a range of their own, which BigTable
+            // reads only after the page's lower versions, and never once it has `limit` rows.
+            (ObjectSchema::V2, false) => {
+                let ranges = match hi.checked_sub(ASCENDING_OBJECT_VERSIONS_NEWEST_RANGE) {
+                    Some(older_hi) if older_hi >= lo => vec![
+                        closed(key(older_hi), key(lo)),
+                        closed(key(hi), key(older_hi + 1)),
+                    ],
+                    _ => vec![closed(key(hi), key(lo))],
+                };
+                (ranges, true)
+            }
+        };
         // Keep only the live-object column, so tombstone rows come back empty and BigTable drops
         // them before applying `rows_limit`.
         let live_only = Self::column_filter(&[tables::objects::col::OBJECT]);
+        let table = self.objects_table();
         let rows = self
-            .range_scan(
-                tables::objects::NAME,
-                Some(start_key),
-                Some(end_key),
-                rows_limit,
-                descending,
-                Some(live_only),
-            )
+            .ranges_scan(table, ranges, rows_limit, reversed, Some(live_only))
             .await?;
         rows.into_iter()
             .map(|(_, row)| match tables::objects::decode(&row)? {
@@ -2139,28 +2238,17 @@ impl KeyValueStoreReader for BigTableClient {
         object_id: &ObjectID,
     ) -> Result<Option<SequenceNumber>> {
         // The newest row, live or tombstone, is the object's state. A tombstone cannot be
-        // filtered out server-side here, because the scan would then return an older live row;
+        // filtered out server-side here, because the read would then return an older live row;
         // the row's column tells the two apart even with its value stripped.
-        let lower_limit = Bytes::from(Self::raw_object_key(&ObjectKey::min_for_id(object_id)));
-        let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
-        let Some((row_key, row)) = self
-            .range_scan(
-                tables::objects::NAME,
-                Some(lower_limit),
-                Some(upper_limit),
-                1,
-                true,
-                Some(Self::keys_only_filter()),
-            )
-            .await?
-            .pop()
-        else {
+        let Some((row_key, row)) = self.newest_object_row(*object_id, u64::MAX, true).await? else {
             return Ok(None);
         };
         if !tables::objects::is_live(&row)? {
             return Ok(None);
         }
-        Ok(Some(tables::objects::decode_key(&row_key)?.1))
+        Ok(Some(
+            tables::objects::decode_key(self.object_schema, &row_key)?.1,
+        ))
     }
 
     async fn get_object_version_at_checkpoint(
@@ -2667,9 +2755,10 @@ fn column_exists_filter(column: &str) -> RowFilter {
 
 #[cfg(test)]
 mod tests {
-    use crate::bigtable::mock_server::{ExpectedCall, MockBigtableServer};
+    use crate::bigtable::mock_server::{ExpectedCall, MockBigtableServer, ReadRowsCall};
     use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
     use futures::{TryStreamExt, stream};
+    use std::collections::BTreeMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
@@ -3358,88 +3447,312 @@ mod tests {
         assert_eq!(latest.package_version, 70);
     }
 
-    /// Tombstones are filtered out by the server, so they never take a slot in a page, in either
-    /// direction, and the version-bounded point read stops at them.
-    #[tokio::test]
-    async fn object_version_reads_skip_or_stop_at_tombstones() {
+    fn test_object(id: ObjectID, version: u64) -> Object {
+        Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(version),
+            sui_types::object::Owner::AddressOwner(Default::default()),
+        )
+    }
+
+    /// Writes `id`'s live versions and tombstones to `schema`'s objects table.
+    async fn insert_object_rows(
+        mock: &MockBigtableServer,
+        schema: ObjectSchema,
+        id: ObjectID,
+        live: &[u64],
+        tombstones: &[(u64, ObjectStatus)],
+    ) {
+        let table = tables::objects::table_name(schema);
+        let key = |version| {
+            tables::objects::encode_key(schema, &ObjectKey(id, SequenceNumber::from_u64(version)))
+        };
+        for &version in live {
+            let cells = tables::objects::encode(&test_object(id, version)).unwrap();
+            mock.insert_row(table, key(version), cells).await;
+        }
+        for &(version, status) in tombstones {
+            let cells = tables::objects::encode_tombstone(status).unwrap();
+            mock.insert_row(table, key(version), cells).await;
+        }
+    }
+
+    /// Ids on both sides of [`OBJECT`], with rows at the extreme versions, so a read of
+    /// [`OBJECT`] that ran past its own rows would find theirs.
+    const OBJECT: ObjectID = ObjectID::from_single_byte(0x42);
+    const NEIGHBOURS: [ObjectID; 2] = [
+        ObjectID::from_single_byte(0x41),
+        ObjectID::from_single_byte(0x43),
+    ];
+    const SCHEMAS: [ObjectSchema; 2] = [ObjectSchema::V1, ObjectSchema::V2];
+
+    async fn insert_neighbour_rows(mock: &MockBigtableServer, schema: ObjectSchema) {
+        for id in NEIGHBOURS {
+            insert_object_rows(mock, schema, id, &[0, 1, u64::MAX - 1], &[]).await;
+        }
+    }
+
+    /// The one ReadRows call recorded since the last clear.
+    async fn single_read(mock: &MockBigtableServer) -> ReadRowsCall {
+        let mut calls = mock.read_rows_calls().await;
+        assert_eq!(calls.len(), 1, "expected one ReadRows call: {calls:?}");
+        mock.clear_read_rows_calls().await;
+        calls.pop().unwrap()
+    }
+
+    async fn mock_client(schema: ObjectSchema) -> (MockBigtableServer, BigTableClient) {
         let mock = MockBigtableServer::new();
-        let (addr, _handle) = mock.start().await.unwrap();
-        let mut client =
+        let (addr, handle) = mock.start().await.unwrap();
+        // The server runs until the test's runtime shuts down.
+        drop(handle);
+        let client =
             BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
                 .await
-                .unwrap();
+                .unwrap()
+                .with_object_schema(schema);
+        (mock, client)
+    }
 
-        // Versions 1, 2, 4 and 6 are live; the object is wrapped at 3 and deleted at 5.
-        let id = ObjectID::random();
-        let other = ObjectID::from_bytes([0xff; 32]).unwrap();
-        let v = SequenceNumber::from_u64;
-        for (object_id, version) in [(id, 1), (id, 2), (id, 4), (id, 6), (other, 1)] {
-            let object = Object::with_id_owner_version_for_testing(
-                object_id,
-                v(version),
-                sui_types::object::Owner::AddressOwner(Default::default()),
-            );
-            let key = tables::objects::encode_key(&ObjectKey(object_id, v(version)));
-            mock.insert_row(
-                tables::objects::NAME,
-                key,
-                tables::objects::encode(&object).unwrap(),
-            )
-            .await;
-        }
-        for (version, status) in [(3, ObjectStatus::Wrapped), (5, ObjectStatus::Deleted)] {
-            let key = tables::objects::encode_key(&ObjectKey(id, v(version)));
-            let cells = tables::objects::encode_tombstone(status).unwrap();
-            mock.insert_row(tables::objects::NAME, key, cells).await;
-        }
-
-        let mut page = async |versions: RangeInclusive<u64>, limit, descending| {
+    /// Every object read agrees with a model of the object's rows in either schema: tombstones
+    /// hide the object at the versions where it was removed, and never take a slot in a page. Each
+    /// read is a point read or one single-range read: under V1 version-bounded reads and
+    /// ascending pages are reversed, and under V2, whose keys sort versions newest first, every
+    /// read is forward except the ascending page.
+    #[tokio::test]
+    async fn object_reads_match_the_model() {
+        for schema in SCHEMAS {
+            let (mock, mut client) = mock_client(schema).await;
+            let table = tables::objects::table_name(schema);
+            // Versions 1, 2, 4 and 6 are live; the object is wrapped at 3 and deleted at 5.
+            let live = [1, 2, 4, 6];
+            let tombstones = [(3, ObjectStatus::Wrapped), (5, ObjectStatus::Deleted)];
+            insert_object_rows(&mock, schema, OBJECT, &live, &tombstones).await;
+            insert_neighbour_rows(&mock, schema).await;
             mock.clear_read_rows_calls().await;
-            let objects = client
-                .get_live_object_versions(
-                    id,
-                    v(*versions.start())..=v(*versions.end()),
-                    limit,
-                    descending,
-                )
-                .await
-                .unwrap();
-            let calls = mock.read_rows_calls().await;
-            assert_eq!(calls.len(), 1);
-            assert_eq!(calls[0].row_keys.len(), objects.len(), "rows sent");
-            objects
-                .into_iter()
-                .map(|o| {
-                    assert_eq!(o.id(), id);
+
+            // Version -> whether the object is live at that version.
+            let model: BTreeMap<u64, bool> = live
+                .iter()
+                .map(|&version| (version, true))
+                .chain(tombstones.iter().map(|&(version, _)| (version, false)))
+                .collect();
+            let v = SequenceNumber::from_u64;
+            let version_of = |object: Option<Object>| {
+                object.map(|o| {
+                    assert_eq!(o.id(), OBJECT);
                     o.version().value()
                 })
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(page(0..=u64::MAX, 2, false).await, vec![1, 2]);
-        assert_eq!(page(3..=u64::MAX, 2, false).await, vec![4, 6]);
-        assert_eq!(page(0..=u64::MAX, 2, true).await, vec![6, 4]);
-        assert_eq!(page(0..=3, 2, true).await, vec![2, 1]);
-        assert_eq!(page(0..=u64::MAX, 10, true).await, vec![6, 4, 2, 1]);
-        assert_eq!(page(5..=5, 10, false).await, Vec::<u64>::new());
+            };
+            let assert_single_row_read = |call: ReadRowsCall| {
+                assert_eq!(call.table, table);
+                assert_eq!(call.reversed, schema == ObjectSchema::V1, "{schema:?}");
+                assert_eq!(call.rows_limit, 1);
+                assert_eq!(call.row_ranges.len(), 1);
+            };
 
-        // Point reads at or below each version: the tombstones at 3 and 5 hide the object.
-        for (version, expected) in [
-            (0, None),
-            (1, Some(1)),
-            (2, Some(2)),
-            (3, None),
-            (4, Some(4)),
-            (5, None),
-            (6, Some(6)),
-            (u64::MAX, Some(6)),
+            for version in (0..=8).chain([SequenceNumber::MAX.value(), u64::MAX]) {
+                let found = client
+                    .get_object_lt_or_eq_version(OBJECT, v(version))
+                    .await
+                    .unwrap();
+                let expected = model
+                    .range(..=version)
+                    .next_back()
+                    .and_then(|(&at, &is_live)| is_live.then_some(at));
+                assert_eq!(
+                    version_of(found),
+                    expected,
+                    "{schema:?} at version {version}"
+                );
+                assert_single_row_read(single_read(&mock).await);
+            }
+
+            let latest = client.get_latest_object(&OBJECT).await.unwrap();
+            assert_eq!(version_of(latest), Some(6), "{schema:?}");
+            assert_single_row_read(single_read(&mock).await);
+
+            for version in 0..=8 {
+                let found = client
+                    .get_objects(&[ObjectKey(OBJECT, v(version))])
+                    .await
+                    .unwrap();
+                let expected = model.get(&version).copied().unwrap_or(false);
+                assert_eq!(
+                    found.len(),
+                    usize::from(expected),
+                    "{schema:?} exact read at {version}"
+                );
+                let call = single_read(&mock).await;
+                assert_eq!(call.table, table);
+                assert!(call.row_ranges.is_empty(), "exact reads are point reads");
+            }
+
+            for (versions, limit, descending) in [
+                (0..=u64::MAX, 2, false),
+                (3..=u64::MAX, 2, false),
+                (0..=u64::MAX, 2, true),
+                (0..=3, 2, true),
+                (0..=u64::MAX, 10, true),
+                (0..=u64::MAX, 10, false),
+                (5..=5, 10, false),
+                (2..=5, 1, true),
+            ] {
+                let page: Vec<u64> = client
+                    .get_live_object_versions(
+                        OBJECT,
+                        v(*versions.start())..=v(*versions.end()),
+                        limit,
+                        descending,
+                    )
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|o| version_of(Some(o)).unwrap())
+                    .collect();
+                let in_range = model
+                    .range(versions.clone())
+                    .filter(|(_, is_live)| **is_live)
+                    .map(|(&version, _)| version);
+                let expected: Vec<u64> = if descending {
+                    in_range.rev().take(limit).collect()
+                } else {
+                    in_range.take(limit).collect()
+                };
+                let context = format!("{schema:?} {versions:?} limit {limit} desc {descending}");
+                assert_eq!(page, expected, "{context}");
+                let call = single_read(&mock).await;
+                assert_eq!(call.table, table);
+                let reversed = match schema {
+                    ObjectSchema::V1 => descending,
+                    ObjectSchema::V2 => !descending,
+                };
+                assert_eq!(call.reversed, reversed, "{context}");
+                assert_eq!(call.rows_limit, limit as i64);
+                assert_eq!(
+                    call.row_keys.len(),
+                    page.len(),
+                    "tombstones are dropped server-side: {context}"
+                );
+            }
+
+            // An object deleted at its newest version has no latest version, but its older
+            // versions stay readable.
+            let removed = ObjectID::from_single_byte(0x50);
+            insert_object_rows(&mock, schema, removed, &[1], &[(2, ObjectStatus::Deleted)]).await;
+            assert!(client.get_latest_object(&removed).await.unwrap().is_none());
+            assert_eq!(
+                client
+                    .get_object_lt_or_eq_version(removed, v(1))
+                    .await
+                    .unwrap()
+                    .map(|o| o.version().value()),
+                Some(1),
+                "{schema:?}",
+            );
+        }
+    }
+
+    /// An ascending V2 page whose range spans more than [`ASCENDING_OBJECT_VERSIONS_NEWEST_RANGE`]
+    /// versions is one reversed read of two ranges, the range's newest versions in the second. A
+    /// page found below them never reaches them, even one starting at version 0 for an object whose
+    /// versions all lie far above it. A narrower page reads one range.
+    #[tokio::test]
+    async fn v2_ascending_page_splits_wide_ranges() {
+        let (mock, mut client) = mock_client(ObjectSchema::V2).await;
+        let width = ASCENDING_OBJECT_VERSIONS_NEWEST_RANGE;
+        let newest = 4 * width + 7;
+        let older_hi = newest - width;
+        let live = [2 * width, 2 * width + 3, older_hi, older_hi + 1, newest];
+        insert_object_rows(
+            &mock,
+            ObjectSchema::V2,
+            OBJECT,
+            &live,
+            &[(2 * width + 1, ObjectStatus::Wrapped)],
+        )
+        .await;
+        insert_neighbour_rows(&mock, ObjectSchema::V2).await;
+        mock.clear_read_rows_calls().await;
+
+        let v = SequenceNumber::from_u64;
+        let key = |version| {
+            Bytes::from(tables::objects::encode_key(
+                ObjectSchema::V2,
+                &ObjectKey(OBJECT, v(version)),
+            ))
+        };
+        let closed = |start, end| RowRange {
+            start_key: Some(StartKey::StartKeyClosed(start)),
+            end_key: Some(EndKey::EndKeyClosed(end)),
+        };
+        for (versions, limit, expected, ranges) in [
+            (
+                0..=newest,
+                2,
+                vec![2 * width, 2 * width + 3],
+                vec![
+                    closed(key(older_hi), key(0)),
+                    closed(key(newest), key(older_hi + 1)),
+                ],
+            ),
+            (
+                0..=newest,
+                10,
+                live.to_vec(),
+                vec![
+                    closed(key(older_hi), key(0)),
+                    closed(key(newest), key(older_hi + 1)),
+                ],
+            ),
+            (
+                older_hi..=newest,
+                10,
+                vec![older_hi, older_hi + 1, newest],
+                vec![
+                    closed(key(older_hi), key(older_hi)),
+                    closed(key(newest), key(older_hi + 1)),
+                ],
+            ),
+            (
+                older_hi + 1..=newest,
+                10,
+                vec![older_hi + 1, newest],
+                vec![closed(key(newest), key(older_hi + 1))],
+            ),
         ] {
-            let found = client
-                .get_object_lt_or_eq_version(id, v(version))
+            let page: Vec<u64> = client
+                .get_live_object_versions(
+                    OBJECT,
+                    v(*versions.start())..=v(*versions.end()),
+                    limit,
+                    false,
+                )
                 .await
                 .unwrap()
-                .map(|o| o.version().value());
-            assert_eq!(found, expected, "at version {version}");
+                .into_iter()
+                .map(|o| o.version().value())
+                .collect();
+            assert_eq!(page, expected, "{versions:?} limit {limit}");
+            let call = single_read(&mock).await;
+            assert!(call.reversed);
+            assert_eq!(call.rows_limit, limit as i64);
+            assert_eq!(call.row_ranges, ranges, "{versions:?}");
         }
+    }
+
+    /// A scan of no ranges reads nothing, where a ReadRows with an empty row set would read the
+    /// whole table.
+    #[tokio::test]
+    async fn ranges_scan_of_no_ranges_reads_nothing() {
+        let (mock, mut client) = mock_client(ObjectSchema::V2).await;
+        insert_object_rows(&mock, ObjectSchema::V2, OBJECT, &[1, 2], &[]).await;
+        mock.clear_read_rows_calls().await;
+        let rows = client
+            .ranges_scan(tables::objects::NAME_V2, vec![], 10, false, None)
+            .await
+            .unwrap();
+        assert!(rows.is_empty());
+        assert!(mock.read_rows_calls().await.is_empty());
     }
 
     /// The state at checkpoint `C` is the first index row from `(id, C)` to `(id, 0)`, read in one
@@ -3523,18 +3836,12 @@ mod tests {
         }
     }
 
-    /// The contents-free reads agree with the reads they stand in for: a key at which the object
-    /// was deleted or wrapped is not an existing key, and an object deleted or wrapped at its
-    /// newest version has no latest version, even though older live versions remain.
+    /// The contents-free reads agree with the reads they stand in for, in either schema: a key at
+    /// which the object was deleted or wrapped is not an existing key, and an object deleted or
+    /// wrapped at its newest version has no latest version, even though older live versions
+    /// remain.
     #[tokio::test]
     async fn contents_free_object_reads_skip_tombstones() {
-        let mock = MockBigtableServer::new();
-        let (addr, _handle) = mock.start().await.unwrap();
-        let mut client =
-            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
-                .await
-                .unwrap();
-
         // `wrapped` is live at 1 and wrapped at 2. `deleted` is live at 1, wrapped at 2,
         // unwrapped at 3 and deleted at 4. `live` is live at 1 and 2.
         let v = SequenceNumber::from_u64;
@@ -3551,60 +3858,60 @@ mod tests {
             (live, 1, None),
             (live, 2, None),
         ];
-        for (id, version, tombstone) in rows {
-            let cells = match tombstone {
-                None => tables::objects::encode(&Object::with_id_owner_version_for_testing(
-                    id,
-                    v(version),
-                    sui_types::object::Owner::AddressOwner(Default::default()),
-                ))
-                .unwrap(),
-                Some(status) => tables::objects::encode_tombstone(status).unwrap(),
-            };
-            let key = tables::objects::encode_key(&ObjectKey(id, v(version)));
-            mock.insert_row(tables::objects::NAME, key, cells).await;
-        }
+        for schema in SCHEMAS {
+            let (mock, mut client) = mock_client(schema).await;
+            for (id, version, tombstone) in rows {
+                let cells = match tombstone {
+                    None => tables::objects::encode(&test_object(id, version)).unwrap(),
+                    Some(status) => tables::objects::encode_tombstone(status).unwrap(),
+                };
+                let key = tables::objects::encode_key(schema, &ObjectKey(id, v(version)));
+                mock.insert_row(tables::objects::table_name(schema), key, cells)
+                    .await;
+            }
 
-        for (id, expected) in [(wrapped, None), (deleted, None), (live, Some(v(2)))] {
+            for (id, expected) in [(wrapped, None), (deleted, None), (live, Some(v(2)))] {
+                mock.clear_read_rows_calls().await;
+                assert_eq!(
+                    client.get_latest_object_version(&id).await.unwrap(),
+                    expected,
+                    "{schema:?}: latest version of {id}",
+                );
+                let call = single_read(&mock).await;
+                assert!(
+                    call.values_stripped,
+                    "latest version is read without contents"
+                );
+                assert_eq!(call.reversed, schema == ObjectSchema::V1);
+                assert_eq!(call.rows_limit, 1);
+                let latest = client.get_latest_object(&id).await.unwrap();
+                assert_eq!(
+                    latest.map(|o| o.version()),
+                    expected,
+                    "{schema:?}: latest object {id}",
+                );
+            }
+
+            // Every stored row, plus a version that was never written.
+            let mut keys: Vec<_> = rows
+                .iter()
+                .map(|&(id, version, _)| ObjectKey(id, v(version)))
+                .collect();
+            keys.push(ObjectKey(deleted, v(5)));
             mock.clear_read_rows_calls().await;
-            assert_eq!(
-                client.get_latest_object_version(&id).await.unwrap(),
-                expected,
-                "latest version of {id}",
-            );
-            let calls = mock.read_rows_calls().await;
-            assert_eq!(calls.len(), 1, "one ReadRows per latest version: {calls:?}");
+            let mut existing = client.get_existing_object_keys(&keys).await.unwrap();
+            existing.sort();
+            let live_keys: Vec<_> = rows
+                .iter()
+                .filter(|(_, _, tombstone)| tombstone.is_none())
+                .map(|&(id, version, _)| ObjectKey(id, v(version)))
+                .collect();
+            assert_eq!(existing, live_keys, "{schema:?}");
             assert!(
-                calls[0].values_stripped,
-                "latest version is read without contents"
+                single_read(&mock).await.values_stripped,
+                "existing keys are read without contents"
             );
-            assert!(calls[0].reversed);
-            assert_eq!(calls[0].rows_limit, 1);
-            let latest = client.get_latest_object(&id).await.unwrap();
-            assert_eq!(latest.map(|o| o.version()), expected, "latest object {id}");
         }
-
-        // Every stored row, plus a version that was never written.
-        let mut keys: Vec<_> = rows
-            .iter()
-            .map(|&(id, version, _)| ObjectKey(id, v(version)))
-            .collect();
-        keys.push(ObjectKey(deleted, v(5)));
-        mock.clear_read_rows_calls().await;
-        let mut existing = client.get_existing_object_keys(&keys).await.unwrap();
-        existing.sort();
-        let live_keys: Vec<_> = rows
-            .iter()
-            .filter(|(_, _, tombstone)| tombstone.is_none())
-            .map(|&(id, version, _)| ObjectKey(id, v(version)))
-            .collect();
-        assert_eq!(existing, live_keys);
-        let calls = mock.read_rows_calls().await;
-        assert_eq!(calls.len(), 1);
-        assert!(
-            calls[0].values_stripped,
-            "existing keys are read without contents"
-        );
     }
 
     #[tokio::test]

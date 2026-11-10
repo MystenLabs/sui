@@ -240,6 +240,7 @@ pub(crate) mod test_utils {
     use prometheus::Registry;
     use prometheus::proto::{Counter, Histogram, MetricFamily};
     use sui_kvstore::BigTableClient as InnerBigTableClient;
+    use sui_kvstore::ObjectSchema;
     use sui_kvstore::ObjectStatus;
     use sui_kvstore::tables::object_versions_by_checkpoint;
     use sui_kvstore::tables::objects;
@@ -448,8 +449,8 @@ pub(crate) mod test_utils {
         );
     }
 
-    /// A kv-rpc server over the mock BigTable at `addr`, with every watermark it serves at
-    /// checkpoint 10 and its service info loaded.
+    /// A kv-rpc server over the mock BigTable at `addr`, reading [`ObjectSchema::V1`], with every
+    /// watermark it serves at checkpoint 10 and its service info loaded.
     pub(crate) async fn start_kv_rpc(
         addr: SocketAddr,
         stages: StagesConfig,
@@ -465,11 +466,30 @@ pub(crate) mod test_utils {
         enable_object_at_checkpoint: bool,
         height: impl Fn(&str) -> u64,
     ) -> KvRpcServer {
+        start_kv_rpc_with_schema(
+            addr,
+            stages,
+            ObjectSchema::V1,
+            enable_object_at_checkpoint,
+            height,
+        )
+        .await
+    }
+
+    /// [`start_kv_rpc_at_heights`], reading the objects table of `object_schema`.
+    pub(crate) async fn start_kv_rpc_with_schema(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        object_schema: ObjectSchema,
+        enable_object_at_checkpoint: bool,
+        height: impl Fn(&str) -> u64,
+    ) -> KvRpcServer {
         let mut client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".into())
             .await
             .expect("connect to mock BigTable");
         let pipelines = service_info_watermark_pipelines(
             LedgerHistoryConfig::default().bitmap_schema(),
+            object_schema,
             enable_object_at_checkpoint,
         );
         seed_watermarks(&mut client, &pipelines, height).await;
@@ -483,6 +503,7 @@ pub(crate) mod test_utils {
             config.monotonic_read_wait_timeout(),
             stages,
             config.watermark_source(),
+            object_schema,
             enable_object_at_checkpoint,
         )
         .await
@@ -503,9 +524,9 @@ pub(crate) mod test_utils {
         }
     }
 
-    /// Write `id`'s history, `(checkpoint, version, status)` for each change in order, to both
-    /// the `objects` table (a live row or a tombstone) and the `object_versions_by_checkpoint`
-    /// index.
+    /// Write `id`'s history, `(checkpoint, version, status)` for each change in order, to the
+    /// objects tables of both schemas (a live row or a tombstone) and the
+    /// `object_versions_by_checkpoint` index, so a server reading either schema sees it.
     pub(crate) async fn insert_history(
         mock: &MockBigtableServer,
         id: ObjectID,
@@ -522,12 +543,14 @@ pub(crate) mod test_utils {
                 .unwrap(),
                 removed => objects::encode_tombstone(removed).unwrap(),
             };
-            mock.insert_row(
-                objects::NAME,
-                objects::encode_key(&ObjectKey(id, version)),
-                cells,
-            )
-            .await;
+            for schema in [ObjectSchema::V1, ObjectSchema::V2] {
+                mock.insert_row(
+                    objects::table_name(schema),
+                    objects::encode_key(schema, &ObjectKey(id, version)),
+                    cells.clone(),
+                )
+                .await;
+            }
             mock.insert_row(
                 object_versions_by_checkpoint::NAME,
                 object_versions_by_checkpoint::encode_key(&id, checkpoint),
@@ -717,6 +740,7 @@ mod tests {
                 KvRpcConfig::default().monotonic_read_wait_timeout(),
                 StagesConfig::default(),
                 WatermarkSource::IndexerStreams(vec![]),
+                sui_kvstore::ObjectSchema::V1,
                 false,
             )
             .await

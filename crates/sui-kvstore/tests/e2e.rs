@@ -38,6 +38,8 @@ use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
 use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
+use sui_kvstore::OBJECTS_V2_PIPELINE;
+use sui_kvstore::ObjectSchema;
 use sui_kvstore::ObjectStatus;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
@@ -1174,19 +1176,20 @@ async fn test_object_versions_by_checkpoint() -> Result<()> {
 /// Version-bounded object reads see the state left by the object's latest change at or below
 /// that version, through creation, mutation, wrapping, unwrapping, and deletion: tombstones hide
 /// the object at the versions where it was wrapped or deleted, and pages of live versions skip
-/// them.
+/// them. Both objects tables answer alike: `objects`, with the tombstones the
+/// `kvstore_object_tombstones` pipeline writes, and `objects_v2`, whose pipeline writes both.
 #[tokio::test]
 async fn test_object_tombstones() -> Result<()> {
     let mut harness = TestHarness::new().await?;
 
     // Alpha pipelines are opt-in: an indexer that does not name them does not register them.
     let default_indexer = build_indexer(&harness.client, harness.cluster.rpc_url(), &[]).await?;
-    assert!(
-        !default_indexer
-            .pipeline_names()
-            .contains(&OBJECT_TOMBSTONES_PIPELINE),
-        "alpha pipeline registered by default",
-    );
+    for pipeline in [OBJECT_TOMBSTONES_PIPELINE, OBJECTS_V2_PIPELINE] {
+        assert!(
+            !default_indexer.pipeline_names().contains(&pipeline),
+            "alpha pipeline {pipeline} registered by default",
+        );
+    }
     drop(default_indexer);
 
     let publish_tx = harness
@@ -1259,119 +1262,109 @@ async fn test_object_tombstones() -> Result<()> {
     changes.push((object, delete.lamport_version(), ObjectStatus::Deleted));
     harness.wait_for_watermark(last_cp, 0).await?;
 
-    let first_version = create.lamport_version().value();
-    let last_version = delete.lamport_version().value();
-    for id in [object, wrapper] {
-        let history: Vec<(SequenceNumber, ObjectStatus)> = changes
-            .iter()
-            .filter(|(changed, _, _)| *changed == id)
-            .map(|(_, version, status)| (*version, *status))
-            .collect();
-        let live_versions: Vec<SequenceNumber> = history
-            .iter()
-            .filter(|(_, status)| *status == ObjectStatus::Live)
-            .map(|(version, _)| *version)
-            .collect();
-
-        // Every version from just before creation to just after deletion: the newest change at
-        // or below it decides whether the object exists, and which version it is.
-        for version in first_version - 1..=last_version + 1 {
-            let version = SequenceNumber::from_u64(version);
-            let expected = history
+    for schema in [ObjectSchema::V1, ObjectSchema::V2] {
+        let mut client = harness.bigtable_client().clone().with_object_schema(schema);
+        let first_version = create.lamport_version().value();
+        let last_version = delete.lamport_version().value();
+        for id in [object, wrapper] {
+            let history: Vec<(SequenceNumber, ObjectStatus)> = changes
                 .iter()
-                .rev()
-                .find(|(changed_at, _)| *changed_at <= version)
-                .and_then(|(changed_at, status)| {
-                    (*status == ObjectStatus::Live).then_some(*changed_at)
-                });
-            let found = harness
-                .bigtable_client()
-                .get_object_lt_or_eq_version(id, version)
-                .await?;
+                .filter(|(changed, _, _)| *changed == id)
+                .map(|(_, version, status)| (*version, *status))
+                .collect();
+            let live_versions: Vec<SequenceNumber> = history
+                .iter()
+                .filter(|(_, status)| *status == ObjectStatus::Live)
+                .map(|(version, _)| *version)
+                .collect();
+
+            // Every version from just before creation to just after deletion: the newest change at
+            // or below it decides whether the object exists, and which version it is.
+            for version in first_version - 1..=last_version + 1 {
+                let version = SequenceNumber::from_u64(version);
+                let expected = history
+                    .iter()
+                    .rev()
+                    .find(|(changed_at, _)| *changed_at <= version)
+                    .and_then(|(changed_at, status)| {
+                        (*status == ObjectStatus::Live).then_some(*changed_at)
+                    });
+                let found = client.get_object_lt_or_eq_version(id, version).await?;
+                assert_eq!(
+                    found.map(|o| (o.id(), o.version())),
+                    expected.map(|live| (id, live)),
+                    "{schema:?} {id} at version {version}",
+                );
+
+                // The exact-version read and its contents-free form agree.
+                let expected_exact = live_versions.contains(&version).then_some(version);
+                let exact = client.get_objects(&[ObjectKey(id, version)]).await?;
+                assert_eq!(
+                    exact.first().map(|o| o.version()),
+                    expected_exact,
+                    "{schema:?} {id} exactly at version {version}",
+                );
+                let existing = client
+                    .get_existing_object_keys(&[ObjectKey(id, version)])
+                    .await?;
+                assert_eq!(
+                    existing.first().map(|key| key.1),
+                    expected_exact,
+                    "{schema:?} {id} key exactly at version {version}",
+                );
+            }
+
+            // Both objects end deleted, so neither has a latest version, with or without contents,
+            // even though their older live versions remain.
+            assert!(
+                client.get_latest_object(&id).await?.is_none(),
+                "{schema:?} {id} has a latest version after deletion",
+            );
             assert_eq!(
-                found.map(|o| (o.id(), o.version())),
-                expected.map(|live| (id, live)),
-                "{id} at version {version}",
+                client.get_latest_object_version(&id).await?,
+                None,
+                "{schema:?} {id} has a latest version number after deletion",
             );
 
-            // The exact-version read and its contents-free form agree.
-            let expected_exact = live_versions.contains(&version).then_some(version);
-            let exact = harness
-                .bigtable_client()
-                .get_objects(&[ObjectKey(id, version)])
-                .await?;
-            assert_eq!(
-                exact.first().map(|o| o.version()),
-                expected_exact,
-                "{id} exactly at version {version}",
-            );
-            let existing = harness
-                .bigtable_client()
-                .get_existing_object_keys(&[ObjectKey(id, version)])
-                .await?;
-            assert_eq!(
-                existing.first().map(|key| key.1),
-                expected_exact,
-                "{id} key exactly at version {version}",
-            );
-        }
-
-        // Both objects end deleted, so neither has a latest version, with or without contents,
-        // even though their older live versions remain.
-        assert!(
-            harness
-                .bigtable_client()
-                .get_latest_object(&id)
-                .await?
-                .is_none(),
-            "{id} has a latest version after deletion",
-        );
-        assert_eq!(
-            harness
-                .bigtable_client()
-                .get_latest_object_version(&id)
-                .await?,
-            None,
-            "{id} has a latest version number after deletion",
-        );
-
-        // Pages of live versions skip the tombstones, which never take a slot in a page.
-        let all_versions = SequenceNumber::MIN..=SequenceNumber::MAX;
-        for limit in 1..=live_versions.len() + 1 {
-            for descending in [false, true] {
-                let page: Vec<SequenceNumber> = harness
-                    .bigtable_client()
-                    .get_live_object_versions(id, all_versions.clone(), limit, descending)
-                    .await?
-                    .into_iter()
-                    .map(|o| {
-                        assert_eq!(o.id(), id);
-                        o.version()
-                    })
-                    .collect();
-                let mut expected = live_versions.clone();
-                if descending {
-                    expected.reverse();
+            // Pages of live versions skip the tombstones, which never take a slot in a page.
+            let all_versions = SequenceNumber::MIN..=SequenceNumber::MAX;
+            for limit in 1..=live_versions.len() + 1 {
+                for descending in [false, true] {
+                    let page: Vec<SequenceNumber> = client
+                        .get_live_object_versions(id, all_versions.clone(), limit, descending)
+                        .await?
+                        .into_iter()
+                        .map(|o| {
+                            assert_eq!(o.id(), id);
+                            o.version()
+                        })
+                        .collect();
+                    let mut expected = live_versions.clone();
+                    if descending {
+                        expected.reverse();
+                    }
+                    expected.truncate(limit);
+                    assert_eq!(
+                        page, expected,
+                        "{schema:?} {id} limit {limit} descending {descending}"
+                    );
                 }
-                expected.truncate(limit);
-                assert_eq!(page, expected, "{id} limit {limit} descending {descending}");
             }
         }
-    }
 
-    // A page bounded below a removal: the object's live versions before it was wrapped.
-    let before_wrap = SequenceNumber::MIN..=wrap.lamport_version();
-    let page: Vec<SequenceNumber> = harness
-        .bigtable_client()
-        .get_live_object_versions(object, before_wrap, 10, true)
-        .await?
-        .into_iter()
-        .map(|o| o.version())
-        .collect();
-    assert_eq!(
-        page,
-        vec![set_value.lamport_version(), create.lamport_version()]
-    );
+        // A page bounded below a removal: the object's live versions before it was wrapped.
+        let before_wrap = SequenceNumber::MIN..=wrap.lamport_version();
+        let page: Vec<SequenceNumber> = client
+            .get_live_object_versions(object, before_wrap, 10, true)
+            .await?
+            .into_iter()
+            .map(|o| o.version())
+            .collect();
+        assert_eq!(
+            page,
+            vec![set_value.lamport_version(), create.lamport_version()]
+        );
+    }
 
     Ok(())
 }

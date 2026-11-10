@@ -380,6 +380,7 @@ pub struct PipelineLayer {
     pub checkpoints: ConcurrentLayer,
     pub checkpoints_by_digest: ConcurrentLayer,
     pub transactions: ConcurrentLayer,
+    /// Configures `kvstore_objects` and `kvstore_objects_v2`.
     pub objects: ConcurrentLayer,
     pub epoch_start: ConcurrentLayer,
     pub epoch_end: ConcurrentLayer,

@@ -68,6 +68,33 @@ impl BitmapSchema {
     }
 }
 
+/// Row layout of the objects table: which table holds object versions and how its row keys
+/// order them.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Deserialize,
+    serde::Serialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum ObjectSchema {
+    /// The `objects` table, written by the `kvstore_objects` pipeline. Row keys are
+    /// `object_id || version`, so an object's versions sort oldest first. Deletions and wraps are
+    /// recorded only where the alpha `kvstore_object_tombstones` pipeline has run; elsewhere a
+    /// removed object resolves to its last live version.
+    #[default]
+    V1,
+    /// The `objects_v2` table, written by the `kvstore_objects_v2` pipeline. Row keys are
+    /// `object_id || (u64::MAX - version)`, so an object's versions sort newest first, and the
+    /// table also holds a tombstone at every version that deleted or wrapped an object.
+    V2,
+}
+
 /// Row-key prefix of [`BitmapSchema::V1`] tables.
 const V1_BITMAP_ROW_KEY_PREFIX: &[u8] = b"v1#";
 

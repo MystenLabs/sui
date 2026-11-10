@@ -11,14 +11,14 @@ use crate::KvRpcServer;
 use crate::render::object_to_response;
 use crate::served_height::ServedHeight;
 
-/// Serve `ListObjectVersions` from the `objects` table. Every listing is bounded by a checkpoint:
-/// `at_checkpoint`, or the served height when it is unset. `objects` rows above the served height
-/// can be written out of checkpoint order, so a listing past it could list a version and skip an
-/// older one still being written, which a client paging on from the newer version's cursor would
-/// never see. The object's version at the end of that checkpoint, the request's version range,
-/// and its cursors fold into one inclusive version range, from which one page of live versions
-/// is read; a range with no versions left is answered without reading it, unless it has a cursor
-/// to check against the served height.
+/// Serve `ListObjectVersions` from the objects table of the server's `object-schema`. Every
+/// listing is bounded by a checkpoint: `at_checkpoint`, or the served height when it is unset.
+/// Object rows above the served height can be written out of checkpoint order, so a listing past
+/// it could list a version and skip an older one still being written, which a client paging on
+/// from the newer version's cursor would never see. The object's version at the end of that
+/// checkpoint, the request's version range, and its cursors fold into one inclusive version range,
+/// from which one page of live versions is read; a range with no versions left is answered
+/// without reading it, unless it has a cursor to check against the served height.
 ///
 /// Without `at_checkpoint`, a cursor above the object's version at the served height, or any
 /// cursor for an object with no version there, is `OutOfRange` (`ABOVE_LATEST_AVAILABLE`, bound
@@ -88,6 +88,7 @@ pub(crate) async fn list_object_versions(
 mod tests {
     use bytes::Bytes;
     use prost::Message;
+    use sui_kvstore::ObjectSchema;
     use sui_kvstore::ObjectStatus;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_rpc::proto::google::rpc::BadRequest;
@@ -99,7 +100,7 @@ mod tests {
     use super::*;
     use crate::StagesConfig;
     use crate::v2::test_utils::insert_history;
-    use crate::v2::test_utils::start_kv_rpc;
+    use crate::v2::test_utils::start_kv_rpc_with_schema;
 
     /// `(checkpoint, version, status)` for each change to the fixture object: created at version
     /// 3 in checkpoint 2, mutated at 5 in checkpoint 3, wrapped at 8 in checkpoint 5, unwrapped at
@@ -114,9 +115,13 @@ mod tests {
         (9, 14, ObjectStatus::Deleted),
     ];
 
-    /// A kv-rpc server, with every watermark at checkpoint 10 and `at_checkpoint` reads enabled
-    /// if `enable_object_at_checkpoint`, over a mock BigTable holding `history` for a new object.
+    const SCHEMAS: [ObjectSchema; 2] = [ObjectSchema::V1, ObjectSchema::V2];
+
+    /// A kv-rpc server reading `object_schema`, with every watermark at checkpoint 10 and
+    /// `at_checkpoint` reads enabled if `enable_object_at_checkpoint`, over a mock BigTable
+    /// holding `history` for a new object.
     async fn start_fixture_with_history(
+        object_schema: ObjectSchema,
         enable_object_at_checkpoint: bool,
         history: &[(u64, u64, ObjectStatus)],
     ) -> (KvRpcServer, ObjectID, tokio::task::JoinHandle<()>) {
@@ -124,15 +129,23 @@ mod tests {
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
         let id = ObjectID::random();
         insert_history(&mock, id, history).await;
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), enable_object_at_checkpoint).await;
+        let kv_rpc = start_kv_rpc_with_schema(
+            addr,
+            StagesConfig::default(),
+            object_schema,
+            enable_object_at_checkpoint,
+            |_| 10,
+        )
+        .await;
         (kv_rpc, id, mock_server)
     }
 
     /// [`start_fixture_with_history`] for [`HISTORY`].
     async fn start_fixture(
+        object_schema: ObjectSchema,
         enable_object_at_checkpoint: bool,
     ) -> (KvRpcServer, ObjectID, tokio::task::JoinHandle<()>) {
-        start_fixture_with_history(enable_object_at_checkpoint, &HISTORY).await
+        start_fixture_with_history(object_schema, enable_object_at_checkpoint, &HISTORY).await
     }
 
     fn cursor(id: ObjectID, version: u64) -> Bytes {
@@ -210,84 +223,92 @@ mod tests {
     /// keeps the versions written by the end of the checkpoint, none before creation.
     #[tokio::test]
     async fn test_list_object_versions_intersects_every_bound() {
-        let (kv_rpc, id, mock_server) = start_fixture(true).await;
+        for schema in SCHEMAS {
+            let (kv_rpc, id, mock_server) = start_fixture(schema, true).await;
 
-        let expected = |start: Option<u64>,
-                        end: Option<u64>,
-                        after: Option<u64>,
-                        before: Option<u64>,
-                        at_checkpoint: Option<u64>,
-                        ordering: Ordering,
-                        limit: Option<u32>| {
-            let mut versions: Vec<u64> = HISTORY
-                .iter()
-                .filter(|&&(checkpoint, version, status)| {
-                    status == ObjectStatus::Live
-                        && start.is_none_or(|start| version >= start)
-                        && end.is_none_or(|end| version < end)
-                        && after.is_none_or(|after| version > after)
-                        && before.is_none_or(|before| version < before)
-                        && at_checkpoint.is_none_or(|bound| checkpoint <= bound)
-                })
-                .map(|&(_, version, _)| version)
-                .collect();
-            if ordering == Ordering::Descending {
-                versions.reverse();
-            }
-            versions.truncate(limit.map_or(usize::MAX, |limit| limit as usize));
-            versions
-        };
+            let expected = |start: Option<u64>,
+                            end: Option<u64>,
+                            after: Option<u64>,
+                            before: Option<u64>,
+                            at_checkpoint: Option<u64>,
+                            ordering: Ordering,
+                            limit: Option<u32>| {
+                let mut versions: Vec<u64> = HISTORY
+                    .iter()
+                    .filter(|&&(checkpoint, version, status)| {
+                        status == ObjectStatus::Live
+                            && start.is_none_or(|start| version >= start)
+                            && end.is_none_or(|end| version < end)
+                            && after.is_none_or(|after| version > after)
+                            && before.is_none_or(|before| version < before)
+                            && at_checkpoint.is_none_or(|bound| checkpoint <= bound)
+                    })
+                    .map(|&(_, version, _)| version)
+                    .collect();
+                if ordering == Ordering::Descending {
+                    versions.reverse();
+                }
+                versions.truncate(limit.map_or(usize::MAX, |limit| limit as usize));
+                versions
+            };
 
-        // Bounds on either side of live versions and tombstones (8 is the wrap), and checkpoints
-        // before creation, at it, between changes, at the wrap, and past the deletion.
-        for start in [None, Some(5), Some(10)] {
-            for end in [None, Some(9), Some(13)] {
-                for after in [None, Some(5), Some(8)] {
-                    for before in [None, Some(9), Some(14)] {
-                        for at_checkpoint in [None, Some(1), Some(2), Some(4), Some(5), Some(10)] {
-                            for ordering in [Ordering::Ascending, Ordering::Descending] {
-                                for limit in [None, Some(1)] {
-                                    let mut req = request(
-                                        id,
-                                        ordering,
-                                        limit,
-                                        after.map(|v| cursor(id, v)).as_ref(),
-                                        before.map(|v| cursor(id, v)).as_ref(),
-                                    );
-                                    req.start_version = start;
-                                    req.end_version = end;
-                                    req.at_checkpoint = at_checkpoint;
-                                    assert_eq!(
-                                        list(&kv_rpc, req).await.unwrap(),
-                                        expected(
-                                            start,
-                                            end,
-                                            after,
-                                            before,
-                                            at_checkpoint,
+            // Bounds on either side of live versions and tombstones (8 is the wrap), and checkpoints
+            // before creation, at it, between changes, at the wrap, and past the deletion.
+            for start in [None, Some(5), Some(10)] {
+                for end in [None, Some(9), Some(13)] {
+                    for after in [None, Some(5), Some(8)] {
+                        for before in [None, Some(9), Some(14)] {
+                            for at_checkpoint in
+                                [None, Some(1), Some(2), Some(4), Some(5), Some(10)]
+                            {
+                                for ordering in [Ordering::Ascending, Ordering::Descending] {
+                                    for limit in [None, Some(1)] {
+                                        let mut req = request(
+                                            id,
                                             ordering,
-                                            limit
-                                        ),
-                                        "versions [{start:?}, {end:?}) after {after:?} before \
-                                         {before:?} at_checkpoint {at_checkpoint:?} {ordering:?} \
-                                         limit {limit:?}",
-                                    );
+                                            limit,
+                                            after.map(|v| cursor(id, v)).as_ref(),
+                                            before.map(|v| cursor(id, v)).as_ref(),
+                                        );
+                                        req.start_version = start;
+                                        req.end_version = end;
+                                        req.at_checkpoint = at_checkpoint;
+                                        assert_eq!(
+                                            list(&kv_rpc, req).await.unwrap(),
+                                            expected(
+                                                start,
+                                                end,
+                                                after,
+                                                before,
+                                                at_checkpoint,
+                                                ordering,
+                                                limit
+                                            ),
+                                            "{schema:?}: versions [{start:?}, {end:?}) after \
+                                         {after:?} before {before:?} at_checkpoint \
+                                         {at_checkpoint:?} {ordering:?} limit {limit:?}",
+                                        );
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // An object with no versions lists none.
-        let other = ObjectID::random();
-        for ordering in [Ordering::Ascending, Ordering::Descending] {
-            let listed = list(&kv_rpc, request(other, ordering, None, None, None)).await;
-            assert_eq!(listed.unwrap(), Vec::<u64>::new(), "{ordering:?}");
-        }
+            // An object with no versions lists none.
+            let other = ObjectID::random();
+            for ordering in [Ordering::Ascending, Ordering::Descending] {
+                let listed = list(&kv_rpc, request(other, ordering, None, None, None)).await;
+                assert_eq!(
+                    listed.unwrap(),
+                    Vec::<u64>::new(),
+                    "{schema:?} {ordering:?}"
+                );
+            }
 
-        mock_server.abort();
+            mock_server.abort();
+        }
     }
 
     /// A backward page from the first version a client holds, followed by forward pages from
@@ -295,7 +316,7 @@ mod tests {
     /// ending with a short page. Cursors from descending pages bound ascending ones.
     #[tokio::test]
     async fn test_list_object_versions_pages_backward_then_forward_from_cursors() {
-        let (kv_rpc, id, mock_server) = start_fixture(true).await;
+        let (kv_rpc, id, mock_server) = start_fixture(ObjectSchema::V1, true).await;
         let page = |ordering, after: Option<Bytes>, before: Option<Bytes>| {
             let req = request(id, ordering, Some(2), after.as_ref(), before.as_ref());
             list_object_versions(&kv_rpc, kv_rpc.admitted_request(req))
@@ -360,7 +381,7 @@ mod tests {
     /// reads are enabled. `at_checkpoint` above the served height is `OutOfRange`.
     #[tokio::test]
     async fn test_list_object_versions_rejects_invalid_requests() {
-        let (kv_rpc, id, mock_server) = start_fixture(true).await;
+        let (kv_rpc, id, mock_server) = start_fixture(ObjectSchema::V1, true).await;
 
         let other_object = cursor(ObjectID::random(), 5);
         let malformed = Bytes::from_static(&[0xFF, 0xFF]);
@@ -439,19 +460,25 @@ mod tests {
     /// `at_checkpoint`, and even when its version bounds leave nothing to list.
     #[tokio::test]
     async fn test_list_object_versions_needs_the_at_checkpoint_flag() {
-        let (kv_rpc, id, mock_server) = start_fixture(false).await;
+        for schema in SCHEMAS {
+            let (kv_rpc, id, mock_server) = start_fixture(schema, false).await;
 
-        for at_checkpoint in [None, Some(5)] {
-            for start_version in [None, Some(100)] {
-                let mut req = request(id, Ordering::Ascending, None, None, None);
-                req.at_checkpoint = at_checkpoint;
-                req.start_version = start_version;
-                let status = list(&kv_rpc, req).await.unwrap_err();
-                assert_eq!(status.code(), tonic::Code::Unimplemented, "{status:?}");
+            for at_checkpoint in [None, Some(5)] {
+                for start_version in [None, Some(100)] {
+                    let mut req = request(id, Ordering::Ascending, None, None, None);
+                    req.at_checkpoint = at_checkpoint;
+                    req.start_version = start_version;
+                    let status = list(&kv_rpc, req).await.unwrap_err();
+                    assert_eq!(
+                        status.code(),
+                        tonic::Code::Unimplemented,
+                        "{schema:?}: {status:?}"
+                    );
+                }
             }
-        }
 
-        mock_server.abort();
+            mock_server.abort();
+        }
     }
 
     /// Without `at_checkpoint`, a listing is bounded by the served height: `objects` rows above
@@ -467,7 +494,8 @@ mod tests {
         // version from checkpoint 11 is still being written.
         let mut history = HISTORY.to_vec();
         history.push((12, 20, ObjectStatus::Live));
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, &history).await;
+        let (kv_rpc, id, mock_server) =
+            start_fixture_with_history(ObjectSchema::V1, true, &history).await;
 
         // Version 14 deleted the object in checkpoint 9, so 14 is its version at the served
         // height and a cursor at it is served. `None` expects the cursor to be past the tip.
@@ -586,7 +614,8 @@ mod tests {
         // An object first written above the served height has no version at it, so any cursor
         // for it is past the tip, while a listing without one finds nothing.
         let (kv_rpc, id, mock_server) =
-            start_fixture_with_history(true, &[(12, 20, ObjectStatus::Live)]).await;
+            start_fixture_with_history(ObjectSchema::V1, true, &[(12, 20, ObjectStatus::Live)])
+                .await;
         let after_20 = cursor(id, 20);
         let before_21 = cursor(id, 21);
         for ordering in [Ordering::Ascending, Ordering::Descending] {

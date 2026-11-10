@@ -11,7 +11,7 @@ if [[ -n $BIGTABLE_EMULATOR_HOST ]]; then
 fi
 
 for table in transaction_bitmap_index transaction_bitmap_index_v2 event_bitmap_index \
-    event_bitmap_index_v2 checkpoints checkpoints_by_digest transactions objects \
+    event_bitmap_index_v2 checkpoints checkpoints_by_digest transactions objects objects_v2 \
     object_versions_by_checkpoint epochs watermark_alt protocol_configs packages packages_by_id \
     packages_by_checkpoint system_packages tx_seq_digest; do
   (

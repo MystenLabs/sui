@@ -282,8 +282,9 @@ impl BigTableClient {
     }
 
     /// The newest version of `object_id` at or below `version`, unless the
-    /// object was deleted or wrapped at that version. One reverse range scan of
-    /// the `objects` table, under one permit.
+    /// object was deleted or wrapped at that version. One single-row read of
+    /// the objects table, reversed under `objects` and forward under
+    /// `objects_v2`, under one permit.
     pub(crate) async fn get_object_lt_or_eq_version(
         &self,
         object_id: ObjectID,
@@ -300,7 +301,9 @@ impl BigTableClient {
     /// Up to `limit` live versions of `object_id` in `versions`, in ascending
     /// version order or descending if `descending`; versions at which the
     /// object was deleted or wrapped are skipped and do not count toward
-    /// `limit`. One range scan of the `objects` table, under one permit.
+    /// `limit`. One ReadRows of the objects table, under one permit. Under
+    /// `objects_v2`, a descending page is a forward read and an ascending one
+    /// a reversed read over at most two ranges.
     pub(crate) async fn get_live_object_versions(
         &self,
         object_id: ObjectID,

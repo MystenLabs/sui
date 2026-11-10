@@ -16,6 +16,7 @@ use sui_kv_rpc::LedgerHistoryConfig;
 use sui_kv_rpc::LedgerHistoryMethodConfig;
 use sui_kv_rpc::StageConfig;
 use sui_kv_rpc::StagesConfig;
+use sui_kvstore::ObjectSchema;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::google::rpc::BadRequest;
@@ -70,7 +71,9 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
+use sui_types::transaction::Command;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
@@ -134,6 +137,15 @@ fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
 /// this file opts in.
 async fn list_api_cluster() -> FullCluster {
     list_api_cluster_with_config(KvRpcConfig::default()).await
+}
+
+/// [`list_api_cluster`] with kv-rpc reading the objects table of `object_schema`.
+async fn list_api_cluster_with_schema(object_schema: ObjectSchema) -> FullCluster {
+    list_api_cluster_with_config(KvRpcConfig {
+        object_schema: Some(object_schema),
+        ..Default::default()
+    })
+    .await
 }
 
 /// [`list_api_cluster`] for tests that also need to tune the kv-rpc config.
@@ -1169,13 +1181,31 @@ async fn test_json_read_mask() {
     }
 }
 
+/// Latest and exact-version reads from `objects`.
 #[tokio::test]
 async fn test_batch_get_objects() {
-    let mut cluster = list_api_cluster().await;
-    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    assert_batch_get_objects(ObjectSchema::V1).await;
+}
 
-    let (pkg_id, gas) =
-        publish_package(&mut cluster, sender, &kp, gas, emit_test_event_pkg_path()).await;
+/// Latest and exact-version reads answer the same from `objects_v2` as from `objects`.
+#[tokio::test]
+async fn test_batch_get_objects_object_schema_v2() {
+    assert_batch_get_objects(ObjectSchema::V2).await;
+}
+
+async fn assert_batch_get_objects(object_schema: ObjectSchema) {
+    let mut cluster = list_api_cluster_with_schema(object_schema).await;
+    let (sender, kp, funded_gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let (pkg_id, gas) = publish_package(
+        &mut cluster,
+        sender,
+        &kp,
+        funded_gas,
+        emit_test_event_pkg_path(),
+    )
+    .await;
+    assert!(funded_gas.1 < gas.1);
 
     cluster.create_checkpoint().await;
 
@@ -1192,6 +1222,21 @@ async fn test_batch_get_objects() {
         req.version = version;
         req
     };
+
+    // 0. An older version of an object is still readable by exact version.
+    {
+        let mut req = BatchGetObjectsRequest::default();
+        req.requests = vec![make_req(&gas.0, Some(funded_gas.1.value()))];
+        req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+
+        let response = client.batch_get_objects(req).await.unwrap().into_inner();
+        match &response.objects[0].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(obj.version, Some(funded_gas.1.value()));
+            }
+            other => panic!("expected the funded gas version, got: {other:?}"),
+        }
+    }
 
     // 1. A batch containing only unversioned (version: None) requests.
     {
@@ -1342,6 +1387,79 @@ async fn test_batch_get_objects() {
             other => panic!("expected NotFound error at index 4, got: {other:?}"),
         }
     }
+}
+
+/// A coin deleted by a merge has no latest version, under either `object-schema`: `objects`
+/// holds the deletion's tombstone from `kvstore_object_tombstones`, and `objects_v2` from its own
+/// pipeline.
+#[tokio::test]
+async fn test_latest_read_of_deleted_object() {
+    assert_latest_read_of_deleted_object(ObjectSchema::V1).await;
+}
+
+/// [`test_latest_read_of_deleted_object`] against a kv-rpc server reading `objects_v2`.
+#[tokio::test]
+async fn test_latest_read_of_deleted_object_object_schema_v2() {
+    assert_latest_read_of_deleted_object(ObjectSchema::V2).await;
+}
+
+/// Splits a coin off the gas coin, merges it back, which deletes it, and reads the coin's latest
+/// version from a kv-rpc server reading `object_schema`.
+async fn assert_latest_read_of_deleted_object(object_schema: ObjectSchema) {
+    let mut cluster = list_api_cluster_with_schema(object_schema).await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.transfer_sui(sender, Some(1_000_000));
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+    let (fx, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("split failed");
+    assert!(err.is_none(), "split failed: {err:?}");
+    let (coin, _) = fx.created().into_iter().next().expect("coin created");
+    let gas = fx.gas_object().expect("gas object").0;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap();
+    builder.command(Command::MergeCoins(Argument::GasCoin, vec![coin_arg]));
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+    let (fx, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("merge failed");
+    assert!(err.is_none(), "merge failed: {err:?}");
+    assert!(
+        fx.deleted().iter().any(|(id, _, _)| *id == coin.0),
+        "merge should delete the coin"
+    );
+    cluster.create_checkpoint().await;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(coin.0.to_canonical_string(true));
+    request.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+    let status = client
+        .get_object(request)
+        .await
+        .expect_err("the deletion's tombstone hides the coin");
+    assert_eq!(
+        status.code(),
+        tonic::Code::NotFound,
+        "{object_schema:?}: {status:?}"
+    );
 }
 
 fn basics_pkg_path() -> PathBuf {
@@ -1670,7 +1788,17 @@ fn bad_request_fields(status: &tonic::Status) -> Vec<String> {
 /// batches that mix them with exact-version and latest reads.
 #[tokio::test]
 async fn test_get_object_at_checkpoint() {
-    let mut cluster = list_api_cluster().await;
+    assert_get_object_at_checkpoint(ObjectSchema::V1).await;
+}
+
+/// [`test_get_object_at_checkpoint`] against a kv-rpc server reading `objects_v2`.
+#[tokio::test]
+async fn test_get_object_at_checkpoint_object_schema_v2() {
+    assert_get_object_at_checkpoint(ObjectSchema::V2).await;
+}
+
+async fn assert_get_object_at_checkpoint(object_schema: ObjectSchema) {
+    let mut cluster = list_api_cluster_with_schema(object_schema).await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
     let ObjectLifecycle {
@@ -1883,7 +2011,17 @@ fn assert_not_found(read: &ObjectRead, message: &str, context: &str) {
 /// written by then. `GetObject` and `BatchGetObjects` agree item by item.
 #[tokio::test]
 async fn test_get_object_max_version_and_checkpoint_bounds() {
-    let mut cluster = list_api_cluster().await;
+    assert_get_object_max_version_and_checkpoint_bounds(ObjectSchema::V1).await;
+}
+
+/// [`test_get_object_max_version_and_checkpoint_bounds`] against a kv-rpc server reading `objects_v2`.
+#[tokio::test]
+async fn test_get_object_max_version_and_checkpoint_bounds_object_schema_v2() {
+    assert_get_object_max_version_and_checkpoint_bounds(ObjectSchema::V2).await;
+}
+
+async fn assert_get_object_max_version_and_checkpoint_bounds(object_schema: ObjectSchema) {
+    let mut cluster = list_api_cluster_with_schema(object_schema).await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
     let ObjectLifecycle {
@@ -2112,7 +2250,17 @@ fn listed_cursor(read: &VersionsRead, index: usize) -> prost::bytes::Bytes {
 /// versions written by the end of the checkpoint and none before creation.
 #[tokio::test]
 async fn test_list_object_versions_lifecycle() {
-    let mut cluster = list_api_cluster().await;
+    assert_list_object_versions_lifecycle(ObjectSchema::V1).await;
+}
+
+/// [`test_list_object_versions_lifecycle`] against a kv-rpc server reading `objects_v2`.
+#[tokio::test]
+async fn test_list_object_versions_lifecycle_object_schema_v2() {
+    assert_list_object_versions_lifecycle(ObjectSchema::V2).await;
+}
+
+async fn assert_list_object_versions_lifecycle(object_schema: ObjectSchema) {
+    let mut cluster = list_api_cluster_with_schema(object_schema).await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
     let ObjectLifecycle {

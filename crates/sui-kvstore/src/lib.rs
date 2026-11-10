@@ -80,6 +80,7 @@ pub use crate::handlers::EventBitmapV2Processor;
 pub use crate::handlers::ObjectTombstonesPipeline;
 pub use crate::handlers::ObjectVersionsByCheckpointPipeline;
 pub use crate::handlers::ObjectsPipeline;
+pub use crate::handlers::ObjectsV2Pipeline;
 pub use crate::handlers::PackagesByCheckpointPipeline;
 pub use crate::handlers::PackagesByIdPipeline;
 pub use crate::handlers::PackagesPipeline;
@@ -92,6 +93,7 @@ pub use crate::handlers::TxSeqDigestPipeline;
 pub use crate::store::BigTableConnection;
 pub use crate::store::BigTableStore;
 pub use crate::tables::BitmapSchema;
+pub use crate::tables::ObjectSchema;
 pub use config::BigtablePoolLayer;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;
@@ -142,6 +144,8 @@ pub const OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE: &str = <BigTableHandler<
 > as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const OBJECT_TOMBSTONES_PIPELINE: &str =
     <BigTableHandler<ObjectTombstonesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const OBJECTS_V2_PIPELINE: &str =
+    <BigTableHandler<ObjectsV2Pipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
 /// Pipelines the indexer always registers. Excludes [`ALPHA_PIPELINE_NAMES`].
 pub const ALL_PIPELINE_NAMES: [&str; 14] = [
@@ -163,7 +167,8 @@ pub const ALL_PIPELINE_NAMES: [&str; 14] = [
 
 /// Pipelines the indexer registers only when they are named in the `alpha_pipelines` argument of
 /// [`BigTableIndexer::new`], so deployments do not start writing their tables by default.
-pub const ALPHA_PIPELINE_NAMES: [&str; 4] = [
+pub const ALPHA_PIPELINE_NAMES: [&str; 5] = [
+    OBJECTS_V2_PIPELINE,
     OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
     OBJECT_TOMBSTONES_PIPELINE,
     BITMAP_INDEX_V2_PIPELINE,
@@ -175,6 +180,24 @@ pub const fn bitmap_index_pipelines(schema: BitmapSchema) -> [&'static str; 2] {
     match schema {
         BitmapSchema::V1 => [BITMAP_INDEX_PIPELINE, EVENT_BITMAP_INDEX_PIPELINE],
         BitmapSchema::V2 => [BITMAP_INDEX_V2_PIPELINE, EVENT_BITMAP_INDEX_V2_PIPELINE],
+    }
+}
+
+/// The pipeline that writes the live versions of the objects table of `schema`.
+pub const fn objects_pipeline(schema: ObjectSchema) -> &'static str {
+    match schema {
+        ObjectSchema::V1 => OBJECTS_PIPELINE,
+        ObjectSchema::V2 => OBJECTS_V2_PIPELINE,
+    }
+}
+
+/// The pipeline that writes the deletion and wrap tombstones of the objects table of `schema`:
+/// the alpha [`OBJECT_TOMBSTONES_PIPELINE`] for [`ObjectSchema::V1`], and for
+/// [`ObjectSchema::V2`] the same pipeline that writes its live versions.
+pub const fn object_tombstones_pipeline(schema: ObjectSchema) -> &'static str {
+    match schema {
+        ObjectSchema::V1 => OBJECT_TOMBSTONES_PIPELINE,
+        ObjectSchema::V2 => OBJECTS_V2_PIPELINE,
     }
 }
 
@@ -357,6 +380,10 @@ pub struct WatermarkV1 {
     pub bucket_start_cp: Option<u64>,
 }
 
+/// Reads of the kvstore tables. Object reads go to the objects table of the reader's
+/// [`ObjectSchema`] (for [`BigTableClient`], set by [`BigTableClient::with_object_schema`]).
+/// Deletions and wraps are recorded where the reader's [`object_tombstones_pipeline`] has run;
+/// elsewhere a removed object resolves to its last live version.
 #[async_trait]
 pub trait KeyValueStoreReader {
     /// The live objects among `objects`. Keys with no object at that version, including keys at
@@ -385,9 +412,7 @@ pub trait KeyValueStoreReader {
         pipelines: &[&str],
     ) -> Result<Option<WatermarkV1>>;
     /// The object's newest version. `None` if the object has no versions, or if it was deleted or
-    /// wrapped at its newest version. Deletions and wraps are only recorded where the alpha
-    /// [`OBJECT_TOMBSTONES_PIPELINE`] has run; elsewhere a removed object resolves to its last
-    /// live version.
+    /// wrapped at its newest version.
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     /// The version [`Self::get_latest_object`] would return, read without the object's contents.
     async fn get_latest_object_version(
@@ -396,8 +421,7 @@ pub trait KeyValueStoreReader {
     ) -> Result<Option<SequenceNumber>>;
     /// The object's newest version at or below `version`, like the fullnode's
     /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below `version`,
-    /// or if it was deleted or wrapped at the newest one. Deletions and wraps are only recorded
-    /// where the alpha [`OBJECT_TOMBSTONES_PIPELINE`] has run.
+    /// or if it was deleted or wrapped at the newest one.
     async fn get_object_lt_or_eq_version(
         &mut self,
         object_id: ObjectID,
@@ -423,9 +447,9 @@ pub trait KeyValueStoreReader {
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Option<(SequenceNumber, ObjectStatus)>>;
     /// The contents of `object_id` at the end of `checkpoint`. `None` if the object did not exist
-    /// yet, was deleted or wrapped, or its contents are not yet in the `objects` table. Callers
+    /// yet, was deleted or wrapped, or its contents are not yet in the objects table. Callers
     /// should bound `checkpoint` by the watermarks of both the alpha
-    /// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECTS_PIPELINE`].
+    /// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and the reader's [`objects_pipeline`].
     async fn get_object_at_checkpoint(
         &mut self,
         object_id: ObjectID,
@@ -653,9 +677,22 @@ impl BigTableIndexer {
                     &pipeline.objects,
                     build_rate_limiter(pipeline.objects.max_rows_per_second, base_rps, &global),
                 ),
-                pipeline.objects.finish(base.clone()),
+                pipeline.objects.clone().finish(base.clone()),
             )
             .await?;
+        // The V2 pipeline shares the configuration of the V1 pipeline.
+        if alpha_pipelines.contains(&OBJECTS_V2_PIPELINE) {
+            indexer
+                .concurrent_pipeline(
+                    BigTableHandler::new(
+                        ObjectsV2Pipeline,
+                        &pipeline.objects,
+                        build_rate_limiter(pipeline.objects.max_rows_per_second, base_rps, &global),
+                    ),
+                    pipeline.objects.finish(base.clone()),
+                )
+                .await?;
+        }
         indexer
             .concurrent_pipeline(
                 BigTableHandler::new(

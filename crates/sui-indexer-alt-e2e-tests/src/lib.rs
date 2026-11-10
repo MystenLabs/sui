@@ -972,6 +972,7 @@ async fn start_archival(
         kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),
         kv_rpc_config.watermark_source(),
+        kv_rpc_config.object_schema(),
         kv_rpc_config.enable_object_at_checkpoint(),
     )
     .await

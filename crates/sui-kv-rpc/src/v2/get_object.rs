@@ -168,8 +168,9 @@ async fn read_written_by(
 ///    gives a `version` item bounded by `at_checkpoint` the newest version written by then, and
 ///    decides how an `at_checkpoint` or `max_version` item is read (see [`bounded_read`]).
 /// 2. `objects` multi-gets for the live versions stage 1 resolved items to that no exact-version
-///    read covers, alongside one `objects` reverse scan per distinct `(object_id, version)` that
-///    a `max_version` item scans down from.
+///    read covers, alongside one single-row read of the objects table (reversed on `objects`,
+///    forward on `objects_v2`) per distinct `(object_id, version)` that a `max_version` item
+///    reads down from.
 ///
 /// The exact versions do not depend on stage 1, so their `objects` multi-gets run alongside it,
 /// and one latest-version scan per distinct object runs alongside everything. Multi-gets are
@@ -180,7 +181,7 @@ async fn read_written_by(
 ///
 /// When the read mask asks for nothing but `object_id` and `version`, stage 1 answers the items
 /// it resolves to a live version on its own, and the other `objects` reads fetch only row keys,
-/// not object contents, except the reverse scans.
+/// not object contents, except the `max_version` reads.
 pub(crate) async fn batch_get_objects(
     server: &KvRpcServer,
     request: tonic::Request<BatchGetObjectsRequest>,
@@ -440,7 +441,8 @@ enum BoundedRead {
     /// This version, the object's version at the end of the checkpoint, answers it, and the
     /// object is live at it.
     Live(SequenceNumber),
-    /// The newest version at or below this one answers it, from an `objects` reverse scan.
+    /// The newest version at or below this one answers it, from a single-row read of the objects
+    /// table (reversed on `objects`, forward on `objects_v2`).
     ScanFrom(SequenceNumber),
 }
 
@@ -567,7 +569,7 @@ async fn read_max_version(
         .map(Found::Object))
 }
 
-/// For each `ObjectKey(object_id, version)` in `keys`, one `objects` reverse scan through the
+/// For each `ObjectKey(object_id, version)` in `keys`, one single-row objects-table read through the
 /// request's gated `client` for the newest version of `object_id` at or below `version` (see
 /// [`read_max_version`]), at most [`MAX_CONCURRENT_UNVERSIONED_SCANS`] at a time. Keys whose scan
 /// finds no object are absent from the map.
@@ -707,6 +709,7 @@ impl AtCheckpointReads {
 #[cfg(test)]
 mod tests {
     use mysten_common::ZipDebugEqIteratorExt;
+    use sui_kvstore::ObjectSchema;
     use sui_kvstore::tables::object_versions_by_checkpoint;
     use sui_kvstore::tables::objects;
     use sui_kvstore::testing::MockBigtableServer;
@@ -722,14 +725,48 @@ mod tests {
     use crate::v2::test_utils::mask;
     use crate::v2::test_utils::start_kv_rpc;
     use crate::v2::test_utils::start_kv_rpc_at_heights;
+    use crate::v2::test_utils::start_kv_rpc_with_schema;
 
-    /// For each `objects`-table read since the last clear, whether it asked for values to be
-    /// stripped.
-    async fn objects_reads_stripped(mock: &MockBigtableServer) -> Vec<bool> {
+    const SCHEMAS: [ObjectSchema; 2] = [ObjectSchema::V1, ObjectSchema::V2];
+
+    /// A kv-rpc server like [`start_kv_rpc`], reading the objects table of `schema`.
+    async fn start_kv_rpc_reading(
+        addr: std::net::SocketAddr,
+        schema: ObjectSchema,
+        enable_object_at_checkpoint: bool,
+    ) -> KvRpcServer {
+        start_kv_rpc_with_schema(
+            addr,
+            StagesConfig::default(),
+            schema,
+            enable_object_at_checkpoint,
+            |_| 10,
+        )
+        .await
+    }
+
+    /// Writes `cells` at `key` of `schema`'s objects table.
+    async fn insert_object_row(
+        mock: &MockBigtableServer,
+        schema: ObjectSchema,
+        key: ObjectKey,
+        cells: [(&'static str, bytes::Bytes); 1],
+    ) {
+        mock.insert_row(
+            objects::table_name(schema),
+            objects::encode_key(schema, &key),
+            cells,
+        )
+        .await;
+    }
+
+    /// For each read of `schema`'s objects table since the last clear, whether it asked for
+    /// values to be stripped.
+    async fn objects_reads_stripped(mock: &MockBigtableServer, schema: ObjectSchema) -> Vec<bool> {
         mock.read_rows_calls()
             .await
             .into_iter()
-            .filter(|call| call.table == objects::NAME)
+            .filter(|call| call.table == objects::table_name(schema))
             .map(|call| call.values_stripped)
             .collect()
     }
@@ -739,156 +776,164 @@ mod tests {
     /// by the version index without an `objects` read.
     #[tokio::test]
     async fn test_version_only_masks_skip_object_contents() {
-        let mock = MockBigtableServer::new();
-        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        for schema in SCHEMAS {
+            let mock = MockBigtableServer::new();
+            let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+            let kv_rpc = start_kv_rpc_reading(addr, schema, true).await;
 
-        // One object, live at version 3 from checkpoint 5.
-        let id = ObjectID::random();
-        let version = SequenceNumber::from_u64(3);
-        let object = Object::with_id_owner_version_for_testing(
-            id,
-            version,
-            Owner::AddressOwner(SuiAddress::ZERO),
-        );
-        mock.insert_row(
-            objects::NAME,
-            objects::encode_key(&ObjectKey(id, version)),
-            objects::encode(&object).unwrap(),
-        )
-        .await;
-        mock.insert_row(
-            object_versions_by_checkpoint::NAME,
-            object_versions_by_checkpoint::encode_key(&id, 5),
-            object_versions_by_checkpoint::encode(version, ObjectStatus::Live),
-        )
-        .await;
-
-        // Latest, exact version, and at checkpoint 7.
-        let selectors = [(None, None), (Some(3), None), (None, Some(7))];
-        let request = |(version, at_checkpoint): (Option<u64>, Option<u64>), paths: &[&str]| {
-            let mut req = GetObjectRequest::default();
-            req.object_id = Some(id.to_canonical_string(true));
-            req.version = version;
-            req.at_checkpoint = at_checkpoint;
-            req.read_mask = Some(mask(paths));
-            req
-        };
-
-        let version_only = ["object_id", "version"];
-        mock.clear_read_rows_calls().await;
-        for selector in selectors {
-            let rendered = get_object(
-                &kv_rpc,
-                kv_rpc.admitted_request(request(selector, &version_only)),
-            )
-            .await
-            .unwrap()
-            .object
-            .unwrap();
-            assert_eq!(
-                (rendered.object_id, rendered.version),
-                (Some(id.to_canonical_string(true)), Some(3)),
-                "{selector:?}",
+            // One object, live at version 3 from checkpoint 5.
+            let id = ObjectID::random();
+            let version = SequenceNumber::from_u64(3);
+            let object = Object::with_id_owner_version_for_testing(
+                id,
+                version,
+                Owner::AddressOwner(SuiAddress::ZERO),
             );
-        }
-        let mut batch = BatchGetObjectsRequest::default();
-        batch.requests = selectors.map(|selector| request(selector, &[])).to_vec();
-        batch.read_mask = Some(mask(&version_only));
-        for item in batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
-            .await
-            .unwrap()
-            .objects
-        {
-            assert_eq!(item.object().version, Some(3), "{item:?}");
-        }
-        // Latest and exact version, once each for the single reads and the batch; none for
-        // `at_checkpoint`.
-        assert_eq!(
-            objects_reads_stripped(&mock).await,
-            [true; 4],
-            "version-only reads fetch only row keys",
-        );
+            insert_object_row(
+                &mock,
+                schema,
+                ObjectKey(id, version),
+                objects::encode(&object).unwrap(),
+            )
+            .await;
+            mock.insert_row(
+                object_versions_by_checkpoint::NAME,
+                object_versions_by_checkpoint::encode_key(&id, 5),
+                object_versions_by_checkpoint::encode(version, ObjectStatus::Live),
+            )
+            .await;
 
-        mock_server.abort();
-    }
-
-    /// A read mask that needs no object contents answers a deleted object as `NOT_FOUND`, like a
-    /// read of its contents does, both latest and at the version that deleted it.
-    #[tokio::test]
-    async fn test_version_only_reads_of_deleted_object_are_not_found() {
-        let mock = MockBigtableServer::new();
-        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), false).await;
-
-        // Live at version 1, deleted at version 2.
-        let id = ObjectID::random();
-        let live = SequenceNumber::from_u64(1);
-        let object = Object::with_id_owner_version_for_testing(
-            id,
-            live,
-            Owner::AddressOwner(SuiAddress::ZERO),
-        );
-        mock.insert_row(
-            objects::NAME,
-            objects::encode_key(&ObjectKey(id, live)),
-            objects::encode(&object).unwrap(),
-        )
-        .await;
-        mock.insert_row(
-            objects::NAME,
-            objects::encode_key(&ObjectKey(id, SequenceNumber::from_u64(2))),
-            objects::encode_tombstone(ObjectStatus::Deleted).unwrap(),
-        )
-        .await;
-
-        let request = |version: Option<u64>| {
-            let mut req = GetObjectRequest::default();
-            req.object_id = Some(id.to_canonical_string(true));
-            req.version = version;
-            req
-        };
-        let version_only = ["object_id", "version"];
-        for paths in [&version_only[..], &["object_id", "version", "digest"]] {
-            for version in [None, Some(2)] {
-                let mut req = request(version);
+            // Latest, exact version, and at checkpoint 7.
+            let selectors = [(None, None), (Some(3), None), (None, Some(7))];
+            let request = |(version, at_checkpoint): (Option<u64>, Option<u64>), paths: &[&str]| {
+                let mut req = GetObjectRequest::default();
+                req.object_id = Some(id.to_canonical_string(true));
+                req.version = version;
+                req.at_checkpoint = at_checkpoint;
                 req.read_mask = Some(mask(paths));
-                let status: tonic::Status = get_object(&kv_rpc, kv_rpc.admitted_request(req))
-                    .await
-                    .unwrap_err()
-                    .into();
-                assert_eq!(
-                    status.code(),
-                    tonic::Code::NotFound,
-                    "{version:?} {paths:?}"
-                );
-            }
-            let mut req = request(Some(1));
-            req.read_mask = Some(mask(paths));
-            let found = get_object(&kv_rpc, kv_rpc.admitted_request(req))
+                req
+            };
+
+            let version_only = ["object_id", "version"];
+            mock.clear_read_rows_calls().await;
+            for selector in selectors {
+                let rendered = get_object(
+                    &kv_rpc,
+                    kv_rpc.admitted_request(request(selector, &version_only)),
+                )
                 .await
                 .unwrap()
                 .object
                 .unwrap();
-            assert_eq!(found.version, Some(1), "{paths:?}");
+                assert_eq!(
+                    (rendered.object_id, rendered.version),
+                    (Some(id.to_canonical_string(true)), Some(3)),
+                    "{schema:?} {selector:?}",
+                );
+            }
+            let mut batch = BatchGetObjectsRequest::default();
+            batch.requests = selectors.map(|selector| request(selector, &[])).to_vec();
+            batch.read_mask = Some(mask(&version_only));
+            for item in batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+                .await
+                .unwrap()
+                .objects
+            {
+                assert_eq!(item.object().version, Some(3), "{schema:?} {item:?}");
+            }
+            // Latest and exact version, once each for the single reads and the batch; none for
+            // `at_checkpoint`.
+            assert_eq!(
+                objects_reads_stripped(&mock, schema).await,
+                [true; 4],
+                "{schema:?}: version-only reads fetch only row keys",
+            );
+
+            mock_server.abort();
         }
+    }
 
-        let mut batch = BatchGetObjectsRequest::default();
-        batch.requests = vec![request(None), request(Some(2)), request(Some(1))];
-        batch.read_mask = Some(mask(&version_only));
-        let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
-            .await
-            .unwrap()
-            .objects;
-        assert_eq!(
-            items[0].error().code,
-            tonic::Code::NotFound as i32,
-            "latest"
-        );
-        assert_eq!(items[1].error().code, tonic::Code::NotFound as i32, "at 2");
-        assert_eq!(items[2].object().version, Some(1), "at 1");
+    /// A read mask that needs no object contents answers a deleted object as `NOT_FOUND`, like a
+    /// read of its contents does, both latest and at the version that deleted it, from either
+    /// objects table.
+    #[tokio::test]
+    async fn test_version_only_reads_of_deleted_object_are_not_found() {
+        for schema in SCHEMAS {
+            let mock = MockBigtableServer::new();
+            let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+            let kv_rpc = start_kv_rpc_reading(addr, schema, false).await;
 
-        mock_server.abort();
+            // Live at version 1, deleted at version 2.
+            let id = ObjectID::random();
+            let live = SequenceNumber::from_u64(1);
+            let object = Object::with_id_owner_version_for_testing(
+                id,
+                live,
+                Owner::AddressOwner(SuiAddress::ZERO),
+            );
+            insert_object_row(
+                &mock,
+                schema,
+                ObjectKey(id, live),
+                objects::encode(&object).unwrap(),
+            )
+            .await;
+            insert_object_row(
+                &mock,
+                schema,
+                ObjectKey(id, SequenceNumber::from_u64(2)),
+                objects::encode_tombstone(ObjectStatus::Deleted).unwrap(),
+            )
+            .await;
+
+            let request = |version: Option<u64>| {
+                let mut req = GetObjectRequest::default();
+                req.object_id = Some(id.to_canonical_string(true));
+                req.version = version;
+                req
+            };
+            let version_only = ["object_id", "version"];
+            for paths in [&version_only[..], &["object_id", "version", "digest"]] {
+                for version in [None, Some(2)] {
+                    let mut req = request(version);
+                    req.read_mask = Some(mask(paths));
+                    let status: tonic::Status = get_object(&kv_rpc, kv_rpc.admitted_request(req))
+                        .await
+                        .unwrap_err()
+                        .into();
+                    assert_eq!(
+                        status.code(),
+                        tonic::Code::NotFound,
+                        "{schema:?} {version:?} {paths:?}"
+                    );
+                }
+                let mut req = request(Some(1));
+                req.read_mask = Some(mask(paths));
+                let found = get_object(&kv_rpc, kv_rpc.admitted_request(req))
+                    .await
+                    .unwrap()
+                    .object
+                    .unwrap();
+                assert_eq!(found.version, Some(1), "{schema:?} {paths:?}");
+            }
+
+            let mut batch = BatchGetObjectsRequest::default();
+            batch.requests = vec![request(None), request(Some(2)), request(Some(1))];
+            batch.read_mask = Some(mask(&version_only));
+            let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+                .await
+                .unwrap()
+                .objects;
+            assert_eq!(
+                items[0].error().code,
+                tonic::Code::NotFound as i32,
+                "latest"
+            );
+            assert_eq!(items[1].error().code, tonic::Code::NotFound as i32, "at 2");
+            assert_eq!(items[2].object().version, Some(1), "at 1");
+
+            mock_server.abort();
+        }
     }
 
     /// A `GetObjectRequest` for `id` with the given selector fields.
@@ -928,96 +973,98 @@ mod tests {
     /// read to a version written by the end of the checkpoint, and has a `max_version` read select
     /// among the versions written by then, so versions written after the checkpoint never change
     /// its answer. `GetObject` and `BatchGetObjects` agree on every read, with and without object
-    /// contents.
+    /// contents, from either objects table.
     #[tokio::test]
     async fn test_max_version_and_checkpoint_bounds_follow_the_history() {
-        let mock = MockBigtableServer::new();
-        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        for schema in SCHEMAS {
+            let mock = MockBigtableServer::new();
+            let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+            let kv_rpc = start_kv_rpc_reading(addr, schema, true).await;
 
-        // Created at version 2 in checkpoint 1, mutated at 4 in checkpoint 3, wrapped at 6 in
-        // checkpoint 5, unwrapped at 8 in checkpoint 7, and deleted at 9 in checkpoint 10.
-        let id = ObjectID::random();
-        let history = [
-            (1, 2, ObjectStatus::Live),
-            (3, 4, ObjectStatus::Live),
-            (5, 6, ObjectStatus::Wrapped),
-            (7, 8, ObjectStatus::Live),
-            (10, 9, ObjectStatus::Deleted),
-        ];
-        insert_history(&mock, id, &history).await;
+            // Created at version 2 in checkpoint 1, mutated at 4 in checkpoint 3, wrapped at 6 in
+            // checkpoint 5, unwrapped at 8 in checkpoint 7, and deleted at 9 in checkpoint 10.
+            let id = ObjectID::random();
+            let history = [
+                (1, 2, ObjectStatus::Live),
+                (3, 4, ObjectStatus::Live),
+                (5, 6, ObjectStatus::Wrapped),
+                (7, 8, ObjectStatus::Live),
+                (10, 9, ObjectStatus::Deleted),
+            ];
+            insert_history(&mock, id, &history).await;
 
-        let live = |version: u64| {
-            history
-                .iter()
-                .any(|&(_, changed, status)| changed == version && status == ObjectStatus::Live)
-        };
-        let written_by = |version: u64, checkpoint: u64| {
-            history
-                .iter()
-                .any(|&(changed_at, changed, _)| changed == version && changed_at <= checkpoint)
-        };
-        // The newest version at or below `version`, among those written by `at_checkpoint` if
-        // set, if the object is live at it.
-        let newest_at_or_below = |version: u64, at_checkpoint: Option<u64>| {
-            history
-                .iter()
-                .rev()
-                .find(|&&(changed_at, changed, _)| {
-                    changed <= version && at_checkpoint.is_none_or(|cp| changed_at <= cp)
-                })
-                .filter(|&&(_, _, status)| status == ObjectStatus::Live)
-                .map(|&(_, changed, _)| changed)
-        };
+            let live = |version: u64| {
+                history
+                    .iter()
+                    .any(|&(_, changed, status)| changed == version && status == ObjectStatus::Live)
+            };
+            let written_by = |version: u64, checkpoint: u64| {
+                history
+                    .iter()
+                    .any(|&(changed_at, changed, _)| changed == version && changed_at <= checkpoint)
+            };
+            // The newest version at or below `version`, among those written by `at_checkpoint` if
+            // set, if the object is live at it.
+            let newest_at_or_below = |version: u64, at_checkpoint: Option<u64>| {
+                history
+                    .iter()
+                    .rev()
+                    .find(|&&(changed_at, changed, _)| {
+                        changed <= version && at_checkpoint.is_none_or(|cp| changed_at <= cp)
+                    })
+                    .filter(|&&(_, _, status)| status == ObjectStatus::Live)
+                    .map(|&(_, changed, _)| changed)
+            };
 
-        // Every version the history spans and one past it, each read exactly and as a
-        // `max_version`, unbounded and bounded by every checkpoint up to the served height.
-        let mut cases = Vec::new();
-        for version in 0..=10 {
-            for at_checkpoint in std::iter::once(None).chain((0..=10).map(Some)) {
-                let exact = live(version)
-                    .then_some(version)
-                    .filter(|&found| at_checkpoint.is_none_or(|cp| written_by(found, cp)));
-                cases.push((
-                    selector_request(id, Some(version), None, at_checkpoint),
-                    exact.ok_or(tonic::Code::NotFound),
-                ));
-                cases.push((
-                    selector_request(id, None, Some(version), at_checkpoint),
-                    newest_at_or_below(version, at_checkpoint).ok_or(tonic::Code::NotFound),
-                ));
+            // Every version the history spans and one past it, each read exactly and as a
+            // `max_version`, unbounded and bounded by every checkpoint up to the served height.
+            let mut cases = Vec::new();
+            for version in 0..=10 {
+                for at_checkpoint in std::iter::once(None).chain((0..=10).map(Some)) {
+                    let exact = live(version)
+                        .then_some(version)
+                        .filter(|&found| at_checkpoint.is_none_or(|cp| written_by(found, cp)));
+                    cases.push((
+                        selector_request(id, Some(version), None, at_checkpoint),
+                        exact.ok_or(tonic::Code::NotFound),
+                    ));
+                    cases.push((
+                        selector_request(id, None, Some(version), at_checkpoint),
+                        newest_at_or_below(version, at_checkpoint).ok_or(tonic::Code::NotFound),
+                    ));
+                }
             }
+
+            for paths in [
+                &["object_id", "version"][..],
+                &["object_id", "version", "digest"],
+            ] {
+                for (req, expected) in &cases {
+                    let mut req = req.clone();
+                    req.read_mask = Some(mask(paths));
+                    let request = kv_rpc.admitted_request(req.clone());
+                    let outcome = single_outcome(get_object(&kv_rpc, request).await);
+                    assert_eq!(&outcome, expected, "{schema:?} GetObject {req:?}");
+                }
+
+                let mut batch = BatchGetObjectsRequest::default();
+                batch.requests = cases.iter().map(|(req, _)| req.clone()).collect();
+                batch.read_mask = Some(mask(paths));
+                let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+                    .await
+                    .unwrap()
+                    .objects;
+                for (item, (req, expected)) in items.iter().zip_debug_eq(&cases) {
+                    assert_eq!(
+                        &batch_outcome(item),
+                        expected,
+                        "{schema:?} BatchGetObjects {req:?} {paths:?}"
+                    );
+                }
+            }
+
+            mock_server.abort();
         }
-
-        for paths in [
-            &["object_id", "version"][..],
-            &["object_id", "version", "digest"],
-        ] {
-            for (req, expected) in &cases {
-                let mut req = req.clone();
-                req.read_mask = Some(mask(paths));
-                let request = kv_rpc.admitted_request(req.clone());
-                let outcome = single_outcome(get_object(&kv_rpc, request).await);
-                assert_eq!(&outcome, expected, "GetObject {req:?}");
-            }
-
-            let mut batch = BatchGetObjectsRequest::default();
-            batch.requests = cases.iter().map(|(req, _)| req.clone()).collect();
-            batch.read_mask = Some(mask(paths));
-            let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
-                .await
-                .unwrap()
-                .objects;
-            for (item, (req, expected)) in items.iter().zip_debug_eq(&cases) {
-                assert_eq!(
-                    &batch_outcome(item),
-                    expected,
-                    "BatchGetObjects {req:?} {paths:?}"
-                );
-            }
-        }
-
-        mock_server.abort();
     }
 
     /// With version 5 written in checkpoint 90 and version 7 in checkpoint 101, `max_version` 8 at
@@ -1116,8 +1163,8 @@ mod tests {
     }
 
     /// `max_version` reads, and `version` reads bounded by `at_checkpoint`, are `Unimplemented`
-    /// unless `at_checkpoint` and `max_version` reads are enabled. A batch with an item the
-    /// instance cannot serve fails as a whole.
+    /// unless `at_checkpoint` and `max_version` reads are enabled, under either objects schema. A
+    /// batch with an item the instance cannot serve fails as a whole.
     #[tokio::test]
     async fn test_max_version_and_checkpoint_bounds_need_the_flag() {
         let mock = MockBigtableServer::new();
@@ -1125,8 +1172,8 @@ mod tests {
         let id = ObjectID::random();
         insert_history(&mock, id, &[(2, 2, ObjectStatus::Live)]).await;
 
-        for enabled in [false, true] {
-            let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), enabled).await;
+        for (schema, enabled) in SCHEMAS.into_iter().flat_map(|s| [(s, false), (s, true)]) {
+            let kv_rpc = start_kv_rpc_reading(addr, schema, enabled).await;
             let expected = if enabled {
                 Ok(2)
             } else {
@@ -1137,8 +1184,9 @@ mod tests {
                 (None, Some(2), None),
                 (None, Some(2), Some(5)),
             ] {
-                let context =
-                    format!("enabled {enabled}: {version:?} {max_version:?} {at_checkpoint:?}");
+                let context = format!(
+                    "{schema:?}, enabled {enabled}: {version:?} {max_version:?} {at_checkpoint:?}"
+                );
                 let req = selector_request(id, version, max_version, at_checkpoint);
                 let request = kv_rpc.admitted_request(req.clone());
                 let outcome = single_outcome(get_object(&kv_rpc, request).await);
@@ -1158,29 +1206,42 @@ mod tests {
     }
 
     /// With `at_checkpoint` and `max_version` reads enabled, the watermarks of both the versions
-    /// index and the tombstones pipeline bound the served height.
+    /// index and the pipeline that writes the objects table's tombstones bound the served height:
+    /// `kvstore_object_tombstones` under V1, and `kvstore_objects_v2`, which bounds it whatever
+    /// the flag, under V2.
     #[tokio::test]
     async fn test_object_indexes_bound_the_served_height() {
-        for lagging in [
-            sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
-            sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
-        ] {
-            for (enabled, served) in [(false, 10), (true, 7)] {
-                let mock = MockBigtableServer::new();
-                let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-                let kv_rpc =
-                    start_kv_rpc_at_heights(addr, StagesConfig::default(), enabled, |pipeline| {
-                        if pipeline == lagging { 7 } else { 10 }
-                    })
+        for schema in SCHEMAS {
+            let tombstones = sui_kvstore::object_tombstones_pipeline(schema);
+            for (lagging, bounds_when_disabled) in [
+                (sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE, false),
+                (tombstones, schema == ObjectSchema::V2),
+            ] {
+                for enabled in [false, true] {
+                    let served = if enabled || bounds_when_disabled {
+                        7
+                    } else {
+                        10
+                    };
+                    let mock = MockBigtableServer::new();
+                    let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+                    let kv_rpc = start_kv_rpc_with_schema(
+                        addr,
+                        StagesConfig::default(),
+                        schema,
+                        enabled,
+                        |pipeline| if pipeline == lagging { 7 } else { 10 },
+                    )
                     .await;
-                assert_eq!(
-                    ServedHeight::of(&kv_rpc.admitted_request(()))
-                        .unwrap()
-                        .checkpoint,
-                    served,
-                    "{lagging} lagging, enabled {enabled}",
-                );
-                mock_server.abort();
+                    assert_eq!(
+                        ServedHeight::of(&kv_rpc.admitted_request(()))
+                            .unwrap()
+                            .checkpoint,
+                        served,
+                        "{schema:?}: {lagging} lagging, enabled {enabled}",
+                    );
+                    mock_server.abort();
+                }
             }
         }
     }
@@ -1212,7 +1273,7 @@ mod tests {
             );
             mock.insert_row(
                 objects::NAME,
-                objects::encode_key(&ObjectKey(id, object.version())),
+                objects::encode_key(ObjectSchema::V1, &ObjectKey(id, object.version())),
                 objects::encode(&object).unwrap(),
             )
             .await;
@@ -1266,7 +1327,12 @@ mod tests {
         let mut read_keys: Vec<_> = reads.into_iter().flatten().collect();
         read_keys.sort();
         let requested_keys: Vec<_> = (1..=5)
-            .map(|version| objects::encode_key(&ObjectKey(id, SequenceNumber::from_u64(version))))
+            .map(|version| {
+                objects::encode_key(
+                    ObjectSchema::V1,
+                    &ObjectKey(id, SequenceNumber::from_u64(version)),
+                )
+            })
             .collect();
         assert_eq!(read_keys, requested_keys, "each key is read exactly once");
 

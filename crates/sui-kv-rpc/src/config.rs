@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::BitmapSchema;
+use sui_kvstore::ObjectSchema;
 use sui_kvstore::PoolConfig;
 use sui_kvstore::ReadRowsRetryConfig;
 
@@ -642,9 +643,10 @@ pub struct KvRpcConfig {
     /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint` or
     /// `max_version`, and every `ListObjectVersions` request (bounded by `at_checkpoint`, or by
     /// the served height when it is unset), and fold the alpha
-    /// `kvstore_object_versions_by_checkpoint` and `kvstore_object_tombstones` pipelines into the
-    /// `GetServiceInfo` checkpoint height. Defaults to `false`, which rejects those requests with
-    /// `Unimplemented`.
+    /// `kvstore_object_versions_by_checkpoint` pipeline and the pipeline that writes the
+    /// tombstones of `object-schema`'s table (`kvstore_object_tombstones` under `v1`;
+    /// `kvstore_objects_v2`, which already bounds it, under `v2`) into the `GetServiceInfo`
+    /// checkpoint height. Defaults to `false`, which rejects those requests with `Unimplemented`.
     ///
     /// Enable this only after both pipelines have been backfilled from genesis. The versions
     /// index has no restore floor, so an object unchanged since before the pipeline's first
@@ -719,6 +721,21 @@ pub struct KvRpcConfig {
     /// read ceiling.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stages: Option<StagesConfig>,
+
+    /// Which objects table `GetObject`, `BatchGetObjects`, `ListObjectVersions`, the package
+    /// reads and the object reads of transactions and checkpoints use. `v1` reads `objects`,
+    /// written by the `kvstore_objects` pipeline, with deletion and wrap tombstones from the alpha
+    /// `kvstore_object_tombstones` pipeline. `v2` reads `objects_v2`, written by the alpha
+    /// `kvstore_objects_v2` pipeline, which writes the tombstones with the live versions and
+    /// orders each object's versions newest first, so latest, `max_version` and descending
+    /// `ListObjectVersions` reads are single-row or single-page forward reads. The watermark of
+    /// the pipeline that writes the chosen table bounds the served checkpoint. `objects_v2` must
+    /// be backfilled from genesis before choosing `v2`, because exact-version reads do not check
+    /// any watermark. `enable-object-at-checkpoint` gates the same reads under either schema.
+    ///
+    /// Defaults to `v1` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_schema: Option<ObjectSchema>,
 }
 
 impl KvRpcConfig {
@@ -838,6 +855,10 @@ impl KvRpcConfig {
 
     pub fn stages(&self) -> StagesConfig {
         self.stages.clone().unwrap_or_default()
+    }
+
+    pub fn object_schema(&self) -> ObjectSchema {
+        self.object_schema.unwrap_or(ObjectSchema::V1)
     }
 
     /// Where this instance learns how far the data in Bigtable goes: the watermark streams of the
@@ -1194,14 +1215,20 @@ render-ahead = 3
     fn bitmap_schema_selects_the_bitmap_pipelines_that_bound_the_height() {
         let v1 = KvRpcConfig::default();
         v1.validate().unwrap();
-        let v1_pipelines =
-            service_info_watermark_pipelines(v1.ledger_history().bitmap_schema(), false);
+        let v1_pipelines = service_info_watermark_pipelines(
+            v1.ledger_history().bitmap_schema(),
+            v1.object_schema(),
+            false,
+        );
 
         let v2: KvRpcConfig =
             serde_yaml::from_str("ledger-history:\n  bitmap-schema: v2\n").unwrap();
         v2.validate().unwrap();
-        let v2_pipelines =
-            service_info_watermark_pipelines(v2.ledger_history().bitmap_schema(), false);
+        let v2_pipelines = service_info_watermark_pipelines(
+            v2.ledger_history().bitmap_schema(),
+            v2.object_schema(),
+            false,
+        );
 
         for (pipeline, in_v1, in_v2) in [
             ("kvstore_tx_seq_digest", true, true),
@@ -1216,33 +1243,80 @@ render-ahead = 3
     }
 
     #[test]
-    fn object_at_checkpoint_off_by_default_and_bounds_the_watermark_set() {
-        let object_pipelines = [
-            sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
-            sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
-        ];
-        let cfg = KvRpcConfig::default();
-        assert!(!cfg.enable_object_at_checkpoint());
-        let pipelines = service_info_watermark_pipelines(
-            cfg.ledger_history().bitmap_schema(),
-            cfg.enable_object_at_checkpoint(),
-        );
-        for pipeline in object_pipelines {
-            assert!(!pipelines.contains(&pipeline), "{pipeline}");
-        }
+    fn object_schema_selects_the_objects_pipeline_that_bounds_the_height() {
+        let v1 = KvRpcConfig::default();
+        v1.validate().unwrap();
+        assert_eq!(v1.object_schema(), ObjectSchema::V1);
+        let v2: KvRpcConfig = toml::from_str("object-schema = \"v2\"\n").unwrap();
+        v2.validate().unwrap();
+        assert_eq!(v2.object_schema(), ObjectSchema::V2);
 
-        let yaml = "enable-object-at-checkpoint: true\n";
-        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
-        assert!(cfg.enable_object_at_checkpoint());
-        let pipelines = service_info_watermark_pipelines(
-            cfg.ledger_history().bitmap_schema(),
-            cfg.enable_object_at_checkpoint(),
-        );
-        for pipeline in object_pipelines {
-            assert!(
-                pipelines.contains(&pipeline),
-                "{pipeline} must bound the height"
+        for enabled in [false, true] {
+            let pipelines = |cfg: &KvRpcConfig| {
+                service_info_watermark_pipelines(
+                    cfg.ledger_history().bitmap_schema(),
+                    cfg.object_schema(),
+                    enabled,
+                )
+            };
+            let (v1_pipelines, v2_pipelines) = (pipelines(&v1), pipelines(&v2));
+            for (pipeline, in_v1, in_v2) in [
+                ("kvstore_checkpoints", true, true),
+                ("kvstore_objects", true, false),
+                ("kvstore_objects_v2", false, true),
+                // Tombstones come from their own pipeline under v1, and from the objects pipeline
+                // under v2.
+                ("kvstore_object_tombstones", enabled, false),
+            ] {
+                let context = format!("{pipeline}, enable-object-at-checkpoint {enabled}");
+                assert_eq!(v1_pipelines.contains(&pipeline), in_v1, "{context} in v1");
+                assert_eq!(v2_pipelines.contains(&pipeline), in_v2, "{context} in v2");
+            }
+            assert_eq!(
+                v2_pipelines
+                    .iter()
+                    .filter(|&&p| p == "kvstore_objects_v2")
+                    .count(),
+                1,
+                "kvstore_objects_v2 is listed once",
             );
+        }
+    }
+
+    /// `enable-object-at-checkpoint` alone gates the object history reads, under either
+    /// `object-schema`, and folds the versions index into the height.
+    #[test]
+    fn object_at_checkpoint_off_by_default_and_bounds_the_watermark_set() {
+        for schema in ["", "object-schema = \"v1\"\n", "object-schema = \"v2\"\n"] {
+            let cfg: KvRpcConfig = toml::from_str(schema).unwrap();
+            assert!(!cfg.enable_object_at_checkpoint());
+            assert!(
+                !service_info_watermark_pipelines(
+                    cfg.ledger_history().bitmap_schema(),
+                    cfg.object_schema(),
+                    cfg.enable_object_at_checkpoint(),
+                )
+                .contains(&sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE),
+                "{schema:?}",
+            );
+
+            let toml = format!("{schema}enable-object-at-checkpoint = true\n");
+            let cfg: KvRpcConfig = toml::from_str(&toml).unwrap();
+            assert!(cfg.enable_object_at_checkpoint());
+            let pipelines = service_info_watermark_pipelines(
+                cfg.ledger_history().bitmap_schema(),
+                cfg.object_schema(),
+                cfg.enable_object_at_checkpoint(),
+            );
+            for pipeline in [
+                sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
+                sui_kvstore::object_tombstones_pipeline(cfg.object_schema()),
+            ] {
+                assert!(
+                    pipelines.contains(&pipeline),
+                    "{pipeline} must bound the height: {toml:?}"
+                );
+            }
         }
     }
 
