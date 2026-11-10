@@ -22,6 +22,7 @@ unfrozen only in an epoch after the last <code><a href="../sui/coin_regulation.m
 -  [Struct `SeizeAuthDestroyed`](#sui_coin_regulation_SeizeAuthDestroyed)
 -  [Struct `CoinTypePaused`](#sui_coin_regulation_CoinTypePaused)
 -  [Struct `CoinTypeUnpaused`](#sui_coin_regulation_CoinTypeUnpaused)
+-  [Struct `DenyCapMigrated`](#sui_coin_regulation_DenyCapMigrated)
 -  [Constants](#@Constants_0)
 -  [Function `freeze_address`](#sui_coin_regulation_freeze_address)
 -  [Function `unfreeze_address`](#sui_coin_regulation_unfreeze_address)
@@ -38,6 +39,8 @@ unfrozen only in an epoch after the last <code><a href="../sui/coin_regulation.m
 -  [Function `allow_global_pause`](#sui_coin_regulation_allow_global_pause)
 -  [Function `frozen_address`](#sui_coin_regulation_frozen_address)
 -  [Function `frozen_epoch`](#sui_coin_regulation_frozen_epoch)
+-  [Function `new_compliance_cap`](#sui_coin_regulation_new_compliance_cap)
+-  [Function `migrate_from_deny_list`](#sui_coin_regulation_migrate_from_deny_list)
 -  [Function `create`](#sui_coin_regulation_create)
 -  [Function `add_frozen_address`](#sui_coin_regulation_add_frozen_address)
 -  [Function `coin_type_state_mut_or_add`](#sui_coin_regulation_coin_type_state_mut_or_add)
@@ -46,22 +49,35 @@ unfrozen only in an epoch after the last <code><a href="../sui/coin_regulation.m
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/internal.md#std_internal">std::internal</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/u128.md#std_u128">std::u128</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement">sui::accumulator_settlement</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
+<b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
+<b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
 <b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
+<b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
+<b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
+<b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
+<b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator">sui::funds_accumulator</a>;
 <b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
+<b>use</b> <a href="../sui/protocol_config.md#sui_protocol_config">sui::protocol_config</a>;
+<b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
+<b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
+<b>use</b> <a href="../sui/url.md#sui_url">sui::url</a>;
 <b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 <b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 </code></pre>
@@ -492,6 +508,34 @@ Event: the global pause of <code>T</code> was lifted.
 
 </details>
 
+<a name="sui_coin_regulation_DenyCapMigrated"></a>
+
+## Struct `DenyCapMigrated`
+
+Event: the <code>DenyCapV2</code> for <code>T</code> was replaced by the <code><a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a></code> <code>cap</code>, keeping its ID.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_DenyCapMigrated">DenyCapMigrated</a>&lt;<b>phantom</b> T&gt; <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>cap: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+ The ID of the <code><a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a></code>, which is also the ID of the replaced <code>DenyCapV2</code>.
+</dd>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -563,6 +607,16 @@ Event: the global pause of <code>T</code> was lifted.
 
 <pre><code>#[error]
 <b>const</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_EUnfreezeTooEarly">EUnfreezeTooEarly</a>: vector&lt;u8&gt; = b"The <b>address</b> cannot be unfrozen until the epoch after its last <a href="../sui/coin_regulation.md#sui_coin_regulation_SeizeAuth">SeizeAuth</a> was destroyed.";
+</code></pre>
+
+
+
+<a name="sui_coin_regulation_ECoinTypeStateExists"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_ECoinTypeStateExists">ECoinTypeStateExists</a>: vector&lt;u8&gt; = b"The <a href="../sui/coin.md#sui_coin">coin</a> type already <b>has</b> <b>freeze</b> list state.";
 </code></pre>
 
 
@@ -1013,6 +1067,81 @@ The epoch in which <code><a href="../sui/coin_regulation.md#sui_coin_regulation_
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_epoch">frozen_epoch</a>&lt;T&gt;(auth: &<a href="../sui/coin_regulation.md#sui_coin_regulation_SeizeAuth">SeizeAuth</a>&lt;T&gt;): u64 {
     auth.<a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_epoch">frozen_epoch</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_regulation_new_compliance_cap"></a>
+
+## Function `new_compliance_cap`
+
+A new <code><a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a></code> for <code>T</code>, for a coin created through the coin registry.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_new_compliance_cap">new_compliance_cap</a>&lt;T&gt;(<a href="../sui/coin_regulation.md#sui_coin_regulation_allow_global_pause">allow_global_pause</a>: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">sui::coin_regulation::ComplianceCap</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_new_compliance_cap">new_compliance_cap</a>&lt;T&gt;(
+    <a href="../sui/coin_regulation.md#sui_coin_regulation_allow_global_pause">allow_global_pause</a>: bool,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a>&lt;T&gt; {
+    <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a> { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx), <a href="../sui/coin_regulation.md#sui_coin_regulation_allow_global_pause">allow_global_pause</a> }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_regulation_migrate_from_deny_list"></a>
+
+## Function `migrate_from_deny_list`
+
+Replace <code>cap</code> with a <code><a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a></code> that keeps its object ID, carrying over <code>T</code>'s legacy
+next-epoch global pause and freezing each of <code>frozen_addresses</code> denied in the legacy next-epoch
+list.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_migrate_from_deny_list">migrate_from_deny_list</a>&lt;T&gt;(list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">sui::coin_regulation::FreezeList</a>, <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, cap: <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, frozen_addresses: vector&lt;<b>address</b>&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">sui::coin_regulation::ComplianceCap</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_migrate_from_deny_list">migrate_from_deny_list</a>&lt;T&gt;(
+    list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">FreezeList</a>,
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+    cap: DenyCapV2&lt;T&gt;,
+    frozen_addresses: vector&lt;<b>address</b>&gt;,
+    ctx: &TxContext,
+): <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a>&lt;T&gt; {
+    <b>let</b> key = <a href="../sui/coin_regulation.md#sui_coin_regulation_CoinTypeKey">CoinTypeKey</a>&lt;T&gt;();
+    <b>assert</b>!(!df::exists(&list.id, key), <a href="../sui/coin_regulation.md#sui_coin_regulation_ECoinTypeStateExists">ECoinTypeStateExists</a>);
+    <b>let</b> paused = <a href="../sui/coin.md#sui_coin_deny_list_v2_is_global_pause_enabled_next_epoch">coin::deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
+    df::add(&<b>mut</b> list.id, key, <a href="../sui/coin_regulation.md#sui_coin_regulation_CoinTypeState">CoinTypeState</a> { paused, num_frozen_addresses: 0 });
+    <b>let</b> (id, <a href="../sui/coin_regulation.md#sui_coin_regulation_allow_global_pause">allow_global_pause</a>) = <a href="../sui/coin.md#sui_coin_destroy_deny_cap_v2">coin::destroy_deny_cap_v2</a>(cap);
+    <b>let</b> cap = <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">ComplianceCap</a>&lt;T&gt; { id, <a href="../sui/coin_regulation.md#sui_coin_regulation_allow_global_pause">allow_global_pause</a> };
+    frozen_addresses.do!(|addr| {
+        <b>if</b> (
+            <a href="../sui/coin.md#sui_coin_deny_list_v2_contains_next_epoch">coin::deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>, addr)
+                && !list.<a href="../sui/coin_regulation.md#sui_coin_regulation_is_frozen">is_frozen</a>&lt;T&gt;(addr)
+        ) list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, <b>false</b>, ctx)
+    });
+    <a href="../sui/coin.md#sui_coin_deny_list_v2_mark_migrated">coin::deny_list_v2_mark_migrated</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
+    <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_DenyCapMigrated">DenyCapMigrated</a>&lt;T&gt; { cap: <a href="../sui/object.md#sui_object_id">object::id</a>(&cap) });
+    cap
 }
 </code></pre>
 

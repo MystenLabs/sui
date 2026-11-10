@@ -5,6 +5,7 @@
 module sui::coin_regulation_tests;
 
 use std::unit_test::{assert_eq, destroy};
+use sui::coin::{Self, DenyCapV2};
 use sui::coin_regulation::{
     Self,
     FreezeList,
@@ -17,7 +18,9 @@ use sui::coin_regulation::{
     SeizeAuthDestroyed,
     CoinTypePaused,
     CoinTypeUnpaused,
+    DenyCapMigrated,
 };
+use sui::deny_list::DenyList;
 use sui::event;
 use sui::test_scenario::{Self, Scenario};
 
@@ -28,12 +31,15 @@ public struct OTHER()
 const ISSUER: address = @0x11;
 const ALICE: address = @0xA;
 const BOB: address = @0xB;
+const CAROL: address = @0xC0;
+const DAVE: address = @0xD0;
+const ERIN: address = @0xE0;
 
 fun setup(allow_global_pause: bool): (Scenario, FreezeList, ComplianceCap<TEST>) {
     let mut scenario = test_scenario::begin(ISSUER);
     scenario.create_system_objects();
     let list = scenario.take_shared<FreezeList>();
-    let cap = coin_regulation::new_cap_for_testing<TEST>(allow_global_pause, scenario.ctx());
+    let cap = coin_regulation::new_compliance_cap<TEST>(allow_global_pause, scenario.ctx());
     (scenario, list, cap)
 }
 
@@ -90,7 +96,7 @@ fun freeze_adds_coin_type_state() {
 #[test]
 fun freeze_is_per_coin_type() {
     let (mut scenario, mut list, mut cap) = setup(false);
-    let mut other_cap = coin_regulation::new_cap_for_testing<OTHER>(false, scenario.ctx());
+    let mut other_cap = coin_regulation::new_compliance_cap<OTHER>(false, scenario.ctx());
 
     list.freeze_address(&mut cap, ALICE, scenario.ctx());
     assert!(list.is_frozen<TEST>(ALICE));
@@ -385,5 +391,268 @@ fun pause_without_allow_global_pause_aborts() {
 fun unpause_without_allow_global_pause_aborts() {
     let (mut scenario, mut list, mut cap) = setup(false);
     list.disable_global_pause(&mut cap, scenario.ctx());
+    abort
+}
+
+fun setup_deny_list(allow_global_pause: bool): (Scenario, DenyCapV2<TEST>) {
+    let mut scenario = test_scenario::begin(ISSUER);
+    scenario.create_system_objects();
+    let cap = coin::new_deny_cap_v2<TEST>(allow_global_pause, scenario.ctx());
+    (scenario, cap)
+}
+
+fun migrate(scenario: &mut Scenario, cap: DenyCapV2<TEST>, addresses: vector<address>) {
+    scenario.next_tx(ISSUER);
+    let mut list = scenario.take_shared<FreezeList>();
+    let mut deny_list = scenario.take_shared<DenyList>();
+    let cap = list.migrate_from_deny_list(&mut deny_list, cap, addresses, scenario.ctx());
+    test_scenario::return_shared(list);
+    test_scenario::return_shared(deny_list);
+    transfer::public_transfer(cap, ISSUER);
+}
+
+#[test]
+fun migrate_keeps_cap_id_and_global_pause() {
+    let (mut scenario, cap) = setup_deny_list(true);
+    let cap_id = object::id(&cap);
+    let mut list = scenario.take_shared<FreezeList>();
+    let mut deny_list = scenario.take_shared<DenyList>();
+    let cap = list.migrate_from_deny_list(&mut deny_list, cap, vector[], scenario.ctx());
+    assert_eq!(object::id(&cap), cap_id);
+    assert!(cap.allow_global_pause());
+    assert!(!list.is_global_pause<TEST>());
+    assert_eq!(list.num_frozen_addresses<TEST>(), 0);
+    let events = event::events_by_type<DenyCapMigrated<TEST>>();
+    assert_eq!(events.length(), 1);
+
+    let other_cap = coin::new_deny_cap_v2<OTHER>(false, scenario.ctx());
+    let other_id = object::id(&other_cap);
+    let other_cap = list.migrate_from_deny_list(
+        &mut deny_list,
+        other_cap,
+        vector[],
+        scenario.ctx(),
+    );
+    assert_eq!(object::id(&other_cap), other_id);
+    assert!(!other_cap.allow_global_pause());
+
+    destroy(other_cap);
+    test_scenario::return_shared(deny_list);
+    teardown(scenario, list, cap);
+}
+
+#[test]
+fun migrate_freezes_denied_addresses() {
+    let (mut scenario, mut cap) = setup_deny_list(false);
+    let mut deny_list = scenario.take_shared<DenyList>();
+    coin::deny_list_v2_add(&mut deny_list, &mut cap, ALICE, scenario.ctx());
+    coin::deny_list_v2_add(&mut deny_list, &mut cap, BOB, scenario.ctx());
+    coin::deny_list_v2_add(&mut deny_list, &mut cap, ERIN, scenario.ctx());
+    test_scenario::return_shared(deny_list);
+    scenario.next_epoch(ISSUER);
+
+    let mut deny_list = scenario.take_shared<DenyList>();
+    // CAROL is a pending add and BOB a pending removal.
+    coin::deny_list_v2_add(&mut deny_list, &mut cap, CAROL, scenario.ctx());
+    coin::deny_list_v2_remove(&mut deny_list, &mut cap, BOB, scenario.ctx());
+    assert!(!coin::deny_list_v2_contains_current_epoch<TEST>(&deny_list, CAROL, scenario.ctx()));
+    assert!(coin::deny_list_v2_contains_current_epoch<TEST>(&deny_list, BOB, scenario.ctx()));
+    test_scenario::return_shared(deny_list);
+
+    migrate(&mut scenario, cap, vector[ALICE, BOB, CAROL, DAVE, ALICE]);
+    scenario.next_tx(ISSUER);
+
+    let list = scenario.take_shared<FreezeList>();
+    assert!(list.is_frozen<TEST>(ALICE));
+    assert!(list.is_frozen<TEST>(CAROL));
+    assert!(!list.is_frozen<TEST>(BOB));
+    assert!(!list.is_frozen<TEST>(DAVE));
+    // Denied but omitted from the migration.
+    assert!(!list.is_frozen<TEST>(ERIN));
+    assert!(!list.is_frozen<OTHER>(ALICE));
+    assert_eq!(list.num_frozen_addresses<TEST>(), 2);
+    let cap = scenario.take_from_sender<ComplianceCap<TEST>>();
+    teardown(scenario, list, cap);
+}
+
+#[test]
+fun migrate_records_migration_epoch() {
+    let (mut scenario, mut cap) = setup_deny_list(false);
+    let mut deny_list = scenario.take_shared<DenyList>();
+    coin::deny_list_v2_add(&mut deny_list, &mut cap, ALICE, scenario.ctx());
+    test_scenario::return_shared(deny_list);
+    scenario.next_epoch(ISSUER);
+
+    migrate(&mut scenario, cap, vector[ALICE]);
+    scenario.next_tx(ISSUER);
+
+    let mut list = scenario.take_shared<FreezeList>();
+    let mut cap = scenario.take_from_sender<ComplianceCap<TEST>>();
+    let auth = list.issue_seize_auth(&mut cap, ALICE, scenario.ctx());
+    assert_eq!(auth.frozen_epoch(), 1);
+    list.destroy_seize_auth(auth, scenario.ctx());
+    teardown(scenario, list, cap);
+}
+
+#[test]
+fun unfreeze_in_migration_epoch() {
+    let (mut scenario, mut cap) = setup_deny_list(false);
+    let mut deny_list = scenario.take_shared<DenyList>();
+    coin::deny_list_v2_add(&mut deny_list, &mut cap, ALICE, scenario.ctx());
+    test_scenario::return_shared(deny_list);
+    scenario.next_epoch(ISSUER);
+
+    migrate(&mut scenario, cap, vector[ALICE]);
+    scenario.next_tx(ISSUER);
+
+    let mut list = scenario.take_shared<FreezeList>();
+    let mut cap = scenario.take_from_sender<ComplianceCap<TEST>>();
+    assert!(list.is_frozen<TEST>(ALICE));
+    list.unfreeze_address(&mut cap, ALICE, scenario.ctx());
+    assert!(!list.is_frozen<TEST>(ALICE));
+    teardown(scenario, list, cap);
+}
+
+#[test]
+fun migrate_carries_over_pending_pause() {
+    let (mut scenario, mut cap) = setup_deny_list(true);
+    let mut deny_list = scenario.take_shared<DenyList>();
+    coin::deny_list_v2_enable_global_pause(&mut deny_list, &mut cap, scenario.ctx());
+    test_scenario::return_shared(deny_list);
+
+    migrate(&mut scenario, cap, vector[]);
+    scenario.next_tx(ISSUER);
+
+    let list = scenario.take_shared<FreezeList>();
+    assert!(list.is_global_pause<TEST>());
+    let cap = scenario.take_from_sender<ComplianceCap<TEST>>();
+    teardown(scenario, list, cap);
+}
+
+#[test]
+fun migrate_carries_over_pending_unpause() {
+    let (mut scenario, mut cap) = setup_deny_list(true);
+    let mut deny_list = scenario.take_shared<DenyList>();
+    coin::deny_list_v2_enable_global_pause(&mut deny_list, &mut cap, scenario.ctx());
+    test_scenario::return_shared(deny_list);
+    scenario.next_epoch(ISSUER);
+
+    let mut deny_list = scenario.take_shared<DenyList>();
+    coin::deny_list_v2_disable_global_pause(&mut deny_list, &mut cap, scenario.ctx());
+    assert!(
+        coin::deny_list_v2_is_global_pause_enabled_current_epoch<TEST>(
+            &deny_list,
+            scenario.ctx(),
+        ),
+    );
+    test_scenario::return_shared(deny_list);
+
+    migrate(&mut scenario, cap, vector[]);
+    scenario.next_tx(ISSUER);
+
+    let list = scenario.take_shared<FreezeList>();
+    assert!(!list.is_global_pause<TEST>());
+    let cap = scenario.take_from_sender<ComplianceCap<TEST>>();
+    teardown(scenario, list, cap);
+}
+
+#[test]
+fun migrate_leaves_other_types_on_deny_list() {
+    let (mut scenario, cap) = setup_deny_list(false);
+    migrate(&mut scenario, cap, vector[]);
+    scenario.next_tx(ISSUER);
+
+    let mut deny_list = scenario.take_shared<DenyList>();
+    let mut other_cap = coin::new_deny_cap_v2<OTHER>(false, scenario.ctx());
+    coin::deny_list_v2_add(&mut deny_list, &mut other_cap, ALICE, scenario.ctx());
+    assert!(coin::deny_list_v2_contains_next_epoch<OTHER>(&deny_list, ALICE));
+    destroy(other_cap);
+    test_scenario::return_shared(deny_list);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = coin_regulation::ECoinTypeStateExists)]
+fun migrate_second_deny_cap_aborts() {
+    let (mut scenario, cap) = setup_deny_list(false);
+    migrate(&mut scenario, cap, vector[]);
+    scenario.next_tx(ISSUER);
+    let cap = coin::new_deny_cap_v2<TEST>(false, scenario.ctx());
+    migrate(&mut scenario, cap, vector[]);
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_regulation::ECoinTypeStateExists)]
+fun migrate_after_freeze_aborts() {
+    let (mut scenario, mut list, mut cap) = setup(false);
+    list.freeze_address(&mut cap, ALICE, scenario.ctx());
+    let mut deny_list = scenario.take_shared<DenyList>();
+    let deny_cap = coin::new_deny_cap_v2<TEST>(false, scenario.ctx());
+    let _cap = list.migrate_from_deny_list(&mut deny_list, deny_cap, vector[], scenario.ctx());
+    abort
+}
+
+/// Migrate `TEST` and return the deny list with a fresh `DenyCapV2<TEST>`.
+fun migrated_deny_list(): (Scenario, DenyList, DenyCapV2<TEST>) {
+    let (mut scenario, cap) = setup_deny_list(true);
+    migrate(&mut scenario, cap, vector[]);
+    scenario.next_tx(ISSUER);
+    let deny_list = scenario.take_shared<DenyList>();
+    let cap = coin::new_deny_cap_v2<TEST>(true, scenario.ctx());
+    (scenario, deny_list, cap)
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_add_aborts_after_migration() {
+    let (mut scenario, mut deny_list, mut cap) = migrated_deny_list();
+    coin::deny_list_v2_add(&mut deny_list, &mut cap, ALICE, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_remove_aborts_after_migration() {
+    let (mut scenario, mut deny_list, mut cap) = migrated_deny_list();
+    coin::deny_list_v2_remove(&mut deny_list, &mut cap, ALICE, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_contains_current_epoch_aborts_after_migration() {
+    let (mut scenario, deny_list, _cap) = migrated_deny_list();
+    coin::deny_list_v2_contains_current_epoch<TEST>(&deny_list, ALICE, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_contains_next_epoch_aborts_after_migration() {
+    let (_scenario, deny_list, _cap) = migrated_deny_list();
+    coin::deny_list_v2_contains_next_epoch<TEST>(&deny_list, ALICE);
+    abort
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_enable_global_pause_aborts_after_migration() {
+    let (mut scenario, mut deny_list, mut cap) = migrated_deny_list();
+    coin::deny_list_v2_enable_global_pause(&mut deny_list, &mut cap, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_disable_global_pause_aborts_after_migration() {
+    let (mut scenario, mut deny_list, mut cap) = migrated_deny_list();
+    coin::deny_list_v2_disable_global_pause(&mut deny_list, &mut cap, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_is_global_pause_enabled_current_epoch_aborts_after_migration() {
+    let (mut scenario, deny_list, _cap) = migrated_deny_list();
+    coin::deny_list_v2_is_global_pause_enabled_current_epoch<TEST>(&deny_list, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = coin::ECoinTypeMigrated)]
+fun legacy_is_global_pause_enabled_next_epoch_aborts_after_migration() {
+    let (_scenario, deny_list, _cap) = migrated_deny_list();
+    coin::deny_list_v2_is_global_pause_enabled_next_epoch<TEST>(&deny_list);
     abort
 }

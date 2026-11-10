@@ -39,6 +39,9 @@ const ENotEnough: u64 = 2;
 // const EGlobalPauseNotAllowed: vector<u8> =
 //    b"Kill switch was not allowed at the creation of the DenyCapV2";
 const EGlobalPauseNotAllowed: u64 = 3;
+#[error(code = 4)]
+const ECoinTypeMigrated: vector<u8> =
+    b"The coin type has migrated to coin_regulation and no longer uses the deny list.";
 
 /// A coin of type `T` worth `value`. Transferable and storable
 public struct Coin<phantom T> has key, store {
@@ -258,7 +261,11 @@ public fun create_currency<T: drop>(
 /// The `allow_global_pause` flag enables an additional API that will cause all addresses to
 /// be denied. Note however, that this doesn't affect per-address entries of the deny list and
 /// will not change the result of the "contains" APIs.
-#[deprecated(note = b"Use `coin_registry::new_currency_with_otw` with `make_regulated` instead")]
+#[
+    deprecated(
+        note = b"Use `coin_registry::new_currency_with_otw` with `coin_registry::make_compliance_regulated` instead",
+    ),
+]
 #[allow(deprecated_usage)]
 public fun create_regulated_currency_v2<T: drop>(
     witness: T,
@@ -345,7 +352,7 @@ public fun deny_list_v2_add<T>(
     addr: address,
     ctx: &mut TxContext,
 ) {
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_add(DENY_LIST_COIN_INDEX, ty, addr, ctx)
 }
 
@@ -358,7 +365,7 @@ public fun deny_list_v2_remove<T>(
     addr: address,
     ctx: &mut TxContext,
 ) {
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_remove(DENY_LIST_COIN_INDEX, ty, addr, ctx)
 }
 
@@ -369,7 +376,7 @@ public fun deny_list_v2_contains_current_epoch<T>(
     addr: address,
     ctx: &TxContext,
 ): bool {
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_contains_current_epoch(DENY_LIST_COIN_INDEX, ty, addr, ctx)
 }
 
@@ -377,7 +384,7 @@ public fun deny_list_v2_contains_current_epoch<T>(
 /// the next epoch will immediately be unable to use objects of this coin type as inputs. At the
 /// start of the next epoch, the address will be unable to receive objects of this coin type.
 public fun deny_list_v2_contains_next_epoch<T>(deny_list: &DenyList, addr: address): bool {
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_contains_next_epoch(DENY_LIST_COIN_INDEX, ty, addr)
 }
 
@@ -391,7 +398,7 @@ public fun deny_list_v2_enable_global_pause<T>(
     ctx: &mut TxContext,
 ) {
     assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_enable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
 }
 
@@ -405,7 +412,7 @@ public fun deny_list_v2_disable_global_pause<T>(
     ctx: &mut TxContext,
 ) {
     assert!(deny_cap.allow_global_pause, EGlobalPauseNotAllowed);
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_disable_global_pause(DENY_LIST_COIN_INDEX, ty, ctx)
 }
 
@@ -414,13 +421,13 @@ public fun deny_list_v2_is_global_pause_enabled_current_epoch<T>(
     deny_list: &DenyList,
     ctx: &TxContext,
 ): bool {
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_is_global_pause_enabled_current_epoch(DENY_LIST_COIN_INDEX, ty, ctx)
 }
 
 /// Check if the global pause is enabled for the given coin type in the next epoch.
 public fun deny_list_v2_is_global_pause_enabled_next_epoch<T>(deny_list: &DenyList): bool {
-    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    let ty = unmigrated_deny_list_v2_key<T>(deny_list);
     deny_list.v2_is_global_pause_enabled_next_epoch(DENY_LIST_COIN_INDEX, ty)
 }
 
@@ -532,6 +539,23 @@ public(package) fun allow_global_pause<T>(cap: &DenyCapV2<T>): bool {
     cap.allow_global_pause
 }
 
+public(package) fun destroy_deny_cap_v2<T>(cap: DenyCapV2<T>): (UID, bool) {
+    let DenyCapV2 { id, allow_global_pause } = cap;
+    (id, allow_global_pause)
+}
+
+/// Mark `T` as migrated, after which every `deny_list_v2_*` function aborts for `T`.
+public(package) fun deny_list_v2_mark_migrated<T>(deny_list: &mut DenyList) {
+    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    deny_list.v2_mark_migrated(DENY_LIST_COIN_INDEX, ty)
+}
+
+fun unmigrated_deny_list_v2_key<T>(deny_list: &DenyList): vector<u8> {
+    let ty = type_name::with_defining_ids<T>().into_string().into_bytes();
+    assert!(!deny_list.v2_is_migrated(DENY_LIST_COIN_INDEX, ty), ECoinTypeMigrated);
+    ty
+}
+
 public(package) fun new_coin_metadata<T>(
     decimals: u8,
     name: string::String,
@@ -628,7 +652,7 @@ public struct DenyCap<phantom T> has key, store {
 /// with the coin as input objects.
 #[
     deprecated(
-        note = b"For new coins, use `new_currency_with_otw` and use `make_regulated`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2` and then use migration functions in `coin_registry`",
+        note = b"For new coins, use `coin_registry::new_currency_with_otw` and `coin_registry::make_compliance_regulated`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2` and then `coin_registry::migrate_to_compliance_cap`",
     ),
 ]
 #[allow(deprecated_usage)]

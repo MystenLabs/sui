@@ -7,6 +7,7 @@ use sui::coin_registry;
 
 public struct REGULATED() has drop;
 
+#[allow(deprecated_usage)]
 fun init(witness: REGULATED, ctx: &mut TxContext) {
     let (mut init, mut treasury_cap) = coin_registry::new_currency_with_otw(
         witness,
