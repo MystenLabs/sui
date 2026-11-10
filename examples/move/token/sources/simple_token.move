@@ -5,9 +5,9 @@
 /// actions are allowed as long as the user is not on the denylist.
 module examples::simple_token {
     use examples::denylist_rule::Denylist;
-    use sui::coin::{Self, TreasuryCap};
+    use sui::coin::TreasuryCap;
+    use sui::coin_registry;
     use sui::token::{Self, TokenPolicy, TokenPolicyCap};
-    use sui::tx_context::sender;
 
     /// OTW and the type for the Token.
     public struct SIMPLE_TOKEN has drop {}
@@ -16,11 +16,13 @@ module examples::simple_token {
     // purposes; however half of what's happening here could be implemented as
     // a single / set of PTBs.
     fun init(otw: SIMPLE_TOKEN, ctx: &mut TxContext) {
-        let treasury_cap = create_currency(otw, ctx);
+        let (builder, treasury_cap) = create_currency(otw, ctx);
         let (mut policy, cap) = token::new_policy(&treasury_cap, ctx);
 
         set_rules(&mut policy, &cap, ctx);
 
+        let metadata_cap = builder.finalize(ctx);
+        transfer::public_transfer(metadata_cap, ctx.sender());
         transfer::public_transfer(treasury_cap, ctx.sender());
         transfer::public_transfer(cap, ctx.sender());
         token::share_policy(policy);
@@ -43,20 +45,19 @@ module examples::simple_token {
 
     /// Internal: not necessary, but moving this call to a separate function for
     /// better visibility of the Closed Loop setup in `init`.
-    #[allow(deprecated_usage)]
-    fun create_currency<T: drop>(otw: T, ctx: &mut TxContext): TreasuryCap<T> {
-        let (treasury_cap, metadata) = coin::create_currency(
+    fun create_currency<T: drop>(
+        otw: T,
+        ctx: &mut TxContext,
+    ): (coin_registry::CurrencyInitializer<T>, TreasuryCap<T>) {
+        coin_registry::new_currency_with_otw(
             otw,
-            6,
-            b"SMPL",
-            b"Simple Token",
-            b"Token that showcases denylist",
-            option::none(),
+            6, // Decimals
+            b"SMPL".to_string(),
+            b"Simple Token".to_string(),
+            b"Token that showcases denylist".to_string(),
+            b"".to_string(),
             ctx,
-        );
-
-        transfer::public_freeze_object(metadata);
-        treasury_cap
+        )
     }
 }
 

@@ -3,7 +3,7 @@
 
 module examples::testnet_soulbound_nft;
 
-use std::string;
+use std::string::String;
 use sui::event;
 use sui::url::{Self, Url};
 
@@ -15,12 +15,11 @@ use sui::url::{Self, Url};
 public struct TestnetSoulboundNFT has key {
     id: UID,
     /// Name for the token
-    name: string::String,
+    name: String,
     /// Description of the token
-    description: string::String,
+    description: String,
     /// URL for the token
     url: Url,
-    // TODO: allow custom attributes
 }
 
 // ===== Events =====
@@ -31,18 +30,18 @@ public struct NFTMinted has copy, drop {
     // The creator of the NFT
     creator: address,
     // The name of the NFT
-    name: string::String,
+    name: String,
 }
 
 // ===== Public view functions =====
 
 /// Get the NFT's `name`
-public fun name(nft: &TestnetSoulboundNFT): &string::String {
+public fun name(nft: &TestnetSoulboundNFT): &String {
     &nft.name
 }
 
 /// Get the NFT's `description`
-public fun description(nft: &TestnetSoulboundNFT): &string::String {
+public fun description(nft: &TestnetSoulboundNFT): &String {
     &nft.description
 }
 
@@ -64,8 +63,8 @@ public fun mint_to_sender(
     let sender = ctx.sender();
     let nft = TestnetSoulboundNFT {
         id: object::new(ctx),
-        name: string::utf8(name),
-        description: string::utf8(description),
+        name: name.to_string(),
+        description: description.to_string(),
         url: url::new_unsafe_from_bytes(url),
     };
 
@@ -91,7 +90,7 @@ public fun update_description(
     new_description: vector<u8>,
     _: &mut TxContext,
 ) {
-    nft.description = string::utf8(new_description)
+    nft.description = new_description.to_string()
 }
 
 /// Permanently delete `nft`
