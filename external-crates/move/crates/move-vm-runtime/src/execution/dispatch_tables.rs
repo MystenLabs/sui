@@ -669,7 +669,7 @@ impl VMDispatchTables {
         Ok(())
     }
 
-    /// The four sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
+    /// The five sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
     /// resolve through the cache.
     pub(crate) fn type_size_of(&self, ty: &Type, limits: &TypeLimits) -> PartialVMResult<TypeSize> {
         self.type_size_of_impl(ty, &mut limits.traversal())
@@ -708,7 +708,7 @@ impl VMDispatchTables {
     }
 
     /// The `value_depth` of a concrete type -- the single measure `Pack`/`PackVariant` need,
-    /// computed without the other three.
+    /// computed without the other four.
     pub(crate) fn value_depth_of(&self, ty: &Type, limits: &TypeLimits) -> PartialVMResult<u64> {
         self.value_depth_of_impl(ty, &mut limits.traversal())
     }
@@ -884,11 +884,11 @@ impl VMDispatchTables {
         )
     }
 
-    /// Check a type's predicted `value_depth` and `layout_size` against the configured limits
-    /// before any layout generation -- pure arithmetic over the descriptor formulas; nothing of
-    /// an oversized layout is ever built. The error codes mirror the legacy cursor's.
+    /// Check a type's predicted layout and materialization sizes before layout generation.
     fn check_layout_limits(&self, ty: &Type) -> PartialVMResult<()> {
         let size = self.type_size_of(ty, &self.type_limits)?;
+        self.type_limits
+            .check_type_nodes(size.materialized_type_size)?;
         if size.value_depth
             > safe_unwrap!(self.vm_config.runtime_limits_config.max_value_nest_depth)
         {

@@ -72,14 +72,18 @@ impl TypeLimits {
         self.max_type_nodes
     }
 
-    pub fn check_syntactic_limits(&self, type_size: u64, type_depth: u64) -> PartialVMResult<()> {
-        if type_depth > self.max_type_depth {
-            return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
-        }
+    pub fn check_type_nodes(&self, type_size: u64) -> PartialVMResult<()> {
         if type_size > self.max_type_nodes {
             return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
         }
         Ok(())
+    }
+
+    pub fn check_syntactic_limits(&self, type_size: u64, type_depth: u64) -> PartialVMResult<()> {
+        if type_depth > self.max_type_depth {
+            return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
+        }
+        self.check_type_nodes(type_size)
     }
 
     pub fn traversal(&self) -> TypeTraversalBudget {
