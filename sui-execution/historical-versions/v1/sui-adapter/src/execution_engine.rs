@@ -639,6 +639,9 @@ mod checked {
                                 "EndOfEpochTransactionKind::ForwardingAddressRegistryCreate should not exist in v1"
                             );
                         }
+                        EndOfEpochTransactionKind::FreezeListCreate => {
+                            unreachable!("EndOfEpochTransactionKind::FreezeListCreate is not supported by this execution version")
+                        }
                     }
                 }
                 unreachable!(

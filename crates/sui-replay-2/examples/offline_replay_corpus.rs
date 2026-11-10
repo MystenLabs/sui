@@ -487,6 +487,12 @@ fn format_withdrawal(withdrawal: &sui_types::transaction::FundsWithdrawalArg) ->
         WithdrawFrom::SenderAllowance { funder, allowance } => {
             format!("SenderAllowance({funder}, {allowance})")
         }
+        WithdrawFrom::FrozenAddress {
+            seized_from,
+            seize_auth,
+        } => {
+            format!("FrozenAddress({seized_from}, {seize_auth})")
+        }
     };
     let reservation = match &withdrawal.reservation {
         Reservation::MaxAmountU64(amount) => format!("MaxAmountU64({amount})"),

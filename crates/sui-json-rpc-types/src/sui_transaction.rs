@@ -630,6 +630,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
                                 SuiEndOfEpochTransactionKind::ForwardingAddressRegistryCreate
                             }
+                            EndOfEpochTransactionKind::FreezeListCreate => {
+                                SuiEndOfEpochTransactionKind::FreezeListCreate
+                            }
                         })
                         .collect(),
                 })
@@ -1810,6 +1813,7 @@ pub enum SuiEndOfEpochTransactionKind {
     AddressAliasStateCreate,
     WriteAccumulatorStorageCost,
     ForwardingAddressRegistryCreate,
+    FreezeListCreate,
 }
 
 #[serde_as]
@@ -2429,6 +2433,13 @@ impl SuiCallArg {
                     WithdrawFrom::SenderAllowance { funder, allowance } => {
                         SuiWithdrawFrom::SenderAllowance { funder, allowance }
                     }
+                    WithdrawFrom::FrozenAddress {
+                        seized_from,
+                        seize_auth,
+                    } => SuiWithdrawFrom::FrozenAddress {
+                        seized_from,
+                        seize_auth,
+                    },
                 },
             }),
         })
@@ -2530,6 +2541,11 @@ pub enum SuiWithdrawFrom {
     SenderAllowance {
         funder: SuiAddress,
         allowance: ObjectID,
+    },
+    #[serde(rename_all = "camelCase")]
+    FrozenAddress {
+        seized_from: SuiAddress,
+        seize_auth: ObjectID,
     },
 }
 

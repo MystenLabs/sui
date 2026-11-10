@@ -429,6 +429,14 @@ type BalanceWithdraw {
 	"""
 	reservation: WithdrawalReservation
 	"""
+	The seize authorization authorizing the withdrawal, if `withdrawFrom` is `FROZEN_ADDRESS`. Use `asTransactionObject` to see it as this transaction referenced it.
+	"""
+	seizeAuth: Address
+	"""
+	The frozen account whose funds are seized, if `withdrawFrom` is `FROZEN_ADDRESS`.
+	"""
+	seizedFrom: Address
+	"""
 	The type of the funds accumulator to withdraw from (e.g. `0x2::balance::Balance<0x2::sui::SUI>`).
 	"""
 	type: MoveType
@@ -1325,7 +1333,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction | AddressAliasStateCreateTransaction | WriteAccumulatorStorageCostTransaction | ForwardingAddressRegistryCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction | AddressAliasStateCreateTransaction | WriteAccumulatorStorageCostTransaction | ForwardingAddressRegistryCreateTransaction | FreezeListCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -1700,6 +1708,16 @@ type FeatureFlag {
 System transaction for creating the forwarding address registry.
 """
 type ForwardingAddressRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction for creating the coin regulation freeze list.
+"""
+type FreezeListCreateTransaction {
 	"""
 	A workaround to define an empty variant of a GraphQL union.
 	"""
@@ -4955,6 +4973,10 @@ enum WithdrawFrom {
 	The funds are withdrawn from the account of an allowance's funder, under an allowance granted to the transaction sender. See `BalanceWithdraw.funder` and `BalanceWithdraw.allowance`.
 	"""
 	SENDER_ALLOWANCE
+	"""
+	The funds are seized from the account of a frozen address, under a seize authorization owned by the transaction sender. See `BalanceWithdraw.seizedFrom` and `BalanceWithdraw.seizeAuth`.
+	"""
+	FROZEN_ADDRESS
 }
 
 type WithdrawMaxAmountU64 {

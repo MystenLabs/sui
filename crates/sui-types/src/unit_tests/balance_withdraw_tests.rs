@@ -15,9 +15,9 @@ use crate::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
         CallArg, FundsWithdrawalArg, GasData, InputObjectKind, InputObjects, ObjectArg,
-        ObjectReadResult, ProgrammableTransaction, SharedObjectMutability, TransactionData,
-        TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
-        TxValidityCheckContext, WithdrawalTypeArg,
+        ObjectReadResult, ProgrammableTransaction, Reservation, SharedObjectMutability,
+        TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
+        TransactionKind, TxValidityCheckContext, WithdrawFrom, WithdrawalTypeArg,
     },
 };
 
@@ -546,4 +546,63 @@ fn test_allowance_requires_feature_flag() {
             .contains("Allowance withdrawals are not enabled"),
         "{err}"
     );
+}
+
+fn frozen_address_withdrawal() -> FundsWithdrawalArg {
+    FundsWithdrawalArg {
+        reservation: Reservation::MaxAmountU64(100),
+        type_arg: WithdrawalTypeArg::Balance(GAS::type_tag()),
+        withdraw_from: WithdrawFrom::FrozenAddress {
+            seized_from: SuiAddress::random_for_testing_only(),
+            seize_auth: ObjectID::random(),
+        },
+    }
+}
+
+#[test]
+fn test_frozen_address_withdrawal_rejected() {
+    let withdrawal = frozen_address_withdrawal();
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.funds_withdrawal(withdrawal).unwrap();
+    let tx = TransactionData::new_programmable(
+        SuiAddress::random_for_testing_only(),
+        vec![random_object_ref()],
+        ptb.finish(),
+        1_000_000,
+        1000,
+    );
+
+    let err = tx
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &protocol_config(),
+        ))
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Frozen address withdrawals are not yet supported"),
+        "{err}"
+    );
+}
+
+#[test]
+fn test_frozen_address_withdrawal_round_trip() {
+    let withdrawal = frozen_address_withdrawal();
+    let WithdrawFrom::FrozenAddress { seized_from, .. } = withdrawal.withdraw_from else {
+        unreachable!()
+    };
+    assert_eq!(withdrawal.owner_for_withdrawal(&dummy_tx()), seized_from);
+
+    let arg = CallArg::FundsWithdrawal(withdrawal);
+    let bytes = bcs::to_bytes(&arg).unwrap();
+    assert_eq!(bcs::from_bytes::<CallArg>(&bytes).unwrap(), arg);
+}
+
+fn dummy_tx() -> TransactionData {
+    TransactionData::new_programmable(
+        SuiAddress::random_for_testing_only(),
+        vec![random_object_ref()],
+        ProgrammableTransactionBuilder::new().finish(),
+        1_000_000,
+        1000,
+    )
 }

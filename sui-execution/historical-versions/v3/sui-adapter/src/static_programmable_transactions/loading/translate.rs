@@ -184,6 +184,11 @@ fn input<Mode: ExecutionMode>(
                         should have been checked at signing"
                     );
                 }
+                P::WithdrawFrom::FrozenAddress { .. } => {
+                    unreachable!(
+                        "WithdrawFrom::FrozenAddress is not supported by this execution version"
+                    )
+                }
             };
             (
                 L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {

@@ -35,6 +35,12 @@ pub struct BalanceWithdraw {
 
     /// The allowance authorizing the withdrawal, if `withdrawFrom` is `SENDER_ALLOWANCE`. Use `asTransactionObject` to see it as this transaction referenced it.
     pub allowance: Option<Address>,
+
+    /// The seize authorization authorizing the withdrawal, if `withdrawFrom` is `FROZEN_ADDRESS`. Use `asTransactionObject` to see it as this transaction referenced it.
+    pub seize_auth: Option<Address>,
+
+    /// The frozen account whose funds are seized, if `withdrawFrom` is `FROZEN_ADDRESS`.
+    pub seized_from: Option<Address>,
 }
 
 /// Reservation details for a withdrawal.
@@ -57,6 +63,8 @@ pub enum WithdrawFrom {
     Sponsor,
     /// The funds are withdrawn from the account of an allowance's funder, under an allowance granted to the transaction sender. See `BalanceWithdraw.funder` and `BalanceWithdraw.allowance`.
     SenderAllowance,
+    /// The funds are seized from the account of a frozen address, under a seize authorization owned by the transaction sender. See `BalanceWithdraw.seizedFrom` and `BalanceWithdraw.seizeAuth`.
+    FrozenAddress,
 }
 
 impl BalanceWithdraw {
@@ -75,15 +83,33 @@ impl BalanceWithdraw {
             }
         });
 
-        let (withdraw_from, funder, allowance) = match withdraw_from {
-            NativeWithdrawFrom::Sender => (WithdrawFrom::Sender, None, None),
-            NativeWithdrawFrom::Sponsor => (WithdrawFrom::Sponsor, None, None),
+        let (withdraw_from, funder, allowance, seize_auth, seized_from) = match withdraw_from {
+            NativeWithdrawFrom::Sender => (WithdrawFrom::Sender, None, None, None, None),
+            NativeWithdrawFrom::Sponsor => (WithdrawFrom::Sponsor, None, None, None, None),
             NativeWithdrawFrom::SenderAllowance { funder, allowance } => (
                 WithdrawFrom::SenderAllowance,
                 Some(Address::with_address(scope.without_root_bound(), funder)),
                 Some(Address::with_address(
                     scope.without_root_bound(),
                     allowance.into(),
+                )),
+                None,
+                None,
+            ),
+            NativeWithdrawFrom::FrozenAddress {
+                seized_from,
+                seize_auth,
+            } => (
+                WithdrawFrom::FrozenAddress,
+                None,
+                None,
+                Some(Address::with_address(
+                    scope.without_root_bound(),
+                    seize_auth.into(),
+                )),
+                Some(Address::with_address(
+                    scope.without_root_bound(),
+                    seized_from,
                 )),
             ),
         };
@@ -108,6 +134,8 @@ impl BalanceWithdraw {
             withdraw_from: Some(withdraw_from),
             funder,
             allowance,
+            seize_auth,
+            seized_from,
         }
     }
 }
@@ -151,6 +179,8 @@ mod tests {
         assert!(matches!(withdraw.withdraw_from, Some(WithdrawFrom::Sender)));
         assert!(withdraw.funder.is_none());
         assert!(withdraw.allowance.is_none());
+        assert!(withdraw.seize_auth.is_none());
+        assert!(withdraw.seized_from.is_none());
 
         let type_tag = withdraw
             .type_
@@ -178,6 +208,34 @@ mod tests {
         assert_eq!(
             withdraw.allowance.map(|a| a.address),
             Some(allowance.into())
+        );
+    }
+
+    #[test]
+    fn test_from_native_frozen_address() {
+        let seized_from = NativeSuiAddress::random_for_testing_only();
+        let seize_auth = ObjectID::random();
+        let withdrawal = FundsWithdrawalArg {
+            reservation: NativeReservation::MaxAmountU64(42),
+            type_arg: NativeWithdrawalTypeArg::Balance(GAS::type_tag()),
+            withdraw_from: NativeWithdrawFrom::FrozenAddress {
+                seized_from,
+                seize_auth,
+            },
+        };
+
+        let withdraw = BalanceWithdraw::from_native(withdrawal, Scope::for_tests());
+
+        assert!(matches!(
+            withdraw.withdraw_from,
+            Some(WithdrawFrom::FrozenAddress)
+        ));
+        assert!(withdraw.funder.is_none());
+        assert_eq!(withdraw.seized_from.map(|a| a.address), Some(seized_from));
+        assert!(withdraw.allowance.is_none());
+        assert_eq!(
+            withdraw.seize_auth.map(|a| a.address),
+            Some(seize_auth.into())
         );
     }
 }
