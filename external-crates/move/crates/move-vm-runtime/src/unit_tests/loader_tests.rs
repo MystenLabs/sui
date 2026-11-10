@@ -954,6 +954,7 @@ fn test_term_formula_argument_order() {
     let arena = ArenaBuilder::new_bounded(&VMConfig::new_for_test(
         /* allow_unpublishable_code_execution */ false, None,
     ));
+    let key = |name: &str| VMPointer::from_ref(&*arena.alloc_box(key(name)).unwrap());
     let alloc = |ty| VMPointer::from_ref(&*arena.alloc_box(ty).unwrap());
     let apply = |name: &str, args: Vec<ArenaType>| {
         let args = arena.alloc_vec(args.into_iter().map(alloc)).unwrap();

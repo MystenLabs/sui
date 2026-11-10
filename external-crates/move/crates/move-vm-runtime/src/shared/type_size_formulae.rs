@@ -46,7 +46,7 @@ use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
     execution::dispatch_tables::{TypeCache, VirtualTableKey},
     jit::execution::ast::{ArenaType, Datatype},
-    shared::TypeLimits,
+    shared::{TypeLimits, vm_pointer::VMPointer},
 };
 use move_binary_format::{
     checked_as,
@@ -637,7 +637,7 @@ pub(crate) struct ArenaTypeSizeFormula {
     /// order). These are exactly the formulae [`evaluate`](Self::evaluate) must be handed; the
     /// dispatch tables' resolution work queue reads this list directly, so dependency
     /// discovery never touches a type.
-    keys: ArenaVec<VirtualTableKey>,
+    keys: ArenaVec<VMPointer<VirtualTableKey>>,
     /// The fields' (or term's) datatype applications, **linearized**: the application trees,
     /// flattened at JIT time into one sequence in dependency order -- an entry's arguments only
     /// reference the results of strictly earlier entries, so evaluation is one in-order pass
@@ -651,7 +651,7 @@ pub(crate) struct ArenaTypeSizeFormula {
 /// (heap-side builders, arena-allocated by [`finish`](Linearizer::finish) once emission is
 /// complete).
 struct Linearizer {
-    keys: Vec<VirtualTableKey>,
+    keys: Vec<VMPointer<VirtualTableKey>>,
     applications: Vec<ApplicationBuilder>,
 }
 
@@ -670,12 +670,12 @@ impl Linearizer {
     }
 
     /// The index of `key` in the deduplicated key list, appending it on first mention.
-    fn intern_key(&mut self, key: &VirtualTableKey) -> PartialVMResult<KeyIndex> {
+    fn intern_key(&mut self, key: &VMPointer<VirtualTableKey>) -> PartialVMResult<KeyIndex> {
         match self.keys.iter().position(|existing| existing == key) {
             Some(index) => checked_as!(index, u16),
             None => {
                 let index = checked_as!(self.keys.len(), u16)?;
-                self.keys.push(key.clone());
+                self.keys.push(key.ptr_clone());
                 Ok(index)
             }
         }
@@ -694,7 +694,7 @@ impl Linearizer {
         enum Item<'a> {
             Compile(&'a ArenaType),
             Assemble {
-                key: &'a VirtualTableKey,
+                key: &'a VMPointer<VirtualTableKey>,
                 argument_count: usize,
                 primitive_wrap_layers: u16,
             },
@@ -805,7 +805,7 @@ impl Linearizer {
     fn finish(
         self,
         arena: &ArenaBuilder,
-    ) -> PartialVMResult<(ArenaVec<VirtualTableKey>, ArenaVec<Application>)> {
+    ) -> PartialVMResult<(ArenaVec<VMPointer<VirtualTableKey>>, ArenaVec<Application>)> {
         let Linearizer { keys, applications } = self;
         let applications = applications
             .into_iter()
@@ -1136,8 +1136,8 @@ impl ArenaTypeSizeFormula {
     /// without ever walking an [`ArenaType`].
     ///
     /// Example: `[T, S, R]` for `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }`.
-    pub(crate) fn vtable_keys(&self) -> &[VirtualTableKey] {
-        &self.keys
+    pub(crate) fn vtable_keys(&self) -> impl Iterator<Item = &VirtualTableKey> {
+        self.keys.iter().map(VMPointer::to_ref)
     }
 
     /// Close this formula against a linkage: given the resolved formula of every
@@ -1205,7 +1205,7 @@ impl ArenaTypeSizeFormula {
                 .get(application.datatype as usize)
                 .ok_or_else(|| broken("out-of-bounds key index"))?;
             let formula = key_formulae
-                .get(key)
+                .get(key.to_ref())
                 .ok_or_else(|| broken("unresolved datatype dependency"))?;
             let applied = formula.substitute(&args)?;
             if let Some(depth) = application.field_depth {

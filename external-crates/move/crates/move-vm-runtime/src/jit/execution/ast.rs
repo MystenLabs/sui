@@ -161,7 +161,7 @@ pub(crate) struct Function {
     // Any value holding a `Function` needs to ensure it is correctly dropped.
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
-    pub name: VirtualTableKey,
+    pub name: VMPointer<VirtualTableKey>,
     pub locals_len: usize,
     pub jump_tables: ArenaVec<VariantJumpTable>,
 }
@@ -193,7 +193,7 @@ pub(crate) type VariantJumpTable = ArenaVec<CodeOffset>;
 //   that will be filled in at a later time before execution.
 pub(crate) enum CallType {
     Direct(VMPointer<Function>),
-    Virtual(VirtualTableKey),
+    Virtual(VMPointer<VirtualTableKey>),
 }
 
 // -----------------------------------------------
@@ -202,7 +202,7 @@ pub(crate) enum CallType {
 
 #[derive(Debug)]
 pub(crate) struct StructDef {
-    pub def_vtable_key: VirtualTableKey,
+    pub def_vtable_key: VMPointer<VirtualTableKey>,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
     pub fields: ArenaVec<VMPointer<ArenaType>>,
@@ -211,7 +211,7 @@ pub(crate) struct StructDef {
 
 #[derive(Debug)]
 pub(crate) struct EnumDef {
-    pub def_vtable_key: VirtualTableKey,
+    pub def_vtable_key: VMPointer<VirtualTableKey>,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
     #[allow(dead_code)]
@@ -243,7 +243,7 @@ pub(crate) struct FunctionInstantiation {
 pub(crate) struct StructInstantiation {
     // struct field count
     pub field_count: u16,
-    pub def_vtable_key: VirtualTableKey,
+    pub def_vtable_key: VMPointer<VirtualTableKey>,
     pub(crate) type_params: VMPointer<ArenaVec<SizedArenaType>>,
 }
 
@@ -251,14 +251,14 @@ pub(crate) struct StructInstantiation {
 #[derive(Debug)]
 pub(crate) struct FieldHandle {
     pub offset: usize,
-    pub owner: VirtualTableKey,
+    pub owner: VMPointer<VirtualTableKey>,
 }
 
 // A field instantiation. The offset is the only used information when operating on a field
 #[derive(Debug)]
 pub(crate) struct FieldInstantiation {
     pub offset: usize,
-    pub owner: VirtualTableKey,
+    pub owner: VMPointer<VirtualTableKey>,
 }
 
 #[derive(Debug)]
@@ -267,7 +267,7 @@ pub(crate) struct EnumInstantiation {
     #[allow(dead_code)]
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
-    pub def_vtable_key: VirtualTableKey,
+    pub def_vtable_key: VMPointer<VirtualTableKey>,
     pub type_params: VMPointer<ArenaVec<SizedArenaType>>,
 }
 
@@ -290,8 +290,8 @@ pub(crate) enum ArenaType {
     Address,
     Signer,
     Vector(VMPointer<ArenaType>),
-    Datatype(VirtualTableKey),
-    DatatypeInstantiation(VMPointer<(VirtualTableKey, ArenaVec<VMPointer<ArenaType>>)>),
+    Datatype(VMPointer<VirtualTableKey>),
+    DatatypeInstantiation(VMPointer<(VMPointer<VirtualTableKey>, ArenaVec<VMPointer<ArenaType>>)>),
     Reference(VMPointer<ArenaType>),
     MutableReference(VMPointer<ArenaType>),
     TyParam(u16),
@@ -497,7 +497,7 @@ pub(crate) enum Bytecode {
     ///
     /// The VTableKey must be resolved in the current package context to resolve it to a function
     /// that can be executed.
-    VirtualCall(VirtualTableKey),
+    VirtualCall(VMPointer<VirtualTableKey>),
     CallGeneric(VMPointer<FunctionInstantiation>),
     /// Create an instance of the type specified via `DatatypeHandleIndex` and push it on the stack.
     /// The values of the fields of the struct, in the order they appear in the struct declaration,
@@ -1019,14 +1019,14 @@ impl ArenaType {
             ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type()?)),
             ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type()?)),
             ArenaType::MutableReference(ty) => Type::MutableReference(Box::new(ty.to_type()?)),
-            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.to_ref().clone()),
             ArenaType::DatatypeInstantiation(def_inst) => {
                 let (def_idx, instantiation) = &**def_inst;
                 let inst = instantiation
                     .iter()
                     .map(|ty| ty.to_type())
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+                Type::DatatypeInstantiation(Box::new((def_idx.to_ref().clone(), inst)))
             }
         })
     }
@@ -1257,14 +1257,14 @@ impl ArenaType {
             ArenaType::MutableReference(ty) => {
                 Type::MutableReference(Box::new(ty.subst_unchecked(ty_args)?))
             }
-            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.to_ref().clone()),
             ArenaType::DatatypeInstantiation(def_inst) => {
                 let (def_idx, instantiation) = &**def_inst;
                 let inst = instantiation
                     .iter()
                     .map(|ty| ty.subst_unchecked(ty_args))
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+                Type::DatatypeInstantiation(Box::new((def_idx.to_ref().clone(), inst)))
             }
         })
     }
@@ -1499,10 +1499,10 @@ impl std::fmt::Debug for ArenaType {
             ArenaType::Address => write!(f, "address"),
             ArenaType::Signer => write!(f, "signer"),
             ArenaType::Vector(inner) => write!(f, "vector<{:?}>", inner.to_ref()),
-            ArenaType::Datatype(key) => write!(f, "{:?}", key),
+            ArenaType::Datatype(key) => write!(f, "{:?}", key.to_ref()),
             ArenaType::DatatypeInstantiation(inst) => {
                 let (key, types) = inst.to_ref();
-                write!(f, "{:?}<", key)?;
+                write!(f, "{:?}<", key.to_ref())?;
                 let types = types
                     .iter()
                     .map(|x| format!("{:?}", x) + ",")
