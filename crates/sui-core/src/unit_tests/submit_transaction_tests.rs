@@ -1691,9 +1691,13 @@ async fn test_pool_mode_reports_owned_object_conflict_per_transaction() {
                 .await
         }
     });
-    while metrics.owned_object_conflicts.get() < 1 {
-        tokio::task::yield_now().await;
-    }
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while metrics.owned_object_conflicts.get() < 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the second transaction was never refused on the shared gas object");
 
     let (taken, ack, _) = pool.take(10, usize::MAX);
     assert_eq!(taken.len(), 1);

@@ -128,7 +128,6 @@ impl<E: AdmissionQueueEntry> InsertOutcome<E> {
         }
     }
 
-    /// Whether the entry was admitted to the queue, as opposed to being refused.
     pub fn was_inserted(&self) -> bool {
         matches!(self.outcome, Some(Outcome::Inserted { .. }))
     }
@@ -262,6 +261,7 @@ pub struct AdmissionQueueMetrics {
     pub rejections: IntCounter,
     pub duplicate_inserts: IntCounter,
     pub owned_object_conflicts: IntCounter,
+    pub owned_object_replacements: IntCounter,
 
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
@@ -320,6 +320,12 @@ impl AdmissionQueueMetrics {
             owned_object_conflicts: register_int_counter_with_registry!(
                 "admission_queue_owned_object_conflicts",
                 "Transactions refused at admission because an owned gas object they consume is already pending. Tallied as spam for DoS protection.",
+                registry,
+            )
+            .unwrap(),
+            owned_object_replacements: register_int_counter_with_registry!(
+                "admission_queue_owned_object_replacements",
+                "Queued entries removed because a higher-priced transaction consumes one of their owned gas objects",
                 registry,
             )
             .unwrap(),
@@ -615,9 +621,9 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         for (entry, _) in &removed {
             self.remove_keys(entry);
         }
-        if !removed.is_empty() {
-            self.metrics.evictions.inc();
-        }
+        self.metrics
+            .owned_object_replacements
+            .inc_by(removed.len() as u64);
         removed
     }
 
@@ -1379,7 +1385,7 @@ mod tests {
 
         let resubmit = MockEntry {
             gas_price: 100,
-            key: key.clone(),
+            key,
             owned: keys_of(&[gas]),
             outcome: Arc::new(Mutex::new(None)),
         };
@@ -1388,16 +1394,34 @@ mod tests {
             SuiErrorKind::OwnedObjectConflict { .. }
         ));
         assert_eq!(q.len(), 1);
+    }
 
-        let bump = MockEntry {
-            gas_price: 200,
-            key,
-            owned: keys_of(&[gas]),
-            outcome: Arc::new(Mutex::new(None)),
-        };
-        q.insert(bump).unwrap();
+    #[test]
+    fn multi_key_newcomer_must_outbid_every_holder() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics.clone());
+        let gas_a = owned_ref(1, 6);
+        let gas_b = owned_ref(2, 6);
+        let (low_holder, low_outcome) = mock_entry(100, vec![gas_a]);
+        let (high_holder, high_outcome) = mock_entry(300, vec![gas_b]);
+        assert!(q.insert(low_holder).unwrap());
+        assert!(q.insert(high_holder).unwrap());
+
+        let (between, _) = mock_entry(200, vec![gas_a, gas_b]);
+        assert!(matches!(
+            q.insert(between).unwrap_err().as_inner(),
+            SuiErrorKind::OwnedObjectConflict { object_id } if *object_id == gas_b.0
+        ));
+        assert_eq!(q.len(), 2);
+        assert_eq!(*low_outcome.lock().unwrap(), None);
+
+        let (above, _) = mock_entry(400, vec![gas_a, gas_b]);
+        assert!(q.insert(above).unwrap());
         assert_eq!(q.len(), 1);
-        assert_eq!(q.pop_batch(10).first().map(|e| e.gas_price), Some(200));
+        assert_eq!(*low_outcome.lock().unwrap(), Some("replaced"));
+        assert_eq!(*high_outcome.lock().unwrap(), Some("replaced"));
+        assert_eq!(metrics.owned_object_replacements.get(), 2);
+        assert_eq!(q.pop_batch(10).first().map(|e| e.gas_price), Some(400));
     }
 
     #[test]

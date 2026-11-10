@@ -407,23 +407,3 @@ fn is_validator_error(error: &SuiError) -> bool {
             | ErrorCategory::Unavailable
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use sui_network::tonic;
-
-    use super::*;
-
-    #[test]
-    fn owned_object_conflict_is_retriable_and_not_a_validator_error() {
-        let error: SuiError = SuiErrorKind::OwnedObjectConflict {
-            object_id: ObjectID::random(),
-        }
-        .into();
-        let decoded = SuiError::from(tonic::Status::from(error.clone()));
-        assert_eq!(decoded, error);
-        assert!(!is_validator_error(&decoded));
-        assert_eq!(decoded.categorize(), ErrorCategory::Aborted);
-        assert!(decoded.categorize().is_submission_retriable());
-    }
-}

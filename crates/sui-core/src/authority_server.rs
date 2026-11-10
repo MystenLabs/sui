@@ -1526,9 +1526,11 @@ impl ValidatorService {
                     }
                     // Another queued transaction holds an owned gas object of this group. Report
                     // it per-tx, like a duplicate, so it counts toward the request's spam weight
-                    // and does not fail the other groups.
+                    // and does not fail the other groups. The group is not queued, so its digests
+                    // are released rather than recorded as recently submitted.
                     Err(err) if Self::is_owned_object_conflict(&err) => {
-                        for (idx, _) in txns_meta {
+                        for (idx, tx_digest) in txns_meta {
+                            inflight_guard.release(tx_digest);
                             results[idx] = Some(SubmitTxResult::Rejected { error: err.clone() });
                         }
                     }
@@ -1774,6 +1776,17 @@ impl InflightTransactionsGuard {
 
         self.acquired.insert(digest);
         AcquireOutcome::Acquired
+    }
+
+    /// Releases a digest that was not queued, so a resubmission is handled afresh instead of
+    /// being suppressed as recently submitted.
+    fn release(&mut self, digest: TransactionDigest) {
+        if !self.acquired.remove(&digest) {
+            return;
+        }
+        let mut set = self.inflight.lock();
+        set.remove(&digest);
+        self.metrics.inflight_transactions.set(set.len() as i64);
     }
 
     fn recently_processed_outcome(&self, digest: TransactionDigest) -> Option<AcquireOutcome> {
@@ -2406,6 +2419,29 @@ mod inflight_guard_tests {
         assert!(matches!(
             g1.try_acquire(digest),
             AcquireOutcome::AlreadyAcquiredByThisRequest
+        ));
+    }
+
+    #[test]
+    fn released_digest_is_not_recorded_as_recently_submitted() {
+        let inflight = Arc::new(Mutex::new(HashSet::new()));
+        let cache = ValidatorService::new_recently_submitted_cache(Duration::from_secs(10));
+        let metrics = Arc::new(ValidatorServiceMetrics::new(&Registry::new()));
+        let digest = TransactionDigest::random();
+
+        {
+            let mut g = make_guard(inflight.clone(), cache.clone(), metrics.clone());
+            assert!(matches!(g.try_acquire(digest), AcquireOutcome::Acquired));
+            g.release(digest);
+            assert_eq!(inflight.lock().len(), 0);
+            assert_eq!(metrics.inflight_transactions.get(), 0);
+        }
+        cache.run_pending_tasks();
+
+        let mut g_after = make_guard(inflight.clone(), cache.clone(), metrics.clone());
+        assert!(matches!(
+            g_after.try_acquire(digest),
+            AcquireOutcome::Acquired
         ));
     }
 
