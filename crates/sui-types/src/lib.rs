@@ -168,6 +168,7 @@ pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
+    SUI_FREEZE_LIST_OBJECT_ID,
 ];
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {

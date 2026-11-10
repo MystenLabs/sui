@@ -1428,6 +1428,11 @@ struct FeatureFlags {
     // If true, create the freeze list object in the change epoch transaction.
     #[serde(skip_serializing_if = "is_false")]
     create_freeze_list: bool,
+
+    // If true, sequence the freeze list as an implicitly read system object and allow it as a
+    // shared input.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_regulation: bool,
 }
 
 fn is_false(b: &bool) -> bool {
