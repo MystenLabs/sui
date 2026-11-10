@@ -1897,6 +1897,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::time::Duration;
 
     use fastcrypto::traits::KeyPair;
     use rand::{SeedableRng, rngs::StdRng};
@@ -1905,7 +1906,8 @@ mod tests {
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
     use super::{
-        AuthorityStorePruningConfig, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
+        AuthorityStorePruningConfig, ConsensusTransactionPoolConfig, ExecutionTimeObserverConfig,
+        Genesis, StateArchiveConfig,
     };
     use crate::NodeConfig;
 
@@ -1966,9 +1968,6 @@ mod tests {
 
     #[test]
     fn max_queue_age_defaults_and_disable() {
-        use super::ConsensusTransactionPoolConfig;
-        use std::time::Duration;
-
         let default = ConsensusTransactionPoolConfig::default();
         assert_eq!(default.max_queue_age(), Some(Duration::from_secs(60)));
 
@@ -1984,6 +1983,15 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(disabled.max_queue_age(), None);
+
+        let parsed: ConsensusTransactionPoolConfig =
+            serde_yaml::from_str("max-queue-age-secs: 0").unwrap();
+        assert_eq!(parsed.max_queue_age(), None);
+        let parsed: ConsensusTransactionPoolConfig =
+            serde_yaml::from_str("max-queue-age-secs: 5").unwrap();
+        assert_eq!(parsed.max_queue_age(), Some(Duration::from_secs(5)));
+        let omitted: ConsensusTransactionPoolConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(omitted.max_queue_age(), Some(Duration::from_secs(60)));
     }
 
     #[test]

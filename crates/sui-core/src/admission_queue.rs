@@ -53,10 +53,6 @@ pub trait AdmissionQueueEntry {
     fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey>;
     fn notify_evicted(self, min_gas_price: u64);
     fn notify_rejected(self, min_gas_price: u64);
-    /// When the entry was admitted, used to drop entries that outlive their time to live.
-    fn enqueue_time(&self) -> Instant;
-    /// The entry waited past its time to live and was dropped; the submitter should retry.
-    fn notify_expired(self, retry_after_secs: u64);
 }
 
 /// Outcome of [`PriorityAdmissionQueue::try_insert`]. Any displaced entry is
@@ -155,18 +151,6 @@ impl AdmissionQueueEntry for QueueEntry {
     fn notify_rejected(self, _min_gas_price: u64) {
         // Nothing to do here in push mode. The rejected caller receives the
         // outbid error via the insert result instead.
-    }
-
-    fn enqueue_time(&self) -> Instant {
-        self.enqueue_time
-    }
-
-    fn notify_expired(self, retry_after_secs: u64) {
-        let _ = self
-            .position_sender
-            .send(Err(tonic::Status::from(SuiError::from(
-                SuiErrorKind::ValidatorOverloadedRetryAfter { retry_after_secs },
-            ))));
     }
 }
 
@@ -528,30 +512,29 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         (included, excluded)
     }
 
-    /// Drops queued entries admitted more than `ttl` before `now`, returning them
-    /// for the caller to notify. A backstop for entries that sit far longer than a
-    /// client waits. Within a price level entries are age-ordered (oldest at the
-    /// front), so the expired ones form a prefix: this pops that prefix and stops at
-    /// the first fresh entry, so a level with no expired entries costs one comparison.
-    /// Runs on every block proposal.
-    pub fn evict_expired(&mut self, now: Instant, ttl: Duration) -> Vec<E> {
-        let mut expired = Vec::new();
+    /// Pops, from the front of each price level, the entries for which `pred` holds,
+    /// stopping each level at the first entry for which it does not. Within a level
+    /// entries are ordered by admission time, so a predicate on age pops the aged prefix
+    /// and a level with no match costs one call.
+    pub fn pop_front_while(&mut self, mut pred: impl FnMut(&mut E) -> bool) -> Vec<E> {
+        let mut popped = Vec::new();
         for deque in self.map.values_mut() {
-            while deque
-                .front()
-                .is_some_and(|entry| now.saturating_duration_since(entry.enqueue_time()) >= ttl)
+            while let Some(front) = deque.front_mut()
+                && pred(front)
             {
-                expired.push(deque.pop_front().expect("front was just observed"));
+                popped.push(deque.pop_front().expect("front was just observed"));
             }
         }
-        self.total_len -= expired.len();
-        for entry in &expired {
+        if popped.is_empty() {
+            return popped;
+        }
+        self.total_len -= popped.len();
+        for entry in &popped {
             self.remove_keys(entry);
         }
         self.map.retain(|_, deque| !deque.is_empty());
-        self.metrics.expired.inc_by(expired.len() as u64);
         self.metrics.queue_depth.set(self.total_len as i64);
-        expired
+        popped
     }
 
     pub fn is_empty(&self) -> bool {
@@ -997,69 +980,80 @@ mod tests {
         )
     }
 
+    fn expired_at(now: Instant, ttl: Duration) -> impl FnMut(&mut QueueEntry) -> bool {
+        move |entry| now.saturating_duration_since(entry.enqueue_time) >= ttl
+    }
+
     #[test]
-    fn evict_expired_drops_entries_past_ttl() {
+    fn pop_front_while_drops_aged_entries_and_their_keys() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics.clone());
-        let (e1, mut rx1) = make_test_entry(100);
-        let (e2, _rx2) = make_test_entry(200);
+        let now = Instant::now();
+        let (mut e1, _rx1) = entry_at(100, now);
+        e1.transactions = vec![ConsensusTransaction::new_end_of_publish(
+            sui_types::base_types::AuthorityName::ZERO,
+        )];
+        let (e2, _rx2) = entry_at(200, now);
         q.insert(e1).unwrap();
         q.insert(e2).unwrap();
 
         let ttl = Duration::from_secs(60);
-        let expired = q.evict_expired(Instant::now() + Duration::from_secs(120), ttl);
-        assert_eq!(expired.len(), 2);
+        let popped = q.pop_front_while(expired_at(now + Duration::from_secs(120), ttl));
+        assert_eq!(popped.len(), 2);
         assert_eq!(q.len(), 0);
-        assert_eq!(metrics.expired.get(), 2);
-
-        for entry in expired {
-            entry.notify_expired(ttl.as_secs());
-        }
-        assert!(matches!(rx1.try_recv(), Ok(Err(_))));
+        assert_eq!(metrics.queue_depth.get(), 0);
+        assert!(q.queued_keys.is_empty());
+        assert!(q.map.is_empty());
     }
 
     #[test]
-    fn evict_expired_keeps_fresh_entries() {
+    fn pop_front_while_keeps_fresh_entries() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
-        q.insert(make_test_entry(100).0).unwrap();
-        q.insert(make_test_entry(200).0).unwrap();
+        let now = Instant::now();
+        q.insert(entry_at(100, now).0).unwrap();
+        q.insert(entry_at(200, now).0).unwrap();
 
-        let expired = q.evict_expired(Instant::now(), Duration::from_secs(60));
-        assert!(expired.is_empty());
+        let popped = q.pop_front_while(expired_at(now, Duration::from_secs(60)));
+        assert!(popped.is_empty());
         assert_eq!(q.len(), 2);
     }
 
     #[test]
-    fn evict_expired_drops_only_entries_past_ttl() {
+    fn pop_front_while_drops_only_aged_entries_across_levels() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
         let now = Instant::now();
-        let (old, _old_rx) = entry_at(100, now);
-        let (fresh, _fresh_rx) = entry_at(200, now + Duration::from_secs(120));
-        q.insert(old).unwrap();
-        q.insert(fresh).unwrap();
+        q.insert(entry_at(100, now).0).unwrap();
+        q.insert(entry_at(200, now + Duration::from_secs(120)).0)
+            .unwrap();
 
-        let expired = q.evict_expired(now + Duration::from_secs(60), Duration::from_secs(60));
-        assert_eq!(expired.len(), 1);
-        assert_eq!(expired[0].gas_price(), 100);
+        let popped = q.pop_front_while(expired_at(
+            now + Duration::from_secs(60),
+            Duration::from_secs(60),
+        ));
+        assert_eq!(popped.len(), 1);
+        assert_eq!(popped[0].gas_price(), 100);
         assert_eq!(q.len(), 1);
     }
 
     #[test]
-    fn evict_expired_stops_at_first_fresh_entry_in_a_level() {
+    fn pop_front_while_stops_at_first_fresh_entry_in_a_level() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
         let now = Instant::now();
-        // Same price level, oldest first: an expired entry ahead of a fresh one.
-        let (old, _old_rx) = entry_at(100, now);
-        let (fresh, _fresh_rx) = entry_at(100, now + Duration::from_secs(120));
-        q.insert(old).unwrap();
-        q.insert(fresh).unwrap();
+        let (fresh_behind_old, _) = entry_at(100, now + Duration::from_secs(120));
+        let (old_behind_fresh, _) = entry_at(100, now);
+        q.insert(entry_at(100, now).0).unwrap();
+        q.insert(fresh_behind_old).unwrap();
+        q.insert(old_behind_fresh).unwrap();
 
-        let expired = q.evict_expired(now + Duration::from_secs(60), Duration::from_secs(60));
-        assert_eq!(expired.len(), 1);
-        assert_eq!(q.len(), 1);
+        let popped = q.pop_front_while(expired_at(
+            now + Duration::from_secs(60),
+            Duration::from_secs(60),
+        ));
+        assert_eq!(popped.len(), 1);
+        assert_eq!(q.len(), 2);
     }
 
     fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {

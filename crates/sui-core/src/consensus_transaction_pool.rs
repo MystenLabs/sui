@@ -147,6 +147,10 @@ impl PendingAck {
     fn is_abandoned_system(&self) -> bool {
         matches!(&self.ack, Some(EntryAck::SystemOrPing(sender)) if sender.is_closed())
     }
+
+    fn is_abandoned_user(&self) -> bool {
+        matches!(&self.ack, Some(EntryAck::User(sender)) if sender.is_closed())
+    }
 }
 
 impl Drop for PendingAck {
@@ -274,20 +278,6 @@ impl AdmissionQueueEntry for PoolEntry {
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price }
                 .into(),
         );
-    }
-
-    fn enqueue_time(&self) -> Instant {
-        self.ack.created
-    }
-
-    fn notify_expired(self, retry_after_secs: u64) {
-        self.metrics.pool_depth.with_label_values(&["user"]).dec();
-        self.metrics
-            .pool_bytes
-            .with_label_values(&["user"])
-            .sub(self.total_bytes as i64);
-        self.ack
-            .resolve_error(SuiErrorKind::ValidatorOverloadedRetryAfter { retry_after_secs }.into());
     }
 }
 
@@ -832,6 +822,48 @@ impl ConsensusTransactionPool {
         }
     }
 
+    /// Resolves a user entry the sweep removed. An entry already committed elsewhere is
+    /// reported as processed rather than expired, so the submitter does not resubmit a
+    /// final transaction.
+    fn resolve_swept_user_entry(&self, mut entry: PoolEntry) {
+        self.decrement_lane_metrics("user", &entry);
+        if let Some(method) = all_processed(&mut entry.processed) {
+            self.resolve_already_processed(entry, "sweep", method);
+        } else if entry.ack.is_abandoned_user() {
+            self.drop_abandoned_user_entry(entry);
+        } else {
+            self.metrics.expired.inc();
+            entry.ack.resolve_error(
+                SuiErrorKind::ValidatorOverloadedRetryAfter {
+                    retry_after_secs: 1,
+                }
+                .into(),
+            );
+        }
+    }
+
+    fn resolve_already_processed(&self, entry: PoolEntry, stage: &str, method: ProcessedMethod) {
+        self.metrics
+            .pool_already_processed
+            .with_label_values(&[stage, method.metric_label()])
+            .inc();
+        let error = processing_error(
+            entry.processed.iter().map(|watch| watch.consensus.key()),
+            method,
+        );
+        entry.ack.resolve_error(error);
+    }
+
+    fn drop_abandoned_user_entry(&self, entry: PoolEntry) {
+        self.metrics
+            .pool_abandoned
+            .with_label_values(&["user"])
+            .inc();
+        entry
+            .ack
+            .drop_deliberately("submitter stopped waiting before proposal");
+    }
+
     fn decrement_lane_metrics(&self, lane: &str, entry: &PoolEntry) {
         self.metrics.pool_depth.with_label_values(&[lane]).dec();
         self.metrics
@@ -1159,13 +1191,17 @@ impl TransactionPool for ConsensusTransactionPool {
 
         let now = Instant::now();
         let mut excluded = Vec::new();
-        let mut expired_user = Vec::new();
-        // The time-to-live backstop runs on every proposal, independent of whether user
-        // transactions are drained this round. A saturated system lane leaves limit_reached
-        // non-empty and skips the drain below, but that overload is exactly when aged
-        // entries must still be shed, so expiry is not gated on it.
-        if let (Some(ttl), UserLane::Open(user)) = (max_queue_age, &mut pool.user) {
-            expired_user = user.evict_expired(now, ttl);
+        let mut swept_user = Vec::new();
+        // The sweep runs on every proposal, independent of whether user transactions are
+        // drained this round. A saturated system lane leaves limit_reached non-empty and
+        // skips the drain below, but that overload is exactly when aged entries must still
+        // be shed, so the sweep is not gated on it.
+        if let UserLane::Open(user) = &mut pool.user {
+            swept_user = user.pop_front_while(|entry| {
+                entry.ack.is_abandoned_user()
+                    || max_queue_age
+                        .is_some_and(|ttl| now.saturating_duration_since(entry.ack.created) >= ttl)
+            });
         }
         if !user_take_disabled
             && matches!(limit_reached, LimitReached::AllTransactionsIncluded)
@@ -1181,6 +1217,9 @@ impl TransactionPool for ConsensusTransactionPool {
             };
             let popped;
             (popped, excluded) = user.pop_batch_while(|entry| {
+                if entry.ack.is_abandoned_user() {
+                    return PopAction::Exclude;
+                }
                 // An already-processed entry is excluded without consuming block budget.
                 // Checked before the staggered hold, so a copy committed elsewhere
                 // resolves a held entry immediately instead of after its delay.
@@ -1245,11 +1284,8 @@ impl TransactionPool for ConsensusTransactionPool {
 
         // Resolve flushed/processed items outside the mutex.
         self.resolve_flushed_user_entries(flushed);
-        if let Some(ttl) = max_queue_age {
-            let retry_after_secs = ttl.as_secs();
-            for entry in expired_user {
-                entry.notify_expired(retry_after_secs);
-            }
+        for entry in swept_user {
+            self.resolve_swept_user_entry(entry);
         }
         for entry in abandoned {
             self.metrics
@@ -1277,17 +1313,11 @@ impl TransactionPool for ConsensusTransactionPool {
                 entry.ack.resolve_error(error);
                 continue;
             }
-            let method = all_processed(&mut entry.processed)
-                .expect("excluded entries are already processed");
-            self.metrics
-                .pool_already_processed
-                .with_label_values(&["proposal", method.metric_label()])
-                .inc();
-            let error = processing_error(
-                entry.processed.iter().map(|watch| watch.consensus.key()),
-                method,
-            );
-            entry.ack.resolve_error(error);
+            if let Some(method) = all_processed(&mut entry.processed) {
+                self.resolve_already_processed(entry, "proposal", method);
+            } else {
+                self.drop_abandoned_user_entry(entry);
+            }
         }
 
         self.metrics
@@ -1870,11 +1900,14 @@ mod tests {
         let block_bytes = u64::try_from(serialized_len * 2).unwrap();
         let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
         let epoch = pool.epoch();
-        for gas_price in [10, 20, 30] {
-            let (_receiver, _) = pool
-                .try_insert(epoch, gas_price, vec![transaction()])
-                .unwrap();
-        }
+        let _receivers: Vec<_> = [10, 20, 30]
+            .into_iter()
+            .map(|gas_price| {
+                pool.try_insert(epoch, gas_price, vec![transaction()])
+                    .unwrap()
+                    .0
+            })
+            .collect();
 
         let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
         assert_eq!(transactions.len(), 2);
@@ -1927,8 +1960,140 @@ mod tests {
         assert_eq!(pool.queue_depth("user"), 0);
         assert!(matches!(
             user_receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 1
+            }
+        ));
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn expiry_releases_bytes_and_dedup_keys() {
+        let ttl = Duration::from_secs(1);
+        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let epoch = pool.epoch();
+        let user_tx = user_transaction(&state);
+
+        let (receiver, newly_inserted) = pool.try_insert(epoch, 10, vec![user_tx.clone()]).unwrap();
+        assert!(newly_inserted);
+        assert!(pool.metrics.pool_bytes.with_label_values(&["user"]).get() > 0);
+
+        tokio::time::sleep(ttl + Duration::from_secs(1)).await;
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert!(transactions.is_empty());
+        drop(ack);
+
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(
+            pool.metrics.pool_bytes.with_label_values(&["user"]).get(),
+            0
+        );
+        assert_eq!(pool.metrics.expired.get(), 1);
+        assert!(matches!(
+            receiver.await.unwrap().unwrap_err().as_inner(),
             SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
         ));
+
+        let (_receiver, newly_inserted) = pool.try_insert(epoch, 10, vec![user_tx]).unwrap();
+        assert!(newly_inserted);
+        assert_eq!(pool.metrics.duplicate_inserts.get(), 0);
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn expiry_reports_already_processed_entries_as_processing() {
+        let ttl = Duration::from_secs(1);
+        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let epoch = pool.epoch();
+        let processed = user_transaction(&state);
+        let (receiver, _) = pool.try_insert(epoch, 10, vec![processed.clone()]).unwrap();
+
+        state
+            .epoch_store_for_testing()
+            .process_notifications(std::iter::once(&consensus_key(&processed)));
+        tokio::time::sleep(ttl + Duration::from_secs(1)).await;
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert!(transactions.is_empty());
+        drop(ack);
+
+        assert_eq!(
+            pool.already_processed_count("sweep", "consensus_message"),
+            1
+        );
+        assert_eq!(pool.metrics.expired.get(), 0);
+        assert!(matches!(
+            receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::TransactionProcessing { .. }
+        ));
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn requeued_entry_keeps_its_age() {
+        let ttl = Duration::from_secs(2);
+        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let epoch = pool.epoch();
+        let (receiver, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction(&state)])
+            .unwrap();
+
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 1);
+
+        tokio::time::sleep(ttl + Duration::from_secs(1)).await;
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert!(transactions.is_empty());
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert!(matches!(
+            receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+        ));
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn abandoned_user_entries_are_dropped_by_sweep_and_drain() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+
+        // The abandoned entry at the front of its level is removed by the sweep; the one
+        // behind a live entry is removed by the drain.
+        let (abandoned_front, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction(&state)])
+            .unwrap();
+        let (live, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction(&state)])
+            .unwrap();
+        let (abandoned_behind, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction(&state)])
+            .unwrap();
+        drop(abandoned_front);
+        drop(abandoned_behind);
+
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        ack(block(1));
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(pool.abandoned_count("user"), 2);
+        assert_eq!(live.await.unwrap().unwrap().len(), 1);
+
+        // With a saturated system lane the drain is skipped, and the sweep alone removes
+        // an abandoned entry.
+        let (abandoned, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction(&state)])
+            .unwrap();
+        drop(abandoned);
+        let _s1 = pool.submit(epoch, &[transaction()]).unwrap();
+        let _s2 = pool.submit(epoch, &[transaction()]).unwrap();
+        let (transactions, ack, limit) = pool.take(1, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(limit, LimitReached::MaxNumOfTransactions);
+        ack(block(2));
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(pool.abandoned_count("user"), 3);
         pool.close();
     }
 
