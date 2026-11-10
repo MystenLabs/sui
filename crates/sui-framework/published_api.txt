@@ -2167,7 +2167,97 @@ create
 FreezeList
 	public struct
 	0x2::coin_regulation
+ComplianceCap
+	public struct
+	0x2::coin_regulation
+SeizeAuth
+	public struct
+	0x2::coin_regulation
+CoinTypeKey
+	public struct
+	0x2::coin_regulation
+CoinTypeState
+	public struct
+	0x2::coin_regulation
+FrozenAddressKey
+	public struct
+	0x2::coin_regulation
+FrozenAddressState
+	public struct
+	0x2::coin_regulation
+AddressFrozen
+	public struct
+	0x2::coin_regulation
+AddressUnfrozen
+	public struct
+	0x2::coin_regulation
+AddressPermanentlyFrozen
+	public struct
+	0x2::coin_regulation
+SeizeAuthIssued
+	public struct
+	0x2::coin_regulation
+SeizeAuthDestroyed
+	public struct
+	0x2::coin_regulation
+CoinTypePaused
+	public struct
+	0x2::coin_regulation
+CoinTypeUnpaused
+	public struct
+	0x2::coin_regulation
+freeze_address
+	public fun
+	0x2::coin_regulation
+unfreeze_address
+	public fun
+	0x2::coin_regulation
+permanently_freeze_address
+	public fun
+	0x2::coin_regulation
+issue_seize_auth
+	public fun
+	0x2::coin_regulation
+destroy_seize_auth
+	public fun
+	0x2::coin_regulation
+transfer_seize_auth
+	public fun
+	0x2::coin_regulation
+enable_global_pause
+	public fun
+	0x2::coin_regulation
+disable_global_pause
+	public fun
+	0x2::coin_regulation
+is_frozen
+	public fun
+	0x2::coin_regulation
+is_permanently_frozen
+	public fun
+	0x2::coin_regulation
+is_global_pause
+	public fun
+	0x2::coin_regulation
+seize_auths
+	public fun
+	0x2::coin_regulation
+allow_global_pause
+	public fun
+	0x2::coin_regulation
+frozen_address
+	public fun
+	0x2::coin_regulation
+frozen_epoch
+	public fun
+	0x2::coin_regulation
 create
+	fun
+	0x2::coin_regulation
+add_frozen_address
+	fun
+	0x2::coin_regulation
+coin_type_state_mut_or_add
 	fun
 	0x2::coin_regulation
 Config
