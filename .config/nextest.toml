@@ -53,5 +53,7 @@ fail-fast = false
 # Mark tests as slow after 30m, terminate after 1.5h
 slow-timeout = { period = "30m", terminate-after = 3 }
 
+# CI reads this report from target/nextest/ci/junit.xml (.github/workflows/rust.yml and
+# bridge.yml), so keep that path in sync.
 [profile.ci.junit]
 path = "junit.xml"

@@ -153,6 +153,23 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci --cargo-quiet -p sui-bridge -p sui-bridge-indexer
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (bridge)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (bridge)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash

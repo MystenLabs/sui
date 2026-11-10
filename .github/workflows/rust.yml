@@ -140,6 +140,23 @@ jobs:
           # where their fixed stream timeouts flake under contention. sui-fork-e2e-tests runs in the
           # test-sui-fork job, because each of its shell tests starts a full local network and a fork.
           cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !package(sui-fork-e2e-tests) and !(package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (test)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (test)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -180,6 +197,23 @@ jobs:
       - name: cargo test (sui-fork e2e)
         run: |
           cargo nextest run --profile ci --cargo-quiet -p sui-fork-e2e-tests
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (sui-fork e2e)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (sui-fork e2e)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -225,6 +259,23 @@ jobs:
       - name: cargo test with tidehunter
         run: |
           RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core -p typed-store --features typed-store/tidehunter
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (tidehunter)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (tidehunter)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
       - run: rustup component add clippy
       # Same as the main `cargo xclippy` run, denying warnings, but with USE_TIDEHUNTER=1 and
       # scoped to the crates whose build.rs emits cfg(tidehunter) so tidehunter-only code is
@@ -296,6 +347,23 @@ jobs:
       - name: cargo test (sui-graphql staging)
         run: |
           cargo nextest run --profile ci --cargo-quiet -p sui-indexer-alt-graphql -p sui-indexer-alt-e2e-tests --features staging --lib --bins --test graphql_subscription
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (graphql staging)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (graphql staging)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
       - name: doctests
         run: |
           cargo test --doc
@@ -484,14 +552,50 @@ jobs:
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast \
             -E "$(scripts/simtest/ci-packages.sh)"
-      # The chain override is read at run time, so this reuses the build from the step above.
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (simtest)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (simtest)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
+      # The chain override is read at run time, so this reuses the build from the cargo simtest step.
       - name: cargo simtest (mainnet protocol config)
         if: ${{ !cancelled() }}
         env:
           SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
         run: |
+          # Remove the previous pass's report so that a failed pass cannot upload it again.
+          rm -f target/nextest/ci/junit.xml
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast \
             -E "$(scripts/simtest/ci-packages.sh --mainnet)"
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (simtest, mainnet protocol config)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (simtest, mainnet protocol config)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-mainnet-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
       - name: check determinism
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/check-determinism.sh
@@ -529,6 +633,23 @@ jobs:
       - name: Run move tests
         run: |
           cargo nextest run --profile ci --cargo-quiet -p sui-framework-tests --test move_tests
+      # The report can contain test output, which only the job log masks, so publish timings only.
+      - name: extract test timings (move tests)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 scripts/nextest/junit-timings.py target/nextest/ci/junit.xml target/nextest/ci/timings.tsv
+      # continue-on-error does not stop a job timeout, so the cap keeps a stalled upload from
+      # failing the job.
+      - name: upload test timings (move tests)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: timings-${{ github.job }}-${{ strategy.job-index }}-attempt${{ github.run_attempt }}
+          path: target/nextest/ci/timings.tsv
+          if-no-files-found: ignore
+          retention-days: 14
 
   # # Disabled
   # rosetta-validation:
