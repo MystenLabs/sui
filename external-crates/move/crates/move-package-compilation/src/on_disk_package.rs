@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::ensure;
+use anyhow::{Context, ensure};
 use move_binary_format::CompiledModule;
 use move_compiler::{
     compiled_unit::NamedCompiledModule,
@@ -105,10 +105,11 @@ impl OnDiskCompiledPackage {
                 })?
                 .into_iter()
                 .map(|path| {
-                    let contents = std::fs::read_to_string(&path).unwrap();
-                    (path, contents)
+                    let contents = std::fs::read_to_string(&path)
+                        .with_context(|| format!("Failed to read compiled doc '{path}'"))?;
+                    Ok((path, contents))
                 })
-                .collect(),
+                .collect::<anyhow::Result<Vec<_>>>()?,
             )
         } else {
             None

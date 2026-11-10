@@ -7,20 +7,29 @@ use anyhow::Context;
 use move_command_line_common::files::find_filenames;
 
 pub fn run_tests_with_config_and_filter<V: VMTestSetup + Sync>(
+    config: UnitTestingConfig,
+    root_path: &str,
+    source_pattern: &str,
+    dep_root: Option<&str>,
+    vm_test_setup: V,
+) {
+    if let Err(error) = run_tests(config, root_path, source_pattern, dep_root, vm_test_setup) {
+        eprintln!("{error:#}");
+        std::process::exit(1);
+    }
+}
+
+fn run_tests<V: VMTestSetup + Sync>(
     mut config: UnitTestingConfig,
     root_path: &str,
     source_pattern: &str,
     dep_root: Option<&str>,
     vm_test_setup: V,
 ) -> anyhow::Result<()> {
-    let sources = find_matching_files(root_path, source_pattern)?;
-    let deps = dep_root
-        .map(|root| find_matching_files(root, r".*\.move$"))
-        .transpose()?
-        .unwrap_or_default();
-
-    config.source_files = sources;
-    config.dep_files = deps;
+    config.source_files = find_matching_files(root_path, source_pattern)?;
+    if let Some(root) = dep_root {
+        config.dep_files = find_matching_files(root, r".*\.move$")?;
+    }
     let test_plan = config
         .build_test_plan()
         .context("Unable to build test plan")?;
@@ -49,24 +58,26 @@ fn find_matching_files(root_path: &str, pattern: &str) -> anyhow::Result<Vec<Str
 macro_rules! register_move_unit_tests {
     ($config:expr, $root:expr, $pattern:expr) => {
         #[test]
-        fn move_unit_tests() -> Result<(), Box<dyn std::error::Error>> {
+        fn move_unit_tests() {
             $crate::cargo_runner::run_tests_with_config_and_filter(
-                $config, $root, $pattern, None, None,
-            )?;
-            Ok(())
+                $config,
+                $root,
+                $pattern,
+                None,
+                $crate::vm_test_setup::DefaultVMTestSetup::legacy_default(),
+            )
         }
     };
-    ($config:expr, $root:expr, $source_pattern:expr, $dep_root:expr, $native_function_table:expr) => {
+    ($config:expr, $root:expr, $source_pattern:expr, $dep_root:expr, $vm_test_setup:expr) => {
         #[test]
-        fn move_unit_tests() -> Result<(), Box<dyn std::error::Error>> {
+        fn move_unit_tests() {
             $crate::cargo_runner::run_tests_with_config_and_filter(
                 $config,
                 $root,
                 $source_pattern,
                 Some($dep_root),
-                $native_function_table,
-            )?;
-            Ok(())
+                $vm_test_setup,
+            )
         }
     };
 }
@@ -90,4 +101,23 @@ mod tests {
                 .contains("Failed to discover Move sources")
         );
     }
+}
+
+#[cfg(test)]
+mod macro_tests {
+    crate::register_move_unit_tests!(
+        {
+            crate::UnitTestingConfig {
+                num_threads: 1,
+                gas_limit: Some(1000),
+                dep_files: move_stdlib::source_files(),
+                named_address_values: move_stdlib::named_addresses().into_iter().collect(),
+                report_stacktrace_on_abort: true,
+                deterministic_generation: true,
+                ..crate::UnitTestingConfig::default_with_bound(None)
+            }
+        },
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_sources"),
+        r".*/do_nothing\.move$"
+    );
 }

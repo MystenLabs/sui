@@ -56,7 +56,7 @@ pub fn summaries_full_path() -> String {
 pub fn source_files() -> Vec<String> {
     let path = path_in_crate(MODULES_DIR);
     find_filenames(&[path], |p| extension_equals(p, MOVE_EXTENSION))
-        .unwrap_or_else(|error| panic!("Failed to discover Move stdlib sources: {error:#}"))
+        .expect("Failed to discover Move stdlib sources")
 }
 
 pub fn named_addresses() -> BTreeMap<String, NumericalAddress> {

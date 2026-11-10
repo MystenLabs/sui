@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::layout::CompiledPackageLayout;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use move_command_line_common::files::{extension_equals, find_filenames, try_exists};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
@@ -62,10 +62,13 @@ pub fn build_docs(
 
 fn find_root_doc_templates(package_root: &Path) -> Result<Vec<String>> {
     let path = package_root.join(SourcePackageLayout::DocTemplates.path());
-    if !try_exists(&path)? {
+    if !try_exists(&path)
+        .with_context(|| format!("Failed to inspect doc templates at '{}'", path.display()))?
+    {
         return Ok(vec![]);
     }
-    find_filenames(&[path], |path| extension_equals(path, "md"))
+    find_filenames(&[&path], |path| extension_equals(path, "md"))
+        .with_context(|| format!("Failed to discover doc templates at '{}'", path.display()))
 }
 
 #[cfg(all(test, unix))]
@@ -89,6 +92,10 @@ mod tests {
 
         let error = find_root_doc_templates(temp_dir.path()).unwrap_err();
 
-        assert!(error.to_string().contains("Failed to traverse source path"));
+        assert!(
+            error
+                .to_string()
+                .contains("Failed to discover doc templates")
+        );
     }
 }

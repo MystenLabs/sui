@@ -236,21 +236,21 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
     let mut result = vec![];
 
     for p in paths {
-        if !try_exists_vfs(p)? {
+        let traversal_context =
+            || format!("Failed to traverse virtual source path '{}'", p.as_str());
+        if !try_exists_vfs(p).with_context(traversal_context)? {
             anyhow::bail!("No such file or directory '{}'", p.as_str())
         }
-        if p.is_file()? && is_file_desired(p) {
+        if p.is_file().with_context(traversal_context)? && is_file_desired(p) {
             result.push(p.clone());
             continue;
         }
-        if !p.is_dir()? {
+        if !p.is_dir().with_context(traversal_context)? {
             continue;
         }
-        for entry in p.walk_dir()? {
-            let entry = entry.with_context(|| {
-                format!("Failed to traverse virtual source path '{}'", p.as_str())
-            })?;
-            if !entry.is_file()? || !is_file_desired(&entry) {
+        for entry in p.walk_dir().with_context(traversal_context)? {
+            let entry = entry.with_context(traversal_context)?;
+            if !entry.is_file().with_context(traversal_context)? || !is_file_desired(&entry) {
                 continue;
             }
 
@@ -298,19 +298,29 @@ pub fn find_move_filenames_vfs(
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::{find_filenames, find_filenames_vfs};
+    use super::{find_filenames, find_filenames_and_keep_specified, find_filenames_vfs};
     use std::os::unix::fs::symlink;
     use vfs::{VfsPath, impls::physical::PhysicalFS};
 
     #[test]
     fn physical_traversal_errors_are_propagated() {
         let temp_dir = tempfile::tempdir().unwrap();
-        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+        symlink("missing.move", temp_dir.path().join("broken.move")).unwrap();
 
         let error = find_filenames(&[temp_dir.path()], |_| true).unwrap_err();
 
         assert!(error.downcast_ref::<walkdir::Error>().is_some());
         assert!(error.to_string().contains("Failed to traverse source path"));
+    }
+
+    #[test]
+    fn keep_specified_propagates_traversal_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        symlink(temp_dir.path(), temp_dir.path().join("loop")).unwrap();
+
+        let error = find_filenames_and_keep_specified(&[temp_dir.path()], |_| true).unwrap_err();
+
+        assert!(error.downcast_ref::<walkdir::Error>().is_some());
     }
 
     #[test]

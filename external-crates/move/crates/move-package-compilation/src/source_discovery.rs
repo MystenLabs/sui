@@ -105,6 +105,26 @@ mod tests {
         assert!(!source_paths.iter().any(|p| p.ends_with("README.md")));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn test_get_sources_propagates_traversal_errors() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        create_test_package_structure(temp_dir.path()).expect("Failed to create test structure");
+        symlink(
+            temp_dir.path().join("sources"),
+            temp_dir.path().join("sources/loop"),
+        )
+        .expect("Failed to create symlink loop");
+        let package_path =
+            PackagePath::new(temp_dir.path().to_path_buf()).expect("Failed to create package path");
+
+        let error = get_sources(&package_path, &BuildConfig::default()).unwrap_err();
+
+        assert!(error.to_string().contains("Failed to traverse source path"));
+    }
+
     #[test]
     fn test_get_sources_test_mode() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
