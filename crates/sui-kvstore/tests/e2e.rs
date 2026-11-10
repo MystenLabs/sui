@@ -33,6 +33,7 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::BitmapQuery;
+use sui_kvstore::BitmapSchema;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
@@ -931,7 +932,7 @@ async fn test_indexer_e2e() -> Result<()> {
             harness.bigtable_client(),
             BitmapQuery::scan(sender_dim_key.clone())?,
             tx_range.clone(),
-            BitmapIndexSpec::tx(),
+            BitmapIndexSpec::tx(BitmapSchema::V2),
             ScanDirection::Ascending,
         )
         .try_collect::<Vec<_>>()
@@ -957,7 +958,7 @@ async fn test_indexer_e2e() -> Result<()> {
             harness.bigtable_client(),
             BitmapQuery::scan(sender_dim_key)?,
             event_range,
-            BitmapIndexSpec::event(),
+            BitmapIndexSpec::event(BitmapSchema::V2),
             ScanDirection::Ascending,
         )
         .try_collect::<Vec<_>>()
@@ -1133,9 +1134,9 @@ async fn test_object_versions_by_checkpoint() -> Result<()> {
     let last_cp = changes.last().unwrap().0;
     harness.wait_for_watermark(last_cp, 0).await?;
 
-    // Check every checkpoint from just before creation through deletion. Checkpoints between two
-    // changes must resolve to the earlier change.
-    for checkpoint in first_cp - 1..=last_cp {
+    // Check every checkpoint from just before creation through deletion, and the last possible
+    // checkpoint. Checkpoints between two changes must resolve to the earlier change.
+    for checkpoint in (first_cp - 1..=last_cp).chain([u64::MAX]) {
         for id in [object, wrapper] {
             let expected = changes
                 .iter()

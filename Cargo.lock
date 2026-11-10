@@ -15280,6 +15280,7 @@ dependencies = [
  "roaring",
  "rustc-hash 2.1.1",
  "rustls",
+ "schemars 0.8.21",
  "scoped-futures",
  "serde",
  "sui-futures",

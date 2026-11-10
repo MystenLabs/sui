@@ -11,6 +11,7 @@ use sui_inverted_index::IndexDimension;
 use sui_inverted_index::for_each_transaction_dimension;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::tables::BitmapSchema;
 use crate::tables::transaction_bitmap_index;
 
 use crate::handlers::bitmap::BitmapIndexProcessor;
@@ -18,44 +19,78 @@ use crate::handlers::bitmap::BitmapIndexProcessor;
 // Compile-time check that BUCKET_SIZE fits in u32 (required for RoaringBitmap bit positions).
 const _: () = assert!(transaction_bitmap_index::BUCKET_SIZE <= u32::MAX as u64);
 
+/// Writes the [`BitmapSchema::V1`] table.
 pub struct TransactionBitmapProcessor;
+
+/// Writes the [`BitmapSchema::V2`] table.
+pub struct TransactionBitmapV2Processor;
 
 impl BitmapIndexProcessor for TransactionBitmapProcessor {
     const NAME: &'static str = "kvstore_transaction_dimensions";
-    const TABLE: &'static str = "transaction_bitmap_index";
+    const TABLE: &'static str = transaction_bitmap_index::NAME;
     const COLUMN: &'static str = transaction_bitmap_index::col::BITMAP;
-    const SCHEMA_VERSION: u32 = transaction_bitmap_index::SCHEMA_VERSION;
+    const SCHEMA: BitmapSchema = BitmapSchema::V1;
     const BUCKET_ID_WIDTH: usize = transaction_bitmap_index::BUCKET_ID_WIDTH;
 
-    fn for_each_indexed_bit<F>(&self, checkpoint: &Checkpoint, mut emit: F)
+    fn for_each_indexed_bit<F>(&self, checkpoint: &Checkpoint, emit: F)
     where
         F: FnMut(u64, u32, IndexDimension, &[u8]),
     {
-        let cp = checkpoint.summary.data();
-        // network_total_transactions is cumulative *including* this checkpoint,
-        // so tx_lo is the first tx_seq in this checkpoint.
-        let tx_lo = cp.network_total_transactions - checkpoint.transactions.len() as u64;
-
-        for (i, tx) in checkpoint.transactions.iter().enumerate() {
-            let tx_seq = tx_lo + i as u64;
-            let bucket_id = tx_seq / transaction_bitmap_index::BUCKET_SIZE;
-            let bit_position = (tx_seq % transaction_bitmap_index::BUCKET_SIZE) as u32;
-
-            for_each_transaction_dimension(
-                &tx.transaction,
-                &tx.effects,
-                tx.events.as_ref(),
-                &checkpoint.object_set,
-                |dim, value| {
-                    emit(bucket_id, bit_position, dim, value);
-                },
-            );
-        }
+        for_each_transaction_bit(checkpoint, emit);
     }
 
     fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
-        watermark.tx_hi >= (bucket_id + 1) * transaction_bitmap_index::BUCKET_SIZE
+        is_transaction_bucket_sealed(bucket_id, watermark)
     }
+}
+
+impl BitmapIndexProcessor for TransactionBitmapV2Processor {
+    const NAME: &'static str = "kvstore_transaction_dimensions_v2";
+    const TABLE: &'static str = transaction_bitmap_index::NAME_V2;
+    const COLUMN: &'static str = transaction_bitmap_index::col::BITMAP;
+    const SCHEMA: BitmapSchema = BitmapSchema::V2;
+    const BUCKET_ID_WIDTH: usize = transaction_bitmap_index::BUCKET_ID_WIDTH;
+
+    fn for_each_indexed_bit<F>(&self, checkpoint: &Checkpoint, emit: F)
+    where
+        F: FnMut(u64, u32, IndexDimension, &[u8]),
+    {
+        for_each_transaction_bit(checkpoint, emit);
+    }
+
+    fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
+        is_transaction_bucket_sealed(bucket_id, watermark)
+    }
+}
+
+fn for_each_transaction_bit<F>(checkpoint: &Checkpoint, mut emit: F)
+where
+    F: FnMut(u64, u32, IndexDimension, &[u8]),
+{
+    let cp = checkpoint.summary.data();
+    // network_total_transactions is cumulative *including* this checkpoint,
+    // so tx_lo is the first tx_seq in this checkpoint.
+    let tx_lo = cp.network_total_transactions - checkpoint.transactions.len() as u64;
+
+    for (i, tx) in checkpoint.transactions.iter().enumerate() {
+        let tx_seq = tx_lo + i as u64;
+        let bucket_id = tx_seq / transaction_bitmap_index::BUCKET_SIZE;
+        let bit_position = (tx_seq % transaction_bitmap_index::BUCKET_SIZE) as u32;
+
+        for_each_transaction_dimension(
+            &tx.transaction,
+            &tx.effects,
+            tx.events.as_ref(),
+            &checkpoint.object_set,
+            |dim, value| {
+                emit(bucket_id, bit_position, dim, value);
+            },
+        );
+    }
+}
+
+fn is_transaction_bucket_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
+    watermark.tx_hi >= (bucket_id + 1) * transaction_bitmap_index::BUCKET_SIZE
 }
 
 #[cfg(test)]
@@ -78,11 +113,7 @@ mod tests {
     fn sender_row_key(sender_idx: u8, bucket_id: u64) -> Vec<u8> {
         let sender = TestCheckpointBuilder::derive_address(sender_idx);
         let dimension_key = encode_dimension_key(IndexDimension::Sender, sender.as_ref());
-        transaction_bitmap_index::encode_row_key(
-            transaction_bitmap_index::SCHEMA_VERSION,
-            &dimension_key,
-            bucket_id,
-        )
+        transaction_bitmap_index::encode_row_key(BitmapSchema::V2, &dimension_key, bucket_id)
     }
 
     fn move_call_row_key(
@@ -93,11 +124,7 @@ mod tests {
     ) -> Vec<u8> {
         let value = move_call_value(package.as_ref(), Some(module), Some(function));
         let dimension_key = encode_dimension_key(IndexDimension::MoveCall, &value);
-        transaction_bitmap_index::encode_row_key(
-            transaction_bitmap_index::SCHEMA_VERSION,
-            &dimension_key,
-            bucket_id,
-        )
+        transaction_bitmap_index::encode_row_key(BitmapSchema::V2, &dimension_key, bucket_id)
     }
 
     fn row<'a>(values: &'a [BitmapIndexValue], row_key: &[u8]) -> &'a BitmapIndexValue {
@@ -134,7 +161,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(TransactionBitmapProcessor)
+        let values = BitmapIndexHandler::new(TransactionBitmapV2Processor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -156,7 +183,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(TransactionBitmapProcessor)
+        let values = BitmapIndexHandler::new(TransactionBitmapV2Processor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();
@@ -179,7 +206,7 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let values = BitmapIndexHandler::new(TransactionBitmapProcessor)
+        let values = BitmapIndexHandler::new(TransactionBitmapV2Processor)
             .process(&Arc::new(checkpoint))
             .await
             .unwrap();

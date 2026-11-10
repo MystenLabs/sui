@@ -544,6 +544,7 @@ pub(crate) mod test_utils {
             bitmap_drain_probe_rows: None,
             watermark_beacon_buckets: None,
             max_bitmap_filter_literals: Some(1),
+            bitmap_schema: Some(sui_kvstore::BitmapSchema::V2),
         };
         let stage = StageConfig {
             max_seeks_per_read: Some(2),

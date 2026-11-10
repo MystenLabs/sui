@@ -13,7 +13,6 @@ use futures::stream::BoxStream;
 use prost::Message;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
-use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::tables;
 use sui_rpc::field::FieldMask;
@@ -183,12 +182,13 @@ pub(crate) async fn list_checkpoints(
     // keyspace directly, bounded by limit_items.
     let cp_data_stream: BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, ScanStop>> =
         if let Some(query) = filter_query {
-            let scan_budget = ctx.scan_budget(BitmapIndexSpec::tx());
+            let spec = ctx.tx_bitmap_spec();
+            let scan_budget = ctx.ledger_history().bitmap_bucket_budget_tx();
             let tx_range = client.checkpoint_to_tx_range(cp_range.clone()).await?;
             let tx_seq_stream = client.eval_bitmap_query_stream(
                 query,
                 tx_range,
-                BitmapIndexSpec::tx(),
+                spec,
                 direction,
                 scan_budget,
                 ctx.bitmap_skip_policy(),

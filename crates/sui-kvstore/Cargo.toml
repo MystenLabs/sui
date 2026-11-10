@@ -41,6 +41,7 @@ prost-types.workspace = true
 roaring.workspace = true
 rustc-hash.workspace = true
 rustls.workspace = true
+schemars.workspace = true
 scoped-futures.workspace = true
 serde.workspace = true
 toml.workspace = true
