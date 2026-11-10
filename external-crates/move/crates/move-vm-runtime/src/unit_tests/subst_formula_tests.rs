@@ -19,8 +19,7 @@ use crate::{
     shared::{
         constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
         type_size_formulae::{
-            LinearForm, MaterializationForm, MaxPlusForm, PartialTypeSizeFormula, TypeSize,
-            check_syntactic_limits,
+            LinearForm, MaxPlusForm, PartialTypeSizeFormula, TypeSize, check_syntactic_limits,
         },
     },
 };
@@ -126,31 +125,20 @@ fn partial_formula_substitute_composes() {
     let mut seed = 0xdead_beefu64;
     for _ in 0..1000 {
         let (p, q) = (2u16, 2u16);
-        let mk = |seed: &mut u64, n| {
-            let type_size = rand_linear(seed, n);
-            PartialTypeSizeFormula {
-                materialized_type_size: MaterializationForm {
-                    syntactic_candidates: vec![type_size.clone(), rand_linear(seed, n)],
-                    inherited_peaks: (0..n).filter(|_| next(seed).is_multiple_of(2)).collect(),
-                },
-                type_size,
-                type_depth: rand_maxplus(seed, n),
-                value_depth: rand_maxplus(seed, n),
-                layout_size: rand_linear(seed, n),
-            }
+        let mk = |seed: &mut u64, n| PartialTypeSizeFormula {
+            type_size: rand_linear(seed, n),
+            type_depth: rand_maxplus(seed, n),
+            value_depth: rand_maxplus(seed, n),
+            layout_size: rand_linear(seed, n),
         };
         let f = mk(&mut seed, p);
         let gs: Vec<PartialTypeSizeFormula> = (0..p).map(|_| mk(&mut seed, q)).collect();
         let xs: Vec<TypeSize> = (0..q)
-            .map(|_| {
-                let type_size = 1 + next(&mut seed) % 4;
-                TypeSize {
-                    type_size,
-                    type_depth: 1 + next(&mut seed) % 4,
-                    value_depth: 1 + next(&mut seed) % 4,
-                    layout_size: 1 + next(&mut seed) % 4,
-                    materialized_type_size: type_size + next(&mut seed) % 4,
-                }
+            .map(|_| TypeSize {
+                type_size: 1 + next(&mut seed) % 4,
+                type_depth: 1 + next(&mut seed) % 4,
+                value_depth: 1 + next(&mut seed) % 4,
+                layout_size: 1 + next(&mut seed) % 4,
             })
             .collect();
 
@@ -178,7 +166,6 @@ fn wrap_adds_one_level_to_every_measure() {
         type_depth: 2,
         value_depth: 4,
         layout_size: 5,
-        materialized_type_size: 7,
     };
     // A parameter formula solved against `inner` is `inner`; wrapping it must add one everywhere.
     let wrapped = PartialTypeSizeFormula::parameter(0)

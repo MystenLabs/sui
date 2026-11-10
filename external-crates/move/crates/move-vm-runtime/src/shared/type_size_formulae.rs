@@ -3,24 +3,23 @@
 
 //! Type size formulae.
 //!
-//! The VM bounds five quantities of a type, each against its own limit:
+//! The VM bounds four quantities of a type, each against its own limit:
 //!
 //! - `type_size`: the syntactic node count of the type;
 //! - `type_depth`: the syntactic depth of the type;
 //! - `value_depth`: the depth of a *value* of the type, through datatype fields;
-//! - `layout_size`: the node count of the type's generated layout, through datatype fields;
-//! - `materialized_type_size`: the largest type built while expanding datatype fields.
+//! - `layout_size`: the node count of the type's generated layout, through datatype fields.
 //!
 //! Rather than realize a type and measure it, we predict each quantity with a closed-form
 //! formula and check the prediction, so rejection is arithmetic and no oversized type, value,
 //! or layout is ever built.
 //!
-//! The first four quantities use additive ([`LinearForm`]) or max-plus ([`MaxPlusForm`])
-//! algebras. [`MaterializationForm`] combines affine syntactic-size candidates with inherited
-//! expansion peaks. All forms are flat and closed under substitution. The pipeline is a partial
-//! evaluator built from three operations: **evaluate**, **substitute**, and **solve**.
+//! Each quantity lives in one of two algebras: additive ([`LinearForm`], for `type_size` and
+//! `layout_size`) and max-plus ([`MaxPlusForm`], for `type_depth` and `value_depth`). Both are
+//! flat and closed under substitution. The pipeline is a partial evaluator built from three
+//! operations: **evaluate**, **substitute**, and **solve**.
 //!
-//! 1. **JIT** builds an [`ArenaTypeSizeFormula`] per datatype: the five forms over the
+//! 1. **JIT** builds an [`ArenaTypeSizeFormula`] per datatype: the four forms over the
 //!    datatype's own type parameters. `type_size`/`type_depth` are closed; `value_depth`/
 //!    `layout_size` additionally depend on the datatype's field *applications*, which need a
 //!    linkage to resolve. The application trees of every field are **linearized** at JIT time
@@ -39,7 +38,7 @@
 //! 3. **Solve** ([`PartialTypeSizeFormula::solve`]) evaluates a flat form against concrete
 //!    argument [`TypeSize`]s, yielding a concrete [`TypeSize`].
 //!
-//! All five forms are used for various safety checks across VM execution. All arithmetic
+//! All four forms are used for various safety checks across VM execution. All arithmetic
 //! saturates: every quantity exists only to be compared against a limit, and a saturated value
 //! exceeds any limit -- the correct verdict.
 
@@ -60,7 +59,7 @@ use move_binary_format::{
 // TypeSize
 // -------------------------------------------------------------------------------------------------
 
-/// The five size quantities of a concrete type. A call frame's type arguments carry these, so
+/// The four size quantities of a concrete type. A call frame's type arguments carry these, so
 /// every later limit check against them is arithmetic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TypeSize {
@@ -68,7 +67,6 @@ pub struct TypeSize {
     pub type_depth: u64,
     pub value_depth: u64,
     pub layout_size: u64,
-    pub materialized_type_size: u64,
 }
 
 impl TypeSize {
@@ -78,18 +76,16 @@ impl TypeSize {
         type_depth: 1,
         value_depth: 1,
         layout_size: 1,
-        materialized_type_size: 1,
     };
 
-    /// The sizes of `vector<self>` / `&self` / `&mut self`.
+    /// The sizes of `vector<self>` / `&self` / `&mut self`: one node and one level on top of
+    /// the element in every measure.
     pub(crate) fn wrap(self) -> TypeSize {
-        let type_size = self.type_size.saturating_add(1);
         TypeSize {
-            type_size,
+            type_size: self.type_size.saturating_add(1),
             type_depth: self.type_depth.saturating_add(1),
             value_depth: self.value_depth.saturating_add(1),
             layout_size: self.layout_size.saturating_add(1),
-            materialized_type_size: self.materialized_type_size.max(type_size),
         }
     }
 }
@@ -353,154 +349,61 @@ impl MaxPlusForm {
     }
 }
 
-// -------------------------------------------------------------------------------------------------
-// Materialization form
-// -------------------------------------------------------------------------------------------------
-
-const MAX_MATERIALIZATION_CANDIDATES: usize = 512;
-
-/// The maximum of affine syntactic-size candidates and expansion peaks inherited from type
-/// parameters.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct MaterializationForm {
-    pub(crate) syntactic_candidates: Vec<LinearForm>,
-    pub(crate) inherited_peaks: Vec<TypeParameterIndex>,
-}
-
-impl MaterializationForm {
-    fn empty() -> Self {
-        Self {
-            syntactic_candidates: vec![],
-            inherited_peaks: vec![],
-        }
-    }
-
-    fn primitive() -> Self {
-        Self::from_type_size(LinearForm::constant(1))
-    }
-
-    fn parameter(param: TypeParameterIndex) -> Self {
-        Self {
-            syntactic_candidates: vec![],
-            inherited_peaks: vec![param],
-        }
-    }
-
-    fn from_type_size(type_size: LinearForm) -> Self {
-        Self {
-            syntactic_candidates: vec![type_size],
-            inherited_peaks: vec![],
-        }
-    }
-
-    fn absorb(&mut self, other: &Self) {
-        self.syntactic_candidates
-            .extend(other.syntactic_candidates.iter().cloned());
-        self.inherited_peaks
-            .extend(other.inherited_peaks.iter().copied());
-        self.canonicalize();
-    }
-
-    fn absorb_type_size(&mut self, type_size: LinearForm) {
-        self.syntactic_candidates.push(type_size);
-        self.canonicalize();
-    }
-
-    fn substitute(&self, args: &[PartialTypeSizeFormula]) -> PartialVMResult<Self> {
-        let type_sizes = project(args, |arg| arg.type_size.clone());
-        let mut result = Self::empty();
-        for candidate in &self.syntactic_candidates {
-            result
-                .syntactic_candidates
-                .push(candidate.substitute(&type_sizes)?);
-        }
-        result.canonicalize();
-        for param in &self.inherited_peaks {
-            let arg = args
-                .get(*param as usize)
-                .ok_or_else(|| out_of_bounds_parameter(*param, args.len()))?;
-            result.absorb(&arg.materialized_type_size);
-        }
-        Ok(result)
-    }
-
-    fn solve(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
-        let type_sizes = project(args, |arg| arg.type_size);
-        let mut result = 0;
-        for candidate in &self.syntactic_candidates {
-            result = result.max(candidate.solve(&type_sizes)?);
-        }
-        for param in &self.inherited_peaks {
-            let arg = args
-                .get(*param as usize)
-                .ok_or_else(|| out_of_bounds_parameter(*param, args.len()))?;
-            result = result.max(arg.materialized_type_size);
-        }
-        if result == 0 {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "materialization form solved to zero"
-            ));
-        }
-        Ok(result)
-    }
-
-    fn canonicalize(&mut self) {
-        for candidate in &mut self.syntactic_candidates {
-            candidate.canonicalize();
-        }
-        self.inherited_peaks.sort_unstable();
-        self.inherited_peaks.dedup();
-
-        fn dominates(lhs: &LinearForm, rhs: &LinearForm) -> bool {
-            lhs.constant == u64::MAX
-                || lhs.constant >= rhs.constant
-                    && rhs.terms.iter().all(|rhs_term| {
-                        lhs.terms
-                            .iter()
-                            .find(|lhs_term| lhs_term.param == rhs_term.param)
-                            .map_or(rhs_term.coefficient == 0, |lhs_term| {
-                                lhs_term.coefficient >= rhs_term.coefficient
-                            })
-                    })
-        }
-
-        let mut kept = Vec::with_capacity(self.syntactic_candidates.len());
-        for candidate in self.syntactic_candidates.drain(..) {
-            if kept.iter().any(|existing| dominates(existing, &candidate)) {
-                continue;
+fn syntactic_forms(ty: &ArenaType) -> (LinearForm, MaxPlusForm) {
+    let mut type_size = LinearForm::constant(0);
+    let mut type_depth = MaxPlusForm::constant(0);
+    let mut work: Vec<(&ArenaType, u64)> = vec![(ty, 0)];
+    while let Some((ty, depth)) = work.pop() {
+        match ty {
+            ArenaType::TyParam(idx) => {
+                match type_size.terms.iter_mut().find(|term| term.param == *idx) {
+                    Some(existing) => existing.coefficient = existing.coefficient.saturating_add(1),
+                    None => type_size.terms.push(LinearTerm {
+                        param: *idx,
+                        coefficient: 1,
+                    }),
+                }
+                match type_depth.terms.iter_mut().find(|term| term.param == *idx) {
+                    Some(existing) => existing.offset = existing.offset.max(depth),
+                    None => type_depth.terms.push(MaxPlusTerm {
+                        param: *idx,
+                        offset: depth,
+                    }),
+                }
             }
-            kept.retain(|existing| !dominates(&candidate, existing));
-            kept.push(candidate);
-            if kept.len() > MAX_MATERIALIZATION_CANDIDATES {
-                kept.clear();
-                kept.push(LinearForm::constant(u64::MAX));
-                self.inherited_peaks.clear();
-                break;
+            ArenaType::Vector(inner)
+            | ArenaType::Reference(inner)
+            | ArenaType::MutableReference(inner) => {
+                type_size.constant = type_size.constant.saturating_add(1);
+                type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+                work.push((inner, depth.saturating_add(1)));
+            }
+            ArenaType::DatatypeInstantiation(inst) => {
+                type_size.constant = type_size.constant.saturating_add(1);
+                type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+                let (_, args) = &**inst;
+                for arg in args.iter() {
+                    work.push((arg, depth.saturating_add(1)));
+                }
+            }
+            ArenaType::Bool
+            | ArenaType::U8
+            | ArenaType::U16
+            | ArenaType::U32
+            | ArenaType::U64
+            | ArenaType::U128
+            | ArenaType::U256
+            | ArenaType::Address
+            | ArenaType::Signer
+            | ArenaType::Datatype(_) => {
+                type_size.constant = type_size.constant.saturating_add(1);
+                type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
             }
         }
-        self.syntactic_candidates = kept;
     }
-
-    fn into_arena(self, arena: &ArenaBuilder) -> PartialVMResult<ArenaMaterializationForm> {
-        let candidates = self
-            .syntactic_candidates
-            .into_iter()
-            .map(|candidate| candidate.into_arena(arena))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        Ok(ArenaMaterializationForm {
-            syntactic_candidates: if candidates.is_empty() {
-                ArenaVec::empty()
-            } else {
-                arena.alloc_vec(candidates.into_iter())?
-            },
-            inherited_peaks: if self.inherited_peaks.is_empty() {
-                ArenaVec::empty()
-            } else {
-                arena.alloc_vec(self.inherited_peaks.into_iter())?
-            },
-        })
-    }
+    type_size.canonicalize();
+    type_depth.canonicalize();
+    (type_size, type_depth)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -557,21 +460,27 @@ impl ArenaMaxPlusForm {
 }
 
 #[derive(Debug)]
-pub(crate) struct ArenaMaterializationForm {
-    syntactic_candidates: ArenaVec<ArenaLinearForm>,
-    inherited_peaks: ArenaVec<TypeParameterIndex>,
+pub(crate) struct ArenaSyntacticSizeFormula {
+    type_size: ArenaLinearForm,
+    type_depth: ArenaMaxPlusForm,
 }
 
-impl ArenaMaterializationForm {
-    fn to_form(&self) -> MaterializationForm {
-        MaterializationForm {
-            syntactic_candidates: self
-                .syntactic_candidates
-                .iter()
-                .map(ArenaLinearForm::to_form)
-                .collect(),
-            inherited_peaks: self.inherited_peaks.to_vec(),
-        }
+impl ArenaSyntacticSizeFormula {
+    pub(crate) fn from_term(ty: &ArenaType, arena: &ArenaBuilder) -> PartialVMResult<Self> {
+        let (type_size, type_depth) = syntactic_forms(ty);
+        Ok(Self {
+            type_size: type_size.into_arena(arena)?,
+            type_depth: type_depth.into_arena(arena)?,
+        })
+    }
+
+    pub(crate) fn solve(&self, args: &[TypeSize]) -> PartialVMResult<(u64, u64)> {
+        Ok((
+            self.type_size
+                .solve(&project(args, |size| size.type_size))?,
+            self.type_depth
+                .solve(&project(args, |size| size.type_depth))?,
+        ))
     }
 }
 
@@ -579,7 +488,7 @@ impl ArenaMaterializationForm {
 // PartialTypeSizeFormula
 // -------------------------------------------------------------------------------------------------
 
-/// A type's five size formulae over some parameters, fully resolved and flat (no pending
+/// A type's four size formulae over some parameters, fully resolved and flat (no pending
 /// datatype applications): the result of closing any [`ArenaTypeSizeFormula`] (datatype or
 /// term) under a linkage. This is the value cached per datatype key during execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -588,7 +497,6 @@ pub(crate) struct PartialTypeSizeFormula {
     pub(crate) type_depth: MaxPlusForm,
     pub(crate) value_depth: MaxPlusForm,
     pub(crate) layout_size: LinearForm,
-    pub(crate) materialized_type_size: MaterializationForm,
 }
 
 impl PartialTypeSizeFormula {
@@ -599,7 +507,6 @@ impl PartialTypeSizeFormula {
             type_depth: MaxPlusForm::parameter(param),
             value_depth: MaxPlusForm::parameter(param),
             layout_size: LinearForm::parameter(param),
-            materialized_type_size: MaterializationForm::parameter(param),
         }
     }
 
@@ -610,7 +517,6 @@ impl PartialTypeSizeFormula {
             type_depth: MaxPlusForm::constant(1),
             value_depth: MaxPlusForm::constant(1),
             layout_size: LinearForm::constant(1),
-            materialized_type_size: MaterializationForm::primitive(),
         }
     }
 
@@ -631,9 +537,6 @@ impl PartialTypeSizeFormula {
         let mut layout_size = self.layout_size.clone();
         layout_size.constant = layout_size.constant.saturating_add(layers);
 
-        let mut materialized_type_size = self.materialized_type_size.clone();
-        materialized_type_size.absorb_type_size(type_size.clone());
-
         // Max-plus forms store wrapper depth in every branch.
         let mut type_depth = self.type_depth.clone();
         type_depth.constant = type_depth.constant.saturating_add(layers);
@@ -652,7 +555,6 @@ impl PartialTypeSizeFormula {
             type_depth,
             value_depth,
             layout_size,
-            materialized_type_size,
         }
     }
 
@@ -668,25 +570,16 @@ impl PartialTypeSizeFormula {
     /// `args = [T's size]` where `T = u64` (all measures `1`), each measure solves to `2` -- i.e.
     /// `TypeSize` all-`2`, the size of `vector<u64>`.
     pub(crate) fn solve(&self, args: &[TypeSize]) -> PartialVMResult<TypeSize> {
-        let type_size = self.solve_type_size(args)?;
-        let materialized_type_size = self.solve_materialized_type_size(args)?;
-        if materialized_type_size < type_size {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "materialized type size is smaller than the type"
-            ));
-        }
         Ok(TypeSize {
-            type_size,
+            type_size: self.solve_type_size(args)?,
             type_depth: self.solve_type_depth(args)?,
             value_depth: self.solve_value_depth(args)?,
             layout_size: self.solve_layout_size(args)?,
-            materialized_type_size,
         })
     }
 
     // Per-measure solves, for the call sites that only need one measure and would otherwise
-    // compute the other four.
+    // compute (and discard) the other three.
 
     pub(crate) fn solve_type_size(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
         self.type_size.solve(&project(args, |s| s.type_size))
@@ -702,10 +595,6 @@ impl PartialTypeSizeFormula {
 
     pub(crate) fn solve_layout_size(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
         self.layout_size.solve(&project(args, |s| s.layout_size))
-    }
-
-    pub(crate) fn solve_materialized_type_size(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
-        self.materialized_type_size.solve(args)
     }
 
     /// Substitute a formula for each parameter (positionally): run each measure's flat-form
@@ -731,7 +620,6 @@ impl PartialTypeSizeFormula {
             layout_size: self
                 .layout_size
                 .substitute(&project(args, |a| a.layout_size.clone()))?,
-            materialized_type_size: self.materialized_type_size.substitute(args)?,
         })
     }
 }
@@ -771,7 +659,6 @@ pub(crate) struct Application {
     /// entry gets `Some(1)` (a direct field), `z`'s `R<..>` entry gets `Some(2)` (one vector
     /// layer down), and the `S<A>` inside it gets `None` -- `R`'s entry already counts it.
     field_depth: Option<u64>,
-    field_wrap_layers: u16,
 }
 
 /// One type argument of an [`Application`]: a base type under some number of `vector<…>` (or
@@ -780,7 +667,8 @@ pub(crate) struct Application {
 /// Example: `vector<vector<u64>>` is `{ primitive_wrap_layers: 2, base: Primitive }`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Argument {
-    /// Number of `vector<…>`/reference layers around `base`.
+    /// Number of `vector<…>`/reference layers around `base`; each contributes one node and one
+    /// level to every measure.
     primitive_wrap_layers: u16,
     base: ArgumentBase,
 }
@@ -799,7 +687,7 @@ pub(crate) enum ArgumentBase {
     Application(ApplicationIndex),
 }
 
-/// A datatype's five size formulae over its own type parameters, built at JIT time. (A type
+/// A datatype's four size formulae over its own type parameters, built at JIT time. (A type
 /// *term* compiles to the same shape via [`from_term`](Self::from_term), over the enclosing
 /// function's type parameters; "field" below then means the term's root.)
 ///
@@ -827,7 +715,6 @@ pub(crate) struct ArenaTypeSizeFormula {
     type_depth: ArenaMaxPlusForm,
     value_depth_local: ArenaMaxPlusForm,
     layout_size_local: ArenaLinearForm,
-    materialized_type_size_local: ArenaMaterializationForm,
     /// Every datatype mentioned by the field (or term) types (deduplicated, first-mention
     /// order). These are exactly the formulae [`evaluate`](Self::evaluate) must be handed; the
     /// dispatch tables' resolution work queue reads this list directly, so dependency
@@ -854,7 +741,6 @@ struct ApplicationBuilder {
     datatype: KeyIndex,
     arguments: Vec<Argument>,
     field_depth: Option<u64>,
-    field_wrap_layers: u16,
 }
 
 impl Linearizer {
@@ -974,7 +860,6 @@ impl Linearizer {
                         datatype,
                         arguments,
                         field_depth: None,
-                        field_wrap_layers: 0,
                     });
                     compiled.push(Argument {
                         primitive_wrap_layers,
@@ -1015,7 +900,6 @@ impl Linearizer {
                         arena.alloc_vec(builder.arguments.into_iter())?
                     },
                     field_depth: builder.field_depth,
-                    field_wrap_layers: builder.field_wrap_layers,
                 })
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
@@ -1048,12 +932,10 @@ fn visit_field(
     mut prefix_depth: u64,
     value_depth_local: &mut MaxPlusForm,
     layout_size_local: &mut LinearForm,
-    materialized_type_size_local: &mut MaterializationForm,
     linearizer: &mut Linearizer,
     type_limits: &TypeLimits,
 ) -> PartialVMResult<()> {
     let mut remaining_nodes = type_limits.max_type_nodes();
-    let mut wrap_layers = 0u64;
     loop {
         if remaining_nodes == 0 {
             return Err(partial_vm_error!(
@@ -1072,7 +954,6 @@ fn visit_field(
                     .max(prefix_depth.saturating_add(1));
                 layout_size_local.constant = layout_size_local.constant.saturating_add(1);
                 prefix_depth = prefix_depth.saturating_add(1);
-                wrap_layers = wrap_layers.saturating_add(1);
                 ty = inner;
             }
             ArenaType::TyParam(idx) => {
@@ -1090,27 +971,20 @@ fn visit_field(
                         coefficient: 1,
                     }),
                 }
-                let mut field_materialization = MaterializationForm::parameter(*idx);
-                let mut field_type_size = LinearForm::parameter(*idx);
-                field_type_size.constant = wrap_layers;
-                field_materialization.absorb_type_size(field_type_size);
-                materialized_type_size_local.absorb(&field_materialization);
                 return Ok(());
             }
             ArenaType::Datatype(_) | ArenaType::DatatypeInstantiation(_) => {
                 let root = linearizer.emit_datatype_application(ty)?;
-                let application =
-                    linearizer
-                        .applications
-                        .get_mut(root as usize)
-                        .ok_or_else(|| {
-                            partial_vm_error!(
-                                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                                "linearizer returned an out-of-bounds application index"
-                            )
-                        })?;
-                application.field_depth = Some(prefix_depth);
-                application.field_wrap_layers = checked_as!(wrap_layers, u16)?;
+                linearizer
+                    .applications
+                    .get_mut(root as usize)
+                    .ok_or_else(|| {
+                        partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "linearizer returned an out-of-bounds application index"
+                        )
+                    })?
+                    .field_depth = Some(prefix_depth);
                 return Ok(());
             }
             ArenaType::Bool
@@ -1126,8 +1000,6 @@ fn visit_field(
                     .constant
                     .max(prefix_depth.saturating_add(1));
                 layout_size_local.constant = layout_size_local.constant.saturating_add(1);
-                materialized_type_size_local
-                    .absorb_type_size(LinearForm::constant(wrap_layers.saturating_add(1)));
                 return Ok(());
             }
         }
@@ -1175,8 +1047,6 @@ impl ArenaTypeSizeFormula {
             let mut value_depth_local = MaxPlusForm::constant(1);
             let mut layout_size_local =
                 LinearForm::constant(1u64.saturating_add(extra_layout_nodes));
-            let mut materialized_type_size_local =
-                MaterializationForm::from_type_size(type_size.clone());
             let mut linearizer = Linearizer::new();
             for field in field_types {
                 visit_field(
@@ -1184,7 +1054,6 @@ impl ArenaTypeSizeFormula {
                     1,
                     &mut value_depth_local,
                     &mut layout_size_local,
-                    &mut materialized_type_size_local,
                     &mut linearizer,
                     type_limits,
                 )?;
@@ -1197,7 +1066,6 @@ impl ArenaTypeSizeFormula {
                 type_depth: type_depth.into_arena(arena)?,
                 value_depth_local: value_depth_local.into_arena(arena)?,
                 layout_size_local: layout_size_local.into_arena(arena)?,
-                materialized_type_size_local: materialized_type_size_local.into_arena(arena)?,
                 keys,
                 applications,
             })
@@ -1208,7 +1076,7 @@ impl ArenaTypeSizeFormula {
                 let struct_ = struct_.to_ref();
                 from_fields(
                     checked_as!(struct_.type_parameters.len(), u16)?,
-                    struct_.fields.iter().map(|field| &**field),
+                    struct_.fields.iter().map(|field| &*field.ty),
                     0,
                     arena,
                     type_limits,
@@ -1221,7 +1089,7 @@ impl ArenaTypeSizeFormula {
                     enum_
                         .variants
                         .iter()
-                        .flat_map(|variant| variant.fields.iter().map(|field| &**field)),
+                        .flat_map(|variant| variant.fields.iter().map(|field| &*field.ty)),
                     enum_.variants.len() as u64,
                     arena,
                     type_limits,
@@ -1246,78 +1114,18 @@ impl ArenaTypeSizeFormula {
         arena: &ArenaBuilder,
         type_limits: &TypeLimits,
     ) -> PartialVMResult<Self> {
-        // The syntactic measures, computed structurally over a worklist: each node is one
-        // `type_size` node at its `type_depth` level; parameters contribute their own measures
-        // (coefficients sum, offsets max on repeated parameters).
-        let mut type_size = LinearForm::constant(0);
-        let mut type_depth = MaxPlusForm::constant(0);
-        let mut work: Vec<(&ArenaType, u64)> = vec![(ty, 0)];
-        while let Some((ty, depth)) = work.pop() {
-            match ty {
-                ArenaType::TyParam(idx) => {
-                    match type_size.terms.iter_mut().find(|t| t.param == *idx) {
-                        Some(existing) => {
-                            existing.coefficient = existing.coefficient.saturating_add(1)
-                        }
-                        None => type_size.terms.push(LinearTerm {
-                            param: *idx,
-                            coefficient: 1,
-                        }),
-                    }
-                    match type_depth.terms.iter_mut().find(|t| t.param == *idx) {
-                        Some(existing) => existing.offset = existing.offset.max(depth),
-                        None => type_depth.terms.push(MaxPlusTerm {
-                            param: *idx,
-                            offset: depth,
-                        }),
-                    }
-                }
-                ArenaType::Vector(inner)
-                | ArenaType::Reference(inner)
-                | ArenaType::MutableReference(inner) => {
-                    type_size.constant = type_size.constant.saturating_add(1);
-                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
-                    work.push((inner, depth.saturating_add(1)));
-                }
-                ArenaType::DatatypeInstantiation(inst) => {
-                    type_size.constant = type_size.constant.saturating_add(1);
-                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
-                    let (_, args) = &**inst;
-                    for arg in args.iter() {
-                        work.push((arg, depth.saturating_add(1)));
-                    }
-                }
-                // Primitives and uninstantiated datatypes: one node, one level.
-                ArenaType::Bool
-                | ArenaType::U8
-                | ArenaType::U16
-                | ArenaType::U32
-                | ArenaType::U64
-                | ArenaType::U128
-                | ArenaType::U256
-                | ArenaType::Address
-                | ArenaType::Signer
-                | ArenaType::Datatype(_) => {
-                    type_size.constant = type_size.constant.saturating_add(1);
-                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
-                }
-            }
-        }
-        type_size.canonicalize();
-        type_depth.canonicalize();
+        let (type_size, type_depth) = syntactic_forms(ty);
 
         // The term is a "field" of nothing: no wrapping datatype node, so the locals start at
         // zero and the fold sits at depth 0.
         let mut value_depth_local = MaxPlusForm::constant(0);
         let mut layout_size_local = LinearForm::constant(0);
-        let mut materialized_type_size_local = MaterializationForm::empty();
         let mut linearizer = Linearizer::new();
         visit_field(
             ty,
             0,
             &mut value_depth_local,
             &mut layout_size_local,
-            &mut materialized_type_size_local,
             &mut linearizer,
             type_limits,
         )?;
@@ -1329,7 +1137,6 @@ impl ArenaTypeSizeFormula {
             type_depth: type_depth.into_arena(arena)?,
             value_depth_local: value_depth_local.into_arena(arena)?,
             layout_size_local: layout_size_local.into_arena(arena)?,
-            materialized_type_size_local: materialized_type_size_local.into_arena(arena)?,
             keys,
             applications,
         })
@@ -1401,7 +1208,6 @@ impl ArenaTypeSizeFormula {
         let mut results: Vec<PartialTypeSizeFormula> = Vec::with_capacity(self.applications.len());
         let mut value_depth = self.value_depth_local.to_form();
         let mut layout_size = self.layout_size_local.to_form();
-        let mut materialized_type_size = self.materialized_type_size_local.to_form();
         for application in self.applications.iter() {
             let args = application
                 .arguments
@@ -1429,11 +1235,6 @@ impl ArenaTypeSizeFormula {
             if let Some(depth) = application.field_depth {
                 value_depth.absorb(depth, &applied.value_depth);
                 layout_size.absorb(1, &applied.layout_size);
-                materialized_type_size.absorb(
-                    &applied
-                        .wrap_n(application.field_wrap_layers)
-                        .materialized_type_size,
-                );
             }
             results.push(applied);
         }
@@ -1444,7 +1245,6 @@ impl ArenaTypeSizeFormula {
             type_depth: self.type_depth.to_form(),
             value_depth,
             layout_size,
-            materialized_type_size,
         })
     }
 }

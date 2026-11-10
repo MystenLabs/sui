@@ -280,21 +280,6 @@ impl Adapter {
         count_layout_nodes(&layout)
     }
 
-    fn try_generate_layout(&self, ty: &Type) -> PartialVMResult<()> {
-        let vm = self.runtime_adapter.write();
-        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
-        session.virtual_tables.type_to_type_layout(ty).map(drop)
-    }
-
-    fn try_generate_annotated_layout(&self, ty: &Type) -> PartialVMResult<()> {
-        let vm = self.runtime_adapter.write();
-        let session = vm.make_vm(self.store.linkage.clone()).unwrap();
-        session
-            .virtual_tables
-            .type_to_fully_annotated_layout(ty)
-            .map(drop)
-    }
-
     fn get_type_tag(&self, ty: &Type) -> TypeTag {
         let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
@@ -920,7 +905,6 @@ fn test_nested_application_formulas() {
             type_depth: 2,
             value_depth: 7,
             layout_size: 17,
-            materialized_type_size: 7,
         }
     );
     assert_eq!(adapter.generated_layout_nodes(&w_u64), 17);
@@ -934,7 +918,6 @@ fn test_nested_application_formulas() {
             type_depth: 3,
             value_depth: 7,
             layout_size: 23,
-            materialized_type_size: 8,
         }
     );
     assert_eq!(adapter.generated_layout_nodes(&w_ss_u64), 23);
@@ -1005,7 +988,6 @@ fn test_term_formula_argument_order() {
             type_depth: 3,
             value_depth: 4,
             layout_size: 5,
-            materialized_type_size: 4,
         }
     );
 
@@ -1033,7 +1015,6 @@ fn test_term_formula_argument_order() {
             type_depth: 4,
             value_depth: 6,
             layout_size: 10,
-            materialized_type_size: 7,
         }
     );
 }
@@ -1070,30 +1051,6 @@ fn test_layout_size_matches_generated_layout() {
             "layout_size formula disagrees with generated layout for {ty:?}"
         );
     }
-}
-
-#[test]
-fn test_layout_rejects_phantom_field_materialization_growth() {
-    let data_store = InMemoryStorage::new();
-    let mut adapter =
-        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
-    adapter.publish_package(get_depth_tests_modules());
-
-    let module = ModuleId::new(ADDR2, Identifier::new("P").unwrap());
-    let chain3 = adapter.datatype(&module, ident_str!("Chain3"), vec![Type::U8]);
-    let chain4 = adapter.datatype(&module, ident_str!("Chain4"), vec![Type::U8]);
-    let linear4 = adapter.datatype(&module, ident_str!("Linear4"), vec![Type::U8]);
-
-    assert_eq!(adapter.type_size_of(&chain3).materialized_type_size, 86);
-    assert_eq!(adapter.generated_layout_nodes(&chain3), 5);
-    assert_eq!(adapter.type_size_of(&chain4).materialized_type_size, 342);
-    assert_eq!(adapter.type_size_of(&linear4).materialized_type_size, 2);
-    assert_eq!(adapter.generated_layout_nodes(&linear4), 6);
-
-    let err = adapter.try_generate_layout(&chain4).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
-    let err = adapter.try_generate_annotated_layout(&chain4).unwrap_err();
-    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
 }
 
 /// `type_size_of` recurs structurally over a concrete type; a nesting at the depth limit must

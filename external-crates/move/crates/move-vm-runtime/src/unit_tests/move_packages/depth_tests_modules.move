@@ -119,24 +119,6 @@ module 0x2::I {
     }
 }
 
-module 0x2::P {
-    public struct Four<phantom A, phantom B, phantom C, phantom D> has copy, drop, store {
-        value: u8,
-    }
-
-    public struct Chain0<phantom T> has copy, drop, store { value: u8 }
-    public struct Chain1<phantom T> has copy, drop, store { value: Chain0<Four<T, T, T, T>> }
-    public struct Chain2<phantom T> has copy, drop, store { value: Chain1<Four<T, T, T, T>> }
-    public struct Chain3<phantom T> has copy, drop, store { value: Chain2<Four<T, T, T, T>> }
-    public struct Chain4<phantom T> has copy, drop, store { value: Chain3<Four<T, T, T, T>> }
-
-    public struct Linear0<phantom T> has copy, drop, store { value: u8 }
-    public struct Linear1<phantom T> has copy, drop, store { value: Linear0<T> }
-    public struct Linear2<phantom T> has copy, drop, store { value: Linear1<T> }
-    public struct Linear3<phantom T> has copy, drop, store { value: Linear2<T> }
-    public struct Linear4<phantom T> has copy, drop, store { value: Linear3<T> }
-}
-
 module 0x2::W {
     // A family with nested datatype applications in field position, exercising the linearized
     // size-formula path: subterm vs. field-root applications, vector layers on arguments, and

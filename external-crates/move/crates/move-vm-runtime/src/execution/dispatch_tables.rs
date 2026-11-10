@@ -11,8 +11,8 @@ use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
     execution::{interpreter::state::TypeArguments, vm::DatatypeInfo},
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, Function, FunctionInstantiation, Package,
-        SizedArenaType, StructInstantiation, Type, VariantInstantiation,
+        ArenaType, Datatype, DatatypeDescriptor, FieldType, Function, FunctionInstantiation,
+        Package, SizedArenaType, StructInstantiation, Type, VariantInstantiation,
     },
     shared::{
         TypeLimits, TypeTraversalBudget,
@@ -669,7 +669,7 @@ impl VMDispatchTables {
         Ok(())
     }
 
-    /// The five sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
+    /// The four sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
     /// resolve through the cache.
     pub(crate) fn type_size_of(&self, ty: &Type, limits: &TypeLimits) -> PartialVMResult<TypeSize> {
         self.type_size_of_impl(ty, &mut limits.traversal())
@@ -708,7 +708,7 @@ impl VMDispatchTables {
     }
 
     /// The `value_depth` of a concrete type -- the single measure `Pack`/`PackVariant` need,
-    /// computed without the other four.
+    /// computed without the other three.
     pub(crate) fn value_depth_of(&self, ty: &Type, limits: &TypeLimits) -> PartialVMResult<u64> {
         self.value_depth_of_impl(ty, &mut limits.traversal())
     }
@@ -884,11 +884,29 @@ impl VMDispatchTables {
         )
     }
 
-    /// Check a type's predicted layout and materialization sizes before layout generation.
+    fn type_argument_sizes(&self, ty_args: &[Type]) -> PartialVMResult<Vec<TypeSize>> {
+        ty_args
+            .iter()
+            .map(|ty| self.type_size_of(ty, &self.type_limits))
+            .collect()
+    }
+
+    fn substitute_field_type(
+        &self,
+        field: &FieldType,
+        ty_args: &[Type],
+        arg_sizes: &[TypeSize],
+    ) -> PartialVMResult<Type> {
+        let (type_size, type_depth) = field.syntactic_size.solve(arg_sizes)?;
+        check_syntactic_limits(&self.type_limits, type_size, type_depth)?;
+        field.ty.subst_unchecked(ty_args)
+    }
+
+    /// Check a type's predicted `value_depth` and `layout_size` against the configured limits
+    /// before any layout generation -- pure arithmetic over the descriptor formulas; nothing of
+    /// an oversized layout is ever built. The error codes mirror the legacy cursor's.
     fn check_layout_limits(&self, ty: &Type) -> PartialVMResult<()> {
         let size = self.type_size_of(ty, &self.type_limits)?;
-        self.type_limits
-            .check_type_nodes(size.materialized_type_size)?;
         if size.value_depth
             > safe_unwrap!(self.vm_config.runtime_limits_config.max_value_nest_depth)
         {
@@ -918,6 +936,7 @@ impl VMDispatchTables {
             ty_args: &[Type],
         ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
             let ty = tables.resolve_type(datatype_name)?.to_ref();
+            let arg_sizes = tables.type_argument_sizes(ty_args)?;
             let type_layout = match ty.datatype_info.inner_ref() {
                 Datatype::Enum(einfo) => {
                     let mut variant_layouts = vec![];
@@ -925,7 +944,7 @@ impl VMDispatchTables {
                         let field_tys = variant
                             .fields
                             .iter()
-                            .map(|ty| ty.subst_unchecked(ty_args))
+                            .map(|field| tables.substitute_field_type(field, ty_args, &arg_sizes))
                             .collect::<PartialVMResult<Vec<_>>>()?;
                         let field_layouts = field_tys
                             .iter()
@@ -941,7 +960,7 @@ impl VMDispatchTables {
                     let field_tys = sinfo
                         .fields
                         .iter()
-                        .map(|ty| ty.subst_unchecked(ty_args))
+                        .map(|field| tables.substitute_field_type(field, ty_args, &arg_sizes))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     let field_layouts = field_tys
                         .iter()
@@ -1013,6 +1032,7 @@ impl VMDispatchTables {
             ty_args: &[Type],
         ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
             let ty = tables.resolve_type(datatype_name)?.to_ref();
+            let arg_sizes = tables.type_argument_sizes(ty_args)?;
             let struct_tag = tables.datatype_to_type_tag_impl(
                 datatype_name,
                 ty_args,
@@ -1036,7 +1056,7 @@ impl VMDispatchTables {
                             .zip(variant.fields.iter())
                             .map(|(n, ty)| {
                                 let n = tables.interner.resolve_ident(n, "field name");
-                                let ty = ty.subst_unchecked(ty_args)?;
+                                let ty = tables.substitute_field_type(ty, ty_args, &arg_sizes)?;
                                 let l = type_to_fully_annotated_layout_unchecked(tables, &ty)?;
                                 Ok(annotated_value::MoveFieldLayout::new(n, l))
                             })
@@ -1071,7 +1091,7 @@ impl VMDispatchTables {
                         .zip(struct_type.fields.iter())
                         .map(|(n, ty)| {
                             let n = tables.interner.resolve_ident(n, "field name");
-                            let ty = ty.subst_unchecked(ty_args)?;
+                            let ty = tables.substitute_field_type(ty, ty_args, &arg_sizes)?;
                             let l = type_to_fully_annotated_layout_unchecked(tables, &ty)?;
                             Ok(annotated_value::MoveFieldLayout::new(n, l))
                         })

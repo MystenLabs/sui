@@ -25,7 +25,7 @@ use crate::{
     shared::{
         TypeLimits, TypeTraversalBudget,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
-        type_size_formulae::ArenaTypeSizeFormula,
+        type_size_formulae::{ArenaSyntacticSizeFormula, ArenaTypeSizeFormula},
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
         views::{SizeConfig, ValueView as _},
@@ -730,8 +730,8 @@ fn structs(
 
             let fields = fields
                 .iter()
-                .map(|f| make_arena_type(context, module, &f.signature.0))
-                .collect::<PartialVMResult<Vec<VMPointer<ArenaType>>>>()?;
+                .map(|field| make_field_type(context, module, &field.signature.0))
+                .collect::<PartialVMResult<Vec<_>>>()?;
             let fields = context.arena_vec(fields.into_iter())?;
 
             let field_names: Vec<IdentifierKey> = match &struct_def.field_information {
@@ -827,7 +827,7 @@ fn enums(
                 let fields = variant_def
                     .fields
                     .iter()
-                    .map(|f| make_arena_type(context, module, &f.signature.0))
+                    .map(|field| make_field_type(context, module, &field.signature.0))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let fields = context.arena_vec(fields.into_iter())?;
 
@@ -1754,6 +1754,16 @@ fn call(
 // -------------------------------------------------------------------------------------------------
 // Type Translation
 // -------------------------------------------------------------------------------------------------
+
+fn make_field_type(
+    context: &mut PackageContext,
+    module: &CompiledModule,
+    tok: &SignatureToken,
+) -> PartialVMResult<FieldType> {
+    let ty = make_arena_type(context, module, tok)?;
+    let syntactic_size = ArenaSyntacticSizeFormula::from_term(&ty, &context.package_arena)?;
+    Ok(FieldType { ty, syntactic_size })
+}
 
 /// Convert a signature token into an execution type paired with its JIT-compiled size formula
 /// ([`ArenaTypeSizeFormula::from_term`]) -- the form every runtime-sized type travels in, so
