@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod accumulator;
+pub mod balance_tracking;
 mod fingerprint;
 pub(crate) mod object_store;
 #[cfg(test)]
@@ -17,13 +18,8 @@ use indexmap::set::IndexSet;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_binary_format::partial_vm_error;
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{MoveTypeLayout, MoveValue},
-    annotated_visitor as AV,
-    language_storage::StructTag,
-    runtime_value as R,
-    u256::U256,
-    vm_status::StatusCode,
+    account_address::AccountAddress, annotated_value::MoveTypeLayout, language_storage::StructTag,
+    runtime_value as R, u256::U256, vm_status::StatusCode,
 };
 use move_vm_runtime::execution::values::{GlobalValue, Reference, StructRef, Value};
 use move_vm_runtime::natives::extensions::NativeExtensionMarker;
@@ -44,15 +40,19 @@ use sui_types::{
     error::{ExecutionError, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
     execution_status::ExecutionErrorKind,
-    id::UID,
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{MoveObject, Owner},
     storage::{ImplicitSystemObjectResolver, ObjectFundsSufficiency, RuntimeObjectResolver},
 };
+use sui_types::{assert_invariant, invariant_violation, make_invariant_violation};
 use tracing::error;
 
 pub use accumulator::*;
+pub use balance_tracking::{
+    BalanceTotals, BalanceTracking, BalancesBefore, ObjectContents, add_to_totals,
+    layout_contains_balance, merge_totals, object_contents, walk_contents,
+};
 
 pub enum ObjectEvent {
     /// Transfer to a new address or object. Or make it shared or immutable.
@@ -94,6 +94,8 @@ pub struct RuntimeResults {
     pub deleted_object_ids: Set<ObjectID>,
     pub settlement_input_sui: u64,
     pub settlement_output_sui: u64,
+    /// Set only when balances are tracked.
+    pub balances_before: Option<BalancesBefore>,
 }
 
 #[derive(Clone, Copy)]
@@ -167,6 +169,8 @@ pub enum TransferResult {
 
 pub struct InputObject {
     pub contained_uids: BTreeSet<ObjectID>,
+    /// Empty unless balances are tracked.
+    pub balances: BalanceTotals,
     pub version: SequenceNumber,
     pub owner: Owner,
 }
@@ -200,18 +204,30 @@ impl<'a> ObjectRuntime<'a> {
         protocol_config: &'a ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         epoch_id: EpochId,
+        track_balances: bool,
     ) -> Self {
         let mut input_object_owners = BTreeMap::new();
         let mut root_version = BTreeMap::new();
         let mut wrapped_object_containers = BTreeMap::new();
+        let mut balances_before = track_balances.then(BalancesBefore::new);
         for (id, input_object) in input_objects {
             let InputObject {
                 contained_uids,
+                balances,
                 version,
                 owner,
             } = input_object;
             input_object_owners.insert(id, owner);
             debug_assert!(contained_uids.contains(&id));
+            if let Some(before) = &mut balances_before {
+                before.record(
+                    id,
+                    ObjectContents {
+                        uids: contained_uids.clone(),
+                        balances,
+                    },
+                );
+            }
             for contained_uid in contained_uids {
                 root_version.insert(contained_uid, version);
                 if contained_uid != id {
@@ -229,6 +245,7 @@ impl<'a> ObjectRuntime<'a> {
                 protocol_config,
                 metrics.clone(),
                 epoch_id,
+                balances_before,
             ),
             system_object_resolver,
             clock: None,
@@ -821,7 +838,14 @@ impl<'a> ObjectRuntime<'a> {
         let child_effects = self.child_object_store.take_effects().map_err(|e| {
             ExecutionError::invariant_violation(format!("Failed to take child object effects: {e}"))
         })?;
-        self.state.finish(loaded_child_objects, child_effects)
+        let balances_before = self.child_object_store.take_balances_before();
+        let mut results = self.state.finish(loaded_child_objects, child_effects)?;
+        assert_invariant!(
+            results.balances_before.is_none(),
+            "Balances before should only be set by the object runtime"
+        );
+        results.balances_before = balances_before;
+        Ok(results)
     }
 
     pub(crate) fn all_active_child_objects(&self) -> impl Iterator<Item = ActiveChildObject<'_>> {
@@ -990,6 +1014,7 @@ impl ObjectRuntimeState {
             deleted_object_ids: deleted_ids,
             settlement_input_sui,
             settlement_output_sui,
+            balances_before: None,
         })
     }
 
@@ -1134,54 +1159,4 @@ fn check_circular_ownership(
         }
     }
     Ok(())
-}
-
-/// WARNING! This function assumes that the bcs bytes have already been validated,
-/// and it will give an invariant violation otherwise.
-/// In short, we are relying on the invariant that the bytes are valid for objects
-/// in storage.  We do not need this invariant for dev-inspect, as the programmable
-/// transaction execution will validate the bytes before we get to this point.
-pub fn get_all_uids(
-    fully_annotated_layout: &MoveTypeLayout,
-    bcs_bytes: &[u8],
-) -> Result<BTreeSet<ObjectID>, /* invariant violation */ String> {
-    let mut ids = BTreeSet::new();
-    struct UIDTraversal<'i>(&'i mut BTreeSet<ObjectID>);
-    struct UIDCollector<'i>(&'i mut BTreeSet<ObjectID>);
-
-    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'_> {
-        type Error = AV::Error;
-
-        fn traverse_struct(
-            &mut self,
-            driver: &mut AV::StructDriver<'_, 'b, 'l>,
-        ) -> Result<(), Self::Error> {
-            if driver.struct_layout().type_ == UID::type_() {
-                while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
-            } else {
-                while driver.next_field(self)?.is_some() {}
-            }
-            Ok(())
-        }
-    }
-
-    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'_> {
-        type Error = AV::Error;
-        fn traverse_address(
-            &mut self,
-            _driver: &AV::ValueDriver<'_, 'b, 'l>,
-            value: AccountAddress,
-        ) -> Result<(), Self::Error> {
-            self.0.insert(value.into());
-            Ok(())
-        }
-    }
-
-    MoveValue::visit_deserialize(
-        bcs_bytes,
-        fully_annotated_layout,
-        &mut UIDTraversal(&mut ids),
-    )
-    .map_err(|e| format!("Failed to deserialize. {e}"))?;
-    Ok(ids)
 }

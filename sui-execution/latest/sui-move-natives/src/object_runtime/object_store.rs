@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
+use crate::object_runtime::{
+    BalancesBefore, ObjectContents, fingerprint::ObjectFingerprint, object_contents,
+};
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::partial_vm_error;
 use move_core_types::{annotated_value as A, runtime_value as R};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
-    collections::{BTreeMap, btree_map},
+    collections::{BTreeMap, BTreeSet, btree_map},
     sync::Arc,
 };
 use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
@@ -88,6 +90,8 @@ struct Inner<'a> {
     metrics: Arc<ExecutionMetrics>,
     // Epoch ID for the current transaction. Used for receiving objects.
     current_epoch_id: EpochId,
+    // Set only when balances are tracked.
+    balances_before: Option<BalancesBefore>,
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
@@ -177,6 +181,18 @@ macro_rules! fetch_child_object_unbounded {
 }
 
 impl Inner<'_> {
+    /// Returns the contained UIDs, keeping the contents if balances are tracked.
+    fn record_contents(&mut self, id: ObjectID, contents: ObjectContents) -> BTreeSet<ObjectID> {
+        match &mut self.balances_before {
+            Some(before) => {
+                let uids = contents.uids.clone();
+                before.record(id, contents);
+                uids
+            }
+            None => contents.uids,
+        }
+    }
+
     fn receive_object_from_store(
         &self,
         owner: ObjectID,
@@ -312,6 +328,7 @@ impl Inner<'_> {
     ) -> PartialVMResult<
         ObjectResult<CacheMetadata<(MoveObjectType, GlobalValue, ObjectFingerprint)>>,
     > {
+        let track_balances = self.balances_before.is_some();
         // retrieve the object from storage if it exists
         let (cache_info, obj_opt) = self.get_or_fetch_object_from_store(parent, child)?;
         let Some(obj) = obj_opt else {
@@ -358,13 +375,14 @@ impl Inner<'_> {
             }
         };
         // Find all UIDs inside of the value and update the object parent maps
-        let contained_uids =
-            get_all_uids(child_ty_fully_annotated_layout, obj_contents).map_err(|e| {
-                partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Failed to find UIDs. ERROR: {e}"
-                )
-            })?;
+        let contents = walk_object_contents(obj, child_ty_fully_annotated_layout, track_balances)
+            .map_err(|e| {
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Failed to find UIDs. ERROR: {e}"
+            )
+        })?;
+        let contained_uids = self.record_contents(child, contents);
         let parents_root_version = self.root_version.get(&parent).copied();
         if let Some(v) = parents_root_version {
             debug_assert!(contained_uids.contains(&child));
@@ -381,6 +399,17 @@ impl Inner<'_> {
             (child_move_type.clone(), global_value, fingerprint),
         )))
     }
+}
+
+fn walk_object_contents(
+    obj: &MoveObject,
+    fully_annotated_layout: &A::MoveTypeLayout,
+    track_balances: bool,
+) -> Result<ObjectContents, String> {
+    let Ok(contents) = object_contents(obj, track_balances, || {
+        Ok::<_, std::convert::Infallible>(Some(fully_annotated_layout))
+    });
+    contents
 }
 
 fn deserialize_move_object(
@@ -414,6 +443,7 @@ impl<'a> ChildObjectStore<'a> {
         protocol_config: &'a ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         current_epoch_id: EpochId,
+        balances_before: Option<BalancesBefore>,
     ) -> Self {
         Self {
             inner: Inner {
@@ -425,6 +455,7 @@ impl<'a> ChildObjectStore<'a> {
                 protocol_config,
                 metrics,
                 current_epoch_id,
+                balances_before,
             },
             store: BTreeMap::new(),
             config_setting_cache: BTreeMap::new(),
@@ -469,13 +500,16 @@ impl<'a> ChildObjectStore<'a> {
                     // Find all UIDs inside of the value and update the object parent maps with the contained
                     // UIDs in the received value. They should all have an upper bound version as the receiving object.
                     // Only do this if we successfully load the object though.
-                    let contained_uids = get_all_uids(child_fully_annotated_layout, obj.contents())
-                        .map_err(|e| {
-                            partial_vm_error!(
-                                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                                "Failed to find UIDs for receiving object. ERROR: {e}"
-                            )
-                        })?;
+                    let track_balances = self.inner.balances_before.is_some();
+                    let contents =
+                        walk_object_contents(&obj, child_fully_annotated_layout, track_balances)
+                            .map_err(|e| {
+                                partial_vm_error!(
+                                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                                    "Failed to find UIDs for receiving object. ERROR: {e}"
+                                )
+                            })?;
+                    let contained_uids = self.inner.record_contents(child, contents);
                     for id in contained_uids {
                         self.inner.root_version.insert(id, child_version);
                         if id != child {
@@ -759,6 +793,10 @@ impl<'a> ChildObjectStore<'a> {
 
     pub(super) fn wrapped_object_containers(&self) -> &BTreeMap<ObjectID, ObjectID> {
         &self.inner.wrapped_object_containers
+    }
+
+    pub(super) fn take_balances_before(&mut self) -> Option<BalancesBefore> {
+        self.inner.balances_before.take()
     }
 
     // retrieve the effects for the child objects

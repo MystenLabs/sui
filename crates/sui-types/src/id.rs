@@ -50,6 +50,13 @@ impl UID {
         }
     }
 
+    pub fn is_uid(s: &StructTag) -> bool {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == OBJECT_MODULE_NAME
+            && s.name.as_ident_str() == UID_STRUCT_NAME
+            && s.type_params.is_empty()
+    }
+
     pub fn object_id(&self) -> &ObjectID {
         &self.id.bytes
     }
