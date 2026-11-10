@@ -1,0 +1,159 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+// Unfreezing lifts the freeze once no SeizeAuth is outstanding. A permanent freeze is never lifted.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 8-32:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 20238800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 34:
+//# run sui::coin_registry::finalize_registration --args object(0xc) receiving(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+deleted: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 8094000,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 3, line 36:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+created: object(3,0), object(3,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 10290400,  storage_rebate: 2887711, non_refundable_storage_fee: 289
+
+task 4, lines 38-40:
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address B is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 5, line 42:
+//# run sui::coin_regulation::unfreeze_address --args object(0xcf) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressUnfrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0)
+deleted: object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 10289371, non_refundable_storage_fee: 1029
+
+task 6, lines 44-46:
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(6,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 7, line 48:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+created: object(3,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 10290400,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 8, lines 50-52:
+//# programmable --sender A --inputs object(0xcf) object(1,3) @B @A
+//> 0: sui::coin_regulation::issue_seize_auth<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2));
+//> sui::coin_regulation::transfer_seize_auth<test::regulated_coin::REGULATED_COIN>(Result(0), Input(3))
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("SeizeAuthIssued"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [202, 40, 1, 93, 137, 61, 174, 254, 85, 126, 0, 113, 89, 121, 234, 205, 203, 156, 133, 252, 213, 135, 252, 166, 202, 101, 206, 14, 59, 63, 96, 192, 211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+created: object(8,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 9849600,  storage_rebate: 7439656, non_refundable_storage_fee: 744
+
+task 9, lines 54-55:
+// Unfreezing waits for every SeizeAuth to be destroyed.
+//# run sui::coin_regulation::unfreeze_address --args object(0xcf) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Move Abort in sui::coin_regulation::unfreeze_address (function index 1) at offset 32 at line 169 with clever code 3
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("coin_regulation") }, function: 1, instruction: 32, function_name: Some("unfreeze_address") }, 13835903206062161927) at command Some(0)
+
+task 10, line 57:
+//# run sui::coin_regulation::destroy_seize_auth --args object(0xcf) object(8,0) --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("SeizeAuthDestroyed"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [202, 40, 1, 93, 137, 61, 174, 254, 85, 126, 0, 113, 89, 121, 234, 205, 203, 156, 133, 252, 213, 135, 252, 166, 202, 101, 206, 14, 59, 63, 96, 192, 211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(3,1)
+deleted: object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 5601200,  storage_rebate: 7948805, non_refundable_storage_fee: 795
+
+task 11, lines 59-60:
+// Unfreezing waits for an epoch after the last SeizeAuth destroy.
+//# advance-epoch
+Epoch advanced: 1
+
+task 12, line 62:
+//# run sui::coin_regulation::unfreeze_address --args object(0xcf) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressUnfrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0)
+deleted: object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 10350165, non_refundable_storage_fee: 1035
+
+task 13, lines 64-66:
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(13,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 14, line 68:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(1,3) @C --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237] }
+created: object(14,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 10290400,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 15, lines 70-72:
+//# programmable --sender A --inputs object(0xcf) object(1,3) @C @A
+//> 0: sui::coin_regulation::issue_seize_auth<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2));
+//> sui::coin_regulation::transfer_seize_auth<test::regulated_coin::REGULATED_COIN>(Result(0), Input(3))
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("SeizeAuthIssued"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [24, 100, 167, 92, 106, 61, 80, 182, 142, 190, 75, 177, 231, 52, 131, 77, 118, 136, 47, 203, 228, 83, 9, 104, 109, 234, 103, 41, 193, 177, 6, 224, 240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237] }
+created: object(15,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(14,0)
+gas summary: computation_cost: 1000000, storage_cost: 9849600,  storage_rebate: 7439656, non_refundable_storage_fee: 744
+
+task 16, line 74:
+//# run sui::coin_regulation::permanently_freeze_address --args object(0xcf) object(1,3) @C --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressPermanentlyFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(14,0)
+gas summary: computation_cost: 1000000, storage_cost: 7683600,  storage_rebate: 7682832, non_refundable_storage_fee: 768
+
+task 17, lines 76-78:
+//# programmable --sender A --inputs object(1,5) 1 @C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address C is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: C, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 18, lines 80-83:
+// The SeizeAuth input does not exempt C.
+//# programmable --sender A --inputs object(15,0) object(1,5) 1 @C
+//> 0: SplitCoins(Input(1), [Input(2)]);
+//> TransferObjects([Result(0)], Input(3))
+Error: Transaction Effects Status: Address C is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: C, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 19, line 85:
+//# run sui::coin_regulation::destroy_seize_auth --args object(0xcf) object(15,0) --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("SeizeAuthDestroyed"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [24, 100, 167, 92, 106, 61, 80, 182, 142, 190, 75, 177, 231, 52, 131, 77, 118, 136, 47, 203, 228, 83, 9, 104, 109, 234, 103, 41, 193, 177, 6, 224, 240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(14,0)
+deleted: object(15,0)
+gas summary: computation_cost: 1000000, storage_cost: 5540400,  storage_rebate: 7948805, non_refundable_storage_fee: 795
+
+task 20, line 87:
+//# run sui::coin_regulation::unfreeze_address --args object(0xcf) object(1,3) @C --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Move Abort in sui::coin_regulation::unfreeze_address (function index 1) at offset 72 at line 173 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("coin_regulation") }, function: 1, instruction: 72, function_name: Some("unfreeze_address") }, 13836184698218872841) at command Some(0)
+
+task 21, lines 89-91:
+//# programmable --sender A --inputs object(1,5) 1 @C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address C is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: C, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }

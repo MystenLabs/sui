@@ -1,0 +1,93 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+// Withdrawing from an object's balance and depositing it back persists no balance-bearing object,
+// but still touches the coin, so it fails while the object is frozen or the coin is paused.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-71:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 25049600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 73:
+//# run sui::coin_registry::finalize_registration --args object(0xc) receiving(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+deleted: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 8094000,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 3, line 75:
+//# run test::regulated_coin::new_vault --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, lines 77-79:
+//# programmable --sender A --inputs object(3,0) object(1,5) 100
+//> 0: SplitCoins(Input(1), [Input(2)]);
+//> 1: test::regulated_coin::fund(Input(0), Result(0));
+mutated: object(0,0), object(1,5), object(3,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(4,0), fake(3,0), sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 3800000,  storage_rebate: 3799620, non_refundable_storage_fee: 380
+
+task 5, line 81:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, line 83:
+//# run test::regulated_coin::withdraw_and_redeposit --args object(3,0) 10 --sender A
+mutated: object(0,0), object(3,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(4,0), fake(3,0), sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2325367, non_refundable_storage_fee: 233
+
+task 7, line 85:
+//# run test::regulated_coin::freeze_vault --args object(0xcf) object(1,3) object(3,0) --sender A
+events: Event { package_id: test, transaction_module: Identifier("regulated_coin"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [86, 163, 88, 102, 71, 46, 22, 134, 82, 25, 20, 164, 177, 142, 141, 227, 113, 171, 169, 162, 100, 194, 127, 190, 186, 87, 230, 76, 83, 1, 252, 227] }
+created: object(7,0), object(7,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 11628000,  storage_rebate: 4225177, non_refundable_storage_fee: 423
+
+task 8, line 87:
+//# run test::regulated_coin::withdraw_and_redeposit --args object(3,0) 10 --sender A
+Error: Transaction Effects Status: Address fake(3,0) is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: fake(3,0), coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 9, line 89:
+//# run test::regulated_coin::unfreeze_vault --args object(0xcf) object(1,3) object(3,0) --sender A
+events: Event { package_id: test, transaction_module: Identifier("regulated_coin"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressUnfrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [86, 163, 88, 102, 71, 46, 22, 134, 82, 25, 20, 164, 177, 142, 141, 227, 113, 171, 169, 162, 100, 194, 127, 190, 186, 87, 230, 76, 83, 1, 252, 227] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0), object(7,0)
+deleted: object(7,1)
+gas summary: computation_cost: 1000000, storage_cost: 8458800,  storage_rebate: 11626837, non_refundable_storage_fee: 1163
+
+task 10, line 91:
+//# run sui::coin_regulation::enable_global_pause --args object(0xcf) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("CoinTypePaused"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 11, line 93:
+//# run test::regulated_coin::withdraw_and_redeposit --args object(3,0) 10 --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 12, line 95:
+//# run sui::coin_regulation::disable_global_pause --args object(0xcf) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("CoinTypeUnpaused"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 13, line 97:
+//# run test::regulated_coin::withdraw_and_redeposit --args object(3,0) 10 --sender A
+mutated: object(0,0), object(3,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(4,0), fake(3,0), sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2325367, non_refundable_storage_fee: 233

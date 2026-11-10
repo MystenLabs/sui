@@ -1,0 +1,128 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+// Shared and immutable Coins, under a frozen coin ID or a frozen sender.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 8-33:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 20238800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 35:
+//# run sui::coin_registry::finalize_registration --args object(0xc) receiving(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+deleted: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 8094000,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 3, lines 37-41:
+// Setup: two shared Coins.
+//# programmable --sender A --inputs object(1,5) 100
+//> 0: SplitCoins(Input(0), [Input(1), Input(1)]);
+//> 1: sui::transfer::public_share_object<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>(NestedResult(0,0));
+//> 2: sui::transfer::public_share_object<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>(NestedResult(0,1))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 5411200,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 4, lines 43-47:
+// Setup: two immutable Coins.
+//# programmable --sender A --inputs object(1,5) 100
+//> 0: SplitCoins(Input(0), [Input(1), Input(1)]);
+//> 1: sui::transfer::public_freeze_object<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>(NestedResult(0,0));
+//> 2: sui::transfer::public_freeze_object<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>(NestedResult(0,1))
+created: object(4,0), object(4,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 5411200,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 5, lines 49-54:
+// Control: C takes T out of a shared Coin, adds T into it, and reads an immutable Coin.
+//# programmable --sender C --inputs object(3,0) object(4,0) 1 @C
+//> 0: SplitCoins(Input(0), [Input(2), Input(2)]);
+//> 1: MergeCoins(Input(0), [NestedResult(0,1)]);
+//> 2: sui::coin::value<test::regulated_coin::REGULATED_COIN>(Input(1));
+//> TransferObjects([NestedResult(0,0)], Input(3))
+created: object(5,0)
+mutated: object(0,2), object(3,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 1474253, non_refundable_storage_fee: 147
+
+task 6, lines 56-61:
+// Setup: freeze the IDs of the first shared Coin and the first immutable Coin.
+//# programmable --sender A --inputs object(0xcf) object(1,3) object(3,0) object(4,0)
+//> 0: sui::object::id_address<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>(Input(2));
+//> 1: sui::coin_regulation::freeze_address<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Result(0));
+//> 2: sui::object::id_address<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>(Input(3));
+//> 3: sui::coin_regulation::freeze_address<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Result(2))
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [61, 49, 19, 25, 43, 186, 8, 123, 63, 97, 146, 1, 46, 139, 50, 119, 132, 228, 221, 247, 234, 169, 224, 218, 199, 199, 0, 62, 184, 201, 17, 197] }, Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [31, 89, 193, 244, 21, 150, 157, 141, 107, 111, 105, 181, 40, 196, 221, 240, 155, 52, 145, 124, 158, 28, 243, 210, 236, 140, 215, 27, 34, 251, 205, 88] }
+created: object(6,0), object(6,1), object(6,2)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 14934000,  storage_rebate: 4361964, non_refundable_storage_fee: 436
+
+task 7, lines 63-66:
+// T moves out of a shared Coin whose ID is frozen.
+//# programmable --sender C --inputs object(3,0) 1 @C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Error checking transaction input objects: Address object(3,0) is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
+
+task 8, lines 68-71:
+// T moves into a shared Coin whose ID is frozen.
+//# programmable --sender A --inputs object(3,0) object(1,5) 1
+//> 0: SplitCoins(Input(1), [Input(2)]);
+//> MergeCoins(Input(0), [Result(0)])
+Error: Error checking transaction input objects: Address object(3,0) is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
+
+task 9, lines 73-75:
+// C reads an immutable Coin whose ID is frozen.
+//# programmable --sender C --inputs object(4,0)
+//> 0: sui::coin::value<test::regulated_coin::REGULATED_COIN>(Input(0))
+Error: Error checking transaction input objects: Address object(4,0) is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
+
+task 10, line 77:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+created: object(10,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 10290400,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 11, lines 79-82:
+// The frozen sender takes T out of an unfrozen shared Coin.
+//# programmable --sender B --inputs object(3,1) 1 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
+
+task 12, lines 84-86:
+// The frozen sender reads an unfrozen immutable Coin.
+//# programmable --sender B --inputs object(4,1)
+//> 0: sui::coin::value<test::regulated_coin::REGULATED_COIN>(Input(0))
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::regulated_coin::REGULATED_COIN
+
+task 13, lines 88-91:
+// C takes T out of an unfrozen shared Coin for the frozen B.
+//# programmable --sender C --inputs object(3,1) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address B is denied for coin test::regulated_coin::REGULATED_COIN
+Debug of error: AddressDeniedForCoin { address: B, coin_type: "test::regulated_coin::REGULATED_COIN" } at command None
+
+task 14, lines 93-97:
+// Control: the unfrozen shared and immutable Coins still work for C.
+//# programmable --sender C --inputs object(3,1) object(4,1) 1 @C
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: sui::coin::value<test::regulated_coin::REGULATED_COIN>(Input(1));
+//> TransferObjects([Result(0)], Input(3))
+created: object(14,0)
+mutated: object(0,2), object(3,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
