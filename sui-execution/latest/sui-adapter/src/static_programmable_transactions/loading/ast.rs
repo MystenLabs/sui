@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    gas_charger::GasPayment,
+    metering::gas_charger::GasPayment,
     static_programmable_transactions::linkage::resolved_linkage::{
         ExecutableLinkage, ResolvedLinkage,
     },
@@ -32,7 +32,7 @@ use sui_verifier::INIT_FN_NAME;
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub gas_payment: Option<GasPayment>,
+    pub(crate) gas_payment: Option<GasPayment>,
     pub inputs: Inputs,
     /// Original number of commands in the transaction. After typing, Spanned indices in the AST
     /// should be < `original_command_len`

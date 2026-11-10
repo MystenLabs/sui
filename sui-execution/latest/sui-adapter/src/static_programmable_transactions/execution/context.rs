@@ -5,8 +5,10 @@ use crate::{
     adapter,
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
-    gas_charger::{GasCharger, GasPayment, PaymentLocation},
-    gas_meter::SuiGasMeter,
+    metering::{
+        gas_charger::{GasMeter, GasPayment, PaymentLocation},
+        gas_meter::SuiGasMeter,
+    },
     sp,
     static_programmable_transactions::{
         env::Env,
@@ -139,18 +141,18 @@ macro_rules! object_runtime_mut {
 }
 
 macro_rules! charge_gas_ {
-    ($gas_charger:expr, $env:expr, $call:ident($($args:expr),*)) => {{
-        SuiGasMeter($gas_charger.move_gas_status_mut())
+    ($gas_meter:expr, $env:expr, $call:ident($($args:expr),*)) => {{
+        SuiGasMeter($gas_meter.move_gas_status_mut())
             .$call($($args),*)
             .map_err(|e| $env.convert_vm_error(e.finish(Location::Undefined)))
     }};
-    ($gas_charger:expr, $env:expr, $case:ident, $value_view:expr) => {
-        charge_gas_!($gas_charger, $env, $case($value_view))
+    ($gas_meter:expr, $env:expr, $case:ident, $value_view:expr) => {
+        charge_gas_!($gas_meter, $env, $case($value_view))
     };
 }
 
 macro_rules! charge_gas {
-    ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
+    ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_meter, $context.env, $case, $value_view) }};
 }
 
 // Temporarily removes the transaction-wide VM from the context so callers can use other mutable
@@ -268,7 +270,7 @@ where
     /// creation of new object IDs
     pub tx_context: Rc<RefCell<TxContext>>,
     /// The gas charger used for metering
-    pub gas_charger: &'gas mut GasCharger,
+    pub(crate) gas_meter: &'gas mut GasMeter,
     /// User events are claimed after each Move call
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
@@ -328,11 +330,11 @@ where
     Mode: ExecutionMode,
 {
     #[instrument(name = "Context::new", level = "trace", skip_all)]
-    pub fn new(
+    pub(crate) fn new(
         env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
         metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
-        gas_charger: &'gas mut GasCharger,
+        gas_meter: &'gas mut GasMeter,
         payment_location: Option<GasPayment>,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
@@ -348,14 +350,14 @@ where
         let mut input_object_metadata = Vec::with_capacity(object_inputs.len());
         let mut object_values = Vec::with_capacity(object_inputs.len());
         for object_input in object_inputs {
-            let (i, m, v) = load_object_arg(gas_charger, env, &mut input_object_map, object_input)?;
+            let (i, m, v) = load_object_arg(gas_meter, env, &mut input_object_map, object_input)?;
             input_object_metadata.push((i, m));
             object_values.push(Some(v));
         }
         let object_inputs = Locals::new(object_values)?;
         let mut withdrawal_values = Vec::with_capacity(input_withdrawal_metadata.len());
         for withdrawal_input in &input_withdrawal_metadata {
-            let v = load_withdrawal_arg(gas_charger, env, withdrawal_input)?;
+            let v = load_withdrawal_arg(gas_meter, env, withdrawal_input)?;
             withdrawal_values.push(Some(v));
         }
         let withdrawal_inputs = Locals::new(withdrawal_values)?;
@@ -367,7 +369,7 @@ where
                 let ty = env.gas_coin_type()?;
                 let (gas_metadata, gas_value) = match gas_payment.location {
                     PaymentLocation::AddressBalance(sui_address) => {
-                        let max_gas_in_balance = gas_charger.gas_budget();
+                        let max_gas_in_balance = gas_meter.budget();
                         assert_invariant!(
                             gas_payment.amount >= max_gas_in_balance,
                             "not enough gas to pay. How did we get this far?"
@@ -387,7 +389,7 @@ where
                         (metadata, coin)
                     }
                     PaymentLocation::Coin(gas_coin_id) => load_object_arg_impl(
-                        gas_charger,
+                        gas_meter,
                         env,
                         &mut input_object_map,
                         gas_coin_id,
@@ -399,7 +401,7 @@ where
                 let mut gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
-                let max_gas_in_balance = gas_charger.gas_budget();
+                let max_gas_in_balance = gas_meter.budget();
                 gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
                 Some((gas_payment, gas_metadata, gas_locals))
             }
@@ -409,7 +411,7 @@ where
             env.state_view,
             env.state_view,
             input_object_map,
-            !gas_charger.is_unmetered(),
+            !gas_meter.is_unmetered(),
             env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
@@ -429,7 +431,7 @@ where
                 .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))?;
         }
 
-        debug_assert_eq!(gas_charger.move_gas_status().stack_height_current(), 0);
+        debug_assert_eq!(gas_meter.move_gas_status().stack_height_current(), 0);
         let tx_context_value = Locals::new(vec![Some(Value::new_tx_context(
             tx_context.borrow().digest(),
         )?)])?;
@@ -440,7 +442,7 @@ where
             unified_linkage,
             executable_vm: None,
             tx_context,
-            gas_charger,
+            gas_meter,
             user_events: vec![],
             locations: Locations {
                 tx_context_value,
@@ -550,7 +552,7 @@ where
             env,
             native_extensions,
             tx_context,
-            gas_charger,
+            gas_meter,
             user_events,
             ..
         } = self;
@@ -605,7 +607,7 @@ where
                 invariant_violation!("Gas payment should be specified if gas ID is present");
             };
             finish_gas_coin(
-                gas_charger,
+                gas_meter,
                 &mut writes,
                 &mut created_object_ids,
                 &deleted_object_ids,
@@ -666,7 +668,7 @@ where
         Ok(execution::context::finish(
             env.protocol_config,
             env.state_view,
-            gas_charger,
+            gas_meter,
             tx_context,
             &by_value_shared_objects,
             &consensus_owner_objects,
@@ -790,7 +792,7 @@ where
                 mut local,
             } => {
                 if local.is_invalid()? {
-                    let v = load_pure_value(self.gas_charger, self.env, bytes, metadata)?;
+                    let v = load_pure_value(self.gas_meter, self.env, bytes, metadata)?;
                     local.store(v)?;
                 }
                 local
@@ -800,7 +802,7 @@ where
                 mut local,
             } => {
                 if local.is_invalid()? {
-                    let v = load_receiving_value(self.gas_charger, self.env, metadata)?;
+                    let v = load_receiving_value(self.gas_meter, self.env, metadata)?;
                     local.store(v)?;
                 }
                 local
@@ -809,17 +811,17 @@ where
         Ok(match usage {
             UsageKind::Move => {
                 let value = local.move_()?;
-                charge_gas_!(self.gas_charger, self.env, charge_move_loc, &value)?;
+                charge_gas_!(self.gas_meter, self.env, charge_move_loc, &value)?;
                 value
             }
             UsageKind::Copy => {
                 let value = local.copy()?;
-                charge_gas_!(self.gas_charger, self.env, charge_copy_loc, &value)?;
+                charge_gas_!(self.gas_meter, self.env, charge_copy_loc, &value)?;
                 value
             }
             UsageKind::Borrow => {
                 charge_gas_!(
-                    self.gas_charger,
+                    self.gas_meter,
                     self.env,
                     charge_simple_instr(SimpleInstruction::MutBorrowLoc)
                 )?;
@@ -853,9 +855,9 @@ where
     where
         VMValue: VMValueCast<V>,
     {
-        let before_height = self.gas_charger.move_gas_status().stack_height_current();
+        let before_height = self.gas_meter.move_gas_status().stack_height_current();
         let value = self.argument_value(arg)?;
-        let after_height = self.gas_charger.move_gas_status().stack_height_current();
+        let after_height = self.gas_meter.move_gas_status().stack_height_current();
         debug_assert_eq!(before_height.saturating_add(1), after_height);
         let value: V = value.cast()?;
         Ok(value)
@@ -881,7 +883,7 @@ where
         num_args: usize,
         num_return: usize,
     ) -> Result<(), Mode::Error> {
-        let move_gas_status = self.gas_charger.move_gas_status_mut();
+        let move_gas_status = self.gas_meter.move_gas_status_mut();
         let before_size = move_gas_status.stack_size_current();
         // Pop all of the arguments
         // If the return values came from the Move VM directly (via a Move call), pop those
@@ -906,7 +908,7 @@ where
     }
 
     pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, Mode::Error> {
-        Ok(CtxValue(copy_value(self.gas_charger, self.env, &value.0)?))
+        Ok(CtxValue(copy_value(self.gas_meter, self.env, &value.0)?))
     }
 
     pub fn new_coin(&mut self, amount: u64) -> Result<CtxValue, Mode::Error> {
@@ -995,7 +997,7 @@ where
         linkage: &ExecutableLinkage,
         tracer: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, Mode::Error> {
-        let gas_status = self.gas_charger.move_gas_status_mut();
+        let gas_status = self.gas_meter.move_gas_status_mut();
         let values = vm
             .execute_function_bypass_visibility(
                 original_mid,
@@ -1100,7 +1102,7 @@ where
                 data_store,
                 *package_id,
                 serialized_pkg,
-                &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
+                &mut SuiGasMeter(self.gas_meter.move_gas_status_mut()),
                 self.native_extensions.clone(),
             )
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
@@ -1176,7 +1178,7 @@ where
         expected_stack_height: u64,
     ) -> Result<(), Mode::Error> {
         debug_assert_eq!(
-            self.gas_charger.move_gas_status().stack_height_current(),
+            self.gas_meter.move_gas_status().stack_height_current(),
             expected_stack_height,
         );
         for module in modules {
@@ -1212,7 +1214,7 @@ where
                 vec![CtxValue(tx_context)]
             };
             debug_assert_eq!(
-                self.gas_charger.move_gas_status().stack_height_current(),
+                self.gas_meter.move_gas_status().stack_height_current(),
                 expected_stack_height,
             );
             trace_utils::trace_move_call_start(trace_builder_opt);
@@ -1244,7 +1246,7 @@ where
                 "init should not have return values"
             );
             debug_assert_eq!(
-                self.gas_charger.move_gas_status().stack_height_current(),
+                self.gas_meter.move_gas_status().stack_height_current(),
                 expected_stack_height,
             );
         }
@@ -1598,7 +1600,7 @@ impl CtxValue {
 }
 
 fn load_object_arg<Mode: ExecutionMode>(
-    meter: &mut GasCharger,
+    meter: &mut GasMeter,
     env: &Env<Mode>,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     input: T::ObjectInput,
@@ -1617,7 +1619,7 @@ fn load_object_arg<Mode: ExecutionMode>(
 }
 
 fn load_object_arg_impl<Mode: ExecutionMode>(
-    meter: &mut GasCharger,
+    meter: &mut GasMeter,
     env: &Env<Mode>,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
@@ -1665,7 +1667,7 @@ fn load_object_arg_impl<Mode: ExecutionMode>(
 }
 
 fn load_withdrawal_arg<Mode: ExecutionMode>(
-    meter: &mut GasCharger,
+    meter: &mut GasMeter,
     env: &Env<Mode>,
     withdrawal: &T::WithdrawalInput,
 ) -> Result<Value, Mode::Error> {
@@ -1690,7 +1692,7 @@ fn load_withdrawal_arg<Mode: ExecutionMode>(
 }
 
 fn load_pure_value<Mode: ExecutionMode>(
-    meter: &mut GasCharger,
+    meter: &mut GasMeter,
     env: &Env<Mode>,
     bytes: &[u8],
     metadata: &T::PureInput,
@@ -1703,7 +1705,7 @@ fn load_pure_value<Mode: ExecutionMode>(
 }
 
 fn load_receiving_value<Mode: ExecutionMode>(
-    meter: &mut GasCharger,
+    meter: &mut GasMeter,
     env: &Env<Mode>,
     metadata: &T::ReceivingInput,
 ) -> Result<Value, Mode::Error> {
@@ -1715,7 +1717,7 @@ fn load_receiving_value<Mode: ExecutionMode>(
 }
 
 fn copy_value<Mode: ExecutionMode>(
-    meter: &mut GasCharger,
+    meter: &mut GasMeter,
     env: &Env<Mode>,
     value: &Value,
 ) -> Result<Value, Mode::Error> {
@@ -1730,7 +1732,7 @@ fn copy_value<Mode: ExecutionMode>(
 fn refund_max_gas_budget<OType>(
     writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
     accumulator_events: &mut Vec<MoveAccumulatorEvent>,
-    gas_charger: &mut GasCharger,
+    gas_meter: &mut GasMeter,
     gas_id: ObjectID,
     gas_coin_transfer: Option<&GasCoinTransfer>,
 ) -> Result<(), ExecutionError> {
@@ -1745,7 +1747,7 @@ fn refund_max_gas_budget<OType>(
             balance_change_accumulator_event(
                 accumulator_events,
                 *recipient,
-                checked_as!(gas_charger.gas_budget(), i64)?,
+                checked_as!(gas_meter.budget(), i64)?,
             )?;
         }
         Some(GasCoinTransfer::TransferObjects) | None => {
@@ -1757,7 +1759,7 @@ fn refund_max_gas_budget<OType>(
             let mut locals = Locals::new([Some(value.into())])?;
             let mut local = locals.local(0)?;
             let coin_value = local.borrow()?.coin_ref_value()?;
-            let additional = gas_charger.gas_budget();
+            let additional = gas_meter.budget();
             if coin_value.checked_add(additional).is_none() {
                 return Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::CoinBalanceOverflow,
@@ -1778,7 +1780,7 @@ fn refund_max_gas_budget<OType>(
 /// The ephemeral coin is removed from writes and created objects in the case that it was not
 /// transferred (left in its memory location at the end of the transaction).
 fn finish_gas_coin<OType>(
-    gas_charger: &mut GasCharger,
+    gas_meter: &mut GasMeter,
     writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
     created_object_ids: &mut IndexSet<ObjectID>,
     deleted_object_ids: &IndexSet<ObjectID>,
@@ -1791,7 +1793,7 @@ fn finish_gas_coin<OType>(
     refund_max_gas_budget(
         writes,
         accumulator_events,
-        gas_charger,
+        gas_meter,
         gas_id,
         gas_coin_transfer.as_ref(),
     )?;
@@ -1803,12 +1805,10 @@ fn finish_gas_coin<OType>(
     // an address balance recipient that matches the original address balance charge location
     match &gas_coin_transfer {
         Some(GasCoinTransfer::SendFunds { recipient, .. }) => {
-            gas_charger.override_gas_charge_location(PaymentLocation::AddressBalance(
-                (*recipient).into(),
-            ))?;
+            gas_meter.set_charge_location(PaymentLocation::AddressBalance((*recipient).into()))?;
         }
         Some(GasCoinTransfer::TransferObjects) => {
-            gas_charger.override_gas_charge_location(PaymentLocation::Coin(gas_id))?;
+            gas_meter.set_charge_location(PaymentLocation::Coin(gas_id))?;
         }
         None => (),
     }
@@ -2202,10 +2202,10 @@ impl fmt::Display for PrimitiveArgumentLayout {
     }
 }
 
-pub fn finish(
+pub(crate) fn finish(
     protocol_config: &ProtocolConfig,
     state_view: &dyn ExecutionState,
-    gas_charger: &mut GasCharger,
+    gas_meter: &mut GasMeter,
     tx_context: &TxContext,
     by_value_shared_objects: &BTreeSet<ObjectID>,
     consensus_owner_objects: &BTreeMap<ObjectID, Owner>,
@@ -2360,7 +2360,7 @@ pub fn finish(
         result,
         num_non_gas_coin_owners,
     } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
-    gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+    gas_meter.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
     result?;
 
     let created_object_ids: BTreeSet<ObjectID> = created_object_ids.into_iter().collect();

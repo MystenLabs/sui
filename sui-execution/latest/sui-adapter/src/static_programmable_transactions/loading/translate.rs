@@ -3,7 +3,7 @@
 
 use crate::{
     execution_mode::ExecutionMode,
-    gas_charger::GasPayment,
+    metering::gas_charger::GasPayment,
     static_programmable_transactions::{
         env::Env,
         linkage,
@@ -20,7 +20,7 @@ use sui_types::{
     transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
 };
 
-pub fn transaction<Mode: ExecutionMode>(
+pub(crate) fn transaction<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
     env: &Env<Mode>,
     tx_context: &TxContext,
