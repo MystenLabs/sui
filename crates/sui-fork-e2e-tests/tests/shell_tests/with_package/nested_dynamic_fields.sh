@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Mutate a nested pre-fork dynamic object field and check which parent indexes the fork updates.
+#
+# `dynamic-field` enumerates the local owner index and has no remote fallback. The fork saves
+# pre-fork objects loaded for a point or execution read as raw object rows without indexing them.
+# Explicitly seeded objects and successful local-execution outputs are indexed. Thus mutating DF-B
+# indexes it under DF-A, but the outer DF-A wrapper is only read, so Root still does not list it.
+set -euo pipefail
+source ./lib.sh
+localnet_setup
+
+# field_count <where> <parent id>: how many dynamic fields `dynamic-field` lists for the parent.
+field_count() { "$1" dynamic-field "$2" --json | jq -r '.dynamicFields | length'; }
+# field_id_for <where> <parent id> <key>: the field whose u64 name is `key` (below 256), read
+# from the first byte of the base64 BCS name.
+field_id_for() {
+  "$1" dynamic-field "$2" --json | jq -r --arg key "$3" \
+    '.dynamicFields[] | select((.name.value | @base64d | explode | .[0]) == ($key | tonumber)) | .fieldId'
+}
+
+sender=$(on_localnet active-address)
+
+add_env_to_toml registry localnet on_localnet
+run_json publish.json on_localnet publish registry --gas-budget 100000000
+package=$(published_package_id publish.json)
+run_json create.json on_localnet call --package "$package" --module registry --function create_nested \
+  --gas-budget 50000000
+root=$(created_object_id create.json "::registry::Registry")
+node=$(created_object_id create.json "::registry::Node")
+fork_point=$(wait_for_graphql_tx "$(tx_digest_of create.json)")
+assert_eq "$(field_count on_localnet "$root")" 1 "the localnet lists DF-A under Root"
+assert_eq "$(field_count on_localnet "$node")" 1 "the localnet lists DF-B under DF-A"
+
+fork_start --checkpoint "$fork_point" --address "$sender"
+fork_env
+assert_eq "$(field_count on_fork "$root")" 0 "the fork does not list pre-fork DF-A under Root"
+
+gas=$(gas_coin on_fork)
+run_json bump.json on_fork call --package "$package" --module registry --function bump_nested \
+  --args "$root" 1 2 --gas "$gas" --gas-budget 50000000
+assert_eq "$(tx_status_of bump.json)" success "nested bump executed on the fork"
+assert_eq "$(field_count on_fork "$root")" 0 "mutating DF-B does not index pre-fork DF-A under Root"
+assert_eq "$(field_count on_fork "$node")" 1 "mutating DF-B indexes it under DF-A"
+assert_ne "$(field_id_for on_fork "$node" 2)" "" "the fork lists DF-B under its u64 name"
+
+exit "$FAILED"

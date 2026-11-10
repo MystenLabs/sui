@@ -25,6 +25,7 @@ use tracing::info;
 
 use crate::RpcError;
 use crate::RpcService;
+use crate::grpc::v2::render::RenderContext;
 use crate::ledger_history::checkpoint_positions::CheckpointPositions;
 use crate::ledger_history::cursor::LedgerPoint;
 use crate::ledger_history::cursor::Position;
@@ -630,11 +631,8 @@ fn render_event_chunk(
                     ),
                 )
             })?;
-        let mut proto_event = service.render_event_to_proto(
-            event,
-            read_mask,
-            &sui_types::full_checkpoint_content::ObjectSet::default(),
-        );
+        let render_context = RenderContext::empty(service.reader.inner());
+        let mut proto_event = service.render_event_to_proto(event, read_mask, &render_context);
         sui_macros::fail_point_if!("corrupt_authenticated_event", || {
             if let Some(bcs) = proto_event.contents.as_mut() {
                 bcs.value = Some(vec![0xDE, 0xAD, 0xBE, 0xEF].into());

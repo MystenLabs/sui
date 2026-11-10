@@ -8,7 +8,6 @@ use std::sync::RwLockWriteGuard;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
-use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
@@ -33,7 +32,6 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::error::SuiResult;
-use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -1080,14 +1078,9 @@ impl RpcStateReader for ForkStore {
         Some(self.stock_reader())
     }
 
-    /// Read a struct layout from `sui-rpc-store`.
-    fn get_struct_layout_with_overlay(
-        &self,
-        struct_tag: &StructTag,
-        overlay: &ObjectSet,
-    ) -> StorageResult<Option<MoveTypeLayout>> {
-        self.stock_reader()
-            .get_struct_layout_with_overlay(struct_tag, overlay)
+    /// Resolve layouts using packages from committed `sui-rpc-store` data.
+    fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
+        self.stock_reader().layout_package_store()
     }
 }
 

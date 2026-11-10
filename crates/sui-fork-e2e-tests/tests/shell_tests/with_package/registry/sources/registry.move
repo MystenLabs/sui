@@ -6,15 +6,41 @@
 module registry::registry;
 
 use sui::dynamic_field as df;
+use sui::dynamic_object_field as dof;
 
 public struct Registry has key {
     id: UID,
     size: u64,
 }
 
+public struct Node has key, store {
+    id: UID,
+}
+
 /// Create an empty shared registry.
 public fun create(ctx: &mut TxContext) {
     transfer::share_object(Registry { id: object::new(ctx), size: 0 })
+}
+
+/// Create a shared registry containing nested dynamic object fields.
+public fun create_nested(ctx: &mut TxContext) {
+    let mut registry = Registry {
+        id: object::new(ctx),
+        size: 0,
+    };
+    let mut node = Node {
+        id: object::new(ctx),
+    };
+    df::add(&mut node.id, 2u64, 0u64);
+    dof::add(&mut registry.id, 1u64, node);
+    transfer::share_object(registry);
+}
+
+/// Increment the nested entry under `node_key` and `leaf_key`.
+public fun bump_nested(registry: &mut Registry, node_key: u64, leaf_key: u64) {
+    let node = dof::borrow_mut<u64, Node>(&mut registry.id, node_key);
+    let leaf = df::borrow_mut<u64, u64>(&mut node.id, leaf_key);
+    *leaf = *leaf + 1;
 }
 
 /// Add an entry under `key`.

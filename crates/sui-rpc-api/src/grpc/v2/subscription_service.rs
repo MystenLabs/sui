@@ -49,6 +49,7 @@ use tonic::codegen::BoxStream;
 
 use crate::RpcError;
 use crate::RpcService;
+use crate::grpc::v2::render::RenderContext;
 use crate::ledger_history::cursor::LedgerPoint;
 use crate::ledger_history::cursor::Position;
 use crate::ledger_history::filter::event_filter_to_query;
@@ -257,11 +258,12 @@ impl SubscriptionService for RpcService {
                                 .as_ref()
                                 .expect("matched event implies events")
                                 .data[ev as usize];
-                            let mut proto_event = service.render_event_to_proto(
-                                event,
-                                &read_mask,
-                                &checkpoint.object_set,
+                            let render_context = RenderContext::new(
+                                service.reader.inner(),
+                                Some(&checkpoint.object_set),
                             );
+                            let mut proto_event =
+                                service.render_event_to_proto(event, &read_mask, &render_context);
                             if read_mask.contains(ProtoEvent::CHECKPOINT_FIELD.name) {
                                 proto_event.checkpoint = Some(cp);
                             }
@@ -394,6 +396,8 @@ fn render_checkpoint_message(
     if let Some(tx_mask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD) {
         // One JSON budget for the whole checkpoint, as in `GetCheckpoint`.
         let mut json_budget = service.config.max_json_move_value_response_size();
+        let render_context =
+            RenderContext::new(service.reader.inner(), Some(&checkpoint.object_set));
         for (message, tx) in checkpoint_message
             .transactions_mut()
             .iter_mut()
@@ -405,6 +409,7 @@ fn render_checkpoint_message(
                 &checkpoint.object_set,
                 &tx_mask,
                 &mut json_budget,
+                &render_context,
             );
         }
     }
@@ -458,12 +463,14 @@ fn render_transaction_message(
     // a transaction's events exhaust `max_json_move_value_response_size`, the
     // remaining events have `json` there but not here.
     let mut json_budget = service.config.max_json_move_value_response_size();
+    let render_context = RenderContext::new(service.reader.inner(), Some(&checkpoint.object_set));
     service.annotate_checkpoint_transaction(
         &mut message,
         tx,
         &checkpoint.object_set,
         read_mask,
         &mut json_budget,
+        &render_context,
     );
 
     if let Some(object_mask) = read_mask
@@ -474,7 +481,7 @@ fn render_transaction_message(
             ProtoObjectSet::default().with_objects(
                 transaction_objects(tx, &checkpoint.object_set)
                     .map(|object| {
-                        service.render_object_to_proto(object, &object_mask, &checkpoint.object_set)
+                        service.render_object_to_proto(object, &object_mask, &render_context)
                     })
                     .collect(),
             ),

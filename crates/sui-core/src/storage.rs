@@ -20,7 +20,6 @@ use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, SuiResult};
-use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -47,7 +46,7 @@ use sui_types::storage::WriteStore;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
 use sui_types::storage::{BackingPackageStore, PackageObject};
-use sui_types::storage::{ObjectKey, OverlayBackingPackageStore, ReadStore};
+use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use tap::TapFallible;
 use tracing::error;
@@ -676,22 +675,8 @@ impl RpcStateReader for RestReadStore {
         None
     }
 
-    fn get_struct_layout_with_overlay(
-        &self,
-        struct_tag: &move_core_types::language_storage::StructTag,
-        overlay: &ObjectSet,
-    ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
-        let backing_store = self.state.get_backing_package_store();
-        let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        epoch_store
-            .executor()
-            // TODO(cache) - must read through cache
-            .type_layout_resolver(epoch_store.protocol_config(), Box::new(overlay_store))
-            .get_annotated_layout(struct_tag)
-            .map(|layout| layout.into_layout())
-            .map(Some)
-            .map_err(StorageError::custom)
+    fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
+        Box::new(self.state.get_backing_package_store().as_ref())
     }
 }
 
@@ -962,25 +947,8 @@ impl RpcStateReader for RpcStoreReadStore {
         Ok(*self.rocks.get_latest_checkpoint()?.sequence_number())
     }
 
-    fn get_struct_layout_with_overlay(
-        &self,
-        struct_tag: &move_core_types::language_storage::StructTag,
-        overlay: &ObjectSet,
-    ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
-        // Resolve through the authority's live executor and backing
-        // package store, matching `RestReadStore`: the perpetual store
-        // backs the package reads and the loaded epoch store carries
-        // the current protocol config.
-        let backing_store = self.state.get_backing_package_store();
-        let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        epoch_store
-            .executor()
-            .type_layout_resolver(epoch_store.protocol_config(), Box::new(overlay_store))
-            .get_annotated_layout(struct_tag)
-            .map(|layout| layout.into_layout())
-            .map(Some)
-            .map_err(StorageError::custom)
+    fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
+        Box::new(self.state.get_backing_package_store().as_ref())
     }
 }
 
