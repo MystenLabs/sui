@@ -71,25 +71,28 @@ and that floor. The floor does not apply when the shape tier you found is 0.
 ## Step 4 — Verify the AI review
 
 Find the review tag in the description. `review-author` Step 4 defines its format, which records
-a `<model>` and a `<sha>`.
+a `<command>`, a `<model>`, and a `<sha>`.
 
-If `<model>` is not in the allowed model list in the base-branch copy of `review-author`, treat
-the PR as if it had no tag. Otherwise, trust the tag. It means that the authoring agent ran the
-review and the author decided every finding. Do not repeat a review that the tag records, and do not look for its findings in the PR.
+If `<command>` is not in the review-command table in the base-branch copy of `review-author`
+Step 3, or `<model>` is not in its allowed model list, treat the PR as if it had no tag.
+Otherwise, trust the tag. It means that the authoring agent ran the review and the author decided
+every finding. Do not repeat a review that the tag records, and do not look for its findings in
+the PR.
 
 - If `<sha>` is the PR head, the review requirement is met.
-- If `<sha>` is an ancestor of the PR head, run `/code-review max` on the commits after it
-  (`<sha>..<head>`) only.
-- If there is no tag, or `<sha>` is not an ancestor of the head, run `/code-review max` on the
-  full `<base>...<head>` diff.
+- If `<sha>` is an ancestor of the PR head, run the final review from that table for your harness
+  on the commits after it (`<sha>..<head>`) only.
+- If there is no tag, or `<sha>` is not an ancestor of the head, run the final review from that
+  table for your harness on the full `<base>...<head>` diff.
 
 When you run a review, run it on a model in the allowed model list. If you run on any other model,
 the outcome is **Blocked**, and the comment says that the PR needs a review by an allowed model.
 Apply the tier focus from the `review-author` skill (test coverage and
 unintended consequences for Tier 2, the MDD questions for Tier 3). For Tier 3, pass the full text
 of the `## Mini design doc` section from the PR description to the reviewer, because the reviewer
-does not read the PR description. Post each finding as an inline review comment with
-`/code-review --comment`. The author must accept or reject each finding.
+does not read the PR description. Post each finding as an inline review comment on the PR. In
+Claude Code, `/code-review --comment` posts them. In other harnesses, post them with
+`gh api repos/<owner>/<repo>/pulls/<n>/reviews`. The author must accept or reject each finding.
 While any of your findings has no reply from the author and no fix, the outcome is **Blocked**.
 
 ## Step 5 — Check the tier requirements
