@@ -48,8 +48,9 @@ pub struct AssignedVersions {
     /// version of the object.
     ///
     /// Today this holds the accumulator root version (as of the beginning of the consensus
-    /// commit this transaction belongs to), and the forwarding address registry and Clock
-    /// versions (as of the point in the commit at which this transaction is sequenced).
+    /// commit this transaction belongs to), and the Clock version and, when forwarding addresses
+    /// are enabled, the forwarding address registry version (as of the point in the commit at
+    /// which this transaction is sequenced).
     pub system_object_versions: SystemObjectVersions,
 }
 
@@ -811,7 +812,6 @@ mod tests {
         let id = shared_object.id();
         let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
-            .with_protocol_config(forwarding_enabled_config())
             .with_starting_objects(std::slice::from_ref(&shared_object))
             .build()
             .await;
@@ -856,7 +856,6 @@ mod tests {
         // using lamport version, hence the next transaction will use the same version number.
         // In the following case, certs[2] has the same assignment as certs[1] for this reason.
         let expected_accumulator_version = SequenceNumber::from_u64(1);
-        let expected_registry_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -865,7 +864,7 @@ mod tests {
                     assigned_versions_for_testing(
                         vec![((id, init_shared_version), init_shared_version)],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -873,7 +872,7 @@ mod tests {
                     assigned_versions_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -881,7 +880,7 @@ mod tests {
                     assigned_versions_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -889,7 +888,7 @@ mod tests {
                     assigned_versions_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(10))],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
             ]
@@ -1125,10 +1124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_assign_versions_from_consensus_with_randomness() {
-        let authority = TestAuthorityBuilder::new()
-            .with_protocol_config(forwarding_enabled_config())
-            .build()
-            .await;
+        let authority = TestAuthorityBuilder::new().build().await;
         let epoch_store = authority.epoch_store_for_testing();
         let randomness_obj_version = epoch_store
             .epoch_start_config()
@@ -1192,7 +1188,6 @@ mod tests {
             next_randomness_obj_version
         );
         let expected_accumulator_version = SequenceNumber::from_u64(1);
-        let expected_registry_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -1204,7 +1199,7 @@ mod tests {
                             randomness_obj_version
                         )],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -1216,7 +1211,7 @@ mod tests {
                             next_randomness_obj_version
                         )],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -1228,7 +1223,7 @@ mod tests {
                             next_randomness_obj_version
                         )],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
             ]
@@ -1245,7 +1240,6 @@ mod tests {
         let init_shared_version_1 = shared_object_1.owner.start_version().unwrap();
         let init_shared_version_2 = shared_object_2.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
-            .with_protocol_config(forwarding_enabled_config())
             .with_starting_objects(&[shared_object_1.clone(), shared_object_2.clone()])
             .build()
             .await;
@@ -1345,10 +1339,6 @@ mod tests {
         // transaction.
         shared_input_next_versions
             .remove(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(1)));
-        shared_input_next_versions.remove(&(
-            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-            SequenceNumber::from_u64(1),
-        ));
         shared_input_next_versions.remove(&(SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION));
         assert_eq!(
             shared_input_next_versions,
@@ -1364,7 +1354,6 @@ mod tests {
 
         // Check that the version assignment for each transaction is correct.
         let expected_accumulator_version = SequenceNumber::from_u64(1);
-        let expected_registry_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -1376,7 +1365,7 @@ mod tests {
                             ((id2, init_shared_version_2), init_shared_version_2)
                         ],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -1387,7 +1376,7 @@ mod tests {
                             ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ),
                         ],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -1395,7 +1384,7 @@ mod tests {
                     assigned_versions_for_testing(
                         vec![((id1, init_shared_version_1), SequenceNumber::from_u64(4))],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -1406,7 +1395,7 @@ mod tests {
                             ((id2, init_shared_version_2), SequenceNumber::CONGESTED)
                         ],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
                 (
@@ -1420,7 +1409,7 @@ mod tests {
                             ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ)
                         ],
                         Some(expected_accumulator_version),
-                        Some(expected_registry_version)
+                        None
                     )
                 ),
             ]
