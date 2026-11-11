@@ -139,9 +139,12 @@ impl UnsettledObjectWithdrawals {
             .process_funds_withdrawals_for_execution(chain_identifier)
             .into_keys()
             .collect();
-        let withdrew_from_object = accumulator_running_max_withdraws
+        if accumulator_running_max_withdraws
             .keys()
-            .any(|account| !address_funds_reservations.contains(account));
+            .all(|account| address_funds_reservations.contains(account))
+        {
+            return false;
+        }
         let updates: Vec<_> = effects
             .accumulator_events()
             .into_iter()
@@ -155,7 +158,7 @@ impl UnsettledObjectWithdrawals {
             })
             .collect();
         if updates.is_empty() {
-            return withdrew_from_object;
+            return true;
         }
         debug_assert!(
             updates.iter().all(|(obj_id, net)| {
@@ -204,5 +207,166 @@ impl UnsettledObjectWithdrawals {
             }
         }
         self.update_unsettled_metrics(&inner);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_types::{
+        accumulator_event::AccumulatorEvent,
+        base_types::{ObjectID, random_object_ref},
+        crypto::get_account_key_pair,
+        effects::{
+            AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+            TestEffectsBuilder,
+        },
+        gas_coin::GAS,
+        transaction::Transaction,
+    };
+
+    fn new_store() -> UnsettledObjectWithdrawals {
+        UnsettledObjectWithdrawals::new(&Registry::new())
+    }
+
+    fn new_tx() -> Transaction {
+        let (sender, keypair) = get_account_key_pair();
+        TestTransactionBuilder::new(sender, random_object_ref(), 1).build_and_sign(&keypair)
+    }
+
+    fn split(tx: &Transaction, account: AccumulatorObjId, amount: u64) -> AccumulatorEvent {
+        AccumulatorEvent::new(
+            account,
+            AccumulatorWriteV1 {
+                address: AccumulatorAddress::new(tx.transaction_data().sender(), GAS::type_tag()),
+                operation: AccumulatorOperation::Split,
+                value: AccumulatorValue::Integer(amount),
+            },
+        )
+    }
+
+    fn record(
+        store: &UnsettledObjectWithdrawals,
+        tx: &Transaction,
+        events: Vec<AccumulatorEvent>,
+        running_max: BTreeMap<AccumulatorObjId, u128>,
+        version: u64,
+    ) -> bool {
+        let effects = TestEffectsBuilder::new(tx.data())
+            .with_accumulator_events(events)
+            .build();
+        store.record_object_funds_withdraws(
+            tx.transaction_data(),
+            &effects,
+            &running_max,
+            SequenceNumber::from_u64(version),
+            ChainIdentifier::default(),
+        )
+    }
+
+    fn unsettled(
+        store: &UnsettledObjectWithdrawals,
+        account: AccumulatorObjId,
+        version: u64,
+    ) -> u128 {
+        store.get_unsettled_object_withdraw(&account, SequenceNumber::from_u64(version))
+    }
+
+    #[test]
+    fn records_net_withdraw_not_running_max() {
+        // Withdraw 100 then deposit 70 back: running max 100, net Split(30) in effects.
+        let store = new_store();
+        let tx = new_tx();
+        let account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        assert!(record(
+            &store,
+            &tx,
+            vec![split(&tx, account, 30)],
+            BTreeMap::from([(account, 100)]),
+            0,
+        ));
+        assert_eq!(unsettled(&store, account, 0), 30);
+
+        // A second transaction at the same version adds to the first.
+        let tx2 = new_tx();
+        assert!(record(
+            &store,
+            &tx2,
+            vec![split(&tx2, account, 30)],
+            BTreeMap::from([(account, 30)]),
+            0,
+        ));
+        assert_eq!(unsettled(&store, account, 0), 60);
+    }
+
+    #[test]
+    fn net_zero_withdraw_records_nothing_but_counts_as_object_withdraw() {
+        // Withdraw 100 then deposit 100 back: running max 100, no net withdraw in effects.
+        let store = new_store();
+        let tx = new_tx();
+        let account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        assert!(record(
+            &store,
+            &tx,
+            vec![],
+            BTreeMap::from([(account, 100)]),
+            0
+        ));
+        assert_eq!(unsettled(&store, account, 0), 0);
+    }
+
+    #[test]
+    fn zero_amount_split_is_skipped() {
+        // A zero-amount withdraw survives effects folding as Split(0) but has no running max
+        // entry.
+        let store = new_store();
+        let tx = new_tx();
+        let zero_account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        let withdraw_account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        assert!(record(
+            &store,
+            &tx,
+            vec![
+                split(&tx, zero_account, 0),
+                split(&tx, withdraw_account, 50)
+            ],
+            BTreeMap::from([(withdraw_account, 50)]),
+            0,
+        ));
+        assert_eq!(unsettled(&store, zero_account, 0), 0);
+        assert_eq!(unsettled(&store, withdraw_account, 0), 50);
+    }
+
+    #[test]
+    fn no_withdraw_returns_false() {
+        let store = new_store();
+        let tx = new_tx();
+        assert!(!record(&store, &tx, vec![], BTreeMap::new(), 0));
+    }
+
+    #[test]
+    fn commit_removes_only_committed_versions() {
+        let store = new_store();
+        let account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        for version in [0, 1] {
+            let tx = new_tx();
+            record(
+                &store,
+                &tx,
+                vec![split(&tx, account, 10)],
+                BTreeMap::from([(account, 10)]),
+                version,
+            );
+        }
+
+        store.commit_accumulator_versions(vec![SequenceNumber::from_u64(0)]);
+        assert_eq!(unsettled(&store, account, 0), 0);
+        assert_eq!(unsettled(&store, account, 1), 10);
+
+        store.commit_accumulator_versions(vec![SequenceNumber::from_u64(1)]);
+        let inner = store.inner.read();
+        assert!(inner.unsettled_withdraws.is_empty());
+        assert!(inner.unsettled_accounts.is_empty());
     }
 }

@@ -24,10 +24,9 @@
 //!
 //! A unit that already-indexed units may wait on must never be re-assigned a new,
 //! higher index (its blocked waiters would pin the concurrency limit while the
-//! causal-next lane can never reach it). Hence the funds-withdraw retry keeps its
-//! original index, and settlement transactions - which materialize long after their
-//! waiters enqueue - are index-less: never blocked by admission, though they occupy
-//! a concurrency slot when one is free.
+//! causal-next lane can never reach it). Hence settlement transactions - which
+//! materialize long after their waiters enqueue - are index-less: never blocked by
+//! admission, though they occupy a concurrency slot when one is free.
 
 use std::{collections::BTreeSet, sync::Arc};
 
