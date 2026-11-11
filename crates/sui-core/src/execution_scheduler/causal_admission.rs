@@ -417,20 +417,24 @@ mod tests {
     #[test]
     fn next_consecutive_is_admitted_at_the_limit() {
         let admission = CausalAdmission::new(1);
-        assign(&admission, 2);
+        assign(&admission, 3);
 
-        // Fill the single concurrency slot with index 2.
-        let slot2 = admission.try_admit(2).unwrap();
+        // Fill the single concurrency slot with index 3.
+        let slot3 = admission.try_admit(3).unwrap();
         // The capacity branch is closed, but index 1 == watermark+1 is still admitted.
         let slot1 = admission.try_admit(1).unwrap();
         // Only one causal-next admission may be outstanding at a time.
         assert!(admission.try_admit(1).is_none());
 
-        // Completing index 1 retires it via the slot drop.
+        // Completing index 1 retires it and reopens the causal-next lane, so index 2 is
+        // admitted while index 3 still holds the only slot.
         drop(slot1);
         assert_eq!(admission.watermark_for_testing(), 1);
+        let slot2 = admission.try_admit(2).unwrap();
         drop(slot2);
         assert_eq!(admission.watermark_for_testing(), 2);
+        drop(slot3);
+        assert_eq!(admission.watermark_for_testing(), 3);
     }
 
     #[test]

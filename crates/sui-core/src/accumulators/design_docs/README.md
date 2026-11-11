@@ -45,25 +45,14 @@ on those modules is the source of truth — no separate doc is provided here.
                            ▼            ▼
                   ┌──────────────────────────────────┐
                   │     execution engine/adapter     │
-                  │  emits AccumulatorEvents per     │
+                  │  checks each object withdraw in  │
+                  │  the VM (object_funds_in_        │
+                  │  execution.md) and emits         │
+                  │  AccumulatorEvents per           │
                   │  Split/Merge — see write_path.md │
                   └──────────────┬───────────────────┘
                                  │
                                  ▼
-                      Has object withdraws?
-                                 │
-                          ┌──────┴──────┐
-                         YES            NO
-                          │             │
-                          ▼             │
-              ┌────────────────────────┐│
-              │  Sufficiency check     ││
-              │  in-execution (VM) —   ││
-              │  see object_funds_in_  ││
-              │  execution.md          ││
-              └────────────┬───────────┘│
-                           │            │
-                           ▼            ▼
                   Effects committed; events
                   accumulated for settlement
                                  │

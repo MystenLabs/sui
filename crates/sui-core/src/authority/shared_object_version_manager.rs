@@ -456,9 +456,10 @@ impl SharedObjVerManager {
                     })
                     .collect();
             // Effects record the accumulator root only when execution reads an object balance, so they
-            // cannot supply the accumulator version for every transaction. Address funds withdraws, coin
-            // reservations and version-gated execution behavior need it, including for historical
-            // transactions. Hence we always use the one provided from the caller (i.e. checkpoint executor).
+            // cannot supply the accumulator version for every transaction. Causal admission deduplicates
+            // every enqueued transaction by it, and coin reservations and version-gated execution
+            // behavior need it, including for historical transactions. Hence we always use the one
+            // provided from the caller (i.e. checkpoint executor).
             if let Some(version) = *accumulator_version {
                 let initial_shared_version = epoch_store
                     .epoch_start_config()

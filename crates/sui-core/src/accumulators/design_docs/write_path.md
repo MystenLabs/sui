@@ -254,10 +254,9 @@ txns followed by one barrier that gates the version bump.
                                    │
                                    ▼
             Address funds:       Object funds:
-            settle_address_funds last_settled_version
-            with FundsSettlement watch channel bumped
-            { V+1, funds_changes }   to V+1 (when barrier
-                                     executes)
+            settle_address_funds no hook; in-execution
+            with FundsSettlement reads wait for the
+            { V+1, funds_changes }   root at V+1
 ```
 
 ### 4.3 What the schedulers see

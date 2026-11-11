@@ -23,7 +23,7 @@ bound is enough to check sufficiency before transaction execution starts: if the
 enough to cover the declared maximum, the transaction is guaranteed to fail, so we skip
 execution entirely and return an early error.
 
-Object-funds withdrawals (where the amount is known only after the transaction is executed) are out of
+Object-funds withdrawals (where the amount is known only while the transaction executes) are out of
 scope here — see [`object_funds_in_execution.md`](./object_funds_in_execution.md).
 
 ### Core data structures

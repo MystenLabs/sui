@@ -78,7 +78,6 @@ use sui_types::execution_params::FundsWithdrawStatus;
 use sui_types::execution_params::get_early_execution_error;
 use sui_types::layout_resolver::{LayoutResolver, into_struct_layout};
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
-use sui_types::node_role::NodeRole;
 use sui_types::storage::InputKey;
 use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::TrackingBackingStore;
@@ -589,7 +588,7 @@ impl AuthorityMetrics {
             object_funds_in_execution_check_result: register_int_counter_vec_with_registry!(
                 "object_funds_in_execution_check_result",
                 "Executed transactions by in-execution object funds check outcome: sufficient \
-                 counts successful transactions that withdrew from an object account",
+                 counts successful transactions that drew on an object account's settled balance",
                 &["result"],
                 registry,
             )
@@ -1075,10 +1074,6 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
-    pub fn node_role(&self, epoch_store: &AuthorityPerEpochStore) -> NodeRole {
-        epoch_store.node_role()
-    }
-
     pub fn is_validator(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
         epoch_store.node_role().is_validator()
     }
@@ -2006,10 +2001,7 @@ impl AuthorityState {
             &execution_env.funds_withdraw_status,
         );
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
-        let system_object_versions = execution_env
-            .assigned_versions
-            .system_object_versions
-            .clone();
+        let system_object_versions = execution_env.assigned_versions.system_object_versions;
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
             Some(errors) => ExecutionOrEarlyError::failed(errors, accumulator_version),
@@ -2023,7 +2015,7 @@ impl AuthorityState {
                 &*self.coin_reservation_resolver,
                 sender,
                 &mut kind,
-                execution_env.assigned_versions.accumulator_version(),
+                accumulator_version,
             )
             .expect("rewriting must succeed for a certified transaction")
         } else {
@@ -3036,8 +3028,8 @@ impl AuthorityState {
             })
             .collect();
 
-        // The test version-assignment helper assigns no accumulator root version, and
-        // the barrier settles object funds at the version it writes.
+        // The test version-assignment helper assigns no accumulator root version, so add the
+        // version these settlement transactions settle.
         let root_version = sui_types::base_types::ConsensusObjectVersion {
             initial_shared_version: accumulator_root_obj_initial_shared_version,
             version: accumulator_version,
@@ -3100,7 +3092,6 @@ impl AuthorityState {
                 funds_changes: balance_changes,
                 next_accumulator_version,
             });
-        // object funds are settled while executing the barrier transaction
 
         replay_txns
     }

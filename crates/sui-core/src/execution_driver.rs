@@ -262,8 +262,8 @@ pub async fn execution_process(
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
             let result = tokio::task::spawn_blocking(move || {
-                // Dropped when execution finishes, which releases the concurrency slot and
-                // retires the causal index.
+                // Dropped when execution finishes, which releases any concurrency slot and
+                // retires any causal index the transaction holds.
                 let _slot = slot;
                 let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
