@@ -718,6 +718,12 @@ mod tests {
     use sui_types::transaction::FundsWithdrawalArg;
     use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
+    fn forwarding_enabled_config() -> ProtocolConfig {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_enable_forwarding_addresses_for_testing(true);
+        config
+    }
+
     fn assigned_versions_for_testing(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         accumulator_version: Option<SequenceNumber>,
@@ -805,6 +811,7 @@ mod tests {
         let id = shared_object.id();
         let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(forwarding_enabled_config())
             .with_starting_objects(std::slice::from_ref(&shared_object))
             .build()
             .await;
@@ -891,7 +898,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarding_registry_version_follows_consensus_order() {
-        let authority = TestAuthorityBuilder::new().build().await;
+        let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(forwarding_enabled_config())
+            .build()
+            .await;
         let epoch_store = authority.epoch_store_for_testing();
         let registry_initial_version = epoch_store
             .epoch_start_config()
@@ -964,7 +974,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarding_registry_declared_by_cancelled_transaction() {
-        let authority = TestAuthorityBuilder::new().build().await;
+        let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(forwarding_enabled_config())
+            .build()
+            .await;
         let epoch_store = authority.epoch_store_for_testing();
         let registry_initial_version = epoch_store
             .epoch_start_config()
@@ -1037,7 +1050,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarding_registry_version_from_effects() {
-        let authority = TestAuthorityBuilder::new().build().await;
+        let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(forwarding_enabled_config())
+            .build()
+            .await;
         let epoch_store = authority.epoch_store_for_testing();
         let registry_initial_version = epoch_store
             .epoch_start_config()
@@ -1109,7 +1125,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_assign_versions_from_consensus_with_randomness() {
-        let authority = TestAuthorityBuilder::new().build().await;
+        let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(forwarding_enabled_config())
+            .build()
+            .await;
         let epoch_store = authority.epoch_store_for_testing();
         let randomness_obj_version = epoch_store
             .epoch_start_config()
@@ -1226,6 +1245,7 @@ mod tests {
         let init_shared_version_1 = shared_object_1.owner.start_version().unwrap();
         let init_shared_version_2 = shared_object_2.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
+            .with_protocol_config(forwarding_enabled_config())
             .with_starting_objects(&[shared_object_1.clone(), shared_object_2.clone()])
             .build()
             .await;
