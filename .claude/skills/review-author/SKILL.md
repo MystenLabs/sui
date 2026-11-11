@@ -129,7 +129,13 @@ existing users. Existing behavior, APIs, and on-disk or on-wire formats stay the
 **Tier 3: everything else.** This includes breaking changes, new APIs, architectural changes, and
 changes to the protocol. In this repository a change is always Tier 3 if it does any of these:
 
-- changes `crates/sui-protocol-config/` or reads a new protocol config flag;
+- changes a protocol setting, or reads a new protocol config flag. A protocol setting is the
+  value of a feature flag or config field for any protocol version or chain, the set of flags and
+  fields, or the range of supported protocol versions. A change that alters any snapshot in
+  `crates/sui-protocol-config/src/snapshots/` changes a protocol setting. A change to
+  `crates/sui-protocol-config/` that leaves every protocol setting unchanged, such as a refactor,
+  a comment, or a test edit, is not Tier 3 by this rule, and the shape of the change decides its
+  tier;
 - changes `crates/sui-types/tests/snapshots/format__sui.yaml.snap` or any BCS-serialized type;
 - changes the result of executing any transaction, or the contents of checkpoints or effects;
 - changes the schema or key encoding of a persisted table;
