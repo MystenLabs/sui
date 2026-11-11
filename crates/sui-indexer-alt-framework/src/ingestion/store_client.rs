@@ -20,8 +20,10 @@ use crate::ingestion::ingestion_client::CheckpointResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
 use crate::types::full_checkpoint_content::Checkpoint;
 
-// from sui-indexer-alt-object-store
-pub(crate) const WATERMARK_PATH: &str = "_metadata/watermark/checkpoint_blob.json";
+/// Watermark of the `checkpoint_blob` pipeline (`sui-checkpoint-blob-indexer`), which writes the
+/// `{checkpoint}.binpb.zst` files this client reads, at the path `sui-indexer-alt-object-store`
+/// stores it.
+pub(crate) const WATERMARK_PATH: &str = "_metadata/watermarks/checkpoint_blob.json";
 
 pub struct StoreIngestionClient {
     store: Arc<dyn ObjectStore>,
@@ -33,7 +35,8 @@ pub struct StoreIngestionClient {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub(crate) struct ObjectStoreWatermark {
-    pub checkpoint_hi_inclusive: u64,
+    /// `None` until the writer commits its first checkpoint.
+    pub checkpoint_hi_inclusive: Option<u64>,
 }
 
 impl StoreIngestionClient {
@@ -82,7 +85,7 @@ impl StoreIngestionClient {
         let watermark: ObjectStoreWatermark =
             serde_json::from_slice(&bytes).context(format!("error parsing {WATERMARK_PATH}"))?;
 
-        Ok(Some(watermark.checkpoint_hi_inclusive))
+        Ok(watermark.checkpoint_hi_inclusive)
     }
 }
 
@@ -251,6 +254,46 @@ pub(crate) mod tests {
                 .unwrap(),
             1
         )
+    }
+
+    /// The watermark this client reads is the one `sui-indexer-alt-object-store` writes for the
+    /// pipeline that produces checkpoint files.
+    #[tokio::test]
+    async fn test_latest_checkpoint_from_object_store_indexer_watermark() {
+        use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+        use sui_indexer_alt_framework_store_traits::Connection;
+        use sui_indexer_alt_framework_store_traits::Store;
+
+        let memory: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
+        let indexer_store = sui_indexer_alt_object_store::ObjectStore::new(memory.clone());
+        let mut conn = indexer_store.connect().await.unwrap();
+        let client = StoreIngestionClient::new(memory, None);
+
+        conn.init_watermark("checkpoint_blob", None).await.unwrap();
+        assert_eq!(
+            IngestionClientTrait::latest_checkpoint_number(&client)
+                .await
+                .unwrap(),
+            0
+        );
+
+        conn.set_committer_watermark(
+            "checkpoint_blob",
+            CommitterWatermark {
+                epoch_hi_inclusive: 3,
+                checkpoint_hi_inclusive: 1234,
+                tx_hi: 5678,
+                timestamp_ms_hi_inclusive: 9,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            IngestionClientTrait::latest_checkpoint_number(&client)
+                .await
+                .unwrap(),
+            1234
+        );
     }
 
     #[tokio::test]

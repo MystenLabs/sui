@@ -15012,6 +15012,7 @@ dependencies = [
  "sui-http",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
+ "sui-indexer-alt-object-store",
  "sui-pg-db",
  "sui-rpc",
  "sui-synthetic-ingestion",
