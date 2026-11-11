@@ -68,7 +68,6 @@ use sui_execution::Executor;
 use sui_package_resolver::{PackageStoreWithLruCache, SyncResolver};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_protocol_config::assert_reachable_gated;
-use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::base_types::SystemObjectVersions;
 use sui_types::execution::ExecutionOutput;
@@ -124,6 +123,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, GasUsageReport};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
+use sui_types::is_system_package;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -156,7 +156,6 @@ use sui_types::{
     object::{Object, ObjectRead},
     transaction::*,
 };
-use sui_types::{TypeTag, is_system_package};
 use typed_store::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
@@ -5159,7 +5158,7 @@ pub(crate) fn pre_object_load_checks(
     chain_identifier: ChainIdentifier,
     coin_reservation_resolver: &dyn CoinReservationResolverTrait,
     account_funds_read: &dyn AccountFundsRead,
-) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>> {
+) -> SuiResult {
     // Note: the deny checks may do redundant package loads but:
     // - they only load packages when there is an active package deny map
     // - the loads are cached anyway
@@ -5183,5 +5182,5 @@ pub(crate) fn pre_object_load_checks(
             .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
     }
 
-    Ok(declared_withdrawals)
+    Ok(())
 }
