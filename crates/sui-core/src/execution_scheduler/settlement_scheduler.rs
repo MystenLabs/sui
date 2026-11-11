@@ -9,14 +9,14 @@ use crate::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::{AssignedVersions, Schedulable},
     },
-    checkpoints::causal_order::CausalOrder,
+    checkpoints::{CheckpointStore, causal_order::CausalOrder},
     execution_cache::TransactionCacheRead,
     execution_scheduler::execution_scheduler_impl::{BarrierDependencyBuilder, ExecutionScheduler},
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     base_types::TransactionDigest,
@@ -61,6 +61,7 @@ impl SettlementQueueSender {
 pub(crate) struct SettlementScheduler {
     execution_scheduler: ExecutionScheduler,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
+    checkpoint_store: Arc<CheckpointStore>,
     settlement_queue_sender: Arc<Mutex<Option<SettlementQueueSender>>>,
     metrics: Arc<AuthorityMetrics>,
 }
@@ -69,11 +70,13 @@ impl SettlementScheduler {
     pub(crate) fn new(
         execution_scheduler: ExecutionScheduler,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
+        checkpoint_store: Arc<CheckpointStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
             execution_scheduler,
             transaction_cache_read,
+            checkpoint_store,
             settlement_queue_sender: Arc::new(Mutex::new(None)),
             metrics,
         }
@@ -184,10 +187,7 @@ impl SettlementScheduler {
         tx_index_offset: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> usize {
-        let digests = epoch_store
-            .notify_read_tx_key_to_digest(&batch_info.tx_keys)
-            .await
-            .expect("db error");
+        let digests = self.resolve_tx_digests(&batch_info, epoch_store).await;
 
         let effects = self
             .transaction_cache_read
@@ -334,6 +334,57 @@ impl SettlementScheduler {
         settlement_tx_count
     }
 
+    async fn resolve_tx_digests(
+        &self,
+        batch_info: &SettlementBatchInfo,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> Vec<TransactionDigest> {
+        let missing_randomness_keys: HashSet<_> = batch_info
+            .tx_keys
+            .iter()
+            .copied()
+            .filter(|key| {
+                matches!(key, TransactionKey::RandomnessRound(_, _))
+                    && epoch_store.tx_key_to_digest(key).is_none()
+            })
+            .collect();
+        let digests = epoch_store.notify_read_tx_key_to_digest(&batch_info.tx_keys);
+        tokio::pin!(digests);
+
+        if !missing_randomness_keys.is_empty() {
+            // A crash can lose randomness key mappings even when the certified transactions and
+            // effects survive. Already executed checkpoints will not be scheduled to repair them.
+            // Race state sync against normal key delivery so live consensus never depends on a
+            // checkpoint arriving, and wait for sync because certification alone does not store data.
+            let checkpoint = tokio::select! {
+                biased;
+                result = &mut digests => return result.expect("db error"),
+                checkpoint = self.checkpoint_store.notify_read_synced_checkpoint(batch_info.checkpoint_seq) => checkpoint,
+            };
+            let contents = self
+                .checkpoint_store
+                .get_checkpoint_contents(&checkpoint.content_digest)
+                .expect("db error")
+                .expect("synced checkpoint contents must exist");
+            let checkpoint_digests: Vec<_> = contents.iter().map(|tx| tx.transaction).collect();
+            let transactions = self
+                .transaction_cache_read
+                .multi_get_transaction_blocks(&checkpoint_digests);
+            for tx in transactions {
+                let tx = tx.expect("synced checkpoint transaction must exist");
+                if let Some(key) = tx.non_digest_key()
+                    && missing_randomness_keys.contains(&key)
+                    && epoch_store.tx_key_to_digest(&key).is_none()
+                {
+                    epoch_store.insert_tx_key(key, *tx.digest());
+                }
+            }
+        }
+
+        // Keep the original registrations alive, including notifications delivered before sync.
+        digests.await.expect("db error")
+    }
+
     fn extract_consensus_commit_prologue_digest(
         &self,
         digests: &[TransactionDigest],
@@ -350,5 +401,240 @@ impl SettlementScheduler {
                 assert_eq!(tx.digest(), effects[0].transaction_digest());
                 *d
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::authority::{AuthorityState, test_authority_builder::TestAuthorityBuilder};
+    use std::time::Duration;
+    use sui_types::{
+        base_types::{ExecutionDigests, SequenceNumber},
+        committee::Committee,
+        crypto::RandomnessRound,
+        gas::GasCostSummary,
+        message_envelope::Message,
+        messages_checkpoint::{
+            CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
+        },
+    };
+
+    async fn setup() -> (Arc<AuthorityState>, SettlementScheduler) {
+        let state = TestAuthorityBuilder::new().build().await;
+        let scheduler = SettlementScheduler::new(
+            state.execution_scheduler().as_ref().clone(),
+            state.get_transaction_cache_reader().clone(),
+            state.checkpoint_store.clone(),
+            state.metrics.clone(),
+        );
+        (state, scheduler)
+    }
+
+    fn randomness_tx(round: u64) -> VerifiedTransaction {
+        VerifiedTransaction::new_randomness_state_update(
+            0,
+            RandomnessRound::new(round),
+            vec![round as u8],
+            SequenceNumber::from_u64(1),
+        )
+    }
+
+    fn batch(tx_keys: Vec<TransactionKey>) -> SettlementBatchInfo {
+        SettlementBatchInfo {
+            settlement_key: TransactionKey::AccumulatorSettlement(0, 7),
+            tx_keys,
+            checkpoint_height: 7,
+            checkpoint_seq: 7,
+            assigned_versions: AssignedVersions::empty(),
+        }
+    }
+
+    fn effects(tx: &VerifiedTransaction) -> TransactionEffects {
+        let mut effects = TransactionEffects::default();
+        *effects.transaction_digest_mut_for_testing() = *tx.digest();
+        effects
+    }
+
+    fn checkpoint(
+        transactions: &[VerifiedTransaction],
+    ) -> (VerifiedCheckpoint, CheckpointContents) {
+        let contents = CheckpointContents::new_with_digests_only_for_tests(
+            transactions
+                .iter()
+                .map(|tx| ExecutionDigests::new(*tx.digest(), effects(tx).digest())),
+        );
+        let summary = CheckpointSummary::new(
+            &sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
+            0,
+            7,
+            transactions.len() as u64,
+            &contents,
+            None,
+            GasCostSummary::default(),
+            None,
+            0,
+            vec![],
+            vec![],
+        );
+        let (committee, keys) = Committee::new_simple_test_committee();
+        let certified =
+            CertifiedCheckpointSummary::new_from_keypairs_for_testing(summary, &keys, &committee);
+        (certified.try_into_verified(&committee).unwrap(), contents)
+    }
+
+    fn sync_checkpoint(
+        state: &AuthorityState,
+        checkpoint: &VerifiedCheckpoint,
+        contents: CheckpointContents,
+        transactions: &[VerifiedTransaction],
+    ) {
+        for tx in transactions {
+            state
+                .get_state_sync_store()
+                .insert_transaction_and_effects(tx, &effects(tx));
+        }
+        state
+            .checkpoint_store
+            .insert_checkpoint_contents(contents)
+            .unwrap();
+        state
+            .checkpoint_store
+            .insert_verified_checkpoint(checkpoint)
+            .unwrap();
+        state
+            .checkpoint_store
+            .update_highest_synced_checkpoint(checkpoint)
+            .unwrap();
+    }
+
+    async fn resolve(
+        scheduler: &SettlementScheduler,
+        batch: &SettlementBatchInfo,
+        state: &AuthorityState,
+    ) -> Vec<TransactionDigest> {
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            scheduler.resolve_tx_digests(batch, &state.epoch_store_for_testing()),
+        )
+        .await
+        .expect("settlement transaction keys should resolve")
+    }
+
+    #[tokio::test]
+    async fn resolve_tx_digests_recovers_requested_randomness_keys_in_batch_order() {
+        let (state, scheduler) = setup().await;
+        let txs = [randomness_tx(1), randomness_tx(2), randomness_tx(3)];
+        let (checkpoint, contents) = checkpoint(&txs);
+        sync_checkpoint(&state, &checkpoint, contents, &txs);
+        let digest = TransactionDigest::random();
+        let batch = batch(vec![
+            txs[1].non_digest_key().unwrap(),
+            TransactionKey::Digest(digest),
+            txs[0].non_digest_key().unwrap(),
+        ]);
+
+        assert_eq!(
+            resolve(&scheduler, &batch, &state).await,
+            vec![*txs[1].digest(), digest, *txs[0].digest()]
+        );
+        let epoch_store = state.epoch_store_for_testing();
+        assert_eq!(
+            epoch_store.tx_key_to_digest(&txs[0].non_digest_key().unwrap()),
+            Some(*txs[0].digest())
+        );
+        assert_eq!(
+            epoch_store.tx_key_to_digest(&txs[2].non_digest_key().unwrap()),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_tx_digests_preserves_existing_mapping() {
+        let (state, scheduler) = setup().await;
+        let txs = [randomness_tx(1), randomness_tx(2)];
+        let (checkpoint, contents) = checkpoint(&txs);
+        sync_checkpoint(&state, &checkpoint, contents, &txs);
+        let existing_digest = TransactionDigest::random();
+        let existing_key = txs[0].non_digest_key().unwrap();
+        state
+            .epoch_store_for_testing()
+            .insert_tx_key(existing_key, existing_digest);
+        let batch = batch(txs.iter().map(|tx| tx.non_digest_key().unwrap()).collect());
+
+        assert_eq!(
+            resolve(&scheduler, &batch, &state).await,
+            vec![existing_digest, *txs[1].digest()]
+        );
+        assert_eq!(
+            state
+                .epoch_store_for_testing()
+                .tx_key_to_digest(&existing_key),
+            Some(existing_digest)
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_tx_digests_waits_for_later_checkpoint_sync() {
+        let (state, scheduler) = setup().await;
+        let txs = [randomness_tx(1)];
+        let (checkpoint, contents) = checkpoint(&txs);
+        let batch = batch(vec![txs[0].non_digest_key().unwrap()]);
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let resolution = scheduler.resolve_tx_digests(&batch, &epoch_store);
+        tokio::pin!(resolution);
+        assert!(futures::poll!(&mut resolution).is_pending());
+
+        // Certification can arrive before state sync has stored the contents and transactions.
+        state
+            .checkpoint_store
+            .insert_verified_checkpoint(&checkpoint)
+            .unwrap();
+        assert!(futures::poll!(&mut resolution).is_pending());
+        sync_checkpoint(&state, &checkpoint, contents, &txs);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), resolution)
+                .await
+                .expect("later checkpoint sync should resolve the missing key"),
+            vec![*txs[0].digest()]
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_tx_digests_accepts_ordinary_key_without_checkpoint() {
+        let (state, scheduler) = setup().await;
+        let key = TransactionKey::ConsensusCommitPrologue(0, 8, 0);
+        let batch = batch(vec![key]);
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let resolution = scheduler.resolve_tx_digests(&batch, &epoch_store);
+        tokio::pin!(resolution);
+        assert!(futures::poll!(&mut resolution).is_pending());
+        let digest = TransactionDigest::random();
+        state.epoch_store_for_testing().insert_tx_key(key, digest);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), resolution)
+                .await
+                .unwrap(),
+            vec![digest]
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_tx_digests_accepts_key_notification_before_checkpoint() {
+        let (state, scheduler) = setup().await;
+        let key = TransactionKey::RandomnessRound(0, RandomnessRound::new(1));
+        let batch = batch(vec![key]);
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let resolution = scheduler.resolve_tx_digests(&batch, &epoch_store);
+        tokio::pin!(resolution);
+        assert!(futures::poll!(&mut resolution).is_pending());
+        let digest = TransactionDigest::random();
+        state.epoch_store_for_testing().insert_tx_key(key, digest);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), resolution)
+                .await
+                .unwrap(),
+            vec![digest]
+        );
     }
 }
