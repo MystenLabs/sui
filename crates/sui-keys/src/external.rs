@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::encryption::{KEYSTORE_PASSWORD_ENV_VAR, NEW_KEYSTORE_PASSWORD_ENV_VAR};
 use crate::keystore::{
     ALIASES_FILE_EXTENSION, AccountKeystore, Alias, GenerateOptions, GeneratedKey, validate_alias,
 };
@@ -150,6 +151,9 @@ impl CommandRunner for StdCommandRunner {
     ) -> Result<JsonValue, ExternalExecError> {
         let mut cmd = Command::new(command)
             .arg("call")
+            // The signer does not need the password of the keystore, so it does not inherit it.
+            .env_remove(KEYSTORE_PASSWORD_ENV_VAR)
+            .env_remove(NEW_KEYSTORE_PASSWORD_ENV_VAR)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)

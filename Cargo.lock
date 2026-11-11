@@ -1085,6 +1085,7 @@ dependencies = [
  "base64ct",
  "blake2 0.11.0",
  "cpufeatures 0.3.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -13648,6 +13649,7 @@ dependencies = [
  "toml_edit 0.19.10",
  "tracing",
  "url",
+ "zeroize",
 ]
 
 [[package]]
@@ -15365,6 +15367,7 @@ name = "sui-keys"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "argon2",
  "async-trait",
  "base64 0.21.7",
  "bcs",
@@ -15375,6 +15378,7 @@ dependencies = [
  "jsonrpc",
  "mockall",
  "mysten-common",
+ "once_cell",
  "rand 0.8.5",
  "regex",
  "serde",
@@ -15387,6 +15391,9 @@ dependencies = [
  "thiserror 1.0.69",
  "tiny-bip39",
  "tokio",
+ "typenum",
+ "unicode-normalization",
+ "zeroize",
 ]
 
 [[package]]
@@ -16540,7 +16547,9 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "serde_yaml 0.8.26",
  "sui-config",
+ "sui-keys",
  "sui-move-build",
  "sui-package-alt",
  "sui-package-management",
@@ -20074,6 +20083,7 @@ version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
 dependencies = [
+ "serde",
  "zeroize_derive",
 ]
 

@@ -37,7 +37,8 @@ use sui_config::{
     SUI_NETWORK_CONFIG, genesis_blob_exists, sui_config_dir,
 };
 use sui_config::{
-    SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
+    SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME,
+    SUI_KEYSTORE_ALIASES_FILENAME, SUI_KEYSTORE_FILENAME,
 };
 use sui_faucet::{AppState, FaucetConfig, LocalFaucet, create_wallet_context, start_faucet};
 use sui_futures::service::Service;
@@ -60,6 +61,7 @@ use sui_indexer_alt_reader::{
     consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs, kv_loader::KvArgs,
     system_package_task::SystemPackageTaskArgs,
 };
+use sui_keys::encryption::is_encrypted_file;
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, External, FileBasedKeystore, Keystore};
@@ -772,9 +774,16 @@ impl SuiCommand {
                         .bridge_authority_port_and_key_path
                         .len()
                 );
+                // `add_account` panics if the import fails, for example because an encrypted
+                // keystore cannot be unlocked. The import also unlocks the keystore, so that
+                // `sign_transaction` below does not panic for that reason.
                 for node_config in network_config.validator_configs() {
                     let account_kp = node_config.account_key_pair.keypair();
-                    context.add_account(None, account_kp.copy()).await;
+                    context
+                        .config
+                        .keystore
+                        .import(None, account_kp.copy())
+                        .await?;
                 }
 
                 let context = context;
@@ -996,7 +1005,12 @@ async fn start(
                         committee_size,
                     )
                     .await
-                    .map_err(|_| {
+                    .map_err(|error| {
+                        // Other errors, such as a keystore that this version cannot read, are
+                        // reported as they are.
+                        if !error.is::<NonEmptyConfigDir>() {
+                            return error;
+                        }
                         anyhow!(
                             "Cannot run genesis with non-empty Sui config directory: {}.\n\n\
                                 If you are trying to run a local network without persisting the \
@@ -1109,6 +1123,19 @@ async fn start(
             }
             fullnode_rpc_address
         }
+    };
+
+    // The faucet signs with the keystore of the client config. An encrypted keystore is unlocked
+    // before the network starts, so that a missing or incorrect password fails at once, and the
+    // password prompt does not appear among the output of the network.
+    let faucet_keystore = match &with_faucet {
+        Some(_) if !force_regenesis && config_dir.join(SUI_CLIENT_CONFIG).exists() => {
+            let client_config =
+                PersistedConfig::<SuiClientConfig>::read(&config_dir.join(SUI_CLIENT_CONFIG))?;
+            client_config.keystore.ensure_unlocked().await?;
+            Some(client_config.keystore)
+        }
+        _ => None,
     };
 
     let mut swarm = swarm_builder.build();
@@ -1347,11 +1374,18 @@ async fn start(
             .unwrap();
         }
 
-        let local_faucet = LocalFaucet::new(
-            create_wallet_context(config.wallet_client_timeout_secs, config_dir.clone())?,
-            config.clone(),
-        )
-        .await?;
+        let mut wallet =
+            create_wallet_context(config.wallet_client_timeout_secs, config_dir.clone())?;
+        if let Some(keystore) = faucet_keystore {
+            // The wallet reads the client config after `sui start` updated its RPC address, and it
+            // takes the keystore that was unlocked before the network started. Both read the same
+            // keystore file.
+            wallet.config.keystore = keystore;
+        }
+        // The faucet signs while it serves requests, so an encrypted keystore is unlocked now,
+        // while the password can still be asked for.
+        wallet.config.keystore.ensure_unlocked().await?;
+        let local_faucet = LocalFaucet::new(wallet, config.clone()).await?;
 
         let app_state = Arc::new(AppState {
             faucet: local_faucet,
@@ -1398,6 +1432,15 @@ async fn start(
     Ok(())
 }
 
+/// The error of [`genesis`] for a Sui config directory that holds other files than a client config
+/// and its keystore.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration",
+    .0.display()
+)]
+struct NonEmptyConfigDir(PathBuf);
+
 async fn genesis(
     from_config: Option<PathBuf>,
     write_config: Option<PathBuf>,
@@ -1432,17 +1475,42 @@ async fn genesis(
 
     let client_path = sui_config_dir.join(SUI_CLIENT_CONFIG);
     let keystore_path = sui_config_dir.join(SUI_KEYSTORE_FILENAME);
+    let aliases_path = sui_config_dir.join(SUI_KEYSTORE_ALIASES_FILENAME);
+    // The keystore that `--force` keeps, unlocked for the import of the faucet key.
+    let mut kept_keystore = None;
 
     if write_config.is_none() && !files.is_empty() {
         if force {
             // check old keystore and client.yaml is compatible
-            let is_compatible = FileBasedKeystore::load_or_create(&keystore_path).is_ok()
-                && PersistedConfig::<SuiClientConfig>::read(&client_path).is_ok();
+            let keystore = FileBasedKeystore::load_or_create(&keystore_path);
+            // A newer version of Sui can write an encrypted keystore that this version cannot
+            // read. The file can be the only copy of its keys, so it is not removed.
+            if let Err(error) = &keystore
+                && fs::read(&keystore_path).is_ok_and(|contents| is_encrypted_file(&contents))
+            {
+                bail!(
+                    "Cannot read the encrypted keystore at {}: {error:#}\n\nGenesis with --force \
+                     would remove it. Move the keystore out of {} to run genesis",
+                    keystore_path.display(),
+                    sui_config_dir.display()
+                );
+            }
+            let is_compatible =
+                keystore.is_ok() && PersistedConfig::<SuiClientConfig>::read(&client_path).is_ok();
             // Keep keystore and client.yaml if they are compatible
             if is_compatible {
+                // Genesis imports the key of the faucet account into the keystore that it keeps.
+                // An encrypted keystore is unlocked before any file is removed, so that a missing
+                // or incorrect password does not stop genesis halfway.
+                if with_faucet && let Ok(keystore) = keystore {
+                    keystore.ensure_unlocked().await?;
+                    kept_keystore = Some(keystore);
+                }
                 for file in files {
                     let path = file.path();
-                    if path != client_path && path != keystore_path {
+                    // The aliases file belongs to the keystore, which also fails to save if
+                    // the aliases file changed after it was read.
+                    if path != client_path && path != keystore_path && path != aliases_path {
                         if path.is_file() {
                             fs::remove_file(path)
                         } else {
@@ -1464,10 +1532,7 @@ async fn genesis(
                 })?;
             }
         } else if files.len() != 2 || !client_path.exists() || !keystore_path.exists() {
-            bail!(
-                "Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration",
-                sui_config_dir.to_str().unwrap()
-            );
+            return Err(NonEmptyConfigDir(sui_config_dir.to_path_buf()).into());
         }
     }
 
@@ -1534,7 +1599,10 @@ async fn genesis(
             .build()
     };
 
-    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    let mut keystore = match kept_keystore {
+        Some(keystore) => keystore,
+        None => FileBasedKeystore::load_or_create(&keystore_path)?,
+    };
     for key in &network_config.account_keys {
         keystore
             .import(None, SuiKeyPair::Ed25519(key.copy()))
