@@ -87,7 +87,7 @@ on those modules is the source of truth — no separate doc is provided here.
 - **Address funds** — virtual balances owned by an address (`SuiAddress`). Withdraw maximums are
   declared in transaction data; sufficiency can be checked **before** execution.
 - **Object funds** — virtual balances owned by another object (UID). Withdraw amounts are
-  determined by Move program logic at runtime; sufficiency must be checked **after** execution.
+  determined by Move program logic at runtime; sufficiency is checked **during** execution.
 - **Settlement** — the act of folding a commit's accumulator events into the on-chain root.
   Implemented as N parallel settlement transactions (`NonExclusiveWrite` access) plus one
   barrier transaction (`Mutable` access).
@@ -95,7 +95,7 @@ on those modules is the source of truth — no separate doc is provided here.
   bump. Driven by `accumulators::build_accumulator_barrier_tx`.
 - **Split / Merge** — Accumulator events. Split = withdrawal, Merge = deposit.
 - **Running max withdraw** — the peak net withdrawal an account experiences during a single
-  transaction's execution. The basis for object-funds sufficiency checking.
+  transaction's execution. It bounds the net withdrawal recorded as unsettled.
 - **Reservation** — in the address-funds scheduler, the *declared maximum* a transaction may
   withdraw from an account. Held against the in-memory balance until settlement releases it.
 - **Checkpoint-builder path / checkpoint-executor path** — the two ways settlement reaches a validator.
