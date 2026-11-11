@@ -47,10 +47,9 @@ pub struct AssignedVersions {
     /// deterministically during consensus sequencing, so that every validator reads the same
     /// version of the object.
     ///
-    /// Today this holds the accumulator root version (as of the beginning of the consensus
-    /// commit this transaction belongs to), and the Clock version and, when forwarding addresses
-    /// are enabled, the forwarding address registry version (as of the point in the commit at
-    /// which this transaction is sequenced).
+    /// Today this holds the accumulator root version, the Clock version and, when forwarding
+    /// addresses are enabled, the forwarding address registry version, each as of the point in the
+    /// consensus commit at which this transaction is sequenced.
     pub system_object_versions: SystemObjectVersions,
 }
 
@@ -721,6 +720,7 @@ mod tests {
 
     fn forwarding_enabled_config() -> ProtocolConfig {
         let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_create_forwarding_address_registry_for_testing(true);
         config.set_enable_forwarding_addresses_for_testing(true);
         config
     }
