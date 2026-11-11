@@ -36,19 +36,20 @@ pub(super) struct BatchedRows<H: Handler> {
 /// whenever the next expected checkpoint has arrived and the committer has room for another batch
 /// (`committer_tx` has a free slot), it cuts a batch from the contiguous run of checkpoints
 /// starting there. While the committer is busy, checkpoints keep accumulating, so batches grow
-/// under back-pressure, up to `max_batch_checkpoints`. If `config.committer.min_batch_rows` is
-/// set, a batch is only cut once that many rows are pending (counting rows buffered for
-/// checkpoints that arrived ahead of their predecessors), or once rows have been pending for
-/// `config.committer.max_batch_delay()`. When the processor closes its channel, every checkpoint
-/// that can still be written in order is written out.
+/// under back-pressure, up to `max_batch_checkpoints` or until the reorder buffer is full (see
+/// below). If `config.committer.min_batch_rows` is set, a batch is only cut once that many rows
+/// are pending (counting rows buffered for checkpoints that arrived ahead of their predecessors),
+/// once rows have been pending for `config.committer.max_batch_delay()`, or once the reorder
+/// buffer is full. When the processor closes its channel, every checkpoint that can still be
+/// written in order is written out.
 ///
 /// Backpressure: when `committer_tx` is full (bounded by `pipeline_depth`), the collector stops
 /// cutting batches, and checkpoints accumulate in the reorder buffer. Once `max_pending_rows` are
-/// pending and the next checkpoint is ready, the buffer is full: the collector stops receiving from
-/// `rx` until it cuts a batch, so the processor→collector channel fills, the processor blocks, and
-/// the ingestion service slows down to this pipeline's pace. A full buffer makes a batch due
-/// regardless of `min_batch_rows`, so a `min_batch_rows` above `max_pending_rows` cannot leave the
-/// collector with receive stopped and no batch to cut.
+/// pending and the next checkpoint has arrived, the buffer is full: the collector stops receiving
+/// from `rx` until it cuts a batch, so the processor→collector channel fills, the processor
+/// blocks, and the ingestion service slows down to this pipeline's pace. A full buffer makes a
+/// batch due regardless of `min_batch_rows`, so a `min_batch_rows` above `max_pending_rows` cannot
+/// leave the collector with receive stopped and no batch to cut.
 ///
 /// While the next checkpoint is missing, the collector keeps receiving past `max_pending_rows`,
 /// because the missing checkpoint may still be in `rx` and nothing can be written until it
@@ -77,7 +78,10 @@ pub(super) fn collector<H: Handler>(
 
         loop {
             let ready = has_ready_checkpoint(next_checkpoint, &pending);
-            let buffer_full = ready && pending_rows >= max_pending_rows;
+            // Only the next checkpoint counts, not stale duplicates of written ones: while it is
+            // missing, it may still be in `rx`, so receiving must continue.
+            let buffer_full =
+                pending.contains_key(&next_checkpoint) && pending_rows >= max_pending_rows;
             let batch_due = buffer_full || (ready && floor.is_reached(pending_rows));
 
             tokio::select! {
@@ -121,7 +125,9 @@ pub(super) fn collector<H: Handler>(
                     loop {
                         recv_rows += indexed.len();
                         pending_rows += indexed.len();
-                        pending.insert(indexed.checkpoint(), indexed);
+                        if let Some(replaced) = pending.insert(indexed.checkpoint(), indexed) {
+                            pending_rows -= replaced.len();
+                        }
 
                         if pending_rows >= max_pending_rows {
                             break;
