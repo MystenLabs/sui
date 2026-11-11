@@ -39,7 +39,8 @@ pub struct CommitterConfig {
     /// of 0, pending rows are cut into a batch as soon as the committer has room for one, so
     /// batches only grow while the committer is busy. Stores that prefer fewer, larger writes can
     /// raise this; rows then wait until this many are pending, or until the oldest has waited
-    /// `max_batch_delay_ms`.
+    /// `max_batch_delay_ms`. A sequential pipeline also cuts a smaller batch once its reorder
+    /// buffer holds `max_pending_rows` rows and the next checkpoint has arrived.
     #[serde(default)]
     pub min_batch_rows: usize,
 
