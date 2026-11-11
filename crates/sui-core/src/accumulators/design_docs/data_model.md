@@ -108,12 +108,14 @@ Three things to internalize:
    what motivates the unsettled-withdraws tracking in
    [`object_funds_in_execution.md`](./object_funds_in_execution.md) §3.
 
-3. **The version is *not* an execution dependency for withdraws.** A transaction at version V+1
-   does **not** have to wait for the V→V+1 settlement to finish executing before it can execute
-   itself. The eager scheduler may approve it immediately based on in-memory balance bookkeeping
-   (see [`address_funds_scheduling.md`](./address_funds_scheduling.md) §3). The version is a
-   logical label that tells the scheduler which "snapshot" to reason about, not a barrier the
-   transaction has to physically clear.
+3. **The version is *not* a scheduling dependency for address withdraws.** A transaction at
+   version V+1 does **not** have to wait for the V→V+1 settlement to finish executing before it
+   can execute itself. The eager scheduler may approve it immediately based on in-memory balance
+   bookkeeping (see [`address_funds_scheduling.md`](./address_funds_scheduling.md) §3). The
+   version is a logical label that tells the scheduler which "snapshot" to reason about, not a
+   barrier the transaction has to physically clear. An object withdraw that needs the settled
+   balance does wait during execution until the root reaches V+1 (see
+   [`object_funds_in_execution.md`](./object_funds_in_execution.md) §2).
 
 The per-account accumulator object itself is also versioned. Reads can be **version-bounded**:
 
@@ -121,7 +123,8 @@ The per-account accumulator object itself is also versioned. Reads can be **vers
 AccumulatorValue::load(runtime_object_resolver, version_bound, owner, type_) -> Option<Self>
 ```
 
-This is how `AccountFundsRead::get_account_amount_at_version` works. Version-bounded reads use
+This is how `TemporaryStore::object_available_balance` reads an object balance during execution,
+and how `AccountFundsRead::get_account_amount_at_version` works. Version-bounded reads use
 the dynamic-field MVCC machinery (`BoundedDynamicFieldID`); they let the system read "what was
 the balance at the accumulator version this transaction was assigned" even when storage has
 since moved past.

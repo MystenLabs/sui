@@ -84,7 +84,7 @@ per-account, per-accumulator-version totals of executed-but-unsettled withdrawal
   through `UnsettledObjectWithdrawals::record_object_funds_withdraws` — net, not running max,
   because that is what settlement will actually deduct. The running max bounds the net in a
   debug assertion (net can never exceed the checked peak), and its keys decide whether the
-  transaction withdrew from an object account at all. Failed transactions
+  transaction drew on an object account's settled balance at all. Failed transactions
   settle nothing and record nothing.
 
   The running max (`InnerTemporaryStore::accumulator_running_max_withdraws`) is the peak net
@@ -111,7 +111,7 @@ per-account, per-accumulator-version totals of executed-but-unsettled withdrawal
 |------|-----------------------------------------------|
 | Live consensus execution | Assigned versions (`AssignedVersions.system_object_versions`). |
 | Checkpoint execution / crash recovery | Back-filled from the settlement barrier's input version, with recorded `ReadOnlyRoot` versions checked for consistency. See `CheckpointTransactionData::new` in the [checkpoint executor](../../checkpoints/checkpoint_executor/mod.rs). |
-| Dev-inspect / dry-run | Captured from the latest stored root before execution (`SystemObjectVersions::from_latest_in_store`). Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
+| Dev-inspect / dry-run | Captured from the latest stored root before execution (`SystemObjectVersions::from_inputs_or_latest_in_store`). Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
 | `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Reconstructing them in replay is tracked in #28300. |
 
 ## 5. Failure and error semantics

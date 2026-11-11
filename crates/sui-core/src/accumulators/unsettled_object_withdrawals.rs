@@ -110,7 +110,7 @@ impl UnsettledObjectWithdrawals {
         self.update_unsettled_metrics(&inner);
     }
 
-    /// Returns whether the transaction withdrew from any object account.
+    /// Returns whether the transaction drew on any object account's settled balance.
     pub fn record_object_funds_withdraws(
         &self,
         tx_data: &TransactionData,
@@ -213,6 +213,7 @@ mod tests {
         },
         gas_coin::GAS,
         transaction::Transaction,
+        utils::create_fake_transaction,
     };
 
     fn sui_balance() -> sui_types::TypeTag {
@@ -236,11 +237,6 @@ mod tests {
 
     fn new_store() -> UnsettledObjectWithdrawals {
         UnsettledObjectWithdrawals::new(&Registry::new())
-    }
-
-    fn new_tx() -> Transaction {
-        let (sender, keypair) = get_account_key_pair();
-        TestTransactionBuilder::new(sender, random_object_ref(), 1).build_and_sign(&keypair)
     }
 
     fn record(
@@ -273,7 +269,7 @@ mod tests {
         let owner = SuiAddress::random_for_testing_only();
         assert!(record(
             &store,
-            &new_tx(),
+            &create_fake_transaction(),
             vec![split(owner, 30)],
             BTreeMap::from([(account(owner), 100)]),
             0,
@@ -283,7 +279,7 @@ mod tests {
         // A second transaction at the same version adds to the first.
         assert!(record(
             &store,
-            &new_tx(),
+            &create_fake_transaction(),
             vec![split(owner, 30)],
             BTreeMap::from([(account(owner), 30)]),
             0,
@@ -298,7 +294,7 @@ mod tests {
         let owner = SuiAddress::random_for_testing_only();
         assert!(record(
             &store,
-            &new_tx(),
+            &create_fake_transaction(),
             vec![],
             BTreeMap::from([(account(owner), 100)]),
             0,
@@ -315,7 +311,7 @@ mod tests {
         let owner = SuiAddress::random_for_testing_only();
         assert!(record(
             &store,
-            &new_tx(),
+            &create_fake_transaction(),
             vec![split(zero_owner, 0), split(owner, 50)],
             BTreeMap::from([(account(owner), 50)]),
             0,
@@ -327,7 +323,13 @@ mod tests {
     #[test]
     fn no_withdraw_returns_false() {
         let store = new_store();
-        assert!(!record(&store, &new_tx(), vec![], BTreeMap::new(), 0));
+        assert!(!record(
+            &store,
+            &create_fake_transaction(),
+            vec![],
+            BTreeMap::new(),
+            0
+        ));
     }
 
     #[test]
@@ -353,13 +355,37 @@ mod tests {
     }
 
     #[test]
+    fn mixed_withdraw_records_only_the_object_account() {
+        // A transaction that withdraws from its sender's address balance and from an object
+        // records only the object withdraw as unsettled.
+        let store = new_store();
+        let (sender, keypair) = get_account_key_pair();
+        let object_owner = SuiAddress::random_for_testing_only();
+        let tx = TestTransactionBuilder::new(sender, random_object_ref(), 1)
+            .transfer_sui_to_address_balance(
+                FundSource::address_fund_with_reservation(100),
+                vec![(100, sender)],
+            )
+            .build_and_sign(&keypair);
+        assert!(record(
+            &store,
+            &tx,
+            vec![split(sender, 100), split(object_owner, 40)],
+            BTreeMap::from([(account(sender), 100), (account(object_owner), 40)]),
+            0,
+        ));
+        assert_eq!(unsettled(&store, sender, 0), 0);
+        assert_eq!(unsettled(&store, object_owner, 0), 40);
+    }
+
+    #[test]
     fn commit_removes_only_committed_versions() {
         let store = new_store();
         let owner = SuiAddress::random_for_testing_only();
         for version in [0, 1] {
             record(
                 &store,
-                &new_tx(),
+                &create_fake_transaction(),
                 vec![split(owner, 10)],
                 BTreeMap::from([(account(owner), 10)]),
                 version,
