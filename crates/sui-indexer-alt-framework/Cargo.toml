@@ -59,6 +59,7 @@ wiremock.workspace = true
 dashmap.workspace = true
 
 sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
+sui-indexer-alt-object-store.workspace = true
 sui-synthetic-ingestion.workspace = true
 
 [features]
