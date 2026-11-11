@@ -147,11 +147,12 @@ different questions:
   accumulator version. A latest-state read would be unsafe: storage may already include later
   settlements that this transaction was not allowed to rely on.
 
-That is also why the implementation is careful about *when* it attempts such reads. If checkpoint
-progress advances far enough while a historical read is in flight, the old version can become
-prune-eligible. The code therefore "dances" around the root version and checkpoint progress to
-make sure it is reading inside a window where the target historical version is still guaranteed to
-exist.
+Historical reads are also bounded by pruning. If checkpoint progress advances far enough, an old
+version becomes prune-eligible. The address-funds scheduler therefore re-reads the root version
+around its MVCC read, so that it reads inside a window where the target version still exists. The
+object funds check waits for the root at the required version and does one version-bounded load;
+pruning trails the checkpoint executor, and a transaction that is still executing has not passed
+it, so that version still exists.
 
 The rest of this design directory is largely about keeping those two questions from being
 accidentally conflated.
