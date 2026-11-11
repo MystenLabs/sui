@@ -43,13 +43,17 @@ pub(super) struct BatchedRows<H: Handler> {
 /// that can still be written in order is written out.
 ///
 /// Backpressure: when `committer_tx` is full (bounded by `pipeline_depth`), the collector stops
-/// cutting batches. It keeps reading `rx` into the reorder buffer until `max_pending_rows` are
-/// pending at a time, so the processor→collector channel fills and the adaptive fanout / ingest
-/// controllers cut upstream concurrency.
+/// cutting batches, and checkpoints accumulate in the reorder buffer. Once `max_pending_rows` are
+/// pending and the next checkpoint is ready, the buffer is full: the collector stops receiving from
+/// `rx` until it cuts a batch, so the processor→collector channel fills, the processor blocks, and
+/// the ingestion service slows down to this pipeline's pace. A full buffer makes a batch due
+/// regardless of `min_batch_rows`, so a `min_batch_rows` above `max_pending_rows` cannot leave the
+/// collector with receive stopped and no batch to cut.
 ///
-/// `max_pending_rows` is a soft cap: when exceeded, the inner drain loop yields so a batch can be
-/// cut. `rx.recv()` itself is never gated, because the missing predecessor for a stuck `pending`
-/// may still be sitting in `rx`; hard-gating receive would risk deadlock.
+/// While the next checkpoint is missing, the collector keeps receiving past `max_pending_rows`,
+/// because the missing checkpoint may still be in `rx` and nothing can be written until it
+/// arrives. Once it arrives, receiving stops again until batches bring the buffer below
+/// `max_pending_rows` or use up the contiguous run of checkpoints.
 pub(super) fn collector<H: Handler>(
     handler: Arc<H>,
     config: SequentialConfig,
@@ -73,7 +77,8 @@ pub(super) fn collector<H: Handler>(
 
         loop {
             let ready = has_ready_checkpoint(next_checkpoint, &pending);
-            let batch_due = ready && floor.is_reached(pending_rows);
+            let buffer_full = ready && pending_rows >= max_pending_rows;
+            let batch_due = buffer_full || (ready && floor.is_reached(pending_rows));
 
             tokio::select! {
                 biased;
@@ -101,18 +106,17 @@ pub(super) fn collector<H: Handler>(
                     floor.set_pending(!pending.is_empty());
                 }
 
-                received = rx.recv() => {
+                received = rx.recv(), if !buffer_full => {
                     // The processor has stopped, so write out everything that can be written.
                     let Some(mut indexed) = received else {
                         break;
                     };
 
-                    // Eagerly drain the channel to avoid scheduler ping-pong. `rx.recv`
-                    // itself is never gated — the reorder buffer must stay unbounded,
-                    // because a missing predecessor may still be sitting in `rx` and
-                    // capping receive could deadlock. The `max_pending_rows` check inside
-                    // the drain loop only yields so that a batch can be cut, it is not a
-                    // hard-cap on the amount of rows buffered.
+                    // Eagerly drain the channel to avoid scheduler ping-pong, until the buffer
+                    // reaches `max_pending_rows`. Whether receiving continues past that is
+                    // decided by `buffer_full` on the next iteration: only while the next
+                    // checkpoint is missing, because it may be among the checkpoints still in
+                    // `rx`.
                     let mut recv_rows = 0usize;
                     loop {
                         recv_rows += indexed.len();
