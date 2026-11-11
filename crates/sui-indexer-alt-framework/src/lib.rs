@@ -761,7 +761,7 @@ mod tests {
             let watermark_path = dir.path().join(WATERMARK_PATH);
             std::fs::create_dir_all(watermark_path.parent().unwrap()).unwrap();
             let watermark = ObjectStoreWatermark {
-                checkpoint_hi_inclusive: cp,
+                checkpoint_hi_inclusive: Some(cp),
             };
             std::fs::write(watermark_path, serde_json::to_string(&watermark).unwrap()).unwrap();
         }
