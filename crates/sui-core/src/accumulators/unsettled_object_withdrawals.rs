@@ -66,11 +66,13 @@ impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
         account: &AccumulatorObjId,
         accumulator_version: SequenceNumber,
     ) -> u128 {
-        UnsettledObjectWithdrawals::get_unsettled_object_withdraw(
-            self,
-            account,
-            accumulator_version,
-        )
+        self.inner
+            .read()
+            .unsettled_withdraws
+            .get(account)
+            .and_then(|withdraws| withdraws.get(&accumulator_version))
+            .copied()
+            .unwrap_or_default()
     }
 }
 
@@ -80,21 +82,6 @@ impl UnsettledObjectWithdrawals {
             inner: RwLock::new(Inner::default()),
             metrics: UnsettledObjectWithdrawalsMetrics::new(registry),
         }
-    }
-
-    /// Get the current unsettled withdraw amount for an account at a given accumulator version.
-    pub(crate) fn get_unsettled_object_withdraw(
-        &self,
-        account: &AccumulatorObjId,
-        accumulator_version: SequenceNumber,
-    ) -> u128 {
-        self.inner
-            .read()
-            .unsettled_withdraws
-            .get(account)
-            .and_then(|withdraws| withdraws.get(&accumulator_version))
-            .copied()
-            .unwrap_or_default()
     }
 
     /// Record a new unsettled withdraw for an account at a given accumulator version.
@@ -213,18 +200,39 @@ impl UnsettledObjectWithdrawals {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
     use sui_types::{
         accumulator_event::AccumulatorEvent,
-        base_types::{ObjectID, random_object_ref},
+        accumulator_root::AccumulatorValue,
+        balance::Balance,
+        base_types::{SuiAddress, random_object_ref},
         crypto::get_account_key_pair,
         effects::{
-            AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
-            TestEffectsBuilder,
+            AccumulatorAddress, AccumulatorOperation, AccumulatorValue as EffectsAccumulatorValue,
+            AccumulatorWriteV1, TestEffectsBuilder,
         },
         gas_coin::GAS,
         transaction::Transaction,
     };
+
+    fn sui_balance() -> sui_types::TypeTag {
+        Balance::type_tag(GAS::type_tag())
+    }
+
+    fn account(owner: SuiAddress) -> AccumulatorObjId {
+        AccumulatorValue::get_field_id(owner, &sui_balance()).unwrap()
+    }
+
+    fn split(owner: SuiAddress, amount: u64) -> AccumulatorEvent {
+        AccumulatorEvent::new(
+            account(owner),
+            AccumulatorWriteV1 {
+                address: AccumulatorAddress::new(owner, sui_balance()),
+                operation: AccumulatorOperation::Split,
+                value: EffectsAccumulatorValue::Integer(amount),
+            },
+        )
+    }
 
     fn new_store() -> UnsettledObjectWithdrawals {
         UnsettledObjectWithdrawals::new(&Registry::new())
@@ -233,17 +241,6 @@ mod tests {
     fn new_tx() -> Transaction {
         let (sender, keypair) = get_account_key_pair();
         TestTransactionBuilder::new(sender, random_object_ref(), 1).build_and_sign(&keypair)
-    }
-
-    fn split(tx: &Transaction, account: AccumulatorObjId, amount: u64) -> AccumulatorEvent {
-        AccumulatorEvent::new(
-            account,
-            AccumulatorWriteV1 {
-                address: AccumulatorAddress::new(tx.transaction_data().sender(), GAS::type_tag()),
-                operation: AccumulatorOperation::Split,
-                value: AccumulatorValue::Integer(amount),
-            },
-        )
     }
 
     fn record(
@@ -265,55 +262,48 @@ mod tests {
         )
     }
 
-    fn unsettled(
-        store: &UnsettledObjectWithdrawals,
-        account: AccumulatorObjId,
-        version: u64,
-    ) -> u128 {
-        store.get_unsettled_object_withdraw(&account, SequenceNumber::from_u64(version))
+    fn unsettled(store: &UnsettledObjectWithdrawals, owner: SuiAddress, version: u64) -> u128 {
+        store.get_unsettled_object_withdraw(&account(owner), SequenceNumber::from_u64(version))
     }
 
     #[test]
     fn records_net_withdraw_not_running_max() {
         // Withdraw 100 then deposit 70 back: running max 100, net Split(30) in effects.
         let store = new_store();
-        let tx = new_tx();
-        let account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        let owner = SuiAddress::random_for_testing_only();
         assert!(record(
             &store,
-            &tx,
-            vec![split(&tx, account, 30)],
-            BTreeMap::from([(account, 100)]),
+            &new_tx(),
+            vec![split(owner, 30)],
+            BTreeMap::from([(account(owner), 100)]),
             0,
         ));
-        assert_eq!(unsettled(&store, account, 0), 30);
+        assert_eq!(unsettled(&store, owner, 0), 30);
 
         // A second transaction at the same version adds to the first.
-        let tx2 = new_tx();
         assert!(record(
             &store,
-            &tx2,
-            vec![split(&tx2, account, 30)],
-            BTreeMap::from([(account, 30)]),
+            &new_tx(),
+            vec![split(owner, 30)],
+            BTreeMap::from([(account(owner), 30)]),
             0,
         ));
-        assert_eq!(unsettled(&store, account, 0), 60);
+        assert_eq!(unsettled(&store, owner, 0), 60);
     }
 
     #[test]
     fn net_zero_withdraw_records_nothing_but_counts_as_object_withdraw() {
         // Withdraw 100 then deposit 100 back: running max 100, no net withdraw in effects.
         let store = new_store();
-        let tx = new_tx();
-        let account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        let owner = SuiAddress::random_for_testing_only();
         assert!(record(
             &store,
-            &tx,
+            &new_tx(),
             vec![],
-            BTreeMap::from([(account, 100)]),
-            0
+            BTreeMap::from([(account(owner), 100)]),
+            0,
         ));
-        assert_eq!(unsettled(&store, account, 0), 0);
+        assert_eq!(unsettled(&store, owner, 0), 0);
     }
 
     #[test]
@@ -321,48 +311,64 @@ mod tests {
         // A zero-amount withdraw survives effects folding as Split(0) but has no running max
         // entry.
         let store = new_store();
-        let tx = new_tx();
-        let zero_account = AccumulatorObjId::new_unchecked(ObjectID::random());
-        let withdraw_account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        let zero_owner = SuiAddress::random_for_testing_only();
+        let owner = SuiAddress::random_for_testing_only();
         assert!(record(
             &store,
-            &tx,
-            vec![
-                split(&tx, zero_account, 0),
-                split(&tx, withdraw_account, 50)
-            ],
-            BTreeMap::from([(withdraw_account, 50)]),
+            &new_tx(),
+            vec![split(zero_owner, 0), split(owner, 50)],
+            BTreeMap::from([(account(owner), 50)]),
             0,
         ));
-        assert_eq!(unsettled(&store, zero_account, 0), 0);
-        assert_eq!(unsettled(&store, withdraw_account, 0), 50);
+        assert_eq!(unsettled(&store, zero_owner, 0), 0);
+        assert_eq!(unsettled(&store, owner, 0), 50);
     }
 
     #[test]
     fn no_withdraw_returns_false() {
         let store = new_store();
-        let tx = new_tx();
-        assert!(!record(&store, &tx, vec![], BTreeMap::new(), 0));
+        assert!(!record(&store, &new_tx(), vec![], BTreeMap::new(), 0));
+    }
+
+    #[test]
+    fn address_only_withdraw_records_nothing_and_returns_false() {
+        // A withdraw from an address balance declared in transaction data is not an object
+        // withdraw, even though it appears in the running max and in the effects.
+        let store = new_store();
+        let (sender, keypair) = get_account_key_pair();
+        let tx = TestTransactionBuilder::new(sender, random_object_ref(), 1)
+            .transfer_sui_to_address_balance(
+                FundSource::address_fund_with_reservation(100),
+                vec![(100, sender)],
+            )
+            .build_and_sign(&keypair);
+        assert!(!record(
+            &store,
+            &tx,
+            vec![split(sender, 100)],
+            BTreeMap::from([(account(sender), 100)]),
+            0,
+        ));
+        assert_eq!(unsettled(&store, sender, 0), 0);
     }
 
     #[test]
     fn commit_removes_only_committed_versions() {
         let store = new_store();
-        let account = AccumulatorObjId::new_unchecked(ObjectID::random());
+        let owner = SuiAddress::random_for_testing_only();
         for version in [0, 1] {
-            let tx = new_tx();
             record(
                 &store,
-                &tx,
-                vec![split(&tx, account, 10)],
-                BTreeMap::from([(account, 10)]),
+                &new_tx(),
+                vec![split(owner, 10)],
+                BTreeMap::from([(account(owner), 10)]),
                 version,
             );
         }
 
         store.commit_accumulator_versions(vec![SequenceNumber::from_u64(0)]);
-        assert_eq!(unsettled(&store, account, 0), 0);
-        assert_eq!(unsettled(&store, account, 1), 10);
+        assert_eq!(unsettled(&store, owner, 0), 0);
+        assert_eq!(unsettled(&store, owner, 1), 10);
 
         store.commit_accumulator_versions(vec![SequenceNumber::from_u64(1)]);
         let inner = store.inner.read();

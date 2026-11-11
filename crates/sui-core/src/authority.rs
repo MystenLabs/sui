@@ -2067,7 +2067,8 @@ impl AuthorityState {
                 ExecutionStatus::Success => {
                     if let Some(accumulator_version) =
                         execution_env.assigned_versions.accumulator_version()
-                        && self
+                    {
+                        let withdrew_from_object = self
                             .unsettled_object_withdrawals
                             .record_object_funds_withdraws(
                                 certificate.transaction_data(),
@@ -2075,12 +2076,13 @@ impl AuthorityState {
                                 &inner_temp_store.accumulator_running_max_withdraws,
                                 accumulator_version,
                                 self.chain_identifier,
-                            )
-                    {
-                        self.metrics
-                            .object_funds_in_execution_check_result
-                            .with_label_values(&["sufficient"])
-                            .inc();
+                            );
+                        if withdrew_from_object {
+                            self.metrics
+                                .object_funds_in_execution_check_result
+                                .with_label_values(&["sufficient"])
+                                .inc();
+                        }
                     }
                 }
                 ExecutionStatus::Failure(failure) => {

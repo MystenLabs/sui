@@ -3,11 +3,12 @@
 This document covers the **in-execution** sufficiency check for object-owned virtual balance
 withdrawals: the `reserve_object_funds_for_withdrawal` native consulted by
 `funds_accumulator::withdraw_from_object` while the transaction is running inside the executor.
-It is gated by the `check_object_funds_withdraw_in_execution` protocol flag, which is enabled on
-all networks. Nodes still execute transactions from earlier protocol versions with the flag off,
-but only from certified effects: the checkpoint executor reproduces an
-`InsufficientFundsForWithdraw` failure as an early error, and every other outcome needs no balance
-read. No post-execution object funds check exists.
+It is gated by the `check_object_funds_withdraw_in_execution` protocol flag. No object funds check
+runs for protocol versions with the flag off. When a node executes such a transaction from
+certified effects, the checkpoint executor reproduces an `InsufficientFundsForWithdraw` failure as
+an early error, and every other outcome needs no balance read. A validator that replays consensus
+in a flag-off epoch has no certified effects, so it can commit an overdraw as success and fork from
+the certified checkpoint.
 
 For the on-chain data layout, see [`data_model.md`](./data_model.md). For how withdrawals are
 declared, executed, and settled, see [`write_path.md`](./write_path.md).
