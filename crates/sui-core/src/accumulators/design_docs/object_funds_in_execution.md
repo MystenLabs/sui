@@ -13,25 +13,21 @@ the certified checkpoint.
 For the on-chain data layout, see [`data_model.md`](./data_model.md). For how withdrawals are
 declared, executed, and settled, see [`write_path.md`](./write_path.md).
 
-## 1. Why move the check into execution?
+## 1. Why check during execution?
 
-Object withdrawal amounts are still only known at runtime — that has not changed. What changes
-is *when the decision is made*. The post-execution checker had to execute the whole transaction,
-inspect the resulting running-max withdrawals, and on insufficiency either wait for settlement or
-re-execute the transaction with an injected failure. This created a few issues:
+Object withdrawal amounts are only known at runtime, so the check runs at each withdrawal, inside
+the executor:
 
-- It is error prone to let arbitrary object funds withdraw to succeed. This has led to a few overflow bugs in the past.
-- It is inefficient since we may have to execute the same transaction multiple times.
-- It makes dryrun/simulate difficult to implement properly.
-
-In-execution, each withdrawal is checked at the moment it happens:
-
-- Insufficiency becomes an ordinary, deterministic Move abort at the offending command — a single
-  execution, no pending-wait/re-execute machinery, and a legible failure
-  (`MoveAbort(funds_accumulator, E_OBJECT_FUNDS_INSUFFICIENT)`) in the effects.
-- The check runs on **every executing node** (fullnodes included), not just validators, because it
-  affects execution results. This is why the unsettled-withdrawal store lives unconditionally on
-  `AuthorityState` rather than behind validator-only init.
+- Insufficiency is an ordinary, deterministic Move abort at the offending command: one execution
+  and a legible failure (`MoveAbort(funds_accumulator, E_OBJECT_FUNDS_INSUFFICIENT)`) in the
+  effects.
+- An unbacked withdrawal never produces an accumulator event. Checking only after execution would
+  let it, which has caused overflow bugs, and failing such a transaction then takes a second
+  execution.
+- Simulation runs the same check as committed execution, with an empty unsettled-withdrawal
+  view (see §4).
+- The check runs on **every executing node** (fullnodes included), because it affects execution
+  results. This is why the unsettled-withdrawal store lives on `AuthorityState` on every node.
 
 ## 2. The check, step by step
 

@@ -67,7 +67,6 @@ use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
 use sui_package_resolver::{PackageStoreWithLruCache, SyncResolver};
 use sui_protocol_config::PerObjectCongestionControlMode;
-use sui_protocol_config::assert_reachable_gated;
 use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::base_types::SystemObjectVersions;
 use sui_types::execution::ExecutionOutput;
@@ -119,7 +118,6 @@ use sui_types::effects::{
 };
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, GasUsageReport};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::is_system_package;
@@ -285,8 +283,6 @@ pub struct AuthorityMetrics {
     pub(crate) execution_queueing_delay_s: Histogram,
     pub(crate) prepare_cert_gas_latency_ratio: Histogram,
     pub(crate) execution_gas_latency_ratio: Histogram,
-
-    pub(crate) object_funds_in_execution_check_result: IntCounterVec,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -583,14 +579,6 @@ impl AuthorityMetrics {
                 "The ratio of computation gas divided by certificate execution latency, include committing certificate.",
                 GAS_LATENCY_RATIO_BUCKETS.to_vec(),
                 registry
-            )
-            .unwrap(),
-            object_funds_in_execution_check_result: register_int_counter_vec_with_registry!(
-                "object_funds_in_execution_check_result",
-                "Executed transactions by in-execution object funds check outcome: sufficient \
-                 counts successful transactions that drew on an object account's settled balance",
-                &["result"],
-                registry,
             )
             .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
@@ -898,8 +886,9 @@ pub struct ExecutionEnv {
     /// The expected digest of the effects of the transaction, if executing from checkpoint or
     /// other sources where the effects are known in advance.
     pub expected_effects_digest: Option<ExpectedEffectsDigest>,
-    /// Status of the address funds withdraw scheduling of the transaction,
-    /// including both address and object funds withdraws.
+    /// Status of the address funds withdraw scheduling of the transaction. The checkpoint
+    /// executor also sets it to `Insufficient` when certified effects report
+    /// `InsufficientFundsForWithdraw`.
     pub funds_withdraw_status: FundsWithdrawStatus,
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
@@ -2055,40 +2044,17 @@ impl AuthorityState {
                 tx_digest,
             );
 
-        if protocol_config.check_object_funds_withdraw_in_execution() {
-            match effects.status() {
-                ExecutionStatus::Success => {
-                    if let Some(accumulator_version) = accumulator_version {
-                        let withdrew_from_object = self
-                            .unsettled_object_withdrawals
-                            .record_object_funds_withdraws(
-                                certificate.transaction_data(),
-                                &effects,
-                                &inner_temp_store.accumulator_running_max_withdraws,
-                                accumulator_version,
-                                self.chain_identifier,
-                            );
-                        if withdrew_from_object {
-                            self.metrics
-                                .object_funds_in_execution_check_result
-                                .with_label_values(&["sufficient"])
-                                .inc();
-                        }
-                    }
-                }
-                ExecutionStatus::Failure(failure) => {
-                    if sui_types::funds_accumulator::is_object_funds_insufficient_abort(
-                        &failure.error,
-                    ) {
-                        assert_reachable_gated!("object funds insufficient in execution", |pc| pc
-                            .check_object_funds_withdraw_in_execution());
-                        self.metrics
-                            .object_funds_in_execution_check_result
-                            .with_label_values(&["insufficient"])
-                            .inc();
-                    }
-                }
-            }
+        if protocol_config.check_object_funds_withdraw_in_execution()
+            && let Some(accumulator_version) = accumulator_version
+        {
+            self.unsettled_object_withdrawals
+                .record_object_funds_withdraws(
+                    certificate.transaction_data(),
+                    &effects,
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    accumulator_version,
+                    self.chain_identifier,
+                );
         }
 
         // (test-only) Inject a fork before the effects-digest check below. Placed here so that a
@@ -3028,8 +2994,9 @@ impl AuthorityState {
             })
             .collect();
 
-        // The test version-assignment helper assigns no accumulator root version, so add the
-        // version these settlement transactions settle.
+        // Consensus assigns the accumulator root version to every transaction in a commit,
+        // settlement transactions included. The test version-assignment helper does not, so
+        // add it here.
         let root_version = sui_types::base_types::ConsensusObjectVersion {
             initial_shared_version: accumulator_root_obj_initial_shared_version,
             version: accumulator_version,
