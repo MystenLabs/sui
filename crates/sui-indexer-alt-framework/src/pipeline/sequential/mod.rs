@@ -368,6 +368,15 @@ mod tests {
             .expect("collector closed its channel")
     }
 
+    /// Receives batches until one ends at checkpoint `last`, returning their values in order.
+    async fn recv_until(rx: &mut mpsc::Receiver<BatchedRows<TestHandler>>, last: u64) -> Vec<u64> {
+        let mut written = vec![];
+        while written.last() != Some(&last) {
+            written.extend(recv_batch(rx).await.batch);
+        }
+        written
+    }
+
     async fn expect_no_batch(rx: &mut mpsc::Receiver<BatchedRows<TestHandler>>) {
         let result = tokio::time::timeout(Duration::from_secs(1), rx.recv()).await;
         assert!(result.is_err(), "expected no batch");
@@ -544,10 +553,7 @@ mod tests {
             .unwrap();
         permit.send(create_checkpoint(14));
 
-        let mut written = vec![];
-        while written.last() != Some(&14) {
-            written.extend(recv_batch(&mut batch_rx).await.batch);
-        }
+        let written = recv_until(&mut batch_rx, 14).await;
         assert_eq!(written, (1..=14).collect::<Vec<_>>());
     }
 
@@ -573,10 +579,7 @@ mod tests {
 
         checkpoint_tx.send(create_checkpoint(0)).await.unwrap();
 
-        let mut written = vec![];
-        while written.last() != Some(&15) {
-            written.extend(recv_batch(&mut batch_rx).await.batch);
-        }
+        let written = recv_until(&mut batch_rx, 15).await;
         assert_eq!(written, (0..=15).collect::<Vec<_>>());
     }
 
@@ -596,6 +599,79 @@ mod tests {
 
         let batch = recv_batch(&mut batch_rx).await;
         assert_eq!(batch.batch, vec![0, 1, 2]);
+    }
+
+    /// A stale duplicate of a written checkpoint does not stop the collector from receiving while
+    /// the next checkpoint is missing.
+    #[tokio::test(start_paused = true)]
+    async fn collector_keeps_receiving_past_stale_checkpoints() {
+        let config = SequentialConfig {
+            max_pending_rows: Some(2),
+            ..Default::default()
+        };
+        let (checkpoint_tx, mut batch_rx, _collector) = spawn_collector(config, 1);
+
+        // Checkpoint 0 fills the committer's channel.
+        checkpoint_tx.send(create_checkpoint(0)).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // A duplicate of checkpoint 0 and checkpoint 2 fill the pending rows while 1 is missing,
+        // followed by more checkpoints than the input channel holds.
+        for i in [0, 2].into_iter().chain(3..=13) {
+            let send = checkpoint_tx.send(create_checkpoint(i));
+            tokio::time::timeout(Duration::from_secs(1), send)
+                .await
+                .expect("collector stopped receiving while checkpoint 1 is missing")
+                .unwrap();
+        }
+
+        checkpoint_tx.send(create_checkpoint(1)).await.unwrap();
+
+        let written = recv_until(&mut batch_rx, 13).await;
+        assert_eq!(written, (0..=13).collect::<Vec<_>>());
+    }
+
+    /// A checkpoint received twice before it is written counts its rows once.
+    #[tokio::test(start_paused = true)]
+    async fn collector_counts_duplicate_pending_checkpoint_once() {
+        let (checkpoint_tx, mut batch_rx, _collector) =
+            spawn_collector(min_batch_config(3, 60_000), 10);
+
+        for i in [1, 1, 0] {
+            checkpoint_tx.send(create_checkpoint(i)).await.unwrap();
+        }
+        expect_no_batch(&mut batch_rx).await;
+
+        checkpoint_tx.send(create_checkpoint(2)).await.unwrap();
+
+        let batch = recv_batch(&mut batch_rx).await;
+        assert_eq!(batch.batch, vec![0, 1, 2]);
+    }
+
+    /// Closing the input channel while the collector has stopped receiving still writes out every
+    /// checkpoint, in order, and stops the collector.
+    #[tokio::test(start_paused = true)]
+    async fn collector_writes_everything_when_closed_while_pending_rows_are_full() {
+        let config = SequentialConfig {
+            max_pending_rows: Some(3),
+            ..Default::default()
+        };
+        let (checkpoint_tx, mut batch_rx, mut collector) = spawn_collector(config, 1);
+
+        checkpoint_tx.send(create_checkpoint(0)).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        for i in 1..=13 {
+            checkpoint_tx.send(create_checkpoint(i)).await.unwrap();
+        }
+        drop(checkpoint_tx);
+
+        let written = recv_until(&mut batch_rx, 13).await;
+        assert_eq!(written, (0..=13).collect::<Vec<_>>());
+
+        tokio::time::timeout(Duration::from_secs(1), collector.join())
+            .await
+            .expect("collector shutdown timeout")
+            .expect("collector shutdown failed");
     }
 
     #[tokio::test(start_paused = true)]
