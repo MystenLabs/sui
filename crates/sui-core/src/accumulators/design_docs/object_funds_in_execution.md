@@ -82,8 +82,9 @@ per-account, per-accumulator-version totals of executed-but-unsettled withdrawal
 - **Recording.** After a transaction executes *successfully* under the in-execution check, the
   authority records its per-account **net** withdrawal amounts from the effects
   through `UnsettledObjectWithdrawals::record_object_funds_withdraws` — net, not running max,
-  because that is what settlement will actually deduct. The running max
-  survives as a debug assertion (net can never exceed the checked peak). Failed transactions
+  because that is what settlement will actually deduct. The running max bounds the net in a
+  debug assertion (net can never exceed the checked peak), and its keys decide whether the
+  transaction withdrew from an object account at all. Failed transactions
   settle nothing and record nothing.
 
   The running max (`InnerTemporaryStore::accumulator_running_max_withdraws`) is the peak net

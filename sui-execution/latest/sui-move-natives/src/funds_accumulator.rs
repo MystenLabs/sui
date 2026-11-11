@@ -164,7 +164,8 @@ pub fn reserve_object_funds_for_withdrawal(
             .check_object_funds_withdraw_in_execution()
         {
             // Before check_object_funds_withdraw_in_execution is enabled, object funds withdrawals are not
-            // checked. Certified effects carry any insufficient-funds outcome for those protocol versions.
+            // checked. When these protocol versions execute from certified checkpoints, the certified
+            // effects carry any insufficient-funds outcome.
             return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
         }
 

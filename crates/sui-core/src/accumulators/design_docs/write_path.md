@@ -333,13 +333,14 @@ exists to take over, and the check must read the balance at the accumulator vers
 the transaction. That is why it waits for the root version and then does a version-bounded read,
 rather than a latest-state skip.
 
-There is a second boundary to keep in mind for those MVCC-bounded reads: checkpoint finalization
-and pruning. Historical object versions are not assumed to live forever. The cache layer's
-historical-read logic is deliberately written to read within a root-version stability window,
-because once checkpoint progress advances enough to make a version prune-eligible, blindly
-reaching back for "whatever version V used to say" is no longer safe. This is another reason the
-code distinguishes carefully between latest-state detection (`SkipSchedule`) and true
-historical-version validation.
+There is a second boundary to keep in mind for MVCC-bounded reads: checkpoint finalization and
+pruning. Historical object versions are not assumed to live forever. The address-funds
+scheduler's latest-state read (`get_consistent_latest_account_amount_and_version`) reads within a
+root-version stability window, because once checkpoint progress advances enough to make a
+version prune-eligible, blindly reaching back for "whatever version V used to say" is no longer
+safe. The in-execution object funds check needs no such window: pruning trails the checkpoint
+executor, and a transaction that is still executing has not passed the executor, so the version
+it reads is still in memory or on disk.
 
 ## 6. Summary of artifacts and where they live
 

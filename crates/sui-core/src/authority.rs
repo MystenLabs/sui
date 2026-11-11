@@ -282,11 +282,12 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
-    pub(crate) object_funds_in_execution_check_result: IntCounterVec,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
     pub(crate) execution_queueing_delay_s: Histogram,
     pub(crate) prepare_cert_gas_latency_ratio: Histogram,
     pub(crate) execution_gas_latency_ratio: Histogram,
+
+    pub(crate) object_funds_in_execution_check_result: IntCounterVec,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -558,14 +559,6 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            object_funds_in_execution_check_result: register_int_counter_vec_with_registry!(
-                "object_funds_in_execution_check_result",
-                "Committed transactions by in-execution object funds check outcome: sufficient \
-                 counts successful transactions that withdrew from an object account",
-                &["result"],
-                registry,
-            )
-            .unwrap(),
             execution_driver_dispatch_queue: register_int_gauge_with_registry!(
                 "execution_driver_dispatch_queue",
                 "Number of transaction pending in execution driver dispatch queue",
@@ -591,6 +584,14 @@ impl AuthorityMetrics {
                 "The ratio of computation gas divided by certificate execution latency, include committing certificate.",
                 GAS_LATENCY_RATIO_BUCKETS.to_vec(),
                 registry
+            )
+            .unwrap(),
+            object_funds_in_execution_check_result: register_int_counter_vec_with_registry!(
+                "object_funds_in_execution_check_result",
+                "Executed transactions by in-execution object funds check outcome: sufficient \
+                 counts successful transactions that withdrew from an object account",
+                &["result"],
+                registry,
             )
             .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
@@ -2065,9 +2066,7 @@ impl AuthorityState {
         if protocol_config.check_object_funds_withdraw_in_execution() {
             match effects.status() {
                 ExecutionStatus::Success => {
-                    if let Some(accumulator_version) =
-                        execution_env.assigned_versions.accumulator_version()
-                    {
+                    if let Some(accumulator_version) = accumulator_version {
                         let withdrew_from_object = self
                             .unsettled_object_withdrawals
                             .record_object_funds_withdraws(

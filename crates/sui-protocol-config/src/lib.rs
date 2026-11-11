@@ -1205,9 +1205,8 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
 
-    // If true, unsettled object-funds withdraws are recorded using per-account net
-    // amounts from transaction effects, instead of running-max withdraw amounts.
-    // No longer read: net amounts are always recorded.
+    // Unused. Unsettled object-funds withdraws are always recorded using per-account net
+    // amounts from transaction effects.
     #[serde(skip_serializing_if = "is_false")]
     record_net_unsettled_object_withdraws: bool,
 
