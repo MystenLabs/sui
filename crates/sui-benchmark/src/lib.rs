@@ -1126,7 +1126,9 @@ fn max_rpc_retries() -> usize {
 /// budget, so the client gives up while the fault is still in effect.
 fn rpc_retry_budget() -> Duration {
     if in_antithesis() {
-        Duration::from_secs(300)
+        // A rolling upgrade with overlapping faults can exhaust 300s just as
+        // checkpoints resume. Leave another recovery window for init.
+        Duration::from_secs(600)
     } else {
         Duration::from_secs(60)
     }
