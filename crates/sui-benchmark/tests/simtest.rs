@@ -1351,10 +1351,9 @@ mod test {
     }
 
     /// Waits until the observer fullnode (if the cluster has one) has finalized at least
-    /// the highest checkpoint the rpc fullnode has executed. The rpc fullnode catches up
-    /// via checkpoint sync, while the observer finalizes checkpoints locally from streamed
-    /// consensus blocks, so reaching the same sequence number proves block streaming kept
-    /// the observer up to date with the rest of the network.
+    /// the highest checkpoint the rpc fullnode has executed. Observer execution can use
+    /// either locally constructed checkpoints or checkpoint-sync fallback. Callers that
+    /// need to verify consensus replay has caught up must also check local execution.
     async fn wait_for_observer_catch_up(test_cluster: &TestCluster, catch_up_timeout: Duration) {
         let Some(observer_node) = test_cluster.observer_node() else {
             return;
@@ -2761,6 +2760,203 @@ mod test {
         );
 
         info!("Observer node test completed successfully - caught up via block streaming");
+    }
+
+    /// Exercise checkpoint replay and sustained local construction without an epoch reset.
+    #[sim_test(config = "test_config()")]
+    async fn test_observer_restart_with_address_balances() {
+        use sui_benchmark::workloads::composite::*;
+
+        ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = Arc::new(
+            init_test_cluster_builder(4, 1_200_000)
+                .with_protocol_version(ProtocolVersion::new(141))
+                .with_chain_override(Chain::Mainnet)
+                .with_observer_fullnode()
+                .with_authority_overload_config(AuthorityOverloadConfig {
+                    check_system_overload_at_signing: false,
+                    ..Default::default()
+                })
+                .build()
+                .await,
+        );
+        let observer_name = test_cluster.observer_node().unwrap().name();
+        // Drop each node handle before stopping/restarting so it cannot retain the old stores.
+        let snapshot = || {
+            test_cluster
+                .observer_node()
+                .unwrap()
+                .get_node_handle()
+                .unwrap()
+                .with(|node| {
+                    let checkpoint_count = |name: &str| {
+                        node.prometheus_metrics_for_testing()
+                            .iter()
+                            .find(|family| family.name() == name)
+                            .map(|family| {
+                                family
+                                    .get_metric()
+                                    .iter()
+                                    .map(|m| m.get_gauge().value())
+                                    .sum::<f64>()
+                            })
+                            .unwrap_or_default()
+                    };
+                    (
+                        node.state().epoch_store_for_testing().epoch(),
+                        node.state()
+                            .get_checkpoint_store()
+                            .get_highest_executed_checkpoint_seq_number()
+                            .unwrap()
+                            .unwrap_or_default(),
+                        checkpoint_count("checkpoint_executor_validator_path"),
+                        checkpoint_count("checkpoint_executor_validator_sync_fallback_path"),
+                        node.state()
+                            .get_checkpoint_store()
+                            .get_latest_locally_computed_checkpoint()
+                            .unwrap()
+                            .map(|checkpoint| checkpoint.sequence_number)
+                            .unwrap_or_default(),
+                    )
+                })
+        };
+        let initial_epoch = snapshot().0;
+        let metrics = Arc::new(Mutex::new(CompositionMetrics::new()));
+        let successful_funds_operations = || {
+            metrics
+                .lock()
+                .unwrap()
+                .iter_stats()
+                .filter(|(ops, _)| {
+                    ops.contains(AddressBalanceDeposit::NAME)
+                        || ops.contains(AddressBalanceWithdraw::NAME)
+                })
+                .map(|(_, stats)| stats.success_count)
+                .sum::<u64>()
+        };
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 2,
+            // Initialization seeds 100 times this amount; cover the 5 SUI gas reservation.
+            address_balance_amount: 100_000_000,
+            address_balance_gas_probability: 0.5,
+            mixed_gas_payment_probability: 0.0,
+            conflicting_transaction_probability: 0.0,
+            alias_tx_probability: 0.0,
+            metrics: Some(metrics.clone()),
+            ..Default::default()
+        }
+        .with_probability(AddressBalanceDeposit::NAME, 0.5)
+        .with_probability(AddressBalanceWithdraw::NAME, 0.5)
+        .with_probability(SharedCounterIncrement::NAME, 0.3);
+        let mut config = SimulatedLoadConfig::composite_only(composite_config.clone());
+        config.randomized_transaction_weight = 0;
+        let restarter = Arc::new(Mutex::new(None));
+        let restarter_slot = restarter.clone();
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            150,
+            config,
+            Some(80),
+            Some(20),
+            Some(move |cluster: Arc<TestCluster>| async move {
+                *restarter_slot.lock().unwrap() = Some(tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(15)).await;
+                    cluster.stop_node(&observer_name);
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    cluster.start_node(&observer_name).await;
+                }));
+            }),
+            false,
+        )
+        .await;
+        let restart_task = restarter.lock().unwrap().take().unwrap();
+        restart_task.await.unwrap();
+        let recovered = snapshot();
+        assert_eq!(
+            recovered.0, initial_epoch,
+            "recovery must stay in the same epoch"
+        );
+        assert!(
+            recovered.3 > 0.0,
+            "restart must exercise checkpoint fallback"
+        );
+        let workload_metrics = metrics.lock().unwrap().sum_all();
+        info!(
+            "observer restart workload: {workload_metrics:#?}; checkpoint snapshot: {recovered:?}"
+        );
+        let first_funds_successes = successful_funds_operations();
+        assert!(first_funds_successes > 100, "funds operations must execute");
+
+        // State-sync execution can stay ahead even while consensus replay makes progress.
+        // Require the local builder to pass the workload's checkpoint frontier directly.
+        let replay_caught_up = tokio::time::timeout(Duration::from_secs(180), async {
+            loop {
+                let current = snapshot();
+                if current.4 >= recovered.1 {
+                    break current;
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "local replay did not reach workload frontier: {:?}",
+                snapshot()
+            )
+        });
+        info!("observer local replay reached workload frontier: {replay_caught_up:?}");
+        // Exercise funds scheduling after replaying the initial workload, as well as during fallback.
+        let mut resumed_composite = composite_config;
+        // Every counted success in this phase must also exercise address-balance gas.
+        resumed_composite.address_balance_gas_probability = 1.0;
+        let mut resumed_config = SimulatedLoadConfig::composite_only(resumed_composite);
+        resumed_config.randomized_transaction_weight = 0;
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            30,
+            resumed_config,
+            Some(80),
+            Some(20),
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+        assert!(
+            successful_funds_operations() > first_funds_successes + 100,
+            "address-balance gas workload must execute after local replay catches up"
+        );
+        let resumed_target = snapshot().1;
+        tokio::time::timeout(Duration::from_secs(180), async {
+            while snapshot().4 < resumed_target {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "local replay stalled on resumed funds workload: {:?}",
+                snapshot()
+            )
+        });
+        let resumed = snapshot();
+        assert!(
+            resumed.4 > replay_caught_up.4,
+            "local checkpoint construction must advance under funds load"
+        );
+        tokio::time::sleep(Duration::from_secs(20)).await;
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(120)).await;
+        let sustained = snapshot();
+        info!("observer sustained replay and execution: {sustained:?}");
+        assert_eq!(sustained.0, initial_epoch);
+        assert!(
+            sustained.1 > resumed.1,
+            "executed checkpoints must keep advancing"
+        );
+        assert!(
+            sustained.4 > resumed.4,
+            "local checkpoint construction must keep advancing after funds replay"
+        );
     }
 
     /// Finds the most recent protocol version that uses an older execution version
