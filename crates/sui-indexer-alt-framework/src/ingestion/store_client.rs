@@ -35,7 +35,8 @@ pub struct StoreIngestionClient {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub(crate) struct ObjectStoreWatermark {
-    pub checkpoint_hi_inclusive: u64,
+    /// `None` until the writer commits its first checkpoint.
+    pub checkpoint_hi_inclusive: Option<u64>,
 }
 
 impl StoreIngestionClient {
@@ -84,7 +85,7 @@ impl StoreIngestionClient {
         let watermark: ObjectStoreWatermark =
             serde_json::from_slice(&bytes).context(format!("error parsing {WATERMARK_PATH}"))?;
 
-        Ok(Some(watermark.checkpoint_hi_inclusive))
+        Ok(watermark.checkpoint_hi_inclusive)
     }
 }
 
@@ -266,7 +267,16 @@ pub(crate) mod tests {
         let memory: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
         let indexer_store = sui_indexer_alt_object_store::ObjectStore::new(memory.clone());
         let mut conn = indexer_store.connect().await.unwrap();
+        let client = StoreIngestionClient::new(memory, None);
+
         conn.init_watermark("checkpoint_blob", None).await.unwrap();
+        assert_eq!(
+            IngestionClientTrait::latest_checkpoint_number(&client)
+                .await
+                .unwrap(),
+            0
+        );
+
         conn.set_committer_watermark(
             "checkpoint_blob",
             CommitterWatermark {
@@ -278,8 +288,6 @@ pub(crate) mod tests {
         )
         .await
         .unwrap();
-
-        let client = StoreIngestionClient::new(memory, None);
         assert_eq!(
             IngestionClientTrait::latest_checkpoint_number(&client)
                 .await
