@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use consensus_config::Stake;
 use consensus_types::block::Round;
@@ -126,32 +126,23 @@ pub struct CommitProgress {
 /// syncer checks its quorum commit index on each scheduling pass and refreshes the commit index
 /// when it rose.
 ///
-/// Embedders use this to tell their own isolation apart from a committee-wide stall. Both look
-/// the same on the commit stream, because no new commits arrive. The fields describe how fresh
-/// and how complete the information is:
-/// - Before the first probe the value is [`PeerProgress::default`]. `probed_at_ms == 0` means
-///   that no probe has completed, so the round and stake fields carry no information. The
-///   commit syncer publishes `quorum_commit_index` independently, so it can be valid while
-///   `probed_at_ms` is still zero.
-/// - When this node is isolated, `responsive_stake` drops toward zero, `quorum_accepted_round`
-///   keeps its last value, and `probed_at_ms` keeps advancing.
-/// - When the committee has halted but this node is healthy, `responsive_stake` stays above
-///   zero because the peers that are up still answer, while `quorum_accepted_round` and
-///   `quorum_commit_index` do not change.
-/// - When the committee is live, `quorum_accepted_round` and `quorum_commit_index` rise.
-///
-/// Readers must apply these patterns with care:
-/// - The first probe after a start or an epoch change can fail against peers that are not up
-///   yet or still serve the previous epoch, and it then matches the isolation pattern. Require
-///   a pattern to persist over several probes before acting on it.
-/// - `responsive_stake` excludes this node, so its ceiling is the committee's total stake minus
-///   this node's stake, and it is always zero in a single-validator committee. Compare it with
-///   the committee's quorum threshold. A positive value alone does not show that a quorum is
-///   reachable, so partial reachability is inconclusive. For example, when seven validators
-///   with equal stake split into groups of two and five, a validator in the group of two sees
-///   one responsive peer and no progress, while the group of five can still commit.
-/// - Committee indices that rise while this node's own [`CommitProgress`] does not advance
-///   point to a local fault, not to isolation or a halt.
+/// When local commits stop, embedders can use these observations to investigate:
+/// - Before the first complete probe, `probed_at_ms`, `responsive_stake`, and
+///   `quorum_accepted_round` are zero. The commit syncer publishes `quorum_commit_index`
+///   independently and can report progress before that probe.
+/// - After a complete probe, zero responsive stake means no remote peer answered successfully.
+///   Local isolation and an outage of all other validators give the same result, even over
+///   repeated probes. A watchdog needs independent evidence before attributing this to a local
+///   fault. At epoch startup, peers may also be starting or still serving the previous epoch.
+/// - If this validator is participating, compare `own_stake + responsive_stake` with the
+///   committee's quorum threshold to check whether this validator and its responding peers
+///   represent quorum stake. Peers may answer probes while consensus is stalled.
+///   In a single-validator committee, responsive stake is always zero.
+/// - If the reachable stake falls below quorum, the rest of the committee may still be live.
+///   For example, when seven validators with equal stake split into groups of two and five,
+///   a validator in the group of two sees one responsive peer while the group of five can commit.
+/// - If the observed quorum commit index keeps advancing beyond this node's committed index
+///   in [`CommitProgress`], the node is falling behind the committee.
 /// - The round prober runs only on validator nodes. On observer and other non-validator nodes,
 ///   the round and stake fields keep their defaults and only `quorum_commit_index` updates,
 ///   from the commit syncer. It carries no freshness stamp, so on those nodes this type cannot
@@ -164,19 +155,18 @@ pub struct CommitProgress {
 /// are read-only and are not inputs to consensus.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PeerProgress {
-    /// Highest round, over all authorities, at which an authority's block is known to have been
-    /// accepted by a quorum of stake. For each authority this is the low bound of its accepted
-    /// quorum round, the value behind the `round_tracker_low_accepted_quorum_round` gauge, and
-    /// the maximum over authorities is taken. Within an epoch this never decreases: a probe where
-    /// peers fail to answer leaves it unchanged.
+    /// Highest accepted quorum round observed by this monitor. Each complete probe samples the
+    /// maximum of the per-authority `round_tracker_low_accepted_quorum_round` gauges. The
+    /// monitor retains the highest sample, even if the gauges later fall. Blocks received
+    /// between probes can advance the next sample even when no peer answers that probe.
     pub quorum_accepted_round: Round,
-    /// Highest commit index that a quorum of stake has voted for, as observed by the commit
-    /// syncer. This is the value behind the `commit_sync_quorum_index` gauge. It never
-    /// decreases.
+    /// Highest quorum commit index this monitor has observed. The commit syncer publishes the
+    /// same sample to its `commit_sync_quorum_index` gauge. The syncer can miss the local
+    /// validator's own votes, and applying fetched commits can delay its next scheduling pass.
+    /// The committee can keep committing while this index stays flat.
     pub quorum_commit_index: CommitIndex,
-    /// Total stake of the peers whose request completed in the last probe, excluding this node.
-    /// A peer counts as responsive when its request succeeds, even if its payload is then rejected
-    /// as malformed.
+    /// Total stake of remote peers whose request succeeded in the last complete probe, including
+    /// peers whose response payload was subsequently rejected as malformed.
     pub responsive_stake: Stake,
     /// Time in milliseconds when the last complete probe finished, from the consensus clock.
     /// That clock reads the wall clock once at start and then advances with a monotonic clock,
@@ -187,12 +177,20 @@ pub struct PeerProgress {
 
 /// Receives [`PeerProgress`] updates from a [`CommitConsumerMonitor`].
 ///
-/// Every method returns a copy of the value. A reader therefore never holds the lock that the
-/// round prober and the commit syncer need to publish updates, so a slow reader cannot delay
-/// consensus.
-#[derive(Clone, Debug)]
+/// Reading and debug formatting both copy the snapshot before handing it to the caller or
+/// formatter, so neither holds the watch channel's lock while processing the value.
+#[derive(Clone)]
 pub struct PeerProgressReceiver {
     receiver: watch::Receiver<PeerProgress>,
+}
+
+impl fmt::Debug for PeerProgressReceiver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let latest = *self.receiver.borrow();
+        f.debug_struct("PeerProgressReceiver")
+            .field("latest", &latest)
+            .finish()
+    }
 }
 
 impl PeerProgressReceiver {
@@ -208,17 +206,18 @@ impl PeerProgressReceiver {
     }
 
     /// Waits for a value that this receiver has not seen, marks it as seen and returns it.
-    /// Returns an error if the monitor has been dropped.
+    /// After the monitor is dropped, returns the last value if it is still unseen, then an error.
     pub async fn changed(&mut self) -> Result<PeerProgress, watch::error::RecvError> {
         self.receiver.changed().await?;
         Ok(self.latest())
     }
 }
 
-/// Tracks application progress, startup readiness, and the consensus head.
+/// Tracks application progress, startup readiness, the consensus head, and peer progress.
 ///
 /// External consumers observe the committed head, handled commits, and replay
-/// target separately to monitor catch-up without reading consensus storage.
+/// target separately to monitor catch-up without reading consensus storage. Liveness
+/// watchdogs use [`PeerProgress`] to interpret a pause in local commits.
 /// DO NOT REMOVE these observation APIs solely because they have no callers in
 /// this workspace. They support the external integration described by
 /// [`CommitConsumerArgs::new_with_full_replay`].
@@ -303,22 +302,12 @@ impl CommitConsumerMonitor {
     }
 
     /// Returns this node's latest view of committee progress. See [`PeerProgress`].
-    ///
-    /// This is an integration API for external consensus consumers that run a liveness
-    /// watchdog and need to tell their own isolation apart from a committee-wide stall.
-    /// DO NOT REMOVE this entry point solely because it has no production callers in this
-    /// workspace. Changes to this contract must account for downstream consumers.
     pub fn peer_progress(&self) -> PeerProgress {
         *self.peer_progress.borrow()
     }
 
     /// Subscribes to committee progress. The round prober sends one update per complete probe,
     /// and the commit syncer sends one when a scheduling pass finds a higher quorum commit index.
-    ///
-    /// This is an integration API for external consensus consumers that run a liveness
-    /// watchdog and need to tell their own isolation apart from a committee-wide stall.
-    /// DO NOT REMOVE this entry point solely because it has no production callers in this
-    /// workspace. Changes to this contract must account for downstream consumers.
     pub fn subscribe_peer_progress(&self) -> PeerProgressReceiver {
         PeerProgressReceiver {
             receiver: self.peer_progress.subscribe(),
@@ -342,8 +331,7 @@ impl CommitConsumerMonitor {
     }
 
     /// Records the quorum commit index observed by the commit syncer. Subscribers are notified
-    /// only when the index rises. A lower index is ignored, because a second consensus instance
-    /// that reuses this monitor starts its commit vote tracking from zero.
+    /// only when the index rises above the highest value already observed.
     pub(crate) fn report_quorum_commit_index(&self, quorum_commit_index: CommitIndex) {
         self.peer_progress.send_if_modified(|progress| {
             if quorum_commit_index <= progress.quorum_commit_index {
@@ -530,9 +518,17 @@ mod test {
     async fn peer_progress_starts_without_information() {
         let monitor = CommitConsumerMonitor::new(0, Some(0));
         assert_eq!(monitor.peer_progress(), PeerProgress::default());
+        let mut receiver = monitor.subscribe_peer_progress();
+        assert_eq!(receiver.latest(), PeerProgress::default());
+
+        monitor.report_quorum_commit_index(12);
+        assert!(receiver.has_changed().unwrap());
         assert_eq!(
-            monitor.subscribe_peer_progress().latest(),
-            PeerProgress::default()
+            receiver.latest(),
+            PeerProgress {
+                quorum_commit_index: 12,
+                ..PeerProgress::default()
+            }
         );
     }
 

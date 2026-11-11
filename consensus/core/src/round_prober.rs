@@ -153,10 +153,9 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         highest_received_rounds[own_index][own_index] = last_proposed_round;
         highest_accepted_rounds[own_index][own_index] = last_proposed_round;
 
-        // Stake of the peers whose request completed in this probe. This is reported to the
+        // Stake of the peers whose request succeeded in this probe. This is reported to the
         // commit consumer monitor as a reachability signal and is not used by consensus.
         let mut responsive_stake: Stake = 0;
-        let mut interrupted_by_shutdown = false;
 
         loop {
             tokio::select! {
@@ -201,11 +200,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
                         },
                     }
                 }
-                _ = self.shutdown_notify.wait() => {
-                    // Requests that have not completed make the responsive stake incomplete.
-                    interrupted_by_shutdown = !requests.is_empty();
-                    break;
-                }
+                _ = self.shutdown_notify.wait() => break,
             }
         }
 
@@ -224,7 +219,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         // A probe that shutdown interrupted has an incomplete responsive stake, which a reader
         // would interpret as peers not responding. Skip the report in that case and keep the
         // last complete probe.
-        if !interrupted_by_shutdown {
+        if requests.is_empty() {
             self.commit_consumer_monitor.report_probe(
                 quorum_accepted_round,
                 responsive_stake,

@@ -547,9 +547,12 @@ mod test {
             ]
         );
 
-        let (propagation_delay, _) = round_tracker.calculate_propagation_delay(110);
+        let (propagation_delay, highest_accepted_quorum_round) =
+            round_tracker.calculate_propagation_delay(110);
 
         // 110 - 100 = 10
         assert_eq!(propagation_delay, 10);
+        // Authority 6's verified block raises its quorum low bound from 107 to 127.
+        assert_eq!(highest_accepted_quorum_round, 127);
     }
 }
