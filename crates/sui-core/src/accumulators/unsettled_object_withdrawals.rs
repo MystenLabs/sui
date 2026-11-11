@@ -4,13 +4,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use parking_lot::RwLock;
-use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
+use prometheus::{
+    IntCounterVec, IntGauge, Registry, register_int_counter_vec_with_registry,
+    register_int_gauge_with_registry,
+};
 use sui_protocol_config::assert_reachable_gated;
 use sui_types::{
     accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
     base_types::SequenceNumber,
     digests::ChainIdentifier,
     effects::{TransactionEffects, TransactionEffectsAPI},
+    execution_status::ExecutionStatus,
+    funds_accumulator::is_object_funds_insufficient_abort,
     transaction::{TransactionData, TransactionDataAPI},
 };
 
@@ -22,6 +27,7 @@ pub struct UnsettledObjectWithdrawals {
 struct UnsettledObjectWithdrawalsMetrics {
     unsettled_accounts: IntGauge,
     unsettled_versions: IntGauge,
+    check_result: IntCounterVec,
 }
 
 impl UnsettledObjectWithdrawalsMetrics {
@@ -36,6 +42,14 @@ impl UnsettledObjectWithdrawalsMetrics {
             unsettled_versions: register_int_gauge_with_registry!(
                 "object_funds_unsettled_versions",
                 "Number of versions with unsettled accounts",
+                registry,
+            )
+            .unwrap(),
+            check_result: register_int_counter_vec_with_registry!(
+                "object_funds_in_execution_check_result",
+                "Executed transactions by in-execution object funds check outcome: sufficient \
+                 counts successful transactions that drew on an object account's settled balance",
+                &["result"],
                 registry,
             )
             .unwrap(),
@@ -110,8 +124,46 @@ impl UnsettledObjectWithdrawals {
         self.update_unsettled_metrics(&inner);
     }
 
-    /// Returns whether the transaction drew on any object account's settled balance.
+    /// Records the unsettled object withdraws of an executed transaction and counts its
+    /// in-execution object funds check outcome.
     pub fn record_object_funds_withdraws(
+        &self,
+        tx_data: &TransactionData,
+        effects: &TransactionEffects,
+        accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        accumulator_version: SequenceNumber,
+        chain_identifier: ChainIdentifier,
+    ) {
+        match effects.status() {
+            ExecutionStatus::Success => {
+                if self.record_net_withdraws(
+                    tx_data,
+                    effects,
+                    accumulator_running_max_withdraws,
+                    accumulator_version,
+                    chain_identifier,
+                ) {
+                    self.metrics
+                        .check_result
+                        .with_label_values(&["sufficient"])
+                        .inc();
+                }
+            }
+            ExecutionStatus::Failure(failure) => {
+                if is_object_funds_insufficient_abort(&failure.error) {
+                    assert_reachable_gated!("object funds insufficient in execution", |pc| pc
+                        .check_object_funds_withdraw_in_execution());
+                    self.metrics
+                        .check_result
+                        .with_label_values(&["insufficient"])
+                        .inc();
+                }
+            }
+        }
+    }
+
+    /// Returns whether the transaction drew on any object account's settled balance.
+    fn record_net_withdraws(
         &self,
         tx_data: &TransactionData,
         effects: &TransactionEffects,
@@ -126,16 +178,17 @@ impl UnsettledObjectWithdrawals {
             .process_funds_withdrawals_for_execution(chain_identifier)
             .into_keys()
             .collect();
-        if accumulator_running_max_withdraws
+        let object_accounts: BTreeSet<_> = accumulator_running_max_withdraws
             .keys()
-            .all(|account| address_funds_reservations.contains(account))
-        {
+            .filter(|account| !address_funds_reservations.contains(account))
+            .collect();
+        if object_accounts.is_empty() {
             return false;
         }
         let updates: Vec<_> = effects
             .accumulator_events()
             .into_iter()
-            .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
+            .filter(|event| object_accounts.contains(&event.accumulator_obj))
             .filter_map(|event| {
                 event
                     .write
@@ -200,6 +253,7 @@ impl UnsettledObjectWithdrawals {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use move_core_types::language_storage::ModuleId;
     use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
     use sui_types::{
         accumulator_event::AccumulatorEvent,
@@ -211,6 +265,8 @@ mod tests {
             AccumulatorAddress, AccumulatorOperation, AccumulatorValue as EffectsAccumulatorValue,
             AccumulatorWriteV1, TestEffectsBuilder,
         },
+        execution_status::{ExecutionFailure, ExecutionFailureStatus, MoveLocation},
+        funds_accumulator::{E_OBJECT_FUNDS_INSUFFICIENT, FUNDS_ACCUMULATOR_MODULE_NAME},
         gas_coin::GAS,
         transaction::Transaction,
         utils::create_fake_transaction,
@@ -239,6 +295,15 @@ mod tests {
         UnsettledObjectWithdrawals::new(&Registry::new())
     }
 
+    fn check_result(store: &UnsettledObjectWithdrawals, result: &str) -> u64 {
+        store
+            .metrics
+            .check_result
+            .with_label_values(&[result])
+            .get()
+    }
+
+    /// Records a successful transaction and returns whether it counted as sufficient.
     fn record(
         store: &UnsettledObjectWithdrawals,
         tx: &Transaction,
@@ -249,13 +314,15 @@ mod tests {
         let effects = TestEffectsBuilder::new(tx.data())
             .with_accumulator_events(events)
             .build();
+        let sufficient_before = check_result(store, "sufficient");
         store.record_object_funds_withdraws(
             tx.transaction_data(),
             &effects,
             &running_max,
             SequenceNumber::from_u64(version),
             ChainIdentifier::default(),
-        )
+        );
+        check_result(store, "sufficient") > sufficient_before
     }
 
     fn unsettled(store: &UnsettledObjectWithdrawals, owner: SuiAddress, version: u64) -> u128 {
@@ -288,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn net_zero_withdraw_records_nothing_but_counts_as_object_withdraw() {
+    fn net_zero_withdraw_records_nothing_but_counts_as_sufficient() {
         // Withdraw 100 then deposit 100 back: running max 100, no net withdraw in effects.
         let store = new_store();
         let owner = SuiAddress::random_for_testing_only();
@@ -321,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn no_withdraw_returns_false() {
+    fn no_withdraw_is_not_counted() {
         let store = new_store();
         assert!(!record(
             &store,
@@ -333,7 +400,7 @@ mod tests {
     }
 
     #[test]
-    fn address_only_withdraw_records_nothing_and_returns_false() {
+    fn address_only_withdraw_records_nothing_and_is_not_counted() {
         // A withdraw from an address balance declared in transaction data is not an object
         // withdraw, even though it appears in the running max and in the effects.
         let store = new_store();
@@ -376,6 +443,40 @@ mod tests {
         ));
         assert_eq!(unsettled(&store, sender, 0), 0);
         assert_eq!(unsettled(&store, object_owner, 0), 40);
+    }
+
+    #[test]
+    fn insufficient_abort_records_nothing_and_counts_insufficient() {
+        let store = new_store();
+        let owner = SuiAddress::random_for_testing_only();
+        let tx = create_fake_transaction();
+        let abort = ExecutionFailureStatus::MoveAbort(
+            MoveLocation {
+                module: ModuleId::new(
+                    sui_types::SUI_FRAMEWORK_ADDRESS,
+                    FUNDS_ACCUMULATOR_MODULE_NAME.to_owned(),
+                ),
+                function: 0,
+                instruction: 0,
+                function_name: None,
+            },
+            E_OBJECT_FUNDS_INSUFFICIENT,
+        );
+        let effects = TestEffectsBuilder::new(tx.data())
+            .with_status(ExecutionStatus::new_failure(ExecutionFailure::new(
+                abort, None,
+            )))
+            .build();
+        store.record_object_funds_withdraws(
+            tx.transaction_data(),
+            &effects,
+            &BTreeMap::from([(account(owner), 100)]),
+            SequenceNumber::from_u64(0),
+            ChainIdentifier::default(),
+        );
+        assert_eq!(check_result(&store, "insufficient"), 1);
+        assert_eq!(check_result(&store, "sufficient"), 0);
+        assert_eq!(unsettled(&store, owner, 0), 0);
     }
 
     #[test]

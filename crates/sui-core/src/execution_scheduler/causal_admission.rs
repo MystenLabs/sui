@@ -425,6 +425,7 @@ mod tests {
         let slot1 = admission.try_admit(1).unwrap();
         // Only one causal-next admission may be outstanding at a time.
         assert!(admission.try_admit(1).is_none());
+        assert!(admission.try_admit(2).is_none());
 
         // Completing index 1 retires it and reopens the causal-next lane, so index 2 is
         // admitted while index 3 still holds the only slot.

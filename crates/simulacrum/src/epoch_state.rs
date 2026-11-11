@@ -23,7 +23,7 @@ use sui_types::{
     coin_reservation::BorrowedCoinReservationResolver,
     committee::{Committee, EpochId},
     digests::ChainIdentifier,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::TransactionEffects,
     error::SuiResult,
     execution_params::ExecutionOrEarlyError,
     gas::GasUsageReport,
@@ -207,7 +207,6 @@ impl EpochState {
         if self
             .protocol_config
             .check_object_funds_withdraw_in_execution()
-            && effects.status().is_ok()
             && let Some(accumulator_version) =
                 system_object_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         {
