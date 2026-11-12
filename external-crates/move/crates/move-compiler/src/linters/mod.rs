@@ -54,6 +54,39 @@ pub enum LinterDiagnosticCategory {
     Conventions,
 }
 
+impl LinterDiagnosticCategory {
+    const ALL: &'static [Self] = &[
+        Self::Correctness,
+        Self::Complexity,
+        Self::Suspicious,
+        Self::Deprecated,
+        Self::Style,
+        Self::Security,
+        Self::Conventions,
+    ];
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Correctness => "correctness",
+            Self::Complexity => "complexity",
+            Self::Suspicious => "suspicious",
+            Self::Deprecated => "deprecated",
+            Self::Style => "style",
+            Self::Security => "security",
+            Self::Conventions => "conventions",
+        }
+    }
+
+    pub(crate) fn name_from_code(category: u8) -> &'static str {
+        Self::ALL
+            .iter()
+            .find(|known| **known as u8 == category)
+            .copied()
+            .expect("ICE unknown lint category")
+            .name()
+    }
+}
+
 /// Declares a lint code enum and its `(category, code, filter_name)` table for one lint source.
 /// Codes are positional and published; append only, never reorder or insert.
 macro_rules! lints {
@@ -119,7 +152,7 @@ macro_rules! lints {
             }
         }
 
-        const $filters_const: &[(u8, u8, &str)] = &[
+        pub(crate) const $filters_const: &[(u8, u8, &str)] = &[
             $(
                 $enum_name::$lint_name.category_code_and_filter_name(),
             )*
@@ -221,6 +254,12 @@ pub(crate) fn filters_from_table(
         Symbol::from(crate::diagnostics::filter::FILTER_ALL),
         vec![DiagnosticsID::all(origin)],
     )];
+    filters.extend(LinterDiagnosticCategory::ALL.iter().map(|category| {
+        (
+            Symbol::from(category.name()),
+            vec![DiagnosticsID::category(origin, *category as u8)],
+        )
+    }));
     filters.extend(table.iter().map(|(category, code, filter_name)| {
         (
             Symbol::from(*filter_name),
@@ -290,5 +329,5 @@ pub fn linter_visitors_with_config(
     level: LintLevel,
     config: &DiagnosticFilterConfig,
 ) -> Vec<Visitor> {
-    config.select_lints(level, &[], OPTIONAL_LINTS)
+    config.select_lints(level, &[CORE_LINT_WARNING_FILTERS], &[], OPTIONAL_LINTS)
 }

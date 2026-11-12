@@ -146,9 +146,12 @@ published-at* = "<hex-address>" # The address that the package is published at. 
 <addr_name> = "<hex_address>" # e.g., alice = "0xB0B"
 ```
 
-Warning and lint names match their source attributes. Specific settings override `all` within
-each section. Configuring a lint as `warn` or `deny` enables its analysis; `allow` disables it.
+Warning and lint names match their source attributes. Lints can also be configured by category
+using `correctness`, `complexity`, `suspicious`, `deprecated`, `style`, `security`, or `conventions`.
+Specific lint settings override their category, and category settings override `all`. Configuring a
+lint as `warn` or `deny` enables its analysis; `allow` disables it.
 `--lint` enables otherwise unconfigured optional lints, but respects manifest settings.
+`--silence-warnings` suppresses warnings and lints regardless of manifest settings.
 `--no-lint` disables all lint analysis regardless of manifest settings.
 
 Only the root manifest configures package diagnostics. Dependency diagnostics are suppressed.

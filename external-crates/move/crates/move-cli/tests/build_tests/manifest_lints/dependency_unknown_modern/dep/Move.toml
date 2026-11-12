@@ -1,0 +1,12 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "dep"
+edition = "2024"
+
+[warnings]
+not_a_warning = "deny"
+
+[lints]
+not_a_lint = "deny"

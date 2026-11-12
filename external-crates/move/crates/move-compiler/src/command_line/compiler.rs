@@ -375,20 +375,11 @@ impl Compiler {
             let flavor = if sui_mode { Flavor::Sui } else { Flavor::Core };
 
             known_warning_filters.extend(known_diagnostic_filters(flavor));
-            let filter_scope = settings.filter_scope(&known_warning_filters);
 
-            let lint_config = settings.lints.unwrap_or_default();
-            let mut passes = if sui_mode {
-                sui_mode::linters::linter_visitors_with_config(level, &lint_config)
-            } else {
-                vec![]
-            };
-            passes.extend(linters::linter_visitors_with_config(level, &lint_config));
-            for visitor in passes {
-                visitors.entry(visitor.type_id()).or_insert(visitor);
-            }
+            // Manifest lint settings determine which optional lint visitors run.
+            configure_lint_visitors(&mut visitors, level, &settings, sui_mode);
 
-            Some(filter_scope)
+            Some(settings.filter_scope(&known_warning_filters))
         } else {
             None
         };
@@ -1244,6 +1235,27 @@ fn run(
         }
     }
     rec(compilation_env, pre_compiled_lib, cur, until)
+}
+
+fn configure_lint_visitors(
+    visitors: &mut IndexMap<TypeId, Visitor>,
+    level: LintLevel,
+    settings: &DiagnosticFilterSettings,
+    sui_mode: bool,
+) {
+    let lint_config = settings.lints.clone().unwrap_or_default();
+    let mut lint_visitors = vec![];
+    if sui_mode {
+        lint_visitors.extend(sui_mode::linters::linter_visitors_with_config(
+            level,
+            &lint_config,
+        ));
+    }
+    lint_visitors.extend(linters::linter_visitors_with_config(level, &lint_config));
+
+    for visitor in lint_visitors {
+        visitors.entry(visitor.type_id()).or_insert(visitor);
+    }
 }
 
 impl Visitor {

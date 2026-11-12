@@ -15,7 +15,7 @@ use crate::{
         },
     },
     editions::Flavor,
-    linters::{self, LintLevel},
+    linters::{self, LintLevel, LinterDiagnosticCategory},
     shared::known_attributes::DiagnosticAttribute,
     sui_mode,
 };
@@ -38,9 +38,12 @@ pub struct DiagnosticFilterConfig {
 
 static TESTING_DIAGNOSTIC_FILTERS: LazyLock<DiagnosticFilterSettings> = LazyLock::new(|| {
     let entries = UNUSED_ITEM_CODES
-        .into_iter()
+        .iter()
+        .copied()
+        .filter(|code| code.allowed_in_test())
         .map(|code| {
-            let id = DiagnosticsID::exact(DiagnosticOrigin::Compiler, UNUSED_ITEM_CATEGORY, code);
+            let id =
+                DiagnosticsID::exact(DiagnosticOrigin::Compiler, UNUSED_ITEM_CATEGORY, code as u8);
             (id, sp(Loc::invalid(), FilterKind::Allow))
         })
         .collect();
@@ -63,8 +66,7 @@ pub fn known_diagnostic_filters(flavor: Flavor) -> KnownDiagnosticFilters {
 }
 
 impl DiagnosticFilterSettings {
-    /// Create a diagnostic filter that allows for unused functions, fields, function type
-    /// parameters, constants, mutable references, and mutable parameters in test fixtures.
+    /// Create a diagnostic filter that allows unused-item warnings in test fixtures.
     pub fn for_testing() -> Self {
         TESTING_DIAGNOSTIC_FILTERS.clone()
     }
@@ -113,11 +115,12 @@ impl DiagnosticFilterConfig {
             .chain(self.filters.iter().map(|(name, kind)| (*name, *kind)))
     }
 
-    /// Checks the named setting, then `all`, then the supplied default.
-    pub fn enabled(&self, name: &str, default_enabled: bool) -> bool {
+    /// Checks the named setting, its category, then `all`, then the supplied default.
+    pub fn enabled(&self, name: &str, category: &str, default_enabled: bool) -> bool {
         match self
             .filters
             .get(&FilterName::from(name))
+            .or_else(|| self.filters.get(&FilterName::from(category)))
             .copied()
             .or(self.all)
         {
@@ -130,6 +133,7 @@ impl DiagnosticFilterConfig {
     pub fn select_lints(
         &self,
         level: LintLevel,
+        lint_code_tables: &[&[(u8, u8, &'static str)]],
         default_lints: &[(&str, VisitorConstructor)],
         optional_lints: &[(&str, VisitorConstructor)],
     ) -> Vec<Visitor> {
@@ -142,7 +146,20 @@ impl DiagnosticFilterConfig {
             .iter()
             .map(|lint| (true, lint))
             .chain(optional_lints.iter().map(|lint| (optional_enabled, lint)))
-            .filter(|(default_enabled, (name, _))| self.enabled(name, *default_enabled))
+            .filter(|(default_enabled, (name, _))| {
+                let category = lint_code_tables
+                    .iter()
+                    .flat_map(|table| table.iter())
+                    .find_map(|(category, _, filter_name)| {
+                        (*filter_name == *name).then_some(*category)
+                    })
+                    .expect("ICE lint visitor must have a diagnostic code");
+                self.enabled(
+                    name,
+                    LinterDiagnosticCategory::name_from_code(category),
+                    *default_enabled,
+                )
+            })
             .map(|(_, (_, constructor))| constructor())
             .collect()
     }

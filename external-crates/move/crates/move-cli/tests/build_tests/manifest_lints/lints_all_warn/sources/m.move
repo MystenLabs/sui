@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module test::m {
+module 0x0::m {
     public fun compiler_warning() {
         let unused = 0u64;
     }

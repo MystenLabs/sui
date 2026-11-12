@@ -18,7 +18,7 @@ use crate::{
     dependency::Pinned,
     package::{manifest::ManifestError, package_loader::PackageConfig},
     schema::{
-        CachedPackageInfo, DefaultDependency, DiagnosticConfigObject, ManifestDependencyInfo,
+        CachedPackageInfo, DefaultDependency, DiagnosticConfig, ManifestDependencyInfo,
         ParsedManifest, Publication,
     },
 };
@@ -46,7 +46,7 @@ pub struct Package<F: MoveFlavor> {
     /// The metadata of the package.
     metadata: PackageMetadata,
 
-    diagnostics: DiagnosticConfigObject,
+    diagnostics: DiagnosticConfig,
 
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
@@ -140,7 +140,7 @@ impl<F: MoveFlavor> Package<F> {
             env: env.name().clone(),
             digest,
             metadata: manifest.package,
-            diagnostics: DiagnosticConfigObject {
+            diagnostics: DiagnosticConfig {
                 warning_filters: manifest.warnings,
                 lint_filters: manifest.lints,
             },
@@ -232,7 +232,7 @@ impl<F: MoveFlavor> Package<F> {
         &self.metadata
     }
 
-    pub fn diagnostics(&self) -> &DiagnosticConfigObject {
+    pub fn diagnostics(&self) -> &DiagnosticConfig {
         &self.diagnostics
     }
 
