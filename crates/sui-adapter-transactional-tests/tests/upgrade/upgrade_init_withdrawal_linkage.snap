@@ -1,0 +1,98 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+// Unused withdrawals whose type belongs to an upgraded package count as linkage participation
+// and require initializer dependencies to match existing selections. Tests conflict precedence
+// over later instantiation errors and a matching committed upgrade that does not consume
+// the unused withdrawal's funds.
+
+init:
+A: object(0,0)
+
+task 1, lines 11-15:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-21:
+//# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 23-26:
+//# publish --dependencies DepV1 --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4453600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, lines 28-37:
+//# publish --upgradeable --dependencies DepV1 --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 9690000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, line 39:
+//# run U1::m::fund --sender A
+created: object(5,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(5,1), A, sui::balance::Balance<U1::m::Token>, Merge, 10)
+gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, line 41:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, lines 61-66:
+//# programmable --sender A --inputs object(4,1) 0u8 digest(U2) withdraw<sui::balance::Balance<U1::m::Token>>(1) 1u64
+// The unused withdrawal alone makes U participate; init cannot replace the selected Dep v1.
+//> Consumer::m::check(Input(4));
+//> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 2: Upgrade(U2, [DepV2,sui,std], U1, Result(1));
+//> sui::package::commit_upgrade(Input(0), Result(2));
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Debug of error: InvalidLinkage at command Some(2)
+
+task 9, lines 68-74:
+//# programmable --sender A --inputs object(4,1) 0u8 digest(U2) withdraw<sui::balance::Balance<U1::m::Token>>(1) 1u64
+// Deferred upgrade-init conflict precedes the later command's invalid instantiated type arity.
+//> Consumer::m::check(Input(4));
+//> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 2: Upgrade(U2, [DepV2,sui,std], U1, Result(1));
+//> Consumer::m::generic<DepV1::m::Box<u64, u64>>();
+//> sui::package::commit_upgrade(Input(0), Result(2));
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Debug of error: InvalidLinkage at command Some(2)
+
+task 10, lines 76-82:
+//# programmable --sender A --inputs object(4,1) 0u8 digest(U2) withdraw<sui::balance::Balance<U1::m::Token>>(1) 2u64
+// Participation succeeds when ordinary contributions already select init's required v2.
+//> Consumer::m::check(Input(4));
+//> DepV2::m::check(Input(4));
+//> 2: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 3: Upgrade(U2, [DepV2,sui,std], U1, Result(2));
+//> sui::package::commit_upgrade(Input(0), Result(3));
+created: object(10,0), object(10,1)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 13854800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 11, lines 84-85:
+//# view-object 10,1
+Owner: Shared( 9 )
+Version: 9
+Contents: U1::new_init::Config {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,1),
+        },
+    },
+    version: 2u64,
+}
+
+task 12, lines 87-88:
+//# view-funds sui::balance::Balance<U1::m::Token> A
+10

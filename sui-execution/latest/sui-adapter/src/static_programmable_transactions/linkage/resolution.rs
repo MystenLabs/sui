@@ -12,6 +12,28 @@ use std::{
 use sui_types::base_types::ObjectID;
 use sui_types::{error::ExecutionErrorTrait, execution_status::ExecutionErrorKind};
 
+/// Meter linkage resolution and publication payload processing during linking.
+pub(crate) trait LinkageMeter<E: ExecutionErrorTrait> {
+    /// Charge before a package metadata lookup, constraint contribution, or upgrade equality check.
+    fn charge_linkage(&mut self) -> Result<(), E>;
+
+    /// Charge serialized module bytes before deserialization and digest computation.
+    fn charge_package_load(&mut self, total_bytes: usize) -> Result<(), E>;
+}
+
+/// Preserve the unmetered linkage policy for external layout queries and writeout.
+pub(crate) struct UnmeteredLinkageMeter;
+
+impl<E: ExecutionErrorTrait> LinkageMeter<E> for UnmeteredLinkageMeter {
+    fn charge_linkage(&mut self) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn charge_package_load(&mut self, _total_bytes: usize) -> Result<(), E> {
+        Ok(())
+    }
+}
+
 /// Unifiers. These are used to determine how to unify two packages.
 #[derive(Debug, Clone)]
 pub enum VersionConstraint {
@@ -60,7 +82,14 @@ impl ResolutionTable {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
-    pub fn add_type_linkages_to_table<I, E, S>(&mut self, ids: I, store: &S) -> Result<(), E>
+    /// Repeated type packages are skipped without charging. Each metadata lookup and
+    /// constraint contribution performed for an expanded package is charged separately.
+    pub fn add_type_linkages_to_table<I, E, S>(
+        &mut self,
+        ids: I,
+        store: &S,
+        meter: &mut dyn LinkageMeter<E>,
+    ) -> Result<(), E>
     where
         S: PackageStore + ?Sized,
         E: ExecutionErrorTrait,
@@ -72,16 +101,17 @@ impl ResolutionTable {
             if !self.seen_type_packages.insert(*id) {
                 continue;
             }
+            meter.charge_linkage()?;
             let pkg = get_package(id, store)?;
+            let package_id = pkg.version_id();
+            add_and_unify(&package_id, store, self, VersionConstraint::at_least, meter)?;
             let transitive_deps = self
                 .config
                 .linkage_table(&pkg)
                 .into_values()
                 .map(ObjectID::from);
-            let package_id = pkg.version_id();
-            add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
             for object_id in transitive_deps {
-                add_and_unify(&object_id, store, self, VersionConstraint::at_least)?;
+                add_and_unify(&object_id, store, self, VersionConstraint::at_least, meter)?;
             }
         }
         Ok(())
@@ -186,7 +216,9 @@ pub(crate) fn add_and_unify<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
     store: &S,
     resolution_table: &mut ResolutionTable,
     resolution_fn: fn(&S::Package) -> Option<VersionConstraint>,
+    meter: &mut dyn LinkageMeter<E>,
 ) -> Result<(), E> {
+    meter.charge_linkage()?;
     let package = get_package(object_id, store)?;
 
     let Some(resolution) = resolution_fn(&package) else {

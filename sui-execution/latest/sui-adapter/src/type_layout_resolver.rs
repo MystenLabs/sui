@@ -60,7 +60,7 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
             self.protocol_config.binary_config(None),
         );
         let tag_linkage =
-            ExecutableLinkage::type_linkage::<_, ExecutionError>(config, ids, &resolver)?;
+            ExecutableLinkage::type_linkage_unmetered::<_, ExecutionError>(config, ids, &resolver)?;
         let link_context = tag_linkage.linkage_context::<ExecutionError>()?;
         let data_store = TransactionPackageStore::new(&null_resolver);
         let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
