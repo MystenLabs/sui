@@ -1,0 +1,17 @@
+name = "mysticeti"
+version = "0.1.0"
+defaultTargets = ["Mysticeti"]
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.33.0"
+
+[[lean_lib]]
+name = "Mysticeti"
+srcDir = "."
+# Build every module in the directory, not only the import closure of the root.
+# Without this, a module that nothing imports is never compiled.
+globs = ["Mysticeti", "Mysticeti.+"]
+# An unbound identifier must be an error, not a silently auto-bound implicit.
+leanOptions = { autoImplicit = false, relaxedAutoImplicit = false }
