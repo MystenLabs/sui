@@ -81,6 +81,8 @@ struct ZkLoginParams {
     pub additional_multisig_checks: bool,
     /// Flag to determine whether additional zkLogin public identifier structure is validated.
     pub validate_zklogin_public_identifier: bool,
+    /// Flag to determine whether secp256r1 public keys in the SEC1 compact encoding are rejected.
+    pub secp256r1_strict_public_keys: bool,
 }
 
 impl SignatureVerifier {
@@ -98,6 +100,7 @@ impl SignatureVerifier {
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
         validate_zklogin_public_identifier: bool,
+        secp256r1_strict_public_keys: bool,
         enable_address_aliases: bool,
     ) -> Self {
         Self {
@@ -127,6 +130,7 @@ impl SignatureVerifier {
                 zklogin_max_epoch_upper_bound_delta,
                 additional_multisig_checks,
                 validate_zklogin_public_identifier,
+                secp256r1_strict_public_keys,
             },
         }
     }
@@ -242,7 +246,8 @@ impl SignatureVerifier {
             self.zk_login_params.additional_multisig_checks,
             self.zk_login_params.validate_zklogin_public_identifier,
         )
-        .with_mldsa65_in_multisig(self.zk_login_params.accept_mldsa65_in_multisig);
+        .with_mldsa65_in_multisig(self.zk_login_params.accept_mldsa65_in_multisig)
+        .with_secp256r1_strict_public_keys(self.zk_login_params.secp256r1_strict_public_keys);
         let indices = verify_sender_signed_data_message_signatures(
             signed_tx,
             self.committee.epoch(),

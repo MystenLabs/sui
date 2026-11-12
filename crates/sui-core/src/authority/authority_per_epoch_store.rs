@@ -966,6 +966,7 @@ impl AuthorityPerEpochStore {
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
             protocol_config.validate_zklogin_public_identifier(),
+            protocol_config.secp256r1_strict_public_keys(),
             protocol_config.address_aliases(),
         );
 

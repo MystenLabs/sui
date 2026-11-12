@@ -78,6 +78,19 @@ fun test_secp256r1_verify_success_with_nonrecoverable_sig() {
     assert!(verify == true);
 }
 
+// The key above in the SEC1 compact encoding 0x05 || x, which decodes to the same key. Since
+// protocol version 143 it is rejected.
+#[test]
+fun test_secp256r1_verify_rejects_compact_public_key() {
+    let msg = b"Hello, world!";
+    let pk = x"0527322b3a891a0a280d6bc1fb2cbb23d28f54906fd6407f5f741f6def5762609a";
+
+    let sig =
+        x"209841acabd0fdf6d25fa0948b2f5c6c74f930eede89c6fce59502218a3134a147535921bf0cdf5d1990f6f0b3dadb8c05069ddc531db057d325857ce198a529";
+    let verify = ecdsa_r1::secp256r1_verify(&sig, &pk, &msg, 0);
+    assert!(verify == false);
+}
+
 #[test]
 fun test_secp256r1_invalid_public_key_length() {
     let msg = b"Hello, world!";

@@ -243,7 +243,17 @@ pub fn secp256r1_verify(
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let Ok(pk) = <Secp256r1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) else {
+    // The frozen execution versions accept the SEC1 compact encoding, so earlier transactions
+    // replay unchanged.
+    let strict = get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .secp256r1_strict_public_keys();
+    let pk = if strict {
+        Secp256r1PublicKey::from_bytes_strict(&public_key_bytes_ref)
+    } else {
+        <Secp256r1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref)
+    };
+    let Ok(pk) = pk else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 

@@ -224,6 +224,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
+        aux_verify_data.check_secp256r1_public_key(&self.user_signature)?;
         self.user_signature.verify_secure(
             intent_msg,
             author,

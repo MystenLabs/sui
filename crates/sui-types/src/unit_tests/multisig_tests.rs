@@ -786,3 +786,88 @@ fn test_multisig_mldsa65_member_gated_by_protocol_config() {
             .unwrap();
     }
 }
+
+#[test]
+fn test_secp256r1_compact_public_key_gated_by_protocol_config() {
+    use crate::crypto::SignatureScheme;
+    use fastcrypto::secp256r1::{Secp256r1KeyPair, Secp256r1PublicKey};
+
+    // Find a key whose SEC1 compact encoding 0x05 || x decodes to the key itself.
+    let mut rng = StdRng::from_seed([0; 32]);
+    let (kp, compact) = loop {
+        let kp = Secp256r1KeyPair::generate(&mut rng);
+        let mut compact = kp.public().as_bytes().to_vec();
+        compact[0] = 0x05;
+        if Secp256r1PublicKey::from_bytes(&compact).unwrap() == *kp.public() {
+            break (SuiKeyPair::Secp256r1(kp), compact);
+        }
+    };
+    let pk = PublicKey::try_from_bytes(SignatureScheme::Secp256r1, &compact).unwrap();
+    let msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Hello".as_bytes().to_vec(),
+        },
+    );
+
+    // A signature by the key, carrying the compact encoding of its public key.
+    let canonical_sig = Signature::new_secure(&msg, &kp);
+    let mut sig_bytes = canonical_sig.as_ref().to_vec();
+    let pk_start = sig_bytes.len() - compact.len();
+    sig_bytes[pk_start..].copy_from_slice(&compact);
+    let sig = Signature::from_bytes(&sig_bytes).unwrap();
+
+    let multisig_pk = MultiSigPublicKey::new(vec![pk.clone()], vec![1], 1).unwrap();
+    let multisig = MultiSig::combine(vec![sig.clone().into()], multisig_pk.clone()).unwrap();
+
+    // A multisig that lists the key twice, where only the canonical member signs.
+    let aliased_pk = MultiSigPublicKey::new(vec![kp.public(), pk.clone()], vec![1, 1], 1).unwrap();
+    let aliased =
+        MultiSig::combine(vec![canonical_sig.clone().into()], aliased_pk.clone()).unwrap();
+
+    // A multisig with a member that is not a valid key and does not sign. The flag must not
+    // reject it.
+    let placeholder =
+        PublicKey::Secp256r1(fastcrypto::serde_helpers::BytesRepresentation([0u8; 33]));
+    let placeholder_pk =
+        MultiSigPublicKey::new(vec![kp.public(), placeholder], vec![1, 1], 1).unwrap();
+    let with_placeholder =
+        MultiSig::combine(vec![canonical_sig.into()], placeholder_pk.clone()).unwrap();
+
+    let lenient = VerifyParams::default();
+    let strict = VerifyParams::default().with_secp256r1_strict_public_keys(true);
+    let verify = |params: &VerifyParams| {
+        let sig_res = sig.verify_claims(
+            &msg,
+            SuiAddress::from(&pk),
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        );
+        let multisig_res = multisig.verify_claims(
+            &msg,
+            SuiAddress::from(&multisig_pk),
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        );
+        let aliased_res = aliased.verify_claims(
+            &msg,
+            SuiAddress::from(&aliased_pk),
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        );
+        let placeholder_res = with_placeholder.verify_claims(
+            &msg,
+            SuiAddress::from(&placeholder_pk),
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        );
+        (
+            sig_res.is_ok(),
+            multisig_res.is_ok(),
+            aliased_res.is_ok(),
+            placeholder_res.is_ok(),
+        )
+    };
+    assert_eq!(verify(&lenient), (true, true, true, true));
+    assert_eq!(verify(&strict), (false, false, false, true));
+}
