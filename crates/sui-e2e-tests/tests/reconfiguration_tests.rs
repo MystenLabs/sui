@@ -604,8 +604,13 @@ fn consensus_observer_validator_config(
 
 /// Submits a transaction only to the validator behind `client` and waits until the cluster's
 /// fullnode executes it, which proves that the validator sequenced it through consensus.
-/// Submission is retried on transport errors because the epoch store switches to the new epoch
-/// before reconfiguration starts the validator gRPC server. Any other error fails the test.
+///
+/// Submission is repeated until the transaction executes, for two reasons. The epoch store
+/// switches to the new epoch before reconfiguration starts the validator gRPC server, so the
+/// first attempts can fail with a transport error. A `Submitted` response also does not
+/// guarantee sequencing: a validator that starts consensus after the rest of the committee can
+/// have its blocks garbage collected or its transactions rejected by consensus, and the client
+/// owns the retry in that case. Any other error fails the test.
 async fn submit_transaction_to_validator(
     test_cluster: &TestCluster,
     client: &NetworkAuthorityClient,
@@ -627,43 +632,74 @@ async fn submit_transaction_to_validator(
         .await;
     let digest = *tx.digest();
 
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let response = loop {
+    // The interval exceeds the window in which the validator suppresses a resubmission.
+    const RESUBMIT_INTERVAL: Duration = Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(120);
+    loop {
         match client
             .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
             .await
         {
-            Ok(response) => break response,
+            Ok(response) => match response.results.as_slice() {
+                [SubmitTxResult::Submitted { .. } | SubmitTxResult::Executed { .. }] => {}
+                // The validator is still processing an earlier submission.
+                [SubmitTxResult::Rejected { error }]
+                    if matches!(
+                        error.as_inner(),
+                        SuiErrorKind::TransactionSubmitted { .. }
+                            | SuiErrorKind::TransactionProcessing { .. }
+                    ) => {}
+                _ => panic!("unexpected submit result: {response:?}"),
+            },
             Err(e) if matches!(e.as_inner(), SuiErrorKind::RpcError(..)) => {
                 assert!(
                     Instant::now() < deadline,
                     "validator did not accept connections: {e:?}"
                 );
                 sleep(Duration::from_secs(1)).await;
+                continue;
             }
             Err(e) => panic!("validator rejected the transaction: {e:?}"),
         }
-    };
-    assert!(
-        matches!(
-            response.results.as_slice(),
-            [SubmitTxResult::Submitted { .. } | SubmitTxResult::Executed { .. }]
-        ),
-        "unexpected submit result: {response:?}"
-    );
 
-    wait_for_execution(&test_cluster.fullnode_handle.sui_node, digest).await;
+        if executed_within(
+            &test_cluster.fullnode_handle.sui_node,
+            digest,
+            RESUBMIT_INTERVAL,
+        )
+        .await
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "transaction {digest} was not executed"
+        );
+    }
 }
 
 /// Waits until the node behind `handle` executes the transaction with `digest`.
 async fn wait_for_execution(handle: &SuiNodeHandle, digest: TransactionDigest) {
+    assert!(
+        executed_within(handle, digest, Duration::from_secs(60)).await,
+        "transaction {digest} was not executed"
+    );
+}
+
+/// Returns whether the node behind `handle` executes the transaction with `digest` within
+/// `timeout`.
+async fn executed_within(
+    handle: &SuiNodeHandle,
+    digest: TransactionDigest,
+    timeout: Duration,
+) -> bool {
     let epoch_store = handle.with(|node| Arc::clone(&*node.state().epoch_store_for_testing()));
     tokio::time::timeout(
-        Duration::from_secs(60),
+        timeout,
         epoch_store.transactions_executed_in_checkpoint_notify(vec![digest]),
     )
     .await
-    .unwrap_or_else(|_| panic!("transaction {digest} was not executed"));
+    .is_ok()
 }
 
 /// A validator that leaves the committee must release the store of its last epoch as a
