@@ -203,6 +203,43 @@ async fn verify_signature_zklogin() -> Result<(), anyhow::Error> {
     assert_eq!(response.is_valid, Some(true));
     assert_eq!(response.reason, None);
 
+    // Both members of a 2-of-2 committee must verify, including the zkLogin member.
+    let ed_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let multisig_pk =
+        MultiSigPublicKey::new(vec![pk_zklogin.clone(), ed_kp.public()], vec![1, 1], 2)?;
+    let multisig_address = SuiAddress::from(&multisig_pk);
+    let ed_signature = GenericSignature::from(Signature::new_secure(&msg, &ed_kp));
+    let multisig = MultiSig::combine(vec![generic_sig.clone(), ed_signature], multisig_pk)?;
+    let multisig_request = VerifySignatureRequest::default()
+        .with_message(message.clone())
+        .with_signature(UserSignature::default().with_bcs(multisig.as_ref().to_vec()))
+        .with_address(multisig_address.to_string());
+    let response = client
+        .verify_signature(multisig_request)
+        .await?
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{response:?}");
+    assert_eq!(response.reason, None);
+
+    // SDK deserialization accepts a zero threshold, but native multisig validation rejects it.
+    let invalid_multisig = MultiSig::insecure_new(
+        multisig.get_sigs().to_vec(),
+        multisig.get_bitmap(),
+        MultiSigPublicKey::insecure_new(multisig.get_pk().pubkeys().clone(), 0),
+    );
+    let response = client
+        .verify_signature(
+            VerifySignatureRequest::default()
+                .with_message(message.clone())
+                .with_signature(
+                    UserSignature::default().with_bcs(invalid_multisig.as_ref().to_vec()),
+                ),
+        )
+        .await?
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert!(response.reason.is_some());
+
     // address checks fail
     let wrong_address = SuiAddress::random_for_testing_only();
     let response = client
@@ -333,6 +370,34 @@ async fn verify_signature_zklogin() -> Result<(), anyhow::Error> {
             .into_inner();
         assert_eq!(response.is_valid, Some(false));
         assert!(response.reason.is_some());
+    }
+
+    test_cluster.wait_for_epoch(Some(3)).await;
+    let future_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+        inputs.clone(),
+        u64::MAX,
+        eph_sig,
+    ));
+    for (signature, address, reason) in [
+        (generic_sig, zklogin_addr, "ZKLogin expired at epoch 2"),
+        (future_sig, zklogin_addr, "ZKLogin max epoch too large"),
+        (
+            GenericSignature::MultiSig(multisig),
+            multisig_address,
+            "ZKLogin expired at epoch 2",
+        ),
+    ] {
+        let response = client
+            .verify_signature(
+                VerifySignatureRequest::default()
+                    .with_message(message.clone())
+                    .with_signature(UserSignature::default().with_bcs(signature.as_ref().to_vec()))
+                    .with_address(address.to_string()),
+            )
+            .await?
+            .into_inner();
+        assert_eq!(response.is_valid, Some(false));
+        assert!(response.reason().contains(reason), "{response:?}");
     }
 
     Ok(())
