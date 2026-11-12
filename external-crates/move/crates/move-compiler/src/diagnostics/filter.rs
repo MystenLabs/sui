@@ -378,6 +378,7 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
         ]
     });
 
+/// Combines compiler and custom filters into a prefix/name lookup.
 fn known_filter_map<'known>(
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
 ) -> BTreeMap<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>> {
@@ -416,7 +417,7 @@ pub(crate) fn aggregate_filter_ids(ids: &[DiagnosticsID]) -> bool {
     !ids.is_empty() && ids.iter().all(|id| id.code == DIAGNOSTIC_FILTER_WILDCARD)
 }
 
-/// Rejects names absent from the compiler and supplied custom registries.
+/// Collects every configured name absent from the supplied registries without building a scope.
 pub fn validate_filter_names<'name, 'known>(
     configured: impl IntoIterator<Item = (FilterPrefix, &'name str)>,
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
@@ -439,8 +440,7 @@ pub fn validate_filter_names<'name, 'known>(
     }
 }
 
-/// Resolves named filter settings against compiler and custom filter registries, creating a
-/// filter scope to perform that diagnostic filtering.
+/// Expands configured names into a filter scope, returning the first unknown name.
 pub(crate) fn resolve_filter_names<'known>(
     configured: impl IntoIterator<Item = (FilterPrefix, FilterName, FilterKind)>,
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
@@ -679,5 +679,33 @@ impl crate::shared::AstDebug for FilterScope {
         } else {
             w.write(format!("({n} filter entries)"));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "duplicate custom diagnostic filter name duplicate")]
+    fn duplicate_custom_filter_names_panic() {
+        let prefix = Some(Symbol::from("lint"));
+        let name = Symbol::from("duplicate");
+        let core = (
+            prefix,
+            vec![(
+                name,
+                vec![DiagnosticsID::exact(DiagnosticOrigin::Lint, 1, 1)],
+            )],
+        );
+        let sui = (
+            prefix,
+            vec![(
+                name,
+                vec![DiagnosticsID::exact(DiagnosticOrigin::SuiLint, 1, 1)],
+            )],
+        );
+
+        known_filter_map([&core, &sui]);
     }
 }

@@ -276,17 +276,12 @@ impl Compiler {
     }
 
     pub fn add_visitor(mut self, pass: impl Into<Visitor>) -> Self {
-        let visitor = pass.into();
-        // De-dup by concrete visitor type. First occurrence wins.
-        self.visitors.entry(visitor.type_id()).or_insert(visitor);
+        extend_visitors(&mut self.visitors, [pass.into()]);
         self
     }
 
     pub fn add_visitors(mut self, passes: impl IntoIterator<Item = Visitor>) -> Self {
-        for visitor in passes {
-            // De-dup by concrete visitor type. First occurrence wins.
-            self.visitors.entry(visitor.type_id()).or_insert(visitor);
-        }
+        extend_visitors(&mut self.visitors, passes);
         self
     }
 
@@ -1253,7 +1248,14 @@ fn configure_lint_visitors(
     }
     lint_visitors.extend(linters::linter_visitors_with_config(level, &lint_config));
 
-    for visitor in lint_visitors {
+    extend_visitors(visitors, lint_visitors);
+}
+
+fn extend_visitors(
+    visitors: &mut IndexMap<TypeId, Visitor>,
+    passes: impl IntoIterator<Item = Visitor>,
+) {
+    for visitor in passes {
         visitors.entry(visitor.type_id()).or_insert(visitor);
     }
 }
