@@ -296,7 +296,9 @@ impl Default for TransactionDriverConfig {
         }
     }
 }
-/// The default cap on the consensus transaction pool user lane's total queued bytes.
+
+/// The consensus transaction pool caps the serialized bytes of queued user-lane entries
+/// at this value when `max_pending_user_bytes` is unset.
 pub const DEFAULT_MAX_PENDING_USER_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -1458,11 +1458,15 @@ impl ValidatorService {
                     // here instead.
                     epoch_store.record_submitted_user_transactions(&txns, submitter_client_addr);
                     let gas_price = Self::extract_gas_price(&txns);
-                    receivers.push(
-                        context
-                            .try_insert(epoch_store.epoch(), gas_price, txns)
-                            .await,
-                    );
+                    let result = context
+                        .try_insert(epoch_store.epoch(), gas_price, txns)
+                        .await;
+                    if let Ok((_, false)) = &result {
+                        // Duplicate of an in-flight submission; flag the request as spam. The
+                        // per-tx result is still Submitted, so this is tracked separately.
+                        duplicate_at_admission = true;
+                    }
+                    receivers.push(result.map(|(receiver, _)| receiver));
                 }
                 let halted_rejections = context
                     .adapter_metrics()
@@ -1514,23 +1518,9 @@ impl ValidatorService {
                             results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
                         }
                     }
-                    // The transaction(s) in this group are already being processed by consensus,
-                    // or already queued in the transaction pool. Report per-tx as a retriable
-                    // rejection rather than failing the whole request.
+                    // The transaction(s) in this group are already being processed by consensus.
+                    // Report per-tx as a retriable rejection rather than failing the whole request.
                     Err(err) => {
-                        if let SuiErrorKind::TransactionSubmitted { .. } = err.as_inner() {
-                            for (idx, tx_digest) in txns_meta {
-                                debug!(
-                                    ?tx_digest,
-                                    "handle_submit_transaction: transaction already queued"
-                                );
-                                results[idx] = Some(SubmitTxResult::Rejected {
-                                    error: SuiErrorKind::TransactionSubmitted { digest: tx_digest }
-                                        .into(),
-                                });
-                            }
-                            continue;
-                        }
                         let SuiErrorKind::TransactionProcessing { status, .. } =
                             err.as_inner().clone()
                         else {

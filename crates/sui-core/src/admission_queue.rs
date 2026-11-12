@@ -53,15 +53,15 @@ pub trait AdmissionQueueEntry {
     fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey>;
     fn notify_evicted(self, min_gas_price: u64);
     fn notify_rejected(self, min_gas_price: u64);
-    /// Returns the serialized transaction bytes that this entry holds. The queue counts
-    /// them against its byte capacity, so they must not change while the entry is queued.
+    /// Returns the bytes that the queue counts against its byte capacity. The value must
+    /// not change while the entry is queued.
     fn byte_size(&self) -> usize;
 }
 
-/// Outcome of [`PriorityAdmissionQueue::try_insert`]. Any displaced entry is
-/// carried here unnotified so that the caller can deliver the notification
+/// Outcome of [`PriorityAdmissionQueue::try_insert`]. Displaced entries are
+/// carried here unnotified so that the caller can deliver the notifications
 /// outside of any held locks.
-#[must_use = "call `notify` to deliver the outcome to the displaced entry"]
+#[must_use = "call `notify` to deliver the outcome to the displaced entries"]
 pub struct InsertOutcome<E> {
     outcome: Option<Outcome<E>>,
     created_at: &'static std::panic::Location<'static>,
@@ -76,7 +76,8 @@ enum Outcome<E> {
         /// The inserted entry's gas price.
         gas_price: u64,
     },
-    /// Rejected: the queue is full and `min_gas_price` was not met.
+    /// Rejected: evicting the entries priced below this one cannot make room. A new bid
+    /// must exceed `min_gas_price`.
     Rejected { entry: E, min_gas_price: u64 },
 }
 
@@ -89,7 +90,7 @@ impl<E: AdmissionQueueEntry> InsertOutcome<E> {
         }
     }
 
-    /// Notifies the displaced entry, if any, then reports the insert result.
+    /// Notifies the displaced entries, if any, then reports the insert result.
     /// `try_insert(e).notify()` is equivalent to `insert(e)`.
     pub fn notify(mut self) -> SuiResult<bool> {
         match self
@@ -182,8 +183,8 @@ impl QueueEntry {
 /// Prometheus metrics for the admission queue.
 pub struct AdmissionQueueMetrics {
     // Pull mode intentionally reuses these admission metrics for its user lane because
-    // both modes implement the same admission policy and are mutually exclusive on a
-    // validator. This preserves dashboard continuity when switching modes.
+    // the two modes are mutually exclusive on a validator. This preserves dashboard
+    // continuity when switching modes.
     pub queue_depth: IntGauge,
     pub queue_wait_latency: HistogramVec,
     pub evictions: IntCounter,
@@ -194,6 +195,8 @@ pub struct AdmissionQueueMetrics {
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
     pub pool_staggered_held: IntGauge,
+    pub pool_staggered_held_bytes: IntGauge,
+    pub pool_staggered_quota_rejected: IntCounterVec,
     pub pool_staggered_rejected: IntCounter,
     pub pool_staggered_delay: Histogram,
     pub pool_stagger_shadow_decisions: IntCounterVec,
@@ -203,7 +206,6 @@ pub struct AdmissionQueueMetrics {
     pub pool_gc_notified: IntCounter,
     pub pool_waiting_inserts: IntGauge,
     pub pool_already_processed: IntCounterVec,
-    pub pool_queued_resubmissions: IntCounter,
     pub pool_rejected_at_proposal: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
@@ -236,7 +238,7 @@ impl AdmissionQueueMetrics {
             .unwrap(),
             rejections: register_int_counter_with_registry!(
                 "admission_queue_rejections",
-                "Number of transactions rejected because the queue was full and their gas price was too low",
+                "Number of transactions rejected because the queue was full, by entry count or by bytes, and evicting cheaper entries could not make room",
                 registry,
             )
             .unwrap(),
@@ -269,6 +271,19 @@ impl AdmissionQueueMetrics {
             pool_staggered_held: register_int_gauge_with_registry!(
                 "consensus_transaction_pool_staggered_held",
                 "User-lane entries in the pool stamped with a staggered-submission hold, whether or not the hold has elapsed",
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_held_bytes: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_staggered_held_bytes",
+                "Serialized bytes of the user-lane entries counted against the staggered-submission held-byte quota",
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_quota_rejected: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_staggered_quota_rejected",
+                "Staggered submissions refused because the held entries reached a quota, by quota (entries or bytes)",
+                &["quota"],
                 registry,
             )
             .unwrap(),
@@ -328,12 +343,6 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_already_processed",
                 "User submissions not proposed because they were already processed elsewhere, by the stage that detected it and the path that processed them",
                 &["stage", "method"],
-                registry,
-            )
-            .unwrap(),
-            pool_queued_resubmissions: register_int_counter_with_registry!(
-                "consensus_transaction_pool_queued_resubmissions",
-                "User submissions rejected because one of their transactions is already queued in the user lane",
                 registry,
             )
             .unwrap(),
@@ -398,30 +407,16 @@ impl Totals {
     }
 }
 
-/// A level holds the entries queued at one gas price, in FIFO order, and their totals.
-struct Level<E> {
-    entries: VecDeque<E>,
-    totals: Totals,
-}
-
-impl<E> Default for Level<E> {
-    fn default() -> Self {
-        Self {
-            entries: VecDeque::new(),
-            totals: Totals::default(),
-        }
-    }
-}
-
 /// Bounded priority queue that orders transactions by gas price. Uses a BTreeMap
 /// for efficient access at both ends: lowest gas price (for eviction) and highest
 /// gas price (for draining to consensus). Entries at the same gas price are FIFO.
 pub struct PriorityAdmissionQueue<E: AdmissionQueueEntry> {
     capacity: usize,
-    /// When set, this caps the total serialized bytes of queued entries. An
-    /// entry-count cap alone does not bound memory when entries vary widely in size.
+    /// When set, this caps the serialized bytes of queued entries, which is the
+    /// measure the block byte limit uses. It bounds the backlog of bytes waiting
+    /// to be proposed.
     byte_capacity: Option<u64>,
-    levels: BTreeMap<u64, Level<E>>,
+    map: BTreeMap<u64, VecDeque<E>>,
     /// Number of queue entries per transaction key, for duplicate detection.
     queued_keys: HashMap<ConsensusTransactionKey, u32>,
     totals: Totals,
@@ -433,7 +428,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         Self {
             capacity,
             byte_capacity: None,
-            levels: BTreeMap::new(),
+            map: BTreeMap::new(),
             queued_keys: HashMap::new(),
             totals: Totals::default(),
             metrics,
@@ -456,47 +451,43 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.byte_capacity
     }
 
-    /// Returns whether an entry holding `key` is queued.
-    pub fn contains_key(&self, key: &ConsensusTransactionKey) -> bool {
-        self.queued_keys.contains_key(key)
-    }
-
     #[cfg(test)]
     fn assert_consistent(&self) {
         let mut totals = Totals::default();
         let mut queued_keys: HashMap<ConsensusTransactionKey, u32> = HashMap::new();
-        for (&gas_price, level) in &self.levels {
-            assert!(!level.entries.is_empty());
-            let mut level_totals = Totals::default();
-            for entry in &level.entries {
+        for (&gas_price, deque) in &self.map {
+            assert!(!deque.is_empty());
+            for entry in deque {
                 assert_eq!(entry.gas_price(), gas_price);
-                level_totals.add(entry.byte_size() as u64);
+                totals.add(entry.byte_size() as u64);
                 for key in entry.transaction_keys() {
                     *queued_keys.entry(key).or_default() += 1;
                 }
             }
-            assert_eq!(level.totals, level_totals);
-            totals.len += level_totals.len;
-            totals.bytes += level_totals.bytes;
         }
         assert_eq!(self.totals, totals);
         assert_eq!(self.queued_keys, queued_keys);
     }
 
     pub fn min_gas_price(&self) -> Option<u64> {
-        self.levels.first_key_value().map(|(&k, _)| k)
+        self.map.first_key_value().map(|(&k, _)| k)
     }
 
     /// On success, returns `Ok(true)` or `Ok(false)` to indicate whether the
-    /// value was newly inserted. Returns `Err` if the queue was full and the
-    /// tx's gas price was not high enough to evict an existing entry.
+    /// value was newly inserted. Returns `Err` if the entry does not fit and
+    /// evicting the entries priced below it cannot make room.
     pub fn insert(&mut self, entry: E) -> SuiResult<bool> {
         self.try_insert(entry).notify()
     }
 
-    /// Same as `insert`, without notifying displaced entries. The evicted entry (on
-    /// success) or the refused entry itself (on rejection) is handed back in the
+    /// Same as `insert`, without notifying displaced entries. The evicted entries (on
+    /// success) or the refused entry itself (on rejection) are handed back in the
     /// outcome for the caller to notify manually.
+    ///
+    /// An entry that does not fit evicts the cheapest queued entries, FIFO within a
+    /// gas price, until it fits both capacities. Only entries priced strictly below it
+    /// can be evicted. If they cannot free enough room, nothing is evicted and the
+    /// refusal reports the first queued gas price at or above the entry's.
     #[track_caller]
     pub fn try_insert(&mut self, entry: E) -> InsertOutcome<E> {
         let newly_inserted = !entry
@@ -508,7 +499,6 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
 
         let gas_price = entry.gas_price();
         let entry_bytes = entry.byte_size() as u64;
-
         if self.fits_after(Totals::default(), entry_bytes) {
             self.push(entry, false);
             return InsertOutcome::new(Outcome::Inserted {
@@ -517,29 +507,42 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                 gas_price,
             });
         }
-
         if !self.fits_bytes_after(Totals::default(), entry_bytes) {
             self.metrics.byte_capacity_bound.inc();
         }
-        match self.plan_eviction(gas_price, entry_bytes) {
-            Ok(count) => {
-                let evicted = self.evict_lowest_n(count);
-                self.push(entry, false);
-                self.metrics.evictions.inc_by(evicted.len() as u64);
-                InsertOutcome::new(Outcome::Inserted {
-                    newly_inserted,
-                    evicted,
-                    gas_price,
-                })
-            }
-            Err(min_gas_price) => {
-                self.metrics.rejections.inc();
-                InsertOutcome::new(Outcome::Rejected {
-                    entry,
-                    min_gas_price,
-                })
+
+        // The entries to evict are counted before any is removed, so that a refusal
+        // leaves the queue unchanged.
+        let mut freed = Totals::default();
+        let mut blocking_price = None;
+        'walk: for (&price, deque) in &self.map {
+            for queued in deque {
+                if self.fits_after(freed, entry_bytes) {
+                    break 'walk;
+                }
+                if price >= gas_price {
+                    blocking_price = Some(price);
+                    break 'walk;
+                }
+                freed.add(queued.byte_size() as u64);
             }
         }
+        if !self.fits_after(freed, entry_bytes) {
+            self.metrics.rejections.inc();
+            return InsertOutcome::new(Outcome::Rejected {
+                entry,
+                min_gas_price: blocking_price.unwrap_or(gas_price),
+            });
+        }
+
+        let evicted: Vec<E> = (0..freed.len).map(|_| self.evict_lowest()).collect();
+        self.metrics.evictions.inc_by(evicted.len() as u64);
+        self.push(entry, false);
+        InsertOutcome::new(Outcome::Inserted {
+            newly_inserted,
+            evicted,
+            gas_price,
+        })
     }
 
     /// Returns whether an entry of `entry_bytes` can be admitted after the queued
@@ -556,45 +559,6 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.byte_capacity.is_none_or(|cap| {
             self.totals.bytes - freed.bytes + entry_bytes <= cap.max(self.totals.bytes)
         })
-    }
-
-    /// Returns the number of entries to evict, cheapest first, to make room for an
-    /// entry at `gas_price` holding `entry_bytes`. Only entries priced strictly below
-    /// `gas_price` can be evicted. When they cannot free enough room, the error holds
-    /// the price that a bid must exceed: the cheapest queued price at or above
-    /// `gas_price`. A bid above it can need a higher price still, if evicting that
-    /// level does not free enough room.
-    ///
-    /// The plan skips whole price levels using their totals, so the cost is linear in
-    /// the number of levels below `gas_price` plus the entries of one level.
-    fn plan_eviction(&self, gas_price: u64, entry_bytes: u64) -> Result<usize, u64> {
-        let mut freed = Totals::default();
-        for (&price, level) in &self.levels {
-            if price >= gas_price {
-                return Err(price);
-            }
-            let freed_with_level = Totals {
-                len: freed.len + level.totals.len,
-                bytes: freed.bytes + level.totals.bytes,
-            };
-            if !self.fits_after(freed_with_level, entry_bytes) {
-                freed = freed_with_level;
-                continue;
-            }
-            for entry in &level.entries {
-                freed.add(entry.byte_size() as u64);
-                if self.fits_after(freed, entry_bytes) {
-                    return Ok(freed.len);
-                }
-            }
-            debug_fatal!("gas price level totals disagree with its entries");
-            return Err(price);
-        }
-        Err(gas_price)
-    }
-
-    fn evict_lowest_n(&mut self, count: usize) -> Vec<E> {
-        (0..count).map(|_| self.evict_lowest()).collect()
     }
 
     /// Pop up to `count` entries, highest gas price first.
@@ -629,7 +593,7 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         let mut included = Vec::new();
         let mut excluded = Vec::new();
         let mut stopped = false;
-        for level in self.levels.values_mut().rev() {
+        for deque in self.map.values_mut().rev() {
             if stopped {
                 break;
             }
@@ -637,34 +601,26 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             // removals costs one pass over the level rather than a shift per removal.
             // This runs on every block proposal, so it must stay linear even when most
             // entries are skipped (e.g. held by staggered submission).
-            let mut source = std::mem::take(&mut level.entries);
+            let mut source = std::mem::take(deque);
             while let Some(mut entry) = source.pop_front() {
                 if stopped {
-                    level.entries.push_back(entry);
+                    deque.push_back(entry);
                     continue;
                 }
-                let popped = match action(&mut entry) {
+                match action(&mut entry) {
                     PopAction::Stop => {
                         stopped = true;
-                        level.entries.push_back(entry);
-                        continue;
+                        deque.push_back(entry);
                     }
-                    PopAction::Skip => {
-                        level.entries.push_back(entry);
-                        continue;
-                    }
-                    PopAction::Include => &mut included,
-                    PopAction::Exclude => &mut excluded,
-                };
-                let bytes = entry.byte_size() as u64;
-                level.totals.remove(bytes);
-                self.totals.remove(bytes);
-                popped.push(entry);
+                    PopAction::Skip => deque.push_back(entry),
+                    PopAction::Include => included.push(entry),
+                    PopAction::Exclude => excluded.push(entry),
+                }
             }
         }
-        self.levels.retain(|_, level| !level.entries.is_empty());
+        self.map.retain(|_, deque| !deque.is_empty());
         for entry in included.iter().chain(&excluded) {
-            self.remove_keys(entry);
+            self.untrack(entry);
         }
         self.metrics.queue_depth.set(self.totals.len as i64);
         (included, excluded)
@@ -682,14 +638,12 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         for key in entry.transaction_keys() {
             *self.queued_keys.entry(key).or_insert(0) += 1;
         }
-        let bytes = entry.byte_size() as u64;
-        self.totals.add(bytes);
-        let level = self.levels.entry(entry.gas_price()).or_default();
-        level.totals.add(bytes);
+        self.totals.add(entry.byte_size() as u64);
+        let deque = self.map.entry(entry.gas_price()).or_default();
         if front {
-            level.entries.push_front(entry);
+            deque.push_front(entry);
         } else {
-            level.entries.push_back(entry);
+            deque.push_back(entry);
         }
         self.metrics.queue_depth.set(self.totals.len as i64);
     }
@@ -697,20 +651,25 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     fn evict_lowest(&mut self) -> E {
         let evicted = {
             let mut first = self
-                .levels
+                .map
                 .first_entry()
                 .expect("evict_lowest called on empty queue");
-            let level = first.get_mut();
-            let evicted = level.entries.pop_front().unwrap();
-            level.totals.remove(evicted.byte_size() as u64);
-            if level.entries.is_empty() {
+            let deque = first.get_mut();
+            let evicted = deque.pop_front().unwrap();
+            if deque.is_empty() {
                 first.remove();
             }
             evicted
         };
-        self.totals.remove(evicted.byte_size() as u64);
-        self.remove_keys(&evicted);
+        self.untrack(&evicted);
         evicted
+    }
+
+    /// Removes an entry that has left the queue from the totals and the key index.
+    /// Every path that removes an entry calls this, so the totals stay consistent.
+    fn untrack(&mut self, entry: &E) {
+        self.totals.remove(entry.byte_size() as u64);
+        self.remove_keys(entry);
     }
 
     fn remove_keys(&mut self, entry: &E) {
@@ -1047,8 +1006,8 @@ async fn submit_queue_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{Rng, SeedableRng, rngs::StdRng};
     use sui_macros::sim_test;
+    use sui_types::digests::TransactionDigest;
 
     fn make_test_entry(
         gas_price: u64,
@@ -1106,6 +1065,7 @@ mod tests {
         id: u64,
         gas_price: u64,
         bytes: usize,
+        keys: Vec<ConsensusTransactionKey>,
         log: MockOutcomeLog,
     }
 
@@ -1115,7 +1075,7 @@ mod tests {
         }
 
         fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey> {
-            std::iter::empty()
+            self.keys.iter().cloned()
         }
 
         fn byte_size(&self) -> usize {
@@ -1141,7 +1101,20 @@ mod tests {
             id,
             gas_price,
             bytes,
+            keys: Vec::new(),
             log: log.clone(),
+        }
+    }
+
+    /// A mock entry holding one transaction key derived from `id`.
+    fn keyed_entry(id: u64, gas_price: u64, bytes: usize, log: &MockOutcomeLog) -> MockEntry {
+        let mut digest = [0; 32];
+        digest[..8].copy_from_slice(&id.to_le_bytes());
+        MockEntry {
+            keys: vec![ConsensusTransactionKey::Certificate(
+                TransactionDigest::new(digest),
+            )],
+            ..mock_entry(id, gas_price, bytes, log)
         }
     }
 
@@ -1349,97 +1322,58 @@ mod tests {
         q.assert_consistent();
     }
 
-    /// `ModelQueue` evicts one entry at a time, cheapest first, and serves as the
-    /// reference for the queue's per-level eviction plan.
-    struct ModelQueue {
-        capacity: usize,
-        byte_capacity: u64,
-        /// Entries as (gas price, bytes, id), in eviction order.
-        entries: Vec<(u64, u64, u64)>,
-    }
+    #[test]
+    fn over_both_capacities_admission_evicts_an_entry_and_its_own_bytes() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(2, 1000);
+        q.insert(mock_entry(1, 10, 600, &log)).unwrap();
+        let popped = q.pop_batch(1);
+        q.insert(mock_entry(2, 10, 300, &log)).unwrap();
+        q.insert(mock_entry(3, 20, 400, &log)).unwrap();
+        q.reinsert_front(popped.into_iter().next().unwrap());
+        // The queue holds 3 entries and 1300 bytes, over both capacities.
+        assert_eq!(q.len(), 3);
+        q.assert_consistent();
 
-    impl ModelQueue {
-        fn sort(&mut self) {
-            self.entries.sort_by_key(|&(gas_price, _, _)| gas_price);
-        }
-
-        /// Returns the evicted ids, or the rejection's minimum gas price.
-        fn insert(&mut self, gas_price: u64, bytes: u64, id: u64) -> Result<Vec<u64>, u64> {
-            let len_limit = self.capacity.max(self.entries.len());
-            let byte_total = |entries: &[(u64, u64, u64)]| entries.iter().map(|e| e.1).sum::<u64>();
-            let byte_limit = self.byte_capacity.max(byte_total(&self.entries));
-            let mut evicted = 0;
-            loop {
-                let rest = &self.entries[evicted..];
-                if rest.len() < len_limit && byte_total(rest) + bytes <= byte_limit {
-                    break;
-                }
-                match rest.first() {
-                    Some(&(price, _, _)) if price < gas_price => evicted += 1,
-                    Some(&(price, _, _)) => return Err(price),
-                    None => return Err(gas_price),
-                }
-            }
-            let ids = self.entries.drain(..evicted).map(|e| e.2).collect();
-            self.entries.push((gas_price, bytes, id));
-            self.sort();
-            Ok(ids)
-        }
+        // Evicting entry 1 frees one entry and more than the newcomer's bytes.
+        q.insert(mock_entry(4, 30, 100, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1]);
+        // The queue holds 3 entries and 800 bytes. Entry 5 must free one entry and 300
+        // bytes, which entry 2 does.
+        q.insert(mock_entry(5, 30, 500, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
+        assert_eq!(q.len(), 3);
+        // The cheapest remaining entry is priced above entry 6, so entry 6 is refused
+        // and nothing is evicted.
+        assert!(matches!(
+            q.insert(mock_entry(6, 15, 100, &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 20 }
+        ));
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
+        assert_eq!(q.len(), 3);
+        assert_eq!(q.metrics.byte_capacity_bound.get(), 3);
+        q.assert_consistent();
     }
 
     #[test]
-    fn eviction_plan_matches_one_at_a_time_model() {
-        let mut rng = StdRng::seed_from_u64(28532);
-        for _ in 0..200 {
-            let capacity = rng.gen_range(1..8);
-            let byte_capacity = rng.gen_range(100..1000);
-            let log = MockOutcomeLog::default();
-            let mut q = byte_capped_queue(capacity, byte_capacity);
-            let mut model = ModelQueue {
-                capacity,
-                byte_capacity,
-                entries: Vec::new(),
-            };
-            for id in 0..60 {
-                match rng.gen_range(0..10) {
-                    0 => {
-                        let popped = q.pop_batch(rng.gen_range(0..3));
-                        let popped_ids: Vec<u64> = popped.iter().map(|e| e.id).collect();
-                        model.entries.retain(|e| !popped_ids.contains(&e.2));
-                        // Reinsert in reverse so that each level keeps its order, as
-                        // the pool does for a dropped proposal.
-                        for entry in popped.into_iter().rev() {
-                            model
-                                .entries
-                                .insert(0, (entry.gas_price, entry.bytes as u64, entry.id));
-                            q.reinsert_front(entry);
-                        }
-                        model.sort();
-                    }
-                    _ => {
-                        let gas_price = rng.gen_range(1..6);
-                        let bytes = rng.gen_range(1..400);
-                        let expected = model.insert(gas_price, bytes, id);
-                        let evicted_before = log.evicted.lock().unwrap().len();
-                        let result = q.insert(mock_entry(id, gas_price, bytes as usize, &log));
-                        match expected {
-                            Ok(ids) => {
-                                assert!(result.is_ok());
-                                assert_eq!(log.evicted.lock().unwrap()[evicted_before..], ids);
-                            }
-                            Err(min_gas_price) => assert!(matches!(
-                                result.unwrap_err().as_inner(),
-                                SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
-                                    min_gas_price: actual
-                                } if *actual == min_gas_price
-                            )),
-                        }
-                    }
-                }
-                q.assert_consistent();
-                assert_eq!(q.len(), model.entries.len());
-            }
+    fn multi_entry_eviction_releases_every_evicted_key() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        for id in 1..=4 {
+            q.insert(keyed_entry(id, 10, 250, &log)).unwrap();
         }
+        q.insert(keyed_entry(5, 20, 700, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3]);
+        q.assert_consistent();
+
+        // A copy of an evicted transaction is not reported as a duplicate, and a copy of
+        // a queued one is.
+        assert!(q.insert(keyed_entry(1, 30, 20, &log)).unwrap());
+        assert!(!q.insert(keyed_entry(4, 30, 20, &log)).unwrap());
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3]);
+        q.assert_consistent();
     }
 
     fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {
