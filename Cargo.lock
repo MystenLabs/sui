@@ -9140,7 +9140,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=7938dd09b301c029a31fd8a0050cb28f5de87e44#7938dd09b301c029a31fd8a0050cb28f5de87e44"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e8545529dffab9388ffa5624fa1baf5be9b8a3e9#e8545529dffab9388ffa5624fa1baf5be9b8a3e9"
 dependencies = [
  "ahash 0.7.8",
  "async-task",
@@ -9169,7 +9169,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=7938dd09b301c029a31fd8a0050cb28f5de87e44#7938dd09b301c029a31fd8a0050cb28f5de87e44"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e8545529dffab9388ffa5624fa1baf5be9b8a3e9#e8545529dffab9388ffa5624fa1baf5be9b8a3e9"
 dependencies = [
  "darling 0.14.2",
  "proc-macro2",

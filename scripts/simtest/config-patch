@@ -19,5 +19,5 @@ index 2322475d08..0e9ccd0479 100644
  async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
  async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
  async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-+tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "7938dd09b301c029a31fd8a0050cb28f5de87e44" }
-+futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "7938dd09b301c029a31fd8a0050cb28f5de87e44" }
++tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e8545529dffab9388ffa5624fa1baf5be9b8a3e9" }
++futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e8545529dffab9388ffa5624fa1baf5be9b8a3e9" }
