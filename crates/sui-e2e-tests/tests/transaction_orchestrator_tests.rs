@@ -171,6 +171,15 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     )
     .await;
 
+    // Local effects can wake this test before the orchestrator drops its WAL guard.
+    timeout(Duration::from_secs(120), async {
+        while !orchestrator.empty_pending_tx_log_in_test() {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("Timed out waiting for the orchestrator to clear the pending transaction log");
+
     let pending_txes = orchestrator.load_all_pending_transactions_in_test()?;
     assert!(pending_txes.is_empty());
     assert!(orchestrator.empty_pending_tx_log_in_test());
