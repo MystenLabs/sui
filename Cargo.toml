@@ -375,8 +375,8 @@ unnecessary_get_then_check = "allow"
 [workspace.dependencies]
 antithesis_sdk = "0.2.5"
 anyhow = "1.0.71"
-arrow = "59.3"
-arrow-array = "59.3"
+arrow = "57.3"
+arrow-array = "57.3"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 argon2 = { version = "0.6.0", default-features = false }
 assert_cmd = "2.0.6"
@@ -530,7 +530,7 @@ once_cell = "1.18.0"
 oneshot = { version = "0.2.1", features = ["std"] }
 ouroboros = "0.18.4"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
-parquet = "59.3"
+parquet = "57.3"
 pin-project = "1"
 pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.10.0", features = ["std"] }
