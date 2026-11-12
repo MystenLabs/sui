@@ -619,10 +619,6 @@ impl CheckpointQueue {
         self.last_built_timestamp
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.pending_roots.is_empty()
-    }
-
     /// Called once at the end of each commit. Returns whether the queue is drained.
     /// The commit-count threshold keeps a single commit after a consensus stall, whose
     /// timestamp jumps ahead, from tripping the timestamp threshold.
