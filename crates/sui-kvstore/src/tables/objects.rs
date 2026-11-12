@@ -8,8 +8,10 @@
 //!
 //! A row holds exactly one of:
 //! - `""`: the BCS-encoded [`Object`] at that version (a live row), or
-//! - `s`: a one-byte [`ObjectStatus`], `Deleted` or `Wrapped` (a tombstone), marking the version
-//!   at which the object was removed from the live set.
+//! - a tombstone, marking the version at which the object was removed from the live set:
+//!   - `s`: a one-byte [`ObjectStatus`], `Deleted` or `Wrapped`, and
+//!   - `t`: the raw 32-byte digest of the transaction that removed the object. Tombstones written
+//!     before this column existed lack it.
 //!
 //! The newest row at or below version `V` is the object's state at `V`: a live row is the
 //! object's contents, a tombstone means the object did not exist at `V`. Tombstones are written
@@ -17,6 +19,7 @@
 
 use anyhow::{Context, Result, bail, ensure};
 use bytes::Bytes;
+use sui_types::digests::TransactionDigest;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 
@@ -29,6 +32,8 @@ pub mod col {
     pub const OBJECT: &str = crate::tables::DEFAULT_COLUMN;
     /// One-byte [`ObjectStatus`](crate::ObjectStatus) of a tombstone.
     pub const STATUS: &str = "s";
+    /// Raw 32-byte digest of the transaction that removed the object, in a tombstone.
+    pub const TRANSACTION: &str = "t";
 }
 
 /// A decoded row of the objects table.
@@ -64,13 +69,23 @@ pub fn encode(object: &Object) -> Result<[(&'static str, Bytes); 1]> {
     Ok([(col::OBJECT, Bytes::from(bcs::to_bytes(object)?))])
 }
 
-/// Cells of a tombstone row. `status` must be `Deleted` or `Wrapped`.
-pub fn encode_tombstone(status: ObjectStatus) -> Result<[(&'static str, Bytes); 1]> {
+/// Cells of a tombstone row. `status` must be `Deleted` or `Wrapped`; `transaction` is the
+/// transaction that removed the object.
+pub fn encode_tombstone(
+    status: ObjectStatus,
+    transaction: &TransactionDigest,
+) -> Result<[(&'static str, Bytes); 2]> {
     ensure!(
         status != ObjectStatus::Live,
         "a tombstone's status must be Deleted or Wrapped"
     );
-    Ok([(col::STATUS, Bytes::copy_from_slice(&[status.to_byte()]))])
+    Ok([
+        (col::STATUS, Bytes::copy_from_slice(&[status.to_byte()])),
+        (
+            col::TRANSACTION,
+            Bytes::copy_from_slice(transaction.inner()),
+        ),
+    ])
 }
 
 /// Parse a row as a live object or a tombstone, selecting the cell by column.
@@ -109,7 +124,7 @@ mod tests {
 
     use super::*;
 
-    fn cells(encoded: [(&'static str, Bytes); 1]) -> Vec<(Bytes, Bytes)> {
+    fn cells<const N: usize>(encoded: [(&'static str, Bytes); N]) -> Vec<(Bytes, Bytes)> {
         encoded
             .into_iter()
             .map(|(column, value)| (Bytes::from_static(column.as_bytes()), value))
@@ -123,11 +138,36 @@ mod tests {
             decode(&cells(encode(&object).unwrap())).unwrap(),
             ObjectRow::Live(object),
         );
+        let transaction = TransactionDigest::random();
         for status in [ObjectStatus::Deleted, ObjectStatus::Wrapped] {
             assert_eq!(
-                decode(&cells(encode_tombstone(status).unwrap())).unwrap(),
+                decode(&cells(encode_tombstone(status, &transaction).unwrap())).unwrap(),
                 ObjectRow::Tombstone(status),
             );
+        }
+    }
+
+    /// A tombstone stores the removing transaction as its raw digest in column `t`. Rows with
+    /// and without that cell decode to the same tombstone.
+    #[test]
+    fn tombstone_transaction_cell_does_not_change_decoding() {
+        let transaction = TransactionDigest::random();
+        for (byte, status) in [(1u8, ObjectStatus::Deleted), (2, ObjectStatus::Wrapped)] {
+            let with_transaction = cells(encode_tombstone(status, &transaction).unwrap());
+            assert_eq!(
+                with_transaction,
+                vec![
+                    (Bytes::from_static(b"s"), Bytes::copy_from_slice(&[byte])),
+                    (
+                        Bytes::from_static(b"t"),
+                        Bytes::copy_from_slice(transaction.inner())
+                    ),
+                ],
+            );
+            let status_only = vec![with_transaction[0].clone()];
+            for row in [with_transaction, status_only] {
+                assert_eq!(decode(&row).unwrap(), ObjectRow::Tombstone(status));
+            }
         }
     }
 
@@ -135,7 +175,9 @@ mod tests {
     #[test]
     fn decode_selects_cell_by_column() {
         let mut row = vec![(Bytes::from_static(b"other"), Bytes::from_static(b"junk"))];
-        row.extend(cells(encode_tombstone(ObjectStatus::Wrapped).unwrap()));
+        row.extend(cells(
+            encode_tombstone(ObjectStatus::Wrapped, &TransactionDigest::random()).unwrap(),
+        ));
         assert_eq!(
             decode(&row).unwrap(),
             ObjectRow::Tombstone(ObjectStatus::Wrapped)
@@ -145,8 +187,11 @@ mod tests {
     #[test]
     fn decode_rejects_malformed_rows() {
         let object = Object::with_id_owner_for_testing(ObjectID::random(), SuiAddress::ZERO);
+        let transaction = TransactionDigest::random();
         let mut both = cells(encode(&object).unwrap());
-        both.extend(cells(encode_tombstone(ObjectStatus::Deleted).unwrap()));
+        both.extend(cells(
+            encode_tombstone(ObjectStatus::Deleted, &transaction).unwrap(),
+        ));
         let status = |bytes: &'static [u8]| vec![(Bytes::from_static(b"s"), Bytes::from(bytes))];
 
         for (name, row) in [
@@ -158,6 +203,6 @@ mod tests {
         ] {
             assert!(decode(&row).is_err(), "{name} row decoded");
         }
-        assert!(encode_tombstone(ObjectStatus::Live).is_err());
+        assert!(encode_tombstone(ObjectStatus::Live, &transaction).is_err());
     }
 }
