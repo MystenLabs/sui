@@ -22,6 +22,9 @@ mod test {
     use sui_benchmark::workloads::composite::CompositeWorkloadConfig;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
     use sui_benchmark::workloads::gas_double_spend::GasDoubleSpendSubmission;
+    use sui_benchmark::workloads::large_transaction::{
+        LargeTransactionGas, LargeTransactionSizeRange,
+    };
     use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
@@ -188,7 +191,43 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         simulated_load_config.remote_env = false;
         simulated_load_config.large_transaction_weight = 1;
-        simulated_load_config.large_transaction_size_bytes = 10_000;
+        simulated_load_config.large_transaction_min_size_bytes = 5_000;
+        simulated_load_config.large_transaction_max_size_bytes = 10_000;
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.transfer_object_weight = 0;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 0;
+        simulated_load_config.randomized_transaction_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        simulated_load_config.composite_weight = 0;
+        simulated_load_config.gas_double_spend_weight = 0;
+        info!("Simulated load config: {:?}", simulated_load_config);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+    }
+
+    /// Runs the large-transaction workload with address balance gas and asserts it generates load.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_large_transaction_address_balance_gas() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        simulated_load_config.remote_env = false;
+        simulated_load_config.large_transaction_weight = 1;
+        simulated_load_config.large_transaction_min_size_bytes = 5_000;
+        simulated_load_config.large_transaction_max_size_bytes = 10_000;
+        simulated_load_config.large_transaction_gas = LargeTransactionGas::AddressBalance;
         simulated_load_config.shared_counter_weight = 0;
         simulated_load_config.transfer_object_weight = 0;
         simulated_load_config.delegation_weight = 0;
@@ -1262,7 +1301,9 @@ mod test {
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
         large_transaction_weight: u32,
-        large_transaction_size_bytes: u64,
+        large_transaction_min_size_bytes: u64,
+        large_transaction_max_size_bytes: u64,
+        large_transaction_gas: LargeTransactionGas,
         slow_weight: u32,
         transfer_object_weight: u32,
         delegation_weight: u32,
@@ -1295,7 +1336,9 @@ mod test {
                 // gets ~5% of the traffic; integer weights can't express 5% otherwise.
                 shared_counter_weight: 2,
                 large_transaction_weight: 0,
-                large_transaction_size_bytes: 100_000,
+                large_transaction_min_size_bytes: 0,
+                large_transaction_max_size_bytes: 100_000,
+                large_transaction_gas: LargeTransactionGas::Coin,
                 slow_weight: 2,
                 transfer_object_weight: 2,
                 num_transfer_accounts: 2,
@@ -1547,7 +1590,12 @@ mod test {
             num_workers,
             num_transfer_accounts: config.num_transfer_accounts,
             weights,
-            large_transaction_size_bytes: config.large_transaction_size_bytes,
+            large_transaction_size: LargeTransactionSizeRange::new(
+                config.large_transaction_min_size_bytes,
+                config.large_transaction_max_size_bytes,
+            )
+            .unwrap(),
+            large_transaction_gas: config.large_transaction_gas,
             adversarial_cfg,
             expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,
