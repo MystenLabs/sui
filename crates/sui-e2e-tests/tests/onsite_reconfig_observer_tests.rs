@@ -13,6 +13,7 @@ use sui_macros::sim_test;
 async fn test_onsite_reconfig_observer_basic() {
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_epoch_duration_ms(10000)
         .build()
         .await;

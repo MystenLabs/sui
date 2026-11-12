@@ -2731,7 +2731,10 @@ async fn test_consolidate_multi_validator_isolation() {
     use futures::TryStreamExt;
     use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
 
@@ -4180,7 +4183,10 @@ async fn test_redeem_multi_validator_isolation() {
     use futures::TryStreamExt;
     use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -5179,7 +5185,10 @@ async fn test_e2e_parse_consolidate_2_stakes_2_fss() {
 /// objects appear in the parse output.
 #[tokio::test]
 async fn test_e2e_parse_consolidate_multi_validator_isolation() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -5528,7 +5537,10 @@ async fn test_e2e_block_consolidate_2_stakes_2_fss() {
 
 #[tokio::test]
 async fn test_e2e_block_consolidate_multi_validator_isolation() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -5901,7 +5913,10 @@ async fn test_e2e_parse_merge_redeem_three_fss_atmost() {
 /// Multi-validator: FSS on both A and B; redeem only from A.
 #[tokio::test]
 async fn test_e2e_parse_merge_redeem_multi_validator_isolation() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
@@ -6255,7 +6270,10 @@ async fn test_e2e_block_merge_redeem_three_fss_atmost() {
 
 #[tokio::test]
 async fn test_e2e_block_merge_redeem_multi_validator_isolation() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
     let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();

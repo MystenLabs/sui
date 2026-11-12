@@ -512,6 +512,30 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             }
         };
 
+        // A per-validator setting cannot vary across a single validator, so a caller that sets
+        // one expects a larger committee.
+        if validators.len() == 1 {
+            const MSG: &str = "is per-validator but the committee has a single validator";
+            assert!(
+                !matches!(
+                    self.supported_protocol_versions_config,
+                    Some(ProtocolVersionsConfig::PerValidator(_))
+                ),
+                "supported protocol versions {MSG}"
+            );
+            assert!(
+                !matches!(
+                    self.global_state_hash_v2_enabled_config,
+                    Some(GlobalStateHashV2EnabledConfig::PerValidator(_))
+                ),
+                "global state hash v2 {MSG}"
+            );
+            assert!(
+                self.peer_deny_sync_config.is_none(),
+                "peer deny sync config {MSG}"
+            );
+        }
+
         let genesis_config = self
             .genesis_config
             .unwrap_or_else(GenesisConfig::for_local_testing);

@@ -125,7 +125,10 @@ async fn test_hash_collections() {
 // repeatable and deterministic.
 #[sim_test]
 async fn test_net_determinism() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
 
     let txn = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let digest = test_cluster

@@ -263,6 +263,7 @@ async fn test_conflicting_jwks() {
     // The scan below reads the contents of every checkpoint the fullnode has
     // executed, so pruning must not remove the early epochs first.
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_epoch_duration_ms(15000)
         .with_jwk_fetch_interval(Duration::from_secs(5))
         .disable_fullnode_pruning()

@@ -29,7 +29,12 @@ async fn test_object_balance_withdraw_stress() {
         cfg
     });
 
-    let test_cluster = Arc::new(TestClusterBuilder::new().build().await);
+    let test_cluster = Arc::new(
+        TestClusterBuilder::new()
+            .with_num_validators(4)
+            .build()
+            .await,
+    );
     let sender = test_cluster.get_address_0();
 
     // Publish the object_balance package from examples.

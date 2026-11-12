@@ -69,7 +69,7 @@ use tracing::{error, info};
 
 pub mod addr_balance_test_env;
 
-const NUM_VALIDATOR: usize = 4;
+const NUM_VALIDATOR: usize = 1;
 // Keep direct test submissions bounded like the production TransactionOrchestrator.
 const TRANSACTION_FINALITY_TIMEOUT: Duration = Duration::from_secs(90);
 
@@ -253,6 +253,11 @@ impl TestCluster {
     }
 
     pub fn random_node_restarter(self: &Arc<Self>) -> RandomNodeRestarter {
+        let committee_size = self.get_validator_pubkeys().len();
+        assert!(
+            committee_size >= 4,
+            "stopping one of {committee_size} committee members loses quorum; a committee of at least 4 is needed"
+        );
         RandomNodeRestarter::new(self.clone())
     }
 
@@ -1231,11 +1236,12 @@ impl Drop for RandomNodeRestarter {
     }
 }
 
-/// Replacement protocol config values. Each value replaces the protocol config value only in
-/// versions where that value is set.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// TestSpeedOverrides holds replacement protocol config values. Each value replaces the protocol
+/// config value only in versions where that value is set.
+#[derive(Clone, Copy, Debug)]
 pub struct TestSpeedOverrides {
-    /// Fewer threshold BLS shares make each randomness round cheaper.
+    /// Fewer threshold BLS shares make each randomness round cheaper. The reduction divides
+    /// voting power by at most 40, so any bound below about 250 gives about 250 shares.
     pub random_beacon_reduction_lower_bound: Option<u32>,
     pub random_beacon_min_round_interval_ms: Option<u64>,
     pub min_checkpoint_interval_ms: Option<u64>,
@@ -1271,7 +1277,7 @@ impl TestSpeedOverrides {
 /// `with_production_config` is called. They cut the CPU cost of randomness and of
 /// checkpoint signature verification, which dominate idle simulated networks. The checkpoint
 /// interval is also the congestion budget period consensus uses before it has measured the
-/// commit rate, so the first commits of an epoch get a larger budget than in production.
+/// commit rate, so the first commit of each epoch gets a larger budget than in production.
 pub const DEFAULT_TEST_SPEED_OVERRIDES: TestSpeedOverrides = TestSpeedOverrides {
     random_beacon_reduction_lower_bound: Some(100),
     random_beacon_min_round_interval_ms: Some(2000),
@@ -1461,6 +1467,8 @@ impl TestClusterBuilder {
 
     /// Set the number of default validators to spawn. Can be overridden by `with_validators`, if
     /// you need to provide more specific genesis configs for each validator.
+    /// The default is 1. Use more only to test multi-validator behavior, such as consensus,
+    /// reconfiguration, quorum aggregation, or cross-validator fork detection.
     pub fn with_num_validators(mut self, num: usize) -> Self {
         self.num_validators = Some(num);
         self
