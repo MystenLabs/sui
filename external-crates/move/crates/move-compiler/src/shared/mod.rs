@@ -364,10 +364,10 @@ impl CompilationEnv {
 
     fn root_filter_stack(&self) -> FilterStack {
         let mut stack = FilterStack::new();
+        stack.push(self.root_scope.clone());
         if self.flags.silence_warnings() {
             stack.push(filter::all_filter_scope());
         }
-        stack.push(self.root_scope.clone());
         stack
     }
 
@@ -470,6 +470,15 @@ impl CompilationEnv {
     ) {
         let filter_attr = self.known_filters.entry(attr_name).or_default();
         for (name, ids) in filters {
+            if let Some(existing) = filter_attr.get(&name) {
+                if existing == &ids {
+                    continue;
+                }
+                assert!(
+                    filter::aggregate_filter_ids(existing) && filter::aggregate_filter_ids(&ids),
+                    "duplicate custom diagnostic filter name {name}"
+                );
+            }
             let existing = filter_attr.entry(name).or_default();
             for f in ids {
                 if f.category != DIAGNOSTIC_FILTER_WILDCARD && f.code != DIAGNOSTIC_FILTER_WILDCARD

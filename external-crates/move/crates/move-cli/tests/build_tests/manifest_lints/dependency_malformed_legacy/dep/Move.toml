@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "manifest_lints"
+name = "dep"
 edition = "2024"
 
 [addresses]
-test = "0x0"
+dep = "0x42"
 
 [lints]
-all = "allow"
-abort_without_constant = "deny"
+abort_without_constant = "banana"

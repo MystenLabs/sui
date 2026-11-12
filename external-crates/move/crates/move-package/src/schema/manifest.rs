@@ -55,7 +55,7 @@ pub struct DiagnosticFilterEntries {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DiagnosticConfigObject {
+pub struct DiagnosticConfig {
     pub warning_filters: DiagnosticFilterEntries,
     pub lint_filters: DiagnosticFilterEntries,
 }
@@ -148,7 +148,7 @@ impl DiagnosticFilterEntries {
     }
 }
 
-impl DiagnosticConfigObject {
+impl DiagnosticConfig {
     /// Resolves the selected profile and rejects invalid diagnostic names in any profile.
     pub fn resolve_for_profile(
         &self,
@@ -436,7 +436,7 @@ mod tests {
     use insta::assert_snapshot;
 
     use super::{
-        DefaultDependency, DiagnosticConfigObject, DiagnosticFilterEntries, DiagnosticProfile,
+        DefaultDependency, DiagnosticConfig, DiagnosticFilterEntries, DiagnosticProfile,
         ExternalDependency, ManifestDependencyInfo, ManifestGitDependency, ParsedManifest,
         ReplacementDependency,
     };
@@ -523,7 +523,7 @@ mod tests {
                 toml_edit::de::from_str::<DiagnosticFilterEntries>(&serialized)?
             );
         }
-        DiagnosticConfigObject {
+        DiagnosticConfig {
             warning_filters: manifest.warnings,
             lint_filters: manifest.lints,
         }

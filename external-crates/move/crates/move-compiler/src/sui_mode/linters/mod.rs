@@ -217,7 +217,15 @@ pub fn linter_visitors_with_config(
     level: LintLevel,
     config: &DiagnosticFilterConfig,
 ) -> Vec<Visitor> {
-    config.select_lints(level, DEFAULT_LINTS, OPTIONAL_LINTS)
+    config.select_lints(
+        level,
+        &[
+            SUI_LINT_WARNING_FILTERS,
+            crate::linters::CORE_LINT_WARNING_FILTERS,
+        ],
+        DEFAULT_LINTS,
+        OPTIONAL_LINTS,
+    )
 }
 
 /// Returns abilities of a given type, if any.

@@ -7,7 +7,7 @@
 //! keyed by [`FilterTarget`] (which encodes specificity) and associated with a [`FilterKind`].
 //!
 //! Resolution walks the stack innermost-first; within a scope, the most specific match wins
-//! (exact diagnostic > category > origin > all-for-dependency).
+//! (exact diagnostic > category > origin > all).
 //!
 //! `#[expect]` fulfillment lives on the scope itself (one `AtomicBool` per expect entry),
 //! so the same [`FilterScope`] re-pushed across compilation passes shares state.
@@ -35,8 +35,8 @@ use move_symbol_pool::Symbol;
 use crate::diagnostics::{
     Diagnostic,
     codes::{
-        Category, CodeGeneration, Declarations, DiagnosticOrigin, DiagnosticsID, Severity,
-        TypeSafety, UnusedItem,
+        Category, CodeGeneration, DIAGNOSTIC_FILTER_WILDCARD, Declarations, DiagnosticOrigin,
+        DiagnosticsID, Severity, TypeSafety, UnusedItem,
     },
     config::KnownDiagnosticFilterGroup,
 };
@@ -131,8 +131,8 @@ enum FilterTarget {
     Category(DiagnosticOrigin, u8),
     /// Matches all diagnostics from the given origin.
     Origin(DiagnosticOrigin),
-    /// Matches every diagnostic regardless of origin. Used for dependency compilation.
-    AllForDependency,
+    /// Matches every diagnostic regardless of origin.
+    All,
 }
 
 impl From<DiagnosticsID> for FilterTarget {
@@ -210,7 +210,7 @@ static EMPTY_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
 });
 
 static ALL_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let target = FilterTarget::Origin(DiagnosticOrigin::Compiler);
+    let target = FilterTarget::All;
     FilterScope(Arc::new(FilterScopeData {
         filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), FilterKind::Allow))]),
         expects: vec![],
@@ -218,7 +218,7 @@ static ALL_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
 });
 
 static DEPENDENCY_DROP_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let target = FilterTarget::AllForDependency;
+    let target = FilterTarget::All;
     FilterScope(Arc::new(FilterScopeData {
         filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), FilterKind::Drop))]),
         expects: vec![],
@@ -378,26 +378,42 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
         ]
     });
 
-fn build_known_filter_map<'known>(
+fn known_filter_map<'known>(
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
 ) -> BTreeMap<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>> {
     let mut known = BTreeMap::<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>::new();
     for (name, ids) in COMPILER_KNOWN_FILTERS.iter() {
-        known
+        let previous = known
             .entry(None)
             .or_default()
             .insert(Symbol::from(*name), ids.to_vec());
+        assert!(
+            previous.is_none(),
+            "duplicate compiler diagnostic filter name {name}"
+        );
     }
     for (prefix, filters) in custom_known {
         let known_for_prefix = known.entry(*prefix).or_default();
         for (name, ids) in filters {
-            known_for_prefix
-                .entry(*name)
-                .or_default()
-                .extend_from_slice(ids);
+            if let Some(existing) = known_for_prefix.get_mut(name) {
+                if existing == ids {
+                    continue;
+                }
+                assert!(
+                    aggregate_filter_ids(existing) && aggregate_filter_ids(ids),
+                    "duplicate custom diagnostic filter name {name}"
+                );
+                existing.extend_from_slice(ids);
+            } else {
+                known_for_prefix.insert(*name, ids.clone());
+            }
         }
     }
     known
+}
+
+pub(crate) fn aggregate_filter_ids(ids: &[DiagnosticsID]) -> bool {
+    !ids.is_empty() && ids.iter().all(|id| id.code == DIAGNOSTIC_FILTER_WILDCARD)
 }
 
 /// Rejects names absent from the compiler and supplied custom registries.
@@ -405,7 +421,7 @@ pub fn validate_filter_names<'name, 'known>(
     configured: impl IntoIterator<Item = (FilterPrefix, &'name str)>,
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
 ) -> Result<(), Vec<(FilterPrefix, &'name str)>> {
-    let known = build_known_filter_map(custom_known);
+    let known = known_filter_map(custom_known);
     let mut unknown = vec![];
     for (prefix, name) in configured {
         if known
@@ -429,7 +445,7 @@ pub(crate) fn resolve_filter_names<'known>(
     configured: impl IntoIterator<Item = (FilterPrefix, FilterName, FilterKind)>,
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
 ) -> Result<FilterScope, (FilterPrefix, FilterName)> {
-    let known = build_known_filter_map(custom_known);
+    let known = known_filter_map(custom_known);
     let mut entries = BTreeMap::new();
     for (prefix, name, kind) in configured {
         let Some(ids) = known
@@ -538,10 +554,11 @@ impl FilterStack {
     }
 
     pub(crate) fn push(&mut self, scope: FilterScope) {
-        if self.stack.iter().any(|s| {
-            s.0.filter_entries
-                .contains_key(&FilterTarget::AllForDependency)
-        }) {
+        if self
+            .stack
+            .iter()
+            .any(|s| s.0.filter_entries.contains_key(&FilterTarget::All))
+        {
             // If the stack already contains a dependency-drop scope, push empty to avoid
             // spurious expect-fulfillment tracking in dependency code.
             self.stack.push(EMPTY_FILTER_SCOPE.clone());
@@ -601,7 +618,7 @@ impl FilterStack {
             FilterTarget::Diagnostic(key),
             FilterTarget::Category(key.origin, key.category),
             FilterTarget::Origin(key.origin),
-            FilterTarget::AllForDependency,
+            FilterTarget::All,
         ];
         for scope in self.stack.iter().rev() {
             let mut best: Option<(usize, FilterTarget, &Spanned<FilterKind>)> = None;
