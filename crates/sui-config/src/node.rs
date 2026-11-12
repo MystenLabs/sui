@@ -322,7 +322,9 @@ pub struct ConsensusTransactionPoolConfig {
 
     /// Drop user-lane entries that have waited at least this many seconds,
     /// bounding how long a transaction sits in the pool rather than only how many
-    /// are queued. Defaults to 60 seconds when unset; 0 disables expiry.
+    /// are queued. Defaults to 60 seconds when unset or `~`; 0 disables expiry.
+    /// A value below the longest staggered-submission hold (about 5 seconds)
+    /// expires held entries before this validator can propose them.
     pub max_queue_age_secs: Option<u64>,
 }
 
@@ -350,6 +352,8 @@ impl ConsensusTransactionPoolConfig {
                 .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
         })
     }
+
+    pub const MIN_RECOMMENDED_MAX_QUEUE_AGE: Duration = Duration::from_secs(10);
 
     pub fn max_queue_age(&self) -> Option<Duration> {
         match self.max_queue_age_secs {
@@ -1977,7 +1981,6 @@ mod tests {
         };
         assert_eq!(configured.max_queue_age(), Some(Duration::from_secs(120)));
 
-        // Zero disables expiry rather than evicting every queued entry.
         let disabled = ConsensusTransactionPoolConfig {
             max_queue_age_secs: Some(0),
             ..Default::default()

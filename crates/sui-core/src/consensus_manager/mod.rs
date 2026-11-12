@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use sui_config::node::ConsensusTransactionPoolConfig;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_network::endpoint_manager::{AddressSource, ConsensusAddressUpdater};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -44,7 +45,7 @@ use sui_types::{
 };
 use tokio::sync::{Mutex, broadcast};
 use tokio::time::{sleep, timeout};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[cfg(test)]
 #[path = "../unit_tests/consensus_manager_tests.rs"]
@@ -307,6 +308,16 @@ impl ConsensusManager {
         let transaction_pool: Option<Arc<dyn TransactionPool>> = if let Some(context) = pool_context
         {
             let config = &node_config.consensus_transaction_pool;
+            if let Some(ttl) = config.max_queue_age()
+                && ttl < ConsensusTransactionPoolConfig::MIN_RECOMMENDED_MAX_QUEUE_AGE
+            {
+                warn!(
+                    ?ttl,
+                    "consensus-transaction-pool.max-queue-age-secs is below {:?} and can expire \
+                     staggered entries before this validator proposes them",
+                    ConsensusTransactionPoolConfig::MIN_RECOMMENDED_MAX_QUEUE_AGE
+                );
+            }
             let pool = Arc::new(ConsensusTransactionPool::new(
                 epoch_store.clone(),
                 context.cache_writer().clone(),

@@ -960,28 +960,22 @@ mod tests {
         assert!(rejected_rx.try_recv().is_err());
     }
 
-    fn entry_at(
-        gas_price: u64,
-        enqueue_time: Instant,
-    ) -> (
-        QueueEntry,
-        oneshot::Receiver<Result<Vec<ConsensusPosition>, tonic::Status>>,
-    ) {
-        let (tx, rx) = oneshot::channel();
-        (
-            QueueEntry {
-                gas_price,
-                transactions: vec![],
-                position_sender: tx,
-                submitter_client_addr: None,
-                enqueue_time,
-            },
-            rx,
-        )
+    fn entry_at(gas_price: u64, enqueue_time: Instant) -> QueueEntry {
+        let mut entry = make_test_entry(gas_price).0;
+        entry.enqueue_time = enqueue_time;
+        entry
     }
 
     fn expired_at(now: Instant, ttl: Duration) -> impl FnMut(&mut QueueEntry) -> bool {
         move |entry| now.saturating_duration_since(entry.enqueue_time) >= ttl
+    }
+
+    fn remaining(q: &mut PriorityAdmissionQueue<QueueEntry>) -> Vec<(u64, Instant)> {
+        let len = q.len();
+        q.pop_batch(len)
+            .into_iter()
+            .map(|entry| (entry.gas_price, entry.enqueue_time))
+            .collect()
     }
 
     #[test]
@@ -989,16 +983,17 @@ mod tests {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics.clone());
         let now = Instant::now();
-        let (mut e1, _rx1) = entry_at(100, now);
-        e1.transactions = vec![ConsensusTransaction::new_end_of_publish(
+        let mut keyed = entry_at(100, now);
+        keyed.transactions = vec![ConsensusTransaction::new_end_of_publish(
             sui_types::base_types::AuthorityName::ZERO,
         )];
-        let (e2, _rx2) = entry_at(200, now);
-        q.insert(e1).unwrap();
-        q.insert(e2).unwrap();
+        q.insert(keyed).unwrap();
+        q.insert(entry_at(200, now)).unwrap();
 
-        let ttl = Duration::from_secs(60);
-        let popped = q.pop_front_while(expired_at(now + Duration::from_secs(120), ttl));
+        let popped = q.pop_front_while(expired_at(
+            now + Duration::from_secs(120),
+            Duration::from_secs(60),
+        ));
         assert_eq!(popped.len(), 2);
         assert_eq!(q.len(), 0);
         assert_eq!(metrics.queue_depth.get(), 0);
@@ -1011,8 +1006,8 @@ mod tests {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
         let now = Instant::now();
-        q.insert(entry_at(100, now).0).unwrap();
-        q.insert(entry_at(200, now).0).unwrap();
+        q.insert(entry_at(100, now)).unwrap();
+        q.insert(entry_at(200, now)).unwrap();
 
         let popped = q.pop_front_while(expired_at(now, Duration::from_secs(60)));
         assert!(popped.is_empty());
@@ -1020,40 +1015,37 @@ mod tests {
     }
 
     #[test]
-    fn pop_front_while_drops_only_aged_entries_across_levels() {
+    fn pop_front_while_pops_the_aged_prefix_of_every_level() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
         let now = Instant::now();
-        q.insert(entry_at(100, now).0).unwrap();
-        q.insert(entry_at(200, now + Duration::from_secs(120)).0)
+        let ttl = Duration::from_secs(60);
+        let fresh = now + Duration::from_secs(120);
+        // Level 100 is entirely fresh and sits below level 200, so a sweep that stops at
+        // the first fresh level never reaches 200.
+        q.insert(entry_at(100, fresh)).unwrap();
+        // Level 200 holds two adjacent aged entries ahead of a fresh one.
+        q.insert(entry_at(200, now)).unwrap();
+        q.insert(entry_at(200, now + Duration::from_secs(1)))
             .unwrap();
+        q.insert(entry_at(200, fresh)).unwrap();
+        // Level 300 ends with an aged entry behind a fresh one, which stays queued.
+        q.insert(entry_at(300, fresh)).unwrap();
+        q.insert(entry_at(300, now)).unwrap();
 
-        let popped = q.pop_front_while(expired_at(
-            now + Duration::from_secs(60),
-            Duration::from_secs(60),
-        ));
-        assert_eq!(popped.len(), 1);
-        assert_eq!(popped[0].gas_price(), 100);
-        assert_eq!(q.len(), 1);
-    }
-
-    #[test]
-    fn pop_front_while_stops_at_first_fresh_entry_in_a_level() {
-        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
-        let mut q = PriorityAdmissionQueue::new(10, metrics);
-        let now = Instant::now();
-        let (fresh_behind_old, _) = entry_at(100, now + Duration::from_secs(120));
-        let (old_behind_fresh, _) = entry_at(100, now);
-        q.insert(entry_at(100, now).0).unwrap();
-        q.insert(fresh_behind_old).unwrap();
-        q.insert(old_behind_fresh).unwrap();
-
-        let popped = q.pop_front_while(expired_at(
-            now + Duration::from_secs(60),
-            Duration::from_secs(60),
-        ));
-        assert_eq!(popped.len(), 1);
-        assert_eq!(q.len(), 2);
+        let popped = q.pop_front_while(expired_at(now + ttl + Duration::from_secs(1), ttl));
+        let popped: Vec<_> = popped
+            .into_iter()
+            .map(|entry| (entry.gas_price, entry.enqueue_time))
+            .collect();
+        assert_eq!(
+            popped,
+            vec![(200, now), (200, now + Duration::from_secs(1))]
+        );
+        assert_eq!(
+            remaining(&mut q),
+            vec![(300, fresh), (300, now), (200, fresh), (100, fresh)]
+        );
     }
 
     fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {

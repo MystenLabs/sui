@@ -61,6 +61,11 @@ const MAX_PENDING_PINGS: usize = 1_024;
 // large signals that proposal progress is stuck and needs operator attention.
 const SYSTEM_LANE_WARN_THRESHOLD: usize = 10_000;
 
+// Bounds the expired entries one proposal resolves, because resolution runs on the
+// proposer before the block is built. After a long proposal pause, the remaining
+// expired entries are resolved by later proposals.
+const MAX_EXPIRED_PER_PROPOSAL: usize = 1_000;
+
 /// Resolves with the submission's final consensus positions once the proposer
 /// includes it in a block, or with an error on eviction or epoch end.
 pub type PositionReceiver = oneshot::Receiver<SuiResult<Vec<ConsensusPosition>>>;
@@ -386,7 +391,8 @@ pub struct ConsensusTransactionPool {
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
     stagger_quota: StaggerQuota,
-    /// When set, user-lane entries queued longer than this are dropped at proposal time.
+    /// When set, user-lane entries queued for at least this long are resolved with a
+    /// retriable error at proposal time.
     max_queue_age: Option<Duration>,
     inner: Arc<Mutex<Inner>>,
 }
@@ -404,6 +410,10 @@ impl ConsensusTransactionPool {
         assert!(
             max_pending_transactions > 0,
             "consensus transaction pool max_pending_transactions must be > 0"
+        );
+        assert!(
+            max_queue_age.is_none_or(|ttl| !ttl.is_zero()),
+            "consensus transaction pool max_queue_age must be > 0"
         );
         assert!(
             epoch_store
@@ -820,7 +830,7 @@ impl ConsensusTransactionPool {
 
     /// Resolves a user entry the sweep removed. An entry already committed elsewhere, or
     /// one whose owned inputs were consumed, gets its final outcome rather than a retriable
-    /// overload error, so the submitter does not resubmit a transaction that cannot land.
+    /// overload error, so the submitter does not resubmit a transaction that cannot succeed.
     fn resolve_swept_user_entry(&self, mut entry: PoolEntry) {
         self.decrement_lane_metrics("user", &entry);
         if let Some(method) = all_processed(&mut entry.processed) {
@@ -829,15 +839,12 @@ impl ConsensusTransactionPool {
             .cache_writer
             .validate_owned_object_versions(&entry.owned_object_refs)
         {
-            self.metrics
-                .pool_rejected_at_proposal
-                .with_label_values(&[error.as_inner().to_variant_name()])
-                .inc();
-            entry.ack.resolve_error(error);
+            self.resolve_rejected(entry, error);
         } else {
             self.metrics.expired.inc();
-            // Longer than the recent-submission dedup window, so a retry that honours the
-            // hint is not rejected as already submitted.
+            // The hint exceeds the default 1 s recent-submission dedup window
+            // (`recent_submission_dedup_window_ms`), so a retry that honours it is not
+            // rejected as already submitted. A larger configured window can still reject it.
             entry.ack.resolve_error(
                 SuiErrorKind::ValidatorOverloadedRetryAfter {
                     retry_after_secs: 2,
@@ -845,6 +852,14 @@ impl ConsensusTransactionPool {
                 .into(),
             );
         }
+    }
+
+    fn resolve_rejected(&self, entry: PoolEntry, error: SuiError) {
+        self.metrics
+            .pool_rejected_at_proposal
+            .with_label_values(&[error.as_inner().to_variant_name()])
+            .inc();
+        entry.ack.resolve_error(error);
     }
 
     fn resolve_already_processed(&self, entry: PoolEntry, stage: &str, method: ProcessedMethod) {
@@ -1105,7 +1120,6 @@ impl TransactionPool for ConsensusTransactionPool {
             .epoch_store
             .get_reconfig_state_read_lock_guard()
             .should_accept_user_certs();
-        let max_queue_age = self.max_queue_age;
         #[allow(unused_mut)]
         let mut disabled = false;
         fail_point_if!("consensus_transaction_pool_disable_take", || {
@@ -1186,15 +1200,22 @@ impl TransactionPool for ConsensusTransactionPool {
 
         let now = Instant::now();
         let mut excluded = Vec::new();
-        let mut swept_user = Vec::new();
         // The sweep runs on every proposal, independent of whether user transactions are
-        // drained this round. A saturated system lane leaves limit_reached non-empty and
-        // skips the drain below, but that overload is exactly when aged entries must still
-        // be shed, so the sweep is not gated on it.
-        if let (Some(ttl), UserLane::Open(user)) = (max_queue_age, &mut pool.user) {
-            swept_user = user
-                .pop_front_while(|entry| now.saturating_duration_since(entry.ack.created) >= ttl);
-        }
+        // drained this round. A saturated system lane sets limit_reached to a block limit and
+        // skips the drain below. Expired entries must still be removed during that overload,
+        // so the sweep does not depend on limit_reached.
+        let swept_user = match (self.max_queue_age, &mut pool.user) {
+            (Some(ttl), UserLane::Open(user)) => {
+                let mut swept = 0;
+                user.pop_front_while(|entry| {
+                    let expired = swept < MAX_EXPIRED_PER_PROPOSAL
+                        && now.saturating_duration_since(entry.ack.created) >= ttl;
+                    swept += usize::from(expired);
+                    expired
+                })
+            }
+            _ => Vec::new(),
+        };
         if !user_take_disabled
             && matches!(limit_reached, LimitReached::AllTransactionsIncluded)
             && let UserLane::Open(user) = &mut pool.user
@@ -1295,11 +1316,7 @@ impl TransactionPool for ConsensusTransactionPool {
         for mut entry in excluded {
             self.decrement_lane_metrics("user", &entry);
             if let Some(error) = entry.rejection.take() {
-                self.metrics
-                    .pool_rejected_at_proposal
-                    .with_label_values(&[error.as_inner().to_variant_name()])
-                    .inc();
-                entry.ack.resolve_error(error);
+                self.resolve_rejected(entry, error);
                 continue;
             }
             let method = all_processed(&mut entry.processed)
@@ -1710,21 +1727,22 @@ mod tests {
 
     // The budget is installed directly because max_transactions_in_block_bytes() is fixed
     // under msim and ignores protocol config overrides.
-    async fn test_state_and_rate_limited_pool(
-        max_block_bytes: u64,
-        max_user_bytes_per_second: u64,
+    /// `byte_budget` is `(max_block_bytes, max_user_bytes_per_second)`.
+    async fn test_state_and_configured_pool(
+        byte_budget: Option<(u64, u64)>,
+        max_queue_age: Option<Duration>,
     ) -> (Arc<AuthorityState>, Arc<ConsensusTransactionPool>) {
         let state = TestAuthorityBuilder::new().build().await;
         let pool = Arc::new(ConsensusTransactionPool::new(
             state.epoch_store_for_testing().clone(),
             state.get_cache_writer().clone(),
             10,
-            Some(max_user_bytes_per_second),
-            None,
+            byte_budget.map(|(_, per_second)| per_second),
+            max_queue_age,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
-        {
+        if let Some((max_block_bytes, max_user_bytes_per_second)) = byte_budget {
             let mut inner = pool.inner.lock();
             let Inner::Open(open) = &mut *inner else {
                 unreachable!("new pool must be open");
@@ -1738,21 +1756,12 @@ mod tests {
         (state, pool)
     }
 
-    async fn test_state_and_ttl_pool(
-        capacity: usize,
-        max_queue_age: Duration,
-    ) -> (Arc<AuthorityState>, Arc<ConsensusTransactionPool>) {
-        let state = TestAuthorityBuilder::new().build().await;
-        let pool = Arc::new(ConsensusTransactionPool::new(
-            state.epoch_store_for_testing().clone(),
-            state.get_cache_writer().clone(),
-            capacity,
-            None,
-            Some(max_queue_age),
-            Arc::new(AdmissionQueueMetrics::new_for_tests()),
-            ConsensusAdapterMetrics::new_test(),
-        ));
-        (state, pool)
+    fn user_byte_budget_tokens(pool: &ConsensusTransactionPool) -> f64 {
+        let inner = pool.inner.lock();
+        let Inner::Open(open) = &*inner else {
+            unreachable!("pool must be open");
+        };
+        open.user_byte_budget.as_ref().unwrap().tokens
     }
 
     fn transaction() -> ConsensusTransaction {
@@ -1885,7 +1894,7 @@ mod tests {
     async fn take_rate_limits_user_bytes_but_not_system() {
         let serialized_len = bcs::to_bytes(&transaction()).unwrap().len();
         let block_bytes = u64::try_from(serialized_len * 2).unwrap();
-        let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+        let (_state, pool) = test_state_and_configured_pool(Some((block_bytes, 1)), None).await;
         let epoch = pool.epoch();
         for gas_price in [10, 20, 30] {
             let (_receiver, _) = pool
@@ -1917,7 +1926,7 @@ mod tests {
     #[sim_test]
     async fn expiry_runs_when_system_lane_saturates_the_block() {
         let ttl = Duration::from_secs(1);
-        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let (state, pool) = test_state_and_configured_pool(None, Some(ttl)).await;
         let epoch = pool.epoch();
 
         let (user_receiver, _) = pool
@@ -1925,11 +1934,10 @@ mod tests {
             .unwrap();
         assert_eq!(pool.queue_depth("user"), 1);
 
-        // Two system transactions so a count-limited take fills the block from the system
-        // lane alone, leaving limit_reached != AllTransactionsIncluded and skipping the user
-        // drain.
+        // With two queued system transactions, a take limited to one transaction fills the
+        // block from the system lane and skips the user drain.
         let _s1 = pool.submit(epoch, &[transaction()]).unwrap();
-        let _s2 = pool.submit(epoch, &[transaction()]).unwrap();
+        let mut s2 = pool.submit(epoch, &[transaction()]).unwrap();
 
         tokio::time::sleep(ttl + Duration::from_secs(1)).await;
 
@@ -1938,9 +1946,9 @@ mod tests {
         assert_eq!(limit, LimitReached::MaxNumOfTransactions);
         ack(block(1));
 
-        // Expiry ran despite the saturated system lane: the aged user entry was evicted and
-        // its submitter received the retriable overload error.
         assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(pool.queue_depth("system"), 1);
+        assert!(s2.try_recv().is_err());
         assert!(matches!(
             user_receiver.await.unwrap().unwrap_err().as_inner(),
             SuiErrorKind::ValidatorOverloadedRetryAfter {
@@ -1951,9 +1959,10 @@ mod tests {
     }
 
     #[sim_test]
-    async fn expiry_releases_bytes_and_dedup_keys() {
+    async fn expiry_releases_bytes_and_dedup_keys_without_refunding_budget() {
         let ttl = Duration::from_secs(1);
-        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let block_bytes = 1 << 20;
+        let (state, pool) = test_state_and_configured_pool(Some((block_bytes, 1)), Some(ttl)).await;
         let epoch = pool.epoch();
         let user_tx = user_transaction(&state);
 
@@ -1972,6 +1981,7 @@ mod tests {
             0
         );
         assert_eq!(pool.metrics.expired.get(), 1);
+        assert_eq!(user_byte_budget_tokens(&pool), block_bytes as f64);
         assert!(matches!(
             receiver.await.unwrap().unwrap_err().as_inner(),
             SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
@@ -1986,7 +1996,7 @@ mod tests {
     #[sim_test]
     async fn expiry_reports_already_processed_entries_as_processing() {
         let ttl = Duration::from_secs(1);
-        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let (state, pool) = test_state_and_configured_pool(None, Some(ttl)).await;
         let epoch = pool.epoch();
         let processed = user_transaction(&state);
         let (receiver, _) = pool.try_insert(epoch, 10, vec![processed.clone()]).unwrap();
@@ -2003,6 +2013,11 @@ mod tests {
             pool.already_processed_count("sweep", "consensus_message"),
             1
         );
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(
+            pool.metrics.pool_bytes.with_label_values(&["user"]).get(),
+            0
+        );
         assert_eq!(pool.metrics.expired.get(), 0);
         assert!(matches!(
             receiver.await.unwrap().unwrap_err().as_inner(),
@@ -2013,20 +2028,20 @@ mod tests {
 
     #[sim_test]
     async fn requeued_entry_keeps_its_age() {
-        let ttl = Duration::from_secs(2);
-        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let ttl = Duration::from_secs(10);
+        let (state, pool) = test_state_and_configured_pool(None, Some(ttl)).await;
         let epoch = pool.epoch();
         let (receiver, _) = pool
             .try_insert(epoch, 10, vec![user_transaction(&state)])
             .unwrap();
 
-        tokio::time::sleep(ttl - Duration::from_millis(500)).await;
+        tokio::time::sleep(ttl - Duration::from_secs(1)).await;
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
         assert_eq!(transactions.len(), 1);
         drop(ack);
         assert_eq!(pool.queue_depth("user"), 1);
 
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
         let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
         assert!(transactions.is_empty());
         drop(ack);
@@ -2041,7 +2056,7 @@ mod tests {
     #[sim_test]
     async fn expiry_reports_consumed_owned_inputs_as_rejected() {
         let ttl = Duration::from_secs(1);
-        let (state, pool) = test_state_and_ttl_pool(10, ttl).await;
+        let (state, pool) = test_state_and_configured_pool(None, Some(ttl)).await;
         let epoch = pool.epoch();
         let (sender, _) = get_key_pair::<AccountKeyPair>();
         let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
@@ -2082,7 +2097,7 @@ mod tests {
     async fn dropped_ack_refunds_user_byte_budget() {
         let serialized_len = bcs::to_bytes(&transaction()).unwrap().len();
         let block_bytes = u64::try_from(serialized_len).unwrap();
-        let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+        let (_state, pool) = test_state_and_configured_pool(Some((block_bytes, 1)), None).await;
         let epoch = pool.epoch();
         let (_receiver, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
 
@@ -2512,7 +2527,7 @@ mod tests {
     #[sim_test]
     async fn take_rejects_entries_with_stale_owned_objects_without_consuming_budget() {
         let block_bytes = 1 << 20;
-        let (state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+        let (state, pool) = test_state_and_configured_pool(Some((block_bytes, 1)), None).await;
         let epoch = pool.epoch();
 
         // Both bid highest, so they head the pop order: one whose gas object never
