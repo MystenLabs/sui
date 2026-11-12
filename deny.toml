@@ -94,6 +94,13 @@ ignore = [
     # request decompression via tonic, remote checkpoint ingestion).
     "RUSTSEC-2026-0391",
     "RUSTSEC-2026-0403",
+    # `thrift` < 0.23 binary protocol `read_bytes` allocates from an unchecked
+    # wire length. Only parquet 57 pulls in thrift 0.17, and only
+    # sui-analytics-indexer uses parquet: it writes Parquet files and parses
+    # them only in tests (its own output). parquet must match the arrow version
+    # of snowflake-api (0.14, arrow 57); remove once snowflake-api moves to an
+    # arrow version whose parquet no longer depends on thrift.
+    "RUSTSEC-2026-0435",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
