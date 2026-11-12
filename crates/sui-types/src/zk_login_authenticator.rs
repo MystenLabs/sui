@@ -223,6 +223,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             }
         }
 
+        aux_verify_data.reject_compact_signature_key(&self.user_signature)?;
+
         // Verify the ephemeral signature over the intent message of the transaction data.
         self.user_signature.verify_secure(
             intent_msg,

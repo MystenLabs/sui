@@ -786,3 +786,149 @@ fn test_multisig_mldsa65_member_gated_by_protocol_config() {
             .unwrap();
     }
 }
+
+fn verify_personal_message(
+    sig: impl Into<GenericSignature>,
+    msg: &IntentMessage<PersonalMessage>,
+    address: SuiAddress,
+    params: &VerifyParams,
+) -> bool {
+    sig.into()
+        .verify_claims(
+            msg,
+            address,
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .is_ok()
+}
+
+#[test]
+fn test_secp256r1_compact_public_key_gated_by_protocol_config() {
+    use crate::crypto::SignatureScheme;
+    use fastcrypto::secp256r1::{Secp256r1KeyPair, Secp256r1PublicKey};
+
+    // Find a key whose SEC1 compact encoding 0x05 || x decodes to the key itself. Each attempt
+    // succeeds with probability 1/2.
+    let mut rng = StdRng::from_seed([0; 32]);
+    let (kp, compact) = (0..64)
+        .find_map(|_| {
+            let kp = Secp256r1KeyPair::generate(&mut rng);
+            let mut compact = kp.public().as_bytes().to_vec();
+            compact[0] = 0x05;
+            (Secp256r1PublicKey::from_bytes(&compact).unwrap() == *kp.public())
+                .then(|| (SuiKeyPair::Secp256r1(kp), compact))
+        })
+        .expect("no key with a valid compact encoding found");
+    let pk = PublicKey::try_from_bytes(SignatureScheme::Secp256r1, &compact).unwrap();
+    let msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Hello".as_bytes().to_vec(),
+        },
+    );
+
+    // A signature by the key, carrying the compact encoding of its public key.
+    let canonical_sig = Signature::new_secure(&msg, &kp);
+    let mut sig_bytes = canonical_sig.as_ref().to_vec();
+    let pk_start = sig_bytes.len() - compact.len();
+    sig_bytes[pk_start..].copy_from_slice(&compact);
+    let sig = Signature::from_bytes(&sig_bytes).unwrap();
+
+    let multisig_pk = MultiSigPublicKey::new(vec![pk.clone()], vec![1], 1).unwrap();
+    let multisig = MultiSig::combine(vec![sig.clone().into()], multisig_pk.clone()).unwrap();
+
+    // A multisig that lists the key twice, where only the canonical member signs. The compact
+    // member cannot sign with the flag on, so the committee stays usable through the other member.
+    let aliased_pk = MultiSigPublicKey::new(vec![kp.public(), pk.clone()], vec![1, 1], 1).unwrap();
+    let aliased =
+        MultiSig::combine(vec![canonical_sig.clone().into()], aliased_pk.clone()).unwrap();
+
+    // A multisig with a member that is not a valid key and does not sign. The flag must not
+    // reject it.
+    let placeholder =
+        PublicKey::Secp256r1(fastcrypto::serde_helpers::BytesRepresentation([0u8; 33]));
+    let placeholder_pk =
+        MultiSigPublicKey::new(vec![kp.public(), placeholder], vec![1, 1], 1).unwrap();
+    let with_placeholder =
+        MultiSig::combine(vec![canonical_sig.clone().into()], placeholder_pk.clone()).unwrap();
+
+    let lenient = VerifyParams::default();
+    let strict = VerifyParams::default().with_secp256r1_strict_public_keys(true);
+    let verify = |params: &VerifyParams| {
+        (
+            verify_personal_message(
+                canonical_sig.clone(),
+                &msg,
+                SuiAddress::from(&kp.public()),
+                params,
+            ),
+            verify_personal_message(sig.clone(), &msg, SuiAddress::from(&pk), params),
+            verify_personal_message(
+                multisig.clone(),
+                &msg,
+                SuiAddress::from(&multisig_pk),
+                params,
+            ),
+            verify_personal_message(aliased.clone(), &msg, SuiAddress::from(&aliased_pk), params),
+            verify_personal_message(
+                with_placeholder.clone(),
+                &msg,
+                SuiAddress::from(&placeholder_pk),
+                params,
+            ),
+        )
+    };
+    assert_eq!(verify(&lenient), (true, true, true, true, true));
+    assert_eq!(verify(&strict), (true, false, false, true, true));
+}
+
+#[test]
+fn test_compact_encoding_check_skips_other_schemes_and_non_signers() {
+    use crate::crypto::SignatureScheme;
+    use fastcrypto::secp256r1::Secp256r1KeyPair;
+
+    let msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Hello".as_bytes().to_vec(),
+        },
+    );
+    let strict = VerifyParams::default().with_secp256r1_strict_public_keys(true);
+
+    // An Ed25519 key whose first byte equals the compact encoding tag is not rejected. Each
+    // attempt succeeds with probability 1/256.
+    let mut rng = StdRng::from_seed([0; 32]);
+    let ed_kp = (0..10_000)
+        .map(|_| get_key_pair_from_rng::<Ed25519KeyPair, _>(&mut rng).1)
+        .find(|kp| kp.public().as_bytes()[0] == 0x05)
+        .map(SuiKeyPair::Ed25519)
+        .expect("no Ed25519 key with first byte 0x05 found");
+    let ed_sig = Signature::new_secure(&msg, &ed_kp);
+    assert!(verify_personal_message(
+        ed_sig,
+        &msg,
+        SuiAddress::from(&ed_kp.public()),
+        &strict
+    ));
+
+    // A passkey member in the compact encoding that does not sign does not block the committee.
+    let r1_kp = SuiKeyPair::Secp256r1(Secp256r1KeyPair::generate(&mut rng));
+    let mut compact = r1_kp.public().as_ref().to_vec();
+    compact[0] = 0x05;
+    let passkey_member =
+        PublicKey::try_from_bytes(SignatureScheme::PasskeyAuthenticator, &compact).unwrap();
+    let passkey_multisig_pk =
+        MultiSigPublicKey::new(vec![r1_kp.public(), passkey_member], vec![1, 1], 1).unwrap();
+    let passkey_multisig = MultiSig::combine(
+        vec![Signature::new_secure(&msg, &r1_kp).into()],
+        passkey_multisig_pk.clone(),
+    )
+    .unwrap();
+    assert!(verify_personal_message(
+        passkey_multisig,
+        &msg,
+        SuiAddress::from(&passkey_multisig_pk),
+        &strict
+    ));
+}

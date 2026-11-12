@@ -50,7 +50,7 @@ pub struct PasskeyAuthenticator {
     #[serde(skip)]
     signature: Secp256r1Signature,
 
-    /// Compact r1 public key upon passkey creation.
+    /// Compressed r1 public key upon passkey creation.
     /// Initialized from `user_signature` in `RawPasskeyAuthenticator`.
     #[serde(skip)]
     pk: Secp256r1PublicKey,
@@ -236,12 +236,16 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
+        aux_verify_data: &VerifyParams,
         _zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> SuiResult
     where
         T: Serialize,
     {
+        // Deserialization parses pk with from_bytes, which accepts the compact encoding. Reject it
+        // here if the protocol requires strict keys.
+        aux_verify_data.reject_compact_secp256r1_key(&self.pk)?;
+
         // Check if author is derived from the public key.
         if author != SuiAddress::from(&self.get_pk()?) {
             return Err(SuiErrorKind::InvalidSignature {

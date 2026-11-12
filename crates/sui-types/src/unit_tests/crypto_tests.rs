@@ -333,6 +333,61 @@ fn mldsa65_zklogin_ephemeral_rejected() {
 }
 
 #[test]
+fn zklogin_compact_secp256r1_ephemeral_key_gated_by_protocol_config() {
+    use crate::signature::{AuthenticatorTrait, VerifyParams};
+    use crate::signature_verification::VerifiedDigestCache;
+    use crate::zk_login_authenticator::ZkLoginAuthenticator;
+    use crate::zk_login_util::get_zklogin_inputs;
+    use fastcrypto::secp256r1::{Secp256r1KeyPair, Secp256r1PublicKey};
+    use std::sync::Arc;
+
+    // Find a key whose SEC1 compact encoding 0x05 || x decodes to the key itself. Each attempt
+    // succeeds with probability 1/2.
+    let mut rng = StdRng::from_seed([0; 32]);
+    let (kp, compact) = (0..64)
+        .find_map(|_| {
+            let kp = Secp256r1KeyPair::generate(&mut rng);
+            let mut compact = kp.public().as_bytes().to_vec();
+            compact[0] = 0x05;
+            (Secp256r1PublicKey::from_bytes(&compact).unwrap() == *kp.public())
+                .then(|| (SuiKeyPair::Secp256r1(kp), compact))
+        })
+        .expect("no key with a valid compact encoding found");
+
+    // An ephemeral signature that carries the compact encoding of its public key.
+    let msg = IntentMessage::new(Intent::sui_transaction(), Foo("zklogin".to_string()));
+    let mut sig_bytes = Signature::new_secure(&msg, &kp).as_ref().to_vec();
+    let pk_start = sig_bytes.len() - compact.len();
+    sig_bytes[pk_start..].copy_from_slice(&compact);
+    let eph_sig = Signature::from_bytes(&sig_bytes).unwrap();
+
+    let inputs = get_zklogin_inputs();
+    let author = SuiAddress::try_from_unpadded(&inputs).unwrap();
+    let authenticator = ZkLoginAuthenticator::new(inputs, 10, eph_sig);
+    let verify = |params: &VerifyParams| match authenticator
+        .verify_claims(
+            &msg,
+            author,
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .map_err(|e| e.into_inner())
+    {
+        Err(crate::error::SuiErrorKind::InvalidSignature { error }) => {
+            error.contains("compact encoding")
+        }
+        _ => false,
+    };
+
+    // The test proof does not bind this ephemeral key, so verification fails in both cases. Only
+    // the strict check fails with the compact encoding error.
+    assert!(!verify(&VerifyParams::default()));
+    assert!(verify(
+        &VerifyParams::default().with_secp256r1_strict_public_keys(true)
+    ));
+}
+
+#[test]
 fn mldsa65_bcs_variant_index_pinned() {
     // The BCS tag is consensus-critical (serialized inside MultiSig committees).
     let kp = mldsa65_random_keypair();

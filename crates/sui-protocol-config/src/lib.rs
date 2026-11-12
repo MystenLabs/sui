@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 144;
+const MAX_PROTOCOL_VERSION: u64 = 145;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -447,6 +447,7 @@ const MAINNET_USDB: &str =
 //              which doubles its excess floor to 1,200 copies and makes the exit dwell ten
 //              windows. Add a minimum number of user transactions per consensus commit,
 //              duplicates included, that it requires.
+// Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -866,6 +867,11 @@ struct FeatureFlags {
     // Reject an overflowing x-coordinate r + n in `secp256r1_ecrecover` instead of wrapping it.
     #[serde(skip_serializing_if = "is_false")]
     secp256r1_ecrecover_checks_x_below_p: bool,
+
+    // Reject secp256r1 public keys in the SEC1 compact encoding (prefix 0x05) in signatures and
+    // in `ecdsa_r1::secp256r1_verify`.
+    #[serde(skip_serializing_if = "is_false")]
+    secp256r1_strict_public_keys: bool,
 
     // Use the refined transaction effects size estimate.
     #[serde(skip_serializing_if = "is_false")]
@@ -5125,6 +5131,9 @@ impl ProtocolConfig {
                         // duplicates turn the signal on.
                         cfg.staggered_submission_signal_min_consensus_user_transactions_per_commit = Some(5);
                     }
+                }
+                145 => {
+                    cfg.feature_flags.secp256r1_strict_public_keys = true;
                 }
                 // Use this template when making changes:
                 //

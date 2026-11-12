@@ -46,6 +46,7 @@ pub struct VerifyParams {
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     pub additional_multisig_checks: bool,
     pub validate_zklogin_public_identifier: bool,
+    pub secp256r1_strict_public_keys: bool,
 }
 
 impl VerifyParams {
@@ -73,6 +74,7 @@ impl VerifyParams {
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
             validate_zklogin_public_identifier,
+            secp256r1_strict_public_keys: false,
         }
     }
 
@@ -84,6 +86,58 @@ impl VerifyParams {
         self.accept_mldsa65_in_multisig = accept;
         self
     }
+
+    /// Whether secp256r1 public keys in the SEC1 compact encoding are rejected. Set from the
+    /// `secp256r1_strict_public_keys` protocol flag.
+    pub fn with_secp256r1_strict_public_keys(mut self, strict: bool) -> Self {
+        self.secp256r1_strict_public_keys = strict;
+        self
+    }
+
+    /// Parse a secp256r1 public key, rejecting the SEC1 compact encoding if
+    /// `secp256r1_strict_public_keys` is set.
+    pub(crate) fn parse_secp256r1_public_key(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Secp256r1PublicKey, FastCryptoError> {
+        if self.secp256r1_strict_public_keys {
+            Secp256r1PublicKey::from_bytes_strict(bytes)
+        } else {
+            Secp256r1PublicKey::from_bytes(bytes)
+        }
+    }
+
+    /// If `secp256r1_strict_public_keys` is set, reject `pk` if it was parsed from the SEC1 compact
+    /// encoding.
+    pub(crate) fn reject_compact_secp256r1_key(&self, pk: &Secp256r1PublicKey) -> SuiResult {
+        self.reject_compact_secp256r1_key_bytes(pk.as_ref())
+    }
+
+    /// If `secp256r1_strict_public_keys` is set, reject `signature` if it is a secp256r1 signature
+    /// whose public key is in the SEC1 compact encoding.
+    pub(crate) fn reject_compact_signature_key(&self, signature: &Signature) -> SuiResult {
+        if signature.scheme() == SignatureScheme::Secp256r1 {
+            self.reject_compact_secp256r1_key_bytes(signature.public_key_bytes())?;
+        }
+        Ok(())
+    }
+
+    /// This function does the same check as [Self::reject_compact_secp256r1_key] on bytes that the
+    /// caller knows to be a secp256r1 public key. It does not parse the bytes.
+    fn reject_compact_secp256r1_key_bytes(&self, bytes: &[u8]) -> SuiResult {
+        if self.secp256r1_strict_public_keys && is_compact_encoding(bytes) {
+            return Err(SuiErrorKind::InvalidSignature {
+                error: "secp256r1 public key in the SEC1 compact encoding".to_string(),
+            }
+            .into());
+        }
+        Ok(())
+    }
+}
+
+fn is_compact_encoding(bytes: &[u8]) -> bool {
+    const SEC1_COMPACT_TAG: u8 = 0x05;
+    bytes.first() == Some(&SEC1_COMPACT_TAG)
 }
 
 /// A lightweight trait that all members of [enum GenericSignature] implement.
@@ -375,6 +429,7 @@ impl AuthenticatorTrait for Signature {
             }
             .into());
         }
+        verify_params.reject_compact_signature_key(self)?;
         self.verify_secure(value, author, self.scheme())
     }
 }
