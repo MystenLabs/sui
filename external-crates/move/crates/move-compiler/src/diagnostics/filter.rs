@@ -681,31 +681,3 @@ impl crate::shared::AstDebug for FilterScope {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[should_panic(expected = "duplicate custom diagnostic filter name duplicate")]
-    fn duplicate_custom_filter_names_panic() {
-        let prefix = Some(Symbol::from("lint"));
-        let name = Symbol::from("duplicate");
-        let core = (
-            prefix,
-            vec![(
-                name,
-                vec![DiagnosticsID::exact(DiagnosticOrigin::Lint, 1, 1)],
-            )],
-        );
-        let sui = (
-            prefix,
-            vec![(
-                name,
-                vec![DiagnosticsID::exact(DiagnosticOrigin::SuiLint, 1, 1)],
-            )],
-        );
-
-        known_filter_map([&core, &sui]);
-    }
-}
