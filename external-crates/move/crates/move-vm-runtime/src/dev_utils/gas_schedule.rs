@@ -299,8 +299,8 @@ impl GasMeter for GasStatus<'_> {
         self.charge_instr_with_size(Opcodes::CALL_GENERIC, (args.len() as u64).into())
     }
 
-    fn charge_ld_const(&mut self, size: u64) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::LD_CONST, size.into())
+    fn charge_ld_const(&mut self, size: AbstractMemorySize) -> PartialVMResult<()> {
+        self.charge_instr_with_size(Opcodes::LD_CONST, size)
     }
 
     fn charge_ld_const_after_deserialization(

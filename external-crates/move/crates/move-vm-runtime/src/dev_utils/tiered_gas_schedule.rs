@@ -544,9 +544,9 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.charge(1, 0, pops, 0, stack_reduction_size.into())
     }
 
-    fn charge_ld_const(&mut self, size: u64) -> PartialVMResult<()> {
+    fn charge_ld_const(&mut self, size: AbstractMemorySize) -> PartialVMResult<()> {
         // Charge for the load from the locals onto the stack.
-        self.charge(1, 1, 0, size, 0)
+        self.charge(1, 1, 0, size.into(), 0)
     }
 
     fn charge_ld_const_after_deserialization(

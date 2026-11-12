@@ -3,7 +3,7 @@
 
 use crate::shared::views::ValueView;
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_algebra::InternalGas;
+use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas};
 
 /// Enum of instructions that do not need extra information for gas metering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -84,7 +84,7 @@ pub trait GasMeter {
         num_locals: u64,
     ) -> PartialVMResult<()>;
 
-    fn charge_ld_const(&mut self, size: u64) -> PartialVMResult<()>;
+    fn charge_ld_const(&mut self, size: AbstractMemorySize) -> PartialVMResult<()>;
 
     fn charge_ld_const_after_deserialization(&mut self, val: impl ValueView)
     -> PartialVMResult<()>;
@@ -193,7 +193,7 @@ impl GasMeter for UnmeteredGasMeter {
         Ok(())
     }
 
-    fn charge_ld_const(&mut self, _size: u64) -> PartialVMResult<()> {
+    fn charge_ld_const(&mut self, _size: AbstractMemorySize) -> PartialVMResult<()> {
         Ok(())
     }
 

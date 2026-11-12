@@ -476,10 +476,6 @@ fn op_step_impl(
             state.push_operand(Value::u256(**int_const))?;
         }
         Bytecode::LdConst(const_ptr) => {
-            // TODO(Gas): `const_ptr.size` is the constant's abstract value size when
-            // `VMConfig::charge_ld_const_abstract_size` is set (its serialized byte length
-            // otherwise). On the next version cut, rename `charge_ld_const` and change it to
-            // take an `AbstractMemorySize` instead of a plain byte count.
             gas_meter.charge_ld_const(const_ptr.size)?;
             let val = const_ptr.value.to_value();
             gas_meter.charge_ld_const_after_deserialization(&val)?;
