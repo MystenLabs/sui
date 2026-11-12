@@ -15,9 +15,9 @@ use crate::{
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
             single_linkage,
         },
+        linking::ast::{self as A, Command},
         loading::ast::{DeserializedPackage, PackagePayload},
         metering::{self, translation_meter::TranslationMeter},
-        preparation::ast::{self as A, Command},
     },
 };
 use move_binary_format::{
@@ -36,7 +36,7 @@ use sui_types::{
     type_input::{StructInput, TypeInput},
 };
 
-/// Preparation fails in input/command order, before VM-based type/signature validation. Upgrades
+/// Linking fails in input/command order, before VM-based type/signature validation. Upgrades
 /// are analyzed after all ordinary contributions so their membership checks see the whole PTB.
 pub fn transaction<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
@@ -57,15 +57,15 @@ pub fn transaction<Mode: ExecutionMode>(
     let meter: &mut dyn LinkageMeter<Mode::Error> = meter;
     let mut table = config.resolution_table_with_native_packages(store, meter)?;
 
-    // First prepare inputs and fold their type constraints, even for inputs no command uses.
-    let prepared_inputs = inputs
+    // First link inputs and fold their type constraints, even for inputs no command uses.
+    let linked_inputs = inputs
         .into_iter()
         .map(|arg| call_arg(arg, &mut table, store, state, meter))
         .collect::<Result<Vec<_>, Mode::Error>>()?;
 
-    // Second prepare commands and fold ordinary contributions in command order. Upgrade-init
+    // Second link commands and fold ordinary contributions in command order. Upgrade-init
     // analysis must wait until all input and ordinary command constraints are present.
-    let prepared_commands = commands
+    let linked_commands = commands
         .into_iter()
         .enumerate()
         .map(|(i, cmd)| {
@@ -79,7 +79,7 @@ pub fn transaction<Mode: ExecutionMode>(
 
     // Third apply upgrade-init constraints in command order. Membership and dependency equality
     // checks must see ordinary contributions even from commands that follow the upgrade.
-    for (i, cmd) in prepared_commands.iter().enumerate() {
+    for (i, cmd) in linked_commands.iter().enumerate() {
         if let Command::Upgrade(payload, _, current, _, linkage) = cmd {
             single_linkage::analyze_upgrade_command(
                 payload,
@@ -96,7 +96,7 @@ pub fn transaction<Mode: ExecutionMode>(
 
     // Fourth verify every initializer's exact pins against the completed table. This must
     // precede finalization, which erases the distinction between Exact and AtLeast constraints.
-    for (i, cmd) in prepared_commands.iter().enumerate() {
+    for (i, cmd) in linked_commands.iter().enumerate() {
         single_linkage::validate_init_linkage_pinning::<Mode::Error>(cmd, &table, store)
             .map_err(|e| e.with_command_index(i))?;
     }
@@ -105,8 +105,8 @@ pub fn transaction<Mode: ExecutionMode>(
     unified_linkage.validate_runtime_linkage_consistency::<Mode::Error>()?;
 
     Ok(A::Transaction {
-        inputs: prepared_inputs,
-        commands: prepared_commands,
+        inputs: linked_inputs,
+        commands: linked_commands,
         unified_linkage,
     })
 }

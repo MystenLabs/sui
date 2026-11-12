@@ -30,9 +30,9 @@ use sui_types::{
 pub mod env;
 pub mod execution;
 pub mod linkage;
+pub mod linking;
 pub mod loading;
 pub mod metering;
-pub mod preparation;
 pub mod spanned;
 pub mod typing;
 
@@ -54,7 +54,7 @@ pub(crate) fn execute<Mode: ExecutionMode>(
     let resolution_config = ResolutionConfig::from_protocol_config::<Mode>(protocol_config);
     let mut translation_meter =
         translation_meter::TranslationMeter::new(protocol_config, gas_meter);
-    let txn = preparation::translate::transaction::<Mode>(
+    let txn = linking::translate::transaction::<Mode>(
         &mut translation_meter,
         &resolution_config,
         &package_store,

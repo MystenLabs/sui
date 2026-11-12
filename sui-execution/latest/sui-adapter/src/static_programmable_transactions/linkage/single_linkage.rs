@@ -10,8 +10,8 @@ use crate::{
             },
             resolved_linkage::ResolvedLinkage,
         },
+        linking::ast::Command,
         loading::ast::{DeserializedPackage, PackagePayload, module_has_init},
-        preparation::ast::Command,
     },
 };
 use move_binary_format::file_format::Visibility;
@@ -77,7 +77,7 @@ pub(crate) fn validate_init_linkage_pinning<E: ExecutionErrorTrait>(
     }
 }
 
-/// Fold a prepared command's ordinary constraints into the transaction-wide resolution table.
+/// Fold a linked command's ordinary constraints into the transaction-wide resolution table.
 /// MoveCall targets are `Exact`; their dependencies are `AtLeast` for public functions and
 /// `Exact` for private/friend functions. Explicit call and vector types contribute their defining
 /// packages and dependencies as `AtLeast` constraints. A publish with an initializer pins its

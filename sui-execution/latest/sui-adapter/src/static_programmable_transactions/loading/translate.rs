@@ -6,9 +6,9 @@ use crate::{
     metering::gas_charger::GasPayment,
     static_programmable_transactions::{
         env::Env,
+        linking::ast as A,
         loading::ast::{self as L},
         metering::{self, translation_meter::TranslationMeter},
-        preparation::ast as A,
         typing::invariant_checks::linkage_consistency,
     },
 };
@@ -39,7 +39,7 @@ pub(crate) fn transaction<Mode: ExecutionMode>(
     } = pt;
     assert_invariant!(
         Rc::ptr_eq(&unified_linkage.0, &env.unified_linkage.0),
-        "prepared transaction and environment must share linkage"
+        "linked transaction and environment must share linkage"
     );
     let withdrawal_compatibility_inputs =
         withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; inputs.len()]);
@@ -287,7 +287,7 @@ fn command<Mode: ExecutionMode>(
                     && *function.version_mid.address() == package.into()
                     && function.version_mid.name() == module.as_ident_str()
                     && function.original_mid.name() == module.as_ident_str(),
-                "prepared call to {package}::{module}::{name} (visibility {visibility:?}) was loaded as {}::{} (visibility {:?}, original module {})",
+                "linked call to {package}::{module}::{name} (visibility {visibility:?}) was loaded as {}::{} (visibility {:?}, original module {})",
                 function.version_mid,
                 function.name,
                 function.visibility,

@@ -20,12 +20,12 @@ use crate::{
             resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
             single_linkage,
         },
+        linking::{self, ast as A},
         loading::{
             self,
             ast::{DeserializedPackage, PackagePayload},
         },
         metering::translation_meter::TranslationMeter,
-        preparation::{self, ast as A},
         typing::{
             ast as T,
             invariant_checks::linkage_consistency::{self, verify_move_call, verify_type_linkage},
@@ -424,16 +424,16 @@ fn linkage_meter_charges_conflicts_and_exhausts_before_processing() {
 }
 
 // Name a v1-defined type through v2 while giving nongeneric foo a type argument. Normal-mode
-// preparation must normalize to v1 without selecting v2; loading must reject the invalid arity.
+// linking must normalize to v1 without selecting v2; loading must reject the invalid arity.
 #[test]
-fn prepared_ast_normalizes_names_but_defers_instantiation_validation() {
+fn linked_ast_normalizes_names_but_defers_instantiation_validation() {
     let p = Packages::with_native_packages();
     let store = p.store();
     let analyzer = p.resolution_config();
     let mut state = p.state();
     let mut charger = p.charger(10000);
     let mut meter = TranslationMeter::new(&p.config, &mut charger);
-    let prepared = preparation::translate::transaction::<Normal<ExecutionError>>(
+    let linked = linking::translate::transaction::<Normal<ExecutionError>>(
         &mut meter,
         &analyzer,
         &store,
@@ -445,19 +445,19 @@ fn prepared_ast_normalizes_names_but_defers_instantiation_validation() {
         },
     )
     .unwrap();
-    let A::Command::MoveCall(call) = &prepared.commands[0] else {
+    let A::Command::MoveCall(call) = &linked.commands[0] else {
         panic!("expected call")
     };
     assert_eq!(call.type_arguments, vec![old_type(DEP)]);
-    assert_eq!(prepared.unified_linkage.0.linkage.get(&DEP), Some(&DEP));
+    assert_eq!(linked.unified_linkage.0.linkage.get(&DEP), Some(&DEP));
     assert!(
-        !prepared
+        !linked
             .unified_linkage
             .0
             .linkage_resolution
             .contains_key(&DEP_V2)
     );
-    let linkage = prepared.unified_linkage.clone();
+    let linkage = linked.unified_linkage.clone();
     let vm = p
         .runtime
         .make_vm(
@@ -487,7 +487,7 @@ fn prepared_ast_normalizes_names_but_defers_instantiation_validation() {
             &tx_context,
             None,
             None,
-            prepared
+            linked
         )
         .is_err()
     );
@@ -496,7 +496,7 @@ fn prepared_ast_normalizes_names_but_defers_instantiation_validation() {
 // Prepare an out-of-range input reference in normal mode with native packages absent.
 // Argument validation must fail before native seeding or any linkage gas is consumed.
 #[test]
-fn preparation_validates_argument_indices_before_linkage_work() {
+fn linking_validates_argument_indices_before_linkage_work() {
     let p = Packages::new();
     let store = p.store();
     let analyzer = p.resolution_config();
@@ -504,7 +504,7 @@ fn preparation_validates_argument_indices_before_linkage_work() {
     let mut charger = p.charger(10000);
     let mut meter = TranslationMeter::new(&p.config, &mut charger);
     assert_invariant_failure(std::panic::AssertUnwindSafe(|| {
-        preparation::translate::transaction::<Normal<ExecutionError>>(
+        linking::translate::transaction::<Normal<ExecutionError>>(
             &mut meter,
             &analyzer,
             &store,
@@ -582,11 +582,11 @@ fn transaction_type_limits_bound_recursive_normalization() {
                     checked.unwrap();
                     let mut charger = p.charger(10000);
                     let mut meter = TranslationMeter::new(&config, &mut charger);
-                    let prepared = preparation::translate::transaction::<Normal<ExecutionError>>(
+                    let linked = linking::translate::transaction::<Normal<ExecutionError>>(
                         &mut meter, &analyzer, &store, &state, &config, txn,
                     )
                     .unwrap();
-                    let normalized = match &prepared.commands[0] {
+                    let normalized = match &linked.commands[0] {
                         A::Command::MoveCall(call) => &call.type_arguments[0],
                         A::Command::MakeMoveVec(Some(ty), _) => ty,
                         _ => panic!("expected a command with an explicit type"),
@@ -602,7 +602,7 @@ fn transaction_type_limits_bound_recursive_normalization() {
 // Payload/order/publication linkage must be retained, runtime must stay on v1, and normal-mode
 // gas must include payload bytes, native seeding for both contexts and six other linkage events.
 #[test]
-fn prepared_ast_retains_publications_without_contributing_to_runtime() {
+fn linked_ast_retains_publications_without_contributing_to_runtime() {
     let p = Packages::with_native_packages();
     let store = p.store();
     let analyzer = p.resolution_config();
@@ -614,7 +614,7 @@ fn prepared_ast_retains_publications_without_contributing_to_runtime() {
         .serialize_with_version(p.config.move_binary_format_version(), &mut bytes)
         .unwrap();
     let byte_charge = bytes.len() as u64 * p.config.package_publish_cost_per_byte();
-    let prepared = preparation::translate::transaction::<Normal<ExecutionError>>(
+    let linked = linking::translate::transaction::<Normal<ExecutionError>>(
         &mut meter,
         &analyzer,
         &store,
@@ -630,8 +630,7 @@ fn prepared_ast_retains_publications_without_contributing_to_runtime() {
         },
     )
     .unwrap();
-    let A::Command::Publish(PackagePayload::Deserialized(pkg), deps, linkage) =
-        &prepared.commands[0]
+    let A::Command::Publish(PackagePayload::Deserialized(pkg), deps, linkage) = &linked.commands[0]
     else {
         panic!("expected publication")
     };
@@ -643,9 +642,9 @@ fn prepared_ast_retains_publications_without_contributing_to_runtime() {
     );
     assert_eq!(pkg.deserialized_modules.len(), 1);
     assert_eq!(linkage.linkage.get(&DEP), Some(&DEP_V2));
-    assert_eq!(prepared.unified_linkage.0.linkage.get(&DEP), Some(&DEP));
-    assert!(matches!(&prepared.commands[1], A::Command::MoveCall(_)));
-    let A::Command::MakeMoveVec(Some(ty), _) = &prepared.commands[2] else {
+    assert_eq!(linked.unified_linkage.0.linkage.get(&DEP), Some(&DEP));
+    assert!(matches!(&linked.commands[1], A::Command::MoveCall(_)));
+    let A::Command::MakeMoveVec(Some(ty), _) = &linked.commands[2] else {
         panic!("expected vector")
     };
     assert_eq!(ty, &old_type(DEP));
@@ -666,7 +665,7 @@ fn prepared_ast_retains_publications_without_contributing_to_runtime() {
 }
 
 // Prepare differently sized no-init payloads before conflicting v1/v2 calls. Both publication
-// commands must pay for their bytes even though preparation fails at the second call.
+// commands must pay for their bytes even though linking fails at the second call.
 #[test]
 fn publication_bytes_are_charged_before_linkage_conflicts() {
     let p = Packages::with_native_packages();
@@ -695,7 +694,7 @@ fn publication_bytes_are_charged_before_linkage_conflicts() {
             };
             let mut charger = p.charger(budget);
             let mut meter = TranslationMeter::new(&p.config, &mut charger);
-            let err = preparation::translate::transaction::<Normal<ExecutionError>>(
+            let err = linking::translate::transaction::<Normal<ExecutionError>>(
                 &mut meter,
                 &config,
                 &store,
@@ -728,7 +727,7 @@ fn publication_bytes_are_charged_before_linkage_conflicts() {
 }
 
 // Prepare and load no-init publication commands without executing them. Payload bytes must be
-// charged during preparation, exactly once; ticket typing and execution are outside this test.
+// charged during linking, exactly once; ticket typing and execution are outside this test.
 #[test]
 fn publication_bytes_are_charged_once_before_loading() {
     let p = Packages::with_native_packages();
@@ -751,7 +750,7 @@ fn publication_bytes_are_charged_once_before_loading() {
         } else {
             Command::Publish(vec![bytes.clone()], vec![])
         };
-        let prepared = preparation::translate::transaction::<Normal<ExecutionError>>(
+        let linked = linking::translate::transaction::<Normal<ExecutionError>>(
             &mut TranslationMeter::new(&p.config, &mut charger),
             &config,
             &store,
@@ -771,7 +770,7 @@ fn publication_bytes_are_charged_once_before_loading() {
             u64::from(charger.move_gas_status().gas_left),
             budget - expected
         );
-        let linkage = prepared.unified_linkage.clone();
+        let linkage = linked.unified_linkage.clone();
         let vm = p
             .runtime
             .make_vm(
@@ -799,7 +798,7 @@ fn publication_bytes_are_charged_once_before_loading() {
             &tx_context,
             None,
             None,
-            prepared,
+            linked,
         )
         .unwrap();
         assert_eq!(
@@ -840,7 +839,7 @@ fn publication_bytes_are_charged_before_deserialization() {
             } else {
                 Command::Publish(vec![bytes.clone()], vec![])
             };
-            let err = preparation::translate::transaction::<Normal<ExecutionError>>(
+            let err = linking::translate::transaction::<Normal<ExecutionError>>(
                 &mut TranslationMeter::new(&p.config, &mut charger),
                 &config,
                 &store,
@@ -959,7 +958,7 @@ fn loaded_calls_share_linkage_and_invariants_reject_equal_copies_and_wrong_targe
     let mut state = p.state();
     let mut charger = p.charger(10000);
     let mut meter = TranslationMeter::new(&p.config, &mut charger);
-    let prepared = preparation::translate::transaction::<Normal<ExecutionError>>(
+    let linked = linking::translate::transaction::<Normal<ExecutionError>>(
         &mut meter,
         &analyzer,
         &store,
@@ -971,7 +970,7 @@ fn loaded_calls_share_linkage_and_invariants_reject_equal_copies_and_wrong_targe
         },
     )
     .unwrap();
-    let linkage = prepared.unified_linkage.clone();
+    let linkage = linked.unified_linkage.clone();
     let vm = p
         .runtime
         .make_vm(
@@ -999,7 +998,7 @@ fn loaded_calls_share_linkage_and_invariants_reject_equal_copies_and_wrong_targe
         &tx_context,
         None,
         None,
-        prepared,
+        linked,
     )
     .unwrap();
     assert!(std::rc::Rc::ptr_eq(

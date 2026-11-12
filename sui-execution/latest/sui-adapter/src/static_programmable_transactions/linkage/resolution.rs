@@ -12,7 +12,7 @@ use std::{
 use sui_types::base_types::ObjectID;
 use sui_types::{error::ExecutionErrorTrait, execution_status::ExecutionErrorKind};
 
-/// Meter linkage resolution and publication payload processing during preparation.
+/// Meter linkage resolution and publication payload processing during linking.
 pub(crate) trait LinkageMeter<E: ExecutionErrorTrait> {
     /// Charge before a package metadata lookup, constraint contribution, or upgrade equality check.
     fn charge_linkage(&mut self) -> Result<(), E>;
