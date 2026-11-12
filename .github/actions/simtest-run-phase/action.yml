@@ -3,10 +3,10 @@
 
 name: Run simtest phases on the simtest host
 description: >
-  Starts scripts/simtest/simtest-run.sh detached on simtest-01 for the given
-  SIMTEST_PHASES, polls until it writes its exit marker, prints the tail of its
-  output and exits with the remote exit code. Expects ~/sui to be cloned and
-  cargo-simtest installed on the host.
+  Starts scripts/simtest/simtest-run.sh on simtest-01 as a transient systemd
+  unit for the given SIMTEST_PHASES, polls until it writes its exit marker,
+  prints the tail of its output and exits with the remote exit code. Expects
+  ~/sui to be cloned and cargo-simtest installed on the host.
 
   Host files for a phase: ~/simtest_<phase>_stdout.log and
   ~/simtest_<phase>_exit_code. ~/simtest_active_run describes the run in
@@ -42,19 +42,19 @@ inputs:
 runs:
   using: composite
   steps:
-    # Run simulator tests via detached execution to survive SSH session drops.
-    # The test script runs independently on the remote machine; we poll for completion
-    # with short-lived SSH calls instead of holding a single long-lived session.
+    # The run is started as a transient systemd unit, not as a background
+    # child of the SSH session, and we poll for completion with short-lived
+    # SSH calls instead of holding one long-lived session.
     #
-    # The background shell is started in its own session (setsid) with
-    # stdin, stdout and stderr redirected, and the setup commands before it
-    # are terminated with `|| exit 1;` rather than `&&`. With `a && b &&
-    # nohup ... &` the trailing `&` applies to the whole AND-list, so bash
-    # forks a subshell that runs nohup in the foreground and waits for it
-    # while still holding the SSH session's stdout and stderr; this step
-    # then blocks for the entire run and the polling step below never runs.
-    # The exit marker is written to a temporary file and moved into place so
-    # the poller never reads a partially written marker.
+    # A child of the SSH session lives in teleport.service's cgroup, and that
+    # unit has OOMPolicy=stop with KillMode=control-group: when the kernel
+    # OOM-kills one stress worker, systemd stops teleport and SIGTERMs every
+    # other worker with it. The transient unit has its own cgroup and
+    # OOMPolicy=continue, so an OOM kill is confined to the one process. It
+    # also outlives the SSH session, so this step returns at once and the
+    # polling step below runs. The exit marker is written to a temporary file
+    # and moved into place so the poller never reads a partially written
+    # marker.
     #
     # The protocol config override is passed on the remote command line: tsh
     # does not forward the runner's environment to the host.
@@ -62,7 +62,7 @@ runs:
       shell: bash
       run: |
         tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "rm -f ~/simtest_${{ inputs.phase }}_exit_code; printf 'workflow=%s\nrun_id=%s\nrun_url=%s\nstarted_at=%s\nmin_free_gb=%s\nlog_dir=%s\nphase=%s\n' '${{ github.workflow }}' '${{ github.run_id }}' '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '${{ inputs.min-free-gb }}' '${{ inputs.log-dir }}' '${{ inputs.phase }}' > ~/simtest_active_run"
-        tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui || exit 1; nohup setsid bash -c 'RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ inputs.test-num }} SIMTEST_RUN_ID=${{ inputs.run-id }} SIMTEST_PHASES=${{ inputs.phases }} SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ inputs.protocol-config-override }} ./scripts/simtest/simtest-run.sh; echo \$? > ~/simtest_${{ inputs.phase }}_exit_code.tmp && mv ~/simtest_${{ inputs.phase }}_exit_code.tmp ~/simtest_${{ inputs.phase }}_exit_code' < /dev/null > ~/simtest_${{ inputs.phase }}_stdout.log 2>&1 &"
+        tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "sudo systemd-run --uid=ubuntu --gid=ubuntu --unit=simtest-${{ inputs.phase }}-${{ inputs.run-id }} --collect -p OOMPolicy=continue --working-directory=/home/ubuntu/sui bash -c 'source ~/.bashrc; source ~/.cargo/env; RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 STRESS_NUM_CPUS=12 TEST_NUM=${{ inputs.test-num }} SIMTEST_RUN_ID=${{ inputs.run-id }} SIMTEST_PHASES=${{ inputs.phases }} SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ inputs.protocol-config-override }} ./scripts/simtest/simtest-run.sh > ~/simtest_${{ inputs.phase }}_stdout.log 2>&1; echo \$? > ~/simtest_${{ inputs.phase }}_exit_code.tmp && mv ~/simtest_${{ inputs.phase }}_exit_code.tmp ~/simtest_${{ inputs.phase }}_exit_code'"
 
     - name: Wait for simtest completion
       shell: bash
@@ -72,9 +72,10 @@ runs:
         while true; do
           sleep 120
           # Use echo-based check so we can distinguish "SSH failed" from "file not found".
-          # If SSH succeeds, we get DONE or RUNNING. If SSH fails, output is empty.
+          # If SSH succeeds, we get DONE, RUNNING, BAD_EXIT_MARKER or DEAD (the unit
+          # is gone but never wrote its marker). If SSH fails, output is empty.
           result=$(tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 \
-            "if test -s ~/simtest_${{ inputs.phase }}_exit_code; then if grep -Eq '^[0-9]+$' ~/simtest_${{ inputs.phase }}_exit_code; then echo DONE; else echo BAD_EXIT_MARKER; fi; elif test -e ~/simtest_${{ inputs.phase }}_exit_code; then echo BAD_EXIT_MARKER; else echo RUNNING; fi" 2>/dev/null) || true
+            "if test -s ~/simtest_${{ inputs.phase }}_exit_code; then if grep -Eq '^[0-9]+$' ~/simtest_${{ inputs.phase }}_exit_code; then echo DONE; else echo BAD_EXIT_MARKER; fi; elif test -e ~/simtest_${{ inputs.phase }}_exit_code; then echo BAD_EXIT_MARKER; elif systemctl is-active --quiet simtest-${{ inputs.phase }}-${{ inputs.run-id }}.service; then echo RUNNING; elif sleep 5 && test -e ~/simtest_${{ inputs.phase }}_exit_code; then echo RUNNING; else echo DEAD; fi" 2>/dev/null) || true
           if [ "$result" = "DONE" ]; then
             echo "Simtest completed."
             break
@@ -85,6 +86,10 @@ runs:
           elif [ "$result" = "BAD_EXIT_MARKER" ]; then
             echo "::error::Remote simtest exit marker is missing, empty, or non-integer. Treating this as infrastructure failure."
             tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "ls -l ~/simtest_${{ inputs.phase }}_exit_code ~/simtest_${{ inputs.phase }}_stdout.log 2>/dev/null || true; df -h / /home /tmp; tail -200 ~/simtest_${{ inputs.phase }}_stdout.log 2>/dev/null || true" || true
+            exit 1
+          elif [ "$result" = "DEAD" ]; then
+            echo "::error::Remote simtest unit is no longer running but wrote no exit marker. Treating this as infrastructure failure."
+            tsh -i ${{ inputs.identity-file }} ssh ubuntu@simtest-01 "sudo journalctl -u simtest-${{ inputs.phase }}-${{ inputs.run-id }} --no-pager 2>/dev/null | tail -50 || true; df -h / /home /tmp; tail -200 ~/simtest_${{ inputs.phase }}_stdout.log 2>/dev/null || true" || true
             exit 1
           else
             # No output: the SSH call itself failed.
