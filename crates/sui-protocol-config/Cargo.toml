@@ -33,7 +33,3 @@ tempfile.workspace = true
 
 [features]
 testing = []
-
-[[test]]
-name = "base_overrides"
-required-features = ["testing"]
