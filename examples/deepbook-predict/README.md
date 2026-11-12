@@ -42,10 +42,12 @@ version 5, `deepbook_predict_orders` version 2 and Sessions version 4 accept
 calls. `client.predict.read.executionMode()` reports which path a network is
 on.
 
-Testnet works from `@mysten/deepbook-v3` 2.10.0, and Mainnet needs
-TBD-DBU-1166: SDK release or later, because earlier releases call the Predict,
-order-desk and Sessions versions that the Mainnet Version 5 cutover retired.
-The `package.json` floor moves to that release once it is published.
+Testnet works from `@mysten/deepbook-v3` 2.10.0. On Mainnet the direct
+examples need TBD-DBU-1166: SDK release or later, and the `sessions-*` files
+need TBD-DBU-1166: Sessions v4 SDK release or later, because earlier releases
+call the Predict, order-desk and Sessions versions that the Mainnet Version 5
+cutover retired. The `package.json` floor moves to the later of the two once
+it is published.
 
 The `sessions-*` files import from `@mysten/deepbook-v3/sessions`, a separate
 subpath from `/predict`. They build owner-signed grant transactions and
