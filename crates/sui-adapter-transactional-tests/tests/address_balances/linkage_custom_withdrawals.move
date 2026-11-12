@@ -9,22 +9,27 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 Consumer=0x0 --accounts A B
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public fun check(expected: u64) { assert!(expected == 1, 11) }
+module DepV1::m {
+    public fun check(expected: u64) { assert!(expected == 1, 11) }
+}
 
 //# publish --dependencies DepV1 --sender A
-module Consumer::m;
-public fun check(expected: u64) { DepV1::m::check(expected) }
+module Consumer::m {
+    public fun check(expected: u64) { DepV1::m::check(expected) }
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public struct New has drop {}
-public struct Mint has key { id: UID, supply: sui::balance::Supply<New> }
-public fun check(expected: u64) { assert!(expected == 2, 22) }
-public fun fund(ctx: &mut TxContext) {
-    let mut supply = sui::balance::create_supply(New {});
-    sui::balance::send_funds(supply.increase_supply(100), ctx.sender());
-    transfer::transfer(Mint { id: object::new(ctx), supply }, ctx.sender())
+module DepV2::m {
+    public struct New has drop {}
+    public struct Mint has key { id: UID, supply: sui::balance::Supply<New> }
+
+    public fun check(expected: u64) { assert!(expected == 2, 22) }
+
+    public fun fund(ctx: &mut TxContext) {
+        let mut supply = sui::balance::create_supply(New {});
+        sui::balance::send_funds(supply.increase_supply(100), ctx.sender());
+        transfer::transfer(Mint { id: object::new(ctx), supply }, ctx.sender())
+    }
 }
 
 //# run DepV2::m::fund --sender A

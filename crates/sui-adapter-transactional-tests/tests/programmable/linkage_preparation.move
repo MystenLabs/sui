@@ -8,20 +8,26 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 Consumer=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public struct Old has drop {}
-public fun ping() {}
+module DepV1::m {
+    public struct Old has drop {}
+
+    public fun ping() {}
+}
 
 //# publish --dependencies DepV1 --sender A
-module Consumer::m;
-public fun generic<T>() {}
-public fun argument(_: u64) {}
+module Consumer::m {
+    public fun generic<T>() {}
+
+    public fun argument(_: u64) {}
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public struct Old has drop {}
-public struct New has drop {}
-public fun ping() {}
+module DepV2::m {
+    public struct Old has drop {}
+    public struct New has drop {}
+
+    public fun ping() {}
+}
 
 //# programmable --sender A
 // Naming an old type through v2 only contributes its v1 defining ID, including nested types.

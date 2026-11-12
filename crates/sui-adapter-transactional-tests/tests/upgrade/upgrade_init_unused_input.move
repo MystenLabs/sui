@@ -9,24 +9,31 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 Consumer=0x0 U1=0x0 U2=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public fun version(): u64 { 1 }
-public fun ping() {}
+module DepV1::m {
+    public fun version(): u64 { 1 }
+
+    public fun ping() {}
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public fun version(): u64 { 2 }
-public fun ping() {}
+module DepV2::m {
+    public fun version(): u64 { 2 }
+
+    public fun ping() {}
+}
 
 //# publish --dependencies DepV1 --sender A
-module Consumer::m;
-public fun ping() { DepV1::m::ping() }
+module Consumer::m {
+    public fun ping() { DepV1::m::ping() }
+}
 
 //# publish --upgradeable --dependencies DepV1 --sender A
-module U1::m;
-public struct Obj has key, store { id: UID }
-public fun make(ctx: &mut TxContext) {
-    transfer::transfer(Obj { id: object::new(ctx) }, ctx.sender())
+module U1::m {
+    public struct Obj has key, store { id: UID }
+
+    public fun make(ctx: &mut TxContext) {
+        transfer::transfer(Obj { id: object::new(ctx) }, ctx.sender())
+    }
 }
 
 //# run U1::m::make --sender A
@@ -34,12 +41,14 @@ public fun make(ctx: &mut TxContext) {
 //# stage-package --dependencies DepV2
 module U2::m {
     public struct Obj has key, store { id: UID }
+
     public fun make(ctx: &mut TxContext) {
         transfer::transfer(Obj { id: object::new(ctx) }, ctx.sender())
     }
 }
 module U2::new_init {
     public struct Config has key { id: UID, version: u64 }
+
     fun init(ctx: &mut TxContext) {
         transfer::share_object(Config { id: object::new(ctx), version: DepV1::m::version() })
     }
