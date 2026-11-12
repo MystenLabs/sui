@@ -16,6 +16,7 @@ use crate::{
     jit::{
         execution::{
             ast::*,
+            key_interner::VirtualTableKeyInterner,
             type_interner::{ArenaTypeInterner, InternedType, PrimitiveType},
         },
         optimization::ast as input,
@@ -47,6 +48,7 @@ use indexmap::IndexMap;
 use tracing::instrument;
 
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
@@ -70,6 +72,7 @@ struct PackageContext<'borrows> {
 
     pub package_arena: ArenaBuilder,
     pub type_interner: ArenaTypeInterner,
+    pub key_interner: RefCell<VirtualTableKeyInterner>,
 
     pub vtable_funs: DefinitionMap<VMPointer<Function>>,
     pub vtable_types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
@@ -179,6 +182,12 @@ impl PackageContext<'_> {
         }
     }
 
+    fn intern_key(&self, key: VirtualTableKey) -> PartialVMResult<VMPointer<VirtualTableKey>> {
+        self.key_interner
+            .borrow_mut()
+            .intern(&self.package_arena, key)
+    }
+
     fn arena_vec<T>(
         &self,
         items: impl ExactSizeIterator<Item = T>,
@@ -275,6 +284,7 @@ pub fn package(
         loaded_modules: IndexMap::new(),
         package_arena: ArenaBuilder::new_bounded(vm_config),
         type_interner: ArenaTypeInterner::default(),
+        key_interner: RefCell::new(VirtualTableKeyInterner::default()),
         vtable_funs: DefinitionMap::empty(),
         vtable_types: DefinitionMap::empty(),
         type_origin_table,
@@ -292,6 +302,7 @@ pub fn package(
         loaded_modules,
         package_arena,
         type_interner: _,
+        key_interner: _,
         vtable_funs,
         vtable_types,
         type_origin_table: _,
@@ -701,6 +712,7 @@ fn structs(
             let def_vtable_key =
                 VirtualTableKey::from_parts(*original_id, *module_name, member_name);
 
+            let def_vtable_key = context.intern_key(def_vtable_key)?;
             let abilities = struct_handle.abilities;
 
             dbg_println!(
@@ -778,6 +790,7 @@ fn enums(
                 module.module_handle_at(enum_handle.module)
             );
 
+            let def_vtable_key = context.intern_key(def_vtable_key)?;
             let abilities = enum_handle.abilities;
 
             let type_parameters = context.arena_vec(enum_handle.type_parameters.iter().cloned())?;
@@ -894,7 +907,10 @@ fn field_handles(
         .iter()
         .map(|f_handle| {
             let def_idx = f_handle.owner;
-            let owner = structs.safe_get(def_idx.0 as usize)?.def_vtable_key.clone();
+            let owner = structs
+                .safe_get(def_idx.0 as usize)?
+                .def_vtable_key
+                .ptr_clone();
             let offset = f_handle.field as usize;
             Ok(FieldHandle { offset, owner })
         })
@@ -945,7 +961,7 @@ fn struct_instantiations(
 
             Ok(StructInstantiation {
                 field_count,
-                def_vtable_key: struct_def.def_vtable_key.clone(),
+                def_vtable_key: struct_def.def_vtable_key.ptr_clone(),
                 type_params,
             })
         })
@@ -978,7 +994,7 @@ fn enum_instantiations(
                 .safe_get(instantiation_idx.0 as usize)?
                 .ptr_clone();
 
-            let def_vtable_key = enum_def.def_vtable_key.clone();
+            let def_vtable_key = enum_def.def_vtable_key.ptr_clone();
             let enum_def = VMPointer::from_ref(enum_def);
 
             Ok(EnumInstantiation {
@@ -1027,7 +1043,7 @@ fn field_instantiations(
         .iter()
         .map(|f_inst| {
             let fh_idx = f_inst.handle;
-            let owner = field_handles.safe_get(fh_idx.0 as usize)?.owner.clone();
+            let owner = field_handles.safe_get(fh_idx.0 as usize)?.owner.ptr_clone();
             let offset = field_handles.safe_get(fh_idx.0 as usize)?.offset;
 
             Ok(FieldInstantiation { offset, owner })
@@ -1210,7 +1226,11 @@ fn alloc_function(
         let package_key = context.original_id;
         let module_name = *module_name;
         let member_name = context.interner.intern_ident_str(name_ident_str);
-        VirtualTableKey::from_parts(package_key, module_name, member_name)
+        context.intern_key(VirtualTableKey::from_parts(
+            package_key,
+            module_name,
+            member_name,
+        ))?
     };
     let parameters = module
         .signature_at(handle.parameters)
@@ -1726,7 +1746,7 @@ fn call(
     Ok(
         match context.try_resolve_direct_function_call(&vtable_key)? {
             Some(func) => CallType::Direct(func),
-            None => CallType::Virtual(vtable_key),
+            None => CallType::Virtual(context.intern_key(vtable_key)?),
         },
     )
 }
@@ -1829,7 +1849,7 @@ fn make_arena_type_impl(
                 .intern_mutable_reference(&context.package_arena, inner)
         }
         SignatureToken::Datatype(handle) => {
-            let datatype = datatype_key(context, module, *handle);
+            let datatype = datatype_key(context, module, *handle)?;
             context
                 .type_interner
                 .intern_datatype(&context.package_arena, datatype)
@@ -1840,7 +1860,7 @@ fn make_arena_type_impl(
                 .iter()
                 .map(|argument| make_arena_type_impl(context, module, argument, type_size))
                 .collect::<PartialVMResult<Vec<_>>>()?;
-            let datatype = datatype_key(context, module, *handle);
+            let datatype = datatype_key(context, module, *handle)?;
             context.type_interner.intern_datatype_instantiation(
                 &context.package_arena,
                 datatype,
@@ -1854,7 +1874,7 @@ fn datatype_key(
     context: &PackageContext,
     module: &CompiledModule,
     handle: FF::DatatypeHandleIndex,
-) -> VirtualTableKey {
+) -> PartialVMResult<VMPointer<VirtualTableKey>> {
     let datatype_handle = module.datatype_handle_at(handle);
     let datatype_name = context
         .interner
@@ -1864,5 +1884,9 @@ fn datatype_key(
     let module_name = context
         .interner
         .intern_ident_str(module.identifier_at(module_handle.name));
-    VirtualTableKey::from_parts(*original_address, module_name, datatype_name)
+    context.intern_key(VirtualTableKey::from_parts(
+        *original_address,
+        module_name,
+        datatype_name,
+    ))
 }

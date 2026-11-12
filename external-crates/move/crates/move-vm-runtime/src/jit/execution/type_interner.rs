@@ -34,9 +34,9 @@ enum TypeNodeKey {
     Vector(TypeId),
     Reference(TypeId),
     MutableReference(TypeId),
-    Datatype(VirtualTableKey),
+    Datatype(VMPointer<VirtualTableKey>),
     DatatypeInstantiation {
-        datatype: VirtualTableKey,
+        datatype: VMPointer<VirtualTableKey>,
         type_arguments: Box<[TypeId]>,
     },
 }
@@ -129,11 +129,11 @@ impl ArenaTypeInterner {
     pub(crate) fn intern_datatype(
         &mut self,
         arena: &ArenaBuilder,
-        datatype: VirtualTableKey,
+        datatype: VMPointer<VirtualTableKey>,
     ) -> PartialVMResult<InternedType> {
         self.intern(
             arena,
-            TypeNodeKey::Datatype(datatype.clone()),
+            TypeNodeKey::Datatype(datatype.ptr_clone()),
             ArenaType::Datatype(datatype),
         )
     }
@@ -141,11 +141,11 @@ impl ArenaTypeInterner {
     pub(crate) fn intern_datatype_instantiation(
         &mut self,
         arena: &ArenaBuilder,
-        datatype: VirtualTableKey,
+        datatype: VMPointer<VirtualTableKey>,
         type_arguments: Vec<InternedType>,
     ) -> PartialVMResult<InternedType> {
         let key = TypeNodeKey::DatatypeInstantiation {
-            datatype: datatype.clone(),
+            datatype: datatype.ptr_clone(),
             type_arguments: type_arguments.iter().map(|argument| argument.id).collect(),
         };
         if let Some(interned) = self.get(&key) {

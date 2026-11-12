@@ -587,7 +587,7 @@ impl VMDispatchTables {
         if let Some(hit) = self.size_formulas.get(key) {
             return Ok(hit);
         }
-        self.resolve_size_formulas(std::slice::from_ref(key))?;
+        self.resolve_size_formulas(std::iter::once(key))?;
         self.size_formulas.get(key).ok_or_else(|| {
             partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -629,9 +629,12 @@ impl VMDispatchTables {
     /// their children); reaching one as a dependency again means the datatype graph is cyclic.
     /// It is only ever probed by key (never iterated), so hashing order is not a determinism
     /// hazard.
-    fn resolve_size_formulas(&self, roots: &[VirtualTableKey]) -> PartialVMResult<()> {
+    fn resolve_size_formulas<'a>(
+        &self,
+        roots: impl IntoIterator<Item = &'a VirtualTableKey>,
+    ) -> PartialVMResult<()> {
         let mut visiting: HashSet<VirtualTableKey> = HashSet::new();
-        let mut stack: Vec<VirtualTableKey> = roots.to_vec();
+        let mut stack: Vec<VirtualTableKey> = roots.into_iter().cloned().collect();
         while let Some(current) = stack.last().cloned() {
             if self.size_formulas.contains(&current) {
                 stack.pop();
