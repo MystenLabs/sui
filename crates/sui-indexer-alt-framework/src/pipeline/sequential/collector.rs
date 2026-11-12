@@ -36,20 +36,25 @@ pub(super) struct BatchedRows<H: Handler> {
 /// whenever the next expected checkpoint has arrived and the committer has room for another batch
 /// (`committer_tx` has a free slot), it cuts a batch from the contiguous run of checkpoints
 /// starting there. While the committer is busy, checkpoints keep accumulating, so batches grow
-/// under back-pressure, up to `max_batch_checkpoints`. If `config.committer.min_batch_rows` is
-/// set, a batch is only cut once that many rows are pending (counting rows buffered for
-/// checkpoints that arrived ahead of their predecessors), or once rows have been pending for
-/// `config.committer.max_batch_delay()`. When the processor closes its channel, every checkpoint
-/// that can still be written in order is written out.
+/// under back-pressure, up to `max_batch_checkpoints` or until the reorder buffer is full (see
+/// below). If `config.committer.min_batch_rows` is set, a batch is only cut once that many rows
+/// are pending (counting rows buffered for checkpoints that arrived ahead of their predecessors),
+/// once rows have been pending for `config.committer.max_batch_delay()`, or once the reorder
+/// buffer is full. When the processor closes its channel, every checkpoint that can still be
+/// written in order is written out.
 ///
 /// Backpressure: when `committer_tx` is full (bounded by `pipeline_depth`), the collector stops
-/// cutting batches. It keeps reading `rx` into the reorder buffer until `max_pending_rows` are
-/// pending at a time, so the processor→collector channel fills and the adaptive fanout / ingest
-/// controllers cut upstream concurrency.
+/// cutting batches, and checkpoints accumulate in the reorder buffer. Once `max_pending_rows` are
+/// pending and the next checkpoint has arrived, the buffer is full: the collector stops receiving
+/// from `rx` until it cuts a batch, so the processor→collector channel fills, the processor
+/// blocks, and the ingestion service slows down to this pipeline's pace. A full buffer makes a
+/// batch due regardless of `min_batch_rows`, so a `min_batch_rows` above `max_pending_rows` cannot
+/// leave the collector with receive stopped and no batch to cut.
 ///
-/// `max_pending_rows` is a soft cap: when exceeded, the inner drain loop yields so a batch can be
-/// cut. `rx.recv()` itself is never gated, because the missing predecessor for a stuck `pending`
-/// may still be sitting in `rx`; hard-gating receive would risk deadlock.
+/// While the next checkpoint is missing, the collector keeps receiving past `max_pending_rows`,
+/// because the missing checkpoint may still be in `rx` and nothing can be written until it
+/// arrives. Once it arrives, receiving stops again until batches bring the buffer below
+/// `max_pending_rows` or use up the contiguous run of checkpoints.
 pub(super) fn collector<H: Handler>(
     handler: Arc<H>,
     config: SequentialConfig,
@@ -73,7 +78,11 @@ pub(super) fn collector<H: Handler>(
 
         loop {
             let ready = has_ready_checkpoint(next_checkpoint, &pending);
-            let batch_due = ready && floor.is_reached(pending_rows);
+            // Only the next checkpoint counts, not stale duplicates of written ones: while it is
+            // missing, it may still be in `rx`, so receiving must continue.
+            let buffer_full =
+                pending.contains_key(&next_checkpoint) && pending_rows >= max_pending_rows;
+            let batch_due = buffer_full || (ready && floor.is_reached(pending_rows));
 
             tokio::select! {
                 biased;
@@ -101,23 +110,24 @@ pub(super) fn collector<H: Handler>(
                     floor.set_pending(!pending.is_empty());
                 }
 
-                received = rx.recv() => {
+                received = rx.recv(), if !buffer_full => {
                     // The processor has stopped, so write out everything that can be written.
                     let Some(mut indexed) = received else {
                         break;
                     };
 
-                    // Eagerly drain the channel to avoid scheduler ping-pong. `rx.recv`
-                    // itself is never gated — the reorder buffer must stay unbounded,
-                    // because a missing predecessor may still be sitting in `rx` and
-                    // capping receive could deadlock. The `max_pending_rows` check inside
-                    // the drain loop only yields so that a batch can be cut, it is not a
-                    // hard-cap on the amount of rows buffered.
+                    // Eagerly drain the channel to avoid scheduler ping-pong, until the buffer
+                    // reaches `max_pending_rows`. Whether receiving continues past that is
+                    // decided by `buffer_full` on the next iteration: only while the next
+                    // checkpoint is missing, because it may be among the checkpoints still in
+                    // `rx`.
                     let mut recv_rows = 0usize;
                     loop {
                         recv_rows += indexed.len();
                         pending_rows += indexed.len();
-                        pending.insert(indexed.checkpoint(), indexed);
+                        if let Some(replaced) = pending.insert(indexed.checkpoint(), indexed) {
+                            pending_rows -= replaced.len();
+                        }
 
                         if pending_rows >= max_pending_rows {
                             break;
