@@ -527,6 +527,8 @@ pub(crate) struct CheckpointQueue {
     current_checkpoint_seq: CheckpointSequenceNumber,
     max_tx: usize,
     min_checkpoint_interval_ms: u64,
+    // When set, a flush forced by max_tx overflow leaves last_built_timestamp unchanged.
+    interval_ignores_forced_flush: bool,
     execution_scheduler_sender: ExecutionSchedulerSender,
     undrained_run: Option<UndrainedRun>,
 }
@@ -550,6 +552,7 @@ impl CheckpointQueue {
         next_checkpoint_seq: CheckpointSequenceNumber,
         max_tx: usize,
         min_checkpoint_interval_ms: u64,
+        interval_ignores_forced_flush: bool,
         execution_scheduler_sender: ExecutionSchedulerSender,
     ) -> Self {
         Self {
@@ -560,6 +563,7 @@ impl CheckpointQueue {
             current_checkpoint_seq: next_checkpoint_seq,
             max_tx,
             min_checkpoint_interval_ms,
+            interval_ignores_forced_flush,
             execution_scheduler_sender,
             undrained_run: None,
         }
@@ -582,6 +586,7 @@ impl CheckpointQueue {
             current_checkpoint_seq: next_checkpoint_seq,
             max_tx,
             min_checkpoint_interval_ms,
+            interval_ignores_forced_flush: true,
             execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
             undrained_run: None,
         }
@@ -604,6 +609,7 @@ impl CheckpointQueue {
             current_checkpoint_seq: next_checkpoint_seq,
             max_tx,
             min_checkpoint_interval_ms,
+            interval_ignores_forced_flush: true,
             execution_scheduler_sender: ExecutionSchedulerSender::new_for_testing(sender),
             undrained_run: None,
         }
@@ -683,7 +689,7 @@ impl CheckpointQueue {
 
         if self.pending_tx_count > 0
             && self.pending_tx_count + user_tx_count > max_tx
-            && let Some(checkpoint) = self.flush_forced()
+            && let Some(checkpoint) = self.flush_roots(!self.interval_ignores_forced_flush)
         {
             flushed_checkpoints.push(checkpoint);
         }
@@ -730,6 +736,10 @@ impl CheckpointQueue {
     }
 
     fn flush_forced(&mut self) -> Option<PendingCheckpoint> {
+        self.flush_roots(true)
+    }
+
+    fn flush_roots(&mut self, update_last_built_timestamp: bool) -> Option<PendingCheckpoint> {
         if self.pending_roots.is_empty() {
             return None;
         }
@@ -749,7 +759,9 @@ impl CheckpointQueue {
             },
         };
 
-        self.last_built_timestamp = last_root.timestamp;
+        if update_last_built_timestamp {
+            self.last_built_timestamp = last_root.timestamp;
+        }
         self.pending_tx_count = 0;
         self.current_checkpoint_seq += 1;
 
@@ -876,6 +888,9 @@ impl<C> ConsensusHandler<C> {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
+        let interval_ignores_forced_flush = epoch_store
+            .protocol_config()
+            .checkpoint_interval_ignores_forced_flush();
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         let next_checkpoint_seq = last_consensus_stats.checkpoint_seq + 1;
@@ -904,6 +919,7 @@ impl<C> ConsensusHandler<C> {
                 next_checkpoint_seq,
                 max_tx,
                 min_checkpoint_interval_ms,
+                interval_ignores_forced_flush,
                 execution_scheduler_sender,
             )),
         }
@@ -939,6 +955,9 @@ impl<C> ConsensusHandler<C> {
             .protocol_config()
             .min_checkpoint_interval_ms_as_option()
             .unwrap_or_default();
+        let interval_ignores_forced_flush = epoch_store
+            .protocol_config()
+            .checkpoint_interval_ignores_forced_flush();
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         Self {
@@ -966,6 +985,7 @@ impl<C> ConsensusHandler<C> {
                 0,
                 max_tx,
                 min_checkpoint_interval_ms,
+                interval_ignores_forced_flush,
                 execution_scheduler_sender,
             )),
         }
@@ -5600,6 +5620,28 @@ mod tests {
             assert!(!queue.record_commit_end(1000 + 10 * MAX_UNDRAINED_MS));
             queue.flush(u64::MAX, true);
             assert!(queue.record_commit_end(1000 + 10 * MAX_UNDRAINED_MS));
+        }
+
+        #[test]
+        fn test_overflow_flush_and_interval_timer() {
+            for ignores_forced_flush in [false, true] {
+                let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0, 10, 200);
+                queue.interval_ignores_forced_flush = ignores_forced_flush;
+                let versions = default_versions();
+                for (height, ts) in [(1, 1100), (2, 1150)] {
+                    queue.push_chunk(
+                        make_chunk(6, height),
+                        &versions,
+                        ts,
+                        make_commit_ref(height as u32),
+                        Digest::default(),
+                    );
+                }
+                let expected = if ignores_forced_flush { 1000 } else { 1100 };
+                assert_eq!(queue.last_built_timestamp, expected);
+                // The time-based flush at 1200 fires only when the overflow left the timer alone.
+                assert_eq!(queue.flush(1200, false).is_some(), ignores_forced_flush);
+            }
         }
 
         #[test]

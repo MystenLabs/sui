@@ -441,6 +441,8 @@ const MAINNET_USDB: &str =
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 //              Enable ML-DSA-65 account signatures on testnet.
 // Version 144: Enable timestamp-based transaction expiration on devnet.
+//              Do not restart the checkpoint interval timer on a flush forced by the
+//              transaction limit.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1410,6 +1412,12 @@ struct FeatureFlags {
     // `TransactionExpired`.
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
+
+    // If true, a checkpoint flush forced by max_transactions_per_checkpoint does not restart
+    // the min_checkpoint_interval_ms timer. Otherwise sustained load can keep the time-based
+    // flush from ever emptying the consensus handler's checkpoint queue.
+    #[serde(skip_serializing_if = "is_false")]
+    checkpoint_interval_ignores_forced_flush: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -5076,6 +5084,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_timestamp_transaction_expiration = true;
                     }
                     cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
+                    cfg.feature_flags.checkpoint_interval_ignores_forced_flush = true;
                 }
                 // Use this template when making changes:
                 //
