@@ -415,6 +415,7 @@ async fn context(
         list_transactions: Some(method_config.clone()),
         list_events: Some(method_config.clone()),
         list_checkpoints: Some(method_config),
+        list_object_versions: None,
         bitmap_bucket_budget_tx: Some(limits.bucket_budget),
         bitmap_bucket_budget_event: Some(limits.bucket_budget),
         bitmap_drain_probe_rows: None,
