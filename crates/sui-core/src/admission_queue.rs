@@ -179,6 +179,7 @@ pub struct AdmissionQueueMetrics {
     pub queue_wait_latency: HistogramVec,
     pub evictions: IntCounter,
     pub rejections: IntCounter,
+    pub expired: IntCounter,
     pub duplicate_inserts: IntCounter,
 
     pub pool_depth: IntGaugeVec,
@@ -226,6 +227,12 @@ impl AdmissionQueueMetrics {
             rejections: register_int_counter_with_registry!(
                 "admission_queue_rejections",
                 "Number of transactions rejected because the queue was full and their gas price was too low",
+                registry,
+            )
+            .unwrap(),
+            expired: register_int_counter_with_registry!(
+                "admission_queue_expired",
+                "Number of queued transactions dropped for exceeding their time to live",
                 registry,
             )
             .unwrap(),
@@ -503,6 +510,31 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         }
         self.metrics.queue_depth.set(self.total_len as i64);
         (included, excluded)
+    }
+
+    /// Pops, from the front of each price level, the entries for which `pred` holds,
+    /// stopping each level at the first entry for which it does not. Within a level
+    /// entries are ordered by admission time, so a predicate on age pops the aged prefix
+    /// and a level with no match costs one call.
+    pub fn pop_front_while(&mut self, mut pred: impl FnMut(&mut E) -> bool) -> Vec<E> {
+        let mut popped = Vec::new();
+        for deque in self.map.values_mut() {
+            while let Some(front) = deque.front_mut()
+                && pred(front)
+            {
+                popped.push(deque.pop_front().expect("front was just observed"));
+            }
+        }
+        if popped.is_empty() {
+            return popped;
+        }
+        self.total_len -= popped.len();
+        for entry in &popped {
+            self.remove_keys(entry);
+        }
+        self.map.retain(|_, deque| !deque.is_empty());
+        self.metrics.queue_depth.set(self.total_len as i64);
+        popped
     }
 
     pub fn is_empty(&self) -> bool {
@@ -926,6 +958,94 @@ mod tests {
         ));
         assert_eq!(q.len(), 1);
         assert!(rejected_rx.try_recv().is_err());
+    }
+
+    fn entry_at(gas_price: u64, enqueue_time: Instant) -> QueueEntry {
+        let mut entry = make_test_entry(gas_price).0;
+        entry.enqueue_time = enqueue_time;
+        entry
+    }
+
+    fn expired_at(now: Instant, ttl: Duration) -> impl FnMut(&mut QueueEntry) -> bool {
+        move |entry| now.saturating_duration_since(entry.enqueue_time) >= ttl
+    }
+
+    fn remaining(q: &mut PriorityAdmissionQueue<QueueEntry>) -> Vec<(u64, Instant)> {
+        let len = q.len();
+        q.pop_batch(len)
+            .into_iter()
+            .map(|entry| (entry.gas_price, entry.enqueue_time))
+            .collect()
+    }
+
+    #[test]
+    fn pop_front_while_drops_aged_entries_and_their_keys() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics.clone());
+        let now = Instant::now();
+        let mut keyed = entry_at(100, now);
+        keyed.transactions = vec![ConsensusTransaction::new_end_of_publish(
+            sui_types::base_types::AuthorityName::ZERO,
+        )];
+        q.insert(keyed).unwrap();
+        q.insert(entry_at(200, now)).unwrap();
+
+        let popped = q.pop_front_while(expired_at(
+            now + Duration::from_secs(120),
+            Duration::from_secs(60),
+        ));
+        assert_eq!(popped.len(), 2);
+        assert_eq!(q.len(), 0);
+        assert_eq!(metrics.queue_depth.get(), 0);
+        assert!(q.queued_keys.is_empty());
+        assert!(q.map.is_empty());
+    }
+
+    #[test]
+    fn pop_front_while_keeps_fresh_entries() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        let now = Instant::now();
+        q.insert(entry_at(100, now)).unwrap();
+        q.insert(entry_at(200, now)).unwrap();
+
+        let popped = q.pop_front_while(expired_at(now, Duration::from_secs(60)));
+        assert!(popped.is_empty());
+        assert_eq!(q.len(), 2);
+    }
+
+    #[test]
+    fn pop_front_while_pops_the_aged_prefix_of_every_level() {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+        let now = Instant::now();
+        let ttl = Duration::from_secs(60);
+        let fresh = now + Duration::from_secs(120);
+        // Level 100 is entirely fresh and sits below level 200, so a sweep that stops at
+        // the first fresh level never reaches 200.
+        q.insert(entry_at(100, fresh)).unwrap();
+        // Level 200 holds two adjacent aged entries ahead of a fresh one.
+        q.insert(entry_at(200, now)).unwrap();
+        q.insert(entry_at(200, now + Duration::from_secs(1)))
+            .unwrap();
+        q.insert(entry_at(200, fresh)).unwrap();
+        // Level 300 ends with an aged entry behind a fresh one, which stays queued.
+        q.insert(entry_at(300, fresh)).unwrap();
+        q.insert(entry_at(300, now)).unwrap();
+
+        let popped = q.pop_front_while(expired_at(now + ttl + Duration::from_secs(1), ttl));
+        let popped: Vec<_> = popped
+            .into_iter()
+            .map(|entry| (entry.gas_price, entry.enqueue_time))
+            .collect();
+        assert_eq!(
+            popped,
+            vec![(200, now), (200, now + Duration::from_secs(1))]
+        );
+        assert_eq!(
+            remaining(&mut q),
+            vec![(300, fresh), (300, now), (200, fresh), (100, fresh)]
+        );
     }
 
     fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {

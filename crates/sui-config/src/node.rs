@@ -319,6 +319,13 @@ pub struct ConsensusTransactionPoolConfig {
     /// two maximum-size blocks per second (`max_transactions_in_block_bytes`).
     /// Must be greater than zero.
     pub max_user_bytes_per_second: Option<u64>,
+
+    /// Drop user-lane entries that have waited at least this many seconds,
+    /// bounding how long a transaction sits in the pool rather than only how many
+    /// are queued. Defaults to 60 seconds when unset or `~`; 0 disables expiry.
+    /// A value below the longest staggered-submission hold (about 5 seconds)
+    /// expires held entries before this validator can propose them.
+    pub max_queue_age_secs: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -328,6 +335,7 @@ impl Default for ConsensusTransactionPoolConfig {
             max_pending_transactions: None,
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
+            max_queue_age_secs: None,
         }
     }
 }
@@ -343,6 +351,16 @@ impl ConsensusTransactionPoolConfig {
             self.max_user_bytes_per_second
                 .unwrap_or(max_transactions_in_block_bytes.saturating_mul(2))
         })
+    }
+
+    pub const MIN_RECOMMENDED_MAX_QUEUE_AGE: Duration = Duration::from_secs(10);
+
+    pub fn max_queue_age(&self) -> Option<Duration> {
+        match self.max_queue_age_secs {
+            Some(0) => None,
+            Some(secs) => Some(Duration::from_secs(secs)),
+            None => Some(Duration::from_secs(60)),
+        }
     }
 }
 
@@ -1883,6 +1901,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::time::Duration;
 
     use fastcrypto::traits::KeyPair;
     use rand::{SeedableRng, rngs::StdRng};
@@ -1891,7 +1910,8 @@ mod tests {
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
     use super::{
-        AuthorityStorePruningConfig, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
+        AuthorityStorePruningConfig, ConsensusTransactionPoolConfig, ExecutionTimeObserverConfig,
+        Genesis, StateArchiveConfig,
     };
     use crate::NodeConfig;
 
@@ -1948,6 +1968,33 @@ mod tests {
             round_tripped.rpc_store_bitmap_periodic_compaction_days,
             Some(17)
         );
+    }
+
+    #[test]
+    fn max_queue_age_defaults_and_disable() {
+        let default = ConsensusTransactionPoolConfig::default();
+        assert_eq!(default.max_queue_age(), Some(Duration::from_secs(60)));
+
+        let configured = ConsensusTransactionPoolConfig {
+            max_queue_age_secs: Some(120),
+            ..Default::default()
+        };
+        assert_eq!(configured.max_queue_age(), Some(Duration::from_secs(120)));
+
+        let disabled = ConsensusTransactionPoolConfig {
+            max_queue_age_secs: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(disabled.max_queue_age(), None);
+
+        let parsed: ConsensusTransactionPoolConfig =
+            serde_yaml::from_str("max-queue-age-secs: 0").unwrap();
+        assert_eq!(parsed.max_queue_age(), None);
+        let parsed: ConsensusTransactionPoolConfig =
+            serde_yaml::from_str("max-queue-age-secs: 5").unwrap();
+        assert_eq!(parsed.max_queue_age(), Some(Duration::from_secs(5)));
+        let omitted: ConsensusTransactionPoolConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(omitted.max_queue_age(), Some(Duration::from_secs(60)));
     }
 
     #[test]

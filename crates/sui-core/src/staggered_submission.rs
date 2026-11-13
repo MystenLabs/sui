@@ -1814,6 +1814,61 @@ mod pool_tests {
     }
 
     #[tokio::test]
+    async fn expired_held_entries_release_their_quota() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, _, _, candidates) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let ttl = Duration::from_secs(1);
+        let pool = Arc::new(ConsensusTransactionPool::new(
+            epoch_store.clone(),
+            state.get_cache_writer().clone(),
+            10,
+            None,
+            Some(ttl),
+            metrics.clone(),
+            crate::consensus_adapter::ConsensusAdapterMetrics::new_test(),
+        ));
+
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+        });
+        staggered.set_active(true);
+
+        let mut held_gas = candidates
+            .iter()
+            .filter(|object| slot_for_gas(&epoch_store, &[object.id()]) == HELD_SLOT)
+            .cloned();
+        let mut receivers = Vec::new();
+        for _ in 0..2 {
+            let gas = held_gas.next().expect("not enough held-slot gas objects");
+            receivers.push(insert(&pool, &state, sender, &keypair, gas).await.0);
+        }
+        assert_eq!(metrics.pool_staggered_held.get(), 2);
+
+        tokio::time::sleep(ttl + Duration::from_millis(200)).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert!(transactions.is_empty());
+        drop(ack);
+        assert_eq!(metrics.pool_staggered_held.get(), 0);
+        for receiver in receivers {
+            assert!(matches!(
+                receiver.await.unwrap().unwrap_err().as_inner(),
+                SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+            ));
+        }
+
+        let gas = held_gas.next().expect("not enough held-slot gas objects");
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, gas).await;
+        pool.close();
+    }
+
+    #[tokio::test]
     async fn staggered_entry_held_until_eligible() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
             c.set_allowed_proposers_for_testing(true);
