@@ -316,6 +316,17 @@ impl StateReader {
         Ok(AtCheckpointUpperBound { highest_indexed })
     }
 
+    /// [`version_not_retained`] if this node does not keep object versions once they are replaced
+    /// (see [`RpcStateReader::retains_object_version_history`]): reads that depend on an object's
+    /// replaced versions would find them gone and answer `NotFound`. The refusal depends only on
+    /// the node's configuration, so check it before anything that depends on the node's state.
+    pub fn require_object_version_history(&self) -> Result<(), crate::RpcError> {
+        if self.inner().retains_object_version_history() {
+            return Ok(());
+        }
+        Err(version_not_retained())
+    }
+
     /// The lower bound for checkpoint-pinned reads: the checkpoint just below the higher of
     /// [`RpcStateReader::get_lowest_available_checkpoint_objects`] and
     /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]. The lowest available
@@ -530,6 +541,22 @@ pub(crate) fn indexes_disabled() -> crate::RpcError {
     not_served_here(NotServedHereCause::NoRpcIndexes, "rpc indexes are disabled")
 }
 
+/// The refusal for a read of an object version that this node, which keeps only each object's
+/// latest version, deleted when a later version replaced it: `OutOfRange` with a
+/// `VERSION_NOT_RETAINED` [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo) and no metadata.
+/// The same request fails the same way on this node; a node that keeps object version history
+/// may serve it.
+pub(crate) fn version_not_retained() -> crate::RpcError {
+    crate::RpcError::new(
+        tonic::Code::OutOfRange,
+        "this node keeps only the latest version of each object, so it cannot answer reads of \
+         earlier versions",
+    )
+    .with_details(
+        ErrorDetails::new().with_error_info(ledger_error_info(ErrorReason::VersionNotRetained, [])),
+    )
+}
+
 /// [`not_ready`] with cause `index_empty`: the rpc indexes have not committed a checkpoint yet.
 pub(crate) fn index_empty() -> crate::RpcError {
     not_ready(NotReadyCause::IndexEmpty, "rpc index is empty")
@@ -620,11 +647,80 @@ impl<S: SyncPackageStore + Sync> sui_display::v2::Store for DisplayStore<'_, S> 
     }
 }
 
+/// Asserts `error` is `code` with exactly one [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo):
+/// `reason` in the [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
+#[cfg(test)]
+pub(crate) fn assert_refusal(
+    error: crate::RpcError,
+    code: tonic::Code,
+    reason: ErrorReason,
+    cause: &str,
+) {
+    use crate::proto::google::rpc::ErrorInfo;
+
+    let status = error.into_status_proto();
+    assert_eq!(status.code, code as i32, "{status:?}");
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    assert_eq!(
+        error_info.metadata,
+        [("cause".to_owned(), cause.to_owned())].into(),
+        "{status:?}"
+    );
+}
+
+/// [`assert_refusal`] for [`not_served_here`] with `cause`.
+#[cfg(test)]
+pub(crate) fn assert_not_served_here(error: crate::RpcError, cause: NotServedHereCause) {
+    assert_refusal(
+        error,
+        tonic::Code::Unimplemented,
+        ErrorReason::NotServedHere,
+        cause.as_str(),
+    );
+}
+
+/// Asserts `error` is [`version_not_retained`]: `OutOfRange` with exactly one
+/// [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo), `VERSION_NOT_RETAINED` in the
+/// [`ErrorReason::DOMAIN`] domain, without metadata.
+#[cfg(test)]
+pub(crate) fn assert_version_not_retained(error: crate::RpcError) {
+    use crate::proto::google::rpc::ErrorInfo;
+
+    let status = error.into_status_proto();
+    assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::VersionNotRetained.as_str_name(),
+        "{status:?}"
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    assert!(error_info.metadata.is_empty(), "{status:?}");
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::cell::Cell;
 
     use super::*;
+    // Tests in other modules import the helpers from here.
+    pub(crate) use super::assert_refusal;
 
     #[test]
     fn dedup_checkpoint_timestamps_fetches_sorted_unique_checkpoints_once() {
@@ -716,35 +812,6 @@ pub(crate) mod tests {
                 .unwrap();
         }
         batch.commit().unwrap();
-    }
-
-    /// Asserts `error` is `code` with exactly one [`ErrorInfo`]: `reason` in the
-    /// [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
-    pub(crate) fn assert_refusal(
-        error: crate::RpcError,
-        code: tonic::Code,
-        reason: ErrorReason,
-        cause: &str,
-    ) {
-        use crate::proto::google::rpc::ErrorInfo;
-
-        let status = error.into_status_proto();
-        assert_eq!(status.code, code as i32, "{status:?}");
-        let error_infos: Vec<ErrorInfo> = status
-            .details
-            .iter()
-            .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
-            .collect();
-        let [error_info] = error_infos.as_slice() else {
-            panic!("expected exactly one ErrorInfo in {status:?}");
-        };
-        assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
-        assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
-        assert_eq!(
-            error_info.metadata,
-            [("cause".to_owned(), cause.to_owned())].into(),
-            "{status:?}"
-        );
     }
 
     /// Checkpoint-pinned reads are refused as not ready while the indexes are empty and while a
