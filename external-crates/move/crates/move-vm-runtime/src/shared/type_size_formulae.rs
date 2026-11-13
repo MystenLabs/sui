@@ -349,6 +349,7 @@ impl MaxPlusForm {
     }
 }
 
+/// Computes syntactic size and depth forms, combining repeated parameters by sum and maximum.
 fn syntactic_forms(ty: &ArenaType) -> (LinearForm, MaxPlusForm) {
     let mut type_size = LinearForm::constant(0);
     let mut type_depth = MaxPlusForm::constant(0);
