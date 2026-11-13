@@ -9,7 +9,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::Struct;
 use sui_package_resolver::{Limits as ResolverLimits, PackageStoreWithLruCache, SyncResolver};
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{ProtocolConfig, max_across_protocol};
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
@@ -50,18 +50,6 @@ fn resolver_limits() -> ResolverLimits {
             .unwrap_or(512) as usize,
         })
         .clone()
-}
-
-fn max_across_protocol<T: Ord>(f: impl Fn(&ProtocolConfig) -> Option<T>) -> Option<T> {
-    let mut max = None;
-    let mut version = ProtocolVersion::MIN;
-    while version <= ProtocolVersion::MAX {
-        max = max.max(f(&ProtocolConfig::get_for_version(version, Chain::Unknown)));
-        max = max.max(f(&ProtocolConfig::get_for_version(version, Chain::Mainnet)));
-        max = max.max(f(&ProtocolConfig::get_for_version(version, Chain::Testnet)));
-        version = version + 1;
-    }
-    max
 }
 
 /// Reuses parsed packages while rendering a response against a fixed object overlay.

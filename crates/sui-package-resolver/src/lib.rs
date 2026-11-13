@@ -56,8 +56,12 @@ use sui_types::type_input::StructInput;
 use sui_types::type_input::TypeInput;
 
 use crate::error::Error;
+use crate::limits::{LayoutBudget, LayoutMeter};
 
 pub mod error;
+mod limits;
+
+pub use limits::Limits;
 
 // TODO Move to ServiceConfig
 
@@ -80,91 +84,6 @@ pub struct Resolver<S> {
 pub struct SyncResolver<S> {
     package_store: S,
     limits: Option<Limits>,
-}
-
-/// Optional configuration that imposes limits on the work that the resolver can do for each
-/// request.
-#[derive(Debug, Clone)]
-pub struct Limits {
-    /// Maximum recursion depth through type parameters.
-    pub max_type_argument_depth: usize,
-    /// Maximum number of type arguments in a single type instantiation.
-    pub max_type_argument_width: usize,
-    /// Maximum size for the resolution context.
-    pub max_type_nodes: usize,
-    /// Maximum recursion depth through struct fields.
-    pub max_move_value_depth: usize,
-    /// Maximum number of nodes constructed while resolving a type layout.
-    pub max_layout_nodes: usize,
-}
-
-impl Limits {
-    fn layout_budget(&self) -> LayoutBudget {
-        LayoutBudget {
-            max_nodes: Some(self.max_layout_nodes),
-            remaining_nodes: self.max_layout_nodes,
-            max_depth: Some(self.max_move_value_depth),
-            remaining_depth: self.max_move_value_depth,
-        }
-    }
-}
-
-struct LayoutBudget {
-    max_nodes: Option<usize>,
-    remaining_nodes: usize,
-    max_depth: Option<usize>,
-    remaining_depth: usize,
-}
-
-impl LayoutBudget {
-    fn unlimited() -> Self {
-        Self {
-            max_nodes: None,
-            remaining_nodes: usize::MAX,
-            max_depth: None,
-            remaining_depth: usize::MAX,
-        }
-    }
-
-    fn charge_node(&mut self) -> Result<()> {
-        self.charge_nodes(1)
-    }
-
-    fn charge_nodes(&mut self, nodes: usize) -> Result<()> {
-        let Some(max_nodes) = self.max_nodes else {
-            return Ok(());
-        };
-        if nodes > self.remaining_nodes {
-            return Err(Error::TooManyTypeNodes(
-                max_nodes,
-                max_nodes
-                    .saturating_sub(self.remaining_nodes)
-                    .saturating_add(nodes),
-            ));
-        }
-
-        self.remaining_nodes = self.remaining_nodes.saturating_sub(nodes);
-        Ok(())
-    }
-
-    fn check_depth(&self) -> Result<()> {
-        self.ensure_depth(1)
-    }
-
-    fn ensure_depth(&self, depth: usize) -> Result<()> {
-        if depth > self.remaining_depth {
-            return Err(Error::ValueNesting(self.max_depth.unwrap_or(0)));
-        }
-        Ok(())
-    }
-
-    fn with_child<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
-        self.check_depth()?;
-        self.remaining_depth = self.remaining_depth.saturating_sub(1);
-        let result = f(self);
-        self.remaining_depth = self.remaining_depth.saturating_add(1);
-        result
-    }
 }
 
 struct ResolvedLayout {
@@ -565,12 +484,17 @@ impl<S: PackageStore> Resolver<S> {
             .await?;
 
         // (2). Use that information to resolve the tag into a layout.
+        let max_depth = self
+            .limits
+            .as_ref()
+            .map(|limits| limits.max_move_value_depth);
         let mut budget = self
             .limits
             .as_ref()
             .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
+        let mut meter = LayoutMeter::new(max_depth, &mut budget);
 
-        Ok(context.resolve_type_layout(&tag, &mut budget)?.layout)
+        Ok(context.resolve_type_layout(&tag, &mut meter)?.layout)
     }
 
     /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
@@ -854,12 +778,17 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         )?;
 
         // (2). Use that information to resolve the tag into a layout.
+        let max_depth = self
+            .limits
+            .as_ref()
+            .map(|limits| limits.max_move_value_depth);
         let mut budget = self
             .limits
             .as_ref()
             .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
+        let mut meter = LayoutMeter::new(max_depth, &mut budget);
 
-        Ok(context.resolve_type_layout(&tag, &mut budget)?.layout)
+        Ok(context.resolve_type_layout(&tag, &mut meter)?.layout)
     }
 
     /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
@@ -2169,18 +2098,18 @@ impl<'l> ResolutionContext<'l> {
     /// Requires that the necessary information was added to the context through calls to
     /// `add_type_tag` and `add_signature` before being called.
     ///
-    /// `budget` controls how deep/large the layout is allowed to grow to. The actual depth/node
-    /// count reached is returned alongside the layout (assuming it does not exceed `budget`).
+    /// `meter` controls how deep/large the layout is allowed to grow to. The actual depth/node
+    /// count reached is returned alongside the layout (assuming it does not exceed `meter`).
     fn resolve_type_layout(
         &self,
         tag: &TypeTag,
-        budget: &mut LayoutBudget,
+        meter: &mut LayoutMeter,
     ) -> Result<ResolvedLayout> {
         use MoveTypeLayout as L;
         use TypeTag as T;
 
-        budget.check_depth()?;
-        budget.charge_node()?;
+        meter.check_depth()?;
+        meter.charge_node()?;
 
         Ok(match tag {
             T::Signer => return Err(Error::UnexpectedSigner),
@@ -2195,7 +2124,8 @@ impl<'l> ResolutionContext<'l> {
             T::U256 => ResolvedLayout::leaf(L::U256),
 
             T::Vector(tag) => {
-                let element = budget.with_child(|budget| self.resolve_type_layout(tag, budget))?;
+                let mut child = meter.nest()?;
+                let element = self.resolve_type_layout(tag, &mut child)?;
                 ResolvedLayout {
                     layout: L::Vector(Box::new(element.layout)),
                     depth: element.depth.saturating_add(1),
@@ -2216,12 +2146,6 @@ impl<'l> ResolutionContext<'l> {
                 // SAFETY: `add_type_tag` ensures `datatypes` has an element with this key.
                 let key = DatatypeRef::from(s.as_ref());
                 let def = &self.datatypes[&key];
-                if def.type_params.len() != s.type_params.len() {
-                    return Err(Error::TypeArityMismatch(
-                        def.type_params.len(),
-                        s.type_params.len(),
-                    ));
-                }
 
                 let mut type_params = s.type_params.clone();
                 for type_param in &mut type_params {
@@ -2233,11 +2157,12 @@ impl<'l> ResolutionContext<'l> {
                     .iter()
                     .zip_eq(def.type_params.iter())
                     .map(|(tag, param)| {
-                        (!param.is_phantom)
-                            .then(|| {
-                                budget.with_child(|budget| self.resolve_type_layout(tag, budget))
-                            })
-                            .transpose()
+                        if param.is_phantom {
+                            return Ok(None);
+                        }
+
+                        let mut child = meter.nest()?;
+                        Ok(Some(self.resolve_type_layout(tag, &mut child)?))
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -2248,7 +2173,7 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                 };
 
-                self.resolve_datatype_signature(def, type_, param_layouts, budget)?
+                self.resolve_datatype_signature(def, type_, param_layouts, meter)?
             }
         })
     }
@@ -2306,7 +2231,7 @@ impl<'l> ResolutionContext<'l> {
         data_def: &DataDef,
         type_: StructTag,
         param_layouts: Vec<Option<ResolvedLayout>>,
-        budget: &mut LayoutBudget,
+        meter: &mut LayoutMeter,
     ) -> Result<ResolvedLayout> {
         Ok(match &data_def.data {
             MoveData::Struct(fields) => {
@@ -2315,14 +2240,13 @@ impl<'l> ResolutionContext<'l> {
                 let mut field_nodes = 0usize;
 
                 for (name, sig) in fields {
-                    let resolved = budget.with_child(|budget| {
-                        self.resolve_signature_layout(
-                            sig,
-                            &param_layouts,
-                            &type_.type_params,
-                            budget,
-                        )
-                    })?;
+                    let mut child = meter.nest()?;
+                    let resolved = self.resolve_signature_layout(
+                        sig,
+                        &param_layouts,
+                        &type_.type_params,
+                        &mut child,
+                    )?;
 
                     field_depth = field_depth.max(resolved.depth);
                     field_nodes = field_nodes.saturating_add(resolved.nodes);
@@ -2342,7 +2266,7 @@ impl<'l> ResolutionContext<'l> {
                 }
             }
             MoveData::Enum(variants) => {
-                budget.charge_nodes(variants.len())?;
+                meter.charge_nodes(variants.len())?;
 
                 let mut field_depth = 0;
                 let mut field_nodes = 0usize;
@@ -2351,14 +2275,13 @@ impl<'l> ResolutionContext<'l> {
                 for (tag, variant) in variants.iter().enumerate() {
                     let mut fields = Vec::with_capacity(variant.signatures.len());
                     for (name, sig) in &variant.signatures {
-                        let resolved = budget.with_child(|budget| {
-                            self.resolve_signature_layout(
-                                sig,
-                                &param_layouts,
-                                &type_.type_params,
-                                budget,
-                            )
-                        })?;
+                        let mut child = meter.nest()?;
+                        let resolved = self.resolve_signature_layout(
+                            sig,
+                            &param_layouts,
+                            &type_.type_params,
+                            &mut child,
+                        )?;
 
                         field_depth = field_depth.max(resolved.depth);
                         field_nodes = field_nodes.saturating_add(resolved.nodes);
@@ -2389,15 +2312,15 @@ impl<'l> ResolutionContext<'l> {
         sig: &OpenSignatureBody,
         param_layouts: &[Option<ResolvedLayout>],
         param_type_tags: &[TypeTag],
-        budget: &mut LayoutBudget,
+        meter: &mut LayoutMeter,
     ) -> Result<ResolvedLayout> {
         use MoveTypeLayout as L;
         use OpenSignatureBody as O;
 
-        budget.check_depth()?;
+        meter.check_depth()?;
 
         if !matches!(sig, O::TypeParameter(_)) {
-            budget.charge_node()?;
+            meter.charge_node()?;
         }
 
         Ok(match sig {
@@ -2415,12 +2338,12 @@ impl<'l> ResolutionContext<'l> {
                     .get(*ix as usize)
                     .and_then(Option::as_ref)
                     .ok_or_else(|| Error::TypeParamOOB(*ix, param_layouts.len()))?;
-                budget.charge_nodes(resolved.nodes)?;
+                meter.charge_nodes(resolved.nodes)?;
 
                 // We need to re-check the type parameter before we use it because it might have
                 // been fine when it was created, but result in too deep a layout when we use it at
                 // this position.
-                budget.ensure_depth(resolved.depth)?;
+                meter.ensure_depth(resolved.depth)?;
 
                 ResolvedLayout {
                     layout: resolved.layout.clone(),
@@ -2430,14 +2353,13 @@ impl<'l> ResolutionContext<'l> {
             }
 
             O::Vector(sig) => {
-                let element = budget.with_child(|budget| {
-                    self.resolve_signature_layout(
-                        sig.as_ref(),
-                        param_layouts,
-                        param_type_tags,
-                        budget,
-                    )
-                })?;
+                let mut child = meter.nest()?;
+                let element = self.resolve_signature_layout(
+                    sig.as_ref(),
+                    param_layouts,
+                    param_type_tags,
+                    &mut child,
+                )?;
 
                 ResolvedLayout {
                     layout: L::Vector(Box::new(element.layout)),
@@ -2463,14 +2385,13 @@ impl<'l> ResolutionContext<'l> {
                         type_params.push(self.resolve_signature_type_tag(sig, param_type_tags)?);
                         resolved_params.push(None);
                     } else {
-                        let resolved = budget.with_child(|budget| {
-                            self.resolve_signature_layout(
-                                sig,
-                                param_layouts,
-                                param_type_tags,
-                                budget,
-                            )
-                        })?;
+                        let mut child = meter.nest()?;
+                        let resolved = self.resolve_signature_layout(
+                            sig,
+                            param_layouts,
+                            param_type_tags,
+                            &mut child,
+                        )?;
                         // SAFETY: layouts generated by this context have canonical type tags.
                         type_params.push(TypeTag::from(&resolved.layout));
                         resolved_params.push(Some(resolved));
@@ -2484,7 +2405,7 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                 };
 
-                self.resolve_datatype_signature(def, type_, resolved_params, budget)?
+                self.resolve_datatype_signature(def, type_, resolved_params, meter)?
             }
         })
     }

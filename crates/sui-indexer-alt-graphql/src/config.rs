@@ -10,9 +10,8 @@ use serde::Serialize;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use sui_name_service::NameServiceConfig;
-use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::max_across_protocol;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 
@@ -783,18 +782,4 @@ impl Default for ZkLoginConfig {
             ),
         }
     }
-}
-
-/// Fetch the maximum value of a protocol config across all chains and versions.
-fn max_across_protocol<T: Ord>(f: impl Fn(&ProtocolConfig) -> Option<T>) -> Option<T> {
-    let mut x = None;
-    let mut v = ProtocolVersion::MIN;
-    while v <= ProtocolVersion::MAX {
-        x = x.max(f(&ProtocolConfig::get_for_version(v, Chain::Unknown)));
-        x = x.max(f(&ProtocolConfig::get_for_version(v, Chain::Mainnet)));
-        x = x.max(f(&ProtocolConfig::get_for_version(v, Chain::Testnet)));
-        v = v + 1;
-    }
-
-    x
 }
