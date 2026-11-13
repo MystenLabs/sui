@@ -32,7 +32,9 @@ where
     }
 }
 
-pub(crate) struct ScanChunkDone<State, Item> {
+/// One completed chunk. `Terminal` records why the scan ended so far; the ledger List APIs use
+/// [`ScanTerminal`], and `ListObjectVersions` uses the retention floor its last chunk read.
+pub(crate) struct ScanChunkDone<State, Item, Terminal = ScanTerminal> {
     /// Frames to yield: rendered item frames plus, only when the chunk produced
     /// no items, at most one scan watermark frame.
     pub(crate) items: Vec<Item>,
@@ -40,7 +42,7 @@ pub(crate) struct ScanChunkDone<State, Item> {
     /// Drives the request item limit, not `items.len()`.
     pub(crate) produced: usize,
     pub(crate) next_state: Option<State>,
-    pub(crate) terminal: ScanTerminal,
+    pub(crate) terminal: Terminal,
     pub(crate) remaining_scan_budget: usize,
 }
 
@@ -75,6 +77,10 @@ where
     }
 }
 
+/// A spawned chunk worker.
+type ChunkTask<State, Item, Terminal> =
+    JoinHandle<Result<ScanChunkDone<State, Item, Terminal>, RpcError>>;
+
 /// Bridges the async gRPC stream to blocking RocksDB reads.
 ///
 /// Each request has at most one blocking chunk worker in flight. A worker builds
@@ -83,34 +89,32 @@ where
 /// scheduled before the async stream drains the completed chunk's buffered
 /// items, letting slow clients delay response delivery without holding a Rocks
 /// iterator or blocking thread open.
-pub(crate) struct ChunkedScan<State, Item, Spawn>
+pub(crate) struct ChunkedScan<State, Item, Spawn, Terminal = ScanTerminal>
 where
     State: Send + 'static,
     Item: Send + 'static,
-    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>
-        + Send
-        + 'static,
+    Terminal: Send + 'static,
+    Spawn: FnMut(State, ChunkArgs) -> ChunkTask<State, Item, Terminal> + Send + 'static,
 {
-    current: Option<JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>>,
+    current: Option<ChunkTask<State, Item, Terminal>>,
     buffered: VecDeque<Item>,
     spawn: Spawn,
     produced: usize,
     initial_scan_budget: usize,
     scan_budget: usize,
-    terminal: Option<ScanTerminal>,
+    terminal: Option<Terminal>,
     limit_items: usize,
     chunk_max: usize,
     cancel: CancellationToken,
     _cancel_guard: DropGuard,
 }
 
-impl<State, Item, Spawn> ChunkedScan<State, Item, Spawn>
+impl<State, Item, Spawn, Terminal> ChunkedScan<State, Item, Spawn, Terminal>
 where
     State: Send + 'static,
     Item: Send + 'static,
-    Spawn: FnMut(State, ChunkArgs) -> JoinHandle<Result<ScanChunkDone<State, Item>, RpcError>>
-        + Send
-        + 'static,
+    Terminal: Send + 'static,
+    Spawn: FnMut(State, ChunkArgs) -> ChunkTask<State, Item, Terminal> + Send + 'static,
 {
     pub(crate) fn new(
         initial_state: State,
@@ -165,7 +169,7 @@ where
         }
     }
 
-    pub(crate) fn into_terminal(self) -> Option<ScanTerminal> {
+    pub(crate) fn into_terminal(self) -> Option<Terminal> {
         self.terminal
     }
 
@@ -189,7 +193,7 @@ where
         self.cancel.clone()
     }
 
-    fn apply_done(&mut self, done: ScanChunkDone<State, Item>) {
+    fn apply_done(&mut self, done: ScanChunkDone<State, Item, Terminal>) {
         self.terminal = Some(done.terminal);
         self.scan_budget = done.remaining_scan_budget;
         self.produced = self.produced.saturating_add(done.produced);

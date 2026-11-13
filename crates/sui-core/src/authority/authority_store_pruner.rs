@@ -246,6 +246,9 @@ impl AuthorityStorePruner {
                 pruned_tx_seq_exclusive,
                 &transaction_effects,
             )?;
+            // Tests pause here to read the stores while the rpc-store is pruned and the object
+            // versions are not yet.
+            sui_macros::fail_point_async!("prune-objects-before-perpetual-commit");
         }
 
         wb.write()?;
@@ -298,6 +301,9 @@ impl AuthorityStorePruner {
                 pruned_tx_seq_exclusive,
                 &transaction_effects,
             )?;
+            // Tests pause here to read the stores while the rpc-store is pruned and the object
+            // versions are not yet.
+            sui_macros::fail_point_async!("prune-objects-before-perpetual-commit");
         }
 
         wb.write()?;

@@ -413,14 +413,23 @@ fn owner_as_affected_address(owner: &Owner) -> Option<&[u8]> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::collections::HashSet;
 
     use move_core_types::ident_str;
     use sui_types::accumulator_event::AccumulatorEvent;
     use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::ObjectDigest;
+    use sui_types::digests::TransactionDigest;
+    use sui_types::effects::EffectsObjectChange;
     use sui_types::effects::TestEffectsBuilder;
+    use sui_types::effects::UnchangedConsensusKind;
     use sui_types::event::Event;
+    use sui_types::execution_status::ExecutionStatus;
+    use sui_types::gas::GasCostSummary;
     use sui_types::gas_coin::GAS;
+    use sui_types::object::Object;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_types::transaction::SenderSignedData;
 
@@ -549,6 +558,71 @@ mod tests {
 
         assert!(!keys.iter().any(|(_, k)| k == &move_call_key));
         assert!(!keys.iter().any(|(_, k)| k == &affected_object_key));
+    }
+
+    /// A transaction that only references a consensus object whose stream has ended, as one
+    /// naming a deleted shared object does, emits no `AffectedObject` entry for it: only the
+    /// objects the effects change do.
+    #[test]
+    fn transaction_visitor_skips_consensus_objects_whose_stream_ended() {
+        let ended_mutable = TestCheckpointBuilder::derive_object_id(20);
+        let ended_read = TestCheckpointBuilder::derive_object_id(21);
+        let changed = TestCheckpointBuilder::derive_object_id(22);
+        let checkpoint = TestCheckpointBuilder::new(0)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint();
+        let tx = &checkpoint.transactions[0];
+        let owner = Owner::AddressOwner(TestCheckpointBuilder::derive_address(1));
+        let written = Object::with_id_owner_version_for_testing(
+            changed,
+            SequenceNumber::from_u64(6),
+            owner.clone(),
+        );
+        let change = EffectsObjectChange::new(
+            Some(((SequenceNumber::from_u64(4), ObjectDigest::random()), owner)),
+            Some(&written),
+            false,
+            false,
+        );
+        let effects = TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            0,
+            GasCostSummary::default(),
+            vec![
+                (
+                    ended_mutable,
+                    UnchangedConsensusKind::MutateConsensusStreamEnded(SequenceNumber::from_u64(5)),
+                ),
+                (
+                    ended_read,
+                    UnchangedConsensusKind::ReadConsensusStreamEnded(SequenceNumber::from_u64(5)),
+                ),
+            ],
+            TransactionDigest::random(),
+            SequenceNumber::from_u64(6),
+            BTreeMap::from([(changed, change)]),
+            None,
+            None,
+            vec![],
+        );
+
+        let mut keys = HashSet::new();
+        for_each_transaction_dimension(
+            &tx.transaction,
+            &effects,
+            None,
+            &checkpoint.object_set,
+            |dim, value| {
+                keys.insert(encode_dimension_key(dim, value));
+            },
+        );
+
+        let affected =
+            |id: ObjectID| encode_dimension_key(IndexDimension::AffectedObject, id.as_ref());
+        assert!(keys.contains(&affected(changed)));
+        assert!(!keys.contains(&affected(ended_mutable)));
+        assert!(!keys.contains(&affected(ended_read)));
     }
 
     #[test]

@@ -352,6 +352,17 @@ pub trait ObjectCacheRead: Send + Sync {
         version: SequenceNumber,
     ) -> Option<Object>;
 
+    /// Iterate the versions of `object_id` within `versions`, oldest first, or newest first if
+    /// `descending`, each a live object or the tombstone at which the object was deleted or
+    /// wrapped. The cache holds no ranges, so this reads the store alone and sees only versions
+    /// already committed to it.
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: std::ops::RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> SuiResult<Box<dyn Iterator<Item = SuiResult<ObjectOrTombstone>> + '_>>;
+
     /// Test-only: production code no longer reads owned-object lock status by ref.
     #[cfg(test)]
     fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult;

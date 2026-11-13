@@ -19,6 +19,7 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::CheckpointResult;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientTrait;
 use sui_types::digests::ChainIdentifier;
 use sui_types::storage::ReadStore;
+use sui_types::storage::error::Kind as StorageErrorKind;
 
 /// An [`IngestionClientTrait`] over any [`ReadStore`]. In production `R` is the
 /// fullnode's [`RocksDbStore`], which reads the local checkpoint and perpetual
@@ -54,6 +55,22 @@ where
         // the highest executed one, is simply absent. Report it as NotFound so
         // the framework's `wait_for` can retry checkpoints that have not been
         // executed yet, while pruned checkpoints stay permanently unavailable.
+        //
+        // The executed watermark moves only after the executor commits a
+        // checkpoint's objects to the perpetual tables. Until then, its data
+        // may be readable through the writeback cache alone, and indexing it
+        // would let readers of the indexed range that scan the perpetual
+        // tables directly (object version listings) miss its versions.
+        let highest_executed = match self.store.get_latest_checkpoint_sequence_number() {
+            Ok(highest_executed) => highest_executed,
+            Err(e) if e.kind() == StorageErrorKind::Missing => {
+                return Err(CheckpointError::NotFound);
+            }
+            Err(e) => return Err(CheckpointError::Fetch(e.into())),
+        };
+        if checkpoint > highest_executed {
+            return Err(CheckpointError::NotFound);
+        }
         let lowest = self
             .store
             .get_lowest_available_checkpoint()
@@ -108,7 +125,7 @@ mod tests {
     async fn checkpoint_missing_is_not_found() {
         let client = PerpetualStoreIngestionClient::new(store_with([1, 2]), test_chain_id());
         assert!(matches!(
-            client.checkpoint(5).await,
+            client.checkpoint(0).await,
             Err(CheckpointError::NotFound)
         ));
     }
@@ -127,6 +144,28 @@ mod tests {
         let client = PerpetualStoreIngestionClient::new(store, test_chain_id());
         assert!(matches!(
             client.checkpoint(3).await,
+            Err(CheckpointError::NotFound)
+        ));
+    }
+
+    /// A checkpoint whose data the store holds, but which has not finished executing, may not
+    /// have its objects committed to the perpetual tables yet, so it is not served.
+    #[tokio::test]
+    async fn checkpoint_above_highest_executed_is_not_found() {
+        let mut store = store_with([0, 1, 2]);
+        store.highest_executed = Some(1);
+        let client = PerpetualStoreIngestionClient::new(store, test_chain_id());
+        assert_eq!(
+            *client
+                .checkpoint(1)
+                .await
+                .unwrap()
+                .summary
+                .sequence_number(),
+            1
+        );
+        assert!(matches!(
+            client.checkpoint(2).await,
             Err(CheckpointError::NotFound)
         ));
     }

@@ -44,6 +44,7 @@ pub use read_store::LedgerBitmapBucketIter;
 pub use read_store::LedgerBitmapBucketIterator;
 pub use read_store::LedgerTxSeqDigest;
 pub use read_store::LedgerTxSeqDigestIterator;
+pub use read_store::ObjectVersionsIterator;
 pub use read_store::OwnedObjectInfo;
 pub use read_store::ReadStore;
 pub use read_store::RpcIndexes;
@@ -716,7 +717,7 @@ impl From<&FullObjectRef> for FullObjectKey {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectOrTombstone {
     Object(Object),
     Tombstone(ObjectRef),

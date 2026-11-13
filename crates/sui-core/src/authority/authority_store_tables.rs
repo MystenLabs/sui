@@ -6,13 +6,14 @@ use super::*;
 use crate::authority::epoch_marker_key::EPOCH_MARKER_KEY_SIZE;
 use crate::authority::epoch_marker_key::EpochMarkerKey;
 use serde::{Deserialize, Serialize};
+use std::ops::RangeInclusive;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_consensus::SharedTransactionDenyConfig;
-use sui_types::storage::MarkerValue;
+use sui_types::storage::{MarkerValue, ObjectOrTombstone};
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBBatch, DBMap, MetricConf};
 #[cfg(not(tidehunter))]
@@ -502,6 +503,36 @@ impl AuthorityPerpetualTables {
             Some(Err(e)) => Err(e.into()),
             None => Ok(None),
         }
+    }
+
+    /// Iterate the versions of `object_id` within `versions`, oldest first, or newest first if
+    /// `descending`, each a live object or the tombstone at which the object was deleted or
+    /// wrapped. Reads the table directly, so it sees only versions the writeback cache has
+    /// committed.
+    pub fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> SuiResult<impl Iterator<Item = SuiResult<ObjectOrTombstone>> + '_> {
+        let low = ObjectKey(object_id, *versions.start());
+        let high = ObjectKey(object_id, *versions.end());
+        let rows = if descending {
+            self.objects
+                .reversed_safe_iter_with_bounds(Some(low), Some(high))?
+        } else {
+            self.objects.safe_range_iter(low..=high)
+        };
+        Ok(rows.map(|row| {
+            let (key, value) = row?;
+            if let Some(tombstone) = self.tombstone_reference(&key, &value)? {
+                return Ok(ObjectOrTombstone::Tombstone(tombstone));
+            }
+            let object = self
+                .object(&key, value)?
+                .expect("Non tombstone store object could not be converted to object");
+            Ok(ObjectOrTombstone::Object(object))
+        }))
     }
 
     fn construct_object(

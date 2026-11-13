@@ -8,6 +8,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use sui_rpc_store::RpcStoreReader;
 use sui_types::base_types::ExecutionData;
@@ -39,6 +40,7 @@ use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectStore;
+use sui_types::storage::ObjectVersionsIterator;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
@@ -730,7 +732,16 @@ impl RpcStateReader for RestReadStore {
 /// - **The index surface** ([`RpcIndexes`]) — owner / type / balance /
 ///   coin / package-version listings, epoch info, and the
 ///   ledger-history bitmaps — is served from the
-///   [`RpcStoreReader`].
+///   [`RpcStoreReader`], except listings of an object's versions, which
+///   the rpc-store does not hold: they are read through the object cache
+///   ([`crate::execution_cache::ObjectCacheRead::object_versions_iter`]),
+///   which sees only versions committed to the perpetual store. That is
+///   every version a listing reads: the index bounds every listing at a
+///   checkpoint the indexer has received, and the indexer receives a
+///   checkpoint only after the executor commits its objects (the
+///   executor's broadcast follows the commit, and
+///   [`crate::rpc_store_ingestion_client::PerpetualStoreIngestionClient`]
+///   serves only executed checkpoints).
 ///
 /// The object/state available range is the intersection of the two
 /// backends' ranges (`max` of their lower bounds): a consistent read
@@ -1077,6 +1088,22 @@ impl RpcIndexes for RpcStoreReadStore {
             .get_object_version_at_checkpoint(object_id, checkpoint)
     }
 
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> Result<ObjectVersionsIterator<'_>> {
+        let versions = self
+            .state
+            .get_object_cache_reader()
+            .object_versions_iter(object_id, versions, descending)
+            .map_err(StorageError::custom)?;
+        Ok(Box::new(
+            versions.map(|version| version.map_err(StorageError::custom)),
+        ))
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>> {
@@ -1095,6 +1122,10 @@ impl RpcIndexes for RpcStoreReadStore {
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>> {
         self.reader.ledger_tx_seq_digest(tx_seq)
+    }
+
+    fn ledger_tx_seq_by_digest(&self, digest: &TransactionDigest) -> Result<Option<u64>> {
+        self.reader.ledger_tx_seq_by_digest(digest)
     }
 
     fn ledger_tx_seq_digest_multi_get(

@@ -15,6 +15,8 @@
 //! a tombstone row (object was removed at that version), and a
 //! missing row (object did not exist at that version).
 
+use std::ops::RangeInclusive;
+
 use bytes::Buf;
 use bytes::BufMut;
 use sui_consistent_store::Decode;
@@ -26,7 +28,9 @@ use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
+use sui_types::digests::ObjectDigest;
 use sui_types::object::Object;
+use sui_types::storage::ObjectOrTombstone;
 
 use crate::proto::StoredObject;
 use crate::proto::StoredObjectTombstone;
@@ -243,6 +247,45 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         };
         let (_key, value) = row?;
         Ok(decode(value.into_inner())?.into_live())
+    }
+
+    /// Iterate the versions of `id` within `versions`, oldest first, or
+    /// newest first if `descending`, each a live object or the tombstone at
+    /// which the object was deleted or wrapped.
+    pub fn object_versions_iter(
+        &self,
+        id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> Result<impl Iterator<Item = Result<ObjectOrTombstone, Error>> + '_, Error> {
+        let range = Key {
+            id,
+            version: *versions.start(),
+        }..=Key {
+            id,
+            version: *versions.end(),
+        };
+        let rows: Box<dyn Iterator<Item = Result<(Key, Value), Error>> + '_> = if descending {
+            Box::new(self.objects.iter_rev(range)?)
+        } else {
+            Box::new(self.objects.iter(range)?)
+        };
+        Ok(rows.map(|row| {
+            let (key, value) = row?;
+            Ok(match decode(value.into_inner())? {
+                Status::Live(object) => ObjectOrTombstone::Object(object),
+                Status::Tombstone(TombstoneKind::Deleted) => ObjectOrTombstone::Tombstone((
+                    key.id,
+                    key.version,
+                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                )),
+                Status::Tombstone(TombstoneKind::Wrapped) => ObjectOrTombstone::Tombstone((
+                    key.id,
+                    key.version,
+                    ObjectDigest::OBJECT_DIGEST_WRAPPED,
+                )),
+            })
+        }))
     }
 }
 
@@ -534,6 +577,89 @@ mod tests {
                 found,
                 expected.map(|version| (id, version)),
                 "at or below version {version}"
+            );
+        }
+    }
+
+    #[test]
+    fn object_versions_iter_lists_tombstones_within_bounds() {
+        let (_dir, db, schema) = fresh_db();
+        let below = ObjectID::from_single_byte(1);
+        let id = ObjectID::from_single_byte(2);
+        let above = ObjectID::from_single_byte(3);
+        let v = SequenceNumber::from_u64;
+        let live = |id, version| {
+            store(&Object::with_id_owner_version_for_testing(
+                id,
+                v(version),
+                Owner::AddressOwner(SuiAddress::ZERO),
+            ))
+        };
+
+        // `id` is live at 1 and 2, wrapped at 3, unwrapped at 4, live at 5 and deleted at 6. The
+        // neighboring objects' rows sit right next to `id`'s in key order, on either side.
+        let mut batch = db.batch();
+        for (row_id, version, value) in [
+            (below, u64::MAX, live(below, u64::MAX)),
+            (id, 1, live(id, 1)),
+            (id, 2, live(id, 2)),
+            (id, 3, tombstone(TombstoneKind::Wrapped)),
+            (id, 4, live(id, 4)),
+            (id, 5, live(id, 5)),
+            (id, 6, tombstone(TombstoneKind::Deleted)),
+            (above, 0, live(above, 0)),
+        ] {
+            let key = Key {
+                id: row_id,
+                version: v(version),
+            };
+            batch.put(&schema.objects, &key, &value).unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Each listed version, with `L` for a live object, `W` for wrapped and `D` for deleted.
+        for (low, high, descending, expected) in [
+            (
+                0,
+                u64::MAX,
+                false,
+                vec![(1, 'L'), (2, 'L'), (3, 'W'), (4, 'L'), (5, 'L'), (6, 'D')],
+            ),
+            (
+                0,
+                u64::MAX,
+                true,
+                vec![(6, 'D'), (5, 'L'), (4, 'L'), (3, 'W'), (2, 'L'), (1, 'L')],
+            ),
+            // Both ends are inclusive, and tombstones are listed in place.
+            (2, 4, false, vec![(2, 'L'), (3, 'W'), (4, 'L')]),
+            (2, 4, true, vec![(4, 'L'), (3, 'W'), (2, 'L')]),
+            (3, 3, false, vec![(3, 'W')]),
+            (7, u64::MAX, true, vec![]),
+        ] {
+            let listed: Vec<_> = schema
+                .object_versions_iter(id, v(low)..=v(high), descending)
+                .unwrap()
+                .map(|item| match item.unwrap() {
+                    ObjectOrTombstone::Object(object) => {
+                        assert_eq!(object.id(), id);
+                        (object.version().value(), 'L')
+                    }
+                    ObjectOrTombstone::Tombstone((object_id, version, digest)) => {
+                        assert_eq!(object_id, id);
+                        let kind = if digest.is_deleted() {
+                            'D'
+                        } else {
+                            assert!(digest.is_wrapped());
+                            'W'
+                        };
+                        (version.value(), kind)
+                    }
+                })
+                .collect();
+            assert_eq!(
+                listed, expected,
+                "versions {low}..={high}, descending {descending}"
             );
         }
     }
