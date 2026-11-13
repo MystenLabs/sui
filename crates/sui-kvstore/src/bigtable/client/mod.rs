@@ -1219,16 +1219,10 @@ impl BigTableClient {
             .map(move |row| {
                 let (row_key, row) = row?;
                 let version = tables::objects::decode_key(&row_key)?.1;
-                let row = if with_contents {
-                    match tables::objects::decode(&row)? {
-                        ObjectRow::Live(object) => ObjectVersionRow::Live(Some(object)),
-                        ObjectRow::Tombstone(tombstone) => ObjectVersionRow::Tombstone(tombstone),
-                    }
-                } else {
-                    tables::objects::decode_tombstone(&row)?
-                        .map_or(ObjectVersionRow::Live(None), ObjectVersionRow::Tombstone)
-                };
-                Ok((version, row))
+                Ok((
+                    version,
+                    tables::objects::decode_version_row(&row, with_contents)?,
+                ))
             })
             .boxed())
     }
@@ -1779,6 +1773,29 @@ impl BigTableClient {
                 }
             }
         })
+    }
+
+    /// Multi-get `object_keys` from the `objects` table, live or removed, each with its row: the
+    /// object, or how it was removed. Without `with_contents`, live rows are read as keys alone
+    /// and list no object, as in [`Self::object_versions_stream`]. Keys with no row yield nothing.
+    pub async fn get_object_rows_stream(
+        &mut self,
+        object_keys: Vec<ObjectKey>,
+        with_contents: bool,
+    ) -> Result<impl futures::Stream<Item = Result<(ObjectKey, ObjectVersionRow)>> + use<>> {
+        let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
+        let filter = (!with_contents).then(Self::object_contents_stripped_filter);
+        let rows = self
+            .multi_get_stream(tables::objects::NAME, keys, filter)
+            .await?;
+        Ok(rows.map(move |row| {
+            let (row_key, row) = row?;
+            let key = tables::objects::decode_key(&row_key)?;
+            Ok((
+                key,
+                tables::objects::decode_version_row(&row, with_contents)?,
+            ))
+        }))
     }
 
     /// Resolve a half-open checkpoint range to the tx_sequence_number range it spans. Checkpoint 0

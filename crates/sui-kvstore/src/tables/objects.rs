@@ -134,6 +134,19 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<ObjectRow> {
     ))
 }
 
+/// Parse a row read with live objects' contents if `with_contents`, or with them stripped
+/// otherwise, as a live version, with its object only if read with contents, or a tombstone.
+pub fn decode_version_row(row: &[(Bytes, Bytes)], with_contents: bool) -> Result<ObjectVersionRow> {
+    Ok(if with_contents {
+        match decode(row)? {
+            ObjectRow::Live(object) => ObjectVersionRow::Live(Some(object)),
+            ObjectRow::Tombstone(tombstone) => ObjectVersionRow::Tombstone(tombstone),
+        }
+    } else {
+        decode_tombstone(row)?.map_or(ObjectVersionRow::Live(None), ObjectVersionRow::Tombstone)
+    })
+}
+
 /// Parse a row as a tombstone, or `None` for a live row. Live rows are told apart by column
 /// alone, so this also works on rows read with live objects' contents stripped.
 pub fn decode_tombstone(row: &[(Bytes, Bytes)]) -> Result<Option<ObjectTombstone>> {

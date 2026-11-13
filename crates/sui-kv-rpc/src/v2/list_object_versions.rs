@@ -7,14 +7,12 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
 use prost::Message;
-use sui_kvstore::ObjectStatus;
 use sui_kvstore::tables::objects::ObjectTombstone;
 use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_rpc::proto::sui::rpc::v2::ListObjectVersionsRequest;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc_api::AtCheckpointUpperBound;
 use sui_rpc_api::RpcError;
-use sui_rpc_api::ledger_history::object_versions::ObjectRemovalKind;
 use sui_rpc_api::ledger_history::object_versions::ObjectVersionFrames;
 use sui_rpc_api::ledger_history::object_versions::ObjectVersionItem;
 use sui_rpc_api::ledger_history::object_versions::ObjectVersionsQuery;
@@ -31,6 +29,7 @@ use crate::render::needs_only_object_id_and_version;
 use crate::render::object_to_response;
 use crate::render::object_version_to_response;
 use crate::served_height::ServedHeight;
+use crate::v2::get_object::removal_kind;
 
 /// The operation name ListObjectVersions' deadline, limiter, metrics and logs are labelled with.
 pub(super) const OPERATION: &str = "list_object_versions";
@@ -197,11 +196,6 @@ fn removal(
     tombstone: ObjectTombstone,
     with_transaction: bool,
 ) -> Result<ObjectVersionItem, RpcError> {
-    let kind = match tombstone.status {
-        ObjectStatus::Deleted => ObjectRemovalKind::Deleted,
-        ObjectStatus::Wrapped => ObjectRemovalKind::Wrapped,
-        ObjectStatus::Live => unreachable!("decoded tombstones are deleted or wrapped"),
-    };
     let transaction = if with_transaction {
         let transaction = tombstone.transaction.ok_or_else(|| {
             RpcError::new(
@@ -218,7 +212,7 @@ fn removal(
     };
     Ok(ObjectVersionItem::Removal {
         version,
-        kind,
+        kind: removal_kind(tombstone.status),
         transaction,
     })
 }

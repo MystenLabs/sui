@@ -11,7 +11,6 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
@@ -290,9 +289,8 @@ impl StateReader {
         Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
     }
 
-    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_at_checkpoint`],
-    /// [`Self::get_object_version_at_checkpoint`], and `GetPackage`'s `at_checkpoint`): the
-    /// highest checkpoint every rpc index has committed.
+    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_version_at_checkpoint`]
+    /// and `GetPackage`'s `at_checkpoint`): the highest checkpoint every rpc index has committed.
     ///
     /// Read it before the reads. It only grows, and the indexes only add data above it, so it
     /// stays valid for reads made after it was read. The lower bound is the opposite; see
@@ -356,25 +354,6 @@ impl StateReader {
         Ok(AtCheckpointLowerBound {
             lowest_available: lowest_available_objects.max(lowest_with_index_history),
         })
-    }
-
-    /// The live object as of the end of `checkpoint`, or `None` if it did not exist yet or had
-    /// been deleted or wrapped. `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) if `checkpoint` is above
-    /// `upper_bound`; check the lower bound after the read with
-    /// [`Self::at_checkpoint_lower_bound`].
-    pub fn get_object_at_checkpoint(
-        &self,
-        object_id: ObjectID,
-        checkpoint: u64,
-        upper_bound: &AtCheckpointUpperBound,
-    ) -> Result<Option<Object>, crate::RpcError> {
-        let Some(version) =
-            self.get_object_version_at_checkpoint(object_id, checkpoint, upper_bound)?
-        else {
-            return Ok(None);
-        };
-        // A deletion or wrapping tombstone has no object at its version.
-        Ok(self.inner().get_object_by_key(&object_id, version))
     }
 
     /// The version `object_id` had at the end of `checkpoint`: its newest version written at or
@@ -695,9 +674,20 @@ pub(crate) fn assert_refusal(
     reason: ErrorReason,
     cause: &str,
 ) {
+    assert_status_refusal(&error.into_status_proto(), code, reason, cause);
+}
+
+/// [`assert_refusal`] for a status already converted to its proto, such as a per-item error of a
+/// batch response.
+#[cfg(test)]
+pub(crate) fn assert_status_refusal(
+    status: &crate::proto::google::rpc::Status,
+    code: tonic::Code,
+    reason: ErrorReason,
+    cause: &str,
+) {
     use crate::proto::google::rpc::ErrorInfo;
 
-    let status = error.into_status_proto();
     assert_eq!(status.code, code as i32, "{status:?}");
     let error_infos: Vec<ErrorInfo> = status
         .details
@@ -719,8 +709,17 @@ pub(crate) fn assert_refusal(
 /// [`assert_refusal`] for [`not_served_here`] with `cause`.
 #[cfg(test)]
 pub(crate) fn assert_not_served_here(error: crate::RpcError, cause: NotServedHereCause) {
-    assert_refusal(
-        error,
+    assert_status_not_served_here(&error.into_status_proto(), cause);
+}
+
+/// [`assert_not_served_here`] for a status already converted to its proto.
+#[cfg(test)]
+pub(crate) fn assert_status_not_served_here(
+    status: &crate::proto::google::rpc::Status,
+    cause: NotServedHereCause,
+) {
+    assert_status_refusal(
+        status,
         tonic::Code::Unimplemented,
         ErrorReason::NotServedHere,
         cause.as_str(),

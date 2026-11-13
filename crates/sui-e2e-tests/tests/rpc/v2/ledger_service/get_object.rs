@@ -1,14 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+
 use mysten_common::ZipDebugEqIteratorExt;
 use prost::Message;
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::google::rpc::BadRequest;
+use sui_rpc::proto::google::rpc::ErrorInfo;
+use sui_rpc::proto::google::rpc::Status as RpcStatus;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
+use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectResponse;
 use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
@@ -19,6 +24,7 @@ use sui_sdk_types::Address;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
@@ -28,10 +34,11 @@ use sui_types::transaction::TransactionData;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 
+use crate::v2::RpcStatusExt;
 use crate::v2::assert_above_latest_available;
 use crate::v2::assert_below_earliest_available;
 use crate::v2::halt_chain;
-use crate::v2::prune_objects_below_tip;
+use crate::v2::prune_objects_and_rpc_store_below_tip;
 
 #[sim_test]
 async fn get_object() {
@@ -248,9 +255,11 @@ async fn get_object_lifecycle() {
 
     // Drive an object through its lifecycle, one transaction per step, recording each change as
     // (checkpoint, object, version, live). `live` is false for a change that deleted or wrapped
-    // the object. Wrapping creates a wrapper object, and unwrapping deletes it.
+    // the object. Wrapping creates a wrapper object, and unwrapping deletes it. Each removal is
+    // also recorded with its kind and transaction.
     let sender = cluster.get_address_0();
     let mut changes: Vec<(u64, ObjectID, u64, bool)> = Vec::new();
+    let mut removals: HashMap<(ObjectID, u64), (&str, TransactionDigest)> = HashMap::new();
     let mut step_checkpoints = Vec::new();
 
     let (create, cp) = call_object_basics(
@@ -297,6 +306,10 @@ async fn get_object_lifecycle() {
     let wrapper = created_object(&wrap);
     changes.push((cp, object, wrap.lamport_version().value(), false));
     changes.push((cp, wrapper, wrap.lamport_version().value(), true));
+    removals.insert(
+        (object, wrap.lamport_version().value()),
+        ("WRAPPED", *wrap.transaction_digest()),
+    );
     step_checkpoints.push(cp);
 
     let (unwrap, cp) = call_object_basics(
@@ -308,6 +321,10 @@ async fn get_object_lifecycle() {
     .await;
     changes.push((cp, object, unwrap.lamport_version().value(), true));
     changes.push((cp, wrapper, unwrap.lamport_version().value(), false));
+    removals.insert(
+        (wrapper, unwrap.lamport_version().value()),
+        ("DELETED", *unwrap.transaction_digest()),
+    );
     step_checkpoints.push(cp);
 
     let (delete, cp) = call_object_basics(
@@ -318,6 +335,10 @@ async fn get_object_lifecycle() {
     )
     .await;
     changes.push((cp, object, delete.lamport_version().value(), false));
+    removals.insert(
+        (object, delete.lamport_version().value()),
+        ("DELETED", *delete.transaction_digest()),
+    );
     step_checkpoints.push(cp);
 
     // Each step waits for its checkpoint before the next step is built, so every step lands in
@@ -337,24 +358,43 @@ async fn get_object_lifecycle() {
     // `at_checkpoint` reads are bounded by the rpc index's highest indexed checkpoint.
     cluster.wait_for_rpc_index_ready().await;
 
-    // The expected outcome of each read, from the changes: the live change a read selects, as
-    // (checkpoint, version), kept only if it was made by the end of the bound.
+    // The expected outcome of each read, from the changes: the change a read selects, kept only
+    // if it was made by the end of the bound. A live change answers with its version; a removal
+    // answers `NotFound` describing it, with the transaction the bitmap finds for it, since the
+    // fullnode keeps every checkpoint.
     let changes_of = |id: ObjectID| {
         changes
             .iter()
             .filter(move |(_, changed, _, _)| *changed == id)
     };
-    let bounded = |selected: Option<&(u64, ObjectID, u64, bool)>, at_checkpoint: Option<u64>| {
-        selected
-            .filter(|&&(changed_at, _, _, live)| {
-                live && at_checkpoint.is_none_or(|bound| changed_at <= bound)
-            })
-            .map(|&(_, _, version, _)| version)
-    };
+    let bounded =
+        |selected: Option<&(u64, ObjectID, u64, bool)>, at_checkpoint: Option<u64>| match selected
+            .filter(|&&(changed_at, _, _, _)| at_checkpoint.is_none_or(|bound| changed_at <= bound))
+        {
+            Some(&(_, _, version, true)) => Expected::Found(version),
+            Some(&(_, id, version, false)) => {
+                let (kind, transaction) = removals[&(id, version)];
+                Expected::Removed((version, kind.to_owned(), Some(transaction.to_string())))
+            }
+            None => Expected::NotFound,
+        };
+
+    // The latest state of both objects: each was last deleted.
+    let mut cases: Vec<(GetObjectRequest, Expected, String)> = Vec::new();
+    for id in [object, wrapper] {
+        let mut request = GetObjectRequest::new(&Address::from(id));
+        request.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+        let expected = bounded(changes_of(id).next_back(), None);
+        assert!(matches!(expected, Expected::Removed(_)), "{expected:?}");
+        cases.push((
+            request,
+            expected,
+            format!("Object {} not found", Address::from(id)),
+        ));
+    }
 
     // Every checkpoint from just before creation through deletion, for both objects. Checkpoints
     // between two changes resolve to the earlier change.
-    let mut cases: Vec<(GetObjectRequest, Option<u64>, String)> = Vec::new();
     for checkpoint in first_cp - 1..=last_cp {
         for id in [object, wrapper] {
             let latest_change =
@@ -399,6 +439,20 @@ async fn get_object_lifecycle() {
             }
         }
     }
+    // Every removal is described by some read.
+    for &(_, version) in removals.keys() {
+        assert!(
+            cases.iter().any(
+                |(_, expected, _)| matches!(expected, Expected::Removed((v, ..)) if *v == version)
+            ),
+            "no read selects the removal at {version}"
+        );
+    }
+
+    for (request, expected, not_found) in &cases {
+        let outcome = single_outcome(client.get_object(request.clone()).await);
+        assert_outcome(outcome, request, expected, not_found);
+    }
 
     // Batches covering every case twice: results come back in request order, and duplicate
     // items each get their own result.
@@ -418,7 +472,7 @@ async fn get_object_lifecycle() {
             .into_inner();
         assert_eq!(objects.len(), chunk.len());
         for (result, (request, expected, not_found)) in objects.iter().zip_debug_eq(chunk) {
-            assert_outcome(batch_outcome(result), request, *expected, not_found);
+            assert_outcome(batch_outcome(result), request, expected, not_found);
         }
     }
 
@@ -429,9 +483,13 @@ async fn get_object_lifecycle() {
     let (create_cp, _, create_version, _) = changes[0];
     let (set_value_cp, _, set_value_version, _) = changes[1];
     for (max_version, at_checkpoint, expected) in [
-        (create_version, create_cp, Some(create_version)),
-        (set_value_version, create_cp, None),
-        (set_value_version, set_value_cp, Some(set_value_version)),
+        (create_version, create_cp, Expected::Found(create_version)),
+        (set_value_version, create_cp, Expected::NotFound),
+        (
+            set_value_version,
+            set_value_cp,
+            Expected::Found(set_value_version),
+        ),
     ] {
         let request = selector_request(
             Address::from(object),
@@ -444,7 +502,7 @@ async fn get_object_lifecycle() {
             Address::from(object),
         );
         let outcome = single_outcome(client.get_object(request.clone()).await);
-        assert_outcome(outcome, &request, expected, &not_found);
+        assert_outcome(outcome, &request, &expected, &not_found);
     }
 
     // The object skips a version between creation and the mutation, so the cases above include
@@ -455,7 +513,7 @@ async fn get_object_lifecycle() {
     for at_checkpoint in [None, Some(set_value_cp)] {
         let request = selector_request(Address::from(object), None, Some(in_gap), at_checkpoint);
         let outcome = single_outcome(client.get_object(request.clone()).await);
-        assert_outcome(outcome, &request, Some(create_version), "");
+        assert_outcome(outcome, &request, &Expected::Found(create_version), "");
     }
 
     // Setting both `version` and `max_version` is invalid, and fails the whole batch.
@@ -596,7 +654,10 @@ async fn get_object_at_checkpoint_below_available_floor() {
     ));
     assert!(before_end < at_end, "the clock changes in every checkpoint");
 
-    assert_eq!(prune_objects_below_tip(&cluster).await, pruned_to);
+    assert_eq!(
+        prune_objects_and_rpc_store_below_tip(&cluster).await,
+        pruned_to
+    );
 
     // The last pruned checkpoint still reads the version it ended with; the version it replaced
     // is gone, so every checkpoint below is rejected.
@@ -639,7 +700,8 @@ async fn get_object_at_checkpoint_below_available_floor() {
         outcome.unwrap_err(),
         (
             tonic::Code::NotFound,
-            format!("Object {id} with version {} not found", u64::MAX)
+            format!("Object {id} with version {} not found", u64::MAX),
+            None
         )
     );
 
@@ -695,8 +757,42 @@ fn selector_request(
     request
 }
 
-/// A `GetObject` outcome: the object, or the error's code and message.
-type ObjectOutcome = Result<Object, (tonic::Code, String)>;
+/// A removal an `OBJECT_REMOVED` detail describes: `(removedVersion, removalKind, transaction)`.
+type Removal = (u64, String, Option<String>);
+
+/// A `GetObject` outcome: the object, or the error's code and message, and the removal its
+/// `OBJECT_REMOVED` detail describes, if it has one.
+type ObjectOutcome = Result<Object, (tonic::Code, String, Option<Removal>)>;
+
+/// What a read is expected to answer.
+#[derive(Debug)]
+enum Expected {
+    /// The object at this version.
+    Found(u64),
+    /// `NotFound` with no `OBJECT_REMOVED` detail.
+    NotFound,
+    /// `NotFound` with an `OBJECT_REMOVED` detail describing this removal.
+    Removed(Removal),
+}
+
+/// The removal `status`'s `OBJECT_REMOVED` detail describes, if it has one.
+fn removal(status: &RpcStatus) -> Option<Removal> {
+    let info = status
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())?;
+    assert_eq!(
+        info.reason,
+        ErrorReason::ObjectRemoved.as_str_name(),
+        "{info:?}"
+    );
+    assert_eq!(info.domain, ErrorReason::DOMAIN, "{info:?}");
+    Some((
+        info.metadata["removedVersion"].parse().unwrap(),
+        info.metadata["removalKind"].clone(),
+        info.metadata.get("transaction").cloned(),
+    ))
+}
 
 fn single_outcome(
     response: Result<tonic::Response<GetObjectResponse>, tonic::Status>,
@@ -708,15 +804,20 @@ fn single_outcome(
                 .object
                 .expect("response has no object")
         })
-        .map_err(|status| (status.code(), status.message().to_owned()))
+        .map_err(|status| {
+            let removal = removal(&status.rpc_status());
+            (status.code(), status.message().to_owned(), removal)
+        })
 }
 
 fn batch_outcome(result: &GetObjectResult) -> ObjectOutcome {
     match &result.result {
         Some(get_object_result::Result::Object(object)) => Ok(object.clone()),
-        Some(get_object_result::Result::Error(status)) => {
-            Err((tonic::Code::from(status.code), status.message.clone()))
-        }
+        Some(get_object_result::Result::Error(status)) => Err((
+            tonic::Code::from(status.code),
+            status.message.clone(),
+            removal(status),
+        )),
         other => panic!("unexpected batch result {other:?}"),
     }
 }
@@ -738,7 +839,7 @@ fn assert_at_checkpoint(
                 "{id} at checkpoint {checkpoint}"
             );
         }
-        (Err((code, message)), None) => {
+        (Err((code, message, _)), None) => {
             assert_eq!(
                 code,
                 tonic::Code::NotFound,
@@ -756,30 +857,33 @@ fn assert_at_checkpoint(
     }
 }
 
-/// Assert that `request` returned `expected_version`, or `NotFound` with the message `not_found`
-/// when there is no expected version.
+/// Assert that `request` answered as `expected`, with the message `not_found` when it is not
+/// found.
 fn assert_outcome(
     outcome: ObjectOutcome,
     request: &GetObjectRequest,
-    expected_version: Option<u64>,
+    expected: &Expected,
     not_found: &str,
 ) {
     let context = format!(
         "{:?}: version {:?}, max_version {:?}, at_checkpoint {:?}",
         request.object_id, request.version, request.max_version, request.at_checkpoint,
     );
-    match (outcome, expected_version) {
-        (Ok(object), Some(version)) => {
+    match (outcome, expected) {
+        (Ok(object), Expected::Found(version)) => {
             assert_eq!(object.object_id, request.object_id, "{context}");
-            assert_eq!(object.version, Some(version), "{context}");
+            assert_eq!(object.version, Some(*version), "{context}");
         }
-        (Err((code, message)), None) => {
+        (Err((code, message, removal)), Expected::NotFound | Expected::Removed(_)) => {
             assert_eq!(code, tonic::Code::NotFound, "{context}: {message}");
             assert_eq!(message, not_found, "{context}");
+            let expected_removal = match expected {
+                Expected::Removed(removal) => Some(removal),
+                _ => None,
+            };
+            assert_eq!(removal.as_ref(), expected_removal, "{context}");
         }
-        (outcome, expected_version) => {
-            panic!("{context}: expected version {expected_version:?}, got {outcome:?}")
-        }
+        (outcome, expected) => panic!("{context}: expected {expected:?}, got {outcome:?}"),
     }
 }
 
