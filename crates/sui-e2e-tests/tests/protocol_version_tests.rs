@@ -884,6 +884,10 @@ mod sim_only_tests {
         assert!(system_state.safe_mode()); // enters safe mode
         assert!(system_state.epoch_start_timestamp_ms() >= genesis_epoch_start_time + 20000);
 
+        // wait_for_epoch only waits for the fullnode. Every validator must finish
+        // entering safe mode before we clear its safe-mode expectation.
+        test_cluster.wait_for_epoch_all_nodes(1).await;
+
         // We are getting out of safe mode soon.
         test_cluster.set_safe_mode_expected(false);
 
