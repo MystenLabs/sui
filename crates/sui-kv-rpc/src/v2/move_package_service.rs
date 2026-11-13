@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsResponse;
 use sui_rpc::proto::sui::rpc::v2::PackageVersion;
 use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+use sui_rpc_api::AtCheckpointUpperBound;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::grpc::v2::move_package_service::PageToken;
@@ -116,16 +117,7 @@ async fn get_package(
         Selector::AtCheckpoint(at_checkpoint) => {
             // The response does not echo the checkpoint it resolved at, so a bound above the
             // served height would let a caller persist a wrong answer; fail closed instead.
-            if at_checkpoint > served_height.checkpoint {
-                return Err(RpcError::new(
-                    tonic::Code::NotFound,
-                    format!(
-                        "requested checkpoint {at_checkpoint} is not yet indexed; highest \
-                         indexed checkpoint is {}",
-                        served_height.checkpoint,
-                    ),
-                ));
-            }
+            AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
             client
                 .get_package_latest(original_id, at_checkpoint)
@@ -676,13 +668,13 @@ mod tests {
             let mut req = get_package_req(fixture.original_id);
             req.selector = Some(Selector::AtCheckpoint(at_checkpoint));
             let status = fetch_pkg_err(&fixture, req).await;
-            assert_eq!(status.code(), tonic::Code::NotFound, "{at_checkpoint}");
-            assert!(
-                status
-                    .message()
-                    .contains("is not yet indexed; highest indexed checkpoint is 25"),
-                "unexpected message for {at_checkpoint}: {}",
-                status.message()
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{at_checkpoint}");
+            assert_eq!(
+                status.message(),
+                format!(
+                    "requested data above latest available; at_checkpoint is {at_checkpoint}, \
+                     and only checkpoints below 26 are available"
+                ),
             );
         }
     }

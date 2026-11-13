@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::load_package;
+use crate::reader::indexes_disabled;
 use crate::{ErrorReason, Result, RpcError, RpcService};
 use bytes::Bytes;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
@@ -66,7 +67,7 @@ pub fn list_package_versions(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
 
     let mut versions = vec![];
     let iter = indexes

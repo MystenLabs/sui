@@ -14308,7 +14308,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5#1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -16141,7 +16141,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5#1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16194,6 +16194,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-config",
+ "sui-consistent-store",
  "sui-crypto",
  "sui-display",
  "sui-http",
@@ -16203,11 +16204,13 @@ dependencies = [
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rpc",
+ "sui-rpc-store",
  "sui-sdk-types",
  "sui-transaction-builder",
  "sui-transaction-checks",
  "sui-types",
  "tap",
+ "tempfile",
  "tokio",
  "tokio-util 0.7.18",
  "tonic 0.14.6",
@@ -16323,7 +16326,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5#1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5"
 dependencies = [
  "base64ct",
  "bcs",

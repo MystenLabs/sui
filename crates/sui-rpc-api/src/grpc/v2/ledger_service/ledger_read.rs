@@ -12,6 +12,8 @@ use crate::RpcService;
 use crate::ledger_history::cursor::LedgerPoint;
 use crate::ledger_history::query_options::below_serving_floor;
 use crate::ledger_history::row_placement::RowPlacement;
+use crate::reader::index_empty;
+use crate::reader::indexes_disabled;
 
 pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
@@ -22,11 +24,11 @@ pub(super) fn checkpoint_hi_exclusive(service: &RpcService) -> Result<u64, RpcEr
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
     let checkpoint = indexes
         .get_highest_indexed_checkpoint_seq_number()
         .map_err(storage_error)?
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
+        .ok_or_else(index_empty)?;
     checkpoint
         .checked_add(1)
         .ok_or_else(|| RpcError::new(tonic::Code::Internal, "checkpoint bound overflow"))
@@ -291,7 +293,7 @@ pub(super) fn get_tx_seq_digest_multi(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
     indexes
         .ledger_tx_seq_digest_multi_get(tx_seqs)
         .map_err(storage_error)?
@@ -315,7 +317,7 @@ pub(super) fn get_tx_seq_digest_rows(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
     let mut iter = indexes
         .ledger_tx_seq_digest_iter(range.start, range.end, descending)
         .map_err(storage_error)?;

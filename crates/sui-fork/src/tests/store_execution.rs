@@ -593,6 +593,77 @@ async fn test_availability_floor_below_the_fork_passes_through() {
     assert_eq!(store.get_lowest_available_checkpoint_objects().unwrap(), 10);
 }
 
+/// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
+/// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
+/// checkpoint are rejected even when the remote's retention reaches further back.
+#[tokio::test]
+async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    // The remote retains history from checkpoint 10, below the fork checkpoint.
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    assert_eq!(
+        sui_types::storage::RpcStateReader::get_lowest_checkpoint_with_index_history(&store)
+            .unwrap(),
+        fork_checkpoint + 1
+    );
+
+    let package_id = ObjectID::random();
+    let package = sui_types::object::Object::new_package_from_data(
+        sui_types::object::Data::Package(
+            sui_types::move_package::MovePackage::new(
+                package_id,
+                SequenceNumber::from_u64(1),
+                std::collections::BTreeMap::new(),
+                100_000,
+                vec![],
+                std::collections::BTreeMap::new(),
+            )
+            .unwrap(),
+        ),
+        TransactionDigest::genesis_marker(),
+    );
+    store
+        .local_store()
+        .restore_seed_objects(&[package])
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+    let below_floor = "requested data below earliest available; lowest available checkpoint is 100";
+
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some(package_id.to_string());
+    request.selector = Some(Selector::AtCheckpoint(fork_checkpoint - 1));
+    let error = service
+        .get_package(tonic::Request::new(request))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::OutOfRange);
+    assert_eq!(error.message(), below_floor);
+
+    // The fork checkpoint itself is served: the loaded rows hold the state at its end. Both
+    // bounds accept it and the read finds the package, whose response then fails to build only
+    // because this seeded package has no modules.
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some(package_id.to_string());
+    request.selector = Some(Selector::AtCheckpoint(fork_checkpoint));
+    let error = service
+        .get_package(tonic::Request::new(request))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::Internal, "{error:?}");
+    assert_eq!(
+        error.message(),
+        format!("Package has no modules: {package_id}")
+    );
+}
+
 #[tokio::test]
 async fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp, _gql_server) = test_simulacrum().await;
