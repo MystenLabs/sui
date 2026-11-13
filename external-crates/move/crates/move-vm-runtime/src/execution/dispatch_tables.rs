@@ -17,7 +17,7 @@ use crate::{
     shared::{
         TypeLimits, TypeTraversalBudget,
         bounded_map::BoundedMap,
-        constants::{HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, SIZE_FORMULA_CACHE_CAPACITY},
+        constants::SIZE_FORMULA_CACHE_CAPACITY,
         linkage_context::LinkageContext,
         type_size_formulae::{PartialTypeSizeFormula, TypeSize, check_syntactic_limits},
         types::{DefiningTypeId, OriginalId},
@@ -894,12 +894,7 @@ impl VMDispatchTables {
         {
             return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
         }
-        if size.layout_size
-            > self
-                .vm_config
-                .max_type_to_layout_nodes
-                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
-        {
+        if size.layout_size > safe_unwrap!(self.vm_config.max_type_to_layout_nodes) {
             return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
         }
         Ok(())
