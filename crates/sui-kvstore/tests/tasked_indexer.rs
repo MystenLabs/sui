@@ -79,6 +79,8 @@ async fn tasked_indexer_runs_selected_concurrent_pipeline() {
     .await
     .unwrap();
 
+    assert_eq!(indexer.pipeline_names(), [OBJECT_TOMBSTONES_PIPELINE]);
+
     let task_watermark = format!("{OBJECT_TOMBSTONES_PIPELINE}@backfill");
     assert_eq!(
         indexer.pipeline_tasks(),
