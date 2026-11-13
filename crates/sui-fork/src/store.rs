@@ -1064,6 +1064,13 @@ impl RpcStateReader for ForkStore {
         ForkStore::get_lowest_available_checkpoint_objects(self).map_err(to_storage_error)
     }
 
+    /// The checkpoint after the fork checkpoint. The local indexes record only the fork's own
+    /// checkpoints. Every pre-fork object and package version in them was loaded as of the fork
+    /// checkpoint, without the history before it.
+    fn get_lowest_checkpoint_with_index_history(&self) -> StorageResult<CheckpointSequenceNumber> {
+        Ok(self.forked_at_checkpoint().saturating_add(1))
+    }
+
     /// A genuinely hybrid read. The stock side serves the framework `chain_ids` table seeded at
     /// open, while the fallback derives the identifier from the fork checkpoint for custom
     /// networks.

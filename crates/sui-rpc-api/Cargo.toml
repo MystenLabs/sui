@@ -68,4 +68,8 @@ tracing-subscriber.workspace = true
 prost-build.workspace = true
 protox.workspace = true
 walkdir.workspace = true
+# A real rpc-store backs the `StateReader` bound tests.
+sui-consistent-store.workspace = true
+sui-rpc-store.workspace = true
+tempfile.workspace = true
 
