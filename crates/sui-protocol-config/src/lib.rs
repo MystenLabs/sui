@@ -437,6 +437,7 @@ const MAINNET_USDB: &str =
 //              Enable defer_owned_object_double_spend on all networks.
 // Version 143: Add and enable a new execution version.
 //              Simplify Nitro attestation header validation.
+//              Disable forwarding addresses on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5038,6 +5039,7 @@ impl ProtocolConfig {
                     cfg.execution_version = Some(5);
                     cfg.package_arena_size_in_bytes = Some(20_000_000);
                     cfg.feature_flags.simplify_nitro_header_validation = true;
+                    cfg.feature_flags.enable_forwarding_addresses = false;
                 }
                 // Use this template when making changes:
                 //
