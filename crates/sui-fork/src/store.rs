@@ -39,6 +39,15 @@ use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::BackingStore;
+use sui_types::storage::BalanceInfo;
+use sui_types::storage::BalanceIterator;
+use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldIteratorItem;
+use sui_types::storage::DynamicFieldKey;
+use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
@@ -54,6 +63,7 @@ use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
+use typed_store_error::TypedStoreError;
 
 use crate::gql::GraphQLClient;
 use crate::gql::TransactionInfo;
@@ -379,6 +389,19 @@ impl ForkStore {
         Ok(object)
     }
 
+    /// Fetch an object's live version at the fork checkpoint from the remote, and record it locally
+    /// as its version at the fork checkpoint whatever local execution has done to it since.
+    fn fetch_object_at_fork_checkpoint(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<Object>> {
+        let object = self.inner.remote.latest_object(object_id)?;
+        if let Some(object) = &object {
+            self.local_store().save_object_at_fork_checkpoint(object)?;
+        }
+        Ok(object)
+    }
+
     pub(crate) fn read_child_object_fallible(
         &self,
         parent: &ObjectID,
@@ -613,7 +636,7 @@ impl ForkStore {
     /// Return the stock reader over the fork's local `sui-rpc-store`, for reads the fork has no
     /// policy for.
     ///
-    /// This is also what [`RpcStateReader::indexes`] hands out, which makes every index read
+    /// Every index read except the checkpoint-pinned object version resolves here, which makes them
     /// seed-bounded. Owner, dynamic-field, type, and balance lookups resolve from the local index
     /// alone, which holds the seed set loaded at fork creation plus whatever local execution has
     /// produced since, and an owner, parent, or type outside the seed set reads as empty rather
@@ -910,8 +933,9 @@ impl SimulatorStore for ForkStore {
 // the stock rpc-store reader: every read the fork has policy for resolves
 // through the local-first, remote-fallback helpers above, while surfaces the
 // fork keeps no policy for -- events, full checkpoint contents, committees,
-// epoch info, struct layouts, and the ledger/bitmap indexes, all written by
-// the embedded indexer -- are served straight from the stock reader.
+// epoch info, struct layouts, and every index except the checkpoint-pinned
+// object version, all written by the embedded indexer -- are served straight
+// from the stock reader.
 //
 // The one read the stock reader could answer but must not is `get_object`
 // without a version: a stock reverse scan over the fork's sparse `objects` CF
@@ -1080,14 +1104,182 @@ impl RpcStateReader for ForkStore {
         })
     }
 
-    /// Index reads go straight to the stock reader.
+    /// Index reads go to the stock reader, except the checkpoint-pinned object version. See the
+    /// `RpcIndexes` impl below.
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
-        Some(self.stock_reader())
+        Some(self)
     }
 
     /// Resolve layouts using packages from committed `sui-rpc-store` data.
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         self.stock_reader().layout_package_store()
+    }
+}
+
+/// Every index read delegates to the stock reader except
+/// [`RpcIndexes::get_object_version_at_checkpoint`], whose miss at or above the fork checkpoint
+/// means the fork has not resolved the object at the fork checkpoint yet rather than that it did
+/// not exist.
+impl RpcIndexes for ForkStore {
+    fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
+        self.stock_reader().get_epoch_info(epoch)
+    }
+
+    fn owned_objects_iter(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
+    {
+        self.stock_reader()
+            .owned_objects_iter(owner, object_type, cursor)
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<DynamicFieldKey>,
+    ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
+        self.stock_reader().dynamic_field_iter(parent, cursor)
+    }
+
+    fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+        self.stock_reader().get_coin_info(coin_type)
+    }
+
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> StorageResult<Option<BalanceInfo>> {
+        self.stock_reader().get_balance(owner, coin_type)
+    }
+
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> StorageResult<BalanceIterator<'_>> {
+        self.stock_reader().balance_iter(owner, cursor)
+    }
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
+    {
+        self.stock_reader()
+            .package_versions_iter(original_id, cursor)
+    }
+
+    fn get_package_version_storage_id(
+        &self,
+        original_id: ObjectID,
+        version: u64,
+    ) -> StorageResult<Option<ObjectID>> {
+        self.stock_reader()
+            .get_package_version_storage_id(original_id, version)
+    }
+
+    fn get_package_at_checkpoint(
+        &self,
+        original_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> StorageResult<Option<(u64, ObjectID)>> {
+        self.stock_reader()
+            .get_package_at_checkpoint(original_id, checkpoint)
+    }
+
+    /// A row at or below `checkpoint` answers. Without one, the fork has not changed the object
+    /// between the fork checkpoint and `checkpoint`, so at or above the fork checkpoint the version
+    /// is the object's version at the fork checkpoint, which the remote resolves and the fork then
+    /// records, even when local execution has changed the object since.
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> StorageResult<Option<SequenceNumber>> {
+        let version = self
+            .stock_reader()
+            .get_object_version_at_checkpoint(object_id, checkpoint)?;
+        if version.is_some() || checkpoint < self.forked_at_checkpoint() {
+            return Ok(version);
+        }
+        let object = self
+            .fetch_object_at_fork_checkpoint(&object_id)
+            .map_err(to_storage_error)?;
+        Ok(object.map(|object| object.version()))
+    }
+
+    fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        self.stock_reader()
+            .get_highest_indexed_checkpoint_seq_number()
+    }
+
+    fn is_history_backfill_pending(&self) -> StorageResult<bool> {
+        self.stock_reader().is_history_backfill_pending()
+    }
+
+    fn get_highest_live_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        self.stock_reader()
+            .get_highest_live_indexed_checkpoint_seq_number()
+    }
+
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
+        self.stock_reader().ledger_tx_seq_digest(tx_seq)
+    }
+
+    fn ledger_tx_seq_digest_multi_get(
+        &self,
+        tx_seqs: &[u64],
+    ) -> StorageResult<Vec<Option<LedgerTxSeqDigest>>> {
+        self.stock_reader().ledger_tx_seq_digest_multi_get(tx_seqs)
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
+        self.stock_reader()
+            .ledger_tx_seq_digest_iter(start, end_exclusive, descending)
+    }
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        self.stock_reader().transaction_bitmap_bucket_iter(
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        self.stock_reader().event_bitmap_bucket_iter(
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
     }
 }
 

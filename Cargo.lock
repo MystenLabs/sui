@@ -14308,7 +14308,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5#1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e62626b45293906694f80e0ef2a79473e2ba3b76#e62626b45293906694f80e0ef2a79473e2ba3b76"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14662,6 +14662,7 @@ dependencies = [
  "tonic-prost",
  "tracing",
  "tracing-subscriber",
+ "typed-store-error",
  "wiremock",
 ]
 
@@ -16141,7 +16142,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5#1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e62626b45293906694f80e0ef2a79473e2ba3b76#e62626b45293906694f80e0ef2a79473e2ba3b76"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16326,7 +16327,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5#1792e0b3aa02fa4b572ae2a3f09b4e78b515eec5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e62626b45293906694f80e0ef2a79473e2ba3b76#e62626b45293906694f80e0ef2a79473e2ba3b76"
 dependencies = [
  "base64ct",
  "bcs",

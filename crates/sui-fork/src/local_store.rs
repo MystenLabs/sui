@@ -401,6 +401,23 @@ impl LocalStore {
         Ok(())
     }
 
+    /// Save an object fetched from a remote query pinned at the fork checkpoint, recording it as
+    /// the object's version at the fork checkpoint.
+    ///
+    /// Unlike [`Self::save_live_object_if_current`], this writes the fork-checkpoint row even when
+    /// local execution has changed or removed the object since. That row describes only the fork
+    /// checkpoint, and the rows of later checkpoints still outrank it, so it answers the
+    /// checkpoint-pinned reads from the fork checkpoint up to the object's first local change.
+    pub(crate) fn save_object_at_fork_checkpoint(&self, object: &Object) -> anyhow::Result<()> {
+        let mut batch = self.db.batch();
+        self.stage_object_version(&mut batch, object)?;
+        self.stage_package_version(&mut batch, object)?;
+        self.stage_restored_object_version(&mut batch, object)?;
+        batch
+            .commit()
+            .context("failed to save object at the fork checkpoint")
+    }
+
     /// Report whether the seed load has already committed.
     ///
     /// The seed load must run exactly once over the lifetime of a fork directory, because `Balance`

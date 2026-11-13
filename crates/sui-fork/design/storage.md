@@ -195,8 +195,9 @@ Transactions executed locally will be found in the local store.
 
 ### Requests keyed by an object
 
-There are three ways to ask about an object: by an exact version, with no version at all, or
-bounded by a version. Each has different implications for how the fork can answer it.
+There are four ways to ask about an object: by an exact version, with no version at all,
+bounded by a version, or pinned at a checkpoint. Each has different implications for how the
+fork can answer it.
 
 - An exact version is an immutable key: a given version of an object never changes, so a local
 row can be served without further thought, and a miss can be resolved from the live network RPC
@@ -219,6 +220,15 @@ holds when that row carries live-state authority or is a tombstone. Absent that,
 cache may hold some older version that an unrelated historical read left behind, and serving
 it would be wrong, so the bound must also be resolved against the live network and the
 higher of the two answers taken.
+
+- A request pinned at a checkpoint asks for the version the object had at the end of it, and
+`object_version_by_checkpoint` answers it whenever it holds a row at or below that checkpoint.
+Without one, the fork did not change the object between the fork point and that checkpoint, so
+the answer is the object's version at the fork point. That version is resolved from the live
+network RPC pinned at the fork point and recorded there as a floor row, even when the fork has
+changed the object since, because the row describes only the fork point and the rows of later
+checkpoints outrank it. Checkpoints below the fork point are refused, since the fork holds no
+history before it.
 
 ### Derived reads compose over policy
 
