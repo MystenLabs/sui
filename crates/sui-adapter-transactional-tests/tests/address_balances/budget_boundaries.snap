@@ -1,0 +1,96 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+// The budget boundary of computation and of storage. Computation runs out of gas when its charge
+// equals the budget. Storage fits when its net charge equals what computation left. Gas is paid
+// from an address balance, so no gas coin storage is charged.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1031000000, storage_cost: 5403600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-24:
+//# programmable --sender A --inputs 1000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 26:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 28:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+1000000000
+
+task 5, lines 30-33:
+// The minimum computation of 1_000 units costs 1_000_000 MIST at gas price 1_000. It equals the
+// budget: out of gas, and the 1_000_000 MIST are charged.
+//# programmable --sender A --address-balance-gas --gas-budget 1000000
+//> test::boundary::noop()
+Error: Transaction Effects Status: Insufficient Gas.
+Debug of error: InsufficientGas at command None
+
+task 6, line 35:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, line 37:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+999000000
+
+task 8, lines 39-41:
+// One more MIST fits. The VM gets the same 1_000 units, and the charge is 1_000_000 MIST.
+//# programmable --sender A --address-balance-gas --gas-budget 1000001
+//> test::boundary::noop()
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 1000000)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 9, line 43:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, line 45:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+998000000
+
+task 11, lines 47-49:
+// Computation of 1_000_000 MIST and the storage of one W use the whole budget, and storage fits.
+//# programmable --sender A --address-balance-gas --gas-budget 2261600
+//> test::boundary::make()
+created: object(11,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 2261600)
+gas summary: computation_cost: 1000000, storage_cost: 1261600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 12, line 51:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 13, line 53:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+995738400
+
+task 14, lines 55-57:
+// One MIST less: storage does not fit. The W is dropped and only computation is charged.
+//# programmable --sender A --address-balance-gas --gas-budget 2261599
+//> test::boundary::make()
+Error: Transaction Effects Status: Insufficient Gas.
+Debug of error: InsufficientGas at command None
+
+task 15, line 59:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 16, line 61:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+994738400

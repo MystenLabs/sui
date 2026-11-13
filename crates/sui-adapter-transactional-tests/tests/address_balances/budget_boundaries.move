@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // The budget boundary of computation and of storage. Computation runs out of gas when its charge
-// equals the budget. Storage fits when its net charge equals what computation left. publish.move
-// covers a budget equal to the pre-execution charge. Gas is paid from an address balance, so no
-// gas coin storage is charged.
+// equals the budget. Storage fits when its net charge equals what computation left. Gas is paid
+// from an address balance, so no gas coin storage is charged.
 
-//# init --addresses test=0x0 --accounts A --reference-gas-price 3 --default-gas-price 3
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::boundary;
@@ -28,25 +27,25 @@ public fun make(ctx: &mut TxContext) {
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 
-// The minimum computation of 1_000 units costs 3_000 MIST at price 3. It equals the budget:
-// out of gas, and the 3_000 MIST are charged.
-//# programmable --sender A --address-balance-gas --gas-budget 3000
+// The minimum computation of 1_000 units costs 1_000_000 MIST at gas price 1_000. It equals the
+// budget: out of gas, and the 1_000_000 MIST are charged.
+//# programmable --sender A --address-balance-gas --gas-budget 1000000
 //> test::boundary::noop()
 
 //# create-checkpoint
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 
-// One more MIST fits. The VM gets the same 1_000 units, and the charge is 3_000 MIST.
-//# programmable --sender A --address-balance-gas --gas-budget 3001
+// One more MIST fits. The VM gets the same 1_000 units, and the charge is 1_000_000 MIST.
+//# programmable --sender A --address-balance-gas --gas-budget 1000001
 //> test::boundary::noop()
 
 //# create-checkpoint
 
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 
-// Computation of 3_000 MIST and the storage of one W use the whole budget, and storage fits.
-//# programmable --sender A --address-balance-gas --gas-budget 1264600
+// Computation of 1_000_000 MIST and the storage of one W use the whole budget, and storage fits.
+//# programmable --sender A --address-balance-gas --gas-budget 2261600
 //> test::boundary::make()
 
 //# create-checkpoint
@@ -54,7 +53,7 @@ public fun make(ctx: &mut TxContext) {
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 
 // One MIST less: storage does not fit. The W is dropped and only computation is charged.
-//# programmable --sender A --address-balance-gas --gas-budget 1264599
+//# programmable --sender A --address-balance-gas --gas-budget 2261599
 //> test::boundary::make()
 
 //# create-checkpoint
