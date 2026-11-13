@@ -138,7 +138,7 @@ pub(crate) struct Constant {
     pub(crate) value: ConstantValue,
     pub(crate) type_: VMPointer<ArenaType>,
     // Abstract value size of the constant, used for gas charging.
-    pub size: u64,
+    pub size: AbstractMemorySize,
 }
 
 // A runtime function

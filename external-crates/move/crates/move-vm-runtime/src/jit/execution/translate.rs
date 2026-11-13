@@ -1092,10 +1092,10 @@ fn constants(
             })?;
             // Constants cannot contain references, so `traverse_references` is irrelevant;
             // `include_vector_size` matches the non-legacy size config in the Sui gas meter.
-            let size = u64::from(deserialized_value.abstract_memory_size(&SizeConfig {
+            let size = deserialized_value.abstract_memory_size(&SizeConfig {
                 traverse_references: false,
                 include_vector_size: true,
-            })?);
+            })?;
             let value = deserialized_value.into_constant_value(&context.package_arena)?;
             let type_ = make_arena_type(context, module, &constant.type_)?;
             let const_ = Constant { value, type_, size };
