@@ -867,7 +867,7 @@ where
             layer.clone().finish(base.clone()),
         )
         .await?;
-    if !store_runtime_builder.is_registered(P::NAME) {
+    if !indexer.pipelines().any(|p| p == P::NAME) {
         return Ok(store_runtime_builder);
     }
     Ok(store_runtime_builder.with_bitmap_committer::<P>(

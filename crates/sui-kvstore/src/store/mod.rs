@@ -315,16 +315,6 @@ impl BigTableConnection<'_> {
 }
 
 impl BigTableStoreRuntimeBuilder {
-    /// Whether the indexer registered `pipeline`. It calls `init_watermark` for every pipeline it
-    /// registers and for none it skips, such as one that `--pipeline` excludes.
-    pub(crate) fn is_registered(&self, pipeline: &str) -> bool {
-        self.store
-            .init_results
-            .lock()
-            .expect("bitmap initial watermark mutex poisoned")
-            .contains_key(pipeline)
-    }
-
     pub(crate) fn with_bitmap_committer<P>(
         mut self,
         write_chunk_size: usize,

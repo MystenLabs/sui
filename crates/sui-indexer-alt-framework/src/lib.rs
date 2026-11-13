@@ -166,8 +166,8 @@ pub struct Indexer<S: Store> {
     /// with the same name isn't added twice.
     added_pipelines: BTreeSet<&'static str>,
 
-    /// Registered pipelines, waiting to be grouped into ingestion cohorts and started when the
-    /// indexer is run.
+    /// Pipelines that are registered and enabled, waiting to be grouped into ingestion cohorts and
+    /// started when the indexer is run.
     pipelines: Vec<PendingPipeline>,
 }
 
@@ -355,13 +355,10 @@ impl<S: Store> Indexer<S> {
         self.ingestion_factory.metrics()
     }
 
-    /// The pipelines that this indexer will run.
+    /// The pipelines that this indexer will run: those registered with it and not excluded by
+    /// `--pipeline`.
     pub fn pipelines(&self) -> impl Iterator<Item = &'static str> + '_ {
-        self.added_pipelines.iter().copied().filter(|p| {
-            self.enabled_pipelines
-                .as_ref()
-                .is_none_or(|e| e.contains(*p))
-        })
+        self.pipelines.iter().map(|p| p.name)
     }
 
     /// The minimum next checkpoint across all sequential pipelines. This value is used to
@@ -1092,6 +1089,39 @@ mod tests {
         assert_eq!(indexer.latest_checkpoint, 0);
         assert_eq!(indexer.next_checkpoint, 0);
         assert_eq!(indexer.next_sequential_checkpoint, Some(0));
+    }
+
+    /// `pipelines()` reports every registered pipeline without `--pipeline`, and exactly the
+    /// registered pipelines that `--pipeline` names with it.
+    #[tokio::test]
+    async fn test_pipelines_reports_enabled_pipelines() {
+        test_pipeline!(A, "concurrent_a");
+        test_pipeline!(B, "concurrent_b");
+        test_pipeline!(C, "sequential_c");
+        test_pipeline!(D, "sequential_d");
+
+        let cases = [
+            (vec![], vec![A::NAME, B::NAME, C::NAME, D::NAME]),
+            (vec![A::NAME, C::NAME], vec![A::NAME, C::NAME]),
+        ];
+
+        for (filter, expected) in cases {
+            let args = IndexerArgs {
+                pipeline: filter.into_iter().map(String::from).collect(),
+                ..Default::default()
+            };
+            let (mut indexer, _temp_dir) =
+                create_test_indexer(FallibleMockStore::default(), args, &Registry::new(), None)
+                    .await;
+
+            add_concurrent(&mut indexer, A).await;
+            add_concurrent(&mut indexer, B).await;
+            add_sequential(&mut indexer, C).await;
+            add_sequential(&mut indexer, D).await;
+
+            let pipelines: BTreeSet<_> = indexer.pipelines().collect();
+            assert_eq!(pipelines, BTreeSet::from_iter(expected));
+        }
     }
 
     /// next_checkpoint is 1 when smallest committer watermark is 0.
