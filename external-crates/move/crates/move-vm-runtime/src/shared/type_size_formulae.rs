@@ -349,6 +349,66 @@ impl MaxPlusForm {
     }
 }
 
+/// Builds formulae for the node count and nesting depth of `ty` under type substitution.
+///
+/// Datatypes count as one node without expanding their fields.
+fn type_size_and_depth_forms(ty: &ArenaType) -> (LinearForm, MaxPlusForm) {
+    let mut type_size = LinearForm::constant(0);
+    let mut type_depth = MaxPlusForm::constant(0);
+    let mut work: Vec<(&ArenaType, u64)> = vec![(ty, 0)];
+    while let Some((ty, depth)) = work.pop() {
+        match ty {
+            ArenaType::TyParam(idx) => {
+                match type_size.terms.iter_mut().find(|term| term.param == *idx) {
+                    Some(existing) => existing.coefficient = existing.coefficient.saturating_add(1),
+                    None => type_size.terms.push(LinearTerm {
+                        param: *idx,
+                        coefficient: 1,
+                    }),
+                }
+                match type_depth.terms.iter_mut().find(|term| term.param == *idx) {
+                    Some(existing) => existing.offset = existing.offset.max(depth),
+                    None => type_depth.terms.push(MaxPlusTerm {
+                        param: *idx,
+                        offset: depth,
+                    }),
+                }
+            }
+            ArenaType::Vector(inner)
+            | ArenaType::Reference(inner)
+            | ArenaType::MutableReference(inner) => {
+                type_size.constant = type_size.constant.saturating_add(1);
+                type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+                work.push((inner, depth.saturating_add(1)));
+            }
+            ArenaType::DatatypeInstantiation(inst) => {
+                type_size.constant = type_size.constant.saturating_add(1);
+                type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+                let (_, args) = &**inst;
+                for arg in args.iter() {
+                    work.push((arg, depth.saturating_add(1)));
+                }
+            }
+            ArenaType::Bool
+            | ArenaType::U8
+            | ArenaType::U16
+            | ArenaType::U32
+            | ArenaType::U64
+            | ArenaType::U128
+            | ArenaType::U256
+            | ArenaType::Address
+            | ArenaType::Signer
+            | ArenaType::Datatype(_) => {
+                type_size.constant = type_size.constant.saturating_add(1);
+                type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+            }
+        }
+    }
+    type_size.canonicalize();
+    type_depth.canonicalize();
+    (type_size, type_depth)
+}
+
 // -------------------------------------------------------------------------------------------------
 // Arena forms
 // -------------------------------------------------------------------------------------------------
@@ -994,7 +1054,7 @@ impl ArenaTypeSizeFormula {
                 let struct_ = struct_.to_ref();
                 from_fields(
                     checked_as!(struct_.type_parameters.len(), u16)?,
-                    struct_.fields.iter().map(|field| &**field),
+                    struct_.fields.iter().map(|field| &*field.ty),
                     0,
                     arena,
                     type_limits,
@@ -1007,7 +1067,7 @@ impl ArenaTypeSizeFormula {
                     enum_
                         .variants
                         .iter()
-                        .flat_map(|variant| variant.fields.iter().map(|field| &**field)),
+                        .flat_map(|variant| variant.fields.iter().map(|field| &*field.ty)),
                     enum_.variants.len() as u64,
                     arena,
                     type_limits,
@@ -1032,65 +1092,7 @@ impl ArenaTypeSizeFormula {
         arena: &ArenaBuilder,
         type_limits: &TypeLimits,
     ) -> PartialVMResult<Self> {
-        // The syntactic measures, computed structurally over a worklist: each node is one
-        // `type_size` node at its `type_depth` level; parameters contribute their own measures
-        // (coefficients sum, offsets max on repeated parameters).
-        let mut type_size = LinearForm::constant(0);
-        let mut type_depth = MaxPlusForm::constant(0);
-        let mut work: Vec<(&ArenaType, u64)> = vec![(ty, 0)];
-        while let Some((ty, depth)) = work.pop() {
-            match ty {
-                ArenaType::TyParam(idx) => {
-                    match type_size.terms.iter_mut().find(|t| t.param == *idx) {
-                        Some(existing) => {
-                            existing.coefficient = existing.coefficient.saturating_add(1)
-                        }
-                        None => type_size.terms.push(LinearTerm {
-                            param: *idx,
-                            coefficient: 1,
-                        }),
-                    }
-                    match type_depth.terms.iter_mut().find(|t| t.param == *idx) {
-                        Some(existing) => existing.offset = existing.offset.max(depth),
-                        None => type_depth.terms.push(MaxPlusTerm {
-                            param: *idx,
-                            offset: depth,
-                        }),
-                    }
-                }
-                ArenaType::Vector(inner)
-                | ArenaType::Reference(inner)
-                | ArenaType::MutableReference(inner) => {
-                    type_size.constant = type_size.constant.saturating_add(1);
-                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
-                    work.push((inner, depth.saturating_add(1)));
-                }
-                ArenaType::DatatypeInstantiation(inst) => {
-                    type_size.constant = type_size.constant.saturating_add(1);
-                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
-                    let (_, args) = &**inst;
-                    for arg in args.iter() {
-                        work.push((arg, depth.saturating_add(1)));
-                    }
-                }
-                // Primitives and uninstantiated datatypes: one node, one level.
-                ArenaType::Bool
-                | ArenaType::U8
-                | ArenaType::U16
-                | ArenaType::U32
-                | ArenaType::U64
-                | ArenaType::U128
-                | ArenaType::U256
-                | ArenaType::Address
-                | ArenaType::Signer
-                | ArenaType::Datatype(_) => {
-                    type_size.constant = type_size.constant.saturating_add(1);
-                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
-                }
-            }
-        }
-        type_size.canonicalize();
-        type_depth.canonicalize();
+        let (type_size, type_depth) = type_size_and_depth_forms(ty);
 
         // The term is a "field" of nothing: no wrapping datatype node, so the locals start at
         // zero and the fold sits at depth 0.

@@ -730,8 +730,8 @@ fn structs(
 
             let fields = fields
                 .iter()
-                .map(|f| make_arena_type(context, module, &f.signature.0))
-                .collect::<PartialVMResult<Vec<VMPointer<ArenaType>>>>()?;
+                .map(|field| make_sized_type(context, module, &field.signature.0))
+                .collect::<PartialVMResult<Vec<_>>>()?;
             let fields = context.arena_vec(fields.into_iter())?;
 
             let field_names: Vec<IdentifierKey> = match &struct_def.field_information {
@@ -827,7 +827,7 @@ fn enums(
                 let fields = variant_def
                     .fields
                     .iter()
-                    .map(|f| make_arena_type(context, module, &f.signature.0))
+                    .map(|field| make_sized_type(context, module, &field.signature.0))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let fields = context.arena_vec(fields.into_iter())?;
 

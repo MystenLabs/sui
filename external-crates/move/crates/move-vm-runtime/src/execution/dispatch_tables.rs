@@ -884,6 +884,33 @@ impl VMDispatchTables {
         )
     }
 
+    fn type_argument_sizes(&self, ty_args: &[Type]) -> PartialVMResult<Vec<TypeSize>> {
+        ty_args
+            .iter()
+            .map(|ty| self.type_size_of(ty, &self.type_limits))
+            .collect()
+    }
+
+    fn substitute_field_type(
+        &self,
+        field: &SizedArenaType,
+        ty_args: &[Type],
+        arg_sizes: &[TypeSize],
+    ) -> PartialVMResult<Type> {
+        let Some(size_formula) = &field.size_formula else {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "missing size formula for datatype field"
+            ));
+        };
+        check_syntactic_limits(
+            &self.type_limits,
+            size_formula.solve_type_size(arg_sizes)?,
+            size_formula.solve_type_depth(arg_sizes)?,
+        )?;
+        field.ty.subst_unchecked(ty_args)
+    }
+
     /// Check a type's predicted `value_depth` and `layout_size` against the configured limits
     /// before any layout generation -- pure arithmetic over the descriptor formulas; nothing of
     /// an oversized layout is ever built. The error codes mirror the legacy cursor's.
@@ -913,6 +940,7 @@ impl VMDispatchTables {
             ty_args: &[Type],
         ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
             let ty = tables.resolve_type(datatype_name)?.to_ref();
+            let arg_sizes = tables.type_argument_sizes(ty_args)?;
             let type_layout = match ty.datatype_info.inner_ref() {
                 Datatype::Enum(einfo) => {
                     let mut variant_layouts = vec![];
@@ -920,7 +948,7 @@ impl VMDispatchTables {
                         let field_tys = variant
                             .fields
                             .iter()
-                            .map(|ty| ty.subst_unchecked(ty_args))
+                            .map(|field| tables.substitute_field_type(field, ty_args, &arg_sizes))
                             .collect::<PartialVMResult<Vec<_>>>()?;
                         let field_layouts = field_tys
                             .iter()
@@ -936,7 +964,7 @@ impl VMDispatchTables {
                     let field_tys = sinfo
                         .fields
                         .iter()
-                        .map(|ty| ty.subst_unchecked(ty_args))
+                        .map(|field| tables.substitute_field_type(field, ty_args, &arg_sizes))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     let field_layouts = field_tys
                         .iter()
@@ -1008,6 +1036,7 @@ impl VMDispatchTables {
             ty_args: &[Type],
         ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
             let ty = tables.resolve_type(datatype_name)?.to_ref();
+            let arg_sizes = tables.type_argument_sizes(ty_args)?;
             let struct_tag = tables.datatype_to_type_tag_impl(
                 datatype_name,
                 ty_args,
@@ -1031,7 +1060,7 @@ impl VMDispatchTables {
                             .zip(variant.fields.iter())
                             .map(|(n, ty)| {
                                 let n = tables.interner.resolve_ident(n, "field name");
-                                let ty = ty.subst_unchecked(ty_args)?;
+                                let ty = tables.substitute_field_type(ty, ty_args, &arg_sizes)?;
                                 let l = type_to_fully_annotated_layout_unchecked(tables, &ty)?;
                                 Ok(annotated_value::MoveFieldLayout::new(n, l))
                             })
@@ -1066,7 +1095,7 @@ impl VMDispatchTables {
                         .zip(struct_type.fields.iter())
                         .map(|(n, ty)| {
                             let n = tables.interner.resolve_ident(n, "field name");
-                            let ty = ty.subst_unchecked(ty_args)?;
+                            let ty = tables.substitute_field_type(ty, ty_args, &arg_sizes)?;
                             let l = type_to_fully_annotated_layout_unchecked(tables, &ty)?;
                             Ok(annotated_value::MoveFieldLayout::new(n, l))
                         })

@@ -203,7 +203,7 @@ pub(crate) struct StructDef {
     pub def_vtable_key: VMPointer<VirtualTableKey>,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
-    pub fields: ArenaVec<VMPointer<ArenaType>>,
+    pub fields: ArenaVec<SizedArenaType>,
     pub field_names: ArenaVec<IdentifierKey>,
 }
 
@@ -221,7 +221,7 @@ pub(crate) struct EnumDef {
 pub(crate) struct VariantDef {
     pub variant_tag: VariantTag,
     pub variant_name: IdentifierKey,
-    pub fields: ArenaVec<VMPointer<ArenaType>>,
+    pub fields: ArenaVec<SizedArenaType>,
     pub field_names: ArenaVec<IdentifierKey>,
     pub enum_def: VMPointer<EnumDef>,
 }
