@@ -8,12 +8,13 @@ use mysten_common::ZipDebugEqIteratorExt;
 use sui_package_resolver::{SyncPackageStore, SyncResolver};
 use sui_sdk_types::{EpochId, ValidatorCommittee};
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
-use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
+use sui_types::storage::{RpcIndexes, RpcStateReader};
 use tap::Pipe;
 
 use crate::ErrorDetails;
@@ -289,21 +290,38 @@ impl StateReader {
         Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
     }
 
-    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_at_checkpoint`], and
-    /// `GetPackage`'s `at_checkpoint`): the highest checkpoint every rpc index has committed.
+    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_at_checkpoint`],
+    /// [`Self::get_object_version_at_checkpoint`], and `GetPackage`'s `at_checkpoint`): the
+    /// highest checkpoint every rpc index has committed.
     ///
     /// Read it before the reads. It only grows, and the indexes only add data above it, so it
     /// stays valid for reads made after it was read. The lower bound is the opposite; see
     /// [`Self::at_checkpoint_lower_bound`].
     ///
-    /// `UNIMPLEMENTED` (`NOT_SERVED_HERE`, cause `no_rpc_indexes`) if the rpc indexes are
-    /// disabled. `UNAVAILABLE` (`NOT_READY`) if they have not committed a checkpoint yet (cause
-    /// `index_empty`), or are still backfilling history after a restore (cause
-    /// `restore_backfill`): until every history index reaches the restore checkpoint, a
-    /// checkpoint-pinned read can be wrong at any checkpoint the indexes cover (restore of a
-    /// pruned node), or the highest indexed checkpoint lies far below the restored live state
-    /// (restore with nothing pruned).
+    /// Fails as [`Self::require_rpc_index_history`] does, or with `UNAVAILABLE` (`NOT_READY`,
+    /// cause `index_empty`) if the rpc indexes have not committed a checkpoint yet.
     pub fn at_checkpoint_upper_bound(&self) -> Result<AtCheckpointUpperBound, crate::RpcError> {
+        let highest_indexed = self
+            .require_rpc_index_history()?
+            .get_highest_indexed_checkpoint_seq_number()
+            .map_err(index_error)?
+            .ok_or_else(index_empty)?;
+        Ok(AtCheckpointUpperBound { highest_indexed })
+    }
+
+    /// The rpc indexes, for reads that need the history they record: checkpoint-pinned reads,
+    /// and `max_version` reads, which on a pruned node check the version they find against the
+    /// indexes (see [`RpcStateReader::get_object_lt_or_eq_version`]).
+    ///
+    /// `UNIMPLEMENTED` (`NOT_SERVED_HERE`, cause `no_rpc_indexes`) if the rpc indexes are
+    /// disabled. `UNAVAILABLE` (`NOT_READY`, cause `restore_backfill`) while they are still
+    /// backfilling history after a restore: until every history index reaches the restore
+    /// checkpoint, a checkpoint-pinned read can be wrong at any checkpoint the indexes cover
+    /// (restore of a pruned node), the highest indexed checkpoint lies far below the restored
+    /// live state (restore with nothing pruned), and the version the indexes record at the end
+    /// of a checkpoint can be a later one, which would refuse `max_version` reads of versions
+    /// this node holds.
+    pub fn require_rpc_index_history(&self) -> Result<&dyn RpcIndexes, crate::RpcError> {
         let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
         if indexes.is_history_backfill_pending().map_err(index_error)? {
             return Err(not_ready(
@@ -311,11 +329,7 @@ impl StateReader {
                 "rpc index history is still backfilling after a restore",
             ));
         }
-        let highest_indexed = indexes
-            .get_highest_indexed_checkpoint_seq_number()
-            .map_err(index_error)?
-            .ok_or_else(index_empty)?;
-        Ok(AtCheckpointUpperBound { highest_indexed })
+        Ok(indexes)
     }
 
     /// [`version_not_retained`] if this node does not keep object versions once they are replaced
@@ -361,17 +375,37 @@ impl StateReader {
         checkpoint: u64,
         upper_bound: &AtCheckpointUpperBound,
     ) -> Result<Option<Object>, crate::RpcError> {
-        upper_bound.check(checkpoint)?;
-
-        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
-        let Some(version) = indexes
-            .get_object_version_at_checkpoint(object_id, checkpoint)
-            .map_err(index_error)?
+        let Some(version) =
+            self.get_object_version_at_checkpoint(object_id, checkpoint, upper_bound)?
         else {
             return Ok(None);
         };
         // A deletion or wrapping tombstone has no object at its version.
         Ok(self.inner().get_object_by_key(&object_id, version))
+    }
+
+    /// The version the rpc index records for `object_id` at the end of `checkpoint`: its newest
+    /// version written at or before `checkpoint`, or, if that change deleted or wrapped it, the
+    /// version the index records for the removal. For a removal with V1 effects that is
+    /// `TransactionEffectsAPI::lamport_version`, which can be below the tombstone's version in
+    /// the object store, though no version of the object lies between the two. Every live version
+    /// above this one was written after `checkpoint`. `None` if the object did not exist yet, or
+    /// if it was deleted or wrapped in a checkpoint this node pruned, whose pruning removes every
+    /// index row of the object.
+    /// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) if `checkpoint` is above `upper_bound`; check the
+    /// lower bound after the read with [`Self::at_checkpoint_lower_bound`].
+    pub fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: u64,
+        upper_bound: &AtCheckpointUpperBound,
+    ) -> Result<Option<SequenceNumber>, crate::RpcError> {
+        upper_bound.check(checkpoint)?;
+
+        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
+        indexes
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+            .map_err(index_error)
     }
 }
 

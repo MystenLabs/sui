@@ -18,6 +18,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -126,13 +127,38 @@ impl RemoteSource {
         )
     }
 
-    /// Fetch the highest object version at or below `version_bound` (bounded child reads).
+    /// Fetch the highest object version at or below `version_bound`, only if it existed by the
+    /// fork checkpoint and is live.
+    ///
+    /// `None` also when that version was created after the fork checkpoint, without falling back
+    /// to an older one, so a caller must first rule out that the object's version at the fork
+    /// checkpoint is itself within the bound.
     pub(crate) fn object_at_or_before(
         &self,
         object_id: &ObjectID,
         version_bound: u64,
     ) -> anyhow::Result<Option<Object>> {
-        self.object_query(object_id, VersionQuery::RootVersion(version_bound))
+        self.object_query(
+            object_id,
+            VersionQuery::RootVersionAtCheckpoint {
+                root_version: version_bound,
+                checkpoint: self.forked_at_checkpoint,
+            },
+        )
+    }
+
+    /// Fetch the effects of the last change to an object at or before the fork checkpoint, or
+    /// `None` if the remote holds no change to it by then.
+    ///
+    /// For an object that was not live at the fork checkpoint, that change deleted or wrapped it,
+    /// and its `TransactionEffectsAPI::lamport_version` is the removal's version, as an rpc index
+    /// records it.
+    pub(crate) fn last_change_at_fork(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<TransactionEffects>> {
+        self.gql
+            .get_object_last_change_at_checkpoint(*object_id, self.forked_at_checkpoint)
     }
 
     /// Fetch an object by ID and version query, only if it existed by the fork checkpoint.

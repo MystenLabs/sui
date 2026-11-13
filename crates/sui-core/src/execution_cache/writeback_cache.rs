@@ -95,6 +95,7 @@ use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
 use super::ExecutionCacheAPI;
+use super::FoundObjectOrTombstone;
 use super::cache_types::Ticket;
 use super::{
     Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
@@ -132,6 +133,28 @@ impl ObjectEntry {
         match self {
             ObjectEntry::Deleted | ObjectEntry::Wrapped => true,
             ObjectEntry::Object(_) => false,
+        }
+    }
+
+    /// This entry as the entry of `object_id` at `version`: the object, or the tombstone of the
+    /// deletion or wrap at `version`.
+    fn into_object_or_tombstone(
+        self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> ObjectOrTombstone {
+        match self {
+            ObjectEntry::Object(object) => ObjectOrTombstone::Object(object),
+            ObjectEntry::Deleted => ObjectOrTombstone::Tombstone((
+                object_id,
+                version,
+                ObjectDigest::OBJECT_DIGEST_DELETED,
+            )),
+            ObjectEntry::Wrapped => ObjectOrTombstone::Tombstone((
+                object_id,
+                version,
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            )),
         }
     }
 }
@@ -1905,6 +1928,47 @@ impl ObjectCacheRead for WritebackCache {
                 }
             },
         )
+    }
+
+    fn find_object_or_tombstone_lt_or_eq_version_unlocked(
+        &self,
+        object_id: ObjectID,
+        version_bound: SequenceNumber,
+    ) -> Option<FoundObjectOrTombstone> {
+        // Copied out under the shard's read lock, which is released at the end of the statement,
+        // before the store read.
+        let uncommitted = self.dirty.objects.get(&object_id).and_then(|versions| {
+            versions
+                .all_versions_lt_or_eq_descending(&version_bound)
+                .next()
+                .map(|(version, entry)| (*version, entry.clone()))
+        });
+        // `commit_transaction_outputs` writes a version to the store before
+        // `flush_objects_from_dirty_to_cached` removes it from the dirty set, so a version that
+        // left the dirty set after the read above is in the store now.
+        let committed = self
+            .record_db_get("object_or_tombstone_lt_or_eq_version_unlocked")
+            .perpetual_tables
+            .find_object_or_tombstone_lt_or_eq_version(object_id, version_bound)
+            .expect("db error");
+        let committed_version = committed.as_ref().map(|committed| match committed {
+            ObjectOrTombstone::Object(object) => object.version(),
+            ObjectOrTombstone::Tombstone((_, version, _)) => *version,
+        });
+        match uncommitted {
+            Some((version, entry))
+                if committed_version.is_none_or(|committed| committed < version) =>
+            {
+                Some(FoundObjectOrTombstone {
+                    entry: entry.into_object_or_tombstone(object_id, version),
+                    committed: false,
+                })
+            }
+            _ => committed.map(|entry| FoundObjectOrTombstone {
+                entry,
+                committed: true,
+            }),
+        }
     }
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {

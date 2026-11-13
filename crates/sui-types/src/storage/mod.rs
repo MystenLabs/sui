@@ -716,7 +716,7 @@ impl From<&FullObjectRef> for FullObjectKey {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectOrTombstone {
     Object(Object),
     Tombstone(ObjectRef),

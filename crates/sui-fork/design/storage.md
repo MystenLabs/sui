@@ -214,21 +214,34 @@ authoritative, no row means never fetched and sends the read to the remote. "The
 state" below sets out what may write to that index and why.
 
 - A request bounded by a version is the subtle one. It asks for the highest version at or
-below some bound, which is how child objects are read during execution. A stored row at or
-below the bound is only trustworthy if the fork knows nothing newer can exist below it, which
-holds when that row carries live-state authority or is a tombstone. Absent that, the sparse
-cache may hold some older version that an unrelated historical read left behind, and serving
-it would be wrong, so the bound must also be resolved against the live network and the
-higher of the two answers taken.
+below some bound, which is how child objects are read during execution and how `GetObject`
+serves `max_version`. The stored rows are complete only from the object's version at the fork
+point upward, since local execution writes a row for every version it produces and remote
+reads never cache anything newer than that version. Below it, the sparse cache may hold some
+older version that an unrelated historical read left behind, and serving it would be wrong.
+The object's earliest checkpoint-pinned row holds either its version at the fork point or its
+version at the end of its first locally executed checkpoint, so a bound at or above that row's
+version is answered from the stored rows without asking anything. Below it, unless that row is
+at the fork point, the fork asks for the object's version at the fork point and records it
+there, and if that version is within the bound the stored rows answer, which finds an earlier
+version the first local checkpoint wrote. Otherwise the live network answers, but its newest
+version within the bound may come from after the fork point, so the query is pinned there:
+every version within the bound is older than the fork point's, or the object was not live at
+the fork point, and the pinned query returns the newest one that existed by then.
 
 - A request pinned at a checkpoint asks for the version the object had at the end of it, and
 `object_version_by_checkpoint` answers it whenever it holds a row at or below that checkpoint.
 Without one, the fork did not change the object between the fork point and that checkpoint, so
-the answer is the object's version at the fork point. That version is resolved from the live
-network RPC pinned at the fork point and recorded there as a floor row, even when the fork has
-changed the object since, because the row describes only the fork point and the rows of later
-checkpoints outrank it. Checkpoints below the fork point are refused, since the fork holds no
-history before it.
+the answer is the object's version at the fork point, resolved from the live network RPC pinned
+there. If the object was live at the fork point, that version is recorded there as a floor row,
+even when the fork has changed the object since, because the row describes only the fork point
+and the rows of later checkpoints outrank it. If it had been deleted or wrapped by then, the
+answer is the version that removed it: the lamport version of the last transaction that changed
+it by the fork point, the version an rpc index records for a removal. The fork records that one
+too, as a row at the fork point, with a tombstone of the kind that transaction's effects give at
+the version they give, which for V1 effects can sit above the lamport version, as on the chain's
+stores. Later reads find the removal in the stored rows without asking again. Checkpoints below the
+fork point are refused, since the fork holds no history before it.
 
 ### Derived reads compose over policy
 
@@ -355,26 +368,28 @@ type-keyed lookup against the live network when something asks, and cache the re
 object like any other. This is not a limit of forking — unlike the ledger range below — just
 work not done.
 
-The remote leg of a bounded read is not pinned at the fork point. Where the latest and
-exact-version object queries carry the fork checkpoint explicitly, the bounded query carries
-only its version bound, so it resolves against the live network's *current* state.
-Post-fork history on the other chain can therefore answer a read inside this fork, which is
-the one thing every other remote path is built to prevent. It reaches `read_child_object` on
-both the RPC and executor paths, so it can skew execution rather than only reads.
+A bounded read can miss a version of an object that was not live at the fork point, one the
+fork created or unwrapped, when its first local checkpoint changed it more than once. That
+checkpoint's row holds only its last version, and with no version at the fork point to start
+the stored rows from, a bound between those versions goes to the live network, which knows none
+of them and answers that the object had no version. The fork server seals a checkpoint after
+each operation it runs, so this takes a checkpoint holding several transactions that change the
+same object, as the Simulacrum API can produce. Closing it means starting the stored rows at the
+object's version at the fork point. A bounded read below the object's earliest pinned row, for
+an object with no row at the fork point, would ask the live network for the object's last
+change by the fork point and record it, as a checkpoint-pinned read already does for a removal,
+and then let the stored rows answer. That is one query on that path alone: execution's probes
+for dynamic fields that exist nowhere have no stored row and are untouched, and where the live
+network reports no change, or no longer holds it, the read can go to the live network as it
+does now. A removal a checkpoint-pinned read has already recorded starts the stored rows at
+the fork point, so the gap is closed for that object.
 
-That gap and the one below compound rather than merely coexisting, which is worth noticing
-before either is fixed: the fix proposed below is to merge the remote `RootVersion(bound)`
-result with the local candidate, and merging in an unpinned answer would make the remote leg
-authoritative precisely where it is least trustworthy. Pinning has to land first.
-
-Bounded child reads can also serve stale history. `get_object_lt_or_eq_version` trusts the
-highest *local* row at or below the bound, so a sparse cache polluted by an
-exact-historical-version read, an RPC client fetching an old dynamic-field version say, can
-hold a row lower than the true highest-≤-bound, which then wins without the remote ever
-being consulted. This affects `read_child_object` on both the RPC and executor paths, so it
-can skew execution and not only reads. Closing it means short-circuiting only on a live-state
-row or a tombstone, and otherwise merging the remote `RootVersion(bound)` result with the
-local candidate by maximum version.
+`GetObject` reads that resolve to a deletion or wrap are refused with `OUT_OF_RANGE`
+(`BELOW_EARLIEST_AVAILABLE`) rather than answered with `NOT_FOUND`: an exact `version` read
+without `at_checkpoint` of an object that is deleted or wrapped now, and a `max_version` read at
+or above a removal, with or without `at_checkpoint`. The fork's RPC reads of objects see live
+versions only, and its object lower bound is above 0, so the handler cannot tell a removal from
+a version the fork does not hold. Serving the fork's tombstones to the handler closes this.
 
 The fork's ledger index begins at the fork point, and the range below it is permanently
 empty. Positions are inherited rather than restarted: Simulacrum is seeded with the real

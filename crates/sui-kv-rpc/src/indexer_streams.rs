@@ -382,7 +382,8 @@ mod tests {
         let mut client = BigTableClient::new_local(bigtable.to_string(), "test".to_string())
             .await
             .expect("connect to mock Bigtable");
-        seed_watermarks(&mut client, |_| 50).await;
+        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, false);
+        seed_watermarks(&mut client, &pipelines, |_| 50).await;
         mock.clear_read_rows_calls().await;
 
         // The only indexer has not advanced the epoch end pipeline since it started.

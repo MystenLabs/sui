@@ -750,6 +750,25 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
+    /// The object's newest version at or below `version`, like the execution cache's
+    /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below
+    /// `version`, or if it was deleted or wrapped at that newest version. On a store whose object
+    /// lower bound ([`Self::get_lowest_available_checkpoint_objects`]) is above 0, also `None`
+    /// if the version found may be one the store pruned, which readers answer as possibly pruned.
+    ///
+    /// Fails by default. Stores that serve `GetObject`'s `max_version` override it, and
+    /// `GetObject` refuses `max_version` on stores without rpc indexes ([`Self::indexes`]) before
+    /// reading.
+    fn get_object_lt_or_eq_version(
+        &self,
+        _object_id: &ObjectID,
+        _version: SequenceNumber,
+    ) -> Result<Option<Object>> {
+        Err(super::error::Error::custom(
+            "this store does not serve version-bounded object reads",
+        ))
+    }
+
     /// The sequence number of the highest executed checkpoint, independent of
     /// how far any embedded index has caught up.
     ///

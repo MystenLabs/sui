@@ -2895,6 +2895,13 @@ impl AuthorityState {
             .database_for_testing()
     }
 
+    #[cfg(all(test, not(tidehunter)))]
+    pub(crate) fn execution_cache_trait_pointers_for_testing(
+        &self,
+    ) -> &ExecutionCacheTraitPointers {
+        &self.execution_cache_trait_pointers
+    }
+
     /// Access to the underlying authority store for diagnostic tooling (db-shell).
     ///
     /// Goes through `testing_api` deliberately: db-shell is read-only diagnostics
