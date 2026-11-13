@@ -11,82 +11,82 @@ processed 24 tasks
 init:
 A: object(0,0)
 
-task 1, lines 11-14:
+task 1, lines 11-16:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5449200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 16-19:
+task 2, lines 18-23:
 //# publish --dependencies DepV1 --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4476400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 21-26:
+task 3, lines 25-32:
 //# publish --sender A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5312400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 28-38:
+task 4, lines 34-49:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 7835600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 5, line 40:
+task 5, line 51:
 //# run DepV2::m::make_shared --sender A
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, line 42:
+task 6, line 53:
 //# run Wrapper::m::make --type-args DepV2::m::New --sender A
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 44-46:
+task 7, lines 55-58:
 //# publish --upgradeable --dependencies DepV1 --sender A
 created: object(7,0), object(7,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 48-54:
+task 8, lines 60-69:
 //# upgrade --package WitnessV1 --upgrade-capability 7,1 --dependencies DepV2 --sender A
 created: object(8,0)
 mutated: object(0,0), object(7,1)
 gas summary: computation_cost: 1000000, storage_cost: 8109200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 9, line 56:
+task 9, line 71:
 //# run WitnessV2::witness::make --sender A
 created: object(9,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, lines 58-60:
+task 10, lines 73-75:
 //# programmable --sender A --inputs 1u64
 // Without an input witness, the public consumer remains on v1.
 //> Consumer::m::check(Input(0));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 11, lines 62-64:
+task 11, lines 77-79:
 //# programmable --sender A --inputs object(6,0) 2u64
 // Only the old wrapper's phantom type argument introduces the v2 requirement.
 //> Consumer::m::check(Input(1));
 mutated: object(0,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2545745, non_refundable_storage_fee: 255
 
-task 12, lines 66-68:
+task 12, lines 81-83:
 //# programmable --sender A --inputs object(6,0) 1u64
 // The same unused nested type conflicts with an exact v1 target.
 //> DepV1::m::check(Input(1));
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(0) } }
 
-task 13, lines 70-72:
+task 13, lines 85-87:
 //# programmable --sender A --inputs immshared(5,0) 2u64
 // Unused shared inputs contribute before typing can discard them.
 //> Consumer::m::check(Input(1));
@@ -94,56 +94,56 @@ mutated: object(0,0)
 unchanged_shared: object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 14, lines 74-76:
+task 14, lines 89-91:
 //# programmable --sender A --inputs immshared(5,0) 1u64
 // The shared type was introduced in v2 and conflicts with an exact v1 target.
 //> DepV1::m::check(Input(1));
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Debug of error: InvalidLinkage at command Some(0)
 
-task 15, lines 78-80:
+task 15, lines 93-95:
 //# programmable --sender A --inputs object(9,0) 2u64
 // The unused type's package is different from Dep; its dependency table supplies Dep v2.
 //> Consumer::m::check(Input(1));
 mutated: object(0,0), object(9,0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2287371, non_refundable_storage_fee: 229
 
-task 16, lines 82-84:
+task 16, lines 97-99:
 //# programmable --sender A --inputs object(9,0) 1u64
 // Transitive input requirements also conflict with an exact v1 target.
 //> DepV1::m::check(Input(1));
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(0) } }
 
-task 17, lines 86-88:
+task 17, lines 101-103:
 //# programmable --sender A --inputs object(6,0)
 // No user-package command supplies either Wrapper or Dep: both must come from the input.
 //> std::option::none<u64>();
 mutated: object(0,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 2545745, non_refundable_storage_fee: 255
 
-task 18, lines 90-92:
+task 18, lines 105-107:
 //# programmable --sender A --dev-inspect --inputs object(6,0) 2u64
 // Dev-inspect uses the same input-driven dependency selection.
 //> Consumer::m::check(Input(1));
 mutated: object(_), object(6,0)
 gas summary: computation_cost: 500000, storage_cost: 2546000,  storage_rebate: 1557844, non_refundable_storage_fee: 156
 
-task 19, lines 94-96:
+task 19, lines 109-111:
 //# programmable --sender A --dev-inspect --inputs object(6,0) 1u64
 // Relaxed execution checks do not bypass linkage conflicts.
 //> DepV1::m::check(Input(1));
 Error: Transaction Effects Status: InvalidLinkage in command 0
 Execution Error: InvalidLinkage in command 0
 
-task 20, lines 98-100:
+task 20, lines 113-115:
 //# programmable --sender A
 // The baseline abort identifies the v1 dependency.
 //> Consumer::m::fail();
 Error: Transaction Effects Status: Move Runtime Abort. Location: DepV1::m::fail (function index 1) at offset 1, Abort Code: 11
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: DepV1, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("fail") }, 11), source: Some(VMError { major_status: ABORTED, sub_status: Some(11), message: Some("DepV1::m::fail at offset 1"), exec_state: None, location: Module(ModuleId { address: DepV1, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
-task 21, lines 102-105:
+task 21, lines 117-120:
 //# programmable --sender A --inputs object(6,0) 2u64
 // Input-selected v2 must report its shifted function index, package, name, and code at command 1.
 //> Consumer::m::check(Input(1));
@@ -151,7 +151,7 @@ task 21, lines 102-105:
 Error: Transaction Effects Status: Move Runtime Abort. Location: DepV2::m::fail (function index 2) at offset 1, Abort Code: 22
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: DepV2, name: Identifier("m") }, function: 2, instruction: 1, function_name: Some("fail") }, 22), source: Some(VMError { major_status: ABORTED, sub_status: Some(22), message: Some("DepV1::m::fail at offset 1"), exec_state: None, location: Module(ModuleId { address: DepV1, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(1) } }
 
-task 22, lines 107-110:
+task 22, lines 122-125:
 //# programmable --sender A --inputs 2u64
 // A later contribution selects v2 even though command 0 aborts before it executes.
 //> Consumer::m::fail();
@@ -159,7 +159,7 @@ task 22, lines 107-110:
 Error: Transaction Effects Status: Move Runtime Abort. Location: DepV2::m::fail (function index 2) at offset 1, Abort Code: 22
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: DepV2, name: Identifier("m") }, function: 2, instruction: 1, function_name: Some("fail") }, 22), source: Some(VMError { major_status: ABORTED, sub_status: Some(22), message: Some("DepV1::m::fail at offset 1"), exec_state: None, location: Module(ModuleId { address: DepV1, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(0) } }
 
-task 23, lines 112-114:
+task 23, lines 127-129:
 //# programmable --sender A --inputs 1u64
 // Warming v2 must not change the next transaction's independent v1 selection.
 //> Consumer::m::check(Input(0));
