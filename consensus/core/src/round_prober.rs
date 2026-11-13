@@ -207,7 +207,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         self.round_tracker
             .write()
             .update_from_probe(highest_accepted_rounds, highest_received_rounds);
-        let (propagation_delay, quorum_accepted_round) = self
+        let propagation_delay = self
             .round_tracker
             .read()
             .calculate_propagation_delay(last_proposed_round);
@@ -220,6 +220,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         // would interpret as peers not responding. Skip the report in that case and keep the
         // last complete probe.
         if requests.is_empty() {
+            let quorum_accepted_round = self.round_tracker.read().highest_accepted_quorum_round();
             self.commit_consumer_monitor.report_probe(
                 quorum_accepted_round,
                 responsive_stake,
@@ -497,7 +498,6 @@ mod test {
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
-        let mut peer_progress = commit_consumer_monitor.subscribe_peer_progress();
 
         // This node has accepted round 20 blocks from every authority.
         let blocks = (0..NUM_AUTHORITIES)
@@ -529,22 +529,19 @@ mod test {
         // All peers answer. With a quorum of 3, this node reports 20 and three peers report 12
         // for every authority, so 12 is the highest round accepted by a quorum.
         prober.probe().await;
-        assert!(peer_progress.has_changed().unwrap());
-        let first = peer_progress.latest();
+        let first = commit_consumer_monitor.peer_progress();
         assert_eq!(first.quorum_accepted_round, 12);
         assert_eq!(first.responsive_stake, 3);
         assert_eq!(first.quorum_commit_index, 0);
         assert!(first.probed_at_ms > 0);
-        assert_eq!(first, commit_consumer_monitor.peer_progress());
 
-        // All peers fail. No stake is responsive, the quorum round is kept and the probe time
-        // advances.
+        // All peers fail. No stake is responsive and the probe time advances. Only this node
+        // reports accepted rounds, which is less than a quorum, so the quorum round is 0.
         network_client.set_rounds(vec![vec![]; NUM_AUTHORITIES], vec![vec![]; NUM_AUTHORITIES]);
         tokio::time::advance(Duration::from_millis(1_000)).await;
         prober.probe().await;
-        assert!(peer_progress.has_changed().unwrap());
-        let second = peer_progress.latest();
-        assert_eq!(second.quorum_accepted_round, 12);
+        let second = commit_consumer_monitor.peer_progress();
+        assert_eq!(second.quorum_accepted_round, 0);
         assert_eq!(second.responsive_stake, 0);
         assert!(second.probed_at_ms >= first.probed_at_ms + 1_000);
 
@@ -555,8 +552,7 @@ mod test {
         network_client.set_rounds(partial.clone(), partial);
         tokio::time::advance(Duration::from_millis(1_000)).await;
         prober.probe().await;
-        assert!(peer_progress.has_changed().unwrap());
-        let third = peer_progress.latest();
+        let third = commit_consumer_monitor.peer_progress();
         assert_eq!(third.quorum_accepted_round, 20);
         assert_eq!(third.responsive_stake, 2);
         assert!(third.probed_at_ms >= second.probed_at_ms + 1_000);
@@ -570,7 +566,6 @@ mod test {
         assert!(futures::poll!(&mut probe).is_pending());
         prober.shutdown_notify.notify().unwrap();
         probe.await;
-        assert!(!peer_progress.has_changed().unwrap());
         assert_eq!(commit_consumer_monitor.peer_progress(), third);
     }
 }

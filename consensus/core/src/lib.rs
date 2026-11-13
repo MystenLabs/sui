@@ -69,7 +69,7 @@ pub use commit::{
     CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag, TrustedCommit,
 };
 pub use commit_consumer::{
-    CommitConsumerArgs, CommitConsumerMonitor, CommitProgress, PeerProgress, PeerProgressReceiver,
+    CommitConsumerArgs, CommitConsumerMonitor, CommitProgress, PeerProgress,
 };
 pub use context::Clock;
 pub use metrics::Metrics;
