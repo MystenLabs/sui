@@ -3,6 +3,9 @@
 
 use crate::{Error, Result};
 
+/// Default limit on the cumulative number of layout nodes constructed or copied.
+pub const DEFAULT_MAX_LAYOUT_WORK: usize = 2_048;
+
 /// Optional configuration that imposes limits on the work that the resolver can do for each
 /// request.
 #[derive(Debug, Clone)]
@@ -15,8 +18,8 @@ pub struct Limits {
     pub max_type_nodes: usize,
     /// Maximum recursion depth through struct fields.
     pub max_move_value_depth: usize,
-    /// Maximum number of nodes constructed while resolving a type layout.
-    pub max_layout_nodes: usize,
+    /// Maximum cumulative number of layout nodes constructed or copied during resolution.
+    pub max_layout_work: usize,
 }
 
 pub(crate) struct LayoutBudget {
@@ -33,8 +36,8 @@ pub(crate) struct LayoutMeter<'b> {
 impl Limits {
     pub(crate) fn layout_budget(&self) -> LayoutBudget {
         LayoutBudget {
-            max_nodes: Some(self.max_layout_nodes),
-            remaining_nodes: self.max_layout_nodes,
+            max_nodes: Some(self.max_layout_work),
+            remaining_nodes: self.max_layout_work,
         }
     }
 }

@@ -44,10 +44,7 @@ fn resolver_limits() -> ResolverLimits {
                 ProtocolConfig::max_move_value_depth_as_option,
             )
             .unwrap_or(u32::MAX as u64) as usize,
-            max_layout_nodes: max_across_protocol(
-                ProtocolConfig::max_type_to_layout_nodes_as_option,
-            )
-            .unwrap_or(512) as usize,
+            max_layout_work: sui_package_resolver::DEFAULT_MAX_LAYOUT_WORK,
         })
         .clone()
 }

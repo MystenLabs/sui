@@ -61,6 +61,7 @@ use crate::limits::{LayoutBudget, LayoutMeter};
 pub mod error;
 mod limits;
 
+pub use limits::DEFAULT_MAX_LAYOUT_WORK;
 pub use limits::Limits;
 
 // TODO Move to ServiceConfig
@@ -2781,7 +2782,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
@@ -2808,7 +2809,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 2,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
@@ -2836,7 +2837,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
@@ -2868,7 +2869,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
@@ -2916,7 +2917,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
@@ -3482,7 +3483,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 100,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
@@ -3510,7 +3511,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 2,
                 max_move_value_depth: 100,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
@@ -3547,7 +3548,7 @@ mod tests {
                 max_type_argument_depth: 2,
                 max_type_nodes: 100,
                 max_move_value_depth: 100,
-                max_layout_nodes: usize::MAX,
+                max_layout_work: usize::MAX,
             },
         );
 
