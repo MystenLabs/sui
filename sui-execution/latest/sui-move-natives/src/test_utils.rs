@@ -27,8 +27,7 @@ pub fn create_one_time_witness(
         return Ok(NativeResult::err(InternalGas::new(1), 0));
     };
 
-    let hardened_check = context.runtime_limits_config().hardened_otw_check;
-    if is_otw_struct(&struct_layout, &type_tag, hardened_check) {
+    if is_otw_struct(&struct_layout, &type_tag) {
         Ok(NativeResult::ok(
             legacy_test_cost(),
             smallvec![Value::struct_(Struct::pack(vec![Value::bool(true)]))],

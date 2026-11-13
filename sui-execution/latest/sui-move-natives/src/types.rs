@@ -17,11 +17,7 @@ use std::collections::VecDeque;
 
 use crate::{NativesCostTable, get_extension};
 
-pub(crate) fn is_otw_struct(
-    struct_layout: &MoveStructLayout,
-    type_tag: &TypeTag,
-    hardened_check: bool,
-) -> bool {
+pub(crate) fn is_otw_struct(struct_layout: &MoveStructLayout, type_tag: &TypeTag) -> bool {
     let has_one_bool_field = matches!(struct_layout.0.as_slice(), [MoveTypeLayout::Bool]);
 
     // If a struct type has the same name as the module that defines it but capitalized, and it has
@@ -34,8 +30,7 @@ pub(crate) fn is_otw_struct(
         TypeTag::Struct(struct_tag) if
         has_one_bool_field &&
         struct_tag.name.to_string() == struct_tag.module.to_string().to_ascii_uppercase() &&
-        // hardened check ==> no generic types
-        (!hardened_check || struct_tag.type_params.is_empty())
+        struct_tag.type_params.is_empty()
     )
 }
 
@@ -93,8 +88,7 @@ pub fn is_one_time_witness(
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let hardened_check = context.runtime_limits_config().hardened_otw_check;
-    let is_otw = is_otw_struct(&struct_layout, &type_tag, hardened_check);
+    let is_otw = is_otw_struct(&struct_layout, &type_tag);
 
     Ok(NativeResult::ok(cost, smallvec![Value::bool(is_otw)]))
 }
