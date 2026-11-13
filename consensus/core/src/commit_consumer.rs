@@ -17,7 +17,7 @@ use crate::{CommitIndex, CommittedSubDag};
 pub struct CommitConsumerArgs {
     pub(crate) replay_mode: ReplayMode,
     pub(crate) commit_sender: UnboundedSender<CommittedSubDag>,
-    monitor: Arc<CommitConsumerMonitor>,
+    monitor: Arc<ConsumerMonitor>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -69,7 +69,7 @@ impl CommitConsumerArgs {
     /// and no commits are finalized, the entire history is queued without pacing.
     ///
     /// The consumer must run before awaiting [`crate::ConsensusAuthority::start`]
-    /// and call [`CommitConsumerMonitor::set_highest_handled_commit`] only after
+    /// and call [`ConsumerMonitor::set_highest_handled_commit`] only after
     /// applying each commit. Waiting for startup before consuming would deadlock
     /// recovery. Use [`Self::monitor`] to observe readiness and committed-head
     /// progress without accessing storage.
@@ -91,7 +91,7 @@ impl CommitConsumerArgs {
             ReplayMode::FullEpochPaced => (0, None),
         };
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_commit_output");
-        let monitor = Arc::new(CommitConsumerMonitor::new(
+        let monitor = Arc::new(ConsumerMonitor::new(
             replay_after_commit_index,
             replay_target,
         ));
@@ -105,7 +105,7 @@ impl CommitConsumerArgs {
         )
     }
 
-    pub fn monitor(&self) -> Arc<CommitConsumerMonitor> {
+    pub fn monitor(&self) -> Arc<ConsumerMonitor> {
         self.monitor.clone()
     }
 }
@@ -151,14 +151,14 @@ pub struct PeerProgress {
 /// DO NOT REMOVE these observation APIs solely because they have no callers in
 /// this workspace. They support the external integration described by
 /// [`CommitConsumerArgs::new_with_full_replay`].
-pub struct CommitConsumerMonitor {
+pub struct ConsumerMonitor {
     replay_target: SetOnce<CommitIndex>,
     committed: watch::Sender<CommitProgress>,
     handled: watch::Sender<CommitIndex>,
     peer_progress: Mutex<PeerProgress>,
 }
 
-impl CommitConsumerMonitor {
+impl ConsumerMonitor {
     pub(crate) fn new(
         replay_after_commit_index: CommitIndex,
         replay_target: Option<CommitIndex>,
@@ -281,8 +281,8 @@ mod test {
     use super::*;
 
     #[tokio::test]
-    async fn test_commit_consumer_monitor() {
-        let monitor = CommitConsumerMonitor::new(0, Some(10));
+    async fn test_consumer_monitor() {
+        let monitor = ConsumerMonitor::new(0, Some(10));
         assert_eq!(monitor.highest_handled_commit(), 0);
         monitor.set_highest_handled_commit(100);
         assert_eq!(monitor.highest_handled_commit(), 100);
@@ -414,7 +414,7 @@ mod test {
 
     #[tokio::test]
     async fn committed_head_advances_independently_of_a_stalled_consumer() {
-        let monitor = CommitConsumerMonitor::new(0, Some(0));
+        let monitor = ConsumerMonitor::new(0, Some(0));
         monitor.report_committed(20, 50);
         monitor.set_highest_handled_commit(2);
         monitor.report_committed(21, 52);
@@ -426,7 +426,7 @@ mod test {
 
     #[tokio::test]
     async fn peer_progress_stores_latest_samples() {
-        let monitor = CommitConsumerMonitor::new(0, Some(0));
+        let monitor = ConsumerMonitor::new(0, Some(0));
         assert_eq!(monitor.peer_progress(), PeerProgress::default());
         let committed = monitor.subscribe_progress();
         let handled = monitor.subscribe_handled_commit();

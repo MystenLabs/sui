@@ -15,7 +15,7 @@ use consensus_config::{
     NetworkPublicKey as ConsensusNetworkPublicKey, Parameters, ProtocolKeyPair, Stake,
 };
 use consensus_core::{
-    Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
+    Clock, CommitConsumerArgs, CommitIndex, ConsensusAuthority, ConsumerMonitor, NetworkType,
     RandomnessSignatureHandler, TransactionPool, storage::rocksdb_store::RocksDBStore,
 };
 use core::panic;
@@ -203,10 +203,10 @@ pub struct ConsensusManager {
     consensus_handler: Mutex<Option<MysticetiConsensusHandler>>,
 
     #[cfg(test)]
-    pub(crate) consumer_monitor: ArcSwapOption<CommitConsumerMonitor>,
+    pub(crate) consumer_monitor: ArcSwapOption<ConsumerMonitor>,
     #[cfg(not(test))]
-    consumer_monitor: ArcSwapOption<CommitConsumerMonitor>,
-    consumer_monitor_sender: broadcast::Sender<Arc<CommitConsumerMonitor>>,
+    consumer_monitor: ArcSwapOption<ConsumerMonitor>,
+    consumer_monitor_sender: broadcast::Sender<Arc<ConsumerMonitor>>,
 
     running: Mutex<Running>,
 
@@ -658,12 +658,12 @@ impl ConsensusClient for UpdatableConsensusClient {
 
 /// Waits for consensus to finish replaying at consensus handler.
 pub struct ReplayWaiter {
-    consumer_monitor_receiver: broadcast::Receiver<Arc<CommitConsumerMonitor>>,
+    consumer_monitor_receiver: broadcast::Receiver<Arc<ConsumerMonitor>>,
 }
 
 impl ReplayWaiter {
     pub(crate) fn new(
-        consumer_monitor_receiver: broadcast::Receiver<Arc<CommitConsumerMonitor>>,
+        consumer_monitor_receiver: broadcast::Receiver<Arc<ConsumerMonitor>>,
     ) -> Self {
         Self {
             consumer_monitor_receiver,

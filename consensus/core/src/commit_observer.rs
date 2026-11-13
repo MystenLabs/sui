@@ -8,7 +8,7 @@ use tokio::time::Instant;
 use tracing::info;
 
 use crate::{
-    CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag,
+    CommitConsumerArgs, CommittedSubDag, ConsumerMonitor,
     block::{BlockAPI, VerifiedBlock},
     commit::{CommitAPI, load_committed_subdag_from_store},
     commit_consumer::ReplayMode,
@@ -45,7 +45,7 @@ pub(crate) struct CommitObserver {
     commit_interpreter: Linearizer,
     /// Handle to an unbounded channel to send output commits.
     commit_finalizer_handle: CommitFinalizerHandle,
-    consumer_monitor: Arc<CommitConsumerMonitor>,
+    consumer_monitor: Arc<ConsumerMonitor>,
 }
 
 impl CommitObserver {

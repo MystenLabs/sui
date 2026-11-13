@@ -27,7 +27,7 @@ use parking_lot::RwLock;
 use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
-    BlockAPI as _, CommitConsumerMonitor, context::Context, core_thread::CoreThreadDispatcher,
+    BlockAPI as _, ConsumerMonitor, context::Context, core_thread::CoreThreadDispatcher,
     dag_state::DagState, network::ValidatorNetworkClient, round_tracker::RoundTracker,
     task::join_and_propagate_panic,
 };
@@ -52,7 +52,7 @@ pub(crate) struct RoundProber<C: ValidatorNetworkClient> {
     round_tracker: Arc<RwLock<RoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
     network_client: Arc<C>,
-    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+    consumer_monitor: Arc<ConsumerMonitor>,
     shutdown_notify: Arc<NotifyOnce>,
 }
 
@@ -63,7 +63,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         network_client: Arc<C>,
-        commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+        consumer_monitor: Arc<ConsumerMonitor>,
     ) -> Self {
         Self {
             context,
@@ -71,7 +71,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
             round_tracker,
             dag_state,
             network_client,
-            commit_consumer_monitor,
+            consumer_monitor,
             shutdown_notify: Arc::new(NotifyOnce::new()),
         }
     }
@@ -154,7 +154,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         highest_accepted_rounds[own_index][own_index] = last_proposed_round;
 
         // Stake of the peers whose request succeeded in this probe. This is reported to the
-        // commit consumer monitor as a reachability signal and is not used by consensus.
+        // consumer monitor as a reachability signal and is not used by consensus.
         let mut responsive_stake: Stake = 0;
 
         loop {
@@ -221,7 +221,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         // last complete probe.
         if requests.is_empty() {
             let quorum_accepted_round = self.round_tracker.read().highest_accepted_quorum_round();
-            self.commit_consumer_monitor.report_probe(
+            self.consumer_monitor.report_probe(
                 quorum_accepted_round,
                 responsive_stake,
                 self.context.clock.timestamp_utc_ms(),
@@ -250,7 +250,7 @@ mod test {
     use parking_lot::RwLock;
 
     use crate::{
-        CommitConsumerMonitor, TestBlock, VerifiedBlock,
+        ConsumerMonitor, TestBlock, VerifiedBlock,
         commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -443,14 +443,14 @@ mod test {
             context.clone(),
             vec![110, 120, 130, 140, 150, 160, 170],
         )));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
         let prober = RoundProber::new(
             context.clone(),
             core_thread_dispatcher.clone(),
             round_tracker.clone(),
             dag_state.clone(),
             network_client.clone(),
-            commit_consumer_monitor.clone(),
+            consumer_monitor.clone(),
         );
 
         // Create test blocks for each authority with incrementing rounds starting at 110
@@ -481,7 +481,7 @@ mod test {
         // Peer 6 answered with malformed rounds, which still counts as responsive.
         // With a quorum of 5, authority 6 has the highest accepted quorum round:
         // its rounds 177, 171, 170, 127, 107, 0, 0 give a low bound of 107.
-        let peer_progress = commit_consumer_monitor.peer_progress();
+        let peer_progress = consumer_monitor.peer_progress();
         assert_eq!(peer_progress.responsive_stake, 5);
         assert_eq!(peer_progress.quorum_accepted_round, 107);
         assert_eq!(peer_progress.quorum_commit_index, 0);
@@ -497,7 +497,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
 
         // This node has accepted round 20 blocks from every authority.
         let blocks = (0..NUM_AUTHORITIES)
@@ -523,13 +523,13 @@ mod test {
             round_tracker,
             dag_state,
             network_client.clone(),
-            commit_consumer_monitor.clone(),
+            consumer_monitor.clone(),
         );
 
         // All peers answer. With a quorum of 3, this node reports 20 and three peers report 12
         // for every authority, so 12 is the highest round accepted by a quorum.
         prober.probe().await;
-        let first = commit_consumer_monitor.peer_progress();
+        let first = consumer_monitor.peer_progress();
         assert_eq!(first.quorum_accepted_round, 12);
         assert_eq!(first.responsive_stake, 3);
         assert_eq!(first.quorum_commit_index, 0);
@@ -540,7 +540,7 @@ mod test {
         network_client.set_rounds(vec![vec![]; NUM_AUTHORITIES], vec![vec![]; NUM_AUTHORITIES]);
         tokio::time::advance(Duration::from_millis(1_000)).await;
         prober.probe().await;
-        let second = commit_consumer_monitor.peer_progress();
+        let second = consumer_monitor.peer_progress();
         assert_eq!(second.quorum_accepted_round, 0);
         assert_eq!(second.responsive_stake, 0);
         assert!(second.probed_at_ms >= first.probed_at_ms + 1_000);
@@ -552,7 +552,7 @@ mod test {
         network_client.set_rounds(partial.clone(), partial);
         tokio::time::advance(Duration::from_millis(1_000)).await;
         prober.probe().await;
-        let third = commit_consumer_monitor.peer_progress();
+        let third = consumer_monitor.peer_progress();
         assert_eq!(third.quorum_accepted_round, 20);
         assert_eq!(third.responsive_stake, 2);
         assert!(third.probed_at_ms >= second.probed_at_ms + 1_000);
@@ -566,6 +566,6 @@ mod test {
         assert!(futures::poll!(&mut probe).is_pending());
         prober.shutdown_notify.notify().unwrap();
         probe.await;
-        assert_eq!(commit_consumer_monitor.peer_progress(), third);
+        assert_eq!(consumer_monitor.peer_progress(), third);
     }
 }

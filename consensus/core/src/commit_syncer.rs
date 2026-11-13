@@ -46,7 +46,7 @@ use tokio::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    CommitConsumerMonitor, CommitIndex,
+    CommitIndex, ConsumerMonitor,
     block::{BlockAPI, ExtendedBlock, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
@@ -114,7 +114,7 @@ where
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
-        commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+        consumer_monitor: Arc<ConsumerMonitor>,
         block_verifier: Arc<dyn BlockVerifier>,
         transaction_vote_tracker: TransactionVoteTracker,
         round_tracker: Arc<RwLock<RoundTracker>>,
@@ -126,7 +126,7 @@ where
             context,
             core_thread_dispatcher,
             commit_vote_monitor,
-            commit_consumer_monitor,
+            consumer_monitor,
             block_verifier,
             transaction_vote_tracker,
             round_tracker,
@@ -199,12 +199,12 @@ where
             .commit_sync_quorum_index
             .set(quorum_commit_index as i64);
         self.inner
-            .commit_consumer_monitor
+            .consumer_monitor
             .report_quorum_commit_index(quorum_commit_index);
         metrics
             .commit_sync_local_index
             .set(local_commit_index as i64);
-        let highest_handled_index = self.inner.commit_consumer_monitor.highest_handled_commit();
+        let highest_handled_index = self.inner.consumer_monitor.highest_handled_commit();
         let highest_scheduled_index = self.highest_scheduled_index.unwrap_or(0);
         // Update synced_commit_index periodically to make sure it is no smaller than
         // local commit index.
@@ -805,7 +805,7 @@ struct Inner<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
-    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+    consumer_monitor: Arc<ConsumerMonitor>,
     block_verifier: Arc<dyn BlockVerifier>,
     transaction_vote_tracker: TransactionVoteTracker,
     round_tracker: Arc<RwLock<RoundTracker>>,
@@ -918,7 +918,7 @@ mod tests {
     use parking_lot::RwLock;
 
     use crate::{
-        CommitConsumerMonitor, CommitDigest, CommitRef,
+        CommitDigest, CommitRef, ConsumerMonitor,
         block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
@@ -1061,7 +1061,7 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create PeersPool - Observer typically connects to one validator
@@ -1078,7 +1078,7 @@ mod tests {
             context.clone(),
             core_thread_dispatcher,
             commit_vote_monitor.clone(),
-            commit_consumer_monitor.clone(),
+            consumer_monitor.clone(),
             block_verifier,
             transaction_vote_tracker,
             round_tracker,
@@ -1142,7 +1142,7 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create PeersPool with multiple peers (validators and another observer)
@@ -1175,7 +1175,7 @@ mod tests {
             context.clone(),
             core_thread_dispatcher,
             commit_vote_monitor.clone(),
-            commit_consumer_monitor.clone(),
+            consumer_monitor.clone(),
             block_verifier,
             transaction_vote_tracker,
             round_tracker,
@@ -1265,14 +1265,14 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let mut commit_syncer = CommitSyncer::new(
             context,
             core_thread_dispatcher,
             commit_vote_monitor.clone(),
-            commit_consumer_monitor.clone(),
+            consumer_monitor.clone(),
             block_verifier,
             transaction_vote_tracker,
             round_tracker,
@@ -1287,10 +1287,7 @@ mod tests {
         assert!(commit_syncer.highest_scheduled_index().is_none());
         assert_eq!(commit_syncer.highest_fetched_commit_index(), 0);
         assert_eq!(commit_syncer.synced_commit_index(), 0);
-        assert_eq!(
-            commit_consumer_monitor.peer_progress().quorum_commit_index,
-            0
-        );
+        assert_eq!(consumer_monitor.peer_progress().quorum_commit_index, 0);
 
         // Observe round 15 blocks voting for commit 10 from authorities 0 to 2 in CommitVoteMonitor
         for i in 0..3 {
@@ -1310,11 +1307,8 @@ mod tests {
         assert_eq!(commit_syncer.highest_scheduled_index(), Some(10));
         assert_eq!(commit_syncer.highest_fetched_commit_index(), 0);
         assert_eq!(commit_syncer.synced_commit_index(), 0);
-        // The quorum commit index is reported to the commit consumer monitor.
-        assert_eq!(
-            commit_consumer_monitor.peer_progress().quorum_commit_index,
-            10
-        );
+        // The quorum commit index is reported to the consumer monitor.
+        assert_eq!(consumer_monitor.peer_progress().quorum_commit_index, 10);
 
         // Observe round 40 blocks voting for commit 35 from authorities 0 to 2 in CommitVoteMonitor
         for i in 0..3 {
@@ -1333,23 +1327,17 @@ mod tests {
         assert_eq!(commit_syncer.highest_scheduled_index(), Some(25));
         let pending_fetches = commit_syncer.pending_fetches();
         assert_eq!(pending_fetches.len(), 5);
-        assert_eq!(
-            commit_consumer_monitor.peer_progress().quorum_commit_index,
-            35
-        );
+        assert_eq!(consumer_monitor.peer_progress().quorum_commit_index, 35);
 
         // Indicate commit index 25 is consumed, and try to schedule again.
-        commit_consumer_monitor.set_highest_handled_commit(25);
+        consumer_monitor.set_highest_handled_commit(25);
         commit_syncer.try_schedule_once();
 
         // Verify commit syncer schedules fetches up to index 35.
         assert_eq!(commit_syncer.highest_scheduled_index(), Some(35));
         let pending_fetches = commit_syncer.pending_fetches();
         assert_eq!(pending_fetches.len(), 7);
-        assert_eq!(
-            commit_consumer_monitor.peer_progress().quorum_commit_index,
-            35
-        );
+        assert_eq!(consumer_monitor.peer_progress().quorum_commit_index, 35);
 
         // Verify contiguous ranges are scheduled.
         for (range, start) in pending_fetches.iter().zip_debug_eq((1..35).step_by(5)) {

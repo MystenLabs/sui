@@ -1231,7 +1231,7 @@ pub(crate) async fn create_cores(
 #[cfg(test)]
 pub(crate) struct CoreTestFixture {
     pub(crate) core: Core,
-    pub(crate) commit_consumer_monitor: Arc<crate::CommitConsumerMonitor>,
+    pub(crate) consumer_monitor: Arc<crate::ConsumerMonitor>,
     pub(crate) transaction_vote_tracker: TransactionVoteTracker,
     pub(crate) signal_receivers: CoreSignalsReceivers,
     pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
@@ -1329,7 +1329,7 @@ impl CoreTestFixture {
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
         let (commit_consumer, commit_output_receiver) = CommitConsumerArgs::new(0, 0);
-        let commit_consumer_monitor = commit_consumer.monitor();
+        let consumer_monitor = commit_consumer.monitor();
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1357,7 +1357,7 @@ impl CoreTestFixture {
 
         Self {
             core,
-            commit_consumer_monitor,
+            consumer_monitor,
             transaction_vote_tracker,
             signal_receivers,
             block_receiver,
@@ -3605,7 +3605,7 @@ mod test {
 
         let authority_index = AuthorityIndex::new_for_test(0);
         let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
-        let monitor = core.commit_consumer_monitor.clone();
+        let monitor = core.consumer_monitor.clone();
         let mut core = core.core;
 
         // Build a fully connected DAG and accept its blocks, without any commits yet.
