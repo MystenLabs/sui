@@ -11,7 +11,7 @@ use crate::{
     },
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{LintLevel, filters_from_table, lints},
+    linters::{LintSelection, filters_from_table, lints},
     shared::known_attributes::DiagnosticAttribute,
     typing::visitor::TypingVisitor,
 };
@@ -209,16 +209,16 @@ const OPTIONAL_LINTS: &[(&str, VisitorConstructor)] = &[
     }),
 ];
 
-pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    linter_visitors_with_config(level, &DiagnosticFilterConfig::default())
+pub fn linter_visitors(selection: LintSelection) -> Vec<Visitor> {
+    linter_visitors_with_config(selection, &DiagnosticFilterConfig::default())
 }
 
 pub fn linter_visitors_with_config(
-    level: LintLevel,
+    selection: LintSelection,
     config: &DiagnosticFilterConfig,
 ) -> Vec<Visitor> {
     config.select_lints(
-        level,
+        selection,
         &[
             SUI_LINT_WARNING_FILTERS,
             crate::linters::CORE_LINT_WARNING_FILTERS,

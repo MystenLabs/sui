@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_compiler::linters::LintLevel;
+use move_compiler::linters::LintSelection;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -38,26 +38,26 @@ impl LintFlag {
         lint: true,
     };
 
-    pub fn get(self) -> LintLevel {
+    pub fn get(self) -> LintSelection {
         match self {
-            Self::LEVEL_NONE => LintLevel::None,
-            Self::LEVEL_DEFAULT => LintLevel::Default,
-            Self::LEVEL_ALL => LintLevel::All,
+            Self::LEVEL_NONE => LintSelection::None,
+            Self::LEVEL_DEFAULT => LintSelection::Default,
+            Self::LEVEL_ALL => LintSelection::All,
             _ => unreachable!(),
         }
     }
 
-    pub fn set(&mut self, level: LintLevel) {
-        *self = level.into();
+    pub fn set(&mut self, selection: LintSelection) {
+        *self = selection.into();
     }
 }
 
-impl From<LintLevel> for LintFlag {
-    fn from(level: LintLevel) -> Self {
-        match level {
-            LintLevel::None => Self::LEVEL_NONE,
-            LintLevel::Default => Self::LEVEL_DEFAULT,
-            LintLevel::All => Self::LEVEL_ALL,
+impl From<LintSelection> for LintFlag {
+    fn from(selection: LintSelection) -> Self {
+        match selection {
+            LintSelection::None => Self::LEVEL_NONE,
+            LintSelection::Default => Self::LEVEL_DEFAULT,
+            LintSelection::All => Self::LEVEL_ALL,
         }
     }
 }

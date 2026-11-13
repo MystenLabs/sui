@@ -25,7 +25,7 @@ use move_compiler::{
     diagnostics::{Diagnostics, config::DiagnosticFilterSettings},
     editions::{Edition, Flavor},
     expansion::ast::Address,
-    linters::LintLevel,
+    linters::LintSelection,
     shared::{NumericalAddress, PackageConfig, files::MappedFiles},
 };
 use move_core_types::parsing::{
@@ -798,7 +798,7 @@ pub fn compile_source_units(
     )
     .set_pre_compiled_program_opt(state.pre_compiled_program_info_opt.clone())
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
-    .set_diagnostic_filters(LintLevel::None, DiagnosticFilterSettings::for_testing())
+    .set_diagnostic_filters(LintSelection::None, DiagnosticFilterSettings::for_testing())
     .set_default_config(
         PackageConfig::default()
             .set_edition(state.edition)

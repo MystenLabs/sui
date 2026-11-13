@@ -913,25 +913,11 @@ fn parse_symbol(s: &str) -> Result<Symbol, String> {
 // Package Level Config
 //**************************************************************************************************
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PackageConfig {
     pub is_dependency: bool,
-    // TODO (diagnostics): This field is intentionally unused, because the package system currently only
-    // considers the root manifest's warning scope for usage. In the future, we should support it per-package.
-    _warning_filter: FilterScope,
     pub flavor: Flavor,
     pub edition: Edition,
-}
-
-impl Default for PackageConfig {
-    fn default() -> Self {
-        Self {
-            is_dependency: false,
-            _warning_filter: filter::empty_filter_scope(),
-            flavor: Flavor::default(),
-            edition: Edition::default(),
-        }
-    }
 }
 
 impl PackageConfig {

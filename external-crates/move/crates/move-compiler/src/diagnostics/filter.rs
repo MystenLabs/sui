@@ -554,13 +554,14 @@ impl FilterStack {
     }
 
     pub(crate) fn push(&mut self, scope: FilterScope) {
-        if self
-            .stack
-            .iter()
-            .any(|s| s.0.filter_entries.contains_key(&FilterTarget::All))
-        {
-            // If the stack already contains a dependency-drop scope, push empty to avoid
-            // spurious expect-fulfillment tracking in dependency code.
+        let drops_all = self.stack.iter().any(|s| {
+            s.0.filter_entries
+                .get(&FilterTarget::All)
+                .is_some_and(|sp!(_, kind)| *kind == FilterKind::Drop)
+        });
+        if drops_all {
+            // If the stack already contains a dependency-drop scope, push an empty scope to avoid
+            // any behavioral changes when reporting dependency diagnostics.
             self.stack.push(EMPTY_FILTER_SCOPE.clone());
         } else {
             self.stack.push(scope);
