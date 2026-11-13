@@ -18,6 +18,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use consensus_config::Stake;
 use consensus_types::block::Round;
 use futures::stream::{FuturesUnordered, StreamExt as _};
 use mysten_common::sync::notify_once::NotifyOnce;
@@ -26,8 +27,9 @@ use parking_lot::RwLock;
 use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
-    BlockAPI as _, context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::ValidatorNetworkClient, round_tracker::RoundTracker, task::join_and_propagate_panic,
+    BlockAPI as _, ConsumerMonitor, context::Context, core_thread::CoreThreadDispatcher,
+    dag_state::DagState, network::ValidatorNetworkClient, round_tracker::RoundTracker,
+    task::join_and_propagate_panic,
 };
 
 // Handle to control the RoundProber loop and read latest round gaps.
@@ -50,6 +52,7 @@ pub(crate) struct RoundProber<C: ValidatorNetworkClient> {
     round_tracker: Arc<RwLock<RoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
     network_client: Arc<C>,
+    consumer_monitor: Arc<ConsumerMonitor>,
     shutdown_notify: Arc<NotifyOnce>,
 }
 
@@ -60,6 +63,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         network_client: Arc<C>,
+        consumer_monitor: Arc<ConsumerMonitor>,
     ) -> Self {
         Self {
             context,
@@ -67,6 +71,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
             round_tracker,
             dag_state,
             network_client,
+            consumer_monitor,
             shutdown_notify: Arc::new(NotifyOnce::new()),
         }
     }
@@ -148,6 +153,10 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
         highest_received_rounds[own_index][own_index] = last_proposed_round;
         highest_accepted_rounds[own_index][own_index] = last_proposed_round;
 
+        // Stake of the peers whose request succeeded in this probe. This is reported to the
+        // consumer monitor as a reachability signal and is not used by consensus.
+        let mut responsive_stake: Stake = 0;
+
         loop {
             tokio::select! {
                 result = requests.next() => {
@@ -155,6 +164,7 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
                     let peer_name = &self.context.committee.authority(peer).hostname;
                     match result {
                         Ok(Ok((received, accepted))) => {
+                            responsive_stake += self.context.committee.stake(peer);
                             if received.len() == self.context.committee.size()
                             {
                                 highest_received_rounds[peer] = received;
@@ -206,13 +216,32 @@ impl<C: ValidatorNetworkClient> RoundProber<C> {
             .core_thread_dispatcher
             .set_propagation_delay(propagation_delay);
 
+        // A probe that shutdown interrupted has an incomplete responsive stake, which a reader
+        // would interpret as peers not responding. Skip the report in that case and keep the
+        // last complete probe.
+        if requests.is_empty() {
+            let quorum_accepted_round = self.round_tracker.read().highest_accepted_quorum_round();
+            self.consumer_monitor.report_probe(
+                quorum_accepted_round,
+                responsive_stake,
+                self.context.clock.timestamp_utc_ms(),
+            );
+        }
+
         propagation_delay
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+    use std::{
+        collections::BTreeSet,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Duration,
+    };
 
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -221,7 +250,7 @@ mod test {
     use parking_lot::RwLock;
 
     use crate::{
-        TestBlock, VerifiedBlock,
+        ConsumerMonitor, TestBlock, VerifiedBlock,
         commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -282,8 +311,10 @@ mod test {
     }
 
     struct FakeNetworkClient {
-        highest_received_rounds: Vec<Vec<Round>>,
-        highest_accepted_rounds: Vec<Vec<Round>>,
+        highest_received_rounds: RwLock<Vec<Vec<Round>>>,
+        highest_accepted_rounds: RwLock<Vec<Vec<Round>>>,
+        // When set, requests never complete.
+        hanging: AtomicBool,
     }
 
     impl FakeNetworkClient {
@@ -292,9 +323,20 @@ mod test {
             highest_accepted_rounds: Vec<Vec<Round>>,
         ) -> Self {
             Self {
-                highest_received_rounds,
-                highest_accepted_rounds,
+                highest_received_rounds: RwLock::new(highest_received_rounds),
+                highest_accepted_rounds: RwLock::new(highest_accepted_rounds),
+                hanging: AtomicBool::new(false),
             }
+        }
+
+        // Replaces the rounds returned to later probes. A peer with empty rounds fails its request.
+        fn set_rounds(
+            &self,
+            highest_received_rounds: Vec<Vec<Round>>,
+            highest_accepted_rounds: Vec<Vec<Round>>,
+        ) {
+            *self.highest_received_rounds.write() = highest_received_rounds;
+            *self.highest_accepted_rounds.write() = highest_accepted_rounds;
         }
     }
 
@@ -353,8 +395,11 @@ mod test {
             peer: AuthorityIndex,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
-            let received_rounds = self.highest_received_rounds[peer].clone();
-            let accepted_rounds = self.highest_accepted_rounds[peer].clone();
+            if self.hanging.load(Ordering::Relaxed) {
+                return std::future::pending().await;
+            }
+            let received_rounds = self.highest_received_rounds.read()[peer].clone();
+            let accepted_rounds = self.highest_accepted_rounds.read()[peer].clone();
             if received_rounds.is_empty() && accepted_rounds.is_empty() {
                 Err(ConsensusError::NetworkRequestTimeout("test".to_string()))
             } else {
@@ -398,12 +443,14 @@ mod test {
             context.clone(),
             vec![110, 120, 130, 140, 150, 160, 170],
         )));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
         let prober = RoundProber::new(
             context.clone(),
             core_thread_dispatcher.clone(),
             round_tracker.clone(),
             dag_state.clone(),
             network_client.clone(),
+            consumer_monitor.clone(),
         );
 
         // Create test blocks for each authority with incrementing rounds starting at 110
@@ -429,5 +476,96 @@ mod test {
         let propagation_delay = prober.probe().await;
 
         assert_eq!(propagation_delay, 10);
+
+        // Peers 1, 2, 4, 5 and 6 answered the probe, peer 3 failed and peer 0 is this node.
+        // Peer 6 answered with malformed rounds, which still counts as responsive.
+        // With a quorum of 5, authority 6 has the highest accepted quorum round:
+        // its rounds 177, 171, 170, 127, 107, 0, 0 give a low bound of 107.
+        let peer_progress = consumer_monitor.peer_progress();
+        assert_eq!(peer_progress.responsive_stake, 5);
+        assert_eq!(peer_progress.quorum_accepted_round, 107);
+        assert_eq!(peer_progress.quorum_commit_index, 0);
+        assert!(peer_progress.probed_at_ms > 0);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn round_prober_publishes_peer_progress() {
+        telemetry_subscribers::init_for_testing();
+        const NUM_AUTHORITIES: usize = 4;
+        let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
+        let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
+
+        // This node has accepted round 20 blocks from every authority.
+        let blocks = (0..NUM_AUTHORITIES)
+            .map(|authority| {
+                VerifiedBlock::new_for_test(TestBlock::new(20, authority as u32).build())
+            })
+            .collect::<Vec<_>>();
+        dag_state.write().accept_blocks(blocks);
+
+        // Every peer reports `round` for every authority. This node's own entry is unused.
+        let answers = |round: Round| {
+            vec![
+                vec![],
+                vec![round; NUM_AUTHORITIES],
+                vec![round; NUM_AUTHORITIES],
+                vec![round; NUM_AUTHORITIES],
+            ]
+        };
+        let network_client = Arc::new(FakeNetworkClient::new(answers(12), answers(12)));
+        let prober = RoundProber::new(
+            context.clone(),
+            core_thread_dispatcher,
+            round_tracker,
+            dag_state,
+            network_client.clone(),
+            consumer_monitor.clone(),
+        );
+
+        // All peers answer. With a quorum of 3, this node reports 20 and three peers report 12
+        // for every authority, so 12 is the highest round accepted by a quorum.
+        prober.probe().await;
+        let first = consumer_monitor.peer_progress();
+        assert_eq!(first.quorum_accepted_round, 12);
+        assert_eq!(first.responsive_stake, 3);
+        assert_eq!(first.quorum_commit_index, 0);
+        assert!(first.probed_at_ms > 0);
+
+        // All peers fail. No stake is responsive and the probe time advances. Only this node
+        // reports accepted rounds, which is less than a quorum, so the quorum round is 0.
+        network_client.set_rounds(vec![vec![]; NUM_AUTHORITIES], vec![vec![]; NUM_AUTHORITIES]);
+        tokio::time::advance(Duration::from_millis(1_000)).await;
+        prober.probe().await;
+        let second = consumer_monitor.peer_progress();
+        assert_eq!(second.quorum_accepted_round, 0);
+        assert_eq!(second.responsive_stake, 0);
+        assert!(second.probed_at_ms >= first.probed_at_ms + 1_000);
+
+        // Peers 1 and 2 answer with round 30 and peer 3 fails. Rounds per authority are 20 from
+        // this node, 30, 30 and 0, so the quorum low bound is 20 and the responsive stake is 2.
+        let mut partial = answers(30);
+        partial[3] = vec![];
+        network_client.set_rounds(partial.clone(), partial);
+        tokio::time::advance(Duration::from_millis(1_000)).await;
+        prober.probe().await;
+        let third = consumer_monitor.peer_progress();
+        assert_eq!(third.quorum_accepted_round, 20);
+        assert_eq!(third.responsive_stake, 2);
+        assert!(third.probed_at_ms >= second.probed_at_ms + 1_000);
+
+        // Peers stop answering and shutdown interrupts the next probe while requests are
+        // pending. The interrupted probe is not reported.
+        network_client.hanging.store(true, Ordering::Relaxed);
+        tokio::time::advance(Duration::from_millis(1_000)).await;
+        let probe = prober.probe();
+        tokio::pin!(probe);
+        assert!(futures::poll!(&mut probe).is_pending());
+        prober.shutdown_notify.notify().unwrap();
+        probe.await;
+        assert_eq!(consumer_monitor.peer_progress(), third);
     }
 }

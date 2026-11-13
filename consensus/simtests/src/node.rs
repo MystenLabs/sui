@@ -13,9 +13,8 @@ use consensus_config::{
     AuthorityIndex, Committee, ConsensusProtocolConfig, NetworkKeyPair, Parameters, ProtocolKeyPair,
 };
 use consensus_core::{
-    Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
-    NetworkType, TransactionClient, TransactionVerifier, storage::rocksdb_store::RocksDBStore,
-    to_socket_addr,
+    Clock, CommitConsumerArgs, CommittedSubDag, ConsensusAuthority, ConsumerMonitor, NetworkType,
+    TransactionClient, TransactionVerifier, storage::rocksdb_store::RocksDBStore, to_socket_addr,
 };
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -127,11 +126,11 @@ impl AuthorityNode {
             }
 
             let mut commit_receiver = inner.take_commit_receiver();
-            let commit_consumer_monitor = inner.commit_consumer_monitor();
+            let consumer_monitor = inner.consumer_monitor();
             let _handle = tokio::spawn(async move {
                 while let Some(subdag) = commit_receiver.recv().await {
                     info!(authority =% authority_index, commit_index =% subdag.commit_ref.index, "Received committed subdag");
-                    commit_consumer_monitor.set_highest_handled_commit(subdag.commit_ref.index);
+                    consumer_monitor.set_highest_handled_commit(subdag.commit_ref.index);
                     let _ = commit_sender.send(subdag);
                 }
             });
@@ -139,10 +138,10 @@ impl AuthorityNode {
         Ok(())
     }
 
-    pub fn commit_consumer_monitor(&self) -> Arc<CommitConsumerMonitor> {
+    pub fn consumer_monitor(&self) -> Arc<ConsumerMonitor> {
         let inner = self.inner.lock();
         if let Some(inner) = inner.as_ref() {
-            inner.commit_consumer_monitor()
+            inner.consumer_monitor()
         } else {
             panic!("Node not initialised");
         }
@@ -207,7 +206,7 @@ pub(crate) struct AuthorityNodeInner {
     cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
     consensus_authority: Option<ConsensusAuthority>,
     commit_receiver: ArcSwapOption<UnboundedReceiver<CommittedSubDag>>,
-    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+    consumer_monitor: Arc<ConsumerMonitor>,
 }
 
 #[derive(Debug)]
@@ -297,14 +296,14 @@ impl AuthorityNodeInner {
                             (consumer, Some(receiver))
                         }
                     };
-                    let commit_consumer_monitor = commit_consumer.monitor();
+                    let consumer_monitor = commit_consumer.monitor();
                     let consensus_authority = make_authority(config, commit_consumer).await;
 
                     startup_sender_clone.send(true).ok();
                     init_receiver_swap_clone.store(Some(Arc::new((
                         consensus_authority,
                         commit_receiver,
-                        commit_consumer_monitor,
+                        consumer_monitor,
                     ))));
 
                     // run until canceled
@@ -327,7 +326,7 @@ impl AuthorityNodeInner {
             panic!("Components should be initialised by now");
         };
 
-        let Ok((consensus_authority, commit_receiver, commit_consumer_monitor)) =
+        let Ok((consensus_authority, commit_receiver, consumer_monitor)) =
             Arc::try_unwrap(init_tuple)
         else {
             panic!("commit receiver still in use");
@@ -338,7 +337,7 @@ impl AuthorityNodeInner {
             cancel_sender: Some(cancel_sender),
             consensus_authority: Some(consensus_authority),
             commit_receiver: ArcSwapOption::new(commit_receiver.map(Arc::new)),
-            commit_consumer_monitor,
+            consumer_monitor,
         }
     }
 
@@ -367,8 +366,8 @@ impl AuthorityNodeInner {
         }
     }
 
-    pub fn commit_consumer_monitor(&self) -> Arc<CommitConsumerMonitor> {
-        self.commit_consumer_monitor.clone()
+    pub fn consumer_monitor(&self) -> Arc<ConsumerMonitor> {
+        self.consumer_monitor.clone()
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {

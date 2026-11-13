@@ -200,6 +200,16 @@ impl RoundTracker {
         propagation_delay
     }
 
+    /// Returns the highest round over all authorities at which an authority's block
+    /// is known to have been accepted by a quorum of stake. For reporting only.
+    pub(crate) fn highest_accepted_quorum_round(&self) -> Round {
+        self.compute_accepted_quorum_rounds()
+            .iter()
+            .map(|(low, _high)| *low)
+            .max()
+            .unwrap_or(0)
+    }
+
     pub(crate) fn compute_accepted_quorum_rounds(&self) -> Vec<QuorumRound> {
         let highest_accepted_rounds = self
             .probed_accepted_rounds
@@ -537,5 +547,7 @@ mod test {
 
         // 110 - 100 = 10
         assert_eq!(propagation_delay, 10);
+        // Authority 6's verified block raises its quorum low bound from 107 to 127.
+        assert_eq!(round_tracker.highest_accepted_quorum_round(), 127);
     }
 }

@@ -119,8 +119,8 @@ mod consensus_tests {
 
         // Wait for it to catch up
         sleep(Duration::from_secs(230)).await;
-        let commit_consumer_monitor = authorities[NUM_OF_AUTHORITIES - 1].commit_consumer_monitor();
-        let highest_committed_index = commit_consumer_monitor.highest_handled_commit();
+        let consumer_monitor = authorities[NUM_OF_AUTHORITIES - 1].consumer_monitor();
+        let highest_committed_index = consumer_monitor.highest_handled_commit();
         assert!(
             highest_committed_index >= 80,
             "Highest handled commit {highest_committed_index} < 80"
@@ -202,9 +202,8 @@ mod consensus_tests {
 
         // Every authority should commit past the 1st snapshot.
         for i in 0..NUM_OF_AUTHORITIES {
-            let current_committed_index = authorities[i]
-                .commit_consumer_monitor()
-                .highest_handled_commit();
+            let current_committed_index =
+                authorities[i].consumer_monitor().highest_handled_commit();
             let snapshotted_commit_index = snapshotted_commit_indexes[i];
             assert!(
                 current_committed_index > snapshotted_commit_index,
@@ -314,8 +313,7 @@ mod consensus_tests {
         // Every validator should commit past the 1st snapshot, proving the fully restarted
         // committee reconnected.
         for (authority_index, authority) in authorities.iter().enumerate() {
-            let current_committed_index =
-                authority.commit_consumer_monitor().highest_handled_commit();
+            let current_committed_index = authority.consumer_monitor().highest_handled_commit();
             let snapshotted_commit_index = snapshotted_commit_indexes[authority_index];
             assert!(
                 current_committed_index > snapshotted_commit_index,
@@ -465,7 +463,7 @@ mod consensus_tests {
             .is_err()
         );
         assert!(!startup.is_finished());
-        let peer_monitor = authorities[1].commit_consumer_monitor();
+        let peer_monitor = authorities[1].consumer_monitor();
         let peer_head = peer_monitor.highest_handled_commit();
         timeout(Duration::from_secs(30), async {
             while peer_monitor.highest_handled_commit() <= peer_head {
@@ -1014,7 +1012,7 @@ mod consensus_tests {
         let observer1 = AuthorityNode::new(observer1_config);
         observer1.start().await.unwrap();
         observer1.spawn_committed_subdag_consumer().unwrap();
-        let observer1_monitor = observer1.commit_consumer_monitor();
+        let observer1_monitor = observer1.consumer_monitor();
 
         // Create Observer 2 - connects to Observer 1
         let observer2_dir = Arc::new(TempDir::new().unwrap());
@@ -1058,7 +1056,7 @@ mod consensus_tests {
         let observer2 = AuthorityNode::new(observer2_config);
         observer2.start().await.unwrap();
         observer2.spawn_committed_subdag_consumer().unwrap();
-        let observer2_monitor = observer2.commit_consumer_monitor();
+        let observer2_monitor = observer2.consumer_monitor();
 
         // Wait for all nodes to establish connections
         tracing::info!("Waiting for nodes to establish connections...");
@@ -1082,9 +1080,7 @@ mod consensus_tests {
         sleep(Duration::from_secs(15)).await;
 
         // Check progress of all nodes
-        let validator_commits = authorities[0]
-            .commit_consumer_monitor()
-            .highest_handled_commit();
+        let validator_commits = authorities[0].consumer_monitor().highest_handled_commit();
         let observer1_commits = observer1_monitor.highest_handled_commit();
         let observer2_commits = observer2_monitor.highest_handled_commit();
 
@@ -1184,19 +1180,14 @@ mod consensus_tests {
             }
         }
         timeout(Duration::from_secs(120), async {
-            while authorities[0]
-                .commit_consumer_monitor()
-                .highest_handled_commit()
-                < CATCHUP_START_COMMITS
+            while authorities[0].consumer_monitor().highest_handled_commit() < CATCHUP_START_COMMITS
             {
                 sleep(Duration::from_millis(500)).await;
             }
         })
         .await
         .expect("Validators should reach the catch-up start commit index");
-        let catchup_target = authorities[0]
-            .commit_consumer_monitor()
-            .highest_handled_commit();
+        let catchup_target = authorities[0].consumer_monitor().highest_handled_commit();
         tracing::info!("Starting observer, catch-up target is commit {catchup_target}");
 
         // Late-start the observer against validator 0.
@@ -1236,7 +1227,7 @@ mod consensus_tests {
         let observer = AuthorityNode::new(observer_config);
         observer.start().await.unwrap();
         observer.spawn_committed_subdag_consumer().unwrap();
-        let observer_monitor = observer.commit_consumer_monitor();
+        let observer_monitor = observer.consumer_monitor();
 
         // The observer must catch up to the target even with its block stream suspended
         // during commit sync.
@@ -1267,9 +1258,7 @@ mod consensus_tests {
             }
         }
         sleep(Duration::from_secs(10)).await;
-        let validator_commits = authorities[0]
-            .commit_consumer_monitor()
-            .highest_handled_commit();
+        let validator_commits = authorities[0].consumer_monitor().highest_handled_commit();
         let observer_commits = observer_monitor.highest_handled_commit();
         const MAX_COMMIT_DIFFERENCE: u32 = 10;
         assert!(
@@ -1570,7 +1559,7 @@ mod consensus_tests {
     fn commit_indexes(authorities: &[Arc<AuthorityNode>]) -> Vec<CommitIndex> {
         authorities
             .iter()
-            .map(|authority| authority.commit_consumer_monitor().highest_handled_commit())
+            .map(|authority| authority.consumer_monitor().highest_handled_commit())
             .collect()
     }
 

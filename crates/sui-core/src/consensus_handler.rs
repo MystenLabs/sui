@@ -10,7 +10,7 @@ use std::{
 };
 
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CommitConsumerMonitor, CommitIndex, CommitRef};
+use consensus_core::{CommitIndex, CommitRef, ConsumerMonitor};
 use consensus_types::block::BlockRef;
 use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
@@ -3433,7 +3433,7 @@ impl MysticetiConsensusHandler {
         last_processed_commit_at_startup: CommitIndex,
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
-        commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+        consumer_monitor: Arc<ConsumerMonitor>,
     ) -> Self {
         debug!(
             last_processed_commit_at_startup,
@@ -3485,7 +3485,7 @@ impl MysticetiConsensusHandler {
                     );
                     break;
                 }
-                commit_consumer_monitor.set_highest_handled_commit(commit_index);
+                consumer_monitor.set_highest_handled_commit(commit_index);
             }
         }));
         Self { tasks }

@@ -3,8 +3,10 @@
 
 use std::sync::Arc;
 
+use consensus_config::Stake;
 use consensus_types::block::Round;
 use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use parking_lot::Mutex;
 use tokio::sync::{SetOnce, watch};
 use tracing::debug;
 
@@ -15,7 +17,7 @@ use crate::{CommitIndex, CommittedSubDag};
 pub struct CommitConsumerArgs {
     pub(crate) replay_mode: ReplayMode,
     pub(crate) commit_sender: UnboundedSender<CommittedSubDag>,
-    monitor: Arc<CommitConsumerMonitor>,
+    monitor: Arc<ConsumerMonitor>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -67,7 +69,7 @@ impl CommitConsumerArgs {
     /// and no commits are finalized, the entire history is queued without pacing.
     ///
     /// The consumer must run before awaiting [`crate::ConsensusAuthority::start`]
-    /// and call [`CommitConsumerMonitor::set_highest_handled_commit`] only after
+    /// and call [`ConsumerMonitor::set_highest_handled_commit`] only after
     /// applying each commit. Waiting for startup before consuming would deadlock
     /// recovery. Use [`Self::monitor`] to observe readiness and committed-head
     /// progress without accessing storage.
@@ -89,7 +91,7 @@ impl CommitConsumerArgs {
             ReplayMode::FullEpochPaced => (0, None),
         };
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_commit_output");
-        let monitor = Arc::new(CommitConsumerMonitor::new(
+        let monitor = Arc::new(ConsumerMonitor::new(
             replay_after_commit_index,
             replay_target,
         ));
@@ -103,7 +105,7 @@ impl CommitConsumerArgs {
         )
     }
 
-    pub fn monitor(&self) -> Arc<CommitConsumerMonitor> {
+    pub fn monitor(&self) -> Arc<ConsumerMonitor> {
         self.monitor.clone()
     }
 }
@@ -120,20 +122,43 @@ pub struct CommitProgress {
     pub highest_committed_round: Round,
 }
 
-/// Tracks application progress, startup readiness, and the consensus head.
+/// This node's view of committee progress. The round prober sets the round, stake and probe
+/// time after every complete probe, and the commit syncer sets the quorum commit index. The
+/// values are read-only and are not inputs to consensus.
+///
+/// The round prober runs only on validator nodes. On other nodes only `quorum_commit_index`
+/// updates.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PeerProgress {
+    /// Highest round over all authorities at which an authority's block was accepted by a
+    /// quorum of stake, from the last complete probe.
+    pub quorum_accepted_round: Round,
+    /// Quorum commit index from the last commit syncer scheduling pass.
+    pub quorum_commit_index: CommitIndex,
+    /// Total stake of peers whose request succeeded in the last complete probe. It excludes
+    /// this node.
+    pub responsive_stake: Stake,
+    /// Consensus clock time in milliseconds when the last complete probe finished. It is zero
+    /// when no probe has completed.
+    pub probed_at_ms: u64,
+}
+
+/// Tracks application progress, startup readiness, the consensus head, and peer progress.
 ///
 /// External consumers observe the committed head, handled commits, and replay
-/// target separately to monitor catch-up without reading consensus storage.
+/// target separately to monitor catch-up without reading consensus storage. Liveness
+/// watchdogs use [`PeerProgress`] to interpret a pause in local commits.
 /// DO NOT REMOVE these observation APIs solely because they have no callers in
 /// this workspace. They support the external integration described by
 /// [`CommitConsumerArgs::new_with_full_replay`].
-pub struct CommitConsumerMonitor {
+pub struct ConsumerMonitor {
     replay_target: SetOnce<CommitIndex>,
     committed: watch::Sender<CommitProgress>,
     handled: watch::Sender<CommitIndex>,
+    peer_progress: Mutex<PeerProgress>,
 }
 
-impl CommitConsumerMonitor {
+impl ConsumerMonitor {
     pub(crate) fn new(
         replay_after_commit_index: CommitIndex,
         replay_target: Option<CommitIndex>,
@@ -145,6 +170,7 @@ impl CommitConsumerMonitor {
                 highest_committed_round: 0,
             }),
             handled: watch::Sender::new(replay_after_commit_index),
+            peer_progress: Mutex::new(PeerProgress::default()),
         }
     }
 
@@ -205,6 +231,27 @@ impl CommitConsumerMonitor {
         self.handled.send_replace(highest_handled_commit);
     }
 
+    /// Returns this node's latest view of committee progress. See [`PeerProgress`].
+    pub fn peer_progress(&self) -> PeerProgress {
+        *self.peer_progress.lock()
+    }
+
+    pub(crate) fn report_probe(
+        &self,
+        quorum_accepted_round: Round,
+        responsive_stake: Stake,
+        probed_at_ms: u64,
+    ) {
+        let mut progress = self.peer_progress.lock();
+        progress.quorum_accepted_round = quorum_accepted_round;
+        progress.responsive_stake = responsive_stake;
+        progress.probed_at_ms = probed_at_ms;
+    }
+
+    pub(crate) fn report_quorum_commit_index(&self, quorum_commit_index: CommitIndex) {
+        self.peer_progress.lock().quorum_commit_index = quorum_commit_index;
+    }
+
     pub(crate) async fn wait_for_handled(&self, target: CommitIndex) {
         let mut handled = self.subscribe_handled_commit();
         loop {
@@ -234,8 +281,8 @@ mod test {
     use super::*;
 
     #[tokio::test]
-    async fn test_commit_consumer_monitor() {
-        let monitor = CommitConsumerMonitor::new(0, Some(10));
+    async fn test_consumer_monitor() {
+        let monitor = ConsumerMonitor::new(0, Some(10));
         assert_eq!(monitor.highest_handled_commit(), 0);
         monitor.set_highest_handled_commit(100);
         assert_eq!(monitor.highest_handled_commit(), 100);
@@ -367,7 +414,7 @@ mod test {
 
     #[tokio::test]
     async fn committed_head_advances_independently_of_a_stalled_consumer() {
-        let monitor = CommitConsumerMonitor::new(0, Some(0));
+        let monitor = ConsumerMonitor::new(0, Some(0));
         monitor.report_committed(20, 50);
         monitor.set_highest_handled_commit(2);
         monitor.report_committed(21, 52);
@@ -375,5 +422,42 @@ mod test {
         assert_eq!(monitor.highest_handled_commit(), 2);
         assert_eq!(monitor.progress().highest_committed_index, 21);
         assert_eq!(monitor.progress().highest_committed_round, 52);
+    }
+
+    #[tokio::test]
+    async fn peer_progress_stores_latest_samples() {
+        let monitor = ConsumerMonitor::new(0, Some(0));
+        assert_eq!(monitor.peer_progress(), PeerProgress::default());
+        let committed = monitor.subscribe_progress();
+        let handled = monitor.subscribe_handled_commit();
+
+        monitor.report_probe(30, 7_500, 1_000);
+        monitor.report_quorum_commit_index(12);
+        assert_eq!(
+            monitor.peer_progress(),
+            PeerProgress {
+                quorum_accepted_round: 30,
+                quorum_commit_index: 12,
+                responsive_stake: 7_500,
+                probed_at_ms: 1_000,
+            }
+        );
+
+        // Lower values replace higher ones.
+        monitor.report_probe(20, 0, 2_000);
+        monitor.report_quorum_commit_index(3);
+        assert_eq!(
+            monitor.peer_progress(),
+            PeerProgress {
+                quorum_accepted_round: 20,
+                quorum_commit_index: 3,
+                responsive_stake: 0,
+                probed_at_ms: 2_000,
+            }
+        );
+
+        // Peer progress does not notify the committed head or handled commit subscribers.
+        assert!(!committed.has_changed().unwrap());
+        assert!(!handled.has_changed().unwrap());
     }
 }

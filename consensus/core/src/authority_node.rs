@@ -343,7 +343,7 @@ where
             dag_state.clone(),
         ));
 
-        let commit_consumer_monitor = commit_consumer.monitor();
+        let consumer_monitor = commit_consumer.monitor();
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -418,7 +418,7 @@ where
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
-            commit_consumer_monitor.clone(),
+            consumer_monitor.clone(),
             block_verifier.clone(),
             transaction_vote_tracker.clone(),
             round_tracker.clone(),
@@ -475,6 +475,7 @@ where
                     round_tracker.clone(),
                     dag_state.clone(),
                     validator_client,
+                    consumer_monitor.clone(),
                 )
                 .start(),
             );
