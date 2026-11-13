@@ -11,12 +11,14 @@ use crate::{
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
         codes::{DiagnosticsID, Severity},
-        filter::{FilterName, FilterScope},
+        config::{DiagnosticFilterSettings, KnownDiagnosticFilters, known_diagnostic_filters},
+        filter::FilterName,
         *,
     },
-    editions::Edition,
+    editions::{Edition, Flavor},
     expansion::{self, ast as E},
     hlir, interface_generator,
+    linters::{self, LintSelection},
     naming::{self, ast as N},
     parser::{self, ast::FunctionName, *},
     shared::{
@@ -26,7 +28,7 @@ use crate::{
         program_info::ModuleInfo,
         unique_map::UniqueMap,
     },
-    to_bytecode,
+    sui_mode, to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
@@ -65,11 +67,8 @@ pub struct Compiler {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: IndexMap<TypeId, Visitor>,
-    warning_filter: Option<FilterScope>,
-    known_warning_filters: Vec<(
-        /* Prefix */ Option<Symbol>,
-        Vec<(FilterName, Vec<DiagnosticsID>)>,
-    )>,
+    diagnostic_filters: Option<(LintSelection, DiagnosticFilterSettings)>,
+    known_warning_filters: KnownDiagnosticFilters,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
     /// Root path of the virtual file system.
@@ -125,6 +124,8 @@ pub enum Visitor {
     CFGIRVisitor(CFGIRVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
+
+pub type VisitorConstructor = fn() -> Visitor;
 
 //**************************************************************************************************
 // Entry points and impls
@@ -204,7 +205,7 @@ impl Compiler {
             compiled_module_named_address_mapping: BTreeMap::new(),
             flags: Flags::empty(),
             visitors: IndexMap::new(),
-            warning_filter: None,
+            diagnostic_filters: None,
             known_warning_filters: vec![],
             package_configs,
             default_config: None,
@@ -275,23 +276,23 @@ impl Compiler {
     }
 
     pub fn add_visitor(mut self, pass: impl Into<Visitor>) -> Self {
-        let visitor = pass.into();
-        // De-dup by concrete visitor type. First occurrence wins.
-        self.visitors.entry(visitor.type_id()).or_insert(visitor);
+        extend_visitors(&mut self.visitors, [pass.into()]);
         self
     }
 
     pub fn add_visitors(mut self, passes: impl IntoIterator<Item = Visitor>) -> Self {
-        for visitor in passes {
-            // De-dup by concrete visitor type. First occurrence wins.
-            self.visitors.entry(visitor.type_id()).or_insert(visitor);
-        }
+        extend_visitors(&mut self.visitors, passes);
         self
     }
 
-    pub fn set_warning_filter(mut self, filter: Option<FilterScope>) -> Self {
-        assert!(self.warning_filter.is_none());
-        self.warning_filter = filter;
+    /// Sets diagnostic settings validated for the target flavors.
+    pub fn set_diagnostic_filters(
+        mut self,
+        selection: LintSelection,
+        settings: DiagnosticFilterSettings,
+    ) -> Self {
+        assert!(self.diagnostic_filters.is_none());
+        self.diagnostic_filters = Some((selection, settings));
         self
     }
 
@@ -343,21 +344,49 @@ impl Compiler {
             pre_compiled_lib,
             compiled_module_named_address_mapping,
             flags,
-            visitors,
-            warning_filter,
-            known_warning_filters,
+            mut visitors,
+            diagnostic_filters,
+            mut known_warning_filters,
             package_configs,
             default_config,
             vfs_root,
             save_hooks,
             files_to_compile,
         } = self;
+
+        let root_scope = if let Some((level, settings)) = diagnostic_filters {
+            let uses_default_config =
+                package_configs.is_empty() || targets.iter().any(|path| path.package.is_none());
+
+            let sui_mode = package_configs
+                .values()
+                .any(|config| !config.is_dependency && config.flavor == Flavor::Sui)
+                || (uses_default_config
+                    && default_config
+                        .as_ref()
+                        .map(|config| config.flavor)
+                        .unwrap_or_default()
+                        == Flavor::Sui);
+            let flavor = if sui_mode { Flavor::Sui } else { Flavor::Core };
+
+            known_warning_filters.extend(known_diagnostic_filters(flavor));
+
+            // Manifest lint settings determine which optional lint visitors run.
+            configure_lint_visitors(&mut visitors, level, &settings, sui_mode);
+
+            Some(settings.filter_scope(&known_warning_filters))
+        } else {
+            None
+        };
+
+        // Set up the virtual file system root, or default to the physical root if not specified.
         let vfs_root = match vfs_root {
             Some(p) => p,
             None => VfsPath::new(PhysicalFS::new("/")),
         };
         let mut vfs_to_original_path = HashMap::new();
 
+        // Set up the targets and dependencies, possibly converting them to VFS paths .
         let targets = targets
             .into_iter()
             .map(|p| {
@@ -398,15 +427,18 @@ impl Compiler {
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
+
+        // Set up compilation environment.
         let mut compilation_env = CompilationEnv::new(
             flags,
             visitors.into_values().collect(),
             save_hooks,
-            warning_filter,
+            root_scope,
             package_configs,
             default_config,
             files_to_compile,
         );
+
         for (prefix, filters) in known_warning_filters {
             compilation_env.add_custom_known_filters(prefix, filters);
         }
@@ -421,6 +453,7 @@ impl Compiler {
         }
         let mapped_files = compilation_env.mapped_files().clone();
 
+        // Create a SteppedCompiler at the parser pass and run it to the target pass.
         let res: Result<_, (Pass, Diagnostics)> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>();
@@ -1197,6 +1230,37 @@ fn run(
         }
     }
     rec(compilation_env, pre_compiled_lib, cur, until)
+}
+
+fn configure_lint_visitors(
+    visitors: &mut IndexMap<TypeId, Visitor>,
+    selection: LintSelection,
+    settings: &DiagnosticFilterSettings,
+    sui_mode: bool,
+) {
+    let lint_config = settings.lints.clone().unwrap_or_default();
+    let mut lint_visitors = vec![];
+    if sui_mode {
+        lint_visitors.extend(sui_mode::linters::linter_visitors_with_config(
+            selection,
+            &lint_config,
+        ));
+    }
+    lint_visitors.extend(linters::linter_visitors_with_config(
+        selection,
+        &lint_config,
+    ));
+
+    extend_visitors(visitors, lint_visitors);
+}
+
+fn extend_visitors(
+    visitors: &mut IndexMap<TypeId, Visitor>,
+    passes: impl IntoIterator<Item = Visitor>,
+) {
+    for visitor in passes {
+        visitors.entry(visitor.type_id()).or_insert(visitor);
+    }
 }
 
 impl Visitor {

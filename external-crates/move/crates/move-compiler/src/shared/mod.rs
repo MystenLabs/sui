@@ -304,11 +304,7 @@ impl CompilationEnv {
             })
             .collect();
 
-        let root_scope = if flags.silence_warnings() {
-            filter::all_filter_scope()
-        } else {
-            root_scope.unwrap_or_else(filter::empty_filter_scope)
-        };
+        let root_scope = root_scope.unwrap_or_else(filter::empty_filter_scope);
 
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
@@ -366,13 +362,22 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
+    fn root_filter_stack(&self) -> FilterStack {
+        let mut stack = FilterStack::new();
+        stack.push(self.root_scope.clone());
+        if self.flags.silence_warnings() {
+            stack.push(filter::all_filter_scope());
+        }
+        stack
+    }
+
     pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::new(
             &self.flags,
             &self.known_filter_names,
             Arc::clone(&self.diags),
             Arc::clone(&self.ide_information),
-            FilterStack::root(self.root_scope.clone()),
+            self.root_filter_stack(),
         )
     }
 
@@ -380,7 +385,7 @@ impl CompilationEnv {
         DiagnosticReporter::dummy_reporter(
             &self.flags,
             &self.known_filter_names,
-            FilterStack::root(self.root_scope.clone()),
+            self.root_filter_stack(),
         )
     }
 
@@ -390,7 +395,7 @@ impl CompilationEnv {
             &self.known_filter_names,
             Arc::new(RwLock::new(Diagnostics::new())),
             Arc::clone(&self.ide_information),
-            FilterStack::root(self.root_scope.clone()),
+            self.root_filter_stack(),
         )
     }
 
@@ -465,6 +470,15 @@ impl CompilationEnv {
     ) {
         let filter_attr = self.known_filters.entry(attr_name).or_default();
         for (name, ids) in filters {
+            if let Some(existing) = filter_attr.get(&name) {
+                if existing == &ids {
+                    continue;
+                }
+                assert!(
+                    filter::aggregate_filter_ids(existing) && filter::aggregate_filter_ids(&ids),
+                    "duplicate custom diagnostic filter name {name}"
+                );
+            }
             let existing = filter_attr.entry(name).or_default();
             for f in ids {
                 if f.category != DIAGNOSTIC_FILTER_WILDCARD && f.code != DIAGNOSTIC_FILTER_WILDCARD
@@ -899,22 +913,27 @@ fn parse_symbol(s: &str) -> Result<Symbol, String> {
 // Package Level Config
 //**************************************************************************************************
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PackageConfig {
     pub is_dependency: bool,
-    pub warning_filter: FilterScope,
     pub flavor: Flavor,
     pub edition: Edition,
 }
 
-impl Default for PackageConfig {
-    fn default() -> Self {
-        Self {
-            is_dependency: false,
-            warning_filter: filter::empty_filter_scope(),
-            flavor: Flavor::default(),
-            edition: Edition::default(),
-        }
+impl PackageConfig {
+    pub fn set_edition(mut self, edition: Edition) -> Self {
+        self.edition = edition;
+        self
+    }
+
+    pub fn set_flavor(mut self, flavor: Flavor) -> Self {
+        self.flavor = flavor;
+        self
+    }
+
+    pub fn set_is_dependency(mut self, is_dependency: bool) -> Self {
+        self.is_dependency = is_dependency;
+        self
     }
 }
 

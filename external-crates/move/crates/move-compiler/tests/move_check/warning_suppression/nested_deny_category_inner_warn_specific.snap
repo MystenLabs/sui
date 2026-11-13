@@ -5,6 +5,15 @@ info:
   edition: legacy
   lint: false
 ---
+error[EC09008]: unused function
+  ┌─ tests/move_check/warning_suppression/nested_deny_category_inner_warn_specific.move:6:9
+  │
+3 │ #[deny(unused)]
+  │        ------ the lint level is defined here
+  ·
+6 │     fun foo() {
+  │         ^^^ The non-'public', non-'entry' function 'foo' is never called. Consider removing it.
+
 warning[WC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/nested_deny_category_inner_warn_specific.move:7:13
   │

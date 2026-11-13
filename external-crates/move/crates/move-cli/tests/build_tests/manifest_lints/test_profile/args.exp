@@ -1,0 +1,11 @@
+Command `test`:
+INCLUDING DEPENDENCY UnitTest
+BUILDING manifest_lints
+error[EL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:6:15
+  │
+6 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+

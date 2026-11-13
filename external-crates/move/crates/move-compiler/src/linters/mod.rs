@@ -5,9 +5,10 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
-    command_line::compiler::Visitor,
+    command_line::compiler::{Visitor, VisitorConstructor},
     diagnostics::{
         codes::{DiagnosticOrigin, DiagnosticsID},
+        config::DiagnosticFilterConfig,
         filter::FilterName,
     },
     shared::known_attributes::DiagnosticAttribute,
@@ -31,7 +32,7 @@ pub mod unused_return_value;
 pub(crate) mod utils;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LintLevel {
+pub enum LintSelection {
     // No linters
     None,
     // Run only the default linters
@@ -51,6 +52,39 @@ pub enum LinterDiagnosticCategory {
     Style,
     Security,
     Conventions,
+}
+
+impl LinterDiagnosticCategory {
+    const ALL: &'static [Self] = &[
+        Self::Correctness,
+        Self::Complexity,
+        Self::Suspicious,
+        Self::Deprecated,
+        Self::Style,
+        Self::Security,
+        Self::Conventions,
+    ];
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Correctness => "correctness",
+            Self::Complexity => "complexity",
+            Self::Suspicious => "suspicious",
+            Self::Deprecated => "deprecated",
+            Self::Style => "style",
+            Self::Security => "security",
+            Self::Conventions => "conventions",
+        }
+    }
+
+    pub(crate) fn name_from_code(category: u8) -> &'static str {
+        Self::ALL
+            .iter()
+            .find(|known| **known as u8 == category)
+            .copied()
+            .expect("ICE unknown lint category")
+            .name()
+    }
 }
 
 /// Declares a lint code enum and its `(category, code, filter_name)` table for one lint source.
@@ -118,7 +152,7 @@ macro_rules! lints {
             }
         }
 
-        const $filters_const: &[(u8, u8, &str)] = &[
+        pub(crate) const $filters_const: &[(u8, u8, &str)] = &[
             $(
                 $enum_name::$lint_name.category_code_and_filter_name(),
             )*
@@ -220,6 +254,12 @@ pub(crate) fn filters_from_table(
         Symbol::from(crate::diagnostics::filter::FILTER_ALL),
         vec![DiagnosticsID::all(origin)],
     )];
+    filters.extend(LinterDiagnosticCategory::ALL.iter().map(|category| {
+        (
+            Symbol::from(category.name()),
+            vec![DiagnosticsID::category(origin, *category as u8)],
+        )
+    }));
     filters.extend(table.iter().map(|(category, code, filter_name)| {
         (
             Symbol::from(*filter_name),
@@ -236,26 +276,58 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
     )
 }
 
-pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    match level {
-        LintLevel::None | LintLevel::Default => vec![],
-        LintLevel::All => {
-            vec![
-                constant_naming::ConstantNaming.visitor(),
-                unnecessary_while_loop::WhileTrueToLoop.visitor(),
-                meaningless_math_operation::MeaninglessMathOperation.visitor(),
-                unneeded_return::UnneededReturn.visitor(),
-                abort_constant::AssertAbortNamedConstants.visitor(),
-                loop_without_exit::LoopWithoutExit.visitor(),
-                unnecessary_conditional::UnnecessaryConditional.visitor(),
-                self_assignment::SelfAssignment.visitor(),
-                redundant_ref_deref::RedundantRefDeref.visitor(),
-                unnecessary_unit::UnnecessaryUnit.visitor(),
-                equal_operands::EqualOperands.visitor(),
-                combinable_comparisons::CombinableComparisons.visitor(),
-                unused_return_value::UnusedReturnValue.visitor(),
-                mutation_in_match_guard::MutationInMatchGuard.visitor(),
-            ]
-        }
-    }
+const OPTIONAL_LINTS: &[(&str, VisitorConstructor)] = &[
+    ("constant_naming", || {
+        constant_naming::ConstantNaming.visitor()
+    }),
+    ("while_true", || {
+        unnecessary_while_loop::WhileTrueToLoop.visitor()
+    }),
+    ("unnecessary_math", || {
+        meaningless_math_operation::MeaninglessMathOperation.visitor()
+    }),
+    ("unneeded_return", || {
+        unneeded_return::UnneededReturn.visitor()
+    }),
+    ("abort_without_constant", || {
+        abort_constant::AssertAbortNamedConstants.visitor()
+    }),
+    ("loop_without_exit", || {
+        loop_without_exit::LoopWithoutExit.visitor()
+    }),
+    ("unnecessary_conditional", || {
+        unnecessary_conditional::UnnecessaryConditional.visitor()
+    }),
+    ("self_assignment", || {
+        self_assignment::SelfAssignment.visitor()
+    }),
+    ("redundant_ref_deref", || {
+        redundant_ref_deref::RedundantRefDeref.visitor()
+    }),
+    ("unnecessary_unit", || {
+        unnecessary_unit::UnnecessaryUnit.visitor()
+    }),
+    ("always_equal_operands", || {
+        equal_operands::EqualOperands.visitor()
+    }),
+    ("combinable_comparisons", || {
+        combinable_comparisons::CombinableComparisons.visitor()
+    }),
+    ("unused_return_value", || {
+        unused_return_value::UnusedReturnValue.visitor()
+    }),
+    ("mutation_in_match_guard", || {
+        mutation_in_match_guard::MutationInMatchGuard.visitor()
+    }),
+];
+
+pub fn linter_visitors(selection: LintSelection) -> Vec<Visitor> {
+    linter_visitors_with_config(selection, &DiagnosticFilterConfig::default())
+}
+
+pub fn linter_visitors_with_config(
+    selection: LintSelection,
+    config: &DiagnosticFilterConfig,
+) -> Vec<Visitor> {
+    config.select_lints(selection, &[CORE_LINT_WARNING_FILTERS], &[], OPTIONAL_LINTS)
 }

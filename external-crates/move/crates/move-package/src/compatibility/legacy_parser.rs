@@ -40,6 +40,8 @@ pub(crate) const NO_NAME_LEGACY_PACKAGE_NAME: &str = "unnamed_legacy_package";
 
 pub const PACKAGE_NAME: &str = "package";
 const BUILD_NAME: &str = "build";
+const WARNINGS_NAME: &str = "warnings";
+const LINTS_NAME: &str = "lints";
 const ADDRESSES_NAME: &str = "addresses";
 const DEV_ADDRESSES_NAME: &str = "dev-addresses";
 const DEPENDENCY_NAME: &str = "dependencies";
@@ -50,6 +52,8 @@ const EXTERNAL_RESOLVER_PREFIX: &str = "r";
 const KNOWN_NAMES: &[&str] = &[
     PACKAGE_NAME,
     BUILD_NAME,
+    WARNINGS_NAME,
+    LINTS_NAME,
     ADDRESSES_NAME,
     DEV_ADDRESSES_NAME,
     DEPENDENCY_NAME,
@@ -128,6 +132,20 @@ async fn parse_source_manifest<F: MoveFlavor>(
             check_for_required_field_names(&table, REQUIRED_FIELDS)
                 .context("Error parsing package manifest")?;
             warn_if_unknown_field_names(&table, KNOWN_NAMES);
+
+            let warnings = table
+                .remove(WARNINGS_NAME)
+                .map(|value| value.try_into())
+                .transpose()
+                .context("Error parsing '[warnings]' section of manifest")?
+                .unwrap_or_default();
+
+            let lints = table
+                .remove(LINTS_NAME)
+                .map(|value| value.try_into())
+                .transpose()
+                .context("Error parsing '[lints]' section of manifest")?
+                .unwrap_or_default();
 
             let addresses = table
                 .remove(ADDRESSES_NAME)
@@ -223,6 +241,8 @@ async fn parse_source_manifest<F: MoveFlavor>(
                     implicit_dependencies,
                     unrecognized_fields: metadata.unrecognized_fields,
                 },
+                warnings,
+                lints,
 
                 dependencies: dependencies
                     .into_iter()

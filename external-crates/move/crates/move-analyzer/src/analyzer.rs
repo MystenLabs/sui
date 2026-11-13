@@ -13,7 +13,7 @@ use lsp_types::{
     notification::Notification as _,
     request::{Request as _, WorkDoneProgressCreate},
 };
-use move_compiler::{editions::Flavor, linters::LintLevel};
+use move_compiler::{editions::Flavor, linters::LintSelection};
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -152,11 +152,11 @@ pub fn run<F: MoveFlavor + 'static>(move_flavor: Arc<F>, flavor: Option<Flavor>)
             .and_then(serde_json::Value::as_str)
             .unwrap_or(LINT_DEFAULT);
         if lint_level == LINT_ALL {
-            LintLevel::All
+            LintSelection::All
         } else if lint_level == LINT_NONE {
-            LintLevel::None
+            LintSelection::None
         } else {
-            LintLevel::Default
+            LintSelection::Default
         }
     };
     eprintln!("linting level {:?}", lint);

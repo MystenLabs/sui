@@ -1,4 +1,4 @@
-Command `build -v --mode verify_only`:
+Command `build -v --mode verify_only --no-lint`:
 INCLUDING DEPENDENCY Dep
 BUILDING A
 warning[WC00001]: DEPRECATED. will be removed

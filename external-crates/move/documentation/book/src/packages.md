@@ -67,6 +67,24 @@ authors* = [<string>,+]  # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow
 # Additional fields may be added to this section by external tools. E.g., on Sui the following sections are added:
 published-at* = "<hex-address>" # The address that the package is published at. Should be set after the first publication.
 
+[warnings] # (Optional section) Package-wide compiler warning levels
+<warning_name> = "allow" | "warn" | "deny"
+
+[lints] # (Optional section) Package-wide lint levels
+<lint_name> = "allow" | "warn" | "deny"
+
+[warnings.build] # (Optional section) Compiler warning overrides for builds
+<warning_name> = "allow" | "warn" | "deny"
+
+[warnings.test] # (Optional section) Compiler warning overrides for tests
+<warning_name> = "allow" | "warn" | "deny"
+
+[lints.build] # (Optional section) Lint overrides for builds
+<lint_name> = "allow" | "warn" | "deny"
+
+[lints.test] # (Optional section) Lint overrides for tests
+<lint_name> = "allow" | "warn" | "deny"
+
 [dependencies] # (Optional section) Paths to dependencies 
 # One or more lines declaring dependencies in the following format
 
@@ -127,6 +145,59 @@ published-at* = "<hex-address>" # The address that the package is published at. 
 # and `--dev` modes.
 <addr_name> = "<hex_address>" # e.g., alice = "0xB0B"
 ```
+
+Warning and lint names match their source attributes. Lints can also be configured by category
+using `correctness`, `complexity`, `suspicious`, `deprecated`, `style`, `security`, or `conventions`.
+Specific lint settings override their category, and category settings override `all`. Configuring a
+lint as `warn` or `deny` enables its analysis; `allow` disables it.
+`--lint` enables otherwise unconfigured optional lints, but respects manifest settings.
+`--silence-warnings` suppresses warnings and lints regardless of manifest settings.
+`--no-lint` disables all lint analysis regardless of manifest settings.
+
+Only the root manifest configures package diagnostics. Dependency diagnostics are suppressed.
+Module attributes override manifest levels, even when the manifest setting is more specific.
+Member attributes override module attributes. Source attributes cannot enable disabled lint analysis.
+
+```move
+module 0x0::example {
+    #[deny(unused_variable)]
+    fun compiler_warning() { let unused = 0; }
+
+    #[deny(lint(abort_without_constant))]
+    fun lint_warning() { abort 0 }
+}
+```
+
+The equivalent package configuration is:
+
+```toml
+[warnings]
+unused_variable = "deny"
+
+[lints]
+abort_without_constant = "deny"
+```
+
+Both warning and lint sections support `build` and `test` profiles. `build` selects the build
+profile; `test` and `build --mode test` select the test profile. Other build modes still select the
+build profile. Other diagnostic profile names are rejected.
+
+Profile entries replace matching base keys, while unconfigured keys inherit their base settings.
+Build and test profiles are independent and may configure the same keys. Duplicate keys within
+one profile are invalid TOML. Inline tables and dotted tables are both supported:
+
+```toml
+[lints]
+all = "allow"
+abort_without_constant = "warn"
+build = { abort_without_constant = "allow" }
+
+[lints.test]
+abort_without_constant = "deny"
+```
+
+This example disables `abort_without_constant` during normal builds and makes it an error during
+tests. The base `all` setting applies to both profiles.
 
 An example of a minimal package manifest:
 
