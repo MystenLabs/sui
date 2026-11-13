@@ -160,6 +160,9 @@ pub struct Limits {
     /// Maximum nesting allowed in datatype fields when calculating the layout of a single type.
     pub max_move_value_depth: usize,
 
+    /// Maximum number of nodes constructed while calculating a single type layout.
+    pub max_layout_nodes: usize,
+
     /// Maximum budget in bytes to spend when outputting a structured Move value.
     pub max_move_value_bound: usize,
 
@@ -205,6 +208,7 @@ pub struct LimitsLayer {
     pub max_type_argument_width: Option<usize>,
     pub max_type_nodes: Option<usize>,
     pub max_move_value_depth: Option<usize>,
+    pub max_layout_nodes: Option<usize>,
     pub max_move_value_bound: Option<usize>,
     pub max_display_field_depth: Option<usize>,
     pub max_display_format_nodes: Option<usize>,
@@ -492,6 +496,7 @@ impl Limits {
             max_type_argument_width: self.max_type_argument_width,
             max_type_nodes: self.max_type_nodes,
             max_move_value_depth: self.max_move_value_depth,
+            max_layout_nodes: self.max_layout_nodes,
         }
     }
 
@@ -544,6 +549,7 @@ impl LimitsLayer {
             max_move_value_depth: self
                 .max_move_value_depth
                 .unwrap_or(base.max_move_value_depth),
+            max_layout_nodes: self.max_layout_nodes.unwrap_or(base.max_layout_nodes),
             max_move_value_bound: self
                 .max_move_value_bound
                 .unwrap_or(base.max_move_value_bound),
@@ -629,6 +635,7 @@ impl From<Limits> for LimitsLayer {
             max_type_argument_width: Some(value.max_type_argument_width),
             max_type_nodes: Some(value.max_type_nodes),
             max_move_value_depth: Some(value.max_move_value_depth),
+            max_layout_nodes: Some(value.max_layout_nodes),
             max_move_value_bound: Some(value.max_move_value_bound),
             max_display_field_depth: Some(value.max_display_field_depth),
             max_display_format_nodes: Some(value.max_display_format_nodes),
@@ -714,6 +721,10 @@ impl Default for Limits {
             max_across_protocol(ProtocolConfig::max_move_value_depth_as_option)
                 .unwrap_or(u32::MAX as u64) as usize;
 
+        let max_layout_nodes =
+            max_across_protocol(ProtocolConfig::max_type_to_layout_nodes_as_option).unwrap_or(512)
+                as usize;
+
         let display_limits = sui_display::v2::Limits::default();
 
         Self {
@@ -743,6 +754,7 @@ impl Default for Limits {
             max_type_argument_width,
             max_type_nodes,
             max_move_value_depth,
+            max_layout_nodes,
             max_move_value_bound: 1024 * 1024,
             max_display_field_depth: display_limits.max_depth,
             max_display_format_nodes: display_limits.max_nodes,

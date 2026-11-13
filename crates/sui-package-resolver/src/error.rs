@@ -69,7 +69,7 @@ pub enum Error {
     )]
     DatatypeNotFound(AccountAddress, String, String),
 
-    #[error("More than {0} struct definitions required to resolve type")]
+    #[error("Type resolution exceeds node limit of {0}; got {1}")]
     TooManyTypeNodes(usize, usize),
 
     #[error("Expected at most {0} type parameters, got {1}")]

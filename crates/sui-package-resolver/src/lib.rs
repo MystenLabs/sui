@@ -94,6 +94,93 @@ pub struct Limits {
     pub max_type_nodes: usize,
     /// Maximum recursion depth through struct fields.
     pub max_move_value_depth: usize,
+    /// Maximum number of nodes constructed while resolving a type layout.
+    pub max_layout_nodes: usize,
+}
+
+impl Limits {
+    fn layout_budget(&self) -> LayoutBudget {
+        LayoutBudget {
+            max_nodes: Some(self.max_layout_nodes),
+            remaining_nodes: self.max_layout_nodes,
+            max_depth: Some(self.max_move_value_depth),
+            remaining_depth: self.max_move_value_depth,
+        }
+    }
+}
+
+struct LayoutBudget {
+    max_nodes: Option<usize>,
+    remaining_nodes: usize,
+    max_depth: Option<usize>,
+    remaining_depth: usize,
+}
+
+impl LayoutBudget {
+    fn unlimited() -> Self {
+        Self {
+            max_nodes: None,
+            remaining_nodes: usize::MAX,
+            max_depth: None,
+            remaining_depth: usize::MAX,
+        }
+    }
+
+    fn charge_node(&mut self) -> Result<()> {
+        self.charge_nodes(1)
+    }
+
+    fn charge_nodes(&mut self, nodes: usize) -> Result<()> {
+        let Some(max_nodes) = self.max_nodes else {
+            return Ok(());
+        };
+        if nodes > self.remaining_nodes {
+            return Err(Error::TooManyTypeNodes(
+                max_nodes,
+                max_nodes
+                    .saturating_sub(self.remaining_nodes)
+                    .saturating_add(nodes),
+            ));
+        }
+
+        self.remaining_nodes = self.remaining_nodes.saturating_sub(nodes);
+        Ok(())
+    }
+
+    fn check_depth(&self) -> Result<()> {
+        self.ensure_depth(1)
+    }
+
+    fn ensure_depth(&self, depth: usize) -> Result<()> {
+        if depth > self.remaining_depth {
+            return Err(Error::ValueNesting(self.max_depth.unwrap_or(0)));
+        }
+        Ok(())
+    }
+
+    fn with_child<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        self.check_depth()?;
+        self.remaining_depth = self.remaining_depth.saturating_sub(1);
+        let result = f(self);
+        self.remaining_depth = self.remaining_depth.saturating_add(1);
+        result
+    }
+}
+
+struct ResolvedLayout {
+    layout: MoveTypeLayout,
+    depth: usize,
+    nodes: usize,
+}
+
+impl ResolvedLayout {
+    fn leaf(layout: MoveTypeLayout) -> Self {
+        Self {
+            layout,
+            depth: 1,
+            nodes: 1,
+        }
+    }
 }
 
 /// Caches parsed packages by address in an LRU cache. Cache hits do not recheck the backing
@@ -478,12 +565,12 @@ impl<S: PackageStore> Resolver<S> {
             .await?;
 
         // (2). Use that information to resolve the tag into a layout.
-        let max_depth = self
+        let mut budget = self
             .limits
             .as_ref()
-            .map_or(usize::MAX, |l| l.max_move_value_depth);
+            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
 
-        Ok(context.resolve_type_layout(&tag, max_depth)?.0)
+        Ok(context.resolve_type_layout(&tag, &mut budget)?.layout)
     }
 
     /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
@@ -767,12 +854,12 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         )?;
 
         // (2). Use that information to resolve the tag into a layout.
-        let max_depth = self
+        let mut budget = self
             .limits
             .as_ref()
-            .map_or(usize::MAX, |l| l.max_move_value_depth);
+            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
 
-        Ok(context.resolve_type_layout(&tag, max_depth)?.0)
+        Ok(context.resolve_type_layout(&tag, &mut budget)?.layout)
     }
 
     /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
@@ -1635,7 +1722,6 @@ impl DatatypeKey {
         }
     }
 }
-
 impl<'l> ResolutionContext<'l> {
     fn new(limits: Option<&'l Limits>) -> Self {
         ResolutionContext {
@@ -2083,37 +2169,38 @@ impl<'l> ResolutionContext<'l> {
     /// Requires that the necessary information was added to the context through calls to
     /// `add_type_tag` and `add_signature` before being called.
     ///
-    /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
-    /// returned alongside the layout (assuming it does not exceed `max_depth`).
+    /// `budget` controls how deep/large the layout is allowed to grow to. The actual depth/node
+    /// count reached is returned alongside the layout (assuming it does not exceed `budget`).
     fn resolve_type_layout(
         &self,
         tag: &TypeTag,
-        max_depth: usize,
-    ) -> Result<(MoveTypeLayout, usize)> {
+        budget: &mut LayoutBudget,
+    ) -> Result<ResolvedLayout> {
         use MoveTypeLayout as L;
         use TypeTag as T;
 
-        if max_depth == 0 {
-            return Err(Error::ValueNesting(
-                self.limits.map_or(0, |l| l.max_move_value_depth),
-            ));
-        }
+        budget.check_depth()?;
+        budget.charge_node()?;
 
         Ok(match tag {
             T::Signer => return Err(Error::UnexpectedSigner),
 
-            T::Address => (L::Address, 1),
-            T::Bool => (L::Bool, 1),
-            T::U8 => (L::U8, 1),
-            T::U16 => (L::U16, 1),
-            T::U32 => (L::U32, 1),
-            T::U64 => (L::U64, 1),
-            T::U128 => (L::U128, 1),
-            T::U256 => (L::U256, 1),
+            T::Address => ResolvedLayout::leaf(L::Address),
+            T::Bool => ResolvedLayout::leaf(L::Bool),
+            T::U8 => ResolvedLayout::leaf(L::U8),
+            T::U16 => ResolvedLayout::leaf(L::U16),
+            T::U32 => ResolvedLayout::leaf(L::U32),
+            T::U64 => ResolvedLayout::leaf(L::U64),
+            T::U128 => ResolvedLayout::leaf(L::U128),
+            T::U256 => ResolvedLayout::leaf(L::U256),
 
             T::Vector(tag) => {
-                let (layout, depth) = self.resolve_type_layout(tag, max_depth - 1)?;
-                (L::Vector(Box::new(layout)), depth + 1)
+                let element = budget.with_child(|budget| self.resolve_type_layout(tag, budget))?;
+                ResolvedLayout {
+                    layout: L::Vector(Box::new(element.layout)),
+                    depth: element.depth.saturating_add(1),
+                    nodes: element.nodes.saturating_add(1),
+                }
             }
 
             T::Struct(s) => {
@@ -2124,28 +2211,35 @@ impl<'l> ResolutionContext<'l> {
                 // these layouts are naturally keyed based on defining ID, but during resolution,
                 // they are keyed by runtime IDs.
 
-                // TODO (optimization): This could be made more efficient by only generating layouts
-                // for non-phantom types.  This efficiency could be extended to the exploration
-                // phase (i.e. only explore layouts of non-phantom types). But this optimisation is
-                // complicated by the fact that we still need to create a correct type tag for a
-                // phantom parameter, which is currently done by converting a type layout into a
-                // tag.
+                // Only non-phantom parameters contribute to the layout, but all parameters must
+                // remain in the canonical type tag.
+                // SAFETY: `add_type_tag` ensures `datatypes` has an element with this key.
+                let key = DatatypeRef::from(s.as_ref());
+                let def = &self.datatypes[&key];
+                if def.type_params.len() != s.type_params.len() {
+                    return Err(Error::TypeArityMismatch(
+                        def.type_params.len(),
+                        s.type_params.len(),
+                    ));
+                }
+
+                let mut type_params = s.type_params.clone();
+                for type_param in &mut type_params {
+                    self.canonicalize_type(type_param)?;
+                }
+
                 let param_layouts = s
                     .type_params
                     .iter()
-                    // Reduce the max depth because we know these type parameters will be nested
-                    // within this struct.
-                    .map(|tag| self.resolve_type_layout(tag, max_depth - 1))
+                    .zip_eq(def.type_params.iter())
+                    .map(|(tag, param)| {
+                        (!param.is_phantom)
+                            .then(|| {
+                                budget.with_child(|budget| self.resolve_type_layout(tag, budget))
+                            })
+                            .transpose()
+                    })
                     .collect::<Result<Vec<_>>>()?;
-
-                // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
-                // `ResolutionContext`, which guarantees that struct layouts come with types, which
-                // is necessary to avoid errors when converting layouts into type tags.
-                let type_params = param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
-
-                // SAFETY: `add_type_tag` ensures `datatyps` has an element with this key.
-                let key = DatatypeRef::from(s.as_ref());
-                let def = &self.datatypes[&key];
 
                 let type_ = StructTag {
                     address: def.defining_id,
@@ -2154,147 +2248,234 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                 };
 
-                self.resolve_datatype_signature(def, type_, param_layouts, max_depth)?
+                self.resolve_datatype_signature(def, type_, param_layouts, budget)?
             }
         })
     }
 
-    /// Translates a datatype definition into a type layout.  Needs to be provided the layouts of type
-    /// parameters which are substituted when a type parameter is encountered.
+    /// Resolve a signature to its canonical type tag without producing a layout.
     ///
-    /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
-    /// returned alongside the layout (assuming it does not exceed `max_depth`).
+    /// Phantom type parameters do not affect runtime layout, so their layouts are skipped. They
+    /// must still be retained in enclosing `StructTag`s, so this resolves their tags from the
+    /// signature and canonical parameter tags.
+    fn resolve_signature_type_tag(
+        &self,
+        sig: &OpenSignatureBody,
+        param_type_tags: &[TypeTag],
+    ) -> Result<TypeTag> {
+        use OpenSignatureBody as O;
+
+        Ok(match sig {
+            O::Address => TypeTag::Address,
+            O::Bool => TypeTag::Bool,
+            O::U8 => TypeTag::U8,
+            O::U16 => TypeTag::U16,
+            O::U32 => TypeTag::U32,
+            O::U64 => TypeTag::U64,
+            O::U128 => TypeTag::U128,
+            O::U256 => TypeTag::U256,
+            O::TypeParameter(ix) => param_type_tags
+                .get(*ix as usize)
+                .ok_or_else(|| Error::TypeParamOOB(*ix, param_type_tags.len()))?
+                .clone(),
+            O::Vector(sig) => TypeTag::Vector(Box::new(
+                self.resolve_signature_type_tag(sig, param_type_tags)?,
+            )),
+            O::Datatype(key, params) => {
+                // SAFETY: `add_signature` ensures `datatypes` has an element with this key.
+                let def = &self.datatypes[key];
+                let type_params = params
+                    .iter()
+                    .map(|param| self.resolve_signature_type_tag(param, param_type_tags))
+                    .collect::<Result<Vec<_>>>()?;
+
+                TypeTag::Struct(Box::new(StructTag {
+                    address: def.defining_id,
+                    module: ident(&key.module)?,
+                    name: ident(&key.name)?,
+                    type_params,
+                }))
+            }
+        })
+    }
+
+    /// Translates a datatype definition into a type layout. Needs to be provided the layouts of
+    /// type parameters which are substituted when a type parameter is encountered.
     fn resolve_datatype_signature(
         &self,
         data_def: &DataDef,
         type_: StructTag,
-        param_layouts: Vec<(MoveTypeLayout, usize)>,
-        max_depth: usize,
-    ) -> Result<(MoveTypeLayout, usize)> {
+        param_layouts: Vec<Option<ResolvedLayout>>,
+        budget: &mut LayoutBudget,
+    ) -> Result<ResolvedLayout> {
         Ok(match &data_def.data {
             MoveData::Struct(fields) => {
                 let mut resolved_fields = Vec::with_capacity(fields.len());
                 let mut field_depth = 0;
+                let mut field_nodes = 0usize;
 
                 for (name, sig) in fields {
-                    let (layout, depth) =
-                        self.resolve_signature_layout(sig, &param_layouts, max_depth - 1)?;
+                    let resolved = budget.with_child(|budget| {
+                        self.resolve_signature_layout(
+                            sig,
+                            &param_layouts,
+                            &type_.type_params,
+                            budget,
+                        )
+                    })?;
 
-                    field_depth = field_depth.max(depth);
+                    field_depth = field_depth.max(resolved.depth);
+                    field_nodes = field_nodes.saturating_add(resolved.nodes);
                     resolved_fields.push(MoveFieldLayout {
                         name: ident(name.as_str())?,
-                        layout,
+                        layout: resolved.layout,
                     })
                 }
 
-                (
-                    MoveTypeLayout::Struct(Box::new(MoveStructLayout {
+                ResolvedLayout {
+                    layout: MoveTypeLayout::Struct(Box::new(MoveStructLayout {
                         type_,
                         fields: resolved_fields,
                     })),
-                    field_depth + 1,
-                )
+                    depth: field_depth.saturating_add(1),
+                    nodes: field_nodes.saturating_add(1),
+                }
             }
             MoveData::Enum(variants) => {
+                budget.charge_nodes(variants.len())?;
+
                 let mut field_depth = 0;
+                let mut field_nodes = 0usize;
                 let mut resolved_variants = BTreeMap::new();
 
                 for (tag, variant) in variants.iter().enumerate() {
                     let mut fields = Vec::with_capacity(variant.signatures.len());
                     for (name, sig) in &variant.signatures {
-                        // Note: We decrement the depth here because we're already under the variant
-                        let (layout, depth) =
-                            self.resolve_signature_layout(sig, &param_layouts, max_depth - 1)?;
+                        let resolved = budget.with_child(|budget| {
+                            self.resolve_signature_layout(
+                                sig,
+                                &param_layouts,
+                                &type_.type_params,
+                                budget,
+                            )
+                        })?;
 
-                        field_depth = field_depth.max(depth);
+                        field_depth = field_depth.max(resolved.depth);
+                        field_nodes = field_nodes.saturating_add(resolved.nodes);
                         fields.push(MoveFieldLayout {
                             name: ident(name.as_str())?,
-                            layout,
+                            layout: resolved.layout,
                         })
                     }
                     resolved_variants.insert((ident(variant.name.as_str())?, tag as u16), fields);
                 }
 
-                (
-                    MoveTypeLayout::Enum(Box::new(MoveEnumLayout {
+                ResolvedLayout {
+                    layout: MoveTypeLayout::Enum(Box::new(MoveEnumLayout {
                         type_,
                         variants: resolved_variants,
                     })),
-                    field_depth + 1,
-                )
+                    depth: field_depth.saturating_add(1),
+                    nodes: field_nodes.saturating_add(variants.len()).saturating_add(1),
+                }
             }
         })
     }
 
-    /// Like `resolve_type_tag` but for signatures.  Needs to be provided the layouts of type
+    /// Like `resolve_type_tag` but for signatures. Needs to be provided the layouts of type
     /// parameters which are substituted when a type parameter is encountered.
-    ///
-    /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
-    /// returned alongside the layout (assuming it does not exceed `max_depth`).
     fn resolve_signature_layout(
         &self,
         sig: &OpenSignatureBody,
-        param_layouts: &[(MoveTypeLayout, usize)],
-        max_depth: usize,
-    ) -> Result<(MoveTypeLayout, usize)> {
+        param_layouts: &[Option<ResolvedLayout>],
+        param_type_tags: &[TypeTag],
+        budget: &mut LayoutBudget,
+    ) -> Result<ResolvedLayout> {
         use MoveTypeLayout as L;
         use OpenSignatureBody as O;
 
-        if max_depth == 0 {
-            return Err(Error::ValueNesting(
-                self.limits.map_or(0, |l| l.max_move_value_depth),
-            ));
+        budget.check_depth()?;
+
+        if !matches!(sig, O::TypeParameter(_)) {
+            budget.charge_node()?;
         }
 
         Ok(match sig {
-            O::Address => (L::Address, 1),
-            O::Bool => (L::Bool, 1),
-            O::U8 => (L::U8, 1),
-            O::U16 => (L::U16, 1),
-            O::U32 => (L::U32, 1),
-            O::U64 => (L::U64, 1),
-            O::U128 => (L::U128, 1),
-            O::U256 => (L::U256, 1),
+            O::Address => ResolvedLayout::leaf(L::Address),
+            O::Bool => ResolvedLayout::leaf(L::Bool),
+            O::U8 => ResolvedLayout::leaf(L::U8),
+            O::U16 => ResolvedLayout::leaf(L::U16),
+            O::U32 => ResolvedLayout::leaf(L::U32),
+            O::U64 => ResolvedLayout::leaf(L::U64),
+            O::U128 => ResolvedLayout::leaf(L::U128),
+            O::U256 => ResolvedLayout::leaf(L::U256),
 
             O::TypeParameter(ix) => {
-                let (layout, depth) = param_layouts
+                let resolved = param_layouts
                     .get(*ix as usize)
-                    .ok_or_else(|| Error::TypeParamOOB(*ix, param_layouts.len()))
-                    .cloned()?;
+                    .and_then(Option::as_ref)
+                    .ok_or_else(|| Error::TypeParamOOB(*ix, param_layouts.len()))?;
+                budget.charge_nodes(resolved.nodes)?;
 
                 // We need to re-check the type parameter before we use it because it might have
                 // been fine when it was created, but result in too deep a layout when we use it at
                 // this position.
-                if depth > max_depth {
-                    return Err(Error::ValueNesting(
-                        self.limits.map_or(0, |l| l.max_move_value_depth),
-                    ));
-                }
+                budget.ensure_depth(resolved.depth)?;
 
-                (layout, depth)
+                ResolvedLayout {
+                    layout: resolved.layout.clone(),
+                    depth: resolved.depth,
+                    nodes: resolved.nodes,
+                }
             }
 
             O::Vector(sig) => {
-                let (layout, depth) =
-                    self.resolve_signature_layout(sig.as_ref(), param_layouts, max_depth - 1)?;
+                let element = budget.with_child(|budget| {
+                    self.resolve_signature_layout(
+                        sig.as_ref(),
+                        param_layouts,
+                        param_type_tags,
+                        budget,
+                    )
+                })?;
 
-                (L::Vector(Box::new(layout)), depth + 1)
+                ResolvedLayout {
+                    layout: L::Vector(Box::new(element.layout)),
+                    depth: element.depth.saturating_add(1),
+                    nodes: element.nodes.saturating_add(1),
+                }
             }
 
             O::Datatype(key, params) => {
                 // SAFETY: `add_signature` ensures `datatypes` has an element with this key.
                 let def = &self.datatypes[key];
+                if def.type_params.len() != params.len() {
+                    return Err(Error::TypeArityMismatch(
+                        def.type_params.len(),
+                        params.len(),
+                    ));
+                }
 
-                let param_layouts = params
-                    .iter()
-                    .map(|sig| self.resolve_signature_layout(sig, param_layouts, max_depth - 1))
-                    .collect::<Result<Vec<_>>>()?;
-
-                // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
-                // `ResolutionContext`, which guarantees that struct layouts come with types, which
-                // is necessary to avoid errors when converting layouts into type tags.
-                let type_params: Vec<TypeTag> =
-                    param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
+                let mut type_params = Vec::with_capacity(params.len());
+                let mut resolved_params = Vec::with_capacity(params.len());
+                for (sig, param) in params.iter().zip_eq(def.type_params.iter()) {
+                    if param.is_phantom {
+                        type_params.push(self.resolve_signature_type_tag(sig, param_type_tags)?);
+                        resolved_params.push(None);
+                    } else {
+                        let resolved = budget.with_child(|budget| {
+                            self.resolve_signature_layout(
+                                sig,
+                                param_layouts,
+                                param_type_tags,
+                                budget,
+                            )
+                        })?;
+                        // SAFETY: layouts generated by this context have canonical type tags.
+                        type_params.push(TypeTag::from(&resolved.layout));
+                        resolved_params.push(Some(resolved));
+                    }
+                }
 
                 let type_ = StructTag {
                     address: def.defining_id,
@@ -2303,7 +2484,7 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                 };
 
-                self.resolve_datatype_signature(def, type_, param_layouts, max_depth)?
+                self.resolve_datatype_signature(def, type_, resolved_params, budget)?
             }
         })
     }
@@ -2679,6 +2860,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -2705,6 +2887,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 2,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -2732,6 +2915,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -2750,7 +2934,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_err_value_nesting_big_phantom_type_param_layout() {
+    async fn test_big_phantom_type_param_layout() {
         let (_, cache) = package_cache([
             (1, build_package("sui"), sui_types()),
             (1, build_package("d0"), d0_types()),
@@ -2763,6 +2947,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -2776,19 +2961,24 @@ mod tests {
             .await
             .unwrap();
 
-        // But this one fails, even though the big layout is for a phantom type parameter. This may
-        // change in future if we optimise the way we handle phantom type parameters to not
-        // calculate their full layout, just their type tag.
-        let struct_err = resolver
+        // The large phantom parameter does not contribute to the layout depth, but is retained
+        // in the layout's type tag.
+        let struct_layout = resolver
             .type_layout(type_("0xd0::m::O<u8, vector<vector<u8>>>"))
             .await
-            .unwrap_err();
-        let enum_err = resolver
+            .unwrap();
+        let enum_layout = resolver
             .type_layout(type_("0xd0::m::EO<u8, vector<vector<u8>>>"))
             .await
-            .unwrap_err();
-        assert!(matches!(struct_err, Error::ValueNesting(3)));
-        assert!(matches!(enum_err, Error::ValueNesting(3)));
+            .unwrap();
+        assert_eq!(
+            TypeTag::from(&struct_layout),
+            type_("0xd0::m::O<u8, vector<vector<u8>>>")
+        );
+        assert_eq!(
+            TypeTag::from(&enum_layout),
+            type_("0xd0::m::EO<u8, vector<vector<u8>>>")
+        );
     }
 
     #[tokio::test]
@@ -2805,6 +2995,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -3370,6 +3561,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 100,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -3397,6 +3589,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 2,
                 max_move_value_depth: 100,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -3433,6 +3626,7 @@ mod tests {
                 max_type_argument_depth: 2,
                 max_type_nodes: 100,
                 max_move_value_depth: 100,
+                max_layout_nodes: usize::MAX,
             },
         );
 
@@ -3660,6 +3854,7 @@ mod tests {
             datakey("0xa0", "m", "E2"),
             datakey("0xa0", "n", "T0"),
             datakey("0xa0", "n", "E0"),
+            datakey("0xa0", "z", "E0"),
         ]
     }
 
