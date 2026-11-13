@@ -110,6 +110,8 @@ pub struct ReadRowsCall {
     pub row_ranges: Vec<RowRange>,
     pub rows_limit: i64,
     pub reversed: bool,
+    /// Whether the read asked for cell values to be emptied (`StripValueTransformer`).
+    pub values_stripped: bool,
 }
 
 /// Order in which `ReadRows` emits matching rows relative to the request's
@@ -1002,6 +1004,7 @@ impl Bigtable for MockBigtableServer {
             row_ranges: ranges.clone(),
             rows_limit: req.rows_limit,
             reversed: req.reversed,
+            values_stripped: strip_values,
         });
         if ranges.is_empty()
             && state.read_rows_response_order == ReadRowsResponseOrder::ReverseRequestOrder

@@ -219,7 +219,7 @@ mod tests {
     /// A watermark for every pipeline a replica serves, at the checkpoint `checkpoint` picks for
     /// it.
     fn served_watermarks(checkpoint: impl Fn(&str) -> u64) -> HashMap<String, CommitterWatermark> {
-        service_info_watermark_pipelines(BitmapSchema::V2)
+        service_info_watermark_pipelines(BitmapSchema::V2, false)
             .iter()
             .map(|&pipeline| (pipeline.to_string(), watermark(checkpoint(pipeline))))
             .collect()
@@ -280,6 +280,7 @@ mod tests {
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             WatermarkSource::IndexerStreams(indexer_urls),
+            false,
         )
         .await
         .expect("create kv-rpc server");

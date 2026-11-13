@@ -54,6 +54,7 @@ use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::EpochData;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::ObjectStatus;
 use sui_kvstore::PackageData;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
@@ -64,6 +65,7 @@ use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::row_placement::RowPlacement;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -78,6 +80,7 @@ use tokio::sync::Semaphore;
 pub(crate) mod stage {
     pub const TRANSACTIONS: &str = "transactions";
     pub const OBJECTS: &str = "objects";
+    pub const OBJECT_VERSIONS_BY_CHECKPOINT: &str = "object_versions_by_checkpoint";
     pub const TX_SEQ_DIGEST: &str = "tx_seq_digest";
     pub const TX_CP_RESOLVE: &str = "tx_cp_resolve";
     pub const CHECKPOINTS: &str = "checkpoints";
@@ -86,8 +89,8 @@ pub(crate) mod stage {
 }
 
 /// Metrics for the request-scoped `BigTableClient` limiter and the reads it
-/// gates. Cardinality is bounded: per method, 7 stages for `permit_wait_ms`,
-/// `permit_hold_ms`, and `reads_started`, 7 stages × 3 outcomes for
+/// gates. Cardinality is bounded: per method, 8 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 8 stages × 3 outcomes for
 /// `reads_finished`, and one series each for the request-end `permits_peak`
 /// and `ops_total` histograms.
 #[derive(Clone)]
@@ -271,6 +274,20 @@ impl BigTableClient {
             .await
     }
 
+    /// The keys in `object_keys` at which the object is live, read without the
+    /// objects' contents, as their rows arrive.
+    pub(crate) async fn get_existing_object_keys_stream(
+        &self,
+        object_keys: Vec<ObjectKey>,
+    ) -> Result<BoxStream<'static, Result<ObjectKey, anyhow::Error>>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(
+            stage::OBJECTS,
+            inner.get_existing_object_keys_stream(object_keys),
+        )
+        .await
+    }
+
     pub(crate) async fn resolve_tx_digests_stream(
         &self,
         tx_sequence_numbers: Vec<u64>,
@@ -363,6 +380,22 @@ impl BigTableClient {
         .await
     }
 
+    /// The version and status `object_id` had at the end of `checkpoint`, from
+    /// the `object_versions_by_checkpoint` index. One single-row forward scan,
+    /// under one permit.
+    pub(crate) async fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(SequenceNumber, ObjectStatus)>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECT_VERSIONS_BY_CHECKPOINT,
+            inner.get_object_version_at_checkpoint(object_id, checkpoint),
+        )
+        .await
+    }
+
     /// The newest version of `object_id`, unless the object was deleted or wrapped at it. One
     /// reverse range scan of the `objects` table, under one permit.
     pub(crate) async fn get_latest_object(
@@ -371,6 +404,17 @@ impl BigTableClient {
     ) -> Result<Option<Object>, RpcError> {
         let mut inner = self.inner.clone();
         self.call_gated(stage::OBJECTS, inner.get_latest_object(&object_id))
+            .await
+    }
+
+    /// The version [`Self::get_latest_object`] would return, read without the object's
+    /// contents, under one permit.
+    pub(crate) async fn get_latest_object_version(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<SequenceNumber>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::OBJECTS, inner.get_latest_object_version(&object_id))
             .await
     }
 

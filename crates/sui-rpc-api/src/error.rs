@@ -366,6 +366,7 @@ impl ErrorDetails {
 pub struct ObjectNotFoundError {
     object_id: sui_sdk_types::Address,
     version: Option<sui_sdk_types::Version>,
+    checkpoint: Option<sui_sdk_types::CheckpointSequenceNumber>,
 }
 
 impl ObjectNotFoundError {
@@ -373,6 +374,7 @@ impl ObjectNotFoundError {
         Self {
             object_id,
             version: None,
+            checkpoint: None,
         }
     }
 
@@ -383,6 +385,20 @@ impl ObjectNotFoundError {
         Self {
             object_id,
             version: Some(version),
+            checkpoint: None,
+        }
+    }
+
+    /// The object had no live state at the end of `checkpoint`: it did not exist yet, or it had
+    /// been deleted or wrapped.
+    pub fn new_at_checkpoint(
+        object_id: sui_sdk_types::Address,
+        checkpoint: sui_sdk_types::CheckpointSequenceNumber,
+    ) -> Self {
+        Self {
+            object_id,
+            version: None,
+            checkpoint: Some(checkpoint),
         }
     }
 }
@@ -393,6 +409,10 @@ impl std::fmt::Display for ObjectNotFoundError {
 
         if let Some(version) = self.version {
             write!(f, " with version {version}")?;
+        }
+
+        if let Some(checkpoint) = self.checkpoint {
+            write!(f, " at checkpoint {checkpoint}")?;
         }
 
         write!(f, " not found")
