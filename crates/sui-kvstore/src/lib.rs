@@ -847,7 +847,8 @@ impl BigTableIndexer {
 }
 
 /// Registers the bitmap index pipeline `P`, configured by `layer`, together with its
-/// store-owned committer.
+/// store-owned committer. A pipeline the indexer skips, because `--pipeline` excludes it, gets no
+/// committer: nothing would feed it, and its idle tasks would keep a bounded run from finishing.
 async fn add_bitmap_pipeline<P>(
     indexer: &mut Indexer<BigTableStore>,
     store_runtime_builder: BigTableStoreRuntimeBuilder,
@@ -860,21 +861,23 @@ async fn add_bitmap_pipeline<P>(
 where
     P: BitmapIndexProcessor + Send + Sync + 'static,
 {
-    let store_runtime_builder = store_runtime_builder.with_bitmap_committer::<P>(
-        layer.max_rows_or_default(),
-        layer
-            .write_concurrency
-            .unwrap_or(base.committer.write_concurrency),
-        rate_limiter,
-        Some(registry),
-    );
     indexer
         .sequential_pipeline(
             BitmapIndexHandler::new(processor),
             layer.clone().finish(base.clone()),
         )
         .await?;
-    Ok(store_runtime_builder)
+    if !store_runtime_builder.is_registered(P::NAME) {
+        return Ok(store_runtime_builder);
+    }
+    Ok(store_runtime_builder.with_bitmap_committer::<P>(
+        layer.max_rows_or_default(),
+        layer
+            .write_concurrency
+            .unwrap_or(base.committer.write_concurrency),
+        rate_limiter,
+        Some(registry),
+    ))
 }
 
 impl From<WatermarkV0> for sui_indexer_alt_framework_store_traits::CommitterWatermark {
