@@ -89,7 +89,7 @@ use move_command_line_common::files::FileHash;
 use move_compiler::{
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, Visibility},
-    linters::LintLevel,
+    linters::LintSelection,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeInner, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
     shared::{
@@ -166,7 +166,7 @@ pub fn get_symbols<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
-    lint: LintLevel,
+    lint: LintSelection,
     move_flavor: Arc<F>,
     cursor_info: Option<(&PathBuf, Position)>,
     flavor: Option<Flavor>,

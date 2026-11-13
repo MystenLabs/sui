@@ -15,7 +15,7 @@ use crate::{
         },
     },
     editions::Flavor,
-    linters::{self, LintLevel, LinterDiagnosticCategory},
+    linters::{self, LintSelection, LinterDiagnosticCategory},
     shared::known_attributes::DiagnosticAttribute,
     sui_mode,
 };
@@ -132,15 +132,15 @@ impl DiagnosticFilterConfig {
 
     pub fn select_lints(
         &self,
-        level: LintLevel,
+        selection: LintSelection,
         lint_code_tables: &[&[(u8, u8, &'static str)]],
         default_lints: &[(&str, VisitorConstructor)],
         optional_lints: &[(&str, VisitorConstructor)],
     ) -> Vec<Visitor> {
-        let optional_enabled = match level {
-            LintLevel::None => return vec![],
-            LintLevel::Default => false,
-            LintLevel::All => true,
+        let optional_enabled = match selection {
+            LintSelection::None => return vec![],
+            LintSelection::Default => false,
+            LintSelection::All => true,
         };
         default_lints
             .iter()

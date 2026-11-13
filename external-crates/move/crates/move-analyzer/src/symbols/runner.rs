@@ -27,7 +27,7 @@ use std::{
 use sysinfo::{Pid, ProcessesToUpdate, System};
 use vfs::VfsPath;
 
-use move_compiler::{editions::Flavor, linters::LintLevel};
+use move_compiler::{editions::Flavor, linters::LintSelection};
 use move_package::MoveFlavor;
 
 /// Interval for checking if the parent process is still alive (in seconds)
@@ -73,7 +73,7 @@ impl SymbolicatorRunner {
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
         packages_info: Arc<Mutex<CachedPackages>>,
         sender: Sender<SymbolicatorMessage>,
-        lint: LintLevel,
+        lint: LintSelection,
         move_flavor: Arc<F>,
         flavor: Option<Flavor>,
         parent_process_id: Option<u32>,

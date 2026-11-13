@@ -18,7 +18,7 @@ use crate::{
     editions::{Edition, Flavor},
     expansion::{self, ast as E},
     hlir, interface_generator,
-    linters::{self, LintLevel},
+    linters::{self, LintSelection},
     naming::{self, ast as N},
     parser::{self, ast::FunctionName, *},
     shared::{
@@ -67,7 +67,7 @@ pub struct Compiler {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: IndexMap<TypeId, Visitor>,
-    diagnostic_filters: Option<(LintLevel, DiagnosticFilterSettings)>,
+    diagnostic_filters: Option<(LintSelection, DiagnosticFilterSettings)>,
     known_warning_filters: KnownDiagnosticFilters,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
@@ -288,11 +288,11 @@ impl Compiler {
     /// Sets diagnostic settings validated for the target flavors.
     pub fn set_diagnostic_filters(
         mut self,
-        level: LintLevel,
+        selection: LintSelection,
         settings: DiagnosticFilterSettings,
     ) -> Self {
         assert!(self.diagnostic_filters.is_none());
-        self.diagnostic_filters = Some((level, settings));
+        self.diagnostic_filters = Some((selection, settings));
         self
     }
 
@@ -1234,7 +1234,7 @@ fn run(
 
 fn configure_lint_visitors(
     visitors: &mut IndexMap<TypeId, Visitor>,
-    level: LintLevel,
+    selection: LintSelection,
     settings: &DiagnosticFilterSettings,
     sui_mode: bool,
 ) {
@@ -1242,11 +1242,14 @@ fn configure_lint_visitors(
     let mut lint_visitors = vec![];
     if sui_mode {
         lint_visitors.extend(sui_mode::linters::linter_visitors_with_config(
-            level,
+            selection,
             &lint_config,
         ));
     }
-    lint_visitors.extend(linters::linter_visitors_with_config(level, &lint_config));
+    lint_visitors.extend(linters::linter_visitors_with_config(
+        selection,
+        &lint_config,
+    ));
 
     extend_visitors(visitors, lint_visitors);
 }

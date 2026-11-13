@@ -10,7 +10,7 @@ use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::config::DiagnosticFilterSettings,
     editions::{Edition, Flavor},
-    linters::LintLevel,
+    linters::LintSelection,
     shared::{NumericalAddress, PackageConfig},
 };
 use std::{collections::BTreeMap, fs::File, io::Write, path::PathBuf};
@@ -89,7 +89,7 @@ pub fn compile_packages_in_file(filename: &str, dependencies: &[&str]) -> Vec<St
             .set_flavor(Flavor::Sui)
             .set_edition(Edition::E2024_ALPHA),
     )
-    .set_diagnostic_filters(LintLevel::None, DiagnosticFilterSettings::for_testing())
+    .set_diagnostic_filters(LintSelection::None, DiagnosticFilterSettings::for_testing())
     .build_and_report()
     .expect("Failed module compilation");
 

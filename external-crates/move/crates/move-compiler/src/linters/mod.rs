@@ -32,7 +32,7 @@ pub mod unused_return_value;
 pub(crate) mod utils;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LintLevel {
+pub enum LintSelection {
     // No linters
     None,
     // Run only the default linters
@@ -321,13 +321,13 @@ const OPTIONAL_LINTS: &[(&str, VisitorConstructor)] = &[
     }),
 ];
 
-pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    linter_visitors_with_config(level, &DiagnosticFilterConfig::default())
+pub fn linter_visitors(selection: LintSelection) -> Vec<Visitor> {
+    linter_visitors_with_config(selection, &DiagnosticFilterConfig::default())
 }
 
 pub fn linter_visitors_with_config(
-    level: LintLevel,
+    selection: LintSelection,
     config: &DiagnosticFilterConfig,
 ) -> Vec<Visitor> {
-    config.select_lints(level, &[CORE_LINT_WARNING_FILTERS], &[], OPTIONAL_LINTS)
+    config.select_lints(selection, &[CORE_LINT_WARNING_FILTERS], &[], OPTIONAL_LINTS)
 }

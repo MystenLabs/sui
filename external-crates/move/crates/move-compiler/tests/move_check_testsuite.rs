@@ -20,7 +20,7 @@ use move_compiler::{
     diagnostics::config::DiagnosticFilterSettings,
     diagnostics::*,
     editions::{Edition, Flavor},
-    linters::{self, LintLevel},
+    linters::{self, LintSelection},
     shared::{Flags, NumericalAddress, PackageConfig, PackagePaths},
     sui_mode,
 };
@@ -237,19 +237,19 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
         .unwrap()
         .set_flags(flags)
         .set_default_config(package_config)
-        .set_diagnostic_filters(LintLevel::None, settings);
+        .set_diagnostic_filters(LintSelection::None, settings);
 
     if flavor == Flavor::Sui {
         let (prefix, filters) = sui_mode::linters::known_filters();
         compiler = compiler.add_custom_known_filters(prefix, filters);
         if test_info.lint {
-            compiler = compiler.add_visitors(sui_mode::linters::linter_visitors(LintLevel::All))
+            compiler = compiler.add_visitors(sui_mode::linters::linter_visitors(LintSelection::All))
         }
     }
     let (prefix, filters) = linters::known_filters();
     compiler = compiler.add_custom_known_filters(prefix, filters);
     if test_info.lint {
-        compiler = compiler.add_visitors(linters::linter_visitors(LintLevel::All))
+        compiler = compiler.add_visitors(linters::linter_visitors(LintSelection::All))
     }
 
     let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;

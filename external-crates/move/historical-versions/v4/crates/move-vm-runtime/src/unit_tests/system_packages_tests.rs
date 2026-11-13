@@ -343,7 +343,6 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
     use move_compiler::{
         Compiler as MoveCompiler,
         compiled_unit::AnnotatedCompiledUnit,
-        diagnostics::filter::empty_filter_scope,
         editions::{Edition, Flavor},
         shared::PackageConfig,
     };
@@ -357,12 +356,11 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
         vec![],
         move_stdlib::named_addresses(),
     )
-    .set_default_config(PackageConfig {
-        is_dependency: false,
-        warning_filter: empty_filter_scope(),
-        flavor: Flavor::Core,
-        edition: Edition::E2024_ALPHA,
-    })
+    .set_default_config(
+        PackageConfig::default()
+            .set_flavor(Flavor::Core)
+            .set_edition(Edition::E2024_ALPHA),
+    )
     .build_and_report()
     .expect("stdlib compilation");
     let stdlib_modules: Vec<_> = stdlib_units
@@ -394,12 +392,11 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
         move_stdlib::source_files(),
         move_stdlib::named_addresses(),
     )
-    .set_default_config(PackageConfig {
-        is_dependency: false,
-        warning_filter: empty_filter_scope(),
-        flavor: Flavor::Core,
-        edition: Edition::E2024_ALPHA,
-    })
+    .set_default_config(
+        PackageConfig::default()
+            .set_flavor(Flavor::Core)
+            .set_edition(Edition::E2024_ALPHA),
+    )
     .build_and_report()
     .expect("user compilation");
     let user_modules: Vec<_> = user_units
