@@ -5,7 +5,7 @@ use crate::authority::AuthorityState;
 use crate::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::execution_cache::ExecutionCacheTraitPointers;
+use crate::execution_cache::{ExecutionCacheTraitPointers, FoundObjectOrTombstone};
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -47,7 +47,7 @@ use sui_types::storage::WriteStore;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
 use sui_types::storage::{BackingPackageStore, PackageObject};
-use sui_types::storage::{ObjectKey, ReadStore};
+use sui_types::storage::{ObjectKey, ObjectOrTombstone, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use tap::TapFallible;
 use tracing::error;
@@ -83,6 +83,17 @@ impl RocksDbStore {
         self.cache_traits
             .object_cache_reader
             .multi_get_objects_by_key(object_keys)
+    }
+
+    /// See [`crate::execution_cache::ObjectCacheRead::find_object_or_tombstone_lt_or_eq_version_unlocked`].
+    pub fn find_object_or_tombstone_lt_or_eq_version_unlocked(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<FoundObjectOrTombstone> {
+        self.cache_traits
+            .object_cache_reader
+            .find_object_or_tombstone_lt_or_eq_version_unlocked(object_id, version)
     }
 
     pub fn get_last_executed_checkpoint(&self) -> Option<VerifiedCheckpoint> {
@@ -484,6 +495,14 @@ impl RestReadStore {
     }
 }
 
+/// The live object of `entry`, or `None` if it is a tombstone.
+fn live_object(entry: ObjectOrTombstone) -> Option<Object> {
+    match entry {
+        ObjectOrTombstone::Object(object) => Some(object),
+        ObjectOrTombstone::Tombstone(_) => None,
+    }
+}
+
 /// [`RpcStateReader::retains_object_version_history`] for the node `state` runs on: `false` when
 /// it runs the tidehunter objects compactor.
 fn retains_object_version_history(state: &AuthorityState) -> bool {
@@ -742,6 +761,130 @@ impl RpcStoreReadStore {
             reader,
         }
     }
+
+    /// The newest entry of `object_id` at or below `version`, the object or the tombstone of a
+    /// deletion or wrap, for RPC reads. `None` if it has none, or if the entry found may be a
+    /// version below this node's object lower bound, which callers answer as a version that may
+    /// have been pruned.
+    ///
+    /// The store read does not skip the versions the pruner range-deleted: skipping them would
+    /// make the first read after each pruner write rebuild the memtable's list of range
+    /// deletions. So it can find a pruned version older than the one that replaced it, and
+    /// `may_be_below_objects_lower_bound` checks the entry against the rpc indexes.
+    ///
+    /// While the rpc indexes backfill history after a restore
+    /// ([`RpcIndexes::is_history_backfill_pending`]), the version they record at the end of a
+    /// checkpoint can be a later one, so the check can refuse a version this node holds. RPC
+    /// refuses reads that need this method until the backfill finishes.
+    pub fn find_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        let Some(found) = self
+            .rocks
+            .find_object_or_tombstone_lt_or_eq_version_unlocked(object_id, version)
+        else {
+            return Ok(None);
+        };
+        if may_be_below_objects_lower_bound(
+            &found,
+            || self.get_lowest_available_checkpoint_objects(),
+            |checkpoint| {
+                self.reader
+                    .get_object_version_at_checkpoint(object_id, checkpoint)
+            },
+            |digest| self.rocks.get_transaction_checkpoint(digest),
+            || {
+                let Some(row) = self
+                    .reader
+                    .schema()
+                    .iter_object_versions_by_checkpoint(object_id)
+                    .map_err(StorageError::custom)?
+                    .next()
+                else {
+                    return Ok(None);
+                };
+                let (key, value) = row.map_err(StorageError::custom)?;
+                Ok(Some((
+                    key.checkpoint,
+                    SequenceNumber::from_u64(value.into_inner().version),
+                )))
+            },
+        )? {
+            return Ok(None);
+        }
+        Ok(Some(found.entry))
+    }
+}
+
+/// Whether `found`, the newest entry of an object at or below a bound read without skipping
+/// range-deleted versions, may be a version below the object lower bound
+/// (`objects_lower_bound`, see [`RpcStateReader::get_lowest_available_checkpoint_objects`]):
+/// one the pruner deleted that compaction has not dropped yet, older than a version that
+/// replaced it which compaction did drop, or one about to be pruned. The entry is checked
+/// against the object's version at the end of the last pruned checkpoint P, the checkpoint
+/// before the lower bound, which the rpc indexes record (`version_at_checkpoint`). That is the
+/// oldest version the lower bound keeps: every version below it was replaced by the end of P.
+///
+/// - An uncommitted entry (see [`FoundObjectOrTombstone::committed`]), or any entry on a node
+///   whose lower bound is 0, is not. Neither reads the lower bound or the indexes.
+/// - An entry at or above the object's version at P is not: every version above it is one the
+///   lower bound keeps, so the read skipped none. An entry below it is below the lower bound.
+/// - With no version at P, the object did not exist yet, or it was deleted or wrapped by then
+///   and pruning removed its index history. A live entry written in a checkpoint after P
+///   (`transaction_checkpoint` of the transaction that wrote it) is not: every version above it
+///   was written later still. A live entry written at or before P may be.
+/// - A tombstone records no transaction, and a node that prunes checkpoints but keeps object
+///   versions no longer has the checkpoint of a live entry's transaction once that checkpoint
+///   is pruned. With no version at P, such an entry is not below the lower bound if the
+///   object's first index row (`first_indexed_change`: its checkpoint and version) is after P
+///   and records a version at or below the entry's: the entry was written at or after that
+///   change. Otherwise it may be. The first row is read only for such an entry.
+///
+/// Read the lower bound after the entry: pruning raises it in the same write that range-deletes
+/// the versions it prunes, so a pruned version the read found is below the object's version at
+/// the P read then.
+fn may_be_below_objects_lower_bound(
+    found: &FoundObjectOrTombstone,
+    objects_lower_bound: impl FnOnce() -> Result<CheckpointSequenceNumber>,
+    version_at_checkpoint: impl FnOnce(CheckpointSequenceNumber) -> Result<Option<SequenceNumber>>,
+    transaction_checkpoint: impl FnOnce(&TransactionDigest) -> Option<CheckpointSequenceNumber>,
+    first_indexed_change: impl FnOnce() -> Result<Option<(CheckpointSequenceNumber, SequenceNumber)>>,
+) -> Result<bool> {
+    if !found.committed {
+        return Ok(false);
+    }
+    let Some(last_pruned) = objects_lower_bound()?.checked_sub(1) else {
+        return Ok(false);
+    };
+    let may_predate_first_indexed_change = |version: SequenceNumber| -> Result<bool> {
+        Ok(
+            !first_indexed_change()?.is_some_and(|(checkpoint, first_version)| {
+                checkpoint > last_pruned && first_version <= version
+            }),
+        )
+    };
+    Ok(match version_at_checkpoint(last_pruned)? {
+        Some(version_at_last_pruned) => {
+            let found_version = match &found.entry {
+                ObjectOrTombstone::Object(object) => object.version(),
+                ObjectOrTombstone::Tombstone((_, version, _)) => *version,
+            };
+            found_version < version_at_last_pruned
+        }
+        None => match &found.entry {
+            ObjectOrTombstone::Object(object) => {
+                match transaction_checkpoint(&object.previous_transaction) {
+                    Some(checkpoint) => checkpoint <= last_pruned,
+                    None => may_predate_first_indexed_change(object.version())?,
+                }
+            }
+            ObjectOrTombstone::Tombstone((_, version, _)) => {
+                may_predate_first_indexed_change(*version)?
+            }
+        },
+    })
 }
 
 impl ObjectStore for RpcStoreReadStore {
@@ -969,6 +1112,16 @@ impl RpcStateReader for RpcStoreReadStore {
         Some(self)
     }
 
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>> {
+        Ok(self
+            .find_object_or_tombstone_lt_or_eq_version(*object_id, version)?
+            .and_then(live_object))
+    }
+
     fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
         // The raw executed tip, read straight from the checkpoint store. Unlike
         // `get_latest_checkpoint`, this is not bounded to the live-object index
@@ -1150,5 +1303,301 @@ impl RpcIndexes for RpcStoreReadStore {
             end_bucket_exclusive,
             descending,
         )
+    }
+}
+
+#[cfg(all(test, not(tidehunter)))]
+mod tests {
+    use super::*;
+    use crate::authority::authority_store_tables::tests::{
+        object_version, write_and_prune_all_but_newest,
+    };
+    use crate::authority::authority_store_types::{
+        StoreObject, StoreObjectWrapper, get_store_object,
+    };
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use sui_consistent_store::{Db, DbOptions};
+    use sui_rpc_store::RpcStoreSchema;
+    use sui_rpc_store::schema::object_version_by_checkpoint;
+    use sui_types::digests::ObjectDigest;
+    use typed_store::Map;
+
+    /// The last checkpoint the objects pruner has pruned.
+    const LAST_PRUNED: CheckpointSequenceNumber = 10;
+
+    /// `get_object_lt_or_eq_version` on a pruned node, where the pruner range-deleted versions
+    /// that compaction has dropped only some of. The reader reads past range deletions and
+    /// refuses what may be a pruned version, by the object's version at the last pruned
+    /// checkpoint or, with none, by the checkpoint of the transaction that wrote the version
+    /// found or, when this node no longer has that checkpoint, by the object's first index row.
+    #[tokio::test]
+    async fn lt_or_eq_reads_refuse_pruned_versions() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let store = state.database_for_testing();
+        let tables = &store.perpetual_tables;
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) =
+            Db::open::<RpcStoreSchema>(dir.path().join("rpc-store"), DbOptions::default()).unwrap();
+        let schema = Arc::new(schema);
+        let rocks = RocksDbStore::new(
+            state.execution_cache_trait_pointers_for_testing().clone(),
+            state.committee_store().clone(),
+            CheckpointStore::new_for_tests(),
+        );
+        let with_indexes = RpcStoreReadStore::new(
+            state.clone(),
+            rocks,
+            RpcStoreReader::new(db.clone(), schema.clone()),
+        );
+
+        let mut index_rows = db.batch();
+        let mut index = |object_id, version: u64, checkpoint| {
+            let (key, value) = object_version_by_checkpoint::store(
+                object_id,
+                checkpoint,
+                SequenceNumber::from_u64(version),
+            );
+            index_rows
+                .put(&schema.object_version_by_checkpoint, &key, &value)
+                .unwrap();
+        };
+        let finalize = |object: &Object, checkpoint| {
+            store
+                .deprecated_insert_finalized_transactions(
+                    &[object.previous_transaction],
+                    0,
+                    checkpoint,
+                )
+                .unwrap();
+        };
+        let write = |object: &Object| {
+            tables
+                .objects
+                .insert(
+                    &ObjectKey(object.id(), object.version()),
+                    &get_store_object(object.clone()),
+                )
+                .unwrap();
+        };
+        let write_deletion = |object_id, version: u64| {
+            tables
+                .objects
+                .insert(
+                    &ObjectKey(object_id, SequenceNumber::from_u64(version)),
+                    &StoreObjectWrapper::from(StoreObject::Deleted),
+                )
+                .unwrap();
+        };
+
+        // Versions 1, 2 and 3, written in checkpoints 3, 5 and 8: 3 is the object's version at
+        // the end of the last pruned checkpoint, and the pruner range-deleted 1 and 2 and
+        // retracted their index rows.
+        let pruned = ObjectID::random();
+        let pruned_versions =
+            [1, 2, 3].map(|version| object_version(pruned, version, TransactionDigest::random()));
+        write_and_prune_all_but_newest(tables, dir.path(), &pruned_versions);
+        index(pruned, 3, 8);
+        finalize(&pruned_versions[2], 8);
+
+        // Created after the last pruned checkpoint, so it has no version at it.
+        let created = object_version(ObjectID::random(), 5, TransactionDigest::random());
+        write(&created);
+        index(created.id(), 5, LAST_PRUNED + 2);
+        finalize(&created, LAST_PRUNED + 2);
+
+        // No version at the last pruned checkpoint, as when the object was deleted or wrapped by
+        // then and pruning removed its index history: a version written before it, and one
+        // whose transaction's checkpoint this node no longer has and with no index row.
+        let written_before = object_version(ObjectID::random(), 4, TransactionDigest::random());
+        write(&written_before);
+        finalize(&written_before, LAST_PRUNED - 3);
+        let checkpoint_unknown = object_version(ObjectID::random(), 6, TransactionDigest::random());
+        write(&checkpoint_unknown);
+
+        // Deleted in checkpoint 12, after the last pruned checkpoint: at version 3, after version
+        // 2, written in checkpoint 8 and so the object's version at the end of the last pruned
+        // checkpoint; and at version 6, after version 5, created in checkpoint 11 and so with no
+        // version at the end of it.
+        let deleted_after_live = object_version(ObjectID::random(), 2, TransactionDigest::random());
+        write(&deleted_after_live);
+        index(deleted_after_live.id(), 2, LAST_PRUNED - 2);
+        finalize(&deleted_after_live, LAST_PRUNED - 2);
+        write_deletion(deleted_after_live.id(), 3);
+        index(deleted_after_live.id(), 3, LAST_PRUNED + 2);
+        let created_and_deleted =
+            object_version(ObjectID::random(), 5, TransactionDigest::random());
+        write(&created_and_deleted);
+        index(created_and_deleted.id(), 5, LAST_PRUNED + 1);
+        finalize(&created_and_deleted, LAST_PRUNED + 1);
+        write_deletion(created_and_deleted.id(), 6);
+        index(created_and_deleted.id(), 6, LAST_PRUNED + 2);
+        // Deleted at version 4 with no index row: its history was pruned, or it was never
+        // indexed.
+        let deleted_unindexed = ObjectID::random();
+        write_deletion(deleted_unindexed, 4);
+        // Wrapped at version 3 with its index history pruned, then unwrapped at version 7 in
+        // checkpoint 12: the first index row is after the last pruned checkpoint but above the
+        // tombstone, so the wrap may have come before it.
+        let unwrapped_after = ObjectID::random();
+        write_deletion(unwrapped_after, 3);
+        let unwrapped = object_version(unwrapped_after, 7, TransactionDigest::random());
+        write(&unwrapped);
+        index(unwrapped_after, 7, LAST_PRUNED + 2);
+        finalize(&unwrapped, LAST_PRUNED + 2);
+
+        // Version 2, written in checkpoint 8, then version 4, written in checkpoint 12: above the
+        // object's version at the end of the last pruned checkpoint, it needs no transaction
+        // checkpoint.
+        let mutated_after = ObjectID::random();
+        let before_floor = object_version(mutated_after, 2, TransactionDigest::random());
+        write(&before_floor);
+        index(mutated_after, 2, LAST_PRUNED - 2);
+        write(&object_version(
+            mutated_after,
+            4,
+            TransactionDigest::random(),
+        ));
+        index(mutated_after, 4, LAST_PRUNED + 2);
+
+        // A node that keeps every object version but prunes checkpoints (restored from a
+        // snapshot, so its objects lower bound is above 0) no longer has the checkpoints of
+        // these versions' transactions. Version 6, created in checkpoint 12: its first index
+        // row is after the last pruned checkpoint and records it. Version 3, written by the last
+        // pruned checkpoint and replaced after a pruned deletion or wrap by version 7 in
+        // checkpoint 12: the first index row records a later version.
+        let checkpoint_pruned = object_version(ObjectID::random(), 6, TransactionDigest::random());
+        write(&checkpoint_pruned);
+        index(checkpoint_pruned.id(), 6, LAST_PRUNED + 2);
+        let rewritten_after = ObjectID::random();
+        write(&object_version(
+            rewritten_after,
+            3,
+            TransactionDigest::random(),
+        ));
+        write(&object_version(
+            rewritten_after,
+            7,
+            TransactionDigest::random(),
+        ));
+        index(rewritten_after, 7, LAST_PRUNED + 2);
+
+        index_rows.commit().unwrap();
+
+        let found = |reader: &dyn RpcStateReader, object_id, bound: u64| {
+            reader
+                .get_object_lt_or_eq_version(&object_id, SequenceNumber::from_u64(bound))
+                .unwrap()
+                .map(|object| object.version().value())
+        };
+
+        // With nothing pruned there is nothing to check, and the scan's answer stands.
+        assert_eq!(found(&with_indexes, pruned, 2), Some(1));
+
+        tables
+            .set_highest_pruned_checkpoint_without_wb(LAST_PRUNED)
+            .unwrap();
+        // 1 is below the object's version at the last pruned checkpoint.
+        assert_eq!(found(&with_indexes, pruned, 1), None);
+        assert_eq!(found(&with_indexes, pruned, 2), None);
+        assert_eq!(found(&with_indexes, pruned, 3), Some(3));
+        assert_eq!(found(&with_indexes, created.id(), 5), Some(5));
+        assert_eq!(found(&with_indexes, written_before.id(), 4), None);
+        assert_eq!(found(&with_indexes, checkpoint_unknown.id(), 6), None);
+        assert_eq!(found(&with_indexes, checkpoint_pruned.id(), 6), Some(6));
+        assert_eq!(found(&with_indexes, rewritten_after, 5), None);
+        assert_eq!(found(&with_indexes, rewritten_after, 7), Some(7));
+        assert_eq!(found(&with_indexes, mutated_after, 2), Some(2));
+        assert_eq!(found(&with_indexes, mutated_after, 5), Some(4));
+
+        // Tombstones, which `get_object_lt_or_eq_version` reads as no object. One at or above the
+        // object's version at the last pruned checkpoint is kept. With no version there, one is
+        // kept if the object's first index row is after the last pruned checkpoint and records a
+        // version at or below it, and refused if the object has no index row, or the first one
+        // records a later version.
+        let entry = |object_id, bound: u64| {
+            with_indexes
+                .find_object_or_tombstone_lt_or_eq_version(
+                    object_id,
+                    SequenceNumber::from_u64(bound),
+                )
+                .unwrap()
+                .map(|entry| match entry {
+                    ObjectOrTombstone::Object(object) => (object.version().value(), None),
+                    ObjectOrTombstone::Tombstone((_, version, digest)) => {
+                        (version.value(), Some(digest))
+                    }
+                })
+        };
+        assert_eq!(entry(deleted_after_live.id(), 2), Some((2, None)));
+        assert_eq!(
+            entry(deleted_after_live.id(), 3),
+            Some((3, Some(ObjectDigest::OBJECT_DIGEST_DELETED))),
+        );
+        assert_eq!(entry(created_and_deleted.id(), 5), Some((5, None)));
+        assert_eq!(
+            entry(created_and_deleted.id(), 6),
+            Some((6, Some(ObjectDigest::OBJECT_DIGEST_DELETED))),
+        );
+        assert_eq!(entry(deleted_unindexed, 4), None);
+        assert_eq!(entry(unwrapped_after, 5), None);
+        assert_eq!(entry(unwrapped_after, 7), Some((7, None)));
+    }
+
+    /// An uncommitted entry is newer than every version below the lower bound, so it is kept
+    /// without reading the lower bound, the indexes, or its transaction's checkpoint.
+    #[test]
+    fn uncommitted_entries_skip_the_lower_bound_check() {
+        let found = FoundObjectOrTombstone {
+            entry: ObjectOrTombstone::Object(object_version(
+                ObjectID::random(),
+                1,
+                TransactionDigest::random(),
+            )),
+            committed: false,
+        };
+        assert!(
+            !may_be_below_objects_lower_bound(
+                &found,
+                || panic!("read the lower bound"),
+                |_| panic!("read the indexes"),
+                |_| panic!("read the transaction's checkpoint"),
+                || panic!("read the first index row"),
+            )
+            .unwrap()
+        );
+    }
+
+    /// A committed tombstone with no version at the last pruned checkpoint is kept only if the
+    /// object's first index row is after that checkpoint and records a version at or below the
+    /// tombstone's.
+    #[test]
+    fn tombstones_without_a_version_at_the_last_pruned_checkpoint() {
+        let found = FoundObjectOrTombstone {
+            entry: ObjectOrTombstone::Tombstone((
+                ObjectID::random(),
+                SequenceNumber::from_u64(5),
+                ObjectDigest::OBJECT_DIGEST_DELETED,
+            )),
+            committed: true,
+        };
+        let may_be_below = |first_indexed_change: Option<(u64, u64)>| {
+            may_be_below_objects_lower_bound(
+                &found,
+                || Ok(LAST_PRUNED + 1),
+                |_| Ok(None),
+                |_| panic!("read the transaction's checkpoint"),
+                || {
+                    Ok(first_indexed_change.map(|(checkpoint, version)| {
+                        (checkpoint, SequenceNumber::from_u64(version))
+                    }))
+                },
+            )
+            .unwrap()
+        };
+        assert!(!may_be_below(Some((LAST_PRUNED + 1, 5))));
+        assert!(!may_be_below(Some((LAST_PRUNED + 1, 4))));
+        assert!(may_be_below(Some((LAST_PRUNED + 1, 6))));
+        assert!(may_be_below(Some((LAST_PRUNED, 4))));
+        assert!(may_be_below(None));
     }
 }

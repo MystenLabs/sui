@@ -28,6 +28,7 @@ use test_cluster::TestClusterBuilder;
 
 use crate::v2::assert_above_latest_available;
 use crate::v2::assert_below_earliest_available;
+use crate::v2::fullnode_highest_executed;
 use crate::v2::halt_chain;
 use crate::v2::prune_objects_below_tip;
 
@@ -213,9 +214,13 @@ async fn batch_get_objects() {
 
 /// Reads pinned to a checkpoint see the state left by the object's latest change at or before
 /// that checkpoint, through creation, mutation, wrapping, unwrapping, and deletion, and at a
-/// checkpoint in which the live object did not change.
+/// checkpoint in which the live object did not change. `max_version` reads see the newest
+/// version at or below the bound, and `NotFound` from a deletion or wrap until the object is
+/// unwrapped. `at_checkpoint` with `version` keeps that version only if it was written by the
+/// end of the checkpoint, and with `max_version` fails if the version it selects was written
+/// after the checkpoint, as Postgres does.
 #[sim_test]
-async fn get_object_at_checkpoint_lifecycle() {
+async fn get_object_lifecycle() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         // Keep every checkpoint servable; the fullnode prunes old checkpoints by default.
@@ -240,11 +245,11 @@ async fn get_object_at_checkpoint_lifecycle() {
         .0
         .0;
 
-    // Drive an object through its lifecycle, one transaction per step, recording the state each
-    // step leaves behind as (checkpoint, object, version if live). Wrapping creates a wrapper
-    // object, and unwrapping deletes it.
+    // Drive an object through its lifecycle, one transaction per step, recording each change as
+    // (checkpoint, object, version, live). `live` is false for a change that deleted or wrapped
+    // the object. Wrapping creates a wrapper object, and unwrapping deletes it.
     let sender = cluster.get_address_0();
-    let mut changes: Vec<(u64, ObjectID, Option<u64>)> = Vec::new();
+    let mut changes: Vec<(u64, ObjectID, u64, bool)> = Vec::new();
     let mut step_checkpoints = Vec::new();
 
     let (create, cp) = call_object_basics(
@@ -255,19 +260,30 @@ async fn get_object_at_checkpoint_lifecycle() {
     )
     .await;
     let object = created_object(&create);
-    changes.push((cp, object, Some(create.lamport_version().value())));
+    changes.push((cp, object, create.lamport_version().value(), true));
     step_checkpoints.push(cp);
-    // A checkpoint passes before the next step, so the object is live but unchanged in it.
-    wait_for_fullnode_checkpoint_above(&cluster, cp).await;
+    // Bump the gas coin `create` paid with in a checkpoint of its own, in which the object is live
+    // but unchanged, and pay for `set_value` with that coin, so the object skips a version between
+    // creation and the mutation.
+    let bump_tx = cluster
+        .test_transaction_builder_with_gas_object(sender, create.gas_object().unwrap().0)
+        .await
+        .transfer_sui(None, sender)
+        .build();
+    let (bump, _) = execute(&cluster, bump_tx).await;
 
-    let (set_value, cp) = call_object_basics(
-        &cluster,
-        package_id,
-        "set_value",
-        vec![owned_arg(output_ref(&create, object)), pure_arg(&8u64)],
-    )
-    .await;
-    changes.push((cp, object, Some(set_value.lamport_version().value())));
+    let set_value_tx = cluster
+        .test_transaction_builder_with_gas_object(sender, bump.gas_object().unwrap().0)
+        .await
+        .move_call(
+            package_id,
+            "object_basics",
+            "set_value",
+            vec![owned_arg(output_ref(&create, object)), pure_arg(&8u64)],
+        )
+        .build();
+    let (set_value, cp) = execute(&cluster, set_value_tx).await;
+    changes.push((cp, object, set_value.lamport_version().value(), true));
     step_checkpoints.push(cp);
 
     let (wrap, cp) = call_object_basics(
@@ -278,8 +294,8 @@ async fn get_object_at_checkpoint_lifecycle() {
     )
     .await;
     let wrapper = created_object(&wrap);
-    changes.push((cp, object, None));
-    changes.push((cp, wrapper, Some(wrap.lamport_version().value())));
+    changes.push((cp, object, wrap.lamport_version().value(), false));
+    changes.push((cp, wrapper, wrap.lamport_version().value(), true));
     step_checkpoints.push(cp);
 
     let (unwrap, cp) = call_object_basics(
@@ -289,18 +305,18 @@ async fn get_object_at_checkpoint_lifecycle() {
         vec![owned_arg(output_ref(&wrap, wrapper))],
     )
     .await;
-    changes.push((cp, object, Some(unwrap.lamport_version().value())));
-    changes.push((cp, wrapper, None));
+    changes.push((cp, object, unwrap.lamport_version().value(), true));
+    changes.push((cp, wrapper, unwrap.lamport_version().value(), false));
     step_checkpoints.push(cp);
 
-    let (_delete, cp) = call_object_basics(
+    let (delete, cp) = call_object_basics(
         &cluster,
         package_id,
         "delete",
         vec![owned_arg(output_ref(&unwrap, object))],
     )
     .await;
-    changes.push((cp, object, None));
+    changes.push((cp, object, delete.lamport_version().value(), false));
     step_checkpoints.push(cp);
 
     // Each step waits for its checkpoint before the next step is built, so every step lands in
@@ -320,43 +336,105 @@ async fn get_object_at_checkpoint_lifecycle() {
     // `at_checkpoint` reads are bounded by the rpc index's highest indexed checkpoint.
     cluster.wait_for_rpc_index_ready().await;
 
+    // The expected outcome of each read, from the changes: the live change a read selects, as
+    // (checkpoint, version), kept only if it was made by the end of the bound.
+    let changes_of = |id: ObjectID| {
+        changes
+            .iter()
+            .filter(move |(_, changed, _, _)| *changed == id)
+    };
+    let bounded = |selected: Option<&(u64, ObjectID, u64, bool)>, at_checkpoint: Option<u64>| {
+        selected
+            .filter(|&&(changed_at, _, _, live)| {
+                live && at_checkpoint.is_none_or(|bound| changed_at <= bound)
+            })
+            .map(|&(_, _, version, _)| version)
+    };
+
     // Every checkpoint from just before creation through deletion, for both objects. Checkpoints
     // between two changes resolve to the earlier change.
-    let mut cases: Vec<(Address, u64, Option<u64>)> = Vec::new();
+    let mut cases: Vec<(GetObjectRequest, Option<u64>, String)> = Vec::new();
     for checkpoint in first_cp - 1..=last_cp {
         for id in [object, wrapper] {
-            let expected_version = changes
-                .iter()
-                .rev()
-                .find(|(cp, changed, _)| *changed == id && *cp <= checkpoint)
-                .and_then(|(_, _, version)| *version);
-            cases.push((Address::from(id), checkpoint, expected_version));
+            let latest_change =
+                changes_of(id).rfind(|(changed_at, _, _, _)| *changed_at <= checkpoint);
+            cases.push((
+                at_checkpoint_request(Address::from(id), checkpoint),
+                bounded(latest_change, None),
+                format!(
+                    "Object {} at checkpoint {checkpoint} not found",
+                    Address::from(id)
+                ),
+            ));
         }
     }
 
-    // One batch covering every case twice: results come back in request order, and duplicate
-    // items each get their own result.
-    let batch_cases: Vec<_> = cases.iter().chain(cases.iter()).copied().collect();
-    let BatchGetObjectsResponse { objects, .. } = client
-        .batch_get_objects({
-            let mut message = BatchGetObjectsRequest::default();
-            message.requests = batch_cases
-                .iter()
-                .map(|&(id, checkpoint, _)| at_checkpoint_request(id, checkpoint))
-                .collect();
-            message
-        })
-        .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(objects.len(), batch_cases.len());
-    for (result, &(id, checkpoint, expected_version)) in objects.iter().zip_debug_eq(&batch_cases) {
-        assert_at_checkpoint(batch_outcome(result), id, checkpoint, expected_version);
+    // Every version from just before creation to just after deletion, read exactly and as a
+    // `max_version`, unbounded and bounded by each of those checkpoints, for both objects.
+    let versions = changes.iter().map(|&(_, _, version, _)| version);
+    let first_version = versions.clone().min().unwrap() - 1;
+    let last_version = versions.max().unwrap() + 1;
+    let bounds = std::iter::once(None).chain((first_cp - 1..=last_cp).map(Some));
+    for id in [object, wrapper] {
+        let address = Address::from(id);
+        for version in first_version..=last_version {
+            for at_checkpoint in bounds.clone() {
+                let at = at_checkpoint
+                    .map(|checkpoint| format!(" at checkpoint {checkpoint}"))
+                    .unwrap_or_default();
+                let exact = changes_of(id).find(|(_, _, changed, _)| *changed == version);
+                cases.push((
+                    selector_request(address, Some(version), None, at_checkpoint),
+                    bounded(exact, at_checkpoint),
+                    format!("Object {address} with version {version}{at} not found"),
+                ));
+                // The newest change at or below `version`, kept only if it was made by the bound.
+                let at_most = changes_of(id).rfind(|(_, _, changed, _)| *changed <= version);
+                cases.push((
+                    selector_request(address, None, Some(version), at_checkpoint),
+                    bounded(at_most, at_checkpoint),
+                    format!("Object {address} with version at most {version}{at} not found"),
+                ));
+            }
+        }
     }
+
+    // Batches covering every case twice: results come back in request order, and duplicate
+    // items each get their own result. Each batch repeats its own cases, so both copies of a
+    // case share a batch.
+    for part in cases.chunks(500) {
+        let batch: Vec<_> = part.iter().chain(part).collect();
+        let chunk = batch.as_slice();
+        let BatchGetObjectsResponse { objects, .. } = client
+            .batch_get_objects({
+                let mut message = BatchGetObjectsRequest::default();
+                message.requests = chunk
+                    .iter()
+                    .map(|(request, _, _)| request.clone())
+                    .collect();
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(objects.len(), chunk.len());
+        for (result, (request, expected, not_found)) in objects.iter().zip_debug_eq(chunk) {
+            assert_outcome(batch_outcome(result), request, *expected, not_found);
+        }
+    }
+
+    // The object skips a version between creation and the mutation, so the cases above include
+    // a `max_version` between two of its versions.
+    let (_, _, create_version, _) = changes[0];
+    let (_, _, set_value_version, _) = changes[1];
+    assert!(
+        create_version + 1 < set_value_version,
+        "no version gap: {changes:?}"
+    );
 }
 
 /// A checkpoint above the rpc index's highest indexed checkpoint is rejected rather than served
-/// from the latest state.
+/// from the latest state, including as the bound of a `version` or `max_version` read.
 #[sim_test]
 async fn get_object_at_checkpoint_not_yet_indexed() {
     let cluster = TestClusterBuilder::new()
@@ -373,11 +451,14 @@ async fn get_object_at_checkpoint_not_yet_indexed() {
 
     let id: Address = "0x5".parse().unwrap();
 
-    let error = client
-        .get_object(at_checkpoint_request(id, u64::MAX))
-        .await
-        .unwrap_err();
-    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
+    for request in [
+        at_checkpoint_request(id, u64::MAX),
+        selector_request(id, Some(1), None, Some(u64::MAX)),
+        selector_request(id, None, Some(1), Some(u64::MAX)),
+    ] {
+        let error = client.get_object(request.clone()).await.unwrap_err();
+        assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
+    }
 
     // So is an object that does not exist, rather than `NotFound`.
     let unknown = Address::from(ObjectID::random());
@@ -423,7 +504,12 @@ async fn get_object_at_checkpoint_not_yet_indexed() {
 }
 
 /// Pruning object versions through a checkpoint leaves the state at its end readable and rejects
-/// every checkpoint below it as pruned.
+/// every checkpoint below it as pruned, including as the bound of a `version` or `max_version`
+/// read. A `version` or `max_version` read of a version the prune deleted is rejected at the
+/// object lower bound, the checkpoint after the last pruned one, with or without `at_checkpoint`;
+/// a version above the object's latest is `NOT_FOUND`. So are reads of an object deleted in a
+/// pruned checkpoint, and of one that never existed, except where `at_checkpoint` decides the
+/// answer from the rpc index alone.
 #[sim_test]
 async fn get_object_at_checkpoint_below_available_floor() {
     let cluster = TestClusterBuilder::new()
@@ -439,6 +525,47 @@ async fn get_object_at_checkpoint_below_available_floor() {
     // The clock changes in every checkpoint, so the prune deletes the version each checkpoint
     // below the last pruned one ended with.
     let id: Address = "0x6".parse().unwrap();
+
+    // An object created and deleted in checkpoints the prune below covers.
+    let publish_tx = tx_builder(&cluster)
+        .await
+        .publish_examples("basics")
+        .await
+        .build();
+    let (publish, _) = execute(&cluster, publish_tx).await;
+    let package_id = publish
+        .created()
+        .into_iter()
+        .find(|(_, owner)| *owner == Owner::Immutable)
+        .expect("publish created no package")
+        .0
+        .0;
+    let sender = cluster.get_address_0();
+    let (create, _) = call_object_basics(
+        &cluster,
+        package_id,
+        "create",
+        vec![pure_arg(&7u64), pure_arg(&sender)],
+    )
+    .await;
+    let deleted = created_object(&create);
+    let (delete, delete_cp) = call_object_basics(
+        &cluster,
+        package_id,
+        "delete",
+        vec![owned_arg(output_ref(&create, deleted))],
+    )
+    .await;
+    let deleted_version = delete.lamport_version().value();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    while fullnode_highest_executed(&cluster) <= delete_cp + 1 {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for the fullnode to execute past the deletion"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
     let tip = halt_chain(&cluster).await;
     let pruned_to = tip - 1;
 
@@ -466,40 +593,136 @@ async fn get_object_at_checkpoint_below_available_floor() {
     );
     assert_at_checkpoint(outcome, id, pruned_to, Some(at_end));
     for checkpoint in [0, pruned_to - 1] {
-        let error = client
-            .get_object(at_checkpoint_request(id, checkpoint))
-            .await
-            .unwrap_err();
-        assert_below_earliest_available(&error, pruned_to);
+        for request in [
+            at_checkpoint_request(id, checkpoint),
+            selector_request(id, Some(1), None, Some(checkpoint)),
+            selector_request(id, None, Some(1), Some(checkpoint)),
+        ] {
+            let error = client.get_object(request.clone()).await.unwrap_err();
+            assert_below_earliest_available(&error, pruned_to);
+        }
     }
 
-    // Inside a batch, a pruned checkpoint fails only its own item.
+    // The version the checkpoint before the last pruned one ended with is gone, so reading it
+    // exactly or as a `max_version` fails at the object lower bound, also bounded by a checkpoint
+    // the at_checkpoint lower bound accepts. A version above the latest does not exist yet.
+    let objects_lower_bound = pruned_to + 1;
+    for request in [
+        selector_request(id, Some(before_end), None, None),
+        selector_request(id, None, Some(before_end), None),
+        selector_request(id, Some(before_end), None, Some(pruned_to)),
+        selector_request(id, None, Some(before_end), Some(pruned_to)),
+    ] {
+        let error = client.get_object(request.clone()).await.unwrap_err();
+        assert_below_earliest_available(&error, objects_lower_bound);
+    }
+    let outcome = single_outcome(
+        client
+            .get_object(selector_request(id, Some(u64::MAX), None, None))
+            .await,
+    );
+    assert_eq!(
+        outcome.unwrap_err(),
+        (
+            tonic::Code::NotFound,
+            format!("Object {id} with version {} not found", u64::MAX)
+        )
+    );
+
+    // Inside a batch, a pruned checkpoint or version fails only its own item.
     let BatchGetObjectsResponse { objects, .. } = client
         .batch_get_objects({
             let mut message = BatchGetObjectsRequest::default();
             message.requests = vec![
                 at_checkpoint_request(id, pruned_to - 1),
                 at_checkpoint_request(id, pruned_to),
+                selector_request(id, Some(before_end), None, None),
+                selector_request(id, Some(at_end), None, None),
             ];
             message
         })
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(objects.len(), 2);
-    match &objects[0].result {
-        Some(get_object_result::Result::Error(status)) => {
-            assert_below_earliest_available(status, pruned_to);
+    assert_eq!(objects.len(), 4);
+    for (item, floor) in [(0, pruned_to), (2, objects_lower_bound)] {
+        match &objects[item].result {
+            Some(get_object_result::Result::Error(status)) => {
+                assert_below_earliest_available(status, floor);
+            }
+            other => panic!("expected a per-item error, got {other:?}"),
         }
-        other => panic!("expected a per-item error, got {other:?}"),
     }
     assert_at_checkpoint(batch_outcome(&objects[1]), id, pruned_to, Some(at_end));
+    assert_eq!(batch_outcome(&objects[3]).unwrap().version, Some(at_end));
+
+    // The deletion's checkpoint is pruned. Without `at_checkpoint`, the object store has neither
+    // the deleted object's tombstone nor the version it deleted, so a `version` read of the
+    // deletion and a `max_version` read at or above it are rejected at the object lower bound, as
+    // are reads of an object that never existed. (The version the deletion replaced can still be
+    // in the execution cache's committed versions, which pruning does not touch, so it is not
+    // read here.)
+    assert!(delete_cp <= pruned_to, "{delete_cp} > {pruned_to}");
+    let deleted = Address::from(deleted);
+    let never_existed = Address::from(ObjectID::random());
+    for request in [
+        selector_request(deleted, Some(deleted_version), None, None),
+        selector_request(deleted, None, Some(deleted_version), None),
+        selector_request(deleted, None, Some(u64::MAX), None),
+        selector_request(never_existed, Some(1), None, None),
+        selector_request(never_existed, None, Some(u64::MAX), None),
+    ] {
+        let error = client.get_object(request.clone()).await.unwrap_err();
+        assert_below_earliest_available(&error, objects_lower_bound);
+    }
+    // At the last pruned checkpoint, the deleted object and the one that never existed have no
+    // live version, which `at_checkpoint` alone answers with `NOT_FOUND` whether or not the rpc
+    // index still holds the object's history.
+    for request in [
+        at_checkpoint_request(deleted, pruned_to),
+        at_checkpoint_request(never_existed, pruned_to),
+    ] {
+        let error = client.get_object(request.clone()).await.unwrap_err();
+        assert_eq!(
+            error.code(),
+            tonic::Code::NotFound,
+            "{request:?}: {error:?}"
+        );
+    }
+    // A version or `max_version` of the object that never existed is refused at that checkpoint:
+    // the fullnode pruner removes every index row of an object deleted or wrapped in a pruned
+    // checkpoint, so an object with no index row may be one whose history was pruned. (This test
+    // prunes the object store alone, so the deleted object keeps its index rows here, which no
+    // pruned fullnode does; its reads with a version are not checked.)
+    for request in [
+        selector_request(never_existed, Some(1), None, Some(pruned_to)),
+        selector_request(never_existed, None, Some(u64::MAX), Some(pruned_to)),
+    ] {
+        let error = client.get_object(request.clone()).await.unwrap_err();
+        assert_below_earliest_available(&error, objects_lower_bound);
+    }
 }
 
 /// A request for `id` as of the end of `checkpoint`, reading its id and version.
 fn at_checkpoint_request(id: Address, checkpoint: u64) -> GetObjectRequest {
     let mut request = GetObjectRequest::new(&id);
     request.at_checkpoint = Some(checkpoint);
+    request.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+    request
+}
+
+/// A request for `id` with the given `version`, `max_version` and `at_checkpoint`, reading its id
+/// and version.
+fn selector_request(
+    id: Address,
+    version: Option<u64>,
+    max_version: Option<u64>,
+    at_checkpoint: Option<u64>,
+) -> GetObjectRequest {
+    let mut request = GetObjectRequest::new(&id);
+    request.version = version;
+    request.max_version = max_version;
+    request.at_checkpoint = at_checkpoint;
     request.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
     request
 }
@@ -565,6 +788,33 @@ fn assert_at_checkpoint(
     }
 }
 
+/// Assert that `request` returned `expected_version`, or `NotFound` with the message `not_found`
+/// when there is no expected version.
+fn assert_outcome(
+    outcome: ObjectOutcome,
+    request: &GetObjectRequest,
+    expected_version: Option<u64>,
+    not_found: &str,
+) {
+    let context = format!(
+        "{:?}: version {:?}, max_version {:?}, at_checkpoint {:?}",
+        request.object_id, request.version, request.max_version, request.at_checkpoint,
+    );
+    match (outcome, expected_version) {
+        (Ok(object), Some(version)) => {
+            assert_eq!(object.object_id, request.object_id, "{context}");
+            assert_eq!(object.version, Some(version), "{context}");
+        }
+        (Err((code, message)), None) => {
+            assert_eq!(code, tonic::Code::NotFound, "{context}: {message}");
+            assert_eq!(message, not_found, "{context}");
+        }
+        (outcome, expected_version) => {
+            panic!("{context}: expected version {expected_version:?}, got {outcome:?}")
+        }
+    }
+}
+
 /// A transaction builder for address 0, paying with one of its current gas coins.
 async fn tx_builder(cluster: &TestCluster) -> TestTransactionBuilder {
     let sender = cluster.get_address_0();
@@ -577,28 +827,6 @@ async fn tx_builder(cluster: &TestCluster) -> TestTransactionBuilder {
     cluster
         .test_transaction_builder_with_gas_object(sender, gas)
         .await
-}
-
-/// Wait until the fullnode has executed a checkpoint above `checkpoint`.
-async fn wait_for_fullnode_checkpoint_above(cluster: &TestCluster, checkpoint: u64) {
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    loop {
-        let highest_executed = cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("db error")
-                .unwrap_or(0)
-        });
-        if highest_executed > checkpoint {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for the fullnode to execute a checkpoint above {checkpoint}"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
 }
 
 /// Sign and execute `tx_data` as address 0, wait for it to be checkpointed, and return its

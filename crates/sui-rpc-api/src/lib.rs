@@ -45,7 +45,6 @@ pub use reader::AtCheckpointUpperBound;
 pub use reader::NotReadyCause;
 pub use reader::NotServedHereCause;
 pub use reader::TransactionNotFoundError;
-pub use reader::checkpoint_not_yet_indexed_error;
 pub use reader::not_ready;
 pub use reader::not_served_here;
 pub use sui_rpc::proto;

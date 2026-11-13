@@ -314,6 +314,28 @@ impl ServiceManager {
         RpcStoreReader::new(self.db.clone(), self.schema.clone())
     }
 
+    /// Record every embedded-indexer pipeline as having committed `checkpoint`, so tests can serve
+    /// checkpoint-pinned reads above the fork checkpoint without running the indexer.
+    #[cfg(test)]
+    pub(crate) fn set_indexed_checkpoint_for_testing(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> anyhow::Result<()> {
+        let framework = FrameworkSchema::new(self.db.clone());
+        let watermark = sui_consistent_store::Watermark::for_checkpoint(checkpoint);
+        let mut batch = self.db.batch();
+        for pipeline in FORK_INDEXER_PIPELINES {
+            batch.put(
+                &framework.watermarks,
+                &PipelineTaskKey::new(*pipeline),
+                &watermark,
+            )?;
+        }
+        batch
+            .commit()
+            .context("failed to record the indexed checkpoint")
+    }
+
     /// Return a [`LocalStore`] handle over the same rpc-store, pinned at the fork checkpoint. Cheap
     /// to call, because the underlying db and schema are shared.
     pub(crate) fn local_store(&self) -> LocalStore {

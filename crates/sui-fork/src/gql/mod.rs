@@ -49,17 +49,21 @@ pub(crate) struct ObjectKey {
     pub(crate) version_query: VersionQuery,
 }
 
-/// Version rule for an object query.
+/// Version rule for an object query. Every rule is pinned at a checkpoint, so that post-fork
+/// state on the live network cannot answer a read inside the fork.
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum VersionQuery {
-    /// Request the highest version of the object at or below the given version.
-    RootVersion(u64),
-
     /// Request the object as of the given checkpoint. Useful when the version is unknown.
     AtCheckpoint(u64),
 
     /// Request an exact version, but only if it existed by the given checkpoint.
     VersionAtCheckpoint { version: u64, checkpoint: u64 },
+
+    /// Request the highest version of the object at or below `root_version`, but only if that
+    /// version existed by the given checkpoint and is not a deletion or wrap. It does not fall
+    /// back to an older version when the highest one was created after the checkpoint.
+    RootVersionAtCheckpoint { root_version: u64, checkpoint: u64 },
 }
 
 /// The `ObjectRead` trait is used to retrieve objects by their keys, with different query options.

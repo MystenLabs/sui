@@ -816,6 +816,156 @@ async fn test_lt_or_eq_with_cached_tombstone() {
     .await;
 }
 
+/// `find_object_or_tombstone_lt_or_eq_version_unlocked` returns the newest entry at or below the
+/// bound, live or a tombstone, and whether it was committed, whether the versions are
+/// uncommitted, committed, or only in the store, whichever way the store read treats range
+/// deletions, and fills no cache. With a wrap at 5 committed, and the object unwrapped at 7,
+/// wrapped at 9 and unwrapped at 11 not yet committed, a bound of 10 finds the wrap at 9, not the
+/// committed one at 5. An object whose latest entry is its deletion returns that tombstone for
+/// every bound at or above it. For live entries it agrees with `find_object_lt_or_eq_version`.
+#[tokio::test]
+async fn test_object_or_tombstone_lt_or_eq_unlocked() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        // Created at 1, mutated to 4, wrapped at 5, unwrapped at 7, mutated to 8, wrapped at 9,
+        // and unwrapped at 11.
+        s.with_created(&[1]);
+        let created = s.do_tx().await;
+        s.with_mutated_version_delta(&[1], 3);
+        let mutated = s.do_tx().await;
+        s.with_wrapped(&[1]);
+        let wrapped = s.do_tx().await;
+        s.with_mutated_version_delta(&[1], 3);
+        let unwrapped = s.do_tx().await;
+        s.with_mutated(&[1]);
+        let mutated_again = s.do_tx().await;
+        s.with_wrapped(&[1]);
+        let wrapped_again = s.do_tx().await;
+        s.with_mutated_version_delta(&[1], 3);
+        let unwrapped_again = s.do_tx().await;
+        // A second object, created at 1 and deleted at 2.
+        s.with_created(&[2]);
+        let created_second = s.do_tx().await;
+        let deleted_id = s.obj_id(2);
+        s.with_deleted(&[2]);
+        let deleted = s.do_tx().await;
+
+        // Each bound's newest entry: its version, and whether it is live.
+        let expected = |bound: u64| match bound {
+            0 => None,
+            1..=3 => Some((1, true)),
+            4 => Some((4, true)),
+            5 | 6 => Some((5, false)),
+            7 => Some((7, true)),
+            8 => Some((8, true)),
+            9 | 10 => Some((9, false)),
+            _ => Some((11, true)),
+        };
+        // `committed_through`: the highest version of the first object committed so far. The
+        // second object's versions are committed with the first one's last.
+        let check = |s: &Scenario, committed_through: u64| {
+            let id = s.obj_id(1);
+            let find = |object_id, version| {
+                let found = s
+                    .cache()
+                    .find_object_or_tombstone_lt_or_eq_version_unlocked(object_id, version);
+                if let Some(found) = &found {
+                    let found_version = match &found.entry {
+                        ObjectOrTombstone::Object(object) => object.version(),
+                        ObjectOrTombstone::Tombstone((_, version, _)) => *version,
+                    };
+                    let committed = if object_id == id {
+                        found_version.value() <= committed_through
+                    } else {
+                        committed_through == u64::MAX
+                    };
+                    assert_eq!(found.committed, committed, "{found:?}");
+                }
+                found.map(|found| found.entry)
+            };
+            for bound in 0..=12 {
+                let version = SequenceNumber::from_u64(bound);
+                let entry = match find(id, version) {
+                    Some(ObjectOrTombstone::Object(object)) => {
+                        Some((object.version().value(), true))
+                    }
+                    Some(ObjectOrTombstone::Tombstone((tombstone_id, removed_at, digest))) => {
+                        assert_eq!(tombstone_id, id);
+                        assert!(digest.is_wrapped(), "{digest:?}");
+                        Some((removed_at.value(), false))
+                    }
+                    None => None,
+                };
+                assert_eq!(entry, expected(bound), "bound {bound}");
+                // Execution's lookup reads the same entry, and a tombstone as no object.
+                assert_eq!(
+                    s.cache()
+                        .find_object_lt_or_eq_version(id, version)
+                        .map(|object| object.version().value()),
+                    entry.filter(|&(_, live)| live).map(|(version, _)| version),
+                    "bound {bound}"
+                );
+            }
+
+            for bound in 0..=4 {
+                let version = SequenceNumber::from_u64(bound);
+                let entry = find(deleted_id, version);
+                match bound {
+                    0 => assert!(entry.is_none(), "{entry:?}"),
+                    1 => assert!(
+                        matches!(&entry, Some(ObjectOrTombstone::Object(object))
+                            if object.version().value() == 1),
+                        "{entry:?}"
+                    ),
+                    _ => assert!(
+                        matches!(
+                            entry,
+                            Some(ObjectOrTombstone::Tombstone(tombstone))
+                                if tombstone == (
+                                    deleted_id,
+                                    SequenceNumber::from_u64(2),
+                                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                                )
+                        ),
+                        "bound {bound}: {entry:?}"
+                    ),
+                }
+            }
+        };
+
+        check(&s, 0);
+        for tx in [created, mutated, wrapped] {
+            s.commit(tx).await.unwrap();
+        }
+        check(&s, 5);
+        for tx in [
+            unwrapped,
+            mutated_again,
+            wrapped_again,
+            unwrapped_again,
+            created_second,
+            deleted,
+        ] {
+            s.commit(tx).await.unwrap();
+        }
+        check(&s, u64::MAX);
+
+        // From the store alone, whose newest row at or below the bound can be a tombstone. The
+        // lookup fills no cache.
+        s.reset_cache();
+        for id in [s.obj_id(1), deleted_id] {
+            for bound in 0..=12 {
+                s.cache()
+                    .find_object_or_tombstone_lt_or_eq_version_unlocked(id, bound.into());
+            }
+            assert!(!s.cache.object_by_id_cache.contains_key(&id));
+            assert!(s.cache.cached.object_cache.get(&id).is_none());
+        }
+        check(&s, u64::MAX);
+    })
+    .await;
+}
+
 #[sim_test]
 async fn test_write_transaction_outputs_is_sync() {
     telemetry_subscribers::init_for_testing();

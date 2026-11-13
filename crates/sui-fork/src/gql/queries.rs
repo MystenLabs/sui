@@ -1436,31 +1436,52 @@ pub(crate) mod object_query {
         let mut results: Vec<Option<Option<(Object, u64)>>> = vec![None; keys.len()];
         let mut standard_indices: Vec<usize> = Vec::with_capacity(keys.len());
         let mut standard_keys: Vec<ObjectKey> = Vec::with_capacity(keys.len());
-        // Exact versions pinned at a checkpoint go through a checkpoint-scoped
-        // multi-get instead, so they batch too; grouped by checkpoint because
-        // the pin lives on the query rather than on each key.
+        // Keys with an exact version or a root version go through a checkpoint-scoped multi-get,
+        // grouped by checkpoint because the pin lives on the query rather than on each key.
+        // `AtCheckpoint` keys carry their checkpoint on the key, so they go through the plain one.
         let mut pinned: BTreeMap<u64, (Vec<usize>, Vec<ObjectKey>)> = BTreeMap::new();
 
-        for (idx, key) in keys.iter().cloned().enumerate() {
-            match key.version_query {
+        for (idx, key) in keys.iter().enumerate() {
+            let address = SuiAddress(key.object_id.to_string());
+            let (checkpoint, scoped_key) = match key.version_query {
+                VersionQuery::AtCheckpoint(checkpoint) => {
+                    standard_indices.push(idx);
+                    standard_keys.push(ObjectKey {
+                        address,
+                        version: None,
+                        root_version: None,
+                        at_checkpoint: Some(checkpoint),
+                    });
+                    continue;
+                }
                 VersionQuery::VersionAtCheckpoint {
                     version,
                     checkpoint,
-                } => {
-                    let (indices, keys) = pinned.entry(checkpoint).or_default();
-                    indices.push(idx);
-                    keys.push(ObjectKey {
-                        address: SuiAddress(key.object_id.to_string()),
+                } => (
+                    checkpoint,
+                    ObjectKey {
+                        address,
                         version: Some(version),
                         root_version: None,
                         at_checkpoint: None,
-                    });
-                }
-                _ => {
-                    standard_indices.push(idx);
-                    standard_keys.push(ObjectKey::from(key));
-                }
-            }
+                    },
+                ),
+                VersionQuery::RootVersionAtCheckpoint {
+                    root_version,
+                    checkpoint,
+                } => (
+                    checkpoint,
+                    ObjectKey {
+                        address,
+                        version: None,
+                        root_version: Some(root_version),
+                        at_checkpoint: None,
+                    },
+                ),
+            };
+            let (indices, keys) = pinned.entry(checkpoint).or_default();
+            indices.push(idx);
+            keys.push(scoped_key);
         }
 
         for (checkpoint, (indices, keys)) in pinned {
@@ -1510,13 +1531,14 @@ pub(crate) mod object_query {
             .collect())
     }
 
-    /// Fetch exact object versions, each returned only if it already existed at `checkpoint`.
+    /// Fetch objects by exact version or root version, each returned only if the version found
+    /// already existed at `checkpoint`.
     ///
     /// The checkpoint pins the *query scope* rather than each key, which is what lets these batch:
     /// `multiGetObjects` rejects a key carrying more than one bound, so a key with both a version
     /// and an `atCheckpoint` cannot be sent. Scoping instead keeps the guard intact — a scoped
-    /// exact-version read resolves through `Object::at_version`, which drops any version created
-    /// after the checkpoint in scope, so post-fork state still cannot leak into a diverged fork.
+    /// read drops any version created after the checkpoint in scope, without falling back to an
+    /// older one, so post-fork state still cannot leak into a diverged fork.
     async fn query_versions_at_checkpoint(
         keys: Vec<ObjectKey>,
         checkpoint: u64,
@@ -1574,75 +1596,136 @@ pub(crate) mod object_query {
         }
     }
 
-    impl From<GqlObjectKey> for ObjectKey {
-        fn from(key: GqlObjectKey) -> Self {
-            ObjectKey {
-                address: SuiAddress(key.object_id.to_string()),
-                version: match key.version_query {
-                    VersionQuery::VersionAtCheckpoint {
-                        version,
-                        checkpoint,
-                    } => Some(version),
-                    _ => None,
-                },
-                root_version: match key.version_query {
-                    VersionQuery::RootVersion(v) => Some(v),
-                    _ => None,
-                },
-                at_checkpoint: match key.version_query {
-                    VersionQuery::AtCheckpoint(v) => Some(v),
-                    VersionQuery::VersionAtCheckpoint {
-                        version,
-                        checkpoint,
-                    } => Some(checkpoint),
-                    _ => None,
-                },
-            }
-        }
-    }
-
     #[cfg(test)]
     mod tests {
-        use sui_types::base_types::ObjectID;
-
         use super::*;
-
-        #[test]
-        fn object_key_from_version_query_sets_only_selected_bound() {
-            let object_id = ObjectID::random();
-
-            let root_version_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::RootVersion(11),
-            });
-            assert_eq!(root_version_key.version, None);
-            assert_eq!(root_version_key.root_version, Some(11));
-            assert_eq!(root_version_key.at_checkpoint, None);
-
-            let checkpoint_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::AtCheckpoint(19),
-            });
-            assert_eq!(checkpoint_key.version, None);
-            assert_eq!(checkpoint_key.root_version, None);
-            assert_eq!(checkpoint_key.at_checkpoint, Some(19));
-
-            let object_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::VersionAtCheckpoint {
-                    version: 23,
-                    checkpoint: 29,
-                },
-            });
-            assert_eq!(object_key.version, Some(23));
-            assert_eq!(object_key.root_version, None);
-            assert_eq!(object_key.at_checkpoint, Some(29));
-        }
 
         #[test]
         fn decode_object_fragment_returns_none_for_missing_object() {
             assert_eq!(decode_object_fragment(None).unwrap(), None);
         }
+    }
+}
+
+/// The effects of the last transaction that changed an object by a checkpoint.
+pub(crate) mod object_last_change_query {
+    use sui_types::base_types::ObjectID;
+    use sui_types::effects::TransactionEffects as NativeTransactionEffects;
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+    use super::*;
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "Base64")]
+    pub(crate) struct Base64(pub String);
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "SuiAddress")]
+    pub(crate) struct SuiAddress(pub String);
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct ObjectLastChangeArgs {
+        pub sequence_number: Option<u64>,
+        pub address: SuiAddress,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectLastChangeArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Query {
+        #[arguments(sequenceNumber: $sequence_number)]
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectLastChangeArgs",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Checkpoint {
+        query: Option<ScopedQuery>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectLastChangeArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ScopedQuery {
+        #[arguments(last: 1, filter: { affectedObject: $address })]
+        transactions: Option<TransactionConnection>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct TransactionConnection {
+        nodes: Vec<Transaction>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct Transaction {
+        effects: Option<TransactionEffects>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct TransactionEffects {
+        effects_bcs: Option<Base64>,
+    }
+
+    /// Return the effects of the last transaction that changed `object_id` (created, mutated,
+    /// unwrapped, deleted, or wrapped it) at or before `checkpoint`, or `None` if the remote holds
+    /// no such transaction.
+    ///
+    /// The remote indexes a transaction's affected objects from the object changes in its
+    /// effects, so a transaction that only read the object does not count. For an object that is
+    /// not live at `checkpoint`, the last change deleted or wrapped it, and its
+    /// `TransactionEffectsAPI::lamport_version` is the version an rpc index records for that
+    /// removal.
+    pub(crate) async fn query(
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Option<NativeTransactionEffects>, Error> {
+        let operation = Query::build(ObjectLastChangeArgs {
+            sequence_number: Some(checkpoint),
+            address: SuiAddress(object_id.to_string()),
+        });
+        let response = client.run_query(&operation).await.with_context(|| {
+            format!("failed to query the last change to {object_id} at checkpoint {checkpoint}")
+        })?;
+        let data = response.data.with_context(|| {
+            format!(
+                "missing data in the last-change query for {object_id} at checkpoint \
+                 {checkpoint}: {:?}",
+                response.errors,
+            )
+        })?;
+        let transactions = data
+            .checkpoint
+            .with_context(|| format!("checkpoint {checkpoint} not found"))?
+            .query
+            .context("missing checkpoint-scoped query in the last-change response")?
+            .transactions
+            .context("missing transactions in the last-change response")?;
+        let Some(transaction) = transactions.nodes.into_iter().next() else {
+            return Ok(None);
+        };
+        let effects_bcs = transaction
+            .effects
+            .and_then(|effects| effects.effects_bcs)
+            .with_context(|| format!("the last change to {object_id} is missing its effects"))?;
+        let bytes = FastCryptoBase64::decode(&effects_bcs.0)
+            .map_err(|e| anyhow!("failed to decode the last change to {object_id}: {e}"))?;
+        let effects = bcs::from_bytes(&bytes).with_context(|| {
+            format!("failed to deserialize the effects of the last change to {object_id}")
+        })?;
+        Ok(Some(effects))
     }
 }
 

@@ -137,3 +137,72 @@ fn ledger_indexes_delegate_to_rpc_store() {
         .expect("event bitmap iterator should decode rows");
     assert!(event_bitmap_rows.is_empty());
 }
+
+/// The RPC trait's `get_object_lt_or_eq_version`, which serves `GetObject`'s `max_version`,
+/// returns the newest version at or below each bound from the fork's own writes, and `None` where
+/// the newest one is a removal, both while a write is staged and once its checkpoint seals. A
+/// bound below every local version would fall back to the remote.
+#[test]
+fn object_lt_or_eq_version_stops_at_removals() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let services = ServiceManager::open(
+        temp.path(),
+        "custom".to_owned(),
+        0,
+        CheckpointDigest::new([9; 32]).into(),
+    )
+    .expect("service manager should open");
+    let mut store = ForkStore::new_for_testing(temp.path().to_path_buf(), services.local_store());
+
+    let id = ObjectID::random();
+    let live = |version: u64| {
+        Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(version),
+            sui_types::object::Owner::AddressOwner(SuiAddress::ZERO),
+        )
+    };
+    let bounds = [1, 2, 3, 4, u64::MAX];
+    let assert_reads = |store: &ForkStore, expected: [Option<u64>; 5], state: &str| {
+        for (bound, expected) in bounds.into_iter().zip_eq(expected) {
+            let found = RpcStateReader::get_object_lt_or_eq_version(
+                store,
+                &id,
+                SequenceNumber::from_u64(bound),
+            )
+            .expect("local versions should answer without the remote")
+            .map(|object| object.version().value());
+            assert_eq!(found, expected, "at or below version {bound} while {state}");
+        }
+    };
+
+    // Created at 1, wrapped at 3, and unwrapped at 4, each in its own checkpoint.
+    let steps = [
+        (BTreeMap::from([(id, live(1))]), vec![], [Some(1); 5]),
+        (
+            BTreeMap::new(),
+            vec![ObjectRemoval {
+                object_id: id,
+                version: SequenceNumber::from_u64(3),
+                kind: TombstoneKind::Wrapped,
+            }],
+            [Some(1), Some(1), None, None, None],
+        ),
+        (
+            BTreeMap::from([(id, live(4))]),
+            vec![],
+            [Some(1), Some(1), None, Some(4), Some(4)],
+        ),
+    ];
+    for (sequence, (written, removed, expected)) in (1..=3).zip_eq(steps) {
+        store
+            .apply_object_updates(written, removed)
+            .expect("update should stage");
+        assert_reads(&store, expected, "staged");
+
+        let checkpoint = TestCheckpointBuilder::new(sequence).build_checkpoint();
+        store.insert_checkpoint(VerifiedCheckpoint::new_unchecked(checkpoint.summary));
+        store.insert_checkpoint_contents(checkpoint.contents);
+        assert_reads(&store, expected, "sealed");
+    }
+}
