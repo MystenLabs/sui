@@ -1245,6 +1245,7 @@ mod test {
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
     ) -> TestClusterBuilder {
+        ProtocolConfig::enable_small_checkpoint_tx_limits_in_tests();
         let mut builder = TestClusterBuilder::new()
             .with_num_validators(get_var(
                 "SIM_STRESS_TEST_NUM_VALIDATORS",

@@ -2691,6 +2691,7 @@ impl ProtocolConfig {
 }
 
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+static SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS: AtomicBool = AtomicBool::new(false);
 
 // Instantiations for each protocol version.
 impl ProtocolConfig {
@@ -2745,6 +2746,12 @@ impl ProtocolConfig {
 
     pub fn poison_get_for_min_version() {
         POISON_VERSION_METHODS.store(true, Ordering::Relaxed);
+    }
+
+    /// Lets apply_seeded_test_overrides pick checkpoint transaction limits of 2-3. Tests that
+    /// assume a commit lands in one checkpoint must not call this.
+    pub fn enable_small_checkpoint_tx_limits_in_tests() {
+        SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.store(true, Ordering::Relaxed);
     }
 
     fn load_poison_get_for_min_version() -> bool {
@@ -5116,13 +5123,19 @@ impl ProtocolConfig {
 
         use rand::{Rng, SeedableRng, rngs::StdRng};
         let mut rng = StdRng::from_seed(*seed);
+        // This draw must stay first: in upgrade tests, binaries from older releases make only
+        // this draw, and every validator must derive the same limit from the epoch digest.
+        let mut max_txns = rng.gen_range(10..=100u64);
         // Caps of 2-3 put ordinary simtest load above max_tx per min_checkpoint_interval_ms,
         // so most commits force a flush. Production reaches that regime only at high TPS.
-        let max_txns = if rng.gen_bool(0.25) {
-            rng.gen_range(2..=3u64)
-        } else {
-            rng.gen_range(10..=100u64)
-        };
+        // Older versions restart the checkpoint interval on a forced flush, and at these caps
+        // their checkpoint queue would never drain.
+        if self.feature_flags.checkpoint_interval_ignores_forced_flush
+            && SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed)
+            && rng.gen_bool(0.25)
+        {
+            max_txns = rng.gen_range(2..=3u64);
+        }
         info!("seeded test override: max_transactions_per_checkpoint = {max_txns}");
         self.max_transactions_per_checkpoint = Some(max_txns);
     }
