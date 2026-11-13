@@ -15,25 +15,25 @@ task 1, lines 11-17:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6171200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 6171200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 19-26:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6543600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 6543600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 28-36:
 //# upgrade --package DepV2 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6961600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 6961600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 4, lines 38-41:
 //# publish --sender A
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1031000000, storage_cost: 3420000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 43-47:
 //# programmable --sender A --inputs 2u64
