@@ -15,6 +15,7 @@ use move_core_types::language_storage::StructTag;
 use sui_consistent_store::Encode;
 use sui_consistent_store::reader::Reader;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::BalanceInfo;
@@ -391,6 +392,16 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             .map_err(sui_types::storage::error::Error::custom)
     }
 
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> StorageResult<Option<SequenceNumber>> {
+        self.schema()
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
@@ -404,6 +415,10 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         // pipeline has no watermark yet: nothing is fully indexed,
         // so nothing is served (fail closed).
         self.min_committed(self.pipelines.iter().copied())
+    }
+
+    fn is_history_backfill_pending(&self) -> StorageResult<bool> {
+        crate::history_backfill_pending(self.db()).map_err(sui_types::storage::error::Error::custom)
     }
 
     fn get_highest_live_indexed_checkpoint_seq_number(

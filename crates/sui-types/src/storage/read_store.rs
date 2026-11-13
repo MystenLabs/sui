@@ -720,6 +720,31 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     /// available.
     fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber>;
 
+    /// Whether this store keeps an object's versions after later transactions replace them, up
+    /// to [`Self::get_lowest_available_checkpoint_objects`]. Reads of an object as of a past
+    /// checkpoint need them. `false` on nodes that run the tidehunter objects compactor, which
+    /// keeps only each object's latest version and never raises that lower bound.
+    fn retains_object_version_history(&self) -> bool {
+        true
+    }
+
+    /// The first checkpoint the rpc indexes have history for.
+    ///
+    /// The indexes record each change made at or above this checkpoint with the checkpoint that
+    /// made it. Rows a store loads from a live-object snapshot instead (an object's restore
+    /// floor, or a package version with no publish checkpoint) hold the state at the end of the
+    /// checkpoint before this one, with no record of when that state began. So a listing of
+    /// indexed changes is complete only from this checkpoint, and a read of the indexes as of a
+    /// checkpoint is exact only from the checkpoint before it.
+    ///
+    /// Defaults to `0`, for indexes built from genesis and for a node that backfills index
+    /// history down to its lowest available checkpoint: the availability floors already bound
+    /// reads there. A store that never backfills, such as a fork seeded at a checkpoint, reports
+    /// the first checkpoint it indexed itself.
+    fn get_lowest_checkpoint_with_index_history(&self) -> Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
     fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
 
     // Get a handle to an instance of the RpcIndexes
@@ -832,8 +857,32 @@ pub trait RpcIndexes: Send + Sync {
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Option<(u64, ObjectID)>>;
 
+    /// Resolve the version `object_id` had as of the end of `checkpoint`:
+    /// the version recorded by the latest checkpoint at or before
+    /// `checkpoint` that changed the object. That version may be a
+    /// deletion or wrapping tombstone, which has no live object behind it.
+    /// `None` if the object did not exist as of `checkpoint`.
+    ///
+    /// The caller must confirm `checkpoint` is within the index's available
+    /// range, and that [`Self::is_history_backfill_pending`] is `false`; this
+    /// method assumes both.
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<SequenceNumber>>;
+
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
+
+    /// Whether a restore left the checkpoint-pinned indexes behind
+    /// [`Self::get_object_version_at_checkpoint`] and
+    /// [`Self::get_package_at_checkpoint`] still backfilling history below the
+    /// restore checkpoint. While it has, those reads can be wrong at any
+    /// checkpoint the indexes cover, not just above the indexed tip, or the
+    /// indexed tip lies far below the restored live state, so callers must not
+    /// serve them.
+    fn is_history_backfill_pending(&self) -> Result<bool>;
 
     /// The highest checkpoint the live-object cohort -- the indexes derivable
     /// from the live object set (owned objects, types, and balances) -- has
