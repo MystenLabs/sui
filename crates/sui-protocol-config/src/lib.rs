@@ -436,6 +436,7 @@ const MAINNET_USDB: &str =
 //              Configure explicit Move binary format encoding limits.
 //              Enable defer_owned_object_double_spend on all networks.
 // Version 143: Add and enable a new execution version.
+//              Simplify Nitro attestation header validation.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -742,6 +743,11 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation to always include required PCRs, even when all zeros.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_always_include_required_pcrs_parsing: bool,
+
+    // Require an empty unprotected header and validate the protected header's exact shape.
+    // Reject trailing CBOR bytes and indefinite-length byte strings.
+    #[serde(skip_serializing_if = "is_false")]
+    simplify_nitro_header_validation: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -5018,6 +5024,7 @@ impl ProtocolConfig {
                 143 => {
                     cfg.execution_version = Some(5);
                     cfg.package_arena_size_in_bytes = Some(20_000_000);
+                    cfg.feature_flags.simplify_nitro_header_validation = true;
                 }
                 // Use this template when making changes:
                 //

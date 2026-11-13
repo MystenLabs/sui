@@ -53,6 +53,12 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_nitro_attestation())
 }
 
+fn simplify_nitro_header_validation(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .simplify_nitro_header_validation())
+}
+
 pub fn load_nitro_attestation_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -86,6 +92,7 @@ pub fn load_nitro_attestation_internal(
         /* is_upgraded */ true,
         /* include_all_nonzero_pcrs */ true,
         /* always_include_required_pcrs */ true,
+        simplify_nitro_header_validation(context)?,
     ) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();

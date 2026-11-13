@@ -16813,6 +16813,7 @@ dependencies = [
  "bytes",
  "chrono",
  "ciborium",
+ "ciborium-ll",
  "consensus-config",
  "consensus-types",
  "coset",

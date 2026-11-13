@@ -93,19 +93,54 @@ impl From<NitroAttestationVerifyError> for SuiError {
     }
 }
 
+fn decode_cbor(bytes: &[u8], strict: bool) -> Result<Value, String> {
+    let mut remaining = bytes;
+    let value = ciborium::de::from_reader(&mut remaining).map_err(|e| e.to_string())?;
+    if !strict {
+        return Ok(value);
+    }
+    if !remaining.is_empty() {
+        return Err("trailing bytes after CBOR value".to_string());
+    }
+
+    // Ciborium combines segmented byte strings, so inspect the original encoding.
+    // Decoding above has already established CBOR structural validity.
+    let mut remaining = bytes;
+    while !remaining.is_empty() {
+        let header = ciborium_ll::Decoder::from(&mut remaining)
+            .pull()
+            .map_err(|e| format!("invalid CBOR header: {e:?}"))?;
+        match header {
+            ciborium_ll::Header::Bytes(None) => {
+                return Err("indefinite-length byte strings are not allowed".to_string());
+            }
+            ciborium_ll::Header::Bytes(Some(len)) | ciborium_ll::Header::Text(Some(len)) => {
+                remaining = remaining
+                    .get(len..)
+                    .ok_or_else(|| "truncated CBOR string".to_string())?;
+            }
+            _ => {}
+        }
+    }
+    Ok(value)
+}
+
 /// Given an attestation in bytes, parse it into signature, signed message and a parsed payload.
 pub fn parse_nitro_attestation(
     attestation_bytes: &[u8],
     is_upgraded_parsing: bool,
     include_all_nonzero_pcrs: bool,
     always_include_required_pcrs: bool,
+    simplify_nitro_header_validation: bool,
 ) -> SuiResult<(Vec<u8>, Vec<u8>, AttestationDocument)> {
-    let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
+    let cose_sign1 =
+        CoseSign1::parse_and_validate(attestation_bytes, simplify_nitro_header_validation)?;
     let doc = AttestationDocument::parse_payload(
         &cose_sign1.payload,
         is_upgraded_parsing,
         include_all_nonzero_pcrs,
         always_include_required_pcrs,
+        simplify_nitro_header_validation,
     )?;
     let msg = cose_sign1.to_signed_message()?;
     let signature = cose_sign1.signature;
@@ -124,9 +159,9 @@ pub fn verify_nitro_attestation(
     // Extract public key from cert and signature as P384.
     let signature = Signature::from_slice(signature)
         .map_err(|_| NitroAttestationVerifyError::InvalidSignature)?;
-    let cert = X509Certificate::from_der(payload.certificate.as_slice())
+    let (_, cert) = X509Certificate::from_der(payload.certificate.as_slice())
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?;
-    let pk_bytes = SubjectPublicKeyInfo::parsed(cert.1.public_key())
+    let pk_bytes = SubjectPublicKeyInfo::parsed(cert.public_key())
         .map_err(|err| NitroAttestationVerifyError::InvalidCertificate(err.to_string()))?;
 
     // Verify the signature against the public key and the message.
@@ -143,7 +178,7 @@ pub fn verify_nitro_attestation(
         }
     }
 
-    payload.verify_cert(timestamp)?;
+    payload.verify_cert(cert, timestamp)?;
     Ok(())
 }
 
@@ -283,9 +318,12 @@ impl<'de> Deserialize<'de> for CoseSign1 {
 
 impl CoseSign1 {
     /// Parse CBOR bytes into struct. Adapted from <https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs>
-    pub fn parse_and_validate(bytes: &[u8]) -> Result<Self, NitroAttestationVerifyError> {
-        let tagged_value: ciborium::value::Value = ciborium::de::from_reader(bytes)
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+    pub fn parse_and_validate(
+        bytes: &[u8],
+        simplify_nitro_header_validation: bool,
+    ) -> Result<Self, NitroAttestationVerifyError> {
+        let tagged_value = decode_cbor(bytes, simplify_nitro_header_validation)
+            .map_err(NitroAttestationVerifyError::InvalidCoseSign1)?;
 
         let (tag, value) = match tagged_value {
             ciborium::value::Value::Tag(tag, box_value) => (Some(tag), *box_value),
@@ -302,28 +340,68 @@ impl CoseSign1 {
             }
         }
 
-        // Create a buffer for serialization
-        let mut buf = Vec::new();
+        let cosesign1 = if simplify_nitro_header_validation {
+            // When enabled, validate the decoded fields directly:
+            // 1. Require an empty unprotected map.
+            // 2. Require the protected header to contain exactly {1: -35}.
+            let Value::Array(fields) = value else {
+                return Err(NitroAttestationVerifyError::InvalidCoseSign1(
+                    "expected a COSE_Sign1 array".to_string(),
+                ));
+            };
+            let fields: [Value; 4] = fields.try_into().map_err(|_| {
+                NitroAttestationVerifyError::InvalidCoseSign1(
+                    "expected four COSE_Sign1 fields".to_string(),
+                )
+            })?;
+            let [
+                Value::Bytes(protected),
+                Value::Map(unprotected),
+                Value::Bytes(payload),
+                Value::Bytes(signature),
+            ] = fields
+            else {
+                return Err(NitroAttestationVerifyError::InvalidCoseSign1(
+                    "invalid COSE_Sign1 field types".to_string(),
+                ));
+            };
+            if !unprotected.is_empty() {
+                return Err(NitroAttestationVerifyError::InvalidCoseSign1(
+                    "unprotected header must be an empty map".to_string(),
+                ));
+            }
+            Self {
+                protected,
+                unprotected: HeaderMap,
+                payload,
+                signature,
+            }
+        } else {
+            // The legacy path deserializes headers and checks for duplicate keys.
+            // Create a buffer for serialization
+            let mut buf = Vec::new();
 
-        // Serialize the value into the buffer
-        ciborium::ser::into_writer(&value, &mut buf)
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+            // Serialize the value into the buffer
+            ciborium::ser::into_writer(&value, &mut buf)
+                .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
 
-        // Deserialize the COSE_Sign1 structure from the buffer
-        let cosesign1: Self = ciborium::de::from_reader(&buf[..])
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+            // Deserialize the COSE_Sign1 structure from the buffer
+            let cosesign1: Self = ciborium::de::from_reader(&buf[..])
+                .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
 
-        // Validate protected header
-        let _: HeaderMap = ciborium::de::from_reader(cosesign1.protected.as_slice())
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+            let _: HeaderMap = ciborium::de::from_reader(cosesign1.protected.as_slice())
+                .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
 
-        cosesign1.validate_header()?;
+            cosesign1
+        };
+
+        cosesign1.validate_header(simplify_nitro_header_validation)?;
         Ok(cosesign1)
     }
 
     /// Validate protected header, payload and signature length.
-    pub fn validate_header(&self) -> Result<(), NitroAttestationVerifyError> {
-        if !(Self::is_valid_protected_header(self.protected.as_slice())
+    pub fn validate_header(&self, strict: bool) -> Result<(), NitroAttestationVerifyError> {
+        if !(Self::is_valid_protected_header(self.protected.as_slice(), strict)
             && (1..16384).contains(&self.payload.len())
             && self.signature.len() == 96)
         {
@@ -341,13 +419,17 @@ impl CoseSign1 {
     //     $ATTESTATION_DOCUMENT_CONTENT /* Attestation Document */,
     //     signature /* This is the signature */
     // )
-    fn is_valid_protected_header(bytes: &[u8]) -> bool {
+    fn is_valid_protected_header(bytes: &[u8], strict: bool) -> bool {
         let expected_key: Integer = Integer::from(1);
         let expected_val: Integer = Integer::from(-35);
-        let value: Value = match ciborium::de::from_reader(bytes) {
+        let mut remaining = bytes;
+        let value: Value = match ciborium::de::from_reader(&mut remaining) {
             Ok(v) => v,
             Err(_) => return false,
         };
+        if strict && !remaining.is_empty() {
+            return false;
+        }
         match value {
             Value::Map(vec) => match &vec[..] {
                 [(Value::Integer(key), Value::Integer(val))] => {
@@ -400,8 +482,9 @@ impl AttestationDocument {
         is_upgraded_parsing: bool,
         include_all_nonzero_pcrs: bool,
         always_include_required_pcrs: bool,
+        strict: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
-        let document_map = Self::to_map(payload, is_upgraded_parsing)?;
+        let document_map = Self::to_map(payload, is_upgraded_parsing, strict)?;
         Self::validate_document_map(
             &document_map,
             is_upgraded_parsing,
@@ -413,14 +496,14 @@ impl AttestationDocument {
     fn to_map(
         payload: &[u8],
         is_upgraded_parsing: bool,
+        strict: bool,
     ) -> Result<BTreeMap<String, Value>, NitroAttestationVerifyError> {
-        let document_data: ciborium::value::Value =
-            ciborium::de::from_reader(payload).map_err(|err| {
-                NitroAttestationVerifyError::InvalidAttestationDoc(format!(
-                    "cannot parse payload CBOR: {}",
-                    err
-                ))
-            })?;
+        let document_data = decode_cbor(payload, strict).map_err(|err| {
+            NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                "cannot parse payload CBOR: {}",
+                err
+            ))
+        })?;
 
         let document_map: BTreeMap<String, Value> = match document_data {
             ciborium::value::Value::Map(map) => {
@@ -703,12 +786,16 @@ impl AttestationDocument {
 
     /// Verify the certificate against AWS Nitro root of trust and checks expiry.
     /// Assume the cabundle is in order.
-    fn verify_cert(&self, now: u64) -> Result<(), NitroAttestationVerifyError> {
+    fn verify_cert<'a>(
+        &'a self,
+        leaf: X509Certificate<'a>,
+        now: u64,
+    ) -> Result<(), NitroAttestationVerifyError> {
         // Create chain starting with leaf cert all the way to root.
         let mut chain = Vec::with_capacity(1 + self.cabundle.len());
         chain.push(self.certificate.as_slice());
         chain.extend(self.cabundle.iter().rev().map(|cert| cert.as_slice()));
-        verify_cert_chain(&chain, now)
+        verify_cert_chain(&chain, leaf, now)
     }
 
     /// Get the length of the certificate chain.
@@ -717,7 +804,11 @@ impl AttestationDocument {
     }
 }
 /// Verify the certificate chain against the root of trust.
-fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttestationVerifyError> {
+fn verify_cert_chain<'a>(
+    cert_chain: &[&'a [u8]],
+    mut cert: X509Certificate<'a>,
+    now_ms: u64,
+) -> Result<(), NitroAttestationVerifyError> {
     let root_cert = X509Certificate::from_der(ROOT_CERTIFICATE.as_slice())
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
         .1;
@@ -730,10 +821,6 @@ fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttes
 
     // Validate the chain starting from the leaf
     for i in 0..cert_chain.len() {
-        let cert = X509Certificate::from_der(cert_chain[i])
-            .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
-            .1;
-
         // Check key usage for all certificates
         if let Ok(Some(key_usage)) = cert.key_usage() {
             if i == 0 {
@@ -821,6 +908,7 @@ fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttes
                     "certificate fails to verify".to_string(),
                 )
             })?;
+        cert = issuer_cert;
     }
 
     Ok(())

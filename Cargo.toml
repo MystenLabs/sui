@@ -718,6 +718,7 @@ p384 = { version = "0.13.0", default-features = false, features = [
   "sha384",
 ] }
 ciborium = "0.2"
+ciborium-ll = "0.2"
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e" }

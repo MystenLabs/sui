@@ -86,6 +86,7 @@ sui-sdk-types.workspace = true
 sui-rpc.workspace = true
 
 ciborium.workspace = true
+ciborium-ll.workspace = true
 x509-parser.workspace = true
 p384.workspace = true
 rustls-pki-types.workspace = true
