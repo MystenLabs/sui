@@ -68,7 +68,9 @@ sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
 sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 sui-keys.workspace = true
 sui-rpc.workspace = true
+sui-synthetic-ingestion.workspace = true
 sui-test-transaction-builder.workspace = true
+tempfile.workspace = true
 test-cluster.workspace = true
 tokio-stream.workspace = true
 url.workspace = true

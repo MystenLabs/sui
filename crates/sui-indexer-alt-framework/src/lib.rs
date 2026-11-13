@@ -89,7 +89,8 @@ pub struct TaskArgs {
     ///
     /// By default there is no task name, and watermarks are keyed only by `pipeline`.
     ///
-    /// Sequential pipelines cannot be attached to a tasked indexer.
+    /// Sequential pipelines cannot be attached to a tasked indexer, unless `--pipeline` excludes
+    /// them.
     ///
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
     /// pipeline’s pruner watermark. Requires `--reader-interval-ms`.
@@ -149,7 +150,8 @@ pub struct Indexer<S: Store> {
     ///
     /// By default there is no task name, and watermarks are keyed only by `pipeline`.
     ///
-    /// Sequential pipelines cannot be attached to a tasked indexer.
+    /// Sequential pipelines cannot be attached to a tasked indexer, unless `--pipeline` excludes
+    /// them.
     ///
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
     /// pipeline’s pruner watermark.
@@ -555,7 +557,13 @@ impl<T: SequentialStore> Indexer<T> {
         handler: H,
         config: SequentialConfig,
     ) -> anyhow::Result<()> {
-        if self.task.is_some() {
+        // A pipeline excluded by `--pipeline` is skipped by `add_pipeline` below, so it does not
+        // stop a tasked indexer from running the pipelines that are enabled.
+        let enabled = self
+            .enabled_pipelines
+            .as_ref()
+            .is_none_or(|e| e.contains(H::NAME));
+        if self.task.is_some() && enabled {
             bail!(
                 "Sequential pipelines do not support pipeline tasks. \
                 These pipelines guarantee that each checkpoint is committed exactly once and in order. \
@@ -1615,6 +1623,52 @@ mod tests {
         }
         for i in 7..16 {
             assert!(data.get(&i).is_some());
+        }
+    }
+
+    /// A sequential pipeline that `--pipeline` excludes does not stop a tasked indexer from
+    /// running its concurrent pipelines, but a tasked indexer still rejects a sequential pipeline
+    /// that is enabled, whether by name or by an empty `--pipeline` list.
+    #[tokio::test]
+    async fn test_tasked_indexer_skips_excluded_sequential_pipeline() {
+        let store = FallibleMockStore::default();
+        let tasked = |pipeline: Vec<&str>| IndexerArgs {
+            first_checkpoint: Some(0),
+            last_checkpoint: Some(4),
+            pipeline: pipeline.into_iter().map(String::from).collect(),
+            task: TaskArgs::tasked("task".to_string(), 10),
+        };
+
+        let (mut indexer, _temp_dir) = create_test_indexer(
+            store.clone(),
+            tasked(vec![MockCheckpointSequenceNumberHandler::NAME]),
+            &Registry::new(),
+            Some((5, 1)),
+        )
+        .await;
+        add_sequential(&mut indexer, SequentialHandler).await;
+        add_concurrent(&mut indexer, MockCheckpointSequenceNumberHandler).await;
+        indexer.run().await.unwrap().join().await.unwrap();
+
+        let tasked_watermark = store.watermark("test@task").unwrap();
+        assert_eq!(tasked_watermark.checkpoint_hi_inclusive, Some(4));
+        assert!(
+            store.watermark(SequentialHandler::NAME).is_none(),
+            "the excluded sequential pipeline ran"
+        );
+
+        for pipeline in [vec![SequentialHandler::NAME], vec![]] {
+            let (mut indexer, _temp_dir) =
+                create_test_indexer(store.clone(), tasked(pipeline), &Registry::new(), None).await;
+            let err = indexer
+                .sequential_pipeline(SequentialHandler, SequentialConfig::default())
+                .await
+                .unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("Sequential pipelines do not support pipeline tasks"),
+                "unexpected error: {err:#}"
+            );
         }
     }
 
