@@ -9,20 +9,25 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 Generic=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public struct Box<T: copy + drop> has drop { value: T }
-public struct NoCopy has drop {}
-public fun ping() {}
+module DepV1::m {
+    public struct Box<T: copy + drop> has drop { value: T }
+    public struct NoCopy has drop {}
+
+    public fun ping() {}
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public struct Box<T: copy + drop> has drop { value: T }
-public struct NoCopy has drop {}
-public fun ping() {}
+module DepV2::m {
+    public struct Box<T: copy + drop> has drop { value: T }
+    public struct NoCopy has drop {}
+
+    public fun ping() {}
+}
 
 //# publish --sender A
-module Generic::m;
-public fun pair<T, U>() {}
+module Generic::m {
+    public fun pair<T, U>() {}
+}
 
 //# programmable --sender A
 // Valid nested instantiation establishes the positive control.

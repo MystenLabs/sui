@@ -9,32 +9,43 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 Consumer=0x0 Wrapper=0x0 WitnessV1=0x0 WitnessV2=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public fun check(expected: u64) { assert!(expected == 1, 0) }
-public fun fail() { abort 11 }
+module DepV1::m {
+    public fun check(expected: u64) { assert!(expected == 1, 0) }
+
+    public fun fail() { abort 11 }
+}
 
 //# publish --dependencies DepV1 --sender A
-module Consumer::m;
-public fun check(expected: u64) { DepV1::m::check(expected) }
-public fun fail() { DepV1::m::fail() }
+module Consumer::m {
+    public fun check(expected: u64) { DepV1::m::check(expected) }
+
+    public fun fail() { DepV1::m::fail() }
+}
 
 //# publish --sender A
-module Wrapper::m;
-public struct Wrapper<phantom T> has key, store { id: UID }
-public fun make<T>(ctx: &mut TxContext) {
-    transfer::public_transfer(Wrapper<T> { id: object::new(ctx) }, ctx.sender())
+module Wrapper::m {
+    public struct Wrapper<phantom T> has key, store { id: UID }
+
+    public fun make<T>(ctx: &mut TxContext) {
+        transfer::public_transfer(Wrapper<T> { id: object::new(ctx) }, ctx.sender())
+    }
 }
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public struct New has drop {}
-public struct Shared has key, store { id: UID }
-// This v2-only function shifts `fail` from definition index 1 to 2.
-public fun added() {}
-public fun check(expected: u64) { assert!(expected == 2, 0) }
-public fun fail() { abort 22 }
-public fun make_shared(ctx: &mut TxContext) {
-    transfer::share_object(Shared { id: object::new(ctx) })
+module DepV2::m {
+    public struct New has drop {}
+    public struct Shared has key, store { id: UID }
+
+    // This v2-only function shifts `fail` from definition index 1 to 2.
+    public fun added() {}
+
+    public fun check(expected: u64) { assert!(expected == 2, 0) }
+
+    public fun fail() { abort 22 }
+
+    public fun make_shared(ctx: &mut TxContext) {
+        transfer::share_object(Shared { id: object::new(ctx) })
+    }
 }
 
 //# run DepV2::m::make_shared --sender A
@@ -42,15 +53,19 @@ public fun make_shared(ctx: &mut TxContext) {
 //# run Wrapper::m::make --type-args DepV2::m::New --sender A
 
 //# publish --upgradeable --dependencies DepV1 --sender A
-module WitnessV1::witness;
-public fun ping() { DepV1::m::check(1) }
+module WitnessV1::witness {
+    public fun ping() { DepV1::m::check(1) }
+}
 
 //# upgrade --package WitnessV1 --upgrade-capability 7,1 --dependencies DepV2 --sender A
-module WitnessV2::witness;
-public struct Witness has key, store { id: UID }
-public fun ping() { DepV2::m::check(2) }
-public fun make(ctx: &mut TxContext) {
-    transfer::public_transfer(Witness { id: object::new(ctx) }, ctx.sender())
+module WitnessV2::witness {
+    public struct Witness has key, store { id: UID }
+
+    public fun ping() { DepV2::m::check(2) }
+
+    public fun make(ctx: &mut TxContext) {
+        transfer::public_transfer(Witness { id: object::new(ctx) }, ctx.sender())
+    }
 }
 
 //# run WitnessV2::witness::make --sender A
