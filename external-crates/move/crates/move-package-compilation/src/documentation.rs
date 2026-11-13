@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::layout::CompiledPackageLayout;
-use anyhow::Result;
-use move_command_line_common::files::{extension_equals, find_filenames};
+use anyhow::{Context, Result};
+use move_command_line_common::files::{extension_equals, find_filenames, valid_path};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_package::SourcePackageLayout;
@@ -21,14 +21,7 @@ pub fn build_docs(
     deps: &[Symbol],
     install_dir: &Option<PathBuf>,
 ) -> Result<Vec<(String, String)>> {
-    let root_doc_templates = find_filenames(
-        &[package_root
-            .join(SourcePackageLayout::DocTemplates.path())
-            .to_string_lossy()
-            .to_string()],
-        |path| extension_equals(path, "md"),
-    )
-    .unwrap_or_else(|_| vec![]);
+    let root_doc_templates = find_root_doc_templates(package_root)?;
     let root_for_docs = if let Some(install_dir) = install_dir {
         install_dir.join(CompiledPackageLayout::Root.path())
     } else {
@@ -65,4 +58,15 @@ pub fn build_docs(
     };
     let docgen = Docgen::new(model, &doc_options);
     docgen.generate(model)
+}
+
+fn find_root_doc_templates(package_root: &Path) -> Result<Vec<String>> {
+    let path = package_root.join(SourcePackageLayout::DocTemplates.path());
+    if !valid_path(&path)
+        .with_context(|| format!("Failed to inspect doc templates at '{}'", path.display()))?
+    {
+        return Ok(vec![]);
+    }
+    find_filenames(&[&path], |path| extension_equals(path, "md"))
+        .with_context(|| format!("Failed to discover doc templates at '{}'", path.display()))
 }

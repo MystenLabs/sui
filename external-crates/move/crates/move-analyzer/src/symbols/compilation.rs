@@ -1016,7 +1016,7 @@ fn compute_mapped_files<F: MoveFlavor>(
         .unwrap_or(Edition::LEGACY);
 
     for rpkg in root_pkg.packages() {
-        for f in get_sources(rpkg.path(), build_config).unwrap() {
+        for f in get_sources(rpkg.path(), build_config)? {
             let is_dep = !rpkg.is_root();
             // dunce does a better job of canonicalization on Windows
             let fname = canonicalize_path(PathBuf::from(f.as_str()))

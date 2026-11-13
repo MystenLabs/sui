@@ -77,9 +77,28 @@ pub fn try_exists(path: impl AsRef<Path>) -> std::io::Result<bool> {
     }
 }
 
+/// Returns whether a path exists (or it is a symlink to follow)
+pub fn valid_path(path: impl AsRef<Path>) -> std::io::Result<bool> {
+    let path = path.as_ref();
+    if try_exists(path)? {
+        return std::result::Result::Ok(true);
+    }
+    match std::fs::symlink_metadata(path) {
+        std::result::Result::Ok(metadata) => {
+            std::result::Result::Ok(metadata.file_type().is_symlink())
+        }
+        std::result::Result::Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::result::Result::Ok(false)
+        }
+        std::result::Result::Err(error) => std::result::Result::Err(error),
+    }
+}
+
 /// - For each directory in `paths`, it will return all files that satisfy the predicate
 /// - Any file explicitly passed in `paths`, it will include that file in the result, regardless
 ///   of the file extension
+/// - Missing nested symlink targets and symlink loops are ignored
+/// - Other traversal errors are returned
 pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
     paths: &[impl AsRef<Path>],
     mut is_file_desired: Predicate,
@@ -98,11 +117,16 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
         if !path.is_dir() {
             continue;
         }
-        for entry in walkdir::WalkDir::new(path)
-            .follow_links(true)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry in walkdir::WalkDir::new(path).follow_links(true) {
+            let entry = match entry {
+                std::result::Result::Ok(entry) => entry,
+                std::result::Result::Err(error) if is_ignorable_walk_error(&error) => continue,
+                std::result::Result::Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("Failed to traverse source path '{}'", path.display())
+                    });
+                }
+            };
             let entry_path = entry.path();
             if !entry.file_type().is_file() || !is_file_desired(entry_path) {
                 continue;
@@ -112,6 +136,40 @@ pub fn find_filenames<Predicate: FnMut(&Path) -> bool>(
         }
     }
     Ok(result)
+}
+
+fn is_ignorable_walk_error(error: &walkdir::Error) -> bool {
+    // Broken nested symlinks and ancestor loops cannot hide files reachable by this walk.
+    if error.loop_ancestor().is_some() {
+        return true;
+    }
+    let Some(path) = error.path() else {
+        return false;
+    };
+    let Some(io_error) = error.io_error() else {
+        return false;
+    };
+    let target_is_unresolvable = matches!(
+        io_error.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    ) || is_filesystem_loop(io_error);
+    target_is_unresolvable
+        && std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
+}
+
+#[cfg(unix)]
+fn is_filesystem_loop(error: &std::io::Error) -> bool {
+    error.raw_os_error() == Some(libc::ELOOP)
+}
+
+#[cfg(windows)]
+fn is_filesystem_loop(error: &std::io::Error) -> bool {
+    error.raw_os_error() == Some(windows_sys::Win32::Foundation::ERROR_CANT_RESOLVE_FILENAME as i32)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn is_filesystem_loop(_error: &std::io::Error) -> bool {
+    false
 }
 
 /// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
@@ -238,18 +296,27 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
     let mut result = vec![];
 
     for p in paths {
-        if !try_exists_vfs(p)? {
+        let traversal_context =
+            || format!("Failed to traverse virtual source path '{}'", p.as_str());
+        if !try_exists_vfs(p).with_context(traversal_context)? {
             anyhow::bail!("No such file or directory '{}'", p.as_str())
         }
-        if p.is_file()? && is_file_desired(p) {
+        if p.is_file().with_context(traversal_context)? && is_file_desired(p) {
             result.push(p.clone());
             continue;
         }
-        if !p.is_dir()? {
+        if !p.is_dir().with_context(traversal_context)? {
             continue;
         }
-        for entry in p.walk_dir()?.filter_map(|e| e.ok()) {
-            if !entry.is_file()? || !is_file_desired(&entry) {
+        for entry in p.walk_dir().with_context(traversal_context)? {
+            let entry = match entry {
+                std::result::Result::Ok(entry) => entry,
+                std::result::Result::Err(error) if is_ignorable_vfs_error(&error) => continue,
+                std::result::Result::Err(error) => {
+                    return Err(error).with_context(traversal_context);
+                }
+            };
+            if !entry.is_file().with_context(traversal_context)? || !is_file_desired(&entry) {
                 continue;
             }
 
@@ -257,6 +324,16 @@ pub fn find_filenames_vfs<Predicate: FnMut(&VfsPath) -> bool>(
         }
     }
     Ok(result)
+}
+
+fn is_ignorable_vfs_error(error: &vfs::VfsError) -> bool {
+    match error.kind() {
+        VfsErrorKind::FileNotFound => true,
+        VfsErrorKind::IoError(error) => {
+            error.kind() == std::io::ErrorKind::NotADirectory || is_filesystem_loop(error)
+        }
+        _ => false,
+    }
 }
 
 /// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
@@ -274,7 +351,9 @@ pub fn find_move_filenames_vfs(
         let mut file_paths = vec![];
         let mut other_paths = vec![];
         for p in paths {
-            if p.is_file()? {
+            if p.is_file().with_context(|| {
+                format!("Failed to inspect virtual source path '{}'", p.as_str())
+            })? {
                 file_paths.push(p.clone());
             } else {
                 other_paths.push(p.clone());
