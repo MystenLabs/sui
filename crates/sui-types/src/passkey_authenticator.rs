@@ -236,12 +236,16 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
+        aux_verify_data: &VerifyParams,
         _zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> SuiResult
     where
         T: Serialize,
     {
+        // Deserialization parses pk with from_bytes, which accepts the compact encoding. Reject it
+        // here if the protocol requires strict keys.
+        aux_verify_data.check_secp256r1_public_key_bytes(self.pk.as_ref())?;
+
         // Check if author is derived from the public key.
         if author != SuiAddress::from(&self.get_pk()?) {
             return Err(SuiErrorKind::InvalidSignature {

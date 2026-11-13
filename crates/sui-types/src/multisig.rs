@@ -17,7 +17,6 @@ use fastcrypto::{
     error::FastCryptoError,
     hash::HashFunction,
     secp256k1::Secp256k1PublicKey,
-    secp256r1::Secp256r1PublicKey,
     traits::{EncodeDecodeBase64, ToFromBytes, VerifyingKey},
 };
 use fastcrypto_pq::mldsa65::{MLDSA65PublicKey, MLDSA65Signature};
@@ -120,6 +119,16 @@ impl AuthenticatorTrait for MultiSig {
                         .map_err(|e| SuiErrorKind::InvalidSignature {
                             error: format!("Invalid zkLogin pk in multisig: {}", e),
                         })?;
+                }
+            }
+        }
+
+        // Check every secp256r1 member, including members that did not sign, so that a committee
+        // with a key in the SEC1 compact encoding is rejected.
+        if verify_params.secp256r1_strict_public_keys {
+            for (pk, _weight) in &self.multisig_pk.pk_map {
+                if let PublicKey::Secp256r1(bytes) | PublicKey::Passkey(bytes) = pk {
+                    verify_params.check_secp256r1_public_key_bytes(&bytes.0)?;
                 }
             }
         }
@@ -231,11 +240,10 @@ impl AuthenticatorTrait for MultiSig {
                             ),
                         }.into());
                     }
-                    let pk =
-                        Secp256r1PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
-                            SuiErrorKind::InvalidSignature {
-                                error: "Invalid r1 pk bytes".to_string(),
-                            }
+                    let pk = verify_params
+                        .parse_secp256r1_public_key(subsig_pubkey.as_ref())
+                        .map_err(|_| SuiErrorKind::InvalidSignature {
+                            error: "Invalid r1 pk bytes".to_string(),
                         })?;
                     pk.verify(
                         &digest,

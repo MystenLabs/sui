@@ -436,6 +436,7 @@ const MAINNET_USDB: &str =
 //              Configure explicit Move binary format encoding limits.
 //              Enable defer_owned_object_double_spend on all networks.
 // Version 143: Add and enable a new execution version.
+//              Reject secp256r1 public keys in the SEC1 compact encoding.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -837,6 +838,11 @@ struct FeatureFlags {
     // Reject an overflowing x-coordinate r + n in `secp256r1_ecrecover` instead of wrapping it.
     #[serde(skip_serializing_if = "is_false")]
     secp256r1_ecrecover_checks_x_below_p: bool,
+
+    // Reject secp256r1 public keys in the SEC1 compact encoding (prefix 0x05) in signatures and
+    // in `ecdsa_r1::secp256r1_verify`.
+    #[serde(skip_serializing_if = "is_false")]
+    secp256r1_strict_public_keys: bool,
 
     // Use the refined transaction effects size estimate.
     #[serde(skip_serializing_if = "is_false")]
@@ -5018,6 +5024,7 @@ impl ProtocolConfig {
                 143 => {
                     cfg.execution_version = Some(5);
                     cfg.package_arena_size_in_bytes = Some(20_000_000);
+                    cfg.feature_flags.secp256r1_strict_public_keys = true;
                 }
                 // Use this template when making changes:
                 //

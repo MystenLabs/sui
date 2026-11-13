@@ -46,6 +46,7 @@ pub struct VerifyParams {
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     pub additional_multisig_checks: bool,
     pub validate_zklogin_public_identifier: bool,
+    pub secp256r1_strict_public_keys: bool,
 }
 
 impl VerifyParams {
@@ -73,6 +74,7 @@ impl VerifyParams {
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
             validate_zklogin_public_identifier,
+            secp256r1_strict_public_keys: false,
         }
     }
 
@@ -83,6 +85,51 @@ impl VerifyParams {
     pub fn with_mldsa65_in_multisig(mut self, accept: bool) -> Self {
         self.accept_mldsa65_in_multisig = accept;
         self
+    }
+
+    /// Whether secp256r1 public keys in the SEC1 compact encoding are rejected. Set from the
+    /// `secp256r1_strict_public_keys` protocol flag.
+    pub fn with_secp256r1_strict_public_keys(mut self, strict: bool) -> Self {
+        self.secp256r1_strict_public_keys = strict;
+        self
+    }
+
+    /// Parse a secp256r1 public key, rejecting the SEC1 compact encoding if
+    /// `secp256r1_strict_public_keys` is set.
+    pub fn parse_secp256r1_public_key(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Secp256r1PublicKey, FastCryptoError> {
+        if self.secp256r1_strict_public_keys {
+            Secp256r1PublicKey::from_bytes_strict(bytes)
+        } else {
+            Secp256r1PublicKey::from_bytes(bytes)
+        }
+    }
+
+    /// If `secp256r1_strict_public_keys` is set, reject `bytes` if it is a secp256r1 public key in
+    /// the SEC1 compact encoding. Bytes that are not a valid key are not rejected here, because
+    /// multisig members that do not sign are never parsed otherwise.
+    pub fn check_secp256r1_public_key_bytes(&self, bytes: &[u8]) -> SuiResult {
+        if self.secp256r1_strict_public_keys
+            && Secp256r1PublicKey::from_bytes_strict(bytes).is_err()
+            && Secp256r1PublicKey::from_bytes(bytes).is_ok()
+        {
+            return Err(SuiErrorKind::InvalidSignature {
+                error: "secp256r1 public key in the SEC1 compact encoding".to_string(),
+            }
+            .into());
+        }
+        Ok(())
+    }
+
+    /// If `signature` is a secp256r1 signature, check its public key with
+    /// [Self::check_secp256r1_public_key_bytes].
+    pub fn check_secp256r1_public_key(&self, signature: &Signature) -> SuiResult {
+        if signature.scheme() == SignatureScheme::Secp256r1 {
+            self.check_secp256r1_public_key_bytes(signature.public_key_bytes())?;
+        }
+        Ok(())
     }
 }
 
@@ -375,6 +422,7 @@ impl AuthenticatorTrait for Signature {
             }
             .into());
         }
+        verify_params.check_secp256r1_public_key(self)?;
         self.verify_secure(value, author, self.scheme())
     }
 }
