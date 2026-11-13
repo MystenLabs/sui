@@ -303,4 +303,17 @@ impl RpcStateReader for StubStore {
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
         None
     }
+
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>> {
+        Ok(self
+            .objects
+            .iter()
+            .filter(|object| object.id() == *object_id && object.version() <= version)
+            .max_by_key(|object| object.version())
+            .cloned())
+    }
 }

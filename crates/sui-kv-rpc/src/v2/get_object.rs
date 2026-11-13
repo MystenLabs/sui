@@ -15,8 +15,11 @@ use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::Object as ProtoObject;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, GetObjectResponse, GetObjectResult};
+use sui_rpc_api::AtCheckpointUpperBound;
+use sui_rpc_api::NotServedHereCause;
+use sui_rpc_api::RpcError;
 use sui_rpc_api::grpc::v2::ledger_service::{ObjectSelector, validate_get_object_requests};
-use sui_rpc_api::{NotServedHereCause, ObjectNotFoundError, RpcError, not_served_here};
+use sui_rpc_api::not_served_here;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
@@ -32,65 +35,61 @@ use crate::pipeline::{
 use crate::render::needs_only_object_id_and_version;
 use crate::render::object_to_response;
 use crate::render::object_version_to_response;
-use crate::request_cache::CacheFetcher;
+use crate::request_cache::{CacheFetcher, RequestCache};
 use crate::served_height::ServedHeight;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
 
+/// The version and status an object had at the end of a checkpoint, from the
+/// `object_versions_by_checkpoint` index: its newest version written at or before the
+/// checkpoint, including a version at which it was deleted or wrapped. `None` if the object did
+/// not exist yet.
+type VersionAtCheckpoint = Option<(SequenceNumber, ObjectStatus)>;
+
+/// Serve `GetObject`. A `max_version` read counts versions up to the served height, with or
+/// without `at_checkpoint`, so a version written above the served height, whose deletion or wrap
+/// may not be indexed yet, never answers it. Every BigTable read goes through the request's
+/// limiter.
 pub(crate) async fn get_object(
     server: &KvRpcServer,
     request: tonic::Request<GetObjectRequest>,
 ) -> Result<GetObjectResponse, RpcError> {
     let served_height = ServedHeight::of(&request);
-    let GetObjectRequest {
-        object_id,
-        version,
-        read_mask,
-        at_checkpoint,
-        ..
-    } = request.into_inner();
+    let mut request = request.into_inner();
+    let read_mask = request.read_mask.take();
     let (requests, read_mask) =
-        validate_get_object_requests(vec![(object_id, version, at_checkpoint)], read_mask)?;
+        validate_get_object_requests(std::slice::from_ref(&request), read_mask)?;
     let (address, selector) = requests[0];
     let object_id: ObjectID = address.into();
-    let version_only = needs_only_object_id_and_version(&read_mask);
     let client = server.limited_client("GetObject");
+    // Both checks fail the request whatever the object's state, so they come before the reads.
+    let at_checkpoint_reads = if selector.needs_object_version_history() {
+        Some(Arc::new(
+            server.at_checkpoint_reads(client.clone(), served_height)?,
+        ))
+    } else {
+        None
+    };
     let objects = ObjectReads {
-        client: client.clone(),
-        version_only,
+        client,
+        version_only: needs_only_object_id_and_version(&read_mask),
     };
-    let found = match selector {
-        ObjectSelector::Latest => objects
-            .latest(object_id)
-            .await?
-            .ok_or_else(|| ObjectNotFoundError::new(address))?,
-        ObjectSelector::Version(version) => objects
-            .exact(ObjectKey(object_id, version.into()))
-            .await?
-            .ok_or_else(|| ObjectNotFoundError::new_with_version(address, version))?,
-        ObjectSelector::AtCheckpoint(checkpoint) => {
-            let at_checkpoint = server.at_checkpoint_reads(client, served_height)?;
-            if checkpoint > at_checkpoint.served_height.checkpoint {
-                return Err(not_yet_indexed(checkpoint, at_checkpoint.served_height));
-            }
-            let not_found = || ObjectNotFoundError::new_at_checkpoint(address, checkpoint);
-            let version = at_checkpoint
-                .live_version_at_checkpoint(object_id, checkpoint)
+    let answer = match first_step(object_id, selector, at_checkpoint_reads.as_ref()) {
+        FirstStep::Answer(answer) => answer,
+        FirstStep::Scan(scan) => scan.run(&objects).await?,
+    };
+    let found = match answer {
+        ObjectsStageInput::RequestedRow(key) => objects.exact(key).await?,
+        ObjectsStageInput::IndexedRow(key) => Some(
+            objects
+                .exact(key)
                 .await?
-                .ok_or_else(not_found)?;
-            // A live version's row is in the objects table, so the index answers a
-            // version-only read without touching it.
-            if version_only {
-                Found::Version(version)
-            } else {
-                let key = ObjectKey(object_id, version);
-                objects
-                    .exact(key)
-                    .await?
-                    .ok_or_else(|| missing_indexed_row(key))?
-            }
-        }
-    };
+                .ok_or_else(|| missing_indexed_row(key))?,
+        ),
+        ObjectsStageInput::Scanned(found) => found,
+        ObjectsStageInput::Failed(err) => return Err(err),
+    }
+    .ok_or_else(|| selector.not_found(address))?;
     let message = found
         .render(object_id, &read_mask, &server.package_resolver)
         .await;
@@ -100,13 +99,14 @@ pub(crate) async fn get_object(
 /// Serve a batch as its distinct lookups, read and rendered as they become ready:
 ///
 /// 1. Each lookup first learns which `objects` row answers it, if any. An exact version names its
-///    row. An `at_checkpoint` lookup scans `object_versions_by_checkpoint` for the version live at
-///    that checkpoint, because BigTable cannot return the newest row of several ranges in one
-///    `ReadRows` (`rows_limit` covers the whole request). A latest lookup reads its object with
-///    one reverse scan of `objects`. The scans run in groups of the `objects` stage's
-///    `max-seeks-per-read`, each group one read of a [`pipelined_chunks`] stage, and every group
-///    starts at once. A group's answers move on together, so the rows they name fill at most one
-///    `objects` read.
+///    row. A latest lookup reads its object with one reverse scan of `objects`. Every other
+///    lookup reads `object_versions_by_checkpoint` (see [`AtCheckpointReads`]): a `version`
+///    lookup bounded by `at_checkpoint` keeps its row only if the version was written by then,
+///    and an `at_checkpoint` or `max_version` lookup is answered as [`bounded_read`] decides, by
+///    a live version's row or by a reverse scan of `objects` down from `max_version`. The scans
+///    run in groups of the `objects` stage's `max-seeks-per-read`, each group one read of a
+///    [`pipelined_chunks`] stage, and every group starts at once. A group's answers move on
+///    together, so the rows they name fill at most one `objects` read.
 /// 2. The rows the lookups name are read as the lookups arrive, by [`pipelined_keyed_batches`]
 ///    under the `objects` stage ([`crate::config::StagesConfig::objects`]): reads of at most
 ///    `max-seeks-per-read` keys, at most `concurrency` of them at a time, and each row at most
@@ -116,11 +116,14 @@ pub(crate) async fn get_object(
 ///    default render-ahead), and every request for it gets the result.
 ///
 /// Every BigTable read of the batch, scans and `objects` reads alike, shares one request-scoped
-/// limiter. Rendering is not limited by it: package loads go through the server-wide
-/// [`PackageResolver`].
+/// limiter, and each `(object_id, checkpoint)` of the version index is read at most once per
+/// request. Rendering is not limited by it: package loads go through the server-wide
+/// [`PackageResolver`]. A lookup whose `at_checkpoint` is above the served height fails without
+/// a read, and a batch with a lookup that the instance cannot serve fails as a whole.
 ///
-/// When the read mask asks for nothing but `object_id` and `version`, an `at_checkpoint` lookup is
-/// answered by its scan alone, and the `objects` reads fetch only row keys, not object contents.
+/// When the read mask asks for nothing but `object_id` and `version`, a lookup that the version
+/// index resolves to a live version is answered by its scans alone, and the `objects` reads fetch
+/// only row keys, not object contents, except the reverse scans down from `max_version`.
 pub(crate) async fn batch_get_objects(
     server: &KvRpcServer,
     request: tonic::Request<BatchGetObjectsRequest>,
@@ -137,11 +140,7 @@ pub(crate) async fn batch_get_objects(
             format!("number of batch requests exceed limit of {MAX_BATCH_REQUESTS}"),
         ));
     }
-    let requests = requests
-        .into_iter()
-        .map(|req| (req.object_id, req.version, req.at_checkpoint))
-        .collect();
-    let (requests, read_mask) = validate_get_object_requests(requests, read_mask)?;
+    let (requests, read_mask) = validate_get_object_requests(&requests, read_mask)?;
     let version_only = needs_only_object_id_and_version(&read_mask);
 
     // Requests for the same object state share one lookup: `request_lookups[i]` is the index in
@@ -161,42 +160,28 @@ pub(crate) async fn batch_get_objects(
 
     // Every read of the batch goes through this client, under one request-wide limiter.
     let limited_client = server.limited_client("BatchGetObjects");
+    let at_checkpoint_reads = if lookups
+        .iter()
+        .any(|(_, selector)| selector.needs_object_version_history())
+    {
+        Some(Arc::new(server.at_checkpoint_reads(
+            limited_client.clone(),
+            served_height,
+        )?))
+    } else {
+        None
+    };
     let objects = ObjectReads {
-        client: limited_client.clone(),
+        client: limited_client,
         version_only,
     };
 
     let mut answered_without_scan = Vec::new();
     let mut scans = Vec::new();
-    let mut at_checkpoint_lookups = Vec::new();
     for (index, &(address, selector)) in lookups.iter().enumerate() {
-        let object_id: ObjectID = address.into();
-        match selector {
-            ObjectSelector::Latest => scans.push((index, Scan::Latest(object_id))),
-            ObjectSelector::Version(version) => answered_without_scan.push((
-                index,
-                ObjectsStageInput::RequestedRow(ObjectKey(object_id, version.into())),
-            )),
-            ObjectSelector::AtCheckpoint(checkpoint) => {
-                at_checkpoint_lookups.push((index, object_id, checkpoint))
-            }
-        }
-    }
-    if !at_checkpoint_lookups.is_empty() {
-        let reads = Arc::new(server.at_checkpoint_reads(limited_client.clone(), served_height)?);
-        for (index, object_id, checkpoint) in at_checkpoint_lookups {
-            if checkpoint > reads.served_height.checkpoint {
-                let error = not_yet_indexed(checkpoint, reads.served_height);
-                answered_without_scan.push((index, ObjectsStageInput::Failed(error)));
-            } else {
-                let reads = reads.clone();
-                let scan = Scan::AtCheckpoint {
-                    reads,
-                    object_id,
-                    checkpoint,
-                };
-                scans.push((index, scan));
-            }
+        match first_step(address.into(), selector, at_checkpoint_reads.as_ref()) {
+            FirstStep::Answer(answer) => answered_without_scan.push((index, answer)),
+            FirstStep::Scan(scan) => scans.push((index, scan)),
         }
     }
 
@@ -271,18 +256,9 @@ pub(crate) async fn batch_get_objects(
                     Ok(Some(found)) => GetObjectResult::new_object(
                         found.render(address.into(), &read_mask, &resolver).await,
                     ),
-                    Ok(None) => {
-                        let not_found = match selector {
-                            ObjectSelector::Latest => ObjectNotFoundError::new(address),
-                            ObjectSelector::Version(version) => {
-                                ObjectNotFoundError::new_with_version(address, version)
-                            }
-                            ObjectSelector::AtCheckpoint(checkpoint) => {
-                                ObjectNotFoundError::new_at_checkpoint(address, checkpoint)
-                            }
-                        };
-                        GetObjectResult::new_error(RpcError::from(not_found).into_status_proto())
-                    }
+                    Ok(None) => GetObjectResult::new_error(
+                        RpcError::from(selector.not_found(address)).into_status_proto(),
+                    ),
                     Err(err) => GetObjectResult::new_error(err.into_status_proto()),
                 };
                 Ok::<_, Infallible>((index, result))
@@ -325,6 +301,112 @@ pub(crate) async fn batch_get_objects(
     Ok(BatchGetObjectsResponse::new(objects))
 }
 
+/// Whether `version` of an object was written at or before a checkpoint, given the object's
+/// [`VersionAtCheckpoint`] there. An object's versions increase in checkpoint order, so a version
+/// above its newest one written by the checkpoint was written after it, and an object that did
+/// not exist yet had no version written by then.
+fn written_by_checkpoint(
+    version: SequenceNumber,
+    version_at_checkpoint: VersionAtCheckpoint,
+) -> bool {
+    version_at_checkpoint.is_some_and(|(newest, _)| version <= newest)
+}
+
+/// The bounds of an `at_checkpoint` or `max_version` read: it selects the object's newest version
+/// at or below `max_version` written by the end of checkpoint `height`, and finds nothing if that
+/// version was written after `checkpoint`, or deleted or wrapped the object.
+#[derive(Clone, Copy, Debug)]
+struct Bounds {
+    max_version: u64,
+    checkpoint: u64,
+    height: u64,
+}
+
+impl Bounds {
+    /// The bounds of an `at_checkpoint` or `max_version` read at `served_checkpoint`; `None` for
+    /// other selectors. A `max_version` read counts versions up to the served height, and its
+    /// `at_checkpoint` defaults to it. An `at_checkpoint` read is a `max_version` read with no
+    /// bound on the version, counting versions up to the checkpoint.
+    fn of(selector: &ObjectSelector, served_checkpoint: u64) -> Option<Self> {
+        match *selector {
+            ObjectSelector::MaxVersion {
+                max_version,
+                at_checkpoint,
+            } => Some(Self {
+                max_version,
+                checkpoint: at_checkpoint.unwrap_or(served_checkpoint),
+                height: served_checkpoint,
+            }),
+            ObjectSelector::AtCheckpoint(checkpoint) => Some(Self {
+                max_version: u64::MAX,
+                checkpoint,
+                height: checkpoint,
+            }),
+            ObjectSelector::Latest | ObjectSelector::Version { .. } => None,
+        }
+    }
+}
+
+/// How an `at_checkpoint` or `max_version` read is answered. See [`bounded_read`].
+#[derive(Clone, Copy, Debug)]
+enum BoundedRead {
+    /// No version answers it.
+    NotFound,
+    /// This version, the object's version at the end of the checkpoint, answers it, and the
+    /// object is live at it.
+    Live(SequenceNumber),
+    /// The newest version at or below `from`, from an `objects` reverse scan, answers it if it is
+    /// at or below `at_most`, the object's version at the end of the checkpoint; a newer one was
+    /// written after the checkpoint.
+    ScanFrom {
+        from: SequenceNumber,
+        at_most: SequenceNumber,
+    },
+}
+
+/// How a read with [`Bounds`] is answered, given the object's [`VersionAtCheckpoint`] at
+/// `checkpoint` and at `height`. An object's versions increase in checkpoint order, so a version
+/// above its version at the end of a checkpoint was written after it.
+///
+/// Below the version at the checkpoint, every version at or below `max_version` was written by
+/// the checkpoint, so a reverse scan from `max_version` answers. Otherwise, if the object did not
+/// change between the checkpoint and the height, the version index alone decides the answer: the
+/// object if it is live at its version at the checkpoint, and nothing if it was deleted or wrapped
+/// there. If it did change and `max_version` reaches its version at the height, that newer
+/// version is selected, and nothing answers. Below it, a reverse scan from `max_version` answers
+/// only if it finds the version at the checkpoint itself. Every version the scans can reach is at
+/// or below the version at the height, so versions written above the height never count.
+fn bounded_read(
+    max_version: u64,
+    version_at_checkpoint: VersionAtCheckpoint,
+    version_at_height: VersionAtCheckpoint,
+) -> BoundedRead {
+    let Some((at_checkpoint, status)) = version_at_checkpoint else {
+        // Every version of the object was written after the checkpoint.
+        return BoundedRead::NotFound;
+    };
+    let scan = BoundedRead::ScanFrom {
+        from: max_version.into(),
+        at_most: at_checkpoint,
+    };
+    if max_version < at_checkpoint.value() {
+        return scan;
+    }
+    match version_at_height {
+        Some((at_height, _)) if at_height > at_checkpoint => {
+            if status == ObjectStatus::Live && max_version < at_height.value() {
+                scan
+            } else {
+                BoundedRead::NotFound
+            }
+        }
+        _ => match status {
+            ObjectStatus::Live => BoundedRead::Live(at_checkpoint),
+            ObjectStatus::Deleted | ObjectStatus::Wrapped => BoundedRead::NotFound,
+        },
+    }
+}
+
 /// An object as a read found it: the whole object, or, for a read mask that needs only
 /// `object_id` and `version`, just its version.
 #[derive(Clone)]
@@ -334,6 +416,13 @@ enum Found {
 }
 
 impl Found {
+    fn version(&self) -> SequenceNumber {
+        match self {
+            Found::Object(object) => object.version(),
+            Found::Version(version) => *version,
+        }
+    }
+
     async fn render(
         &self,
         object_id: ObjectID,
@@ -351,15 +440,67 @@ impl Found {
 /// [`ObjectsStageInput`], and the rows of the keys it listed.
 type LookupWithRows = KeyedBatchOutput<(usize, ObjectsStageInput), ObjectKey, Found>;
 
-/// A scan that a batch lookup starts with, before any `objects` read.
+/// How a lookup starts: with its answer known up to one `objects` row, or with a scan.
+enum FirstStep {
+    Answer(ObjectsStageInput),
+    Scan(Scan),
+}
+
+/// The first step of a lookup of `object_id` by `selector`. A selector that needs object version
+/// history reads the version index through `at_checkpoint_reads`, and fails without a read if its
+/// `at_checkpoint` is above the served height.
+fn first_step(
+    object_id: ObjectID,
+    selector: ObjectSelector,
+    at_checkpoint_reads: Option<&Arc<AtCheckpointReads>>,
+) -> FirstStep {
+    match selector {
+        ObjectSelector::Latest => FirstStep::Scan(Scan::Latest(object_id)),
+        ObjectSelector::Version {
+            version,
+            at_checkpoint: None,
+        } => FirstStep::Answer(ObjectsStageInput::RequestedRow(ObjectKey(
+            object_id,
+            version.into(),
+        ))),
+        ObjectSelector::Version {
+            at_checkpoint: Some(_),
+            ..
+        }
+        | ObjectSelector::MaxVersion { .. }
+        | ObjectSelector::AtCheckpoint(_) => {
+            let scan = at_checkpoint_reads
+                .ok_or_else(|| {
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        "a read of object version history has no version index reads",
+                    )
+                })
+                .and_then(|reads| reads.scan(object_id, selector));
+            match scan {
+                Ok(scan) => FirstStep::Scan(scan),
+                Err(err) => FirstStep::Answer(ObjectsStageInput::Failed(err)),
+            }
+        }
+    }
+}
+
+/// A scan that a lookup starts with, before any `objects` multi-get.
 enum Scan {
     /// The newest version of the object, from one reverse scan of `objects`.
     Latest(ObjectID),
-    /// The version live at the end of `checkpoint`, from `object_versions_by_checkpoint`.
-    AtCheckpoint {
+    /// The version `key` names, if the object's version at the end of `checkpoint` shows that it
+    /// was written by then.
+    WrittenBy {
+        reads: Arc<AtCheckpointReads>,
+        key: ObjectKey,
+        checkpoint: u64,
+    },
+    /// An `at_checkpoint` or `max_version` read, answered as [`bounded_read`] decides.
+    Bounded {
         reads: Arc<AtCheckpointReads>,
         object_id: ObjectID,
-        checkpoint: u64,
+        bounds: Bounds,
     },
 }
 
@@ -367,28 +508,65 @@ impl Scan {
     async fn run(self, objects: &ObjectReads) -> Result<ObjectsStageInput, RpcError> {
         Ok(match self {
             Scan::Latest(object_id) => ObjectsStageInput::Scanned(objects.latest(object_id).await?),
-            Scan::AtCheckpoint {
+            Scan::WrittenBy {
+                reads,
+                key,
+                checkpoint,
+            } => {
+                let version_at_checkpoint = reads.version_at_checkpoint(key.0, checkpoint).await?;
+                if written_by_checkpoint(key.1, version_at_checkpoint) {
+                    ObjectsStageInput::RequestedRow(key)
+                } else {
+                    ObjectsStageInput::Scanned(None)
+                }
+            }
+            Scan::Bounded {
                 reads,
                 object_id,
-                checkpoint,
-            } => match reads
-                .live_version_at_checkpoint(object_id, checkpoint)
-                .await?
-            {
-                None => ObjectsStageInput::Scanned(None),
-                // A live version's row is in the objects table, so the index answers a
-                // version-only read without touching it.
-                Some(version) if objects.version_only => {
-                    ObjectsStageInput::Scanned(Some(Found::Version(version)))
+                bounds,
+            } => {
+                // Both reads of the version index start at once. The version at the height
+                // decides nothing when the object did not exist at the checkpoint, was deleted or
+                // wrapped there, or `max_version` is below its version there; reading it anyway
+                // costs a read in those cases and saves a round trip in the others.
+                let (version_at_checkpoint, version_at_height) =
+                    if bounds.height == bounds.checkpoint {
+                        let version = reads
+                            .version_at_checkpoint(object_id, bounds.checkpoint)
+                            .await?;
+                        (version, version)
+                    } else {
+                        future::try_join(
+                            reads.version_at_checkpoint(object_id, bounds.checkpoint),
+                            reads.version_at_checkpoint(object_id, bounds.height),
+                        )
+                        .await?
+                    };
+                match bounded_read(bounds.max_version, version_at_checkpoint, version_at_height) {
+                    BoundedRead::NotFound => ObjectsStageInput::Scanned(None),
+                    // A live version's row is in the objects table, so the index answers a
+                    // version-only read without touching it.
+                    BoundedRead::Live(version) if objects.version_only => {
+                        ObjectsStageInput::Scanned(Some(Found::Version(version)))
+                    }
+                    BoundedRead::Live(version) => {
+                        ObjectsStageInput::IndexedRow(ObjectKey(object_id, version))
+                    }
+                    BoundedRead::ScanFrom { from, at_most } => ObjectsStageInput::Scanned(
+                        objects
+                            .at_or_below(object_id, from)
+                            .await?
+                            .filter(|found| found.version() <= at_most),
+                    ),
                 }
-                Some(version) => ObjectsStageInput::IndexedRow(ObjectKey(object_id, version)),
-            },
+            }
         })
     }
 }
 
-/// What a batch lookup carries into the `objects` stage: its answer as far as it is known
-/// before the `objects` reads.
+/// What a lookup carries into its `objects` reads: its answer as far as it is known before
+/// them. A batch hands it to the `objects` stage; `GetObject` reads its row with
+/// `ObjectReads::exact`.
 enum ObjectsStageInput {
     /// The `objects` row at the version the request asked for answers the lookup; without the
     /// row it is `NOT_FOUND`.
@@ -431,6 +609,15 @@ impl ObjectsStageInput {
     }
 }
 
+/// The error for a version that `object_versions_by_checkpoint` names as live but that has no
+/// live `objects` row: the index and storage diverged, so the object's absence is not an answer.
+fn missing_indexed_row(key: ObjectKey) -> RpcError {
+    RpcError::new(
+        tonic::Code::Internal,
+        format!("object_versions_by_checkpoint names {key:?} as live, but objects has no live row"),
+    )
+}
+
 /// Reads of the `objects` table through a request's gated client: whole objects, or, with
 /// `version_only`, just the versions of the live ones, read without the objects' contents.
 #[derive(Clone)]
@@ -460,6 +647,20 @@ impl ObjectReads {
         // The read runs to its end, so it finishes as completed rather than cut off.
         let rows: Vec<_> = self.fetch(vec![key]).await?.try_collect().await?;
         Ok(rows.into_iter().next().map(|(_, found)| found))
+    }
+
+    /// The newest version of `object_id` at or below `version`, read whole by one reverse scan of
+    /// `objects`, unless the object was deleted or wrapped at that version.
+    async fn at_or_below(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Found>, RpcError> {
+        Ok(self
+            .client
+            .get_object_lt_or_eq_version(object_id, version)
+            .await?
+            .map(|object| Found::Object(Arc::new(object))))
     }
 }
 
@@ -492,18 +693,19 @@ impl CacheFetcher<ObjectKey, Found> for ObjectReads {
     }
 }
 
-/// What a request's `at_checkpoint` reads run with: the request-scoped gated client for their
-/// `object_versions_by_checkpoint` scans, and the served height that bounds them.
+/// What a request's reads of the version index run with: the served height that bounds them, and
+/// a cache that reads each `(object_id, checkpoint)` at most once per request, through the
+/// request's gated client.
 struct AtCheckpointReads {
-    client: BigTableClient,
     served_height: ServedHeight,
+    versions: Arc<RequestCache<(ObjectID, u64), (SequenceNumber, ObjectStatus)>>,
 }
 
 impl KvRpcServer {
     /// `Unimplemented` / `NOT_SERVED_HERE` (cause `disabled_by_config`) unless `at_checkpoint`
-    /// object reads are enabled; otherwise the scans read through `client`, the request's gated
-    /// client, at `served_height`, the height the request was admitted at (`Unavailable` if it
-    /// had none).
+    /// and `max_version` object reads are enabled; otherwise the scans read through `client`, the
+    /// request's gated client, at `served_height`, the height the request was admitted at
+    /// (`Unavailable` if it had none).
     fn at_checkpoint_reads(
         &self,
         client: BigTableClient,
@@ -512,51 +714,105 @@ impl KvRpcServer {
         if !self.object_at_checkpoint_enabled {
             return Err(not_served_here(
                 NotServedHereCause::DisabledByConfig,
-                "at_checkpoint object reads are not enabled on this instance",
+                "at_checkpoint and max_version object reads are not enabled on this instance",
             ));
         }
         Ok(AtCheckpointReads {
             served_height: served_height?,
-            client,
+            versions: RequestCache::new(Arc::new(VersionIndexReads { client })),
         })
     }
 }
 
 impl AtCheckpointReads {
-    /// The version `object_id` was live at, at the end of `checkpoint`. `None` if it did not
-    /// exist yet, or had been deleted or wrapped.
-    async fn live_version_at_checkpoint(
+    /// The scan of a lookup that needs object version history: a `version` bounded by
+    /// `at_checkpoint`, a `max_version`, or an `at_checkpoint` alone. Fails if the lookup's
+    /// `at_checkpoint` is above the served height.
+    fn scan(
+        self: &Arc<Self>,
+        object_id: ObjectID,
+        selector: ObjectSelector,
+    ) -> Result<Scan, RpcError> {
+        let served_checkpoint = self.served_height.checkpoint;
+        if let Some(checkpoint) = selector.at_checkpoint() {
+            AtCheckpointUpperBound::new(served_checkpoint).check(checkpoint)?;
+        }
+        let reads = self.clone();
+        Ok(match selector {
+            ObjectSelector::Version {
+                version,
+                at_checkpoint: Some(checkpoint),
+            } => Scan::WrittenBy {
+                reads,
+                key: ObjectKey(object_id, version.into()),
+                checkpoint,
+            },
+            _ => {
+                let bounds = Bounds::of(&selector, served_checkpoint).ok_or_else(|| {
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        "not an at_checkpoint or max_version read",
+                    )
+                })?;
+                Scan::Bounded {
+                    reads,
+                    object_id,
+                    bounds,
+                }
+            }
+        })
+    }
+
+    /// The version and status `object_id` had at the end of `checkpoint`. The first call for an
+    /// `(object_id, checkpoint)` reads it in a task the cache owns, so the read returns its permit
+    /// whether or not its caller is polled; later calls share that read.
+    async fn version_at_checkpoint(
         &self,
         object_id: ObjectID,
         checkpoint: u64,
-    ) -> Result<Option<SequenceNumber>, RpcError> {
-        Ok(
-            match self
-                .client
-                .get_object_version_at_checkpoint(object_id, checkpoint)
-                .await?
-            {
-                Some((version, ObjectStatus::Live)) => Some(version),
-                Some((_, ObjectStatus::Deleted | ObjectStatus::Wrapped)) | None => None,
-            },
-        )
+    ) -> Result<VersionAtCheckpoint, RpcError> {
+        let key = (object_id, checkpoint);
+        let mut reservation = self.versions.reserve(&[key]);
+        let unread = if reservation.is_unread(&key) {
+            vec![key]
+        } else {
+            Vec::new()
+        };
+        let _read_end = self.versions.read(reservation.take_unread(&unread));
+        reservation.value(&key).await
     }
 }
 
-/// The error for an `at_checkpoint` above the served height. The response does not say which
-/// checkpoint it was read at, so answering from a partially indexed table could hand the caller
-/// a wrong answer to persist; fail closed instead.
-fn not_yet_indexed(checkpoint: u64, served_height: ServedHeight) -> RpcError {
-    sui_rpc_api::checkpoint_not_yet_indexed_error(checkpoint, served_height.checkpoint)
+/// Reads of `object_versions_by_checkpoint` through a request's gated client: one scan per
+/// `(object_id, checkpoint)`, because BigTable cannot return the newest row of several ranges in
+/// one `ReadRows` (`rows_limit` covers the whole request).
+struct VersionIndexReads {
+    client: BigTableClient,
 }
 
-/// The error for a version that `object_versions_by_checkpoint` names as live but that has no
-/// live `objects` row: the index and storage diverged, so the object's absence is not an answer.
-fn missing_indexed_row(key: ObjectKey) -> RpcError {
-    RpcError::new(
-        tonic::Code::Internal,
-        format!("object_versions_by_checkpoint names {key:?} as live, but objects has no live row"),
-    )
+#[async_trait::async_trait]
+impl CacheFetcher<(ObjectID, u64), (SequenceNumber, ObjectStatus)> for VersionIndexReads {
+    async fn fetch(
+        &self,
+        keys: Vec<(ObjectID, u64)>,
+    ) -> Result<
+        BoxStream<'static, Result<((ObjectID, u64), (SequenceNumber, ObjectStatus)), RpcError>>,
+        RpcError,
+    > {
+        let client = self.client.clone();
+        Ok(stream::iter(keys)
+            .then(move |(object_id, checkpoint)| {
+                let client = client.clone();
+                async move {
+                    let version = client
+                        .get_object_version_at_checkpoint(object_id, checkpoint)
+                        .await?;
+                    Ok::<_, RpcError>(version.map(|version| ((object_id, checkpoint), version)))
+                }
+            })
+            .try_filter_map(|row| future::ready(Ok(row)))
+            .boxed())
+    }
 }
 
 #[cfg(test)]
@@ -564,7 +820,7 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Duration;
 
-    use sui_kvstore::WatermarkV1;
+    use mysten_common::ZipDebugEqIteratorExt;
     use sui_kvstore::tables::object_versions_by_checkpoint;
     use sui_kvstore::tables::objects;
     use sui_kvstore::testing::MockBigtableServer;
@@ -580,6 +836,7 @@ mod tests {
     use crate::StageConfig;
     use crate::StagesConfig;
     use crate::service_info_watermark_pipelines;
+    use crate::tests::seed_watermarks;
 
     /// A kv-rpc server over the mock BigTable at `addr`, with every watermark it serves at
     /// checkpoint 10 and its service info loaded.
@@ -588,12 +845,23 @@ mod tests {
         stages: StagesConfig,
         enable_object_at_checkpoint: bool,
     ) -> KvRpcServer {
+        start_kv_rpc_at_heights(addr, stages, enable_object_at_checkpoint, |_| 10).await
+    }
+
+    /// [`start_kv_rpc`], with the watermark of each pipeline it serves at `height(pipeline)`.
+    async fn start_kv_rpc_at_heights(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        enable_object_at_checkpoint: bool,
+        height: impl Fn(&str) -> u64,
+    ) -> KvRpcServer {
         let request_bigtable_concurrency = KvRpcConfig::default().request_bigtable_concurrency();
-        start_kv_rpc_with_request_concurrency(
+        start_kv_rpc_with(
             addr,
             stages,
             enable_object_at_checkpoint,
             request_bigtable_concurrency,
+            height,
         )
         .await
     }
@@ -606,30 +874,34 @@ mod tests {
         enable_object_at_checkpoint: bool,
         request_bigtable_concurrency: usize,
     ) -> KvRpcServer {
+        start_kv_rpc_with(
+            addr,
+            stages,
+            enable_object_at_checkpoint,
+            request_bigtable_concurrency,
+            |_| 10,
+        )
+        .await
+    }
+
+    /// A kv-rpc server over the mock BigTable at `addr`, with each request limited to
+    /// `request_bigtable_concurrency` BigTable reads at once, the watermark of each pipeline it
+    /// serves at `height(pipeline)`, and its service info loaded.
+    async fn start_kv_rpc_with(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        enable_object_at_checkpoint: bool,
+        request_bigtable_concurrency: usize,
+        height: impl Fn(&str) -> u64,
+    ) -> KvRpcServer {
         let mut client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".into())
             .await
             .expect("connect to mock BigTable");
-        for pipeline in service_info_watermark_pipelines(
+        let pipelines = service_info_watermark_pipelines(
             LedgerHistoryConfig::default().bitmap_schema(),
             enable_object_at_checkpoint,
-        ) {
-            client
-                .create_pipeline_watermark_if_absent(
-                    pipeline,
-                    &WatermarkV1 {
-                        epoch_hi_inclusive: 0,
-                        checkpoint_hi_inclusive: Some(10),
-                        tx_hi: 0,
-                        timestamp_ms_hi_inclusive: 10_000,
-                        reader_lo: 0,
-                        pruner_hi: 0,
-                        pruner_timestamp_ms: 0,
-                        bucket_start_cp: None,
-                    },
-                )
-                .await
-                .expect("seed watermark");
-        }
+        );
+        seed_watermarks(&mut client, &pipelines, height).await;
         let config = KvRpcConfig::default();
         let kv_rpc = KvRpcServer::new_local_with_config(
             addr.to_string(),
@@ -948,6 +1220,398 @@ mod tests {
         mock_server.abort();
     }
 
+    /// Write `id`'s history, `(checkpoint, version, status)` for each change in order, to both
+    /// the `objects` table (a live row or a tombstone) and the `object_versions_by_checkpoint`
+    /// index.
+    async fn insert_history(
+        mock: &MockBigtableServer,
+        id: ObjectID,
+        history: &[(u64, u64, ObjectStatus)],
+    ) {
+        for &(checkpoint, version, status) in history {
+            let version = SequenceNumber::from_u64(version);
+            let cells = match status {
+                ObjectStatus::Live => objects::encode(&Object::with_id_owner_version_for_testing(
+                    id,
+                    version,
+                    Owner::AddressOwner(SuiAddress::ZERO),
+                ))
+                .unwrap()
+                .to_vec(),
+                removed => objects::encode_tombstone(removed, &TransactionDigest::random())
+                    .unwrap()
+                    .to_vec(),
+            };
+            mock.insert_row(
+                objects::NAME,
+                objects::encode_key(&ObjectKey(id, version)),
+                cells,
+            )
+            .await;
+            mock.insert_row(
+                object_versions_by_checkpoint::NAME,
+                object_versions_by_checkpoint::encode_key(&id, checkpoint),
+                object_versions_by_checkpoint::encode(version, status),
+            )
+            .await;
+        }
+    }
+
+    /// A `GetObjectRequest` for `id` with the given selector fields.
+    fn selector_request(
+        id: ObjectID,
+        version: Option<u64>,
+        max_version: Option<u64>,
+        at_checkpoint: Option<u64>,
+    ) -> GetObjectRequest {
+        let mut req = GetObjectRequest::default();
+        req.object_id = Some(id.to_canonical_string(true));
+        req.version = version;
+        req.max_version = max_version;
+        req.at_checkpoint = at_checkpoint;
+        req
+    }
+
+    /// The version a `GetObject` call returned, or its error code.
+    fn single_outcome(result: Result<GetObjectResponse, RpcError>) -> Result<u64, tonic::Code> {
+        match result {
+            Ok(response) => Ok(response.object.unwrap().version.unwrap()),
+            Err(err) => Err(tonic::Status::from(err).code()),
+        }
+    }
+
+    /// The version a `BatchGetObjects` item returned, or its error code.
+    fn batch_outcome(item: &GetObjectResult) -> Result<u64, tonic::Code> {
+        match &item.result {
+            Some(get_object_result::Result::Object(object)) => Ok(object.version.unwrap()),
+            Some(get_object_result::Result::Error(status)) => Err(tonic::Code::from(status.code)),
+            other => panic!("unexpected batch result {other:?}"),
+        }
+    }
+
+    /// `max_version` reads the newest version at or below it, and is `NotFound` from a deletion
+    /// or wrap until the object is unwrapped or re-created. `at_checkpoint` bounds a `version`
+    /// read to a version written by the end of the checkpoint, and fails a `max_version` read
+    /// whose selected version was written after the checkpoint, as Postgres does. `GetObject` and
+    /// `BatchGetObjects` agree on every read, with and without object contents.
+    #[tokio::test]
+    async fn test_max_version_and_checkpoint_bounds_follow_the_history() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+
+        // Created at version 2 in checkpoint 1, mutated at 4 in checkpoint 3, wrapped at 6 in
+        // checkpoint 5, unwrapped at 8 in checkpoint 7, and deleted at 9 in checkpoint 10.
+        let id = ObjectID::random();
+        let history = [
+            (1, 2, ObjectStatus::Live),
+            (3, 4, ObjectStatus::Live),
+            (5, 6, ObjectStatus::Wrapped),
+            (7, 8, ObjectStatus::Live),
+            (10, 9, ObjectStatus::Deleted),
+        ];
+        insert_history(&mock, id, &history).await;
+
+        let live = |version: u64| {
+            history
+                .iter()
+                .any(|&(_, changed, status)| changed == version && status == ObjectStatus::Live)
+        };
+        let written_by = |version: u64, checkpoint: u64| {
+            history
+                .iter()
+                .any(|&(changed_at, changed, _)| changed == version && changed_at <= checkpoint)
+        };
+        // The newest version at or below `version` written by the served height (10), if it was
+        // written by `at_checkpoint` when that is set and the object is live at it.
+        let newest_at_or_below = |version: u64, at_checkpoint: Option<u64>| {
+            history
+                .iter()
+                .rev()
+                .find(|&&(changed_at, changed, _)| changed <= version && changed_at <= 10)
+                .filter(|&&(changed_at, _, status)| {
+                    status == ObjectStatus::Live && at_checkpoint.is_none_or(|cp| changed_at <= cp)
+                })
+                .map(|&(_, changed, _)| changed)
+        };
+
+        // Every version the history spans and one past it, each read exactly and as a
+        // `max_version`, unbounded and bounded by every checkpoint up to the served height.
+        let mut cases = Vec::new();
+        for version in 0..=10 {
+            for at_checkpoint in std::iter::once(None).chain((0..=10).map(Some)) {
+                let exact = live(version)
+                    .then_some(version)
+                    .filter(|&found| at_checkpoint.is_none_or(|cp| written_by(found, cp)));
+                cases.push((
+                    selector_request(id, Some(version), None, at_checkpoint),
+                    exact.ok_or(tonic::Code::NotFound),
+                ));
+                cases.push((
+                    selector_request(id, None, Some(version), at_checkpoint),
+                    newest_at_or_below(version, at_checkpoint).ok_or(tonic::Code::NotFound),
+                ));
+            }
+        }
+
+        for paths in [
+            &["object_id", "version"][..],
+            &["object_id", "version", "digest"],
+        ] {
+            for (req, expected) in &cases {
+                let mut req = req.clone();
+                req.read_mask = Some(mask(paths));
+                let request = kv_rpc.admitted_request(req.clone());
+                let outcome = single_outcome(get_object(&kv_rpc, request).await);
+                assert_eq!(&outcome, expected, "GetObject {req:?}");
+            }
+
+            let mut batch = BatchGetObjectsRequest::default();
+            batch.requests = cases.iter().map(|(req, _)| req.clone()).collect();
+            batch.read_mask = Some(mask(paths));
+            let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+                .await
+                .unwrap()
+                .objects;
+            for (item, (req, expected)) in items.iter().zip_debug_eq(&cases) {
+                assert_eq!(
+                    &batch_outcome(item),
+                    expected,
+                    "BatchGetObjects {req:?} {paths:?}"
+                );
+            }
+        }
+
+        mock_server.abort();
+    }
+
+    /// With version 5 written in checkpoint 10 and version 8 in checkpoint 20, `max_version` 8 at
+    /// checkpoint 15 selects version 8 once the served height reaches checkpoint 20, and then
+    /// fails because version 8 was written after checkpoint 15. Below that served height, version
+    /// 8 does not count even with its row already in the tables, and version 5 answers.
+    #[tokio::test]
+    async fn test_max_version_at_checkpoint_counts_versions_up_to_the_served_height() {
+        for served in [15, 19, 20, 25] {
+            let mock = MockBigtableServer::new();
+            let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+            let kv_rpc =
+                start_kv_rpc_at_heights(addr, StagesConfig::default(), true, |_| served).await;
+            let id = ObjectID::random();
+            insert_history(
+                &mock,
+                id,
+                &[(10, 5, ObjectStatus::Live), (20, 8, ObjectStatus::Live)],
+            )
+            .await;
+
+            let mut cases = vec![
+                (
+                    selector_request(id, None, Some(8), Some(15)),
+                    if served < 20 {
+                        Ok(5)
+                    } else {
+                        Err(tonic::Code::NotFound)
+                    },
+                ),
+                (selector_request(id, None, Some(7), Some(15)), Ok(5)),
+                (
+                    selector_request(id, None, Some(8), Some(9)),
+                    Err(tonic::Code::NotFound),
+                ),
+            ];
+            if served >= 20 {
+                cases.push((selector_request(id, None, Some(8), Some(20)), Ok(8)));
+                cases.push((selector_request(id, None, Some(8), Some(served)), Ok(8)));
+            }
+            for (req, expected) in &cases {
+                let outcome =
+                    single_outcome(get_object(&kv_rpc, kv_rpc.admitted_request(req.clone())).await);
+                assert_eq!(
+                    &outcome, expected,
+                    "GetObject, served height {served}: {req:?}"
+                );
+            }
+            let mut batch = BatchGetObjectsRequest::default();
+            batch.requests = cases.iter().map(|(req, _)| req.clone()).collect();
+            let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+                .await
+                .unwrap()
+                .objects;
+            for (item, (req, expected)) in items.iter().zip_debug_eq(&cases) {
+                assert_eq!(
+                    &batch_outcome(item),
+                    expected,
+                    "BatchGetObjects, served height {served}: {req:?}"
+                );
+            }
+            mock_server.abort();
+        }
+    }
+
+    /// A `max_version` read without `at_checkpoint` is bounded by the served height (10 here): a
+    /// version written above it never answers, even when its row is already in the tables.
+    #[tokio::test]
+    async fn test_max_version_without_checkpoint_is_bounded_by_the_served_height() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+
+        // `mutated` is live at version 3 from checkpoint 5 and at version 5 from checkpoint 12;
+        // `created` is created at version 2 in checkpoint 12.
+        let mutated = ObjectID::random();
+        insert_history(
+            &mock,
+            mutated,
+            &[(5, 3, ObjectStatus::Live), (12, 5, ObjectStatus::Live)],
+        )
+        .await;
+        let created = ObjectID::random();
+        insert_history(&mock, created, &[(12, 2, ObjectStatus::Live)]).await;
+        let cases = [
+            (selector_request(mutated, None, Some(8), None), Ok(3)),
+            (
+                selector_request(created, None, Some(8), None),
+                Err(tonic::Code::NotFound),
+            ),
+        ];
+
+        for paths in [
+            &["object_id", "version"][..],
+            &["object_id", "version", "digest"],
+        ] {
+            for (req, expected) in &cases {
+                let mut req = req.clone();
+                req.read_mask = Some(mask(paths));
+                let request = kv_rpc.admitted_request(req.clone());
+                let outcome = single_outcome(get_object(&kv_rpc, request).await);
+                assert_eq!(&outcome, expected, "GetObject {req:?}");
+            }
+
+            let mut batch = BatchGetObjectsRequest::default();
+            batch.requests = cases.iter().map(|(req, _)| req.clone()).collect();
+            batch.read_mask = Some(mask(paths));
+            let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+                .await
+                .unwrap()
+                .objects;
+            for (item, (req, expected)) in items.iter().zip_debug_eq(&cases) {
+                assert_eq!(
+                    &batch_outcome(item),
+                    expected,
+                    "BatchGetObjects {req:?} {paths:?}"
+                );
+            }
+        }
+
+        mock_server.abort();
+    }
+
+    /// `max_version` reads, and `version` reads bounded by `at_checkpoint`, are `Unimplemented`
+    /// with `NOT_SERVED_HERE` / `disabled_by_config` unless `at_checkpoint` and `max_version`
+    /// reads are enabled, even when `at_checkpoint` is above the served height. A batch with an
+    /// item the instance cannot serve fails as a whole.
+    #[tokio::test]
+    async fn test_max_version_and_checkpoint_bounds_need_the_flag() {
+        use sui_rpc::proto::google::rpc::ErrorInfo;
+        use sui_rpc::proto::sui::rpc::v2::ErrorReason;
+
+        /// The code of a failed request, and the `cause` of its `NOT_SERVED_HERE` refusal.
+        fn refusal(error: RpcError) -> (tonic::Code, Option<String>) {
+            let status = error.into_status_proto();
+            let cause = status
+                .details
+                .iter()
+                .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+                .find(|info| {
+                    info.domain == ErrorReason::DOMAIN
+                        && info.reason == ErrorReason::NotServedHere.as_str_name()
+                })
+                .and_then(|info| info.metadata.get("cause").cloned());
+            (tonic::Code::from(status.code), cause)
+        }
+
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let id = ObjectID::random();
+        insert_history(&mock, id, &[(2, 2, ObjectStatus::Live)]).await;
+
+        let disabled = Err((
+            tonic::Code::Unimplemented,
+            Some("disabled_by_config".to_owned()),
+        ));
+        for enabled in [false, true] {
+            let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), enabled).await;
+            // The served height is 10.
+            for (version, max_version, at_checkpoint, when_enabled) in [
+                (Some(2), None, Some(5), Ok(2)),
+                (None, Some(2), None, Ok(2)),
+                (None, Some(2), Some(5), Ok(2)),
+                (
+                    Some(2),
+                    None,
+                    Some(11),
+                    Err((tonic::Code::OutOfRange, None)),
+                ),
+            ] {
+                let expected = if enabled {
+                    when_enabled
+                } else {
+                    disabled.clone()
+                };
+                let context =
+                    format!("enabled {enabled}: {version:?} {max_version:?} {at_checkpoint:?}");
+                let req = selector_request(id, version, max_version, at_checkpoint);
+                let request = kv_rpc.admitted_request(req.clone());
+                let outcome = get_object(&kv_rpc, request)
+                    .await
+                    .map(|response| response.object.unwrap().version.unwrap())
+                    .map_err(refusal);
+                assert_eq!(outcome, expected, "GetObject {context}");
+
+                let mut batch = BatchGetObjectsRequest::default();
+                batch.requests = vec![selector_request(id, None, None, None), req];
+                let outcome = match batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch)).await
+                {
+                    Ok(response) => {
+                        batch_outcome(&response.objects[1]).map_err(|code| (code, None))
+                    }
+                    Err(err) => Err(refusal(err)),
+                };
+                assert_eq!(outcome, expected, "BatchGetObjects {context}");
+            }
+        }
+
+        mock_server.abort();
+    }
+
+    /// With `at_checkpoint` and `max_version` reads enabled, the watermarks of both the versions
+    /// index and the tombstones pipeline bound the served height.
+    #[tokio::test]
+    async fn test_object_indexes_bound_the_served_height() {
+        for lagging in [
+            sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
+            sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
+        ] {
+            for (enabled, served) in [(false, 10), (true, 7)] {
+                let mock = MockBigtableServer::new();
+                let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+                let kv_rpc =
+                    start_kv_rpc_at_heights(addr, StagesConfig::default(), enabled, |pipeline| {
+                        if pipeline == lagging { 7 } else { 10 }
+                    })
+                    .await;
+                assert_eq!(
+                    ServedHeight::of(&kv_rpc.admitted_request(()))
+                        .unwrap()
+                        .checkpoint,
+                    served,
+                    "{lagging} lagging, enabled {enabled}",
+                );
+                mock_server.abort();
+            }
+        }
+    }
+
     /// On an instance without `at_checkpoint` reads, a batch of exact versions goes out as
     /// `objects` multi-gets of at most the stage's `max-seeks-per-read` keys, and every item is
     /// answered, whether its version is stored or not.
@@ -1110,8 +1774,10 @@ mod tests {
     }
 
     /// Every request of a batch gets its own lookup's answer, in request order, including a
-    /// request that repeats an earlier one, and each `objects` row is read once: an exact version
-    /// and an `at_checkpoint` lookup that resolves to it share one read.
+    /// request that repeats an earlier one. Each `objects` row is read once: an exact version and
+    /// the lookups at a checkpoint that resolve to it share one read. Each `(object_id,
+    /// checkpoint)` of the version index is read once too: the three lookups at checkpoint 7 share
+    /// one scan.
     #[tokio::test]
     async fn test_batch_answers_each_request_and_reads_each_row_once() {
         let mock = MockBigtableServer::new();
@@ -1144,22 +1810,23 @@ mod tests {
         )
         .await;
 
-        let request = |object: &Object, version: Option<u64>, at_checkpoint: Option<u64>| {
-            let mut req = GetObjectRequest::default();
-            req.object_id = Some(object.id().to_canonical_string(true));
-            req.version = version;
-            req.at_checkpoint = at_checkpoint;
-            req
+        let request = |object: &Object,
+                       version: Option<u64>,
+                       max_version: Option<u64>,
+                       at_checkpoint: Option<u64>| {
+            selector_request(object.id(), version, max_version, at_checkpoint)
         };
         let mut batch = BatchGetObjectsRequest::default();
         batch.requests = vec![
-            request(&pinned, Some(3), None),
-            request(&latest, None, None),
-            request(&pinned, None, Some(7)),
-            request(&pinned, Some(3), None),
-            request(&pinned, Some(4), None),
-            request(&latest, None, None),
-            request(&pinned, None, Some(11)),
+            request(&pinned, Some(3), None, None),
+            request(&latest, None, None, None),
+            request(&pinned, None, None, Some(7)),
+            request(&pinned, Some(3), None, None),
+            request(&pinned, Some(4), None, None),
+            request(&latest, None, None, None),
+            request(&pinned, None, None, Some(11)),
+            request(&pinned, Some(3), None, Some(7)),
+            request(&pinned, None, Some(3), Some(7)),
         ];
         batch.read_mask = Some(mask(&["object_id", "version", "digest"]));
 
@@ -1194,19 +1861,26 @@ mod tests {
                 Err(tonic::Code::NotFound as i32),
                 found(&latest),
                 Err(tonic::Code::OutOfRange as i32),
+                found(&pinned),
+                found(&pinned),
             ],
         );
 
+        let calls = mock.read_rows_calls().await;
         let pinned_key = objects::encode_key(&ObjectKey(pinned.id(), pinned.version()));
-        let pinned_reads = mock
-            .read_rows_calls()
-            .await
-            .into_iter()
+        let pinned_reads = calls
+            .iter()
             .filter(|call| call.table == objects::NAME)
-            .flat_map(|call| call.row_keys)
-            .filter(|key| *key == pinned_key)
+            .flat_map(|call| &call.row_keys)
+            .filter(|key| **key == pinned_key)
             .count();
-        assert_eq!(pinned_reads, 1, "three requests share one read of the row");
+        assert_eq!(pinned_reads, 1, "four lookups share one read of the row");
+        // One scan at checkpoint 7, and one at the served height for the `max_version` lookup.
+        let index_scans = calls
+            .iter()
+            .filter(|call| call.table == object_versions_by_checkpoint::NAME)
+            .count();
+        assert_eq!(index_scans, 2, "{calls:?}");
 
         mock_server.abort();
     }

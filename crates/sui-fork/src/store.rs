@@ -312,20 +312,17 @@ impl ForkStore {
         Ok(object)
     }
 
-    /// Get the latest object version at or below the given root version.
+    /// Get the object's highest version at or below `version_bound`, or `None` if it has none or
+    /// that version is a deletion or wrap.
     ///
-    /// TODO(fork): this trusts the highest local row at or below the bound, which is only the true
-    /// highest when the local history is complete below the bound. A sparse cache polluted by an
-    /// exact-historical-version read (e.g. an RPC client fetching an old dynamic-field version) can
-    /// hold a lower live row than the chain's true highest at the bound, and this read then serves
-    /// that stale row without the remote ever being consulted. Reachable from `read_child_object`
-    /// on both the RPC and the executor paths, so it can skew execution as well as reads. Candidate
-    /// fix (undecided): short-circuit only on an authoritative current version at or below the
-    /// bound, or on a tombstone, and otherwise query the remote `RootVersion(bound)` and take the
-    /// max-version of the remote result and the local candidate. Optionally let executor-driven
-    /// bounds (always the parent's current root version, which Lamport-dominates the child) claim
-    /// currency on fetch so each child pays the remote round-trip once. Tracked in
-    /// design/storage.md § "Known gaps".
+    /// The local rows answer when the bound reaches the object's earliest checkpoint-pinned
+    /// version, because they are complete from there upward. Below it they are a sparse cache of
+    /// historical reads, so the remote answers instead, in two steps, because the remote's newest
+    /// version within the bound may have been created after the fork checkpoint. The object's
+    /// version at the fork checkpoint answers if it is within the bound. Otherwise every version
+    /// within the bound is older than that one, or the object was not live at the fork
+    /// checkpoint, and a query pinned at the fork checkpoint returns the newest of them that
+    /// existed by then.
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
@@ -343,20 +340,37 @@ impl ForkStore {
             Some((_, Status::Tombstone(_))) => return Ok(None),
             None => {}
         }
-        match local_store.get_object_at_or_before(*object_id, version_bound)? {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+
+        let earliest_pinned = local_store.earliest_checkpoint_pinned_version(*object_id)?;
+        if earliest_pinned.is_some_and(|(_, version)| version <= version_bound) {
+            return match local_store.get_object_at_or_before(*object_id, version_bound)? {
+                Some((_, Status::Live(object))) => Ok(Some(object)),
+                Some((_, Status::Tombstone(_))) => Ok(None),
+                None => Err(anyhow!(
+                    "object {object_id} has a checkpoint-pinned version at or below \
+                     {version_bound} but no object row there"
+                )),
+            };
+        }
+
+        // A row at the fork checkpoint already records the object's version there, which is
+        // above the bound.
+        let resolved_at_fork = earliest_pinned
+            .is_some_and(|(checkpoint, _)| checkpoint == self.forked_at_checkpoint());
+        if !resolved_at_fork
+            && let Some(object) = self.fetch_object_at_fork_checkpoint(object_id)?
+            && object.version() <= version_bound
+        {
+            return Ok(Some(object));
         }
 
         let object = self
             .inner
             .remote
             .object_at_or_before(object_id, version_bound.value())?;
-        if let Some(ref object) = object {
+        if let Some(object) = &object {
             local_store.save_object_version_only(object)?;
         }
-
         Ok(object)
     }
 
@@ -1113,6 +1127,16 @@ impl RpcStateReader for ForkStore {
     /// Resolve layouts using packages from committed `sui-rpc-store` data.
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         self.stock_reader().layout_package_store()
+    }
+
+    /// Resolve through the overlay, the local store, then the remote, as the inherent
+    /// `ForkStore::get_object_lt_or_eq_version` does for child-object reads.
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> StorageResult<Option<Object>> {
+        ForkStore::get_object_lt_or_eq_version(self, object_id, version).map_err(to_storage_error)
     }
 }
 
