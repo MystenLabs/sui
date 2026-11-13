@@ -189,6 +189,7 @@ impl Cluster for LocalNewCluster {
         let data_ingestion_path = tempdir()?;
 
         let mut cluster_builder = TestClusterBuilder::new()
+            .with_num_validators(4)
             .enable_fullnode_events()
             .with_data_ingestion_dir(data_ingestion_path.path().to_path_buf());
 

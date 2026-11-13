@@ -36,7 +36,10 @@ use sui_types::transaction::ProgrammableMoveCall;
 async fn basic_reconfig_end_to_end_test() {
     // TODO remove this sleep when this test passes consistently
     sleep(Duration::from_secs(1)).await;
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
     test_cluster.trigger_reconfiguration().await;
 }
 
@@ -112,7 +115,9 @@ async fn do_test_passive_reconfig(chain: Option<Chain>) {
     });
     ProtocolConfig::poison_get_for_min_version();
 
-    let mut builder = TestClusterBuilder::new().with_epoch_duration_ms(10000);
+    let mut builder = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .with_epoch_duration_ms(10000);
 
     if let Some(chain) = chain {
         builder = builder.with_chain_override(chain);
@@ -200,6 +205,7 @@ async fn test_create_advance_epoch_tx_race() {
     register_wait("reconfig_delay", target_node, reconfig_delay_tx.clone());
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_epoch_duration_ms(10000)
         .build()
         .await;
@@ -227,6 +233,7 @@ async fn test_reconfig_with_failing_validator() {
 
     let test_cluster = Arc::new(
         TestClusterBuilder::new()
+            .with_num_validators(4)
             .with_epoch_duration_ms(10000)
             .build()
             .await,
@@ -833,6 +840,7 @@ async fn test_epoch_flag_upgrade() {
     });
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_epoch_duration_ms(30000)
         .build()
         .await;
@@ -892,6 +900,7 @@ async fn safe_mode_reconfig_test() {
     advance_epoch_result_injection::set_override(Some((2, 3)));
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_epoch_duration_ms(EPOCH_DURATION)
         .build()
         .await;
@@ -1184,6 +1193,7 @@ async fn test_epoch_close_deadline_unsticks_divergent_stuck_deferred_transaction
     });
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_epoch_duration_ms(20_000)
         .build()
         .await;

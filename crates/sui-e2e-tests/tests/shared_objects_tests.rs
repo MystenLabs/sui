@@ -82,6 +82,7 @@ async fn shared_object_deletion() {
 async fn shared_object_deletion_multiple_times() {
     let num_deletions = 300;
     let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_accounts(vec![AccountConfig {
             address: None,
             gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_deletions],
@@ -139,6 +140,7 @@ async fn shared_object_deletion_multiple_times() {
 async fn shared_object_deletion_multiple_times_cert_racing() {
     let num_deletions = 10;
     let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_accounts(vec![AccountConfig {
             address: None,
             gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_deletions],
@@ -210,7 +212,10 @@ async fn shared_object_deletion_multi_certs() {
         sleep(Duration::from_millis(delay)).await;
     });
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
 
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let package_id = package.0;
@@ -305,6 +310,7 @@ async fn assert_checkpoint_order_with_effects_dependencies(
     expect_effects_dependencies_disabled: bool,
 ) {
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_protocol_version(protocol_version)
         .with_accounts(vec![AccountConfig {
             address: None,
@@ -675,7 +681,11 @@ async fn call_shared_object_contract() {
 #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
 #[sim_test]
 async fn access_clock_object_test() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .with_production_config()
+        .build()
+        .await;
     let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     let transaction = test_cluster

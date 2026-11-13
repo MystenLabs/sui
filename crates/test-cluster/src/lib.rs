@@ -23,7 +23,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_driver::SubmitTransactionOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::{Chain, ProtocolVersion};
+use sui_protocol_config::{BaseOverrideGuard, Chain, ProtocolConfig, ProtocolVersion};
 use sui_rpc_api::Client;
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -69,7 +69,7 @@ use tracing::{error, info};
 
 pub mod addr_balance_test_env;
 
-const NUM_VALIDATOR: usize = 4;
+const NUM_VALIDATOR: usize = 1;
 // Keep direct test submissions bounded like the production TransactionOrchestrator.
 const TRANSACTION_FINALITY_TIMEOUT: Duration = Duration::from_secs(90);
 
@@ -96,6 +96,7 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
+    _test_speed_overrides: Option<BaseOverrideGuard>,
 }
 
 impl TestCluster {
@@ -252,6 +253,11 @@ impl TestCluster {
     }
 
     pub fn random_node_restarter(self: &Arc<Self>) -> RandomNodeRestarter {
+        let committee_size = self.get_validator_pubkeys().len();
+        assert!(
+            committee_size >= 4,
+            "stopping one of {committee_size} committee members loses quorum; a committee of at least 4 is needed"
+        );
         RandomNodeRestarter::new(self.clone())
     }
 
@@ -1230,7 +1236,56 @@ impl Drop for RandomNodeRestarter {
     }
 }
 
+/// TestSpeedOverrides holds replacement protocol config values. Each value replaces the protocol
+/// config value only in versions where that value is set.
+#[derive(Clone, Copy, Debug)]
+pub struct TestSpeedOverrides {
+    /// Fewer threshold BLS shares make each randomness round cheaper. The reduction divides
+    /// voting power by at most 40, so any bound below about 250 gives about 250 shares.
+    pub random_beacon_reduction_lower_bound: Option<u32>,
+    pub random_beacon_min_round_interval_ms: Option<u64>,
+    pub min_checkpoint_interval_ms: Option<u64>,
+}
+
+impl TestSpeedOverrides {
+    fn apply(&self, mut cfg: ProtocolConfig) -> ProtocolConfig {
+        fn replace<T>(current: Option<T>, value: Option<T>, set: impl FnOnce(T)) {
+            if let (Some(_), Some(value)) = (current, value) {
+                set(value);
+            }
+        }
+        replace(
+            cfg.random_beacon_reduction_lower_bound_as_option(),
+            self.random_beacon_reduction_lower_bound,
+            |v| cfg.set_random_beacon_reduction_lower_bound_for_testing(v),
+        );
+        replace(
+            cfg.random_beacon_min_round_interval_ms_as_option(),
+            self.random_beacon_min_round_interval_ms,
+            |v| cfg.set_random_beacon_min_round_interval_ms_for_testing(v),
+        );
+        replace(
+            cfg.min_checkpoint_interval_ms_as_option(),
+            self.min_checkpoint_interval_ms,
+            |v| cfg.set_min_checkpoint_interval_ms_for_testing(v),
+        );
+        cfg
+    }
+}
+
+/// Protocol config overrides that `TestClusterBuilder` applies under msim unless
+/// `with_production_config` is called. They cut the CPU cost of randomness and of
+/// checkpoint signature verification, which dominate idle simulated networks. The checkpoint
+/// interval is also the congestion budget period consensus uses before it has measured the
+/// commit rate, so the first commit of each epoch gets a larger budget than in production.
+pub const DEFAULT_TEST_SPEED_OVERRIDES: TestSpeedOverrides = TestSpeedOverrides {
+    random_beacon_reduction_lower_bound: Some(100),
+    random_beacon_min_round_interval_ms: Some(2000),
+    min_checkpoint_interval_ms: Some(1000),
+};
+
 pub struct TestClusterBuilder {
+    test_speed_overrides: Option<TestSpeedOverrides>,
     genesis_config: Option<GenesisConfig>,
     network_config: Option<NetworkConfig>,
     additional_objects: Vec<Object>,
@@ -1279,6 +1334,8 @@ pub struct TestClusterBuilder {
 impl TestClusterBuilder {
     pub fn new() -> Self {
         TestClusterBuilder {
+            // Real-time tests keep production timing.
+            test_speed_overrides: cfg!(msim).then_some(DEFAULT_TEST_SPEED_OVERRIDES),
             genesis_config: None,
             network_config: None,
             chain_override: None,
@@ -1397,8 +1454,21 @@ impl TestClusterBuilder {
         self
     }
 
+    /// Run with the unmodified protocol config instead of `DEFAULT_TEST_SPEED_OVERRIDES`.
+    pub fn with_production_config(mut self) -> Self {
+        self.test_speed_overrides = None;
+        self
+    }
+
+    pub fn with_test_speed_overrides(mut self, overrides: TestSpeedOverrides) -> Self {
+        self.test_speed_overrides = Some(overrides);
+        self
+    }
+
     /// Set the number of default validators to spawn. Can be overridden by `with_validators`, if
     /// you need to provide more specific genesis configs for each validator.
+    /// The default is 1. Use more only to test multi-validator behavior, such as consensus,
+    /// reconfiguration, quorum aggregation, or cross-validator fork detection.
     pub fn with_num_validators(mut self, num: usize) -> Self {
         self.num_validators = Some(num);
         self
@@ -1582,6 +1652,11 @@ impl TestClusterBuilder {
     }
 
     pub async fn build(mut self) -> TestCluster {
+        // Installed before any node starts so that every node sees the same config.
+        let test_speed_overrides = self.test_speed_overrides.map(|overrides| {
+            ProtocolConfig::apply_base_overrides_for_testing(move |_, cfg| overrides.apply(cfg))
+        });
+
         // All test clusters receive a continuous stream of random JWKs.
         // If we later use zklogin authenticated transactions in tests we will need to supply
         // valid JWKs as well.
@@ -1697,6 +1772,7 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
+            _test_speed_overrides: test_speed_overrides,
         };
 
         // The embedded rpc-store indexes the tip asynchronously, so genesis

@@ -62,6 +62,7 @@ async fn test_admission_queue_basic() {
     };
 
     let cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
         .with_authority_overload_config(config)
         .with_consensus_transaction_pool_config(pool_disabled())
         .build()

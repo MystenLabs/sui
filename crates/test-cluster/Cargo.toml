@@ -25,7 +25,7 @@ mysten-common.workspace = true
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
 sui-node.workspace = true
-sui-protocol-config.workspace = true
+sui-protocol-config = { workspace = true, features = ["testing"] }
 sui-swarm.workspace = true
 sui-types.workspace = true
 sui-keys.workspace = true

@@ -4,7 +4,7 @@
 use std::time::Duration;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
-use test_cluster::TestClusterBuilder;
+use test_cluster::{DEFAULT_TEST_SPEED_OVERRIDES, TestClusterBuilder, TestSpeedOverrides};
 use tracing::info;
 
 #[sim_test]
@@ -15,6 +15,14 @@ async fn test_checkpoint_rate() {
     });
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        // Production checkpoint and randomness round timing, so that the measured rate reflects
+        // production. Fewer randomness shares do not change the rate.
+        .with_test_speed_overrides(TestSpeedOverrides {
+            random_beacon_min_round_interval_ms: None,
+            min_checkpoint_interval_ms: None,
+            ..DEFAULT_TEST_SPEED_OVERRIDES
+        })
         .with_epoch_duration_ms(60000)
         .build()
         .await;
