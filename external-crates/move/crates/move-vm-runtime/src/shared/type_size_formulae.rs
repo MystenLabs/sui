@@ -349,8 +349,10 @@ impl MaxPlusForm {
     }
 }
 
-/// Computes syntactic size and depth forms, combining repeated parameters by sum and maximum.
-fn syntactic_forms(ty: &ArenaType) -> (LinearForm, MaxPlusForm) {
+/// Builds formulae for the node count and nesting depth of `ty` under type substitution.
+///
+/// Datatypes count as one node without expanding their fields.
+fn type_size_and_depth_forms(ty: &ArenaType) -> (LinearForm, MaxPlusForm) {
     let mut type_size = LinearForm::constant(0);
     let mut type_depth = MaxPlusForm::constant(0);
     let mut work: Vec<(&ArenaType, u64)> = vec![(ty, 0)];
@@ -1090,7 +1092,7 @@ impl ArenaTypeSizeFormula {
         arena: &ArenaBuilder,
         type_limits: &TypeLimits,
     ) -> PartialVMResult<Self> {
-        let (type_size, type_depth) = syntactic_forms(ty);
+        let (type_size, type_depth) = type_size_and_depth_forms(ty);
 
         // The term is a "field" of nothing: no wrapping datatype node, so the locals start at
         // zero and the fold sits at depth 0.
