@@ -54,6 +54,7 @@ use crate::config::PipelineStage;
 use crate::config::ResolvedStageConfig;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
+use crate::pipeline::MissingRow;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
@@ -493,6 +494,7 @@ fn event_transactions(
         transactions_stage.concurrency,
         transactions_stage.min_seeks_per_split_read,
         fetcher,
+        MissingRow::Error,
     )
     .map(|frame| -> Result<_, ScanStop> {
         Ok(match frame? {
