@@ -3334,7 +3334,8 @@ mod tests {
         }
         for (version, status) in [(3, ObjectStatus::Wrapped), (5, ObjectStatus::Deleted)] {
             let key = tables::objects::encode_key(&ObjectKey(id, v(version)));
-            let cells = tables::objects::encode_tombstone(status).unwrap();
+            let cells =
+                tables::objects::encode_tombstone(status, &TransactionDigest::random()).unwrap();
             mock.insert_row(tables::objects::NAME, key, cells).await;
         }
 
