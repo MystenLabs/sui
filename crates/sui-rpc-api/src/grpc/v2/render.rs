@@ -8,7 +8,8 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::Struct;
-use sui_package_resolver::{PackageStoreWithLruCache, SyncResolver};
+use sui_package_resolver::{Limits as ResolverLimits, PackageStoreWithLruCache, SyncResolver};
+use sui_protocol_config::{ProtocolConfig, max_across_protocol};
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
@@ -23,6 +24,30 @@ use crate::{RpcService, reader::DisplayStore};
 
 type CachedLayoutResolver<'a> =
     SyncResolver<PackageStoreWithLruCache<Box<dyn BackingPackageStore + Send + Sync + 'a>>>;
+
+fn resolver_limits() -> ResolverLimits {
+    static LIMITS: OnceLock<ResolverLimits> = OnceLock::new();
+
+    LIMITS
+        .get_or_init(|| ResolverLimits {
+            max_type_argument_depth: max_across_protocol(
+                ProtocolConfig::max_type_argument_depth_as_option,
+            )
+            .unwrap_or(u32::MAX) as usize,
+            max_type_argument_width: max_across_protocol(
+                ProtocolConfig::max_generic_instantiation_length_as_option,
+            )
+            .unwrap_or(u32::MAX as u64) as usize,
+            max_type_nodes: max_across_protocol(ProtocolConfig::max_type_nodes_as_option)
+                .unwrap_or(u32::MAX as u64) as usize,
+            max_move_value_depth: max_across_protocol(
+                ProtocolConfig::max_move_value_depth_as_option,
+            )
+            .unwrap_or(u32::MAX as u64) as usize,
+            max_layout_work: sui_package_resolver::DEFAULT_MAX_LAYOUT_WORK,
+        })
+        .clone()
+}
 
 /// Reuses parsed packages while rendering a response against a fixed object overlay.
 pub(crate) struct RenderContext<'a> {
@@ -58,7 +83,7 @@ impl<'a> RenderContext<'a> {
             if let Some(overlay) = self.overlay {
                 store = Box::new(OverlayBackingPackageStore::new(overlay, store));
             }
-            SyncResolver::new(PackageStoreWithLruCache::new(store))
+            SyncResolver::new_with_limits(PackageStoreWithLruCache::new(store), resolver_limits())
         })
     }
 }

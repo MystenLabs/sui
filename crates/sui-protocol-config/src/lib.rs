@@ -516,6 +516,19 @@ impl Chain {
     }
 }
 
+/// Fetch the maximum value of a protocol config across all chains and versions.
+pub fn max_across_protocol<T: Ord>(f: impl Fn(&ProtocolConfig) -> Option<T>) -> Option<T> {
+    let mut max = None;
+    let mut version = ProtocolVersion::MIN;
+    while version <= ProtocolVersion::MAX {
+        max = max.max(f(&ProtocolConfig::get_for_version(version, Chain::Unknown)));
+        max = max.max(f(&ProtocolConfig::get_for_version(version, Chain::Mainnet)));
+        max = max.max(f(&ProtocolConfig::get_for_version(version, Chain::Testnet)));
+        version = version + 1;
+    }
+    max
+}
+
 pub struct Error(pub String);
 
 // TODO: There are quite a few non boolean values in the feature flags. We should move them out.

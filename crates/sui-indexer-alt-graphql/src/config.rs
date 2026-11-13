@@ -10,9 +10,8 @@ use serde::Serialize;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use sui_name_service::NameServiceConfig;
-use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::max_across_protocol;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 
@@ -160,6 +159,9 @@ pub struct Limits {
     /// Maximum nesting allowed in datatype fields when calculating the layout of a single type.
     pub max_move_value_depth: usize,
 
+    /// Maximum cumulative number of layout nodes constructed or copied during resolution.
+    pub max_layout_work: usize,
+
     /// Maximum budget in bytes to spend when outputting a structured Move value.
     pub max_move_value_bound: usize,
 
@@ -205,6 +207,7 @@ pub struct LimitsLayer {
     pub max_type_argument_width: Option<usize>,
     pub max_type_nodes: Option<usize>,
     pub max_move_value_depth: Option<usize>,
+    pub max_layout_work: Option<usize>,
     pub max_move_value_bound: Option<usize>,
     pub max_display_field_depth: Option<usize>,
     pub max_display_format_nodes: Option<usize>,
@@ -492,6 +495,7 @@ impl Limits {
             max_type_argument_width: self.max_type_argument_width,
             max_type_nodes: self.max_type_nodes,
             max_move_value_depth: self.max_move_value_depth,
+            max_layout_work: self.max_layout_work,
         }
     }
 
@@ -544,6 +548,7 @@ impl LimitsLayer {
             max_move_value_depth: self
                 .max_move_value_depth
                 .unwrap_or(base.max_move_value_depth),
+            max_layout_work: self.max_layout_work.unwrap_or(base.max_layout_work),
             max_move_value_bound: self
                 .max_move_value_bound
                 .unwrap_or(base.max_move_value_bound),
@@ -629,6 +634,7 @@ impl From<Limits> for LimitsLayer {
             max_type_argument_width: Some(value.max_type_argument_width),
             max_type_nodes: Some(value.max_type_nodes),
             max_move_value_depth: Some(value.max_move_value_depth),
+            max_layout_work: Some(value.max_layout_work),
             max_move_value_bound: Some(value.max_move_value_bound),
             max_display_field_depth: Some(value.max_display_field_depth),
             max_display_format_nodes: Some(value.max_display_format_nodes),
@@ -743,6 +749,7 @@ impl Default for Limits {
             max_type_argument_width,
             max_type_nodes,
             max_move_value_depth,
+            max_layout_work: sui_package_resolver::DEFAULT_MAX_LAYOUT_WORK,
             max_move_value_bound: 1024 * 1024,
             max_display_field_depth: display_limits.max_depth,
             max_display_format_nodes: display_limits.max_nodes,
@@ -771,18 +778,4 @@ impl Default for ZkLoginConfig {
             ),
         }
     }
-}
-
-/// Fetch the maximum value of a protocol config across all chains and versions.
-fn max_across_protocol<T: Ord>(f: impl Fn(&ProtocolConfig) -> Option<T>) -> Option<T> {
-    let mut x = None;
-    let mut v = ProtocolVersion::MIN;
-    while v <= ProtocolVersion::MAX {
-        x = x.max(f(&ProtocolConfig::get_for_version(v, Chain::Unknown)));
-        x = x.max(f(&ProtocolConfig::get_for_version(v, Chain::Mainnet)));
-        x = x.max(f(&ProtocolConfig::get_for_version(v, Chain::Testnet)));
-        v = v + 1;
-    }
-
-    x
 }
