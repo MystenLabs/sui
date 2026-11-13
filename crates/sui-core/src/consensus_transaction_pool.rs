@@ -257,6 +257,10 @@ impl AdmissionQueueEntry for PoolEntry {
         self.ack.keys.iter().cloned()
     }
 
+    fn byte_size(&self) -> usize {
+        self.total_bytes
+    }
+
     fn notify_evicted(self, min_gas_price: u64) {
         self.metrics.pool_depth.with_label_values(&["user"]).dec();
         self.metrics
@@ -367,6 +371,10 @@ struct ProposedEntry {
     created: Instant,
 }
 
+// One Inner exists per epoch pool, behind an Arc<Mutex<_>>, so the unused Closed
+// variant's layout slack is a single allocation; boxing Open would only add
+// indirection on take().
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     Open(Pool),
     Closed,
@@ -395,6 +403,7 @@ impl ConsensusTransactionPool {
         cache_writer: Arc<dyn ExecutionCacheWrite>,
         max_pending_transactions: usize,
         max_user_bytes_per_second: Option<u64>,
+        max_pending_user_bytes: Option<u64>,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -414,6 +423,20 @@ impl ConsensusTransactionPool {
                 .max_num_transactions_in_block()
         );
 
+        let max_block_bytes = epoch_store
+            .protocol_config()
+            .max_transactions_in_block_bytes();
+        let max_pending_user_bytes = max_pending_user_bytes.map(|bytes| {
+            if bytes < max_block_bytes {
+                warn!(
+                    configured = bytes,
+                    max_block_bytes,
+                    "max_pending_user_bytes is below max_transactions_in_block_bytes; raising it so that a maximum-size bundle can be admitted"
+                );
+            }
+            bytes.max(max_block_bytes)
+        });
+
         let user_byte_budget = max_user_bytes_per_second.map(|bytes_per_second| {
             assert!(
                 bytes_per_second > 0,
@@ -421,9 +444,7 @@ impl ConsensusTransactionPool {
             );
             Box::new(UserByteBudget::new(
                 bytes_per_second,
-                epoch_store
-                    .protocol_config()
-                    .max_transactions_in_block_bytes(),
+                max_block_bytes,
                 Instant::now(),
             ))
         });
@@ -434,16 +455,14 @@ impl ConsensusTransactionPool {
             adapter_metrics,
             stagger_quota: StaggerQuota::new(
                 max_pending_transactions,
-                metrics.pool_staggered_held.clone(),
-                metrics.pool_staggered_rejected.clone(),
-                metrics.pool_stagger_shadow_decisions.clone(),
-                metrics.pool_stagger_shadow_delay.clone(),
+                max_pending_user_bytes,
+                &metrics,
             ),
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
-                user: UserLane::Open(PriorityAdmissionQueue::new(
-                    max_pending_transactions,
-                    metrics,
-                )),
+                user: UserLane::Open(
+                    PriorityAdmissionQueue::new(max_pending_transactions, metrics)
+                        .with_byte_capacity(max_pending_user_bytes),
+                ),
                 user_byte_budget,
                 system: VecDeque::new(),
                 pings: VecDeque::new(),
@@ -463,6 +482,7 @@ impl ConsensusTransactionPool {
             epoch_store,
             cache_writer,
             max_pending_transactions,
+            None,
             None,
             metrics,
             ConsensusAdapterMetrics::new_test(),
@@ -515,9 +535,11 @@ impl ConsensusTransactionPool {
             .iter()
             .filter_map(|transaction| transaction.kind.as_user_transaction())
             .collect();
-        let staggered_slot = self
-            .stagger_quota
-            .submission_slot(&user_transactions, &self.epoch_store)?;
+        let staggered_slot = self.stagger_quota.submission_slot(
+            &user_transactions,
+            &self.epoch_store,
+            total_bytes as u64,
+        )?;
         let stagger_delay = staggered_slot.as_ref().map(|slot| slot.delay());
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
@@ -985,8 +1007,9 @@ impl Drop for TakenTransactionsGuard {
 
         let mut requeued = 0;
         let mut halted = Vec::new();
-        // Capacity is bypassed because these entries were already admitted. Concurrent
-        // inserts can put us over capacity, which we accept transiently.
+        // The entry-count and byte capacities are bypassed because these entries were
+        // already admitted. Concurrent inserts can put us over either capacity, which we
+        // accept transiently: the overshoot is bounded by one proposal's entries.
         for mut taken in entries.into_iter().rev() {
             match taken.lane {
                 TakenLane::System => {
@@ -1669,6 +1692,7 @@ mod tests {
             state.get_cache_writer().clone(),
             10,
             Some(max_user_bytes_per_second),
+            None,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
@@ -1684,6 +1708,10 @@ mod tests {
             )));
         }
         (state, pool)
+    }
+
+    fn user_lane_bytes(pool: &ConsensusTransactionPool) -> i64 {
+        pool.metrics.pool_bytes.with_label_values(&["user"]).get()
     }
 
     fn transaction() -> ConsensusTransaction {
@@ -1740,6 +1768,165 @@ mod tests {
             EntryAck::User(sender),
             vec![transaction().key()],
         ));
+    }
+
+    #[sim_test]
+    async fn pending_user_bytes_below_block_limit_is_raised_to_it() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let max_block_bytes = epoch_store
+            .protocol_config()
+            .max_transactions_in_block_bytes();
+        let pool = ConsensusTransactionPool::new(
+            epoch_store,
+            state.get_cache_writer().clone(),
+            10,
+            None,
+            Some(1),
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+            ConsensusAdapterMetrics::new_test(),
+        );
+        {
+            let inner = pool.inner.lock();
+            let Inner::Open(open) = &*inner else {
+                unreachable!("new pool must be open");
+            };
+            let UserLane::Open(user) = &open.user else {
+                unreachable!("new user lane must be open");
+            };
+            assert_eq!(user.byte_capacity(), Some(max_block_bytes));
+        }
+        // Held submissions may take a quarter of the raised byte capacity.
+        assert_eq!(pool.stagger_quota.byte_quota(), Some(max_block_bytes / 4));
+        pool.close();
+    }
+
+    #[sim_test]
+    async fn byte_capped_user_lane_evicts_requeues_and_drains() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let transactions: Vec<_> = (0..3).map(|_| user_transaction(&state)).collect();
+        let sizes: Vec<i64> = transactions
+            .iter()
+            .map(|transaction| bcs::to_bytes(transaction).unwrap().len() as i64)
+            .collect();
+        {
+            let mut inner = pool.inner.lock();
+            let Inner::Open(open) = &mut *inner else {
+                unreachable!("new pool must be open");
+            };
+            open.user = UserLane::Open(
+                PriorityAdmissionQueue::new(10, pool.metrics.clone())
+                    .with_byte_capacity(Some((sizes[0] + sizes[1]) as u64)),
+            );
+        }
+
+        let (first, _) = pool
+            .try_insert(epoch, 10, vec![transactions[0].clone()])
+            .unwrap();
+        let (_second, _) = pool
+            .try_insert(epoch, 10, vec![transactions[1].clone()])
+            .unwrap();
+        assert_eq!(pool.queue_depth("user"), 2);
+        assert_eq!(user_lane_bytes(&pool), sizes[0] + sizes[1]);
+
+        let (_third, _) = pool
+            .try_insert(epoch, 20, vec![transactions[2].clone()])
+            .unwrap();
+        assert!(matches!(
+            first.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
+        ));
+        assert_eq!(pool.queue_depth("user"), 2);
+        assert_eq!(user_lane_bytes(&pool), sizes[1] + sizes[2]);
+
+        let (taken, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(taken.len(), 2);
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(user_lane_bytes(&pool), 0);
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 2);
+        assert_eq!(user_lane_bytes(&pool), sizes[1] + sizes[2]);
+
+        pool.close();
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(user_lane_bytes(&pool), 0);
+    }
+
+    #[sim_test]
+    async fn byte_capped_admission_evicts_several_entries_and_a_refusal_changes_nothing() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let transactions: Vec<_> = (0..7).map(|_| user_transaction(&state)).collect();
+        let size = bcs::to_bytes(&transactions[0]).unwrap().len() as i64;
+        assert!(
+            transactions
+                .iter()
+                .all(|transaction| bcs::to_bytes(transaction).unwrap().len() as i64 == size),
+            "the test assumes equal transaction sizes"
+        );
+        // The lane holds exactly three single-transaction entries.
+        {
+            let mut inner = pool.inner.lock();
+            let Inner::Open(open) = &mut *inner else {
+                unreachable!("new pool must be open");
+            };
+            open.user = UserLane::Open(
+                PriorityAdmissionQueue::new(10, pool.metrics.clone())
+                    .with_byte_capacity(Some(3 * size as u64)),
+            );
+        }
+
+        let mut receivers: Vec<_> = transactions[..3]
+            .iter()
+            .map(|transaction| {
+                pool.try_insert(epoch, 10, vec![transaction.clone()])
+                    .unwrap()
+                    .0
+            })
+            .collect();
+        assert_eq!(pool.queue_depth("user"), 3);
+        assert_eq!(user_lane_bytes(&pool), 3 * size);
+
+        // A two-transaction bundle at a higher price evicts the two oldest entries.
+        let (_bundle, _) = pool
+            .try_insert(
+                epoch,
+                20,
+                vec![transactions[3].clone(), transactions[4].clone()],
+            )
+            .unwrap();
+        let _remaining = receivers.pop().unwrap();
+        for evicted in receivers {
+            assert!(matches!(
+                evicted.await.unwrap().unwrap_err().as_inner(),
+                SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
+                    min_gas_price: 20
+                }
+            ));
+        }
+        assert_eq!(pool.queue_depth("user"), 2);
+        assert_eq!(user_lane_bytes(&pool), 3 * size);
+
+        // A bundle at the remaining entry's price cannot evict it, so it is refused and
+        // the lane and its gauges are unchanged.
+        let error = pool
+            .try_insert(
+                epoch,
+                10,
+                vec![transactions[5].clone(), transactions[6].clone()],
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error.as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 10 }
+        ));
+        assert_eq!(pool.queue_depth("user"), 2);
+        assert_eq!(user_lane_bytes(&pool), 3 * size);
+
+        pool.close();
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(user_lane_bytes(&pool), 0);
     }
 
     #[tokio::test]

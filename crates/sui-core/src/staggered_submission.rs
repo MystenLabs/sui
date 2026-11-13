@@ -28,7 +28,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use fastcrypto::hash::HashFunction;
@@ -48,6 +48,7 @@ use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::transaction::{Transaction, TransactionDataAPI as _, paid_proposer_count};
 use tracing::info;
 
+use crate::admission_queue::AdmissionQueueMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 
 /// Default delay between consecutive slots beyond the free slots. It exceeds the median
@@ -56,7 +57,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 /// duplicate copies.
 const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(400);
 /// Held (staggered) submissions may occupy at most `capacity / this` of the owner's
-/// pending-transaction capacity; see [`StaggerQuota`].
+/// pending-transaction capacity and of its byte capacity; see [`StaggerQuota`].
 const STAGGERED_HELD_QUOTA_DIVISOR: usize = 4;
 /// Share of total voting power, in basis points, that a transaction's proposer set
 /// covers: the leading slots of its stagger order whose cumulative stake first reaches
@@ -608,21 +609,30 @@ impl StaggerDecision {
 }
 
 /// The transaction pool's admission gate for staggered (held) submissions, created with
-/// the pool's capacity and metrics so slot requests carry no limits or metrics. The
+/// the pool's capacities and metrics so slot requests carry no limits or metrics. The
 /// stagger policy itself (mode, schedule) stays on the per-epoch [`StaggeredSubmission`]
 /// in the epoch store.
 ///
 /// Held submissions are not drained until their delay elapses, so without the quota
-/// (`max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR`), sustained
-/// no-proposer-list inflow at up to `max_delay` of dwell each could fill the pool's
-/// capacity and crowd out restricted traffic. At the quota the caller gets a retriable
-/// overload error instead — which also steers the client to retry against another
-/// validator, plausibly one of the transaction's free-slot validators.
+/// (`max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR` entries and, when the pool
+/// has a byte capacity, the same share of its bytes), sustained no-proposer-list inflow
+/// at up to `max_delay` of dwell each could fill the pool's capacity and crowd out
+/// restricted traffic. At the quota the caller gets a retriable overload error instead —
+/// which also steers the client to retry against another validator, plausibly one of
+/// the transaction's free-slot validators.
 pub struct StaggerQuota {
     quota: usize,
     held: Arc<AtomicUsize>,
+    /// The quota on the serialized bytes of held entries, set when the pool has a byte
+    /// capacity.
+    byte_quota: Option<u64>,
+    held_bytes: Arc<AtomicU64>,
     /// Kept in lockstep with `held` for observability.
     metric: IntGauge,
+    /// Kept in lockstep with `held_bytes` for observability.
+    bytes_metric: IntGauge,
+    /// Held submissions refused at a quota, labeled by the quota that refused them.
+    quota_rejected_metric: IntCounterVec,
     /// Submissions rejected because this validator is outside the proposer set.
     rejected_metric: IntCounter,
     /// Dry-run records while staggering is inactive: the decision it would have made
@@ -634,29 +644,39 @@ pub struct StaggerQuota {
 impl StaggerQuota {
     pub fn new(
         max_pending_transactions: usize,
-        held_metric: IntGauge,
-        rejected_metric: IntCounter,
-        shadow_decisions_metric: IntCounterVec,
-        shadow_delay_metric: Histogram,
+        max_pending_bytes: Option<u64>,
+        metrics: &AdmissionQueueMetrics,
     ) -> Self {
         Self {
             quota: (max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR).max(1),
             held: Arc::new(AtomicUsize::new(0)),
-            metric: held_metric,
-            rejected_metric,
-            shadow_decisions_metric,
-            shadow_delay_metric,
+            byte_quota: max_pending_bytes
+                .map(|bytes| (bytes / STAGGERED_HELD_QUOTA_DIVISOR as u64).max(1)),
+            held_bytes: Arc::new(AtomicU64::new(0)),
+            metric: metrics.pool_staggered_held.clone(),
+            bytes_metric: metrics.pool_staggered_held_bytes.clone(),
+            quota_rejected_metric: metrics.pool_staggered_quota_rejected.clone(),
+            rejected_metric: metrics.pool_staggered_rejected.clone(),
+            shadow_decisions_metric: metrics.pool_stagger_shadow_decisions.clone(),
+            shadow_delay_metric: metrics.pool_stagger_shadow_delay.clone(),
         }
+    }
+
+    #[cfg(test)]
+    pub fn byte_quota(&self) -> Option<u64> {
+        self.byte_quota
     }
 
     /// Like [`StaggeredSubmission::submission_delay`], but also registers the hold
     /// against the quota and returns it as a [`StaggeredSlot`] carrying the
-    /// eligibility time. A submission outside the proposer set is rejected before it
-    /// touches the quota.
+    /// eligibility time. `bytes` is the submission's serialized size, which the hold
+    /// counts against the byte quota. A submission outside the proposer set is
+    /// rejected before it touches the quota.
     pub fn submission_slot(
         &self,
         txs: &[&Transaction],
         epoch_store: &AuthorityPerEpochStore,
+        bytes: u64,
     ) -> SuiResult<Option<StaggeredSlot>> {
         let staggered = epoch_store.staggered_submission();
         if !staggered.is_active() {
@@ -678,6 +698,14 @@ impl StaggerQuota {
                 return Err(SuiErrorKind::StaggeredSubmissionNotProposer.into());
             }
         };
+        self.hold(delay, bytes).map(Some)
+    }
+
+    /// Registers a hold of `bytes` against both quotas. The byte total is checked
+    /// before the hold is added, so one hold can take it above the byte quota by at
+    /// most its own size. A held submission of any valid size is therefore admitted
+    /// while the byte quota has room.
+    fn hold(&self, delay: Duration, bytes: u64) -> SuiResult<StaggeredSlot> {
         if self
             .held
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |held| {
@@ -685,19 +713,44 @@ impl StaggerQuota {
             })
             .is_err()
         {
+            self.quota_rejected_metric
+                .with_label_values(&["entries"])
+                .inc();
+            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 1,
+            }
+            .into());
+        }
+        if self
+            .held_bytes
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |held| {
+                self.byte_quota
+                    .is_none_or(|quota| held < quota)
+                    .then_some(held + bytes)
+            })
+            .is_err()
+        {
+            self.held.fetch_sub(1, Ordering::Relaxed);
+            self.quota_rejected_metric
+                .with_label_values(&["bytes"])
+                .inc();
             return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
                 retry_after_secs: 1,
             }
             .into());
         }
         self.metric.inc();
-        Ok(Some(StaggeredSlot {
+        self.bytes_metric.add(bytes as i64);
+        Ok(StaggeredSlot {
             delay,
             eligible_at: Instant::now() + delay,
+            bytes,
             held: self.held.clone(),
+            held_bytes: self.held_bytes.clone(),
             metric: self.metric.clone(),
+            bytes_metric: self.bytes_metric.clone(),
             released: false,
-        }))
+        })
     }
 }
 
@@ -712,8 +765,12 @@ impl StaggerQuota {
 pub struct StaggeredSlot {
     delay: Duration,
     eligible_at: Instant,
+    /// The serialized bytes the hold counts against the byte quota.
+    bytes: u64,
     held: Arc<AtomicUsize>,
+    held_bytes: Arc<AtomicU64>,
     metric: IntGauge,
+    bytes_metric: IntGauge,
     released: bool,
 }
 
@@ -738,13 +795,21 @@ impl StaggeredSlot {
         debug_assert!(self.released, "staggered slot rearmed while armed");
         self.released = false;
         self.held.fetch_add(1, Ordering::Relaxed);
+        self.held_bytes.fetch_add(self.bytes, Ordering::Relaxed);
         self.metric.inc();
+        self.bytes_metric.add(self.bytes as i64);
     }
 
     fn dec(&self) {
         let previous = self.held.fetch_sub(1, Ordering::Relaxed);
         debug_assert!(previous > 0, "staggered held count underflow");
+        let previous_bytes = self.held_bytes.fetch_sub(self.bytes, Ordering::Relaxed);
+        debug_assert!(
+            previous_bytes >= self.bytes,
+            "staggered held bytes underflow"
+        );
         self.metric.dec();
+        self.bytes_metric.sub(self.bytes as i64);
     }
 }
 
@@ -1635,6 +1700,83 @@ mod tests {
             stagger_seed(&[id], &[&digest], 6),
         );
     }
+
+    fn test_quota(
+        max_pending_transactions: usize,
+        max_pending_bytes: Option<u64>,
+        metrics: &AdmissionQueueMetrics,
+    ) -> StaggerQuota {
+        StaggerQuota::new(max_pending_transactions, max_pending_bytes, metrics)
+    }
+
+    /// Returns the held count and bytes, and checks that both gauges match them.
+    fn held(quota: &StaggerQuota) -> (usize, u64) {
+        let held = quota.held.load(Ordering::Relaxed);
+        let held_bytes = quota.held_bytes.load(Ordering::Relaxed);
+        assert_eq!(quota.metric.get(), held as i64);
+        assert_eq!(quota.bytes_metric.get(), held_bytes as i64);
+        (held, held_bytes)
+    }
+
+    fn quota_rejections(metrics: &AdmissionQueueMetrics, quota: &str) -> u64 {
+        metrics
+            .pool_staggered_quota_rejected
+            .with_label_values(&[quota])
+            .get()
+    }
+
+    #[test]
+    fn held_byte_quota_bounds_held_bytes() {
+        let metrics = AdmissionQueueMetrics::new_for_tests();
+        // The quotas are a quarter of the capacities: 25 entries and 100 bytes.
+        let quota = test_quota(100, Some(400), &metrics);
+        let delay = Duration::from_secs(1);
+
+        let first = quota.hold(delay, 60).unwrap();
+        let mut second = quota.hold(delay, 60).unwrap();
+        assert_eq!(held(&quota), (2, 120));
+
+        // The byte quota is full, so a further hold is refused and leaves both totals
+        // unchanged.
+        assert!(matches!(
+            quota.hold(delay, 1).err().unwrap().as_inner(),
+            SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+        ));
+        assert_eq!(held(&quota), (2, 120));
+        assert_eq!(quota_rejections(&metrics, "bytes"), 1);
+        assert_eq!(quota_rejections(&metrics, "entries"), 0);
+
+        // Dropping a hold frees its bytes.
+        drop(first);
+        let third = quota.hold(delay, 60).unwrap();
+        assert_eq!(held(&quota), (2, 120));
+
+        // Consumption into a proposal frees the bytes, and a requeue charges them again.
+        second.release();
+        assert_eq!(held(&quota), (1, 60));
+        second.rearm();
+        assert_eq!(held(&quota), (2, 120));
+
+        drop(second);
+        drop(third);
+        assert_eq!(held(&quota), (0, 0));
+    }
+
+    #[test]
+    fn without_a_byte_capacity_only_the_entry_quota_binds() {
+        let metrics = AdmissionQueueMetrics::new_for_tests();
+        // The entry quota is 8 / 4 = 2 holds.
+        let quota = test_quota(8, None, &metrics);
+        let delay = Duration::from_secs(1);
+        let first = quota.hold(delay, 1 << 30).unwrap();
+        let second = quota.hold(delay, 1 << 30).unwrap();
+        assert!(quota.hold(delay, 1).is_err());
+        assert_eq!(quota_rejections(&metrics, "entries"), 1);
+        assert_eq!(quota_rejections(&metrics, "bytes"), 0);
+        drop(first);
+        drop(second);
+        assert_eq!(held(&quota), (0, 0));
+    }
 }
 
 /// Staggering through the pull-based transaction pool: entries are held inside the pool
@@ -1655,9 +1797,9 @@ mod pool_tests {
     use sui_types::transaction::MAX_UNPAID_ALLOWED_PROPOSERS;
 
     use super::*;
-    use crate::admission_queue::AdmissionQueueMetrics;
     use crate::authority::AuthorityState;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::consensus_adapter::ConsensusAdapterMetrics;
     use crate::consensus_adapter::consensus_tests::test_user_transaction;
     use crate::consensus_handler::SequencedConsensusTransaction;
     use crate::consensus_transaction_pool::ConsensusTransactionPool;
@@ -1811,6 +1953,87 @@ mod pool_tests {
         // The dropped ack requeues the entry; close() resolves it before the pool drops.
         drop(ack);
         pool.close();
+    }
+
+    #[tokio::test]
+    async fn held_byte_quota_leaves_byte_capacity_for_unheld_entries() {
+        const MAX_BLOCK_BYTES: u64 = 4096;
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c.set_consensus_max_transactions_in_block_bytes_for_testing(MAX_BLOCK_BYTES);
+            c
+        });
+        let (state, sender, keypair, _, immediate_gas, candidates) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        // The byte capacity is raised to the block limit, so held entries may take a
+        // quarter of it. The entry quota of 100 / STAGGERED_HELD_QUOTA_DIVISOR = 25 is
+        // not reached.
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let pool = ConsensusTransactionPool::new(
+            epoch_store.clone(),
+            state.get_cache_writer().clone(),
+            100,
+            None,
+            Some(1),
+            metrics.clone(),
+            ConsensusAdapterMetrics::new_test(),
+        );
+        let byte_quota = MAX_BLOCK_BYTES / STAGGERED_HELD_QUOTA_DIVISOR as u64;
+
+        let staggered = epoch_store.staggered_submission();
+        staggered.set_params_for_testing(StaggerParams {
+            step: Duration::from_secs(60),
+            max_delay: Duration::from_secs(60),
+        });
+        staggered.set_active(true);
+
+        let mut held_gas = candidates
+            .iter()
+            .filter(|object| slot_for_gas(&epoch_store, &[object.id()]) == HELD_SLOT)
+            .cloned();
+
+        // Hold entries until the byte quota refuses one.
+        let error = loop {
+            let gas = held_gas.next().expect("not enough held-slot gas objects");
+            let tx = test_user_transaction(&state, sender, &keypair, gas, vec![]).await;
+            let consensus_tx =
+                ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
+            if let Err(error) = pool.try_insert(pool.epoch(), 1, vec![consensus_tx]) {
+                break error;
+            }
+        };
+        assert!(
+            matches!(
+                error.as_inner(),
+                SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+            ),
+            "unexpected quota rejection error: {error}"
+        );
+        let quota_rejections = |quota: &str| {
+            metrics
+                .pool_staggered_quota_rejected
+                .with_label_values(&[quota])
+                .get()
+        };
+        assert_eq!(quota_rejections("bytes"), 1);
+        assert_eq!(quota_rejections("entries"), 0);
+
+        // Every queued entry is held, so the bytes charged against the quota are the
+        // bytes the lane counts.
+        let held_bytes = metrics.pool_staggered_held_bytes.get();
+        assert_eq!(
+            held_bytes,
+            metrics.pool_bytes.with_label_values(&["user"]).get()
+        );
+        assert!(held_bytes >= byte_quota as i64);
+
+        // An entry that is not held still fits within the byte capacity and is proposed.
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, immediate_gas).await;
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 1, "immediate slot was held");
+        drop(ack);
+        pool.close();
+        assert_eq!(metrics.pool_staggered_held_bytes.get(), 0);
     }
 
     #[tokio::test]
