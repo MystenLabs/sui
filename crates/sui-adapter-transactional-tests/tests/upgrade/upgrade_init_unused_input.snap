@@ -11,37 +11,37 @@ processed 12 tasks
 init:
 A: object(0,0)
 
-task 1, lines 11-14:
+task 1, lines 11-16:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5266800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 16-19:
+task 2, lines 18-23:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5266800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 3, lines 21-23:
+task 3, lines 25-28:
 //# publish --dependencies DepV1 --sender A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 4, lines 25-30:
+task 4, lines 30-37:
 //# publish --upgradeable --dependencies DepV1 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7197200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, line 32:
+task 5, line 39:
 //# run U1::m::make --sender A
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 7, lines 48-53:
+task 7, lines 57-62:
 //# programmable --sender A --inputs object(4,1) 0u8 digest(U2) object(5,0)
 // The unused U object makes U participate, so init cannot raise D's existing v1 selection.
 //> Consumer::m::ping();
@@ -51,7 +51,7 @@ task 7, lines 48-53:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("upgrade init linkage conflicts with transaction linkage: package DepV1 resolves to DepV1 in transaction linkage, but upgrade linkage requires DepV2"), command: Some(2) } }
 
-task 8, lines 55-60:
+task 8, lines 64-69:
 //# programmable --sender A --inputs object(4,1) 0u8 digest(U2) object(5,0)
 // The same check applies even when the ordinary dependency contribution follows the upgrade.
 //> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
@@ -61,7 +61,7 @@ task 8, lines 55-60:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("upgrade init linkage conflicts with transaction linkage: package DepV1 resolves to DepV1 in transaction linkage, but upgrade linkage requires DepV2"), command: Some(1) } }
 
-task 9, lines 62-67:
+task 9, lines 71-76:
 //# programmable --sender A --inputs object(4,1) 0u8 digest(U2) object(5,0)
 // Ordinary preparation failures precede deferred upgrade-init conflicts.
 //> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
@@ -71,7 +71,7 @@ task 9, lines 62-67:
 Error: Transaction Effects Status: Function Not Found.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'missing' in module 'Consumer::m'"), command: Some(2) } }
 
-task 10, lines 69-74:
+task 10, lines 78-83:
 //# programmable --sender A --inputs object(4,1) 0u8 digest(U2) object(5,0)
 // Selecting v2 independently agrees with init, even with the unused U input.
 //> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
@@ -82,7 +82,7 @@ created: object(10,0), object(10,1)
 mutated: object(0,0), object(4,1), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 12585600,  storage_rebate: 3845215, non_refundable_storage_fee: 385
 
-task 11, line 76:
+task 11, line 85:
 //# view-object 10,1
 Owner: Shared( 10 )
 Version: 10

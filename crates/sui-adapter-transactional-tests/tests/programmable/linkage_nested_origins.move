@@ -9,29 +9,36 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 DepV3=0x0 Generic=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public struct Old has drop {}
-public struct Outer<phantom T> has drop {}
-public fun check(expected: u64) { assert!(expected == 1, 0) }
+module DepV1::m {
+    public struct Old has drop {}
+    public struct Outer<phantom T> has drop {}
+
+    public fun check(expected: u64) { assert!(expected == 1, 0) }
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public struct Old has drop {}
-public struct Outer<phantom T> has drop {}
-public struct New has drop {}
-public fun check(expected: u64) { assert!(expected == 2, 0) }
+module DepV2::m {
+    public struct Old has drop {}
+    public struct Outer<phantom T> has drop {}
+    public struct New has drop {}
+
+    public fun check(expected: u64) { assert!(expected == 2, 0) }
+}
 
 //# upgrade --package DepV2 --upgrade-capability 1,1 --sender A
-module DepV3::m;
-public struct Old has drop {}
-public struct Outer<phantom T> has drop {}
-public struct New has drop {}
-public struct Newest has drop {}
-public fun check(expected: u64) { assert!(expected == 3, 0) }
+module DepV3::m {
+    public struct Old has drop {}
+    public struct Outer<phantom T> has drop {}
+    public struct New has drop {}
+    public struct Newest has drop {}
+
+    public fun check(expected: u64) { assert!(expected == 3, 0) }
+}
 
 //# publish --sender A
-module Generic::m;
-public fun generic<T>() {}
+module Generic::m {
+    public fun generic<T>() {}
+}
 
 //# programmable --sender A --inputs 2u64
 // The outer type is defined in v1, the inner type in v2: neither v3 spelling requires v3.

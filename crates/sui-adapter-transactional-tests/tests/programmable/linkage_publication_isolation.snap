@@ -11,19 +11,19 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 11-13:
+task 1, lines 11-14:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-18:
+task 2, lines 16-21:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5403600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 8, lines 35-39:
+task 8, lines 39-43:
 //# programmable --sender A --inputs 1u64 @A
 // Verification needs v2, but the later ordinary call must still execute v1.
 //> 0: Publish(NoInit, [DepV2,sui,std]);
@@ -33,7 +33,7 @@ created: object(8,0), object(8,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 41-45:
+task 9, lines 45-49:
 //# programmable --sender A --inputs 1u64 @A
 // The same isolation applies when the runtime call precedes publication.
 //> DepV1::m::check(Input(0));
@@ -43,7 +43,7 @@ created: object(9,0), object(9,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 10, lines 47-51:
+task 10, lines 51-55:
 //# programmable --sender A --inputs 1u64 @A
 // Declaring v1 must fail verification: only_v2 is absent, regardless of warmed v2 caches.
 //> 0: Publish(NoInit, [DepV1,sui,std]);

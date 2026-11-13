@@ -10,32 +10,32 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-12:
+task 1, lines 10-13:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 14-18:
+task 2, lines 15-22:
 //# publish --dependencies DepV1 --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4841200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 20-22:
+task 3, lines 24-27:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 4, lines 24-26:
+task 4, lines 29-31:
 //# programmable --sender A --inputs 1u64
 // A direct friend-entry target pins its dependency exactly to v1.
 //> Root::m::friend_entry(Input(0));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 28-31:
+task 5, lines 33-36:
 //# programmable --sender A --inputs 1u64 2u64
 // Friend visibility must not be treated as public when folding dependencies.
 //> Root::m::friend_entry(Input(0));
@@ -43,7 +43,7 @@ task 5, lines 28-31:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV1 (version 1) and DepV2 (version 2) to be used in the same transaction"), command: Some(1) } }
 
-task 6, lines 33-36:
+task 6, lines 38-41:
 //# programmable --sender A --inputs 1u64 2u64
 // Reversing the conflicting commands still fails during preparation.
 //> DepV2::m::check(Input(1));
@@ -51,7 +51,7 @@ task 6, lines 33-36:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV2 (version 2) and DepV1 (version 1) to be used in the same transaction"), command: Some(1) } }
 
-task 7, lines 38-41:
+task 7, lines 43-46:
 //# programmable --sender A --inputs 2u64
 // The public control permits the same dependency upgrade.
 //> Root::m::public_call(Input(0));
@@ -59,21 +59,21 @@ task 7, lines 38-41:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 43-45:
+task 8, lines 48-50:
 //# programmable --sender A --inputs 1u64
 // The warmed v2 package does not change a later friend-entry transaction's exact v1 pin.
 //> Root::m::friend_entry(Input(0));
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 47-49:
+task 9, lines 52-54:
 //# programmable --sender A --dev-inspect --inputs 1u64
 // Dev-inspect permits private targets, but preserves their exact dependency policy.
 //> Root::m::private_call(Input(0));
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 10, lines 51-54:
+task 10, lines 56-59:
 //# programmable --sender A --dev-inspect --inputs 1u64 2u64
 // Bypassing entry visibility checks must not bypass exact dependency constraints.
 //> Root::m::private_call(Input(0));

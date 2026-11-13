@@ -11,25 +11,25 @@ processed 25 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 11-13:
+task 1, lines 11-14:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-17:
+task 2, lines 16-19:
 //# publish --dependencies DepV1 --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4286400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 19-28:
+task 3, lines 21-33:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 8892000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 4, line 30:
+task 4, line 35:
 //# run DepV2::m::fund --sender A
 created: object(4,0)
 mutated: object(0,0)
@@ -37,15 +37,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(4,1), A, sui::balance::Balance<DepV2::m::New>, Merge, 100)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, line 32:
+task 5, line 37:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, line 34:
+task 6, line 39:
 //# view-funds sui::balance::Balance<DepV2::m::New> A
 100
 
-task 7, lines 36-37:
+task 7, lines 41-42:
 //# programmable --sender A --inputs coin_reservation<sui::balance::Balance<DepV2::m::New>>(5)
 // The custom package is supplied only by the input; every command is synthesized.
 mutated: object(0,0)
@@ -53,15 +53,15 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(4,1), A, sui::balance::Balance<DepV2::m::New>, Merge, 0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, line 39:
+task 8, line 44:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 9, lines 41-42:
+task 9, lines 46-47:
 //# view-funds sui::balance::Balance<DepV2::m::New> A
 100
 
-task 10, lines 44-46:
+task 10, lines 49-51:
 //# programmable --sender A --inputs coin_reservation<sui::balance::Balance<DepV2::m::New>>(5) 2u64
 // An unused legacy reservation still selects v2 for the ordinary consumer.
 //> Consumer::m::check(Input(1));
@@ -70,14 +70,14 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(4,1), A, sui::balance::Balance<DepV2::m::New>, Merge, 0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 11, lines 48-50:
+task 11, lines 53-55:
 //# programmable --sender A --inputs coin_reservation<sui::balance::Balance<DepV2::m::New>>(5) 1u64
 // The same input conflicts with an exact v1 target before conversions execute.
 //> DepV1::m::check(Input(1));
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Debug of error: InvalidLinkage at command Some(0)
 
-task 12, lines 52-57:
+task 12, lines 57-62:
 //# programmable --sender A --inputs 2u64 object(4,0) withdraw<sui::balance::Balance<DepV2::m::New>>(5) coin_reservation<sui::balance::Balance<DepV2::m::New>>(5) @A
 // Only the legacy input is converted to Coin; explicit withdrawals retain their input kind.
 //> Consumer::m::check(Input(0));
@@ -89,7 +89,7 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(4,1), A, sui::balance::Balance<DepV2::m::New>, Merge, 0)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 2279772, non_refundable_storage_fee: 228
 
-task 13, lines 59-62:
+task 13, lines 64-67:
 //# programmable --sender A --inputs coin_reservation<sui::balance::Balance<DepV2::m::New>>(5) 2u64 99u64
 // The inserted redemption must not shift this abort's original command index from 1 to 2.
 //> Consumer::m::check(Input(1));
@@ -97,15 +97,15 @@ task 13, lines 59-62:
 Error: Transaction Effects Status: Move Runtime Abort. Location: DepV2::m::check (function index 0) at offset 6, Abort Code: 22
 Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: DepV2, name: Identifier("m") }, function: 0, instruction: 6, function_name: Some("check") }, 22) at command Some(1)
 
-task 14, line 64:
+task 14, line 69:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 15, lines 66-67:
+task 15, lines 71-72:
 //# view-funds sui::balance::Balance<DepV2::m::New> A
 100
 
-task 16, lines 69-72:
+task 16, lines 74-77:
 //# programmable --sender A --inputs b"custom" @B vector[100u256] vector[] vector[99999999999999]
 // Grant B an allowance over the custom type introduced in v2.
 //> 0: std::option::none<sui::allowance::RateLimit>();
@@ -114,7 +114,7 @@ created: object(16,0), object(16,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6414400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 17, lines 74-76:
+task 17, lines 79-81:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<DepV2::m::New>>(5,@A,object(16,0)) immshared(16,0) 2u64
 // The unused allowance-backed inputs resolve the custom type without spending it.
 //> Consumer::m::check(Input(2));
@@ -122,14 +122,14 @@ mutated: object(0,1)
 unchanged_shared: object(16,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 18, lines 78-80:
+task 18, lines 83-85:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<DepV2::m::New>>(5,@A,object(16,0)) immshared(16,0) 1u64
 // An allowance source has the same minimum-version constraint as a sender withdrawal.
 //> DepV1::m::check(Input(2));
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Debug of error: InvalidLinkage at command Some(0)
 
-task 19, lines 82-83:
+task 19, lines 87-88:
 //# view-object 16,0
 Owner: Shared( 11 )
 Version: 11
@@ -179,7 +179,7 @@ Contents: sui::allowance::Allowance<sui::balance::Balance<DepV1::m::New>> {
     current_spend: 0u256,
 }
 
-task 20, lines 85-89:
+task 20, lines 90-94:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<DepV2::m::New>>(7,@A,object(16,0)) mutshared(16,0) immshared(6) @B 2u64
 // A used AllowanceWithdrawal instantiates its custom wrapper and spends exactly seven units.
 //> Consumer::m::check(Input(4));
@@ -190,19 +190,19 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(4,1), A, sui::balance::Balance<DepV2::m::New>, Split, 7), (object(20,0), B, sui::balance::Balance<DepV2::m::New>, Merge, 7)
 gas summary: computation_cost: 1000000, storage_cost: 4134400,  storage_rebate: 4133987, non_refundable_storage_fee: 413
 
-task 21, line 91:
+task 21, line 96:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 22, lines 93-94:
+task 22, lines 98-99:
 //# view-funds sui::balance::Balance<DepV2::m::New> A
 93
 
-task 23, lines 96-97:
+task 23, lines 101-102:
 //# view-funds sui::balance::Balance<DepV2::m::New> B
 7
 
-task 24, lines 99-100:
+task 24, lines 104-105:
 //# view-object 16,0
 Owner: Shared( 11 )
 Version: 14

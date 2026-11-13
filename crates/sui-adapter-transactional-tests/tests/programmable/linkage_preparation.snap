@@ -10,25 +10,25 @@ processed 12 tasks
 init:
 A: object(0,0)
 
-task 1, lines 10-13:
+task 1, lines 10-15:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5532800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 15-18:
+task 2, lines 17-22:
 //# publish --dependencies DepV1 --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4149600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 3, lines 20-24:
+task 3, lines 24-30:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5905200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
-task 4, lines 26-30:
+task 4, lines 32-36:
 //# programmable --sender A
 // Naming an old type through v2 only contributes its v1 defining ID, including nested types.
 //> Consumer::m::generic<vector<DepV2::m::Old>>();
@@ -37,7 +37,7 @@ task 4, lines 26-30:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, lines 32-35:
+task 5, lines 38-41:
 //# programmable --sender A
 // A genuinely new type still requires v2 and conflicts with the exact v1 target.
 //> Consumer::m::generic<DepV2::m::New>();
@@ -45,14 +45,14 @@ task 5, lines 32-35:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(1) } }
 
-task 6, lines 37-39:
+task 6, lines 43-45:
 //# programmable --sender A
 // Without a linkage conflict, loading reports the invalid number of function type arguments.
 //> Consumer::m::generic();
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: Consumer, name: Identifier("m") }), indices: [], offsets: [] }), command: Some(0) } }
 
-task 7, lines 41-45:
+task 7, lines 47-51:
 //# programmable --sender A
 // A later linkage conflict wins over the earlier function type-arity error.
 //> Consumer::m::generic();
@@ -61,14 +61,14 @@ task 7, lines 41-45:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV1 (version 1) and DepV2 (version 2) to be used in the same transaction"), command: Some(2) } }
 
-task 8, lines 47-49:
+task 8, lines 53-55:
 //# programmable --sender A
 // Without a linkage conflict, typing reports the missing value argument.
 //> Consumer::m::argument();
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 1 argument calling function 'Consumer::m::argument', but found 0"), command: Some(0) } }
 
-task 9, lines 51-55:
+task 9, lines 57-61:
 //# programmable --sender A
 // A later linkage conflict also wins over the earlier value-argument error.
 //> Consumer::m::argument();
@@ -77,7 +77,7 @@ task 9, lines 51-55:
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly DepV1 (version 1) and DepV2 (version 2) to be used in the same transaction"), command: Some(2) } }
 
-task 10, lines 57-60:
+task 10, lines 63-66:
 //# programmable --sender A
 // Missing functions fail during preparation, before instantiated signature validation.
 //> Consumer::m::generic();
@@ -85,7 +85,7 @@ task 10, lines 57-60:
 Error: Transaction Effects Status: Function Not Found.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'missing' in module 'DepV1::m'"), command: Some(1) } }
 
-task 11, lines 62-65:
+task 11, lines 68-71:
 //# programmable --sender A
 // Unresolved type names also fail during preparation.
 //> Consumer::m::generic();
