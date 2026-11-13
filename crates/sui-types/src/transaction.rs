@@ -1975,14 +1975,6 @@ impl TransactionKind {
         )
     }
 
-    pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
-        matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
-            && self.shared_input_objects().any(|obj| {
-                obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
-                    && obj.mutability == SharedObjectMutability::Mutable
-            })
-    }
-
     /// Whether this is any accumulator settlement transaction (a settlement chunk or
     /// the barrier); every one declares the accumulator root object as a shared input.
     pub fn is_accumulator_settle_tx(&self) -> bool {
@@ -5274,7 +5266,6 @@ impl std::fmt::Debug for InputObjects {
 
 // An InputObjects new-type that has been verified by sui-transaction-checks, and can be
 // safely passed to execution.
-#[derive(Clone)]
 pub struct CheckedInputObjects(InputObjects);
 
 // DO NOT CALL outside of sui-transaction-checks, genesis, or replay.

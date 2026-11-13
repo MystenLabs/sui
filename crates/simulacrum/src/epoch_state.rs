@@ -10,8 +10,7 @@ use sui_config::{
 };
 use sui_core::{
     accumulators::{
-        funds_read::AccountFundsRead, object_funds_checker::metrics::ObjectFundsCheckerMetrics,
-        unsettled_object_withdrawals::UnsettledObjectWithdrawals,
+        funds_read::AccountFundsRead, unsettled_object_withdrawals::UnsettledObjectWithdrawals,
     },
     transaction_simulation::{SimulationInputLoader, simulate_transaction},
 };
@@ -24,7 +23,7 @@ use sui_types::{
     coin_reservation::BorrowedCoinReservationResolver,
     committee::{Committee, EpochId},
     digests::ChainIdentifier,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::TransactionEffects,
     error::SuiResult,
     execution_params::ExecutionOrEarlyError,
     gas::GasUsageReport,
@@ -82,9 +81,7 @@ impl EpochState {
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));
         let executor = sui_execution::executor(&protocol_config, true).unwrap();
         let simulation_executor = sui_execution::executor(&protocol_config, true).unwrap();
-        let unsettled_object_withdrawals = Arc::new(UnsettledObjectWithdrawals::new(Arc::new(
-            ObjectFundsCheckerMetrics::new(&registry),
-        )));
+        let unsettled_object_withdrawals = Arc::new(UnsettledObjectWithdrawals::new(&registry));
 
         Self {
             epoch_start_state,
@@ -210,7 +207,6 @@ impl EpochState {
         if self
             .protocol_config
             .check_object_funds_withdraw_in_execution()
-            && effects.status().is_ok()
             && let Some(accumulator_version) =
                 system_object_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         {

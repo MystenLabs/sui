@@ -455,13 +455,11 @@ impl SharedObjVerManager {
                         ))
                     })
                     .collect();
-            // Note that for accumulator version, we cannot rely on the one from effects yet, since it won't
-            // be produced until implicitly read system objects are fully shipped. But the old object funds withdraw
-            // still need it. Hence we always use the one provided from the caller (i.e. checkpoint executor).
-            // TODO: Once check_object_funds_withdraw_in_execution is enabled everywhere and the
-            // post-execution ObjectFundsChecker is removed, drop this override (and the
-            // accumulator version threaded from the checkpoint executor) so the accumulator root
-            // is reconstructed from effects exactly like the forwarding address registry.
+            // Effects record the accumulator root only when execution reads an object balance, so they
+            // cannot supply the accumulator version for every transaction. Causal admission deduplicates
+            // every enqueued transaction by it, and coin reservations and version-gated execution
+            // behavior need it, including for historical transactions. Hence we always use the one
+            // provided from the caller (i.e. checkpoint executor).
             if let Some(version) = *accumulator_version {
                 let initial_shared_version = epoch_store
                     .epoch_start_config()
