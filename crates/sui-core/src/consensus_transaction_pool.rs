@@ -36,6 +36,7 @@ use consensus_types::block::{
 use itertools::Itertools;
 use mysten_common::debug_fatal;
 use mysten_common::sync::notify_read::OwnedRegistration;
+use mysten_metrics::monitored_scope;
 use parking_lot::Mutex;
 use prometheus::IntGauge;
 use std::collections::{BTreeMap, VecDeque};
@@ -832,6 +833,7 @@ impl ConsensusTransactionPool {
     /// one whose owned inputs were consumed, gets its final outcome rather than a retriable
     /// overload error, so the submitter does not resubmit a transaction that cannot succeed.
     fn resolve_swept_user_entry(&self, mut entry: PoolEntry) {
+        let _scope = monitored_scope("ConsensusTransactionPool::resolve_swept_user_entry");
         self.decrement_lane_metrics("user", &entry);
         if let Some(method) = all_processed(&mut entry.processed) {
             self.resolve_already_processed(entry, "sweep", method);
@@ -1113,6 +1115,7 @@ impl TransactionPool for ConsensusTransactionPool {
         Box<dyn FnOnce(BlockRef) + Send>,
         LimitReached,
     ) {
+        let _scope = monitored_scope("ConsensusTransactionPool::take");
         // This acquires (and immediately releases) the epoch store's reconfiguration
         // read lock. It must happen before the pool mutex is taken — never read the
         // reconfig state while holding the pool mutex.
