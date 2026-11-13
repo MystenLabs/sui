@@ -9,13 +9,16 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 NoInit=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public fun check(expected: u64) { assert!(expected == 1, 11) }
+module DepV1::m {
+    public fun check(expected: u64) { assert!(expected == 1, 11) }
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public fun check(expected: u64) { assert!(expected == 2, 22) }
-public fun only_v2() {}
+module DepV2::m {
+    public fun check(expected: u64) { assert!(expected == 2, 22) }
+
+    public fun only_v2() {}
+}
 
 //# set-address DepV2 @DepV1
 // Compile the v2 source at its original address so the payload uses original-ID module handles.
@@ -24,8 +27,9 @@ public fun only_v2() {}
 // Hide the v1 source at a different address while compiling against the v2-only API.
 
 //# stage-package
-module NoInit::publication;
-public fun use_new_api() { DepV2::m::only_v2() }
+module NoInit::publication {
+    public fun use_new_api() { DepV2::m::only_v2() }
+}
 
 //# set-address DepV1 object(1,0)
 

@@ -8,28 +8,36 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 Consumer=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public fun version(): u64 { 1 }
-public fun ping() {}
+module DepV1::m {
+    public fun version(): u64 { 1 }
+
+    public fun ping() {}
+}
 
 //# publish --dependencies DepV1 --sender A
-module Consumer::m;
-public fun check(expected: u64) { assert!(DepV1::m::version() == expected, 0) }
+module Consumer::m {
+    public fun check(expected: u64) { assert!(DepV1::m::version() == expected, 0) }
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public struct NewObject has key, store { id: UID }
-public struct NewType has drop {}
-public struct Mint has key { id: UID, supply: sui::balance::Supply<NewType> }
-public fun fund(ctx: &mut TxContext) {
-    let mut supply = sui::balance::create_supply(NewType {});
-    sui::balance::send_funds(supply.increase_supply(2), ctx.sender());
-    transfer::transfer(Mint { id: object::new(ctx), supply }, ctx.sender())
-}
-public fun version(): u64 { 2 }
-public fun ping() {}
-public fun make(ctx: &mut TxContext) {
-    transfer::transfer(NewObject { id: object::new(ctx) }, ctx.sender())
+module DepV2::m {
+    public struct NewObject has key, store { id: UID }
+    public struct NewType has drop {}
+    public struct Mint has key { id: UID, supply: sui::balance::Supply<NewType> }
+
+    public fun fund(ctx: &mut TxContext) {
+        let mut supply = sui::balance::create_supply(NewType {});
+        sui::balance::send_funds(supply.increase_supply(2), ctx.sender());
+        transfer::transfer(Mint { id: object::new(ctx), supply }, ctx.sender())
+    }
+
+    public fun version(): u64 { 2 }
+
+    public fun ping() {}
+
+    public fun make(ctx: &mut TxContext) {
+        transfer::transfer(NewObject { id: object::new(ctx) }, ctx.sender())
+    }
 }
 
 //# run DepV2::m::make --sender A

@@ -8,18 +8,23 @@
 //# init --addresses DepV1=0x0 DepV2=0x0 Root=0x0 --accounts A
 
 //# publish --upgradeable --sender A
-module DepV1::m;
-public fun check(expected: u64) { assert!(expected == 1, 0) }
+module DepV1::m {
+    public fun check(expected: u64) { assert!(expected == 1, 0) }
+}
 
 //# publish --dependencies DepV1 --sender A
-module Root::m;
-public(package) entry fun friend_entry(expected: u64) { DepV1::m::check(expected) }
-public fun public_call(expected: u64) { DepV1::m::check(expected) }
-fun private_call(expected: u64) { DepV1::m::check(expected) }
+module Root::m {
+    public(package) entry fun friend_entry(expected: u64) { DepV1::m::check(expected) }
+
+    public fun public_call(expected: u64) { DepV1::m::check(expected) }
+
+    fun private_call(expected: u64) { DepV1::m::check(expected) }
+}
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
-module DepV2::m;
-public fun check(expected: u64) { assert!(expected == 2, 0) }
+module DepV2::m {
+    public fun check(expected: u64) { assert!(expected == 2, 0) }
+}
 
 //# programmable --sender A --inputs 1u64
 // A direct friend-entry target pins its dependency exactly to v1.
