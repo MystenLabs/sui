@@ -25,6 +25,8 @@ pub mod read_mask_defaults;
 mod reader;
 mod response;
 mod service;
+#[cfg(test)]
+mod stub_store;
 pub mod subscription;
 
 pub use client::Client;
@@ -256,16 +258,40 @@ impl RpcService {
             for service_name in [
                 service_name(&ledger_service),
                 service_name(&transaction_execution_service),
-                service_name(&state_service),
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
-                service_name(&proof_service_v2alpha),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
                 health_reporter
                     .set_service_status(service_name, tonic_health::ServingStatus::Serving)
+                    .await;
+            }
+
+            // Services a node never serves refuse every call with `NOT_SERVED_HERE`: `StateService`
+            // without rpc indexes, and `ProofService` without rpc indexes or without object
+            // version history. They stay mounted so that calls get that refusal, and report
+            // `NotServing` so that per-service health checks route them to other nodes.
+            let status = |serves: bool| {
+                if serves {
+                    tonic_health::ServingStatus::Serving
+                } else {
+                    tonic_health::ServingStatus::NotServing
+                }
+            };
+            let has_indexes = self.reader.inner().indexes().is_some();
+            let retains_object_version_history =
+                self.reader.inner().retains_object_version_history();
+            for (service_name, serves) in [
+                (service_name(&state_service), has_indexes),
+                (
+                    service_name(&proof_service_v2alpha),
+                    has_indexes && retains_object_version_history,
+                ),
+            ] {
+                health_reporter
+                    .set_service_status(service_name, status(serves))
                     .await;
             }
 
@@ -368,5 +394,62 @@ mod tests {
             tonic_health::pb::FILE_DESCRIPTOR_SET,
         ])
         .unwrap();
+    }
+
+    /// `grpc.health.v1` status of `service` on `router`.
+    async fn health_status(
+        router: &axum::Router,
+        service: &str,
+    ) -> tonic_health::pb::health_check_response::ServingStatus {
+        use prost::Message;
+        use tower::ServiceExt;
+
+        let message = tonic_health::pb::HealthCheckRequest {
+            service: service.to_owned(),
+        }
+        .encode_to_vec();
+        let mut body = vec![0u8];
+        body.extend_from_slice(&(message.len() as u32).to_be_bytes());
+        body.extend_from_slice(&message);
+        let request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("/grpc.health.v1.Health/Check")
+            .version(http::Version::HTTP_2)
+            .header(http::header::CONTENT_TYPE, "application/grpc")
+            .body(axum::body::Body::from(body))
+            .unwrap();
+
+        let response = router.clone().oneshot(request).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        // One length-prefixed message: a compression flag byte, then a 4-byte length.
+        let response = tonic_health::pb::HealthCheckResponse::decode(&body[5..]).unwrap();
+        response.status()
+    }
+
+    /// Without rpc indexes, the services that need them report `NOT_SERVING` while the rest of the
+    /// server reports `SERVING`.
+    #[tokio::test]
+    async fn services_that_need_indexes_report_not_serving_without_them() {
+        use tonic_health::pb::health_check_response::ServingStatus;
+
+        let router = crate::stub_store::StubStore::new()
+            .into_service()
+            .into_router()
+            .await;
+
+        assert_eq!(
+            health_status(&router, "sui.rpc.v2.StateService").await,
+            ServingStatus::NotServing
+        );
+        assert_eq!(
+            health_status(&router, "sui.rpc.v2alpha.ProofService").await,
+            ServingStatus::NotServing
+        );
+        assert_eq!(
+            health_status(&router, "sui.rpc.v2.LedgerService").await,
+            ServingStatus::Serving
+        );
     }
 }

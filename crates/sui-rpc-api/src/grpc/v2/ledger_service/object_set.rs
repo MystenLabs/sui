@@ -90,6 +90,18 @@ pub(crate) fn fetch_object_sets_for_chunk(
     build_object_sets(&items, |unique_keys| {
         reader.inner().multi_get_objects_by_key(unique_keys)
     })
+    .map_err(|error| missing_object_version_error(reader, error))
+}
+
+/// The error for a read that found an object version it needs missing: `missing` itself on a node
+/// that keeps replaced object versions, where they go only with pruning. A node that keeps only
+/// the latest version of each object deletes replaced ones, so the read is refused with
+/// `Unimplemented` (`NOT_SERVED_HERE`, cause `no_object_history`) instead.
+pub(crate) fn missing_object_version_error(reader: &StateReader, missing: RpcError) -> RpcError {
+    match reader.require_object_version_history() {
+        Ok(()) => missing,
+        Err(refusal) => refusal,
+    }
 }
 
 pub(crate) fn fetch_transaction_object_set(
@@ -210,5 +222,29 @@ mod tests {
 
         assert!(message.contains(&format!("{missing_key:?}")));
         assert!(message.contains(&owning_digest.to_string()));
+    }
+
+    /// A missing object version is the read's own error on a node that keeps replaced versions,
+    /// and a `no_object_history` refusal on one that deletes them.
+    #[test]
+    fn missing_object_version_is_refused_without_object_history() {
+        use crate::reader::{NotServedHereCause, assert_not_served_here};
+        use crate::stub_store::StubStore;
+
+        let missing = || RpcError::new(tonic::Code::Internal, "unable to fetch object");
+
+        let with_history = StubStore::new().into_service();
+        let error = missing_object_version_error(&with_history.reader, missing());
+        assert_eq!(error.into_status_proto().code, tonic::Code::Internal as i32);
+
+        let without_history = StubStore {
+            retains_object_version_history: false,
+            ..StubStore::new()
+        }
+        .into_service();
+        assert_not_served_here(
+            missing_object_version_error(&without_history.reader, missing()),
+            NotServedHereCause::NoObjectHistory,
+        );
     }
 }

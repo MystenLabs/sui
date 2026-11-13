@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ErrorReason, Result, RpcError, RpcService};
+use crate::reader::indexes_disabled;
+use crate::{ErrorReason, Result, RpcService};
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{Balance, GetBalanceRequest, GetBalanceResponse};
 use sui_sdk_types::Address;
@@ -16,7 +17,7 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(indexes_disabled)?;
 
     let owner = request
         .owner
