@@ -59,23 +59,19 @@ mod checked {
             runtime_limits_config: VMRuntimeLimitsConfig {
                 vector_len_max: protocol_config.max_move_vector_len(),
                 max_value_nest_depth: protocol_config.max_move_value_depth_as_option(),
-                hardened_otw_check: protocol_config.hardened_otw_check(),
+                hardened_otw_check: true,
                 package_arena_size: protocol_config.package_arena_size_in_bytes_as_option(),
             },
-            enable_invariant_violation_check_in_swap_loc: !protocol_config
-                .disable_invariant_violation_check_in_swap_loc(),
-            check_no_extraneous_bytes_during_deserialization: protocol_config
-                .no_extraneous_module_bytes(),
+            enable_invariant_violation_check_in_swap_loc: false,
+            check_no_extraneous_bytes_during_deserialization: true,
             // Don't augment errors with execution state on-chain
             error_execution_state: false,
             binary_config: protocol_config.binary_config(None),
-            rethrow_serialization_type_layout_errors: protocol_config
-                .rethrow_serialization_type_layout_errors(),
+            rethrow_serialization_type_layout_errors: true,
             max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
-            variant_nodes: protocol_config.variant_nodes(),
-            deprecate_global_storage_ops_during_deserialization: protocol_config
-                .deprecate_global_storage_ops_during_deserialization(),
-            normalize_depth_formula: protocol_config.normalize_depth_formula(),
+            variant_nodes: true,
+            deprecate_global_storage_ops_during_deserialization: false,
+            normalize_depth_formula: true,
             charge_ld_const_abstract_size: true,
         }
     }
