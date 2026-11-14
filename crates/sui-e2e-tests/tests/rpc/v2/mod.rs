@@ -332,3 +332,37 @@ async fn prune_objects_below_tip(cluster: &test_cluster::TestCluster) -> u64 {
     assert_eq!(pruned, Some(tip - 1));
     tip - 1
 }
+
+/// [`prune_objects_below_tip`] as the fullnode's pruner prunes: its rpc-store history is pruned to
+/// the same floor in the same step, and tombstones are pruned too. Returns the last pruned
+/// checkpoint, one below the highest executed one. Same preconditions: background pruning off,
+/// after [`halt_chain`].
+async fn prune_objects_and_rpc_store_below_tip(cluster: &test_cluster::TestCluster) -> u64 {
+    let pruned_to = fullnode_highest_executed(cluster) - 1;
+    let pruned = cluster
+        .fullnode_handle
+        .sui_node
+        .with_async(|node| async move {
+            let state = node.state();
+            let rpc_store = node
+                .embedded_rpc_store()
+                .expect("the fullnode runs the rpc indexes")
+                .store();
+            state
+                .database_for_testing()
+                .prune_objects_and_rpc_store_for_testing(
+                    state.get_checkpoint_store(),
+                    &rpc_store,
+                    pruned_to,
+                    false,
+                )
+                .await
+                .unwrap();
+            state
+                .get_object_cache_reader()
+                .get_highest_pruned_checkpoint()
+        })
+        .await;
+    assert_eq!(pruned, Some(pruned_to));
+    pruned_to
+}

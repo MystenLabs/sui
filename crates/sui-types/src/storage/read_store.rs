@@ -760,6 +760,30 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
         version: SequenceNumber,
     ) -> Result<Option<Object>>;
 
+    /// The object's latest state: its newest version, or the tombstone (see
+    /// [`ObjectOrTombstone`]) if it was deleted or wrapped there. Reads use it only to tell a
+    /// removed object apart from one that never existed, after finding no live object. `None`
+    /// if the object has no version, and always `None` by default, for stores that cannot tell
+    /// a removal from absence.
+    fn get_latest_object_or_tombstone(
+        &self,
+        _object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(None)
+    }
+
+    /// [`Self::get_object_lt_or_eq_version`], but the newest version at or below `version` is
+    /// returned as a tombstone if the object was deleted or wrapped there, rather than as
+    /// `None`. Like [`Self::get_latest_object_or_tombstone`], used only to describe removals, and
+    /// always `None` by default.
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        _object_id: &ObjectID,
+        _version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(None)
+    }
+
     /// The sequence number of the highest executed checkpoint, independent of
     /// how far any embedded index has caught up.
     ///

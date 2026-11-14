@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 use sui_kvstore::ObjectStatus;
+use sui_kvstore::tables::objects::ObjectTombstone;
+use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
@@ -17,8 +19,11 @@ use sui_rpc::proto::sui::rpc::v2::Object as ProtoObject;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, GetObjectResponse, GetObjectResult};
 use sui_rpc_api::AtCheckpointUpperBound;
 use sui_rpc_api::NotServedHereCause;
+use sui_rpc_api::ObjectNotFoundError;
+use sui_rpc_api::ObjectRemoval;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::grpc::v2::ledger_service::{ObjectSelector, validate_get_object_requests};
+use sui_rpc_api::ledger_history::object_versions::ObjectRemovalKind;
 use sui_rpc_api::not_served_here;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::object::Object;
@@ -48,8 +53,9 @@ type VersionAtCheckpoint = Option<(SequenceNumber, ObjectStatus)>;
 
 /// Serve `GetObject`. A `max_version` read counts versions up to the served height, with or
 /// without `at_checkpoint`, so a version written above the served height, whose deletion or wrap
-/// may not be indexed yet, never answers it. Every BigTable read goes through the request's
-/// limiter.
+/// may not be indexed yet, never answers it. A read that resolves to a deletion or wrap answers
+/// `NOT_FOUND` with an `OBJECT_REMOVED` detail (see [`respond`]). Every BigTable read goes through
+/// the request's limiter.
 pub(crate) async fn get_object(
     server: &KvRpcServer,
     request: tonic::Request<GetObjectRequest>,
@@ -76,23 +82,28 @@ pub(crate) async fn get_object(
     };
     let answer = match first_step(object_id, selector, at_checkpoint_reads.as_ref()) {
         FirstStep::Answer(answer) => answer,
-        FirstStep::Scan(scan) => scan.run(&objects).await?,
+        FirstStep::Scan(scan) => {
+            let scanned = vec![((), scan.run(&objects).await?)];
+            // One scan, so one answer.
+            let ((), answer) = answer_scans(&objects, scanned).await.remove(0);
+            answer
+        }
     };
-    let found = match answer {
-        ObjectsStageInput::RequestedRow(key) => objects.exact(key).await?,
-        ObjectsStageInput::IndexedRow(key) => Some(
-            objects
-                .exact(key)
-                .await?
-                .ok_or_else(|| missing_indexed_row(key))?,
-        ),
-        ObjectsStageInput::Scanned(found) => found,
-        ObjectsStageInput::Failed(err) => return Err(err),
+    let mut rows = HashMap::new();
+    if let Some(key) = answer.row_key()
+        && let Some(row) = objects.exact(key).await?
+    {
+        rows.insert(key, row);
     }
-    .ok_or_else(|| selector.not_found(address))?;
-    let message = found
-        .render(object_id, &read_mask, &server.package_resolver)
-        .await;
+    let found = answer.complete(&rows)?;
+    let message = respond(
+        found.as_ref(),
+        object_id,
+        selector.not_found(address),
+        &read_mask,
+        &server.package_resolver,
+    )
+    .await?;
     Ok(GetObjectResponse::new(message))
 }
 
@@ -103,15 +114,19 @@ pub(crate) async fn get_object(
 ///    lookup reads `object_versions_by_checkpoint` (see [`AtCheckpointReads`]): a `version`
 ///    lookup bounded by `at_checkpoint` keeps its row only if the version was written by then,
 ///    and an `at_checkpoint` or `max_version` lookup is answered as [`bounded_read`] decides, by
-///    a live version's row or by a reverse scan of `objects` down from `max_version`. The scans
-///    run in groups of the `objects` stage's `max-seeks-per-read`, each group one read of a
-///    [`pipelined_chunks`] stage, and every group starts at once. A group's answers move on
-///    together, so the rows they name fill at most one `objects` read.
+///    a live version's row, by the removal the index records (its tombstone row, read in the
+///    scan and best effort, adds the removing transaction), or by a reverse scan of `objects`
+///    down from `max_version`. The scans run in groups of the `objects` stage's
+///    `max-seeks-per-read`, each group one read of a [`pipelined_chunks`] stage, and every group
+///    starts at once. A group's answers move on together, so the rows they name fill at most one
+///    `objects` read.
 /// 2. The rows the lookups name are read as the lookups arrive, by [`pipelined_keyed_batches`]
 ///    under the `objects` stage ([`crate::config::StagesConfig::objects`]): reads of at most
 ///    `max-seeks-per-read` keys, at most `concurrency` of them at a time, and each row at most
 ///    once per request. A lookup whose row is missing is `NOT_FOUND`, unless the version index
-///    named the row: then the index and `objects` disagree, and the lookup is `INTERNAL`.
+///    named the row as live: then the index and `objects` disagree, and the lookup is `INTERNAL`,
+///    as it is when such a row is a tombstone. A lookup whose row is a tombstone is otherwise
+///    `NOT_FOUND` with an `OBJECT_REMOVED` detail (see [`respond`]).
 /// 3. Each lookup is rendered once, at most `DEFAULT_RENDER_AHEAD` at a time (the list endpoints'
 ///    default render-ahead), and every request for it gets the result.
 ///
@@ -123,7 +138,7 @@ pub(crate) async fn get_object(
 ///
 /// When the read mask asks for nothing but `object_id` and `version`, a lookup that the version
 /// index resolves to a live version is answered by its scans alone, and the `objects` reads fetch
-/// only row keys, not object contents, except the reverse scans down from `max_version`.
+/// only row keys and tombstones, not object contents.
 pub(crate) async fn batch_get_objects(
     server: &KvRpcServer,
     request: tonic::Request<BatchGetObjectsRequest>,
@@ -198,11 +213,12 @@ pub(crate) async fn batch_get_objects(
         move |group: Vec<(usize, Scan)>| {
             let objects = objects.clone();
             async move {
-                let answers = future::try_join_all(group.into_iter().map(|(index, scan)| {
+                let scanned = future::try_join_all(group.into_iter().map(|(index, scan)| {
                     let objects = &objects;
                     async move { Ok::<_, RpcError>((index, scan.run(objects).await?)) }
                 }))
                 .await?;
+                let answers = answer_scans(&objects, scanned).await;
                 Ok::<_, RpcError>(stream::iter(answers.into_iter().map(Ok)).boxed())
             }
         }
@@ -253,14 +269,19 @@ pub(crate) async fn batch_get_objects(
             let resolver = resolver.clone();
             async move {
                 let result = match answer.complete(&rows) {
-                    Ok(Some(found)) => GetObjectResult::new_object(
-                        found.render(address.into(), &read_mask, &resolver).await,
-                    ),
-                    Ok(None) => GetObjectResult::new_error(
-                        RpcError::from(selector.not_found(address)).into_status_proto(),
-                    ),
-                    Err(err) => GetObjectResult::new_error(err.into_status_proto()),
+                    Ok(found) => respond(
+                        found.as_ref(),
+                        address.into(),
+                        selector.not_found(address),
+                        &read_mask,
+                        &resolver,
+                    )
+                    .await
+                    .map(GetObjectResult::new_object),
+                    Err(err) => Err(err),
                 };
+                let result = result
+                    .unwrap_or_else(|err| GetObjectResult::new_error(err.into_status_proto()));
                 Ok::<_, Infallible>((index, result))
             }
         }
@@ -355,12 +376,30 @@ enum BoundedRead {
     /// This version, the object's version at the end of the checkpoint, answers it, and the
     /// object is live at it.
     Live(SequenceNumber),
+    /// This version, the object's version at the end of the checkpoint, answers it, and the
+    /// object was deleted or wrapped at it, as `status` says. Its tombstone row in the `objects`
+    /// table names the removing transaction; that read is best effort (see [`best_effort`]), and
+    /// if it fails the `OBJECT_REMOVED` detail names no transaction.
+    Removed {
+        version: SequenceNumber,
+        status: ObjectStatus,
+    },
     /// The newest version at or below `from`, from an `objects` reverse scan, answers it if it is
     /// at or below `at_most`, the object's version at the end of the checkpoint; a newer one was
     /// written after the checkpoint.
     ScanFrom {
         from: SequenceNumber,
         at_most: SequenceNumber,
+    },
+    /// The object was deleted or wrapped at `removed_at`, its version at the end of the
+    /// checkpoint, and changed again before the height. The newest version at or below `from`,
+    /// from an `objects` reverse scan, is selected: the removal if the scan finds its tombstone,
+    /// and nothing otherwise, since any newer version was written after the checkpoint. Either
+    /// way the answer is `NOT_FOUND`, so the scan only decides the `OBJECT_REMOVED` detail, and
+    /// is best effort: if it fails, the answer goes without the detail.
+    ScanForRemoval {
+        from: SequenceNumber,
+        removed_at: SequenceNumber,
     },
 }
 
@@ -371,8 +410,8 @@ enum BoundedRead {
 /// Below the version at the checkpoint, every version at or below `max_version` was written by
 /// the checkpoint, so a reverse scan from `max_version` answers. Otherwise, if the object did not
 /// change between the checkpoint and the height, the version index alone decides the answer: the
-/// object if it is live at its version at the checkpoint, and nothing if it was deleted or wrapped
-/// there. If it did change and `max_version` reaches its version at the height, that newer
+/// object if it is live at its version at the checkpoint, and its removal if it was deleted or
+/// wrapped there. If it did change and `max_version` reaches its version at the height, that newer
 /// version is selected, and nothing answers. Below it, a reverse scan from `max_version` answers
 /// only if it finds the version at the checkpoint itself. Every version the scans can reach is at
 /// or below the version at the height, so versions written above the height never count.
@@ -385,54 +424,122 @@ fn bounded_read(
         // Every version of the object was written after the checkpoint.
         return BoundedRead::NotFound;
     };
-    let scan = BoundedRead::ScanFrom {
-        from: max_version.into(),
-        at_most: at_checkpoint,
-    };
+    let from = max_version.into();
     if max_version < at_checkpoint.value() {
-        return scan;
+        return BoundedRead::ScanFrom {
+            from,
+            at_most: at_checkpoint,
+        };
     }
     match version_at_height {
         Some((at_height, _)) if at_height > at_checkpoint => {
-            if status == ObjectStatus::Live && max_version < at_height.value() {
-                scan
-            } else {
+            if max_version >= at_height.value() {
                 BoundedRead::NotFound
+            } else if status == ObjectStatus::Live {
+                BoundedRead::ScanFrom {
+                    from,
+                    at_most: at_checkpoint,
+                }
+            } else {
+                BoundedRead::ScanForRemoval {
+                    from,
+                    removed_at: at_checkpoint,
+                }
             }
         }
         _ => match status {
             ObjectStatus::Live => BoundedRead::Live(at_checkpoint),
-            ObjectStatus::Deleted | ObjectStatus::Wrapped => BoundedRead::NotFound,
+            ObjectStatus::Deleted | ObjectStatus::Wrapped => BoundedRead::Removed {
+                version: at_checkpoint,
+                status,
+            },
         },
     }
 }
 
+/// The removal the version index records at `version`, with `status`, and the removing
+/// transaction from `row`, the `objects` row at that version, when it is a tombstone that names
+/// it.
+fn indexed_removal(
+    version: SequenceNumber,
+    status: ObjectStatus,
+    row: Option<&Found>,
+) -> ObjectRemoval {
+    let transaction = match row {
+        Some(Found::Removed(removal)) if removal.version == version.value() => removal.transaction,
+        _ => None,
+    };
+    ObjectRemoval {
+        version: version.value(),
+        kind: removal_kind(status),
+        transaction,
+    }
+}
+
+/// The kind of removal a tombstone or version index row with `status` records.
+pub(super) fn removal_kind(status: ObjectStatus) -> ObjectRemovalKind {
+    match status {
+        ObjectStatus::Deleted => ObjectRemovalKind::Deleted,
+        ObjectStatus::Wrapped => ObjectRemovalKind::Wrapped,
+        ObjectStatus::Live => unreachable!("removals are deleted or wrapped"),
+    }
+}
+
 /// An object as a read found it: the whole object, or, for a read mask that needs only
-/// `object_id` and `version`, just its version.
+/// `object_id` and `version`, just its version; or the removal a tombstone row records.
 #[derive(Clone)]
 enum Found {
     Object(Arc<Object>),
     Version(SequenceNumber),
+    Removed(ObjectRemoval),
 }
 
 impl Found {
+    /// The `objects` row at `version`.
+    fn from_row(version: SequenceNumber, row: ObjectVersionRow) -> Self {
+        match row {
+            ObjectVersionRow::Live(Some(object)) => Found::Object(Arc::new(object)),
+            ObjectVersionRow::Live(None) => Found::Version(version),
+            ObjectVersionRow::Tombstone(ObjectTombstone {
+                status,
+                transaction,
+            }) => Found::Removed(ObjectRemoval {
+                version: version.value(),
+                kind: removal_kind(status),
+                transaction,
+            }),
+        }
+    }
+
     fn version(&self) -> SequenceNumber {
         match self {
             Found::Object(object) => object.version(),
             Found::Version(version) => *version,
+            Found::Removed(removal) => SequenceNumber::from_u64(removal.version),
         }
     }
 
-    async fn render(
-        &self,
-        object_id: ObjectID,
-        read_mask: &FieldMaskTree,
-        resolver: &PackageResolver,
-    ) -> ProtoObject {
-        match self {
-            Found::Object(object) => object_to_response(object, read_mask, resolver).await,
-            Found::Version(version) => object_version_to_response(object_id, *version),
-        }
+    /// Whether this is the tombstone of a removal at `version`.
+    fn is_removal_at(&self, version: SequenceNumber) -> bool {
+        matches!(self, Found::Removed(removal) if removal.version == version.value())
+    }
+}
+
+/// The answer to a read of `object_id` that found `found`: the live version rendered with
+/// `read_mask`, or `not_found`, with an `OBJECT_REMOVED` detail when the read resolved to a
+/// deletion or wrap.
+async fn respond(
+    found: Option<&Found>,
+    object_id: ObjectID,
+    not_found: ObjectNotFoundError,
+    read_mask: &FieldMaskTree,
+    resolver: &PackageResolver,
+) -> Result<ProtoObject, RpcError> {
+    match found {
+        Some(Found::Object(object)) => Ok(object_to_response(object, read_mask, resolver).await),
+        Some(Found::Version(version)) => Ok(object_version_to_response(object_id, *version)),
+        Some(Found::Removed(removal)) => Err(not_found.removed(*removal).into()),
+        None => Err(not_found.into()),
     }
 }
 
@@ -504,9 +611,58 @@ enum Scan {
     },
 }
 
+/// What a [`Scan`] found: the lookup's answer as far as the scan knows it, or a removal the
+/// version index records, whose tombstone row [`answer_scans`] reads for the removing
+/// transaction.
+enum ScanResult {
+    Answer(ObjectsStageInput),
+    IndexedRemoval {
+        key: ObjectKey,
+        status: ObjectStatus,
+    },
+}
+
+/// The answers of `scanned`, a group of scans' results keyed by `I`. The tombstone rows of the
+/// removals the version index records are read together in one `objects` read, which only adds
+/// the removing transaction to the version and kind the index records, so it is best effort (see
+/// [`best_effort`]): if it fails, each of those removals answers `NOT_FOUND` with an
+/// `OBJECT_REMOVED` detail that names no transaction, as when the row is missing. A group holds
+/// at most `max-seeks-per-read` scans, so the read names at most that many keys.
+async fn answer_scans<I>(
+    objects: &ObjectReads,
+    scanned: Vec<(I, ScanResult)>,
+) -> Vec<(I, ObjectsStageInput)> {
+    let mut removal_keys: Vec<ObjectKey> = scanned
+        .iter()
+        .filter_map(|(_, result)| match result {
+            ScanResult::IndexedRemoval { key, .. } => Some(*key),
+            ScanResult::Answer(_) => None,
+        })
+        .collect();
+    removal_keys.sort();
+    removal_keys.dedup();
+    let removal_rows = if removal_keys.is_empty() {
+        HashMap::new()
+    } else {
+        best_effort(&removal_keys, objects.rows(removal_keys.clone()).await).unwrap_or_default()
+    };
+    scanned
+        .into_iter()
+        .map(|(index, result)| {
+            let answer = match result {
+                ScanResult::Answer(answer) => answer,
+                ScanResult::IndexedRemoval { key, status } => ObjectsStageInput::Scanned(Some(
+                    Found::Removed(indexed_removal(key.1, status, removal_rows.get(&key))),
+                )),
+            };
+            (index, answer)
+        })
+        .collect()
+}
+
 impl Scan {
-    async fn run(self, objects: &ObjectReads) -> Result<ObjectsStageInput, RpcError> {
-        Ok(match self {
+    async fn run(self, objects: &ObjectReads) -> Result<ScanResult, RpcError> {
+        Ok(ScanResult::Answer(match self {
             Scan::Latest(object_id) => ObjectsStageInput::Scanned(objects.latest(object_id).await?),
             Scan::WrittenBy {
                 reads,
@@ -526,9 +682,9 @@ impl Scan {
                 bounds,
             } => {
                 // Both reads of the version index start at once. The version at the height
-                // decides nothing when the object did not exist at the checkpoint, was deleted or
-                // wrapped there, or `max_version` is below its version there; reading it anyway
-                // costs a read in those cases and saves a round trip in the others.
+                // decides nothing when the object did not exist at the checkpoint or `max_version`
+                // is below its version there; reading it anyway costs a read in those cases and
+                // saves a round trip in the others.
                 let (version_at_checkpoint, version_at_height) =
                     if bounds.height == bounds.checkpoint {
                         let version = reads
@@ -552,15 +708,32 @@ impl Scan {
                     BoundedRead::Live(version) => {
                         ObjectsStageInput::IndexedRow(ObjectKey(object_id, version))
                     }
+                    // The tombstone row adds only the removing transaction to what the index
+                    // records.
+                    BoundedRead::Removed { version, status } => {
+                        return Ok(ScanResult::IndexedRemoval {
+                            key: ObjectKey(object_id, version),
+                            status,
+                        });
+                    }
                     BoundedRead::ScanFrom { from, at_most } => ObjectsStageInput::Scanned(
                         objects
                             .at_or_below(object_id, from)
                             .await?
                             .filter(|found| found.version() <= at_most),
                     ),
+                    // Only a tombstone answers, so the scan skips live objects' contents.
+                    BoundedRead::ScanForRemoval { from, removed_at } => {
+                        let key = ObjectKey(object_id, from);
+                        ObjectsStageInput::Scanned(
+                            best_effort(&[key], objects.newest(object_id, from, false).await)
+                                .flatten()
+                                .filter(|found| found.is_removal_at(removed_at)),
+                        )
+                    }
                 }
             }
-        })
+        }))
     }
 }
 
@@ -572,7 +745,8 @@ enum ObjectsStageInput {
     /// row it is `NOT_FOUND`.
     RequestedRow(ObjectKey),
     /// The `objects` row at this key, which the version index names as live, answers the
-    /// lookup; without the row the index and `objects` disagree, and the lookup is `INTERNAL`.
+    /// lookup. Without the row, or if it is a tombstone, the index and `objects` disagree, and the
+    /// lookup is `INTERNAL`.
     IndexedRow(ObjectKey),
     /// The lookup's scan answered it; `None` makes it `NOT_FOUND`.
     Scanned(Option<Found>),
@@ -600,8 +774,8 @@ impl ObjectsStageInput {
         match self {
             ObjectsStageInput::RequestedRow(key) => Ok(rows.get(&key).cloned()),
             ObjectsStageInput::IndexedRow(key) => match rows.get(&key) {
+                Some(Found::Removed(_)) | None => Err(missing_indexed_row(key)),
                 Some(found) => Ok(Some(found.clone())),
-                None => Err(missing_indexed_row(key)),
             },
             ObjectsStageInput::Scanned(found) => Ok(found),
             ObjectsStageInput::Failed(err) => Err(err),
@@ -610,7 +784,8 @@ impl ObjectsStageInput {
 }
 
 /// The error for a version that `object_versions_by_checkpoint` names as live but that has no
-/// live `objects` row: the index and storage diverged, so the object's absence is not an answer.
+/// live `objects` row, because the row is missing or a tombstone: the index and storage diverged,
+/// so the object's absence is not an answer.
 fn missing_indexed_row(key: ObjectKey) -> RpcError {
     RpcError::new(
         tonic::Code::Internal,
@@ -618,8 +793,22 @@ fn missing_indexed_row(key: ObjectKey) -> RpcError {
     )
 }
 
-/// Reads of the `objects` table through a request's gated client: whole objects, or, with
-/// `version_only`, just the versions of the live ones, read without the objects' contents.
+/// The result of a read that only adds to the `OBJECT_REMOVED` detail of a `NOT_FOUND` answer:
+/// the value read, or `None`, logged, if the read of `keys` failed, so the answer goes without
+/// what the read would add rather than fail.
+fn best_effort<T>(keys: &[ObjectKey], read: Result<T, RpcError>) -> Option<T> {
+    read.inspect_err(|err| {
+        tracing::warn!(
+            ?keys,
+            "reading removals' objects rows failed, answering without them: {err}"
+        )
+    })
+    .ok()
+}
+
+/// Reads of the `objects` table through a request's gated client, live rows and tombstones
+/// alike: whole objects, or, with `version_only`, just the versions of the live ones, read
+/// without the objects' contents. A tombstone reads as the removal it records.
 #[derive(Clone)]
 struct ObjectReads {
     client: BigTableClient,
@@ -627,40 +816,58 @@ struct ObjectReads {
 }
 
 impl ObjectReads {
-    /// The newest version of `object_id`, unless the object was deleted or wrapped at it.
+    /// The newest row of `object_id`.
     async fn latest(&self, object_id: ObjectID) -> Result<Option<Found>, RpcError> {
-        Ok(if self.version_only {
-            self.client
-                .get_latest_object_version(object_id)
-                .await?
-                .map(Found::Version)
-        } else {
-            self.client
-                .get_latest_object(object_id)
-                .await?
-                .map(|object| Found::Object(Arc::new(object)))
-        })
+        self.newest(object_id, SequenceNumber::MAX, !self.version_only)
+            .await
     }
 
-    /// The object at the version `key` names, unless the object was deleted or wrapped at it.
+    /// The row at the version `key` names.
     async fn exact(&self, key: ObjectKey) -> Result<Option<Found>, RpcError> {
-        // The read runs to its end, so it finishes as completed rather than cut off.
-        let rows: Vec<_> = self.fetch(vec![key]).await?.try_collect().await?;
-        Ok(rows.into_iter().next().map(|(_, found)| found))
+        Ok(self.rows(vec![key]).await?.remove(&key))
     }
 
-    /// The newest version of `object_id` at or below `version`, read whole by one reverse scan of
-    /// `objects`, unless the object was deleted or wrapped at that version.
+    /// The rows at the versions `keys` name, in one read; a key without a row has no entry.
+    async fn rows(&self, keys: Vec<ObjectKey>) -> Result<HashMap<ObjectKey, Found>, RpcError> {
+        // The read runs to its end, so it finishes as completed rather than cut off.
+        self.fetch(keys).await?.try_collect().await
+    }
+
+    /// The newest row of `object_id` at or below `version`, from one reverse scan of `objects`:
+    /// whole, or, with `version_only`, without a live object's contents.
     async fn at_or_below(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Result<Option<Found>, RpcError> {
-        Ok(self
+        self.newest(object_id, version, !self.version_only).await
+    }
+
+    /// The newest row of `object_id` at or below `version`, from one reverse scan of `objects`,
+    /// with live objects' contents if `with_contents`.
+    async fn newest(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        with_contents: bool,
+    ) -> Result<Option<Found>, RpcError> {
+        // The scan runs to its end, so it finishes as completed rather than cut off.
+        let rows: Vec<_> = self
             .client
-            .get_object_lt_or_eq_version(object_id, version)
+            .object_versions_stream(
+                object_id,
+                SequenceNumber::MIN..=version,
+                1,
+                true,
+                with_contents,
+            )
             .await?
-            .map(|object| Found::Object(Arc::new(object))))
+            .try_collect()
+            .await?;
+        Ok(rows
+            .into_iter()
+            .next()
+            .map(|(version, row)| Found::from_row(version, row)))
     }
 }
 
@@ -670,26 +877,13 @@ impl CacheFetcher<ObjectKey, Found> for ObjectReads {
         &self,
         keys: Vec<ObjectKey>,
     ) -> Result<BoxStream<'static, Result<(ObjectKey, Found), RpcError>>, RpcError> {
-        Ok(if self.version_only {
-            self.client
-                .get_existing_object_keys_stream(keys)
-                .await?
-                .map_ok(|key| (key, Found::Version(key.1)))
-                .map_err(RpcError::from)
-                .boxed()
-        } else {
-            self.client
-                .get_objects_stream(keys)
-                .await?
-                .map_ok(|object| {
-                    (
-                        ObjectKey(object.id(), object.version()),
-                        Found::Object(Arc::new(object)),
-                    )
-                })
-                .map_err(RpcError::from)
-                .boxed()
-        })
+        Ok(self
+            .client
+            .get_object_rows_stream(keys, !self.version_only)
+            .await?
+            .map_ok(|(key, row)| (key, Found::from_row(key.1, row)))
+            .map_err(RpcError::from)
+            .boxed())
     }
 }
 
@@ -839,48 +1033,54 @@ mod tests {
     use crate::v2::test_utils::start_kv_rpc_at_heights;
     use crate::v2::test_utils::start_kv_rpc_with_request_concurrency;
 
-    /// For each `objects`-table read since the last clear, whether it asked for values to be
-    /// stripped.
+    /// For each `objects`-table read since the last clear, whether it asked for live objects'
+    /// contents to be stripped: every value, or only the live-object column's, keeping
+    /// tombstones whole.
     async fn objects_reads_stripped(mock: &MockBigtableServer) -> Vec<bool> {
         mock.read_rows_calls()
             .await
             .into_iter()
             .filter(|call| call.table == objects::NAME)
-            .map(|call| call.values_stripped)
+            .map(|call| {
+                call.values_stripped || call.values_stripped_in == [objects::col::OBJECT.as_bytes()]
+            })
             .collect()
     }
 
     /// A read mask that asks for no field beyond `object_id` and `version`, including one that
     /// names only `version` and an empty one, never reads object contents: the latest and
-    /// exact-version reads fetch only row keys, and `at_checkpoint` reads are answered by the
-    /// version index without an `objects` read. Like a read of the object, the answer always
-    /// carries both `object_id` and `version`, and nothing else.
+    /// exact-version reads, and the reverse scan of a `max_version` below the version at the
+    /// checkpoint, fetch only row keys, and `at_checkpoint` reads are answered by the version
+    /// index without an `objects` read. Like a read of the object, the answer always carries both
+    /// `object_id` and `version`, and nothing else.
     #[tokio::test]
     async fn test_version_only_masks_skip_object_contents() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
         let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
 
-        // One object, live at version 3 from checkpoint 5.
+        // One object, live at version 2 from checkpoint 4 and at version 3 from checkpoint 5.
         let id = ObjectID::random();
-        let version = SequenceNumber::from_u64(3);
-        let object = Object::with_id_owner_version_for_testing(
-            id,
-            version,
-            Owner::AddressOwner(SuiAddress::ZERO),
-        );
-        mock.insert_row(
-            objects::NAME,
-            objects::encode_key(&ObjectKey(id, version)),
-            objects::encode(&object).unwrap(),
-        )
-        .await;
-        mock.insert_row(
-            object_versions_by_checkpoint::NAME,
-            object_versions_by_checkpoint::encode_key(&id, 5),
-            object_versions_by_checkpoint::encode(version, ObjectStatus::Live),
-        )
-        .await;
+        for (version, checkpoint) in [(2, 4), (3, 5)] {
+            let version = SequenceNumber::from_u64(version);
+            let object = Object::with_id_owner_version_for_testing(
+                id,
+                version,
+                Owner::AddressOwner(SuiAddress::ZERO),
+            );
+            mock.insert_row(
+                objects::NAME,
+                objects::encode_key(&ObjectKey(id, version)),
+                objects::encode(&object).unwrap(),
+            )
+            .await;
+            mock.insert_row(
+                object_versions_by_checkpoint::NAME,
+                object_versions_by_checkpoint::encode_key(&id, checkpoint),
+                object_versions_by_checkpoint::encode(version, ObjectStatus::Live),
+            )
+            .await;
+        }
 
         // Latest, exact version, and at checkpoint 7.
         let selectors = [(None, None), (Some(3), None), (None, Some(7))];
@@ -925,6 +1125,36 @@ mod tests {
                 "version-only reads fetch only row keys: {paths:?}",
             );
         }
+
+        // `max_version` 2 at checkpoint 7, below the version 3 at the checkpoint, scans down
+        // from 2.
+        let version_only = ["object_id", "version"];
+        let below = |paths: &[&str]| {
+            let mut req = request((None, Some(7)), paths);
+            req.max_version = Some(2);
+            req
+        };
+        mock.clear_read_rows_calls().await;
+        let rendered = get_object(&kv_rpc, kv_rpc.admitted_request(below(&version_only)))
+            .await
+            .unwrap()
+            .object
+            .unwrap();
+        assert_eq!(rendered.version, Some(2));
+        let mut batch = BatchGetObjectsRequest::default();
+        batch.requests = vec![below(&[])];
+        batch.read_mask = Some(mask(&version_only));
+        let objects = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+            .await
+            .unwrap()
+            .objects;
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].object().version, Some(2), "{:?}", objects[0]);
+        assert_eq!(
+            objects_reads_stripped(&mock).await,
+            [true; 2],
+            "version-only `max_version` scans fetch only row keys",
+        );
 
         mock_server.abort();
     }
@@ -1127,6 +1357,146 @@ mod tests {
         mock_server.abort();
     }
 
+    /// A version that the version index names as live but whose `objects` row is a tombstone is
+    /// the same index and storage divergence: an `at_checkpoint` read of it is `INTERNAL`, alone
+    /// and in a batch. A request that names the version itself reads the tombstone as a removal.
+    #[tokio::test]
+    async fn test_at_checkpoint_live_version_with_tombstone_row_is_internal() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+
+        // The index has the object live at version 3 from checkpoint 5; `objects` has a
+        // tombstone there.
+        let id = ObjectID::random();
+        mock.insert_row(
+            object_versions_by_checkpoint::NAME,
+            object_versions_by_checkpoint::encode_key(&id, 5),
+            object_versions_by_checkpoint::encode(SequenceNumber::from_u64(3), ObjectStatus::Live),
+        )
+        .await;
+        mock.insert_row(
+            objects::NAME,
+            objects::encode_key(&ObjectKey(id, SequenceNumber::from_u64(3))),
+            objects::encode_tombstone(ObjectStatus::Deleted, &TransactionDigest::random()).unwrap(),
+        )
+        .await;
+        let contents = ["object_id", "version", "digest"];
+
+        let mut req = selector_request(id, None, None, Some(7));
+        req.read_mask = Some(mask(&contents));
+        let status: tonic::Status = get_object(&kv_rpc, kv_rpc.admitted_request(req))
+            .await
+            .unwrap_err()
+            .into();
+        assert_eq!(status.code(), tonic::Code::Internal, "{status:?}");
+
+        let mut batch = BatchGetObjectsRequest::default();
+        batch.requests = vec![
+            selector_request(id, None, None, Some(7)),
+            selector_request(id, Some(3), None, None),
+        ];
+        batch.read_mask = Some(mask(&contents));
+        let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+            .await
+            .unwrap()
+            .objects;
+        assert_eq!(
+            items[0].error().code,
+            tonic::Code::Internal as i32,
+            "at checkpoint 7"
+        );
+        assert!(
+            matches!(
+                removal_outcome(items[1].error()),
+                Err(Some((3, _, Some(_))))
+            ),
+            "version 3: {:?}",
+            items[1]
+        );
+
+        mock_server.abort();
+    }
+
+    /// When the version index records the removal a read resolves to, the `objects` read that
+    /// only adds the removing transaction is best effort: if it fails, the read answers
+    /// `NOT_FOUND` with the version and kind the index records and no transaction, rather than
+    /// fail, alone and in a batch, and the batch's other items are answered. The scan that looks
+    /// for a removal's tombstone when the object changed again after the checkpoint is best
+    /// effort too: if it fails, the read answers `NOT_FOUND` without the detail.
+    #[tokio::test]
+    async fn test_failed_removal_row_reads_answer_not_found() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+
+        // Created at version 2 in checkpoint 1, deleted at 6 in checkpoint 5, and created again
+        // at 8 in checkpoint 7. The deletion's tombstone row cannot be decoded, so reading it
+        // fails.
+        let id = ObjectID::random();
+        insert_history(
+            &mock,
+            id,
+            &[
+                (1, 2, ObjectStatus::Live),
+                (5, 6, ObjectStatus::Deleted),
+                (7, 8, ObjectStatus::Live),
+            ],
+        )
+        .await;
+        mock.insert_row(
+            objects::NAME,
+            objects::encode_key(&ObjectKey(id, SequenceNumber::from_u64(6))),
+            [(objects::col::STATUS, vec![1u8, 2].into())],
+        )
+        .await;
+
+        // The index records the deletion at checkpoint 5, and `max_version` 7 at checkpoint 5
+        // scans for its tombstone, since the object changed again by the served height.
+        let deleted_at_6: RemovalOutcome = Err(Some((6, "DELETED".to_owned(), None)));
+        let removal_reads = [
+            (
+                selector_request(id, None, None, Some(5)),
+                deleted_at_6.clone(),
+            ),
+            (selector_request(id, None, Some(7), Some(5)), Err(None)),
+        ];
+        for (req, expected) in &removal_reads {
+            let mut req = req.clone();
+            req.read_mask = Some(mask(&["object_id", "version"]));
+            let err = get_object(&kv_rpc, kv_rpc.admitted_request(req.clone()))
+                .await
+                .unwrap_err();
+            assert_eq!(
+                &removal_outcome(&err.into_status_proto()),
+                expected,
+                "{req:?}"
+            );
+        }
+
+        let mut batch = BatchGetObjectsRequest::default();
+        batch.requests = removal_reads.iter().map(|(req, _)| req.clone()).collect();
+        batch
+            .requests
+            .push(selector_request(id, None, None, Some(7)));
+        batch.read_mask = Some(mask(&["object_id", "version"]));
+        let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+            .await
+            .unwrap()
+            .objects;
+        let outcomes: Vec<_> = items
+            .iter()
+            .map(|item| match &item.result {
+                Some(get_object_result::Result::Object(object)) => Ok(object.version.unwrap()),
+                Some(get_object_result::Result::Error(status)) => removal_outcome(status),
+                other => panic!("unexpected batch result {other:?}"),
+            })
+            .collect();
+        assert_eq!(outcomes, vec![deleted_at_6, Err(None), Ok(8)]);
+
+        mock_server.abort();
+    }
+
     /// A `GetObjectRequest` for `id` with the given selector fields.
     fn selector_request(
         id: ObjectID,
@@ -1250,6 +1620,200 @@ mod tests {
                     "BatchGetObjects {req:?} {paths:?}"
                 );
             }
+        }
+
+        mock_server.abort();
+    }
+
+    /// How a read ended: the version it found, or `NOT_FOUND` with the removal its
+    /// `OBJECT_REMOVED` detail describes, if it has one, as `(removedVersion, removalKind,
+    /// transaction)`.
+    type RemovalOutcome = Result<u64, Option<(u64, String, Option<String>)>>;
+
+    /// The [`RemovalOutcome`] of a read that failed with `status`.
+    fn removal_outcome(status: &sui_rpc::proto::google::rpc::Status) -> RemovalOutcome {
+        use sui_rpc::proto::google::rpc::ErrorInfo;
+        use sui_rpc_api::ErrorReason;
+
+        assert_eq!(status.code, tonic::Code::NotFound as i32, "{status:?}");
+        let Some(info) = status
+            .details
+            .iter()
+            .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        else {
+            return Err(None);
+        };
+        assert_eq!(info.reason, ErrorReason::ObjectRemoved.as_str_name());
+        assert_eq!(info.domain, ErrorReason::DOMAIN);
+        Err(Some((
+            info.metadata["removedVersion"].parse().unwrap(),
+            info.metadata["removalKind"].clone(),
+            info.metadata.get("transaction").cloned(),
+        )))
+    }
+
+    /// A read that resolves to a deletion or wrap answers `NOT_FOUND` with an `OBJECT_REMOVED`
+    /// detail naming the removal's version and kind, and its transaction when the tombstone row
+    /// records one; a read of a never-existed object, or one bounded by `at_checkpoint` whose
+    /// resolved version was written after the checkpoint, answers plain `NOT_FOUND`. Latest,
+    /// exact-version, `max_version` and `at_checkpoint` reads, alone and combined, single and in
+    /// one batch with live and never-existed items, with and without object contents.
+    #[tokio::test]
+    async fn test_removed_objects_report_their_removal() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+
+        // Created at version 2 in checkpoint 1, mutated at 4 in checkpoint 3, wrapped at 6 in
+        // checkpoint 5 by a tombstone without its transaction, unwrapped at 8 in checkpoint 7,
+        // and deleted at 9 in checkpoint 10 by a tombstone that names its transaction.
+        let id = ObjectID::random();
+        let never_existed = ObjectID::random();
+        let deletion = TransactionDigest::random();
+        let history = [
+            (1, 2, ObjectStatus::Live, None),
+            (3, 4, ObjectStatus::Live, None),
+            (5, 6, ObjectStatus::Wrapped, None),
+            (7, 8, ObjectStatus::Live, None),
+            (10, 9, ObjectStatus::Deleted, Some(deletion)),
+        ];
+        let statuses: Vec<_> = history
+            .iter()
+            .map(|&(checkpoint, version, status, _)| (checkpoint, version, status))
+            .collect();
+        insert_history(&mock, id, &statuses).await;
+        for &(_, version, status, transaction) in &history {
+            if let Some(transaction) = transaction {
+                mock.insert_row(
+                    objects::NAME,
+                    objects::encode_key(&ObjectKey(id, SequenceNumber::from_u64(version))),
+                    objects::encode_tombstone(status, &transaction).unwrap(),
+                )
+                .await;
+            }
+        }
+
+        // The outcome of reading `entry` of the history: its version if live, else its removal.
+        let outcome = |entry: Option<&(u64, u64, ObjectStatus, Option<TransactionDigest>)>| {
+            let Some(&(_, version, status, transaction)) = entry else {
+                return Err(None);
+            };
+            let kind = match status {
+                ObjectStatus::Live => return Ok(version),
+                ObjectStatus::Deleted => "DELETED",
+                ObjectStatus::Wrapped => "WRAPPED",
+            };
+            Err(Some((
+                version,
+                kind.to_owned(),
+                transaction.map(|digest| digest.to_string()),
+            )))
+        };
+        // The served height is 10, so every change counts toward `max_version`.
+        let written_by =
+            |checkpoint: Option<u64>, changed_at: u64| checkpoint.is_none_or(|cp| changed_at <= cp);
+
+        let mut cases = vec![
+            (
+                selector_request(id, None, None, None),
+                outcome(history.last()),
+            ),
+            (selector_request(never_existed, None, None, None), Err(None)),
+            (
+                selector_request(never_existed, Some(1), None, None),
+                Err(None),
+            ),
+            (
+                selector_request(never_existed, None, Some(5), None),
+                Err(None),
+            ),
+            (
+                selector_request(never_existed, None, None, Some(10)),
+                Err(None),
+            ),
+        ];
+        for checkpoint in 0..=10 {
+            let at_checkpoint = history.iter().rfind(|entry| entry.0 <= checkpoint);
+            cases.push((
+                selector_request(id, None, None, Some(checkpoint)),
+                outcome(at_checkpoint),
+            ));
+        }
+        for version in 0..=10 {
+            for at_checkpoint in std::iter::once(None).chain((0..=10).map(Some)) {
+                let exact = history
+                    .iter()
+                    .find(|entry| entry.1 == version)
+                    .filter(|entry| written_by(at_checkpoint, entry.0));
+                cases.push((
+                    selector_request(id, Some(version), None, at_checkpoint),
+                    outcome(exact),
+                ));
+                let newest = history
+                    .iter()
+                    .rfind(|entry| entry.1 <= version)
+                    .filter(|entry| written_by(at_checkpoint, entry.0));
+                cases.push((
+                    selector_request(id, None, Some(version), at_checkpoint),
+                    outcome(newest),
+                ));
+            }
+        }
+        // Both kinds and both transaction cases are covered.
+        for removed in [6, 9] {
+            assert!(
+                cases
+                    .iter()
+                    .any(|(_, expected)| matches!(expected, Err(Some((v, ..))) if *v == removed))
+            );
+        }
+
+        for paths in [
+            &["object_id", "version"][..],
+            &["object_id", "version", "digest"],
+        ] {
+            for (req, expected) in &cases {
+                let mut req = req.clone();
+                req.read_mask = Some(mask(paths));
+                let outcome = match get_object(&kv_rpc, kv_rpc.admitted_request(req.clone())).await
+                {
+                    Ok(response) => Ok(response.object.unwrap().version.unwrap()),
+                    Err(err) => removal_outcome(&err.into_status_proto()),
+                };
+                assert_eq!(&outcome, expected, "GetObject {req:?}");
+            }
+
+            let mut batch = BatchGetObjectsRequest::default();
+            batch.requests = cases.iter().map(|(req, _)| req.clone()).collect();
+            batch.read_mask = Some(mask(paths));
+            let items = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
+                .await
+                .unwrap()
+                .objects;
+            for (item, (req, expected)) in items.iter().zip_debug_eq(&cases) {
+                let outcome = match &item.result {
+                    Some(get_object_result::Result::Object(object)) => Ok(object.version.unwrap()),
+                    Some(get_object_result::Result::Error(status)) => removal_outcome(status),
+                    other => panic!("unexpected batch result {other:?}"),
+                };
+                assert_eq!(&outcome, expected, "BatchGetObjects {req:?} {paths:?}");
+            }
+        }
+
+        // A latest or exact-version read lands on the tombstone row, which names the transaction,
+        // so a removal costs it no extra read. An `at_checkpoint` read learns the removal from the
+        // version index and reads only the tombstone row, for the transaction.
+        for (version, at_checkpoint) in [(None, None), (Some(9), None), (None, Some(10))] {
+            mock.clear_read_rows_calls().await;
+            let req = selector_request(id, version, None, at_checkpoint);
+            get_object(&kv_rpc, kv_rpc.admitted_request(req))
+                .await
+                .unwrap_err();
+            assert_eq!(
+                objects_reads_stripped(&mock).await.len(),
+                1,
+                "{version:?} {at_checkpoint:?}"
+            );
         }
 
         mock_server.abort();

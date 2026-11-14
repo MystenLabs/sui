@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::digests::{
     ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
@@ -22,8 +22,8 @@ use sui_types::messages_checkpoint::{
 use sui_types::object::Object;
 use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::{
-    BackingPackageStore, ObjectKey, ObjectStore, PackageObject, ReadStore, RpcIndexes,
-    RpcStateReader, RuntimeObjectResolver,
+    BackingPackageStore, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject, ReadStore,
+    RpcIndexes, RpcStateReader, RuntimeObjectResolver,
 };
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 use sui_types::transaction::{Transaction, VerifiedTransaction};
@@ -34,8 +34,12 @@ use crate::RpcService;
 /// alike, is `lowest_available_checkpoint`, which the store does not enforce: it serves whatever
 /// `checkpoints` and `objects` hold, as a node does while pruning catches up with its floor.
 pub(crate) struct StubStore {
-    /// Every stored version of every object. An object's latest version is its highest one.
+    /// Every stored version of every object. An object's latest version is its highest one,
+    /// unless `tombstones` holds a higher one.
     pub objects: Vec<Object>,
+    /// Every stored tombstone: the object, the version it was deleted or wrapped at, and the
+    /// removal digest. A tombstone above an object's highest version in `objects` makes it removed.
+    pub tombstones: Vec<ObjectRef>,
     /// Every stored checkpoint, with its transactions. The latest checkpoint is the highest one.
     pub checkpoints: Vec<Checkpoint>,
     pub lowest_available_checkpoint: CheckpointSequenceNumber,
@@ -54,6 +58,7 @@ impl StubStore {
     pub fn new() -> Self {
         Self {
             objects: Vec::new(),
+            tombstones: Vec::new(),
             checkpoints: Vec::new(),
             lowest_available_checkpoint: 0,
             pruned_to_during_reads: None,
@@ -121,15 +126,39 @@ impl StubStore {
                 .map(|transaction| (checkpoint, transaction))
         })
     }
+
+    /// The newest stored version of `object_id`, live or a tombstone, at or below `version` if
+    /// set.
+    fn newest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+        version: Option<SequenceNumber>,
+    ) -> Option<ObjectOrTombstone> {
+        let below = |stored: SequenceNumber| version.is_none_or(|version| stored <= version);
+        let live = self
+            .objects
+            .iter()
+            .filter(|object| object.id() == *object_id && below(object.version()))
+            .map(|object| ObjectOrTombstone::Object(object.clone()));
+        let removed = self
+            .tombstones
+            .iter()
+            .filter(|(id, removed_at, _)| id == object_id && below(*removed_at))
+            .map(|tombstone| ObjectOrTombstone::Tombstone(*tombstone));
+        live.chain(removed).max_by_key(|item| item.as_objref().1)
+    }
+}
+
+fn live(item: Option<ObjectOrTombstone>) -> Option<Object> {
+    match item? {
+        ObjectOrTombstone::Object(object) => Some(object),
+        ObjectOrTombstone::Tombstone(_) => None,
+    }
 }
 
 impl ObjectStore for StubStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.objects
-            .iter()
-            .filter(|object| object.id() == *object_id)
-            .max_by_key(|object| object.version())
-            .cloned()
+        live(self.newest_object_or_tombstone(object_id, None))
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
@@ -309,11 +338,23 @@ impl RpcStateReader for StubStore {
         object_id: &ObjectID,
         version: SequenceNumber,
     ) -> Result<Option<Object>> {
-        Ok(self
-            .objects
-            .iter()
-            .filter(|object| object.id() == *object_id && object.version() <= version)
-            .max_by_key(|object| object.version())
-            .cloned())
+        Ok(live(
+            self.newest_object_or_tombstone(object_id, Some(version)),
+        ))
+    }
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(self.newest_object_or_tombstone(object_id, None))
+    }
+
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(self.newest_object_or_tombstone(object_id, Some(version)))
     }
 }

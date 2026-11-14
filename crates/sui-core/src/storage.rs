@@ -39,6 +39,7 @@ use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
+use sui_types::storage::ObjectOrTombstone;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ObjectVersionsIterator;
 use sui_types::storage::OwnedObjectInfo;
@@ -500,6 +501,43 @@ fn retains_object_version_history(state: &AuthorityState) -> bool {
     )
 }
 
+/// [`RpcStateReader::get_latest_object_or_tombstone`] through the execution cache, which also
+/// holds a removal not yet committed to the store.
+fn latest_object_or_tombstone(
+    state: &AuthorityState,
+    object_id: &ObjectID,
+) -> Option<ObjectOrTombstone> {
+    state
+        .get_object_cache_reader()
+        .get_latest_object_or_tombstone(*object_id)
+        .map(|(_, item)| item)
+}
+
+/// [`RpcStateReader::get_object_or_tombstone_lt_or_eq_version`]: the object's latest state from
+/// the execution cache when it is at or below `version`, and otherwise the newest version at or
+/// below `version` committed to the store. `None` without a scan of the store if the object has
+/// no version at all, as for an object that never existed.
+fn object_or_tombstone_lt_or_eq_version(
+    state: &AuthorityState,
+    object_id: &ObjectID,
+    version: SequenceNumber,
+) -> Result<Option<ObjectOrTombstone>> {
+    let cache = state.get_object_cache_reader();
+    let Some((ObjectKey(_, latest), item)) = cache.get_latest_object_or_tombstone(*object_id)
+    else {
+        return Ok(None);
+    };
+    if latest <= version {
+        return Ok(Some(item));
+    }
+    cache
+        .object_versions_iter(*object_id, SequenceNumber::MIN..=version, true)
+        .map_err(StorageError::custom)?
+        .next()
+        .transpose()
+        .map_err(StorageError::custom)
+}
+
 impl ObjectStore for RestReadStore {
     fn get_object(&self, object_id: &sui_types::base_types::ObjectID) -> Option<Object> {
         self.rocks.get_object(object_id)
@@ -715,6 +753,21 @@ impl RpcStateReader for RestReadStore {
         version: SequenceNumber,
     ) -> Result<Option<Object>> {
         Ok(self.rocks.find_object_lt_or_eq_version(*object_id, version))
+    }
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(latest_object_or_tombstone(&self.state, object_id))
+    }
+
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        object_or_tombstone_lt_or_eq_version(&self.state, object_id, version)
     }
 }
 
@@ -996,6 +1049,21 @@ impl RpcStateReader for RpcStoreReadStore {
         version: SequenceNumber,
     ) -> Result<Option<Object>> {
         Ok(self.rocks.find_object_lt_or_eq_version(*object_id, version))
+    }
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(latest_object_or_tombstone(&self.state, object_id))
+    }
+
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        object_or_tombstone_lt_or_eq_version(&self.state, object_id, version)
     }
 
     fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
