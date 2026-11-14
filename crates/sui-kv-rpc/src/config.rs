@@ -59,6 +59,11 @@ const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMeth
     max_limit_items: 50,
     render_ahead: DEFAULT_RENDER_AHEAD,
 };
+const LIST_OBJECT_VERSIONS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 50,
+    max_limit_items: 1_000,
+    render_ahead: DEFAULT_RENDER_AHEAD,
+};
 
 /// Per-endpoint tunables for one ledger-history list API. Every field is
 /// optional and falls back to a built-in default; see
@@ -349,9 +354,8 @@ impl StagesConfig {
 }
 
 /// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
-/// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are
-/// global across all three. Every field is optional and falls back to a built-in
-/// default.
+/// the `list-*` fields; the remaining knobs are global across the filtered
+/// list APIs. Every field is optional and falls back to a built-in default.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct LedgerHistoryConfig {
@@ -366,6 +370,10 @@ pub struct LedgerHistoryConfig {
     /// Per-endpoint tunables for `list_checkpoints`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
+
+    /// Per-endpoint tunables for `list_object_versions`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_object_versions: Option<LedgerHistoryMethodConfig>,
 
     /// Per-request evaluated-bucket budget for filtered tx-bitmap scans, shared
     /// across all DNF dimensions of one query. A query with more unique leaves
@@ -463,6 +471,13 @@ impl LedgerHistoryConfig {
         )
     }
 
+    pub fn list_object_versions(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(
+            self.list_object_versions.as_ref(),
+            LIST_OBJECT_VERSIONS_DEFAULTS,
+        )
+    }
+
     pub fn bitmap_bucket_budget_tx(&self) -> u64 {
         self.bitmap_bucket_budget_tx
             .unwrap_or(DEFAULT_BITMAP_BUCKET_BUDGET_TX)
@@ -506,12 +521,18 @@ impl LedgerHistoryConfig {
             ("list_transactions", self.list_transactions()),
             ("list_events", self.list_events()),
             ("list_checkpoints", self.list_checkpoints()),
+            ("list_object_versions", self.list_object_versions()),
         ] {
             anyhow::ensure!(
                 endpoint.render_ahead > 0,
                 "ledger_history.{name}.render_ahead must be greater than zero",
             );
         }
+        // A limit cannot be clamped into an empty range.
+        anyhow::ensure!(
+            self.list_object_versions().max_limit_items > 0,
+            "ledger_history.list_object_versions.max_limit_items must be greater than zero",
+        );
         anyhow::ensure!(
             self.max_bitmap_filter_literals() > 0,
             "ledger_history.max_bitmap_filter_literals must be greater than zero",
@@ -649,19 +670,22 @@ pub struct KvRpcConfig {
     pub watermark_pipeline: Option<Vec<String>>,
 
     /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint` or
-    /// `max_version`, and fold the alpha `kvstore_object_versions_by_checkpoint` and
-    /// `kvstore_object_tombstones` pipelines into the `GetServiceInfo` checkpoint height.
-    /// Defaults to `false`, which rejects those requests with `Unimplemented` (`NOT_SERVED_HERE`,
-    /// cause `disabled_by_config`).
+    /// `max_version`, and every `ListObjectVersions` request (bounded by `at_checkpoint`, or by
+    /// the served height when it is unset), and fold the alpha
+    /// `kvstore_object_versions_by_checkpoint` and `kvstore_object_tombstones` pipelines into the
+    /// `GetServiceInfo` checkpoint height. Defaults to `false`, which rejects those requests with
+    /// `Unimplemented` (`NOT_SERVED_HERE`, cause `disabled_by_config`).
     ///
     /// Enable this only after both pipelines have been backfilled from genesis. The versions
     /// index has no restore floor, so an object unchanged since before the pipeline's first
     /// checkpoint would wrongly read as `NotFound`. A `max_version` read stops at the tombstone
     /// written where the object was deleted or wrapped; without it, the read resolves to the
-    /// object's last live version before the removal instead of `NotFound`. The server cannot
-    /// check this: a backfill run as a separate task writes its own watermark row, so a main
-    /// pipeline's `reader_lo` does not say whether history is complete. Setting this flag is the
-    /// operator's statement that it is.
+    /// object's last live version before the removal instead of `NotFound`. The tombstones must
+    /// also come from a build that records each removal's transaction (column `t`), since
+    /// `ListObjectVersions` fails with `Internal` on a tombstone without one when the request
+    /// asks for it. The server cannot check this: a backfill run as a separate task writes its
+    /// own watermark row, so a main pipeline's `reader_lo` does not say whether history is
+    /// complete. Setting this flag is the operator's statement that it is.
     ///
     /// If this is on but either pipeline is not running, that pipeline has no watermark and the
     /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and

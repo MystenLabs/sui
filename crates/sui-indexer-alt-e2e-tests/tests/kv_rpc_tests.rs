@@ -38,6 +38,7 @@ use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListObjectVersionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
@@ -55,6 +56,7 @@ use sui_rpc::proto::sui::rpc::v2::event_literal;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::get_object_result;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::object_removal;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_rpc_api::ledger_history::cursor::CursorKind;
 use sui_rpc_api::ledger_history::cursor::CursorToken;
@@ -1427,6 +1429,9 @@ struct ObjectLifecycle {
     /// `(checkpoint, object, version, live)` for every change, in checkpoint order. `live` is
     /// false for a change that deleted or wrapped the object.
     changes: Vec<(u64, ObjectID, u64, bool)>,
+    /// `(object, version, transaction)` for every change that deleted or wrapped an object, in
+    /// checkpoint order.
+    removed_by: Vec<(ObjectID, u64, sui_types::digests::TransactionDigest)>,
     /// The checkpoint sealed after publishing, just before the object is created.
     publish_checkpoint: u64,
     set_value_checkpoint: u64,
@@ -1498,6 +1503,7 @@ impl ObjectLifecycle {
         let wrap_version = wrap.lamport_version().value();
         changes.push((wrap_checkpoint, object, wrap_version, false));
         changes.push((wrap_checkpoint, wrapper, wrap_version, true));
+        let mut removed_by = vec![(object, wrap_version, *wrap.transaction_digest())];
 
         let (unwrap, unwrap_checkpoint, gas) = call_object_basics(
             cluster,
@@ -1512,6 +1518,7 @@ impl ObjectLifecycle {
         let unwrap_version = unwrap.lamport_version().value();
         changes.push((unwrap_checkpoint, object, unwrap_version, true));
         changes.push((unwrap_checkpoint, wrapper, unwrap_version, false));
+        removed_by.push((wrapper, unwrap_version, *unwrap.transaction_digest()));
 
         let (delete, delete_checkpoint, gas) = call_object_basics(
             cluster,
@@ -1523,17 +1530,15 @@ impl ObjectLifecycle {
             vec![owned_arg(output_ref(&unwrap, object))],
         )
         .await;
-        changes.push((
-            delete_checkpoint,
-            object,
-            delete.lamport_version().value(),
-            false,
-        ));
+        let delete_version = delete.lamport_version().value();
+        changes.push((delete_checkpoint, object, delete_version, false));
+        removed_by.push((object, delete_version, *delete.transaction_digest()));
 
         Self {
             object,
             wrapper,
             changes,
+            removed_by,
             publish_checkpoint,
             set_value_checkpoint,
             delete_checkpoint,
@@ -2061,6 +2066,470 @@ async fn test_get_object_max_version_and_checkpoint_bounds() {
         .unwrap_err();
     assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
     assert_eq!(bad_request_fields(&err), ["requests[2].max_version"]);
+}
+
+/// A `ListObjectVersionsRequest` for `id` that reads only `object_id` and `version`.
+fn list_versions_request(
+    id: ObjectID,
+    ordering: Ordering,
+    limit: Option<u32>,
+    after: Option<&prost::bytes::Bytes>,
+    before: Option<&prost::bytes::Bytes>,
+) -> ListObjectVersionsRequest {
+    let mut options = QueryOptions::default();
+    options.limit = limit;
+    options.ordering = Some(ordering as i32);
+    options.after = after.cloned();
+    options.before = before.cloned();
+    let mut req = ListObjectVersionsRequest::default();
+    req.object_id = Some(id.to_canonical_string(true));
+    req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+    req.options = Some(options);
+    req
+}
+
+/// One `ListObjectVersions` stream: each listed item's version, removal kind (`None` for a live
+/// version) and cursor, in order, and the reason the stream ended, or the error's code and
+/// message.
+type VersionsRead = Result<
+    (
+        Vec<(u64, Option<object_removal::Kind>, prost::bytes::Bytes)>,
+        QueryEndReason,
+    ),
+    (tonic::Code, String),
+>;
+
+async fn list_versions(
+    client: &mut LedgerServiceClient<Channel>,
+    req: ListObjectVersionsRequest,
+) -> VersionsRead {
+    let id = req.object_id.clone().expect("requests name an object");
+    let error = |status: tonic::Status| (status.code(), status.message().to_owned());
+    let mut stream = client
+        .list_object_versions(req)
+        .await
+        .map_err(error)?
+        .into_inner();
+    let mut listed = vec![];
+    loop {
+        let frame = stream
+            .message()
+            .await
+            .map_err(error)?
+            .expect("a successful stream ends with QueryEnd");
+        let item = match (&frame.object, &frame.removal) {
+            (Some(object), None) => {
+                assert_eq!(object.object_id.as_deref(), Some(id.as_str()));
+                Some((object.version.expect("version should be present"), None))
+            }
+            (None, Some(removal)) => Some((
+                removal.version.expect("removal version should be present"),
+                Some(removal.kind()),
+            )),
+            (None, None) => None,
+            (Some(_), Some(_)) => panic!("a frame has both an object and a removal"),
+        };
+        if let Some((version, removed)) = item {
+            let cursor = frame.cursor.clone().expect("cursor should be present");
+            listed.push((version, removed, cursor));
+        }
+        if let Some(end) = frame.end {
+            let reason = QueryEndReason::try_from(end.reason.expect("reason should be set"))
+                .expect("known reason");
+            assert!(
+                stream.message().await.map_err(error)?.is_none(),
+                "no frame follows QueryEnd"
+            );
+            return Ok((listed, reason));
+        }
+    }
+}
+
+/// The items a successful `ListObjectVersions` call listed, in order: each version with its
+/// removal kind, `None` for a live version.
+fn listed_items(read: &VersionsRead, context: &str) -> Vec<(u64, Option<object_removal::Kind>)> {
+    match read {
+        Ok((listed, _)) => listed
+            .iter()
+            .map(|(version, removed, _)| (*version, *removed))
+            .collect(),
+        Err(err) => panic!("{context}: expected versions, got error {err:?}"),
+    }
+}
+
+/// The versions a successful `ListObjectVersions` call listed, in order.
+fn listed_versions(read: &VersionsRead, context: &str) -> Vec<u64> {
+    listed_items(read, context)
+        .into_iter()
+        .map(|(version, _)| version)
+        .collect()
+}
+
+/// The cursor of the version a successful `ListObjectVersions` call listed at `index`.
+fn listed_cursor(read: &VersionsRead, index: usize) -> prost::bytes::Bytes {
+    read.as_ref().expect("listing should succeed").0[index]
+        .2
+        .clone()
+}
+
+/// The reason a successful `ListObjectVersions` stream ended with.
+fn ended_with(read: &VersionsRead) -> QueryEndReason {
+    read.as_ref().expect("listing should succeed").1
+}
+
+/// `ListObjectVersions` lists the history of objects driven through creation, mutation,
+/// wrapping, unwrapping, and deletion, live versions and removals alike, in either order, inside
+/// every bound the request sets: the version range, cursors from earlier responses, and
+/// `at_checkpoint`, which keeps the versions written by the end of the checkpoint and none
+/// before creation. Pages end with `ITEM_LIMIT` when full, at the object's first version with
+/// `CHECKPOINT_BOUND`, and at its newest, its deletion, with `LEDGER_TIP`.
+#[tokio::test]
+async fn test_list_object_versions_lifecycle() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
+    let ObjectLifecycle {
+        object, wrapper, ..
+    } = lifecycle;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let served_height = client
+        .get_service_info(GetServiceInfoRequest::default())
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint_height
+        .expect("served height should be set");
+    assert!(served_height >= lifecycle.delete_checkpoint);
+
+    // Each object's items: the object is live after creation, the mutation, and the unwrap,
+    // wrapped at the wrap and deleted at the end; the wrapper is live after the wrap and deleted
+    // by the unwrap. Each object's last change is its deletion, every earlier removal a wrap.
+    type Item = (u64, u64, Option<object_removal::Kind>);
+    let items = |id: ObjectID| -> Vec<Item> {
+        let changes: Vec<(u64, u64, bool)> = lifecycle
+            .changes
+            .iter()
+            .filter(|&&(_, changed, _, _)| changed == id)
+            .map(|&(checkpoint, _, version, live)| (checkpoint, version, live))
+            .collect();
+        let last = changes.len() - 1;
+        changes
+            .into_iter()
+            .enumerate()
+            .map(|(index, (checkpoint, version, live))| {
+                let removed = (!live).then_some(if index == last {
+                    object_removal::Kind::Deleted
+                } else {
+                    object_removal::Kind::Wrapped
+                });
+                (checkpoint, version, removed)
+            })
+            .collect()
+    };
+    assert_eq!(items(object).len(), 5);
+    assert_eq!(items(wrapper).len(), 2);
+    let set_value_version = lifecycle
+        .live_version_at(object, lifecycle.set_value_checkpoint)
+        .unwrap();
+    let unwrap_version = items(object)[3].1;
+
+    // Every combination of version range, cursors of each item, and checkpoint from just before
+    // creation through deletion, for both objects, in both orders.
+    let checkpoints: Vec<Option<u64>> = std::iter::once(None)
+        .chain((lifecycle.publish_checkpoint..=lifecycle.delete_checkpoint).map(Some))
+        .collect();
+    for id in [object, wrapper] {
+        let full = list_versions(
+            &mut client,
+            list_versions_request(id, Ordering::Ascending, None, None, None),
+        )
+        .await;
+        let all: Vec<(u64, Option<object_removal::Kind>)> = items(id)
+            .iter()
+            .map(|&(_, version, removed)| (version, removed))
+            .collect();
+        assert_eq!(listed_items(&full, "full listing"), all);
+        assert_eq!(ended_with(&full), QueryEndReason::LedgerTip);
+
+        // Each removal names the transaction that deleted or wrapped the object, when
+        // `removal_read_mask` asks for it.
+        let mut req = list_versions_request(id, Ordering::Ascending, None, None, None);
+        req.removal_read_mask = Some(FieldMask::from_paths(["version", "transaction"]));
+        let mut stream = client.list_object_versions(req).await.unwrap().into_inner();
+        let mut removed_by = vec![];
+        while let Some(frame) = stream.message().await.unwrap() {
+            if let Some(removal) = frame.removal {
+                let transaction = removal.transaction.clone();
+                removed_by.push((removal.version(), transaction));
+            }
+        }
+        let expected: Vec<(u64, Option<String>)> = lifecycle
+            .removed_by
+            .iter()
+            .filter(|&&(removed, _, _)| removed == id)
+            .map(|&(_, version, digest)| (version, Some(digest.to_string())))
+            .collect();
+        assert_eq!(removed_by, expected, "removing transactions of {id}");
+        let cursors: Vec<Option<(u64, prost::bytes::Bytes)>> = std::iter::once(None)
+            .chain(
+                full.unwrap()
+                    .0
+                    .into_iter()
+                    .map(|(version, _, cursor)| Some((version, cursor))),
+            )
+            .collect();
+
+        for (start, end) in [
+            (None, None),
+            (Some(set_value_version), None),
+            (None, Some(unwrap_version)),
+            (Some(set_value_version), Some(unwrap_version)),
+        ] {
+            for after in &cursors {
+                for before in &cursors {
+                    for &at_checkpoint in &checkpoints {
+                        let mut ascending: Vec<(u64, Option<object_removal::Kind>)> = items(id)
+                            .into_iter()
+                            .filter(|&(checkpoint, version, _)| {
+                                start.is_none_or(|start| version >= start)
+                                    && end.is_none_or(|end| version < end)
+                                    && after.as_ref().is_none_or(|(after, _)| version > *after)
+                                    && before.as_ref().is_none_or(|(before, _)| version < *before)
+                                    && at_checkpoint.is_none_or(|bound| checkpoint <= bound)
+                            })
+                            .map(|(_, version, removed)| (version, removed))
+                            .collect();
+                        for ordering in [Ordering::Ascending, Ordering::Descending] {
+                            let mut req = list_versions_request(
+                                id,
+                                ordering,
+                                None,
+                                after.as_ref().map(|(_, cursor)| cursor),
+                                before.as_ref().map(|(_, cursor)| cursor),
+                            );
+                            req.start_version = start;
+                            req.end_version = end;
+                            req.at_checkpoint = at_checkpoint;
+                            let context = format!(
+                                "{id} versions [{start:?}, {end:?}) after {:?} before {:?} \
+                                 at_checkpoint {at_checkpoint:?} {ordering:?}",
+                                after.as_ref().map(|(version, _)| version),
+                                before.as_ref().map(|(version, _)| version),
+                            );
+                            let read = list_versions(&mut client, req).await;
+                            assert_eq!(listed_items(&read, &context), ascending, "{context}");
+                            ascending.reverse();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // A client holding the page after the created version pages backward from its first
+    // version, then forward from that page's cursors, until the listing ends at both ends, with
+    // no gaps or repeats.
+    let versions: Vec<u64> = items(object)
+        .iter()
+        .map(|&(_, version, _)| version)
+        .collect();
+    let first = list_versions(
+        &mut client,
+        list_versions_request(object, Ordering::Ascending, Some(1), None, None),
+    )
+    .await;
+    let held = list_versions(
+        &mut client,
+        list_versions_request(
+            object,
+            Ordering::Ascending,
+            Some(1),
+            Some(&listed_cursor(&first, 0)),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(listed_versions(&held, "held page"), versions[1..2]);
+    assert_eq!(ended_with(&held), QueryEndReason::ItemLimit);
+    let back = list_versions(
+        &mut client,
+        list_versions_request(
+            object,
+            Ordering::Descending,
+            Some(2),
+            None,
+            Some(&listed_cursor(&held, 0)),
+        ),
+    )
+    .await;
+    assert_eq!(
+        listed_versions(&back, "backward page"),
+        versions[..1],
+        "the page ends at the object's first version",
+    );
+    assert_eq!(ended_with(&back), QueryEndReason::CheckpointBound);
+    let mut forward: Vec<u64> = Vec::new();
+    let mut after = listed_cursor(&back, 0);
+    loop {
+        let page = list_versions(
+            &mut client,
+            list_versions_request(object, Ordering::Ascending, Some(1), Some(&after), None),
+        )
+        .await;
+        let versions = listed_versions(&page, "forward page");
+        forward.extend(&versions);
+        if versions.is_empty() {
+            assert_eq!(ended_with(&page), QueryEndReason::LedgerTip);
+            break;
+        }
+        assert_eq!(ended_with(&page), QueryEndReason::ItemLimit);
+        after = listed_cursor(&page, 0);
+    }
+    assert_eq!(forward, versions[1..], "forward pages");
+}
+
+/// A dynamic field removed and re-added under the same name gets the same object ID at a higher
+/// version, so a deletion need not be the end of an object's history. `ListObjectVersions` lists
+/// the field's first version, its deletion, and its re-addition in either order, pages from a
+/// cursor at the deletion across the gap to the re-addition, and stops at the deletion under
+/// `at_checkpoint`.
+#[tokio::test]
+async fn test_list_object_versions_continues_after_a_deletion() {
+    use move_core_types::identifier::Identifier;
+    use move_core_types::language_storage::TypeTag;
+    use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let gas_price = cluster.reference_gas_price();
+    let key_and_value_types = || vec![TypeTag::U64, TypeTag::U64];
+
+    // A `Table<u64, u64>` owned by the sender.
+    let mut builder =
+        TestTransactionBuilder::new(sender, gas, gas_price).with_gas_budget(DEFAULT_GAS_BUDGET);
+    let ptb = builder.ptb_builder_mut();
+    let table = ptb.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("table").unwrap(),
+        Identifier::new("new").unwrap(),
+        key_and_value_types(),
+        vec![],
+    );
+    ptb.transfer_arg(sender, table);
+    let (fx, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(
+            builder.build(),
+            vec![&kp],
+        ))
+        .expect("table::new failed");
+    assert!(err.is_none(), "table::new failed: {err:?}");
+    cluster.create_checkpoint().await;
+    let table = created_object(&fx);
+    let mut table_ref = output_ref(&fx, table);
+    let mut gas = output_ref(&fx, gas.0);
+
+    // Add key 1, remove it, and add it again, each in a checkpoint of its own. Each step's
+    // `(checkpoint, field version, removal kind)`.
+    let mut field = None;
+    let mut steps: Vec<(u64, u64, Option<object_removal::Kind>)> = vec![];
+    for function in ["add", "remove", "add"] {
+        let mut args = vec![owned_arg(table_ref), pure_arg(&1u64)];
+        if function == "add" {
+            args.push(pure_arg(&7u64));
+        }
+        let (fx, err) = cluster
+            .execute_transaction(Transaction::from_data_and_signer(
+                TestTransactionBuilder::new(sender, gas, gas_price)
+                    .with_gas_budget(DEFAULT_GAS_BUDGET)
+                    .move_call_with_type_args(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        "table",
+                        function,
+                        key_and_value_types(),
+                        args,
+                    )
+                    .build(),
+                vec![&kp],
+            ))
+            .expect("table call failed");
+        assert!(err.is_none(), "table::{function} failed: {err:?}");
+        let checkpoint = cluster.create_checkpoint().await.sequence_number;
+        table_ref = output_ref(&fx, table);
+        gas = output_ref(&fx, gas.0);
+        let (id, version, removed) = if function == "add" {
+            let id = created_object(&fx);
+            (id, output_ref(&fx, id).1.value(), None)
+        } else {
+            let deleted = fx.deleted();
+            assert_eq!(deleted.len(), 1, "remove deletes the field: {deleted:?}");
+            let (id, version, _) = deleted[0];
+            (id, version.value(), Some(object_removal::Kind::Deleted))
+        };
+        assert_eq!(*field.get_or_insert(id), id, "the field keeps its ID");
+        steps.push((checkpoint, version, removed));
+    }
+    let field = field.unwrap();
+    let items: Vec<(u64, Option<object_removal::Kind>)> = steps
+        .iter()
+        .map(|&(_, version, removed)| (version, removed))
+        .collect();
+    assert!(
+        items[0].0 < items[1].0 && items[1].0 < items[2].0,
+        "{items:?}"
+    );
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let read = |ordering: Ordering,
+                limit: Option<u32>,
+                after: Option<&prost::bytes::Bytes>,
+                before: Option<&prost::bytes::Bytes>| {
+        list_versions_request(field, ordering, limit, after, before)
+    };
+
+    let full = list_versions(&mut client, read(Ordering::Ascending, None, None, None)).await;
+    assert_eq!(listed_items(&full, "ascending"), items);
+    assert_eq!(ended_with(&full), QueryEndReason::LedgerTip);
+    let reversed = list_versions(&mut client, read(Ordering::Descending, None, None, None)).await;
+    let mut descending = items.clone();
+    descending.reverse();
+    assert_eq!(listed_items(&reversed, "descending"), descending);
+    assert_eq!(ended_with(&reversed), QueryEndReason::CheckpointBound);
+
+    // A page ending at the deletion, then the next page from its cursor, across the gap.
+    let first = list_versions(&mut client, read(Ordering::Ascending, Some(2), None, None)).await;
+    assert_eq!(listed_items(&first, "first page"), items[..2]);
+    assert_eq!(ended_with(&first), QueryEndReason::ItemLimit);
+    let deletion = listed_cursor(&first, 1);
+    let next = list_versions(
+        &mut client,
+        read(Ordering::Ascending, None, Some(&deletion), None),
+    )
+    .await;
+    assert_eq!(listed_items(&next, "after the deletion"), items[2..]);
+    assert_eq!(ended_with(&next), QueryEndReason::LedgerTip);
+    let readded = listed_cursor(&next, 0);
+    let back = list_versions(
+        &mut client,
+        read(Ordering::Descending, None, None, Some(&readded)),
+    )
+    .await;
+    assert_eq!(
+        listed_items(&back, "before the re-addition"),
+        descending[1..]
+    );
+    assert_eq!(ended_with(&back), QueryEndReason::CheckpointBound);
+
+    // At the deletion's checkpoint, the listing ends at the deletion.
+    let mut at_deletion = read(Ordering::Ascending, None, None, None);
+    at_deletion.at_checkpoint = Some(steps[1].0);
+    let bounded = list_versions(&mut client, at_deletion).await;
+    assert_eq!(listed_items(&bounded, "at the deletion"), items[..2]);
+    assert_eq!(ended_with(&bounded), QueryEndReason::CheckpointBound);
 }
 
 #[tokio::test]

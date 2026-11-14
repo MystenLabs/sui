@@ -696,17 +696,17 @@ impl CacheFetcher<ObjectKey, Found> for ObjectReads {
 /// What a request's reads of the version index run with: the served height that bounds them, and
 /// a cache that reads each `(object_id, checkpoint)` at most once per request, through the
 /// request's gated client.
-struct AtCheckpointReads {
-    served_height: ServedHeight,
+pub(super) struct AtCheckpointReads {
+    pub(super) served_height: ServedHeight,
     versions: Arc<RequestCache<(ObjectID, u64), (SequenceNumber, ObjectStatus)>>,
 }
 
 impl KvRpcServer {
-    /// `Unimplemented` / `NOT_SERVED_HERE` (cause `disabled_by_config`) unless `at_checkpoint`
-    /// and `max_version` object reads are enabled; otherwise the scans read through `client`, the
-    /// request's gated client, at `served_height`, the height the request was admitted at
-    /// (`Unavailable` if it had none).
-    fn at_checkpoint_reads(
+    /// `Unimplemented` / `NOT_SERVED_HERE` (cause `disabled_by_config`) unless object version
+    /// history reads (`at_checkpoint` and `max_version` object reads, and `ListObjectVersions`)
+    /// are enabled; otherwise the scans read through `client`, the request's gated client, at
+    /// `served_height`, the height the request was admitted at (`Unavailable` if it had none).
+    pub(super) fn at_checkpoint_reads(
         &self,
         client: BigTableClient,
         served_height: Result<ServedHeight, RpcError>,
@@ -714,7 +714,8 @@ impl KvRpcServer {
         if !self.object_at_checkpoint_enabled {
             return Err(not_served_here(
                 NotServedHereCause::DisabledByConfig,
-                "at_checkpoint and max_version object reads are not enabled on this instance",
+                "at_checkpoint and max_version object reads, and ListObjectVersions, are not \
+                 enabled on this instance",
             ));
         }
         Ok(AtCheckpointReads {
@@ -766,7 +767,7 @@ impl AtCheckpointReads {
     /// The version and status `object_id` had at the end of `checkpoint`. The first call for an
     /// `(object_id, checkpoint)` reads it in a task the cache owns, so the read returns its permit
     /// whether or not its caller is polled; later calls share that read.
-    async fn version_at_checkpoint(
+    pub(super) async fn version_at_checkpoint(
         &self,
         object_id: ObjectID,
         checkpoint: u64,
@@ -817,7 +818,6 @@ impl CacheFetcher<(ObjectID, u64), (SequenceNumber, ObjectStatus)> for VersionIn
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
     use std::time::Duration;
 
     use mysten_common::ZipDebugEqIteratorExt;
@@ -831,106 +831,13 @@ mod tests {
     use sui_types::object::Owner;
 
     use super::*;
-    use crate::KvRpcConfig;
-    use crate::LedgerHistoryConfig;
     use crate::StageConfig;
     use crate::StagesConfig;
-    use crate::service_info_watermark_pipelines;
-    use crate::tests::seed_watermarks;
-
-    /// A kv-rpc server over the mock BigTable at `addr`, with every watermark it serves at
-    /// checkpoint 10 and its service info loaded.
-    async fn start_kv_rpc(
-        addr: SocketAddr,
-        stages: StagesConfig,
-        enable_object_at_checkpoint: bool,
-    ) -> KvRpcServer {
-        start_kv_rpc_at_heights(addr, stages, enable_object_at_checkpoint, |_| 10).await
-    }
-
-    /// [`start_kv_rpc`], with the watermark of each pipeline it serves at `height(pipeline)`.
-    async fn start_kv_rpc_at_heights(
-        addr: SocketAddr,
-        stages: StagesConfig,
-        enable_object_at_checkpoint: bool,
-        height: impl Fn(&str) -> u64,
-    ) -> KvRpcServer {
-        let request_bigtable_concurrency = KvRpcConfig::default().request_bigtable_concurrency();
-        start_kv_rpc_with(
-            addr,
-            stages,
-            enable_object_at_checkpoint,
-            request_bigtable_concurrency,
-            height,
-        )
-        .await
-    }
-
-    /// [`start_kv_rpc`], with each request limited to `request_bigtable_concurrency` BigTable
-    /// reads at once.
-    async fn start_kv_rpc_with_request_concurrency(
-        addr: SocketAddr,
-        stages: StagesConfig,
-        enable_object_at_checkpoint: bool,
-        request_bigtable_concurrency: usize,
-    ) -> KvRpcServer {
-        start_kv_rpc_with(
-            addr,
-            stages,
-            enable_object_at_checkpoint,
-            request_bigtable_concurrency,
-            |_| 10,
-        )
-        .await
-    }
-
-    /// A kv-rpc server over the mock BigTable at `addr`, with each request limited to
-    /// `request_bigtable_concurrency` BigTable reads at once, the watermark of each pipeline it
-    /// serves at `height(pipeline)`, and its service info loaded.
-    async fn start_kv_rpc_with(
-        addr: SocketAddr,
-        stages: StagesConfig,
-        enable_object_at_checkpoint: bool,
-        request_bigtable_concurrency: usize,
-        height: impl Fn(&str) -> u64,
-    ) -> KvRpcServer {
-        let mut client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".into())
-            .await
-            .expect("connect to mock BigTable");
-        let pipelines = service_info_watermark_pipelines(
-            LedgerHistoryConfig::default().bitmap_schema(),
-            enable_object_at_checkpoint,
-        );
-        seed_watermarks(&mut client, &pipelines, height).await;
-        let config = KvRpcConfig::default();
-        let kv_rpc = KvRpcServer::new_local_with_config(
-            addr.to_string(),
-            "test".to_string(),
-            None,
-            LedgerHistoryConfig::default(),
-            request_bigtable_concurrency,
-            config.monotonic_read_wait_timeout(),
-            stages,
-            config.watermark_source(),
-            enable_object_at_checkpoint,
-        )
-        .await
-        .expect("start kv-rpc server");
-        tokio::time::timeout(
-            Duration::from_secs(5),
-            kv_rpc.cache.subscribe().wait_for(Option::is_some),
-        )
-        .await
-        .expect("service info never refreshed")
-        .expect("service info sender dropped");
-        kv_rpc
-    }
-
-    fn mask(paths: &[&str]) -> prost_types::FieldMask {
-        prost_types::FieldMask {
-            paths: paths.iter().map(|path| path.to_string()).collect(),
-        }
-    }
+    use crate::v2::test_utils::insert_history;
+    use crate::v2::test_utils::mask;
+    use crate::v2::test_utils::start_kv_rpc;
+    use crate::v2::test_utils::start_kv_rpc_at_heights;
+    use crate::v2::test_utils::start_kv_rpc_with_request_concurrency;
 
     /// For each `objects`-table read since the last clear, whether it asked for values to be
     /// stripped.
@@ -1218,43 +1125,6 @@ mod tests {
         );
 
         mock_server.abort();
-    }
-
-    /// Write `id`'s history, `(checkpoint, version, status)` for each change in order, to both
-    /// the `objects` table (a live row or a tombstone) and the `object_versions_by_checkpoint`
-    /// index.
-    async fn insert_history(
-        mock: &MockBigtableServer,
-        id: ObjectID,
-        history: &[(u64, u64, ObjectStatus)],
-    ) {
-        for &(checkpoint, version, status) in history {
-            let version = SequenceNumber::from_u64(version);
-            let cells = match status {
-                ObjectStatus::Live => objects::encode(&Object::with_id_owner_version_for_testing(
-                    id,
-                    version,
-                    Owner::AddressOwner(SuiAddress::ZERO),
-                ))
-                .unwrap()
-                .to_vec(),
-                removed => objects::encode_tombstone(removed, &TransactionDigest::random())
-                    .unwrap()
-                    .to_vec(),
-            };
-            mock.insert_row(
-                objects::NAME,
-                objects::encode_key(&ObjectKey(id, version)),
-                cells,
-            )
-            .await;
-            mock.insert_row(
-                object_versions_by_checkpoint::NAME,
-                object_versions_by_checkpoint::encode_key(&id, checkpoint),
-                object_versions_by_checkpoint::encode(version, status),
-            )
-            .await;
-        }
     }
 
     /// A `GetObjectRequest` for `id` with the given selector fields.

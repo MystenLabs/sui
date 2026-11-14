@@ -26,6 +26,7 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -57,6 +58,7 @@ use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
+use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
@@ -293,6 +295,30 @@ impl BigTableClient {
         self.call_gated(
             stage::OBJECTS,
             inner.get_object_lt_or_eq_version(object_id, version),
+        )
+        .await
+    }
+
+    /// Stream up to `limit` versions of `object_id` in `versions`, live or
+    /// removed, in ascending version order or descending if `descending`,
+    /// each with its row, read without live objects' contents unless
+    /// `with_contents`. One range scan of the `objects` table, holding its
+    /// permit until the stream is dropped.
+    pub(crate) async fn object_versions_stream(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+        with_contents: bool,
+    ) -> Result<
+        BoxStream<'static, Result<(SequenceNumber, ObjectVersionRow), anyhow::Error>>,
+        RpcError,
+    > {
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(
+            stage::OBJECTS,
+            inner.object_versions_stream(object_id, versions, limit, descending, with_contents),
         )
         .await
     }
