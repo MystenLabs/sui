@@ -640,11 +640,54 @@ impl<S: SyncPackageStore + Sync> sui_display::v2::Store for DisplayStore<'_, S> 
     }
 }
 
+/// Asserts `error` is `code` with exactly one [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo):
+/// `reason` in the [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
+#[cfg(test)]
+pub(crate) fn assert_refusal(
+    error: crate::RpcError,
+    code: tonic::Code,
+    reason: ErrorReason,
+    cause: &str,
+) {
+    use crate::proto::google::rpc::ErrorInfo;
+
+    let status = error.into_status_proto();
+    assert_eq!(status.code, code as i32, "{status:?}");
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    assert_eq!(
+        error_info.metadata,
+        [("cause".to_owned(), cause.to_owned())].into(),
+        "{status:?}"
+    );
+}
+
+/// [`assert_refusal`] for [`not_served_here`] with `cause`.
+#[cfg(test)]
+pub(crate) fn assert_not_served_here(error: crate::RpcError, cause: NotServedHereCause) {
+    assert_refusal(
+        error,
+        tonic::Code::Unimplemented,
+        ErrorReason::NotServedHere,
+        cause.as_str(),
+    );
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::cell::Cell;
 
     use super::*;
+    // Tests in other modules import the helpers from here.
+    pub(crate) use super::assert_refusal;
 
     #[test]
     fn dedup_checkpoint_timestamps_fetches_sorted_unique_checkpoints_once() {
@@ -736,35 +779,6 @@ pub(crate) mod tests {
                 .unwrap();
         }
         batch.commit().unwrap();
-    }
-
-    /// Asserts `error` is `code` with exactly one [`ErrorInfo`]: `reason` in the
-    /// [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
-    pub(crate) fn assert_refusal(
-        error: crate::RpcError,
-        code: tonic::Code,
-        reason: ErrorReason,
-        cause: &str,
-    ) {
-        use crate::proto::google::rpc::ErrorInfo;
-
-        let status = error.into_status_proto();
-        assert_eq!(status.code, code as i32, "{status:?}");
-        let error_infos: Vec<ErrorInfo> = status
-            .details
-            .iter()
-            .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
-            .collect();
-        let [error_info] = error_infos.as_slice() else {
-            panic!("expected exactly one ErrorInfo in {status:?}");
-        };
-        assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
-        assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
-        assert_eq!(
-            error_info.metadata,
-            [("cause".to_owned(), cause.to_owned())].into(),
-            "{status:?}"
-        );
     }
 
     /// Checkpoint-pinned reads are refused as not ready while the indexes are empty and while a

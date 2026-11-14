@@ -68,6 +68,58 @@ async fn get_epoch() {
     assert_eq!(status.code(), tonic::Code::NotFound);
 }
 
+/// Without rpc indexes a node serves the current epoch from the live system state, refuses a past
+/// epoch, whose data only the indexes hold, as not set up for it, and answers `NotFound` for an
+/// epoch that has not started.
+#[sim_test]
+async fn past_epoch_without_rpc_indexes_is_not_served_here() {
+    use prost::Message;
+    use sui_rpc::proto::google::rpc::ErrorInfo;
+    use sui_rpc::proto::sui::rpc::v2::ErrorReason;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_rpc_config(sui_config::RpcConfig {
+            enable_indexing: Some(false),
+            ..Default::default()
+        })
+        .build()
+        .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let current_epoch = client
+        .get_epoch(GetEpochRequest::latest())
+        .await
+        .unwrap()
+        .into_inner()
+        .epoch
+        .unwrap()
+        .epoch
+        .unwrap();
+    assert!(current_epoch > 0);
+
+    let status = client.get_epoch(GetEpochRequest::new(0)).await.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::Unimplemented, "{status:?}");
+    let error_info = sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"));
+    assert_eq!(error_info.reason, ErrorReason::NotServedHere.as_str_name());
+    assert_eq!(error_info.metadata["cause"], "no_rpc_indexes");
+
+    let status = client
+        .get_epoch(GetEpochRequest::new(current_epoch + 1000))
+        .await
+        .unwrap_err();
+    assert_eq!(status.code(), tonic::Code::NotFound, "{status:?}");
+}
+
 #[sim_test]
 async fn get_epoch_protocol_config_exposes_gasless_allowlist() {
     // The allowlist is a non-scalar `Vec<(String, u64)>`. The render path should expose it as

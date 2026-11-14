@@ -5,6 +5,7 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::render::RenderContext;
+use crate::reader::indexes_disabled;
 use bytes::Bytes;
 use move_core_types::language_storage::StructTag;
 use prost::Message;
@@ -36,7 +37,7 @@ pub fn list_dynamic_fields(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(indexes_disabled)?;
 
     let parent: Address = request
         .parent
