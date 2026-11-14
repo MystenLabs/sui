@@ -1,0 +1,79 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+// A single address-balance reservation larger than the budget. The ephemeral
+// Gas coin the PTB sees holds exactly `reservation - gas budget`, and the
+// unspent part settles back to the address balance.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 10-14:
+// Seed A's address balance with 10 SUI.
+//# programmable --sender A --inputs 10000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 10000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 16:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 18:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+10000000000
+
+task 4, lines 20-23:
+// 1 SUI reserved, 0.5 SUI budget: surplus is exactly 500_000_000.
+//# programmable --sender A --gas-budget 500000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(1000000000) --inputs 500000000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 501988000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, line 25:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 27:
+//# view-object 4,0
+Owner: Account Address ( B )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 500000000u64,
+    },
+}
+
+task 7, lines 29-30:
+// Address balance dropped by the surplus sent to B plus the net gas.
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+9498012000
+
+task 8, lines 32-35:
+// One MIST over the surplus fails.
+//# programmable --sender A --gas-budget 500000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(1000000000) --inputs 500000001 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Insufficient coin balance for operation.
+Debug of error: InsufficientCoinBalance at command Some(0)
+
+task 9, line 37:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 39-40:
+// Only the net gas of the failed transaction is charged.
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+9497012000
