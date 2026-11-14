@@ -595,11 +595,13 @@ async fn test_availability_floor_below_the_fork_passes_through() {
 
 /// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
 /// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
-/// checkpoint are rejected even when the remote's retention reaches further back.
+/// checkpoint are rejected even when the remote's retention reaches further back; at the fork
+/// checkpoint they are served.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
     use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
     use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
@@ -635,7 +637,29 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         .restore_seed_objects(&[package])
         .unwrap();
     let service = RpcService::new(Arc::new(store));
+
+    let list = |at_checkpoint| {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.at_checkpoint = Some(at_checkpoint);
+        tonic::Request::new(request)
+    };
+    let error = service
+        .list_package_versions(list(fork_checkpoint - 1))
+        .await
+        .unwrap_err();
     let below_floor = "requested data below earliest available; lowest available checkpoint is 100";
+    assert_eq!(error.code(), tonic::Code::OutOfRange);
+    assert_eq!(error.message(), below_floor);
+    let versions = service
+        .list_package_versions(list(fork_checkpoint))
+        .await
+        .unwrap()
+        .into_inner()
+        .versions;
+    assert_eq!(versions.len(), 1);
+    assert_eq!(versions[0].version, Some(1));
+    assert_eq!(versions[0].checkpoint, None);
 
     let mut request = GetPackageRequest::default();
     request.package_id = Some(package_id.to_string());
@@ -727,6 +751,104 @@ async fn test_system_package_versions_replaced_before_the_fork_are_pruned() {
         let error = get_version(version).await.unwrap_err();
         assert_eq!(error.code(), tonic::Code::NotFound, "v{version}: {error:?}");
     }
+}
+
+/// The fork has no rows for the system-package versions replaced before it, so a listing bounded
+/// by `at_checkpoint` that starts below the lowest version it stores is refused as pruned, naming
+/// that version, instead of returning the history from that version on as if it were complete. A
+/// listing that starts at that version is served, and so is a listing without `at_checkpoint`.
+#[tokio::test]
+async fn test_system_package_listing_below_the_lowest_stored_version_is_refused() {
+    use prost::Message;
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PageToken;
+    use sui_rpc_api::proto::google::rpc::ErrorInfo;
+    use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsResponse;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+    // A system package at version 3, upgraded in place twice before the fork.
+    let package_id = ObjectID::random();
+    let mut module = move_binary_format::file_format::empty_module();
+    module.address_identifiers[0] = package_id.into();
+    let package = sui_types::object::Object::new_package_from_data(
+        sui_types::object::Data::Package(sui_types::move_package::MovePackage::new_system(
+            SequenceNumber::from_u64(3),
+            &[module],
+            [],
+        )),
+        TransactionDigest::genesis_marker(),
+    );
+    store
+        .local_store()
+        .restore_seed_objects(&[package])
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |at_checkpoint, from_version: Option<u64>| {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.at_checkpoint = at_checkpoint;
+        request.page_token = from_version.map(|version| {
+            PageToken {
+                original_package_id: package_id,
+                version,
+            }
+            .encode()
+        });
+        service.list_package_versions(tonic::Request::new(request))
+    };
+    let listed = |response: tonic::Response<ListPackageVersionsResponse>| {
+        response
+            .into_inner()
+            .versions
+            .iter()
+            .map(|version| version.version.unwrap())
+            .collect::<Vec<_>>()
+    };
+
+    for from_version in [None, Some(1), Some(2)] {
+        let error = list(Some(fork_checkpoint), from_version).await.unwrap_err();
+        assert_eq!(
+            error.code(),
+            tonic::Code::OutOfRange,
+            "from {from_version:?}: {error:?}"
+        );
+        assert_eq!(
+            error.message(),
+            "requested object versions below earliest available; lowest available checkpoint is \
+             100, and lowest available version is 3"
+        );
+        let status = RpcStatus::decode(error.details()).unwrap();
+        let error_info = status
+            .details
+            .iter()
+            .find(|detail| detail.type_url.ends_with("google.rpc.ErrorInfo"))
+            .map(|detail| ErrorInfo::decode(detail.value.as_slice()).unwrap())
+            .unwrap();
+        assert_eq!(error_info.reason, "BELOW_EARLIEST_AVAILABLE");
+        assert_eq!(
+            error_info.metadata,
+            [
+                ("lowestAvailableCheckpoint".to_owned(), "100".to_owned()),
+                ("lowestAvailableVersion".to_owned(), "3".to_owned()),
+            ]
+            .into_iter()
+            .collect()
+        );
+    }
+
+    let response = list(Some(fork_checkpoint), Some(3)).await.unwrap();
+    assert_eq!(listed(response), vec![3]);
+    let response = list(None, None).await.unwrap();
+    assert_eq!(listed(response), vec![3]);
 }
 
 #[tokio::test]

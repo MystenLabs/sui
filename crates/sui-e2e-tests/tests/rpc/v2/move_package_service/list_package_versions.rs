@@ -3,17 +3,31 @@
 
 use move_core_types::ident_str;
 use sui_macros::sim_test;
-use sui_move_build::BuildConfig;
+use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_rpc::proto::sui::rpc::v2::{
-    ListPackageVersionsRequest, move_package_service_client::MovePackageServiceClient,
+    ListPackageVersionsRequest, ListPackageVersionsResponse,
+    move_package_service_client::MovePackageServiceClient,
 };
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID,
+    base_types::{ObjectID, ObjectRef},
+    effects::TransactionEffectsAPI,
     move_package::UpgradePolicy,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{ObjectArg, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TransactionData},
+    transaction::{
+        ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, Transaction,
+        TransactionData,
+    },
 };
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
+use tonic::transport::Channel;
+
+use crate::v2::RpcStatusExt;
+use crate::v2::assert_above_latest_available;
+use crate::v2::assert_below_earliest_available;
+use crate::v2::error_info;
+use crate::v2::halt_chain;
+use crate::v2::prune_objects_below_tip;
 
 #[sim_test]
 async fn test_list_package_versions_system_package() {
@@ -94,6 +108,9 @@ async fn test_list_package_versions_with_upgrades() {
 
     let mut current_upgrade_cap = response.get_new_package_upgrade_cap().unwrap();
 
+    // A listing stops at the highest checkpoint every rpc index has committed, and the indexes
+    // catch up with execution asynchronously, so wait for them before each listing.
+    cluster.wait_for_rpc_index_ready().await;
     let mut request = ListPackageVersionsRequest::default();
     request.package_id = Some(package_ids[0].to_string());
 
@@ -171,6 +188,7 @@ async fn test_list_package_versions_with_upgrades() {
 
     current_upgrade_cap = response.get_new_package_upgrade_cap().unwrap();
 
+    cluster.wait_for_rpc_index_ready().await;
     let grpc_response = service
         .list_package_versions(request.clone())
         .await
@@ -249,6 +267,7 @@ async fn test_list_package_versions_with_upgrades() {
 
     package_ids.push(third_package_id);
 
+    cluster.wait_for_rpc_index_ready().await;
     let grpc_response = service.list_package_versions(request).await.unwrap();
     let grpc_response = grpc_response.into_inner();
 
@@ -397,8 +416,6 @@ async fn test_list_package_versions_invalid_pagination() {
 
     // Test 2: Page token with mismatched package ID
     // Create a valid page token for a different package ID
-    use sui_types::base_types::ObjectID;
-
     #[derive(serde::Serialize)]
     struct PageToken {
         original_package_id: ObjectID,
@@ -431,4 +448,352 @@ async fn test_list_package_versions_invalid_pagination() {
         "Error message: {}",
         error.message()
     );
+}
+
+/// Execute a package publish or upgrade from the cluster's first address. Returns the new
+/// package's id, the lineage's upgrade cap, and the checkpoint the transaction landed in.
+async fn execute_package_write(
+    cluster: &TestCluster,
+    pt: ProgrammableTransaction,
+) -> (ObjectID, ObjectRef, u64) {
+    let transaction = sign_package_write(cluster, pt).await;
+    execute_signed_package_write(cluster, transaction).await
+}
+
+/// Sign a package publish or upgrade from the cluster's first address.
+async fn sign_package_write(cluster: &TestCluster, pt: ProgrammableTransaction) -> Transaction {
+    let address = cluster.get_address_0();
+    let gas_price = cluster.wallet.get_reference_gas_price().await.unwrap();
+    let gas_object = cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(address)
+        .await
+        .unwrap()
+        .unwrap();
+    let transaction_data = TransactionData::new_programmable(
+        address,
+        vec![gas_object],
+        pt,
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH * gas_price,
+        gas_price,
+    );
+    cluster.sign_transaction(&transaction_data).await
+}
+
+/// Execute a transaction signed by [`sign_package_write`]; returns what
+/// [`execute_package_write`] returns.
+async fn execute_signed_package_write(
+    cluster: &TestCluster,
+    transaction: Transaction,
+) -> (ObjectID, ObjectRef, u64) {
+    let response = cluster.execute_transaction(transaction).await;
+    let package_id = response.get_new_package_obj().unwrap().0;
+    let upgrade_cap = response.get_new_package_upgrade_cap().unwrap();
+    let checkpoint = cluster.fullnode_handle.sui_node.with(|node| {
+        *node
+            .state()
+            .get_transaction_checkpoint_for_tests(
+                response.effects.transaction_digest(),
+                &node.state().epoch_store_for_testing(),
+            )
+            .unwrap()
+            .unwrap()
+            .sequence_number()
+    });
+    (package_id, upgrade_cap, checkpoint)
+}
+
+fn publish_upgradeable_pt(
+    cluster: &TestCluster,
+    package: &CompiledPackage,
+) -> ProgrammableTransaction {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let upgrade_cap = builder.publish_upgradeable(
+        package.get_package_bytes(false),
+        package.get_dependency_storage_package_ids(),
+    );
+    builder.transfer_arg(cluster.get_address_0(), upgrade_cap);
+    builder.finish()
+}
+
+async fn publish_upgradeable(
+    cluster: &TestCluster,
+    package: &CompiledPackage,
+) -> (ObjectID, ObjectRef, u64) {
+    execute_package_write(cluster, publish_upgradeable_pt(cluster, package)).await
+}
+
+/// Upgrade `package_id` by republishing `package`'s code.
+async fn upgrade(
+    cluster: &TestCluster,
+    package: &CompiledPackage,
+    package_id: ObjectID,
+    upgrade_cap: ObjectRef,
+) -> (ObjectID, ObjectRef, u64) {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let cap = builder
+        .obj(ObjectArg::ImmOrOwnedObject(upgrade_cap))
+        .unwrap();
+    let policy = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
+    let digest = builder
+        .pure(package.get_package_digest(false).to_vec())
+        .unwrap();
+    let ticket = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("package").to_owned(),
+        ident_str!("authorize_upgrade").to_owned(),
+        vec![],
+        vec![cap, policy, digest],
+    );
+    let receipt = builder.upgrade(
+        package_id,
+        ticket,
+        package.get_dependency_storage_package_ids(),
+        package.get_package_bytes(false),
+    );
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("package").to_owned(),
+        ident_str!("commit_upgrade").to_owned(),
+        vec![],
+        vec![cap, receipt],
+    );
+    execute_package_write(cluster, builder.finish()).await
+}
+
+async fn list_versions(
+    service: &mut MovePackageServiceClient<Channel>,
+    package_id: ObjectID,
+    at_checkpoint: Option<u64>,
+    page_size: Option<u32>,
+    page_token: Option<prost::bytes::Bytes>,
+) -> Result<ListPackageVersionsResponse, tonic::Status> {
+    let mut request = ListPackageVersionsRequest::default();
+    request.package_id = Some(package_id.to_string());
+    request.at_checkpoint = at_checkpoint;
+    request.page_size = page_size;
+    request.page_token = page_token;
+    service
+        .list_package_versions(request)
+        .await
+        .map(tonic::Response::into_inner)
+}
+
+/// `(version, storage id, publish checkpoint)` of each listed version.
+fn listed(response: &ListPackageVersionsResponse) -> Vec<(u64, String, Option<u64>)> {
+    response
+        .versions
+        .iter()
+        .map(|v| {
+            (
+                v.version.unwrap(),
+                v.package_id.clone().unwrap(),
+                v.checkpoint,
+            )
+        })
+        .collect()
+}
+
+#[sim_test]
+async fn test_list_package_versions_at_checkpoint() {
+    // Background pruning stays off so bounds just below the first publish stay above the floor.
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mut test_package_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    test_package_path.push("tests/move_test_code");
+    let package = BuildConfig::new_for_testing()
+        .build_async(&test_package_path)
+        .await
+        .unwrap();
+
+    let (v1, cap, cp1) = publish_upgradeable(&cluster, &package).await;
+    let (v2, cap, cp2) = upgrade(&cluster, &package, v1, cap).await;
+    let (v3, _, cp3) = upgrade(&cluster, &package, v2, cap).await;
+    // Each write waits for the fullnode to execute it from a checkpoint before the next is sent.
+    assert!(0 < cp1 && cp1 < cp2 && cp2 < cp3, "{cp1} {cp2} {cp3}");
+    cluster.wait_for_rpc_index_ready().await;
+
+    let entry_1 = (1, v1.to_string(), Some(cp1));
+    let entry_2 = (2, v2.to_string(), Some(cp2));
+    let entry_3 = (3, v3.to_string(), Some(cp3));
+
+    // Every version reports its publish checkpoint, with or without a bound.
+    for at_checkpoint in [None, Some(cp3)] {
+        let response = list_versions(&mut service, v1, at_checkpoint, None, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            listed(&response),
+            vec![entry_1.clone(), entry_2.clone(), entry_3.clone()],
+            "at_checkpoint {at_checkpoint:?}"
+        );
+    }
+
+    // A bound cuts the lineage at the last version published at or before it, through any
+    // lineage member.
+    for (package_id, at_checkpoint, expected) in [
+        (v1, cp1, vec![entry_1.clone()]),
+        (v3, cp1, vec![entry_1.clone()]),
+        (v1, cp2 - 1, vec![entry_1.clone()]),
+        (v1, cp2, vec![entry_1.clone(), entry_2.clone()]),
+        (v2, cp3 - 1, vec![entry_1.clone(), entry_2.clone()]),
+        (v1, cp1 - 1, vec![]),
+    ] {
+        let response = list_versions(&mut service, package_id, Some(at_checkpoint), None, None)
+            .await
+            .unwrap();
+        assert_eq!(listed(&response), expected, "at_checkpoint {at_checkpoint}");
+        assert!(response.next_page_token.is_none());
+    }
+
+    // A bound above the indexed ceiling is rejected, never clamped to the latest known version,
+    // and a bound exactly at the ceiling is served.
+    let error = list_versions(&mut service, v1, Some(u64::MAX), None, None)
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
+    let first_unavailable: u64 =
+        error_info(&error.rpc_status()).metadata["firstUnavailableCheckpoint"]
+            .parse()
+            .unwrap();
+    let highest_indexed = first_unavailable - 1;
+    let response = list_versions(&mut service, v1, Some(highest_indexed), None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed(&response),
+        vec![entry_1.clone(), entry_2.clone(), entry_3.clone()]
+    );
+
+    // Pages stay within the bound: the token points at the next version under it, and a page
+    // whose next version is above the bound carries no token.
+    let first = list_versions(&mut service, v1, Some(cp3), Some(2), None)
+        .await
+        .unwrap();
+    assert_eq!(listed(&first), vec![entry_1.clone(), entry_2.clone()]);
+    let second = list_versions(&mut service, v1, Some(cp3), Some(2), first.next_page_token)
+        .await
+        .unwrap();
+    assert_eq!(listed(&second), vec![entry_3.clone()]);
+    assert!(second.next_page_token.is_none());
+
+    let first = list_versions(&mut service, v1, Some(cp2), Some(1), None)
+        .await
+        .unwrap();
+    assert_eq!(listed(&first), vec![entry_1.clone()]);
+    let second = list_versions(&mut service, v1, Some(cp2), Some(1), first.next_page_token)
+        .await
+        .unwrap();
+    assert_eq!(listed(&second), vec![entry_2.clone()]);
+    assert!(second.next_page_token.is_none());
+}
+
+#[sim_test]
+async fn test_list_package_versions_at_checkpoint_above_indexed_is_checked_before_lookup() {
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    cluster.wait_for_rpc_index_ready().await;
+
+    // A package that was never published gets `OutOfRange`, not `NotFound`, for a bound above
+    // the indexed ceiling.
+    let never_published = ObjectID::from_hex_literal("0x999").unwrap();
+    let error = list_versions(&mut service, never_published, Some(u64::MAX), None, None)
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
+
+    // So does a package published above the ceiling but at or below the bound. Sign a publish and
+    // derive its package id, the transaction's first created object, before the fullnode has
+    // executed it. The bound is far enough above the ceiling that the publish lands at or below it.
+    let first_unavailable: u64 =
+        error_info(&error.rpc_status()).metadata["firstUnavailableCheckpoint"]
+            .parse()
+            .unwrap();
+    let at_checkpoint = first_unavailable + 1000;
+
+    let mut test_package_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    test_package_path.push("tests/move_test_code");
+    let package = BuildConfig::new_for_testing()
+        .build_async(&test_package_path)
+        .await
+        .unwrap();
+    let transaction =
+        sign_package_write(&cluster, publish_upgradeable_pt(&cluster, &package)).await;
+    let package_id = ObjectID::derive_id(*transaction.digest(), 0);
+
+    let error = list_versions(&mut service, package_id, Some(at_checkpoint), None, None)
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", at_checkpoint);
+
+    let (published_id, _, published_checkpoint) =
+        execute_signed_package_write(&cluster, transaction).await;
+    assert_eq!(published_id, package_id);
+    assert!(
+        published_checkpoint <= at_checkpoint,
+        "{published_checkpoint} {at_checkpoint}"
+    );
+}
+
+#[sim_test]
+async fn test_list_package_versions_at_checkpoint_below_object_pruning_floor() {
+    // Background pruning stays off so only the explicit prune below moves the floor.
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    let framework = SUI_FRAMEWORK_PACKAGE_ID;
+    let genesis_framework = (1, framework.to_string(), Some(0));
+
+    cluster.wait_for_rpc_index_ready().await;
+    let response = list_versions(&mut service, framework, Some(0), None, None)
+        .await
+        .unwrap();
+    assert_eq!(listed(&response), vec![genesis_framework.clone()]);
+
+    // Prune object versions, which raises the floor above genesis to the last pruned checkpoint:
+    // the state at its end survives the prune.
+    halt_chain(&cluster).await;
+    let floor = prune_objects_below_tip(&cluster).await;
+
+    // With background pruning off, the prune is the only floor, and a bound at genesis is below
+    // it.
+    let error = list_versions(&mut service, framework, Some(0), None, None)
+        .await
+        .unwrap_err();
+    assert_below_earliest_available(&error, floor);
+
+    // Every bound below the floor fails rather than returning a partial list.
+    let error = list_versions(&mut service, framework, Some(floor - 1), None, None)
+        .await
+        .unwrap_err();
+    assert_below_earliest_available(&error, floor);
+
+    // The floor itself, and an unbounded listing, are still served.
+    for at_checkpoint in [Some(floor), None] {
+        let response = list_versions(&mut service, framework, at_checkpoint, None, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            listed(&response).first(),
+            Some(&genesis_framework),
+            "at_checkpoint {at_checkpoint:?}"
+        );
+    }
 }
