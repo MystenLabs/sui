@@ -478,7 +478,7 @@ async fn test_withdraw_stake() {
     assert_eq!(1000000000, response.balances[0].value);
 
     // Trigger epoch change.
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // withdraw all stake
     let ops = serde_json::from_value(json!(
@@ -585,7 +585,7 @@ async fn test_withdraw_stake_estimate_only() {
     .await;
 
     // Trigger epoch change so the stake becomes active and withdrawable.
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Leave the staker holding only its StakedSui: no SUI coins and no SUI address balance.
     send_all_sui_coins(&mut client, keystore, staker, funder)
@@ -776,7 +776,7 @@ async fn test_withdraw_stake_estimate_only_with_dust_coin() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Leave the staker holding its StakedSui and a single dust coin.
     send_all_sui_coins(&mut client, keystore, staker, funder)
@@ -815,6 +815,15 @@ async fn test_withdraw_stake_estimate_only_with_dust_coin() {
         "budget {budget} should exceed the quote {fee}"
     );
     assert_submitted_transaction_succeeded(&mut client, &flow.submit.unwrap().unwrap()).await;
+}
+
+/// Trigger an epoch change and wait until the fullnode has indexed the new epoch's first
+/// checkpoint. Rosetta reads the current epoch through `GetEpoch`, which reports the epoch of the
+/// indexed checkpoint, so stakes activating in the new epoch count as active only once its first
+/// checkpoint is indexed.
+async fn reconfigure_and_wait_for_index(cluster: &test_cluster::TestCluster) {
+    cluster.trigger_reconfiguration().await;
+    cluster.wait_for_epoch_indexed().await;
 }
 
 /// Wait for the transaction Rosetta submitted and assert that it executed successfully.
@@ -2119,7 +2128,7 @@ async fn test_consolidate_all_staked_sui_to_fungible() {
     .unwrap();
 
     // Advance epoch so stake becomes active
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Consolidate: convert StakedSui → FungibleStakedSui via Rosetta construction flow
     let consolidate_ops = serde_json::from_value(json!(
@@ -2244,7 +2253,7 @@ async fn test_consolidate_multiple_staked_sui() {
     }
 
     // Advance epoch so all 3 stakes become active
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Verify we have 3 StakedSui before consolidation
     let staked_sui_request = ListOwnedObjectsRequest::default()
@@ -2384,7 +2393,7 @@ async fn test_consolidate_with_preexisting_fss() {
     .unwrap();
 
     // Advance epoch to activate the stake
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Manually convert the StakedSui to FSS via a direct PTB
     let staked_sui_request = ListOwnedObjectsRequest::default()
@@ -2476,7 +2485,7 @@ async fn test_consolidate_with_preexisting_fss() {
     .unwrap();
 
     // Advance epoch again
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Now consolidate: should merge the pre-existing FSS with the new converted StakedSui
     let consolidate_ops = serde_json::from_value(json!(
@@ -2599,7 +2608,7 @@ async fn test_consolidate_fss_only_merge() {
     }
 
     // Advance epoch
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Convert each StakedSui to FSS manually, one at a time
     for _ in 0..2 {
@@ -2813,7 +2822,7 @@ async fn test_consolidate_multi_validator_isolation() {
     .unwrap();
 
     // Advance epoch so both stakes become active
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Verify we have 2 StakedSui total (one per validator)
     let staked_sui_request = ListOwnedObjectsRequest::default()
@@ -3005,7 +3014,7 @@ async fn test_consolidate_noop_single_fss() {
     .unwrap();
 
     // Advance epoch
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Convert to FSS manually
     let staked_sui_request = ListOwnedObjectsRequest::default()
@@ -3334,7 +3343,7 @@ async fn test_fungible_staked_sui_value() -> Result<()> {
     );
 
     // Advance epoch so stake becomes active
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Verify activation_epoch is present in Stake sub-account
     let stake_response: AccountBalanceResponse = rosetta_client
@@ -3542,7 +3551,7 @@ async fn test_merge_and_redeem_fungible_staked_sui() {
     .unwrap();
 
     // Advance epoch
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Convert StakedSui -> FSS
     use futures::TryStreamExt;
@@ -3726,7 +3735,7 @@ async fn setup_fss_for_validator(
     .await
     .unwrap();
 
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let list_request = ListOwnedObjectsRequest::default()
         .with_owner(sender.to_string())
@@ -4037,7 +4046,7 @@ async fn test_redeem_fss_from_inactive_validator() {
         2_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let staked_req = ListOwnedObjectsRequest::default()
         .with_owner(sender.to_string())
@@ -4112,7 +4121,7 @@ async fn test_redeem_fss_from_inactive_validator() {
     // Trigger reconfiguration so the validator moves to inactive_validators.
     // After this, `system_state.validators.active_validators` no longer
     // contains it; only `inactive_validators[pool_id]` does.
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let balance_before = get_sui_balance(&mut client, sender).await;
 
@@ -4255,7 +4264,7 @@ async fn test_redeem_multi_validator_isolation() {
         .await
         .unwrap();
 
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let list_request = ListOwnedObjectsRequest::default()
         .with_owner(sender.to_string())
@@ -4618,7 +4627,7 @@ async fn test_e2e_parse_consolidate_1_stake_0_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let consolidate_ops = serde_json::from_value(json!([{
         "operation_identifier": {"index": 0},
@@ -4684,7 +4693,7 @@ async fn test_e2e_parse_consolidate_0_stakes_2_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
 
     let consolidate_ops = serde_json::from_value(json!([{
@@ -4743,7 +4752,7 @@ async fn test_e2e_parse_consolidate_1_stake_1_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
     // Stake again, advance again. Now we have 1 activated stake + 1 FSS.
     stake_via_rosetta(
@@ -4755,7 +4764,7 @@ async fn test_e2e_parse_consolidate_1_stake_1_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let consolidate_ops = serde_json::from_value(json!([{
         "operation_identifier": {"index": 0},
@@ -4804,7 +4813,7 @@ async fn test_e2e_block_consolidate_1_stake_0_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let consolidate_ops = serde_json::from_value(json!([{
         "operation_identifier": {"index": 0},
@@ -5014,7 +5023,7 @@ async fn test_e2e_parse_consolidate_3_stakes_0_fss() {
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let consolidate_ops = serde_json::from_value(json!([{
         "operation_identifier": {"index": 0},
@@ -5070,7 +5079,7 @@ async fn test_e2e_parse_consolidate_0_stakes_3_fss() {
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
 
     let consolidate_ops = serde_json::from_value(json!([{
@@ -5130,7 +5139,7 @@ async fn test_e2e_parse_consolidate_2_stakes_2_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
     // Then: stake twice more, advance, leaving 2 activated stakes + 2 FSS.
     stake_via_rosetta(
@@ -5151,7 +5160,7 @@ async fn test_e2e_parse_consolidate_2_stakes_2_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     let consolidate_ops = serde_json::from_value(json!([{
         "operation_identifier": {"index": 0},
@@ -5229,7 +5238,7 @@ async fn test_e2e_parse_consolidate_multi_validator_isolation() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Consolidate only validator_a's stakes.
     let consolidate_ops = serde_json::from_value(json!([{
@@ -5361,7 +5370,7 @@ async fn test_e2e_block_consolidate_0_stakes_2_fss() {
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
 
     submit_and_assert_block_consolidate(
@@ -5396,7 +5405,7 @@ async fn test_e2e_block_consolidate_0_stakes_3_fss() {
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
 
     submit_and_assert_block_consolidate(
@@ -5431,7 +5440,7 @@ async fn test_e2e_block_consolidate_3_stakes_0_fss() {
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     submit_and_assert_block_consolidate(
         &rosetta_client,
@@ -5463,7 +5472,7 @@ async fn test_e2e_block_consolidate_1_stake_1_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
     stake_via_rosetta(
         &rosetta_client,
@@ -5474,7 +5483,7 @@ async fn test_e2e_block_consolidate_1_stake_1_fss() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     submit_and_assert_block_consolidate(
         &rosetta_client,
@@ -5508,7 +5517,7 @@ async fn test_e2e_block_consolidate_2_stakes_2_fss() {
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
     for _ in 0..2 {
         stake_via_rosetta(
@@ -5521,7 +5530,7 @@ async fn test_e2e_block_consolidate_2_stakes_2_fss() {
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     submit_and_assert_block_consolidate(
         &rosetta_client,
@@ -5581,7 +5590,7 @@ async fn test_e2e_block_consolidate_multi_validator_isolation() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
 
     // Consolidate only validator_a's stake — expect 1 staked, 0 fss.
     submit_and_assert_block_consolidate(
@@ -5622,7 +5631,7 @@ async fn setup_n_fss(
         )
         .await;
     }
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(test_cluster).await;
     convert_all_staked_to_fss_directly(client, keystore, sender).await;
 }
 
@@ -5958,7 +5967,7 @@ async fn test_e2e_parse_merge_redeem_multi_validator_isolation() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
 
     // Redeem only from validator_a.
@@ -6314,7 +6323,7 @@ async fn test_e2e_block_merge_redeem_multi_validator_isolation() {
         1_000_000_000,
     )
     .await;
-    test_cluster.trigger_reconfiguration().await;
+    reconfigure_and_wait_for_index(&test_cluster).await;
     convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
 
     submit_and_assert_block_merge_redeem(
