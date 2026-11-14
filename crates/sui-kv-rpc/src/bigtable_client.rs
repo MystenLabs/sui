@@ -456,6 +456,14 @@ impl BigTableClient {
         .await
     }
 
+    /// Read the original IDs in the `system_packages` table under a
+    /// `packages` permit (see [`KeyValueStoreReader::get_system_package_ids`]).
+    pub(crate) async fn get_system_package_ids(&self) -> Result<Vec<ObjectID>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::PACKAGES, inner.get_system_package_ids())
+            .await
+    }
+
     /// Stream the checkpoint of each of `tx_sequence_numbers`, reading only the
     /// checkpoint-number column of `tx_seq_digest`. The permit is held for the
     /// stream's lifetime (see `gate_stream`); rows arrive in BigTable order.

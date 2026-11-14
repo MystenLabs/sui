@@ -11,6 +11,9 @@ use sui_rpc::proto::sui::rpc::v2::GetPackageRequest;
 use sui_rpc::proto::sui::rpc::v2::GetPackageResponse;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListSystemPackagesRequest;
+use sui_rpc::proto::sui::rpc::v2::ListSystemPackagesResponse;
+use sui_rpc::proto::sui::rpc::v2::PackageVersion;
 use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 use sui_rpc_api::AtCheckpointUpperBound;
@@ -98,6 +101,20 @@ impl MovePackageService for KvRpcServer {
             .await
         };
         response.map(tonic::Response::new).map_err(Into::into)
+    }
+
+    async fn list_system_packages(
+        &self,
+        request: tonic::Request<ListSystemPackagesRequest>,
+    ) -> Result<tonic::Response<ListSystemPackagesResponse>, tonic::Status> {
+        list_system_packages(
+            self.limited_client("ListSystemPackages"),
+            ServedHeight::of(&request)?,
+            request.into_inner(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 }
 
@@ -347,6 +364,52 @@ async fn list_all_package_versions(
         .collect::<Result<_, RpcError>>()?;
 
     query.response(versions)
+}
+
+/// List the system packages as of the end of `at_checkpoint`, each at its latest version as of
+/// that checkpoint. The checkpoint must be at or below `served_height`, which bounds both the
+/// `system_packages` table the IDs come from and the `packages` table the versions come from.
+/// Every read takes its own permit from `client`'s request limiter and releases it before
+/// returning, so the per-package reads run up to the limiter's capacity at a time.
+async fn list_system_packages(
+    client: LimitedBigTableClient,
+    served_height: ServedHeight,
+    request: ListSystemPackagesRequest,
+) -> Result<ListSystemPackagesResponse, RpcError> {
+    let at_checkpoint = request.at_checkpoint.ok_or_else(|| {
+        FieldViolation::new("at_checkpoint")
+            .with_description("missing at_checkpoint")
+            .with_reason(ErrorReason::FieldMissing)
+    })?;
+    AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
+
+    // `served_height` was read before this scan starts, so the scan finds every system package
+    // created at or below it, and so at or below `at_checkpoint`.
+    let ids = client.get_system_package_ids().await?;
+    let latest = futures::future::try_join_all(
+        ids.iter()
+            .map(|original_id| client.get_package_latest(*original_id, at_checkpoint)),
+    )
+    .await?;
+
+    // The scan may include packages created after `at_checkpoint`; they have no version at or
+    // below it. A system package keeps its original ID across upgrades, so the IDs' ascending
+    // order is also the order of the storage IDs.
+    let system_packages = latest
+        .into_iter()
+        .flatten()
+        .map(|pkg| {
+            let storage_id = ObjectID::from_bytes(&pkg.package_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let original_id = ObjectID::from_bytes(&pkg.original_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            Ok(PackageVersion::new(&storage_id.into(), pkg.package_version)
+                .with_checkpoint(pkg.cp_sequence_number)
+                .with_original_id(original_id.to_canonical_string(true)))
+        })
+        .collect::<Result<_, RpcError>>()?;
+
+    Ok(ListSystemPackagesResponse::new(system_packages))
 }
 
 /// Load the package a bare storage ID names as of `served_height`: a package published above it
@@ -2397,5 +2460,128 @@ mod tests {
                 status.message()
             );
         }
+    }
+
+    /// A client over a mock whose system packages are `0x1`, upgraded at checkpoint 20 (the end of
+    /// epoch 0), `0x2`, and `0xb`, created at checkpoint 30 (the end of epoch 1), with every table
+    /// indexed through checkpoint 40.
+    async fn system_packages_fixture() -> (BigTableClient, tokio::task::JoinHandle<()>) {
+        let mock = MockBigtableServer::new();
+        let (addr, server) = mock.start().await.unwrap();
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .unwrap();
+
+        for (id, version, checkpoint) in
+            [(0x1u8, 1u64, 0u64), (0x1, 2, 20), (0x2, 1, 0), (0xb, 1, 30)]
+        {
+            let original_id = ObjectID::from_single_byte(id);
+            mock.insert_row(
+                tables::packages::NAME,
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(checkpoint, original_id.as_ref(), true),
+            )
+            .await;
+            mock.insert_row(
+                tables::system_packages::NAME,
+                tables::system_packages::encode_key(original_id.as_ref()),
+                tables::system_packages::encode(checkpoint),
+            )
+            .await;
+        }
+
+        (client, server)
+    }
+
+    const SYSTEM_PACKAGES_SERVED_HEIGHT: ServedHeight = ServedHeight {
+        checkpoint: 40,
+        epoch: 2,
+    };
+
+    /// Every read of the listing takes a `packages` permit, and the per-package fan-out completes
+    /// at any limiter capacity, including one permit.
+    #[tokio::test]
+    async fn list_system_packages_at_checkpoint() {
+        let (client, _server) = system_packages_fixture().await;
+
+        // `(id, version, publish checkpoint)` of each listed package.
+        for (at_checkpoint, expected) in [
+            (0, vec![(0x1, 1, 0), (0x2, 1, 0)]),
+            (19, vec![(0x1, 1, 0), (0x2, 1, 0)]),
+            (20, vec![(0x1, 2, 20), (0x2, 1, 0)]),
+            (29, vec![(0x1, 2, 20), (0x2, 1, 0)]),
+            (30, vec![(0x1, 2, 20), (0x2, 1, 0), (0xb, 1, 30)]),
+            (40, vec![(0x1, 2, 20), (0x2, 1, 0), (0xb, 1, 30)]),
+        ] {
+            for capacity in [1, 2] {
+                let (metrics, _registry) = Metrics::for_testing();
+                let limited_client =
+                    LimitedBigTableClient::new(client.clone(), capacity, metrics.clone(), "test");
+                let response = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    list_system_packages(
+                        limited_client,
+                        SYSTEM_PACKAGES_SERVED_HEIGHT,
+                        ListSystemPackagesRequest::new(at_checkpoint),
+                    ),
+                )
+                .await
+                .unwrap_or_else(|_| panic!("capacity {capacity}: listing did not finish"))
+                .unwrap();
+                // The `system_packages` scan, then one read per listed ID.
+                assert_eq!(
+                    metrics
+                        .reads_started
+                        .with_label_values(&["test", "packages"])
+                        .get(),
+                    4,
+                    "at_checkpoint {at_checkpoint}, capacity {capacity}"
+                );
+                let expected: Vec<PackageVersion> = expected
+                    .iter()
+                    .map(|&(id, version, checkpoint)| {
+                        let id = ObjectID::from_single_byte(id);
+                        PackageVersion::new(&id.into(), version)
+                            .with_checkpoint(checkpoint)
+                            .with_original_id(id.to_canonical_string(true))
+                    })
+                    .collect();
+                assert_eq!(
+                    response.system_packages, expected,
+                    "at_checkpoint {at_checkpoint}, capacity {capacity}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn list_system_packages_rejects_unanswerable_requests() {
+        let (client, _server) = system_packages_fixture().await;
+        let client = LimitedBigTableClient::new(client, 2, Metrics::for_testing().0, "test");
+
+        let status: tonic::Status = list_system_packages(
+            client.clone(),
+            SYSTEM_PACKAGES_SERVED_HEIGHT,
+            ListSystemPackagesRequest::default(),
+        )
+        .await
+        .unwrap_err()
+        .into();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+
+        let status: tonic::Status = list_system_packages(
+            client.clone(),
+            SYSTEM_PACKAGES_SERVED_HEIGHT,
+            ListSystemPackagesRequest::new(41),
+        )
+        .await
+        .unwrap_err()
+        .into();
+        assert_eq!(status.code(), tonic::Code::OutOfRange);
+        assert_eq!(
+            status.message(),
+            "requested data above latest available; at_checkpoint is 41, and only checkpoints \
+             below 41 are available",
+        );
     }
 }
