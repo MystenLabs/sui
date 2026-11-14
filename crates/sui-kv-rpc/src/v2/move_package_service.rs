@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_kvstore::BigTableClient;
-use sui_kvstore::KeyValueStoreReader;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::GetDatatypeRequest;
 use sui_rpc::proto::sui::rpc::v2::GetDatatypeResponse;
@@ -28,6 +26,7 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 
 use crate::KvRpcServer;
+use crate::bigtable_client::BigTableClient as LimitedBigTableClient;
 use crate::served_height::ServedHeight;
 
 #[tonic::async_trait]
@@ -37,7 +36,7 @@ impl MovePackageService for KvRpcServer {
         request: tonic::Request<GetPackageRequest>,
     ) -> Result<tonic::Response<GetPackageResponse>, tonic::Status> {
         get_package(
-            self.client.clone(),
+            self.limited_client("GetPackage"),
             ServedHeight::of(&request)?,
             request.into_inner(),
         )
@@ -50,7 +49,7 @@ impl MovePackageService for KvRpcServer {
         &self,
         request: tonic::Request<GetDatatypeRequest>,
     ) -> Result<tonic::Response<GetDatatypeResponse>, tonic::Status> {
-        get_datatype(self.client.clone(), request.into_inner())
+        get_datatype(self.limited_client("GetDatatype"), request.into_inner())
             .await
             .map(tonic::Response::new)
             .map_err(Into::into)
@@ -60,7 +59,7 @@ impl MovePackageService for KvRpcServer {
         &self,
         request: tonic::Request<GetFunctionRequest>,
     ) -> Result<tonic::Response<GetFunctionResponse>, tonic::Status> {
-        get_function(self.client.clone(), request.into_inner())
+        get_function(self.limited_client("GetFunction"), request.into_inner())
             .await
             .map(tonic::Response::new)
             .map_err(Into::into)
@@ -71,7 +70,7 @@ impl MovePackageService for KvRpcServer {
         request: tonic::Request<ListPackageVersionsRequest>,
     ) -> Result<tonic::Response<ListPackageVersionsResponse>, tonic::Status> {
         list_package_versions(
-            self.client.clone(),
+            self.limited_client("ListPackageVersions"),
             ServedHeight::of(&request)?,
             request.into_inner(),
         )
@@ -85,7 +84,7 @@ impl MovePackageService for KvRpcServer {
 /// the bare-id path reads the package object by its storage ID, whose row records no
 /// checkpoint to compare against.
 async fn get_package(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     served_height: ServedHeight,
     request: GetPackageRequest,
 ) -> Result<GetPackageResponse, RpcError> {
@@ -109,8 +108,7 @@ async fn get_package(
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
             client
                 .get_packages_by_version(&[(original_id, version)])
-                .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .await?
                 .pop()
                 .filter(|data| data.cp_sequence_number <= served_height.checkpoint)
         }
@@ -121,8 +119,7 @@ async fn get_package(
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
             client
                 .get_package_latest(original_id, at_checkpoint)
-                .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .await?
         }
         _ => {
             return Err(FieldViolation::new("selector")
@@ -142,8 +139,7 @@ async fn get_package(
 
     let object = client
         .get_objects(&[ObjectKey(storage_id, data.package_version.into())])
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .await?
         .pop()
         .ok_or_else(RpcError::not_found)?;
     let package = into_package(object)?;
@@ -152,7 +148,7 @@ async fn get_package(
 }
 
 async fn get_datatype(
-    client: BigTableClient,
+    client: LimitedBigTableClient,
     request: GetDatatypeRequest,
 ) -> Result<GetDatatypeResponse, RpcError> {
     let package_id_str = request.package_id.as_ref().ok_or_else(|| {
@@ -178,7 +174,7 @@ async fn get_datatype(
 }
 
 async fn get_function(
-    client: BigTableClient,
+    client: LimitedBigTableClient,
     request: GetFunctionRequest,
 ) -> Result<GetFunctionResponse, RpcError> {
     let package_id_str = request.package_id.as_ref().ok_or_else(|| {
@@ -205,7 +201,7 @@ async fn get_function(
 
 /// List the versions of a package published at or below `served_height`.
 async fn list_package_versions(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     served_height: ServedHeight,
     request: ListPackageVersionsRequest,
 ) -> Result<ListPackageVersionsResponse, RpcError> {
@@ -254,8 +250,7 @@ async fn list_package_versions(
             page_size + 1,
             false,
         )
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .await?
         .into_iter()
         .take_while(|pkg| pkg.cp_sequence_number <= served_height.checkpoint)
         .map(|pkg| {
@@ -291,13 +286,12 @@ async fn list_package_versions(
 /// Load a package by its storage ID: a storage ID identifies exactly one immutable package
 /// version, so the latest object at that ID is the package itself.
 async fn load_package(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     package_id: ObjectID,
 ) -> Result<MovePackage, RpcError> {
     let object = client
-        .get_latest_object(&package_id)
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .get_latest_object(package_id)
+        .await?
         .ok_or_else(RpcError::not_found)?;
 
     into_package(object)
@@ -316,13 +310,10 @@ fn into_package(object: Object) -> Result<MovePackage, RpcError> {
 /// full node returns (`NotFound` vs "object is not a package"), and so a package whose
 /// `packages_by_id` row is not yet written is still served.
 async fn resolve_original_package_id(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     package_id: ObjectID,
 ) -> Result<ObjectID, RpcError> {
-    let pairs = client
-        .get_package_original_ids(&[package_id])
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+    let pairs = client.get_package_original_ids(&[package_id]).await?;
     if let Some((_, original_id)) = pairs
         .iter()
         .find(|(storage_id, _)| *storage_id == package_id)
@@ -357,7 +348,14 @@ mod tests {
     use sui_types::storage::ObjectKey;
 
     use super::*;
+    use crate::bigtable_client::Metrics;
     use crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT;
+    use sui_kvstore::BigTableClient;
+
+    /// A request-scoped limited client over `client`, as `KvRpcServer::limited_client` builds.
+    fn limited(client: &BigTableClient) -> LimitedBigTableClient {
+        LimitedBigTableClient::new(client.clone(), 2, Metrics::for_testing().0, "test")
+    }
 
     #[tokio::test]
     async fn list_package_versions_falls_back_to_object_when_packages_by_id_missing() {
@@ -396,7 +394,7 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(original_id.to_string());
         req.page_size = Some(10);
-        let resp = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+        let resp = list_package_versions(limited(&client), UNBOUNDED_SERVED_HEIGHT, req)
             .await
             .unwrap();
         assert_eq!(resp.versions.len(), 3);
@@ -435,7 +433,7 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(storage_id.to_string());
         req.page_size = Some(10);
-        let resp = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+        let resp = list_package_versions(limited(&client), UNBOUNDED_SERVED_HEIGHT, req)
             .await
             .unwrap();
         assert_eq!(resp.versions.len(), 3);
@@ -464,7 +462,7 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(ObjectID::random().to_string());
         req.page_size = Some(10);
-        let err = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+        let err = list_package_versions(limited(&client), UNBOUNDED_SERVED_HEIGHT, req)
             .await
             .unwrap_err();
         let status: tonic::Status = err.into();
@@ -574,7 +572,7 @@ mod tests {
         fixture: &LineageFixture,
         request: GetPackageRequest,
     ) -> sui_rpc::proto::sui::rpc::v2::Package {
-        get_package(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, request)
+        get_package(limited(&fixture.client), FIXTURE_SERVED_HEIGHT, request)
             .await
             .expect("get_package succeeds")
             .package
@@ -582,7 +580,7 @@ mod tests {
     }
 
     async fn fetch_pkg_err(fixture: &LineageFixture, request: GetPackageRequest) -> tonic::Status {
-        get_package(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, request)
+        get_package(limited(&fixture.client), FIXTURE_SERVED_HEIGHT, request)
             .await
             .expect_err("get_package fails")
             .into()
@@ -691,7 +689,7 @@ mod tests {
                 checkpoint: served_checkpoint,
                 epoch: 0,
             };
-            let result = get_package(fixture.client.clone(), served_height, req).await;
+            let result = get_package(limited(&fixture.client), served_height, req).await;
             match result {
                 Ok(response) => {
                     assert!(found, "served height {served_checkpoint} served v2");
@@ -759,7 +757,7 @@ mod tests {
                 epoch: 0,
             };
             let versions: Vec<u64> =
-                list_package_versions(fixture.client.clone(), served_height, req)
+                list_package_versions(limited(&fixture.client), served_height, req)
                     .await
                     .expect("list_package_versions succeeds")
                     .versions
@@ -777,7 +775,7 @@ mod tests {
             epoch: 0,
         };
         let status: tonic::Status =
-            list_package_versions(fixture.client.clone(), served_height, req)
+            list_package_versions(limited(&fixture.client), served_height, req)
                 .await
                 .expect_err("package published above the served height")
                 .into();

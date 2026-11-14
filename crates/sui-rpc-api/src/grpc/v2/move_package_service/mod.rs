@@ -76,16 +76,29 @@ pub(crate) fn parse_package_id(package_id_str: &str) -> Result<ObjectID> {
 }
 
 /// Fetch an object by ID and convert it into a package.
-pub(crate) fn load_package_by_id(
-    service: &RpcService,
-    package_id: ObjectID,
-) -> Result<MovePackage> {
+fn load_package_by_id(service: &RpcService, package_id: ObjectID) -> Result<MovePackage> {
     let object = service
         .reader
         .inner()
         .get_object(&package_id)
         .ok_or_else(RpcError::not_found)?;
     object_as_package(object)
+}
+
+/// Fetch the package stored under `package_id` at exactly `version`, or `None` if this node does
+/// not store that version. System packages are upgraded in place, so all their versions share one
+/// ID and only the version tells them apart.
+pub(crate) fn load_package_by_id_and_version(
+    service: &RpcService,
+    package_id: ObjectID,
+    version: u64,
+) -> Result<Option<MovePackage>> {
+    service
+        .reader
+        .inner()
+        .get_object_by_key(&package_id, version.into())
+        .map(object_as_package)
+        .transpose()
 }
 
 fn object_as_package(object: Object) -> Result<MovePackage> {
