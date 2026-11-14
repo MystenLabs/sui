@@ -224,6 +224,32 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+/// Serve the seed load's request for every system package at `checkpoint`, answering with
+/// `packages` and with no object for every other system package id.
+async fn mock_system_packages(server: &MockServer, checkpoint: u64, packages: &[Object]) {
+    let package_ids: Vec<ObjectID> = sui_types::SYSTEM_PACKAGE_ADDRESSES
+        .iter()
+        .copied()
+        .map(ObjectID::from)
+        .collect();
+    let keys: Vec<_> = package_ids
+        .iter()
+        .map(|id| serde_json::json!({ "address": id.to_string(), "atCheckpoint": checkpoint }))
+        .collect();
+    let objects: Vec<_> = package_ids
+        .iter()
+        .map(|id| packages.iter().find(|package| package.id() == *id))
+        .collect();
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(
+            serde_json::json!({ "variables": { "keys": keys } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&objects)))
+        .mount(server)
+        .await;
+}
+
 /// System package objects at `(id, version)`, each with the modules genesis publishes at `id`: a
 /// package past its first version names its original id through its modules' address.
 fn system_package_objects(versions: &[(ObjectID, u64)]) -> Vec<Object> {
@@ -418,6 +444,12 @@ async fn test_seed_load_survives_restart_without_remote() {
 
     let server = MockServer::start().await;
     mock_seed_object(&server, checkpoint, &object).await;
+    let system_packages = system_package_objects(&[
+        (ObjectID::from_single_byte(1), 1),
+        (ObjectID::from_single_byte(2), 1),
+        (ObjectID::from_single_byte(3), 1),
+    ]);
+    mock_system_packages(&server, checkpoint, &system_packages).await;
     let manifest = SeedManifest {
         network: "custom".to_owned(),
         checkpoint,
@@ -1146,6 +1178,193 @@ async fn test_list_all_package_versions_rejects_cursors_past_the_tip() {
             );
         }
     }
+}
+
+/// The seed load records every system package live at the fork checkpoint, so
+/// `ListSystemPackages` there lists each at its version, though nothing else fetched them.
+#[tokio::test]
+async fn test_list_system_packages_at_the_fork_checkpoint() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::ListSystemPackagesRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::PackageVersion;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let packages = system_package_objects(&[
+        (ObjectID::from_single_byte(1), 1),
+        (ObjectID::from_single_byte(2), 3),
+        (ObjectID::from_single_byte(3), 2),
+    ]);
+    mock_system_packages(&server, fork_checkpoint, &packages).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    let manifest = SeedManifest {
+        network: "custom".to_owned(),
+        checkpoint: fork_checkpoint,
+        addresses: vec![],
+        entries: vec![],
+    };
+    load_seed_objects(&store, &manifest).expect("seed load should fetch the system packages");
+
+    let service = RpcService::new(Arc::new(store));
+    let listed = service
+        .list_system_packages(tonic::Request::new(ListSystemPackagesRequest::new(
+            fork_checkpoint,
+        )))
+        .await
+        .unwrap()
+        .into_inner()
+        .system_packages;
+    // The fork's indexes hold no history before the fork checkpoint, so no publish checkpoint is
+    // known.
+    let expected: Vec<_> = packages
+        .iter()
+        .map(|package| {
+            PackageVersion::new(&package.id().into(), package.version().value())
+                .with_original_id(package.id().to_canonical_string(true))
+        })
+        .collect();
+    assert_eq!(listed, expected);
+}
+
+/// `0x1`, `0x2` and `0x3` exist at every checkpoint, so a remote answering with none for one of
+/// them fails the seed load, which stays incomplete, rather than seeding a fork that lacks it.
+/// Other system packages may be absent at the fork checkpoint.
+#[tokio::test]
+async fn test_seed_load_fails_without_a_core_system_package() {
+    let fork_checkpoint = 100;
+    let manifest = SeedManifest {
+        network: "custom".to_owned(),
+        checkpoint: fork_checkpoint,
+        addresses: vec![],
+        entries: vec![],
+    };
+    for missing in 1..=3u8 {
+        let temp = tempfile::tempdir().expect("failed to create tempdir");
+        let server = MockServer::start().await;
+        let present: Vec<_> = (1..=3u8)
+            .filter(|id| *id != missing)
+            .map(|id| (ObjectID::from_single_byte(id), 1))
+            .collect();
+        mock_system_packages(&server, fork_checkpoint, &system_package_objects(&present)).await;
+        let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+        let error = load_seed_objects(&store, &manifest).unwrap_err();
+        let missing_id = ObjectID::from_single_byte(missing);
+        assert!(
+            format!("{error:#}").contains(&format!("no system package {missing_id}")),
+            "{error:#}"
+        );
+        assert!(!store.local_store().seed_load_complete().unwrap());
+        assert!(!store.local_store().system_packages_loaded().unwrap());
+    }
+}
+
+/// A fork directory whose seed load committed without the system packages loads them on its next
+/// start, so `ListSystemPackages` at the fork checkpoint lists every one rather than only those the
+/// fork fetched on demand. Before that start the fork fetched `0x2` on demand and then wrote newer
+/// `0x2` and `0x3` locally, `0x3` without ever fetching it: both local versions stay current, and
+/// both packages are still recorded at their fork-checkpoint versions. Later starts do not fetch
+/// the packages again.
+#[tokio::test]
+async fn test_resumed_fork_loads_the_system_packages_its_seed_lacked() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::ListSystemPackagesRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::PackageVersion;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let packages = system_package_objects(&[
+        (ObjectID::from_single_byte(1), 1),
+        (ObjectID::from_single_byte(2), 3),
+        (ObjectID::from_single_byte(3), 2),
+    ]);
+    mock_system_packages(&server, fork_checkpoint, &packages).await;
+    let manifest = SeedManifest {
+        network: "custom".to_owned(),
+        checkpoint: fork_checkpoint,
+        addresses: vec![],
+        entries: vec![],
+    };
+
+    {
+        let (store, services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+        store.local_store().restore_seed_objects(&[]).unwrap();
+        store
+            .local_store()
+            .save_live_object_if_current(&packages[1])
+            .unwrap();
+        let local_versions = [
+            (ObjectID::from_single_byte(2), 4),
+            (ObjectID::from_single_byte(3), 5),
+        ];
+        let upgraded: BTreeMap<_, _> = system_package_objects(&local_versions)
+            .into_iter()
+            .map(|package| (package.id(), package))
+            .collect();
+        store
+            .local_store()
+            .commit_local_object_diff_for_testing(&upgraded, &[])
+            .unwrap();
+        assert!(!store.local_store().system_packages_loaded().unwrap());
+
+        load_seed_objects(&store, &manifest).expect("a resumed load should fetch the packages");
+        assert!(store.local_store().system_packages_loaded().unwrap());
+        for (id, fork_version, local_version) in [
+            (ObjectID::from_single_byte(2), 3, 4),
+            (ObjectID::from_single_byte(3), 2, 5),
+        ] {
+            assert_eq!(
+                store
+                    .local_store()
+                    .get_latest_object_status(id)
+                    .unwrap()
+                    .map(|(version, _)| version),
+                Some(SequenceNumber::from_u64(local_version)),
+                "{id}",
+            );
+            assert_eq!(
+                RpcIndexes::get_object_version_at_checkpoint(
+                    store.local_store().reader(),
+                    id,
+                    fork_checkpoint,
+                )
+                .unwrap(),
+                Some(SequenceNumber::from_u64(fork_version)),
+                "{id}",
+            );
+        }
+
+        let listed = RpcService::new(Arc::new(store.clone()))
+            .list_system_packages(tonic::Request::new(ListSystemPackagesRequest::new(
+                fork_checkpoint,
+            )))
+            .await
+            .unwrap()
+            .into_inner()
+            .system_packages;
+        let expected: Vec<_> = packages
+            .iter()
+            .map(|package| {
+                PackageVersion::new(&package.id().into(), package.version().value())
+                    .with_original_id(package.id().to_canonical_string(true))
+            })
+            .collect();
+        assert_eq!(listed, expected);
+        drop(services);
+    }
+
+    let (store, _services) = data_store_with_remote(
+        temp.path(),
+        "http://localhost:1".to_owned(),
+        fork_checkpoint,
+    );
+    load_seed_objects(&store, &manifest).expect("loaded system packages must not be refetched");
 }
 
 #[tokio::test]

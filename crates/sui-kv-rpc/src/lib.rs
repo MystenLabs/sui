@@ -25,6 +25,7 @@ use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
 use sui_kvstore::PACKAGES_PIPELINE;
 pub use sui_kvstore::PoolConfig;
 pub use sui_kvstore::ReadRowsRetryConfig;
+use sui_kvstore::SYSTEM_PACKAGES_PIPELINE;
 use sui_kvstore::TRANSACTIONS_PIPELINE;
 use sui_kvstore::TX_SEQ_DIGEST_PIPELINE;
 use sui_package_resolver::PackageStore;
@@ -688,6 +689,7 @@ pub fn service_info_watermark_pipelines(bitmap_schema: BitmapSchema) -> Vec<&'st
         PACKAGES_PIPELINE,
         PACKAGES_BY_ID_PIPELINE,
         PACKAGES_BY_CHECKPOINT_PIPELINE,
+        SYSTEM_PACKAGES_PIPELINE,
         // List APIs, which read the bitmap tables of `bitmap_schema`.
         TX_SEQ_DIGEST_PIPELINE,
         transaction_bitmap,
