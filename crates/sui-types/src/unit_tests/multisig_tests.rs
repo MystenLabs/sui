@@ -454,6 +454,19 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );
 
+    // The default lets a zkLogin member through the gate, but it has no JWKs to verify the proof.
+    let res = multisig
+        .verify_claims(
+            intent_msg,
+            multisig_address,
+            &VerifyParams::default(),
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .map_err(|e| e.into_inner());
+    assert!(
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error }) if error.contains("JWK not found"))
+    );
+
     // initialize zklogin pk (pk1_padd) with padded address seed
     let pk1_padded = PublicKey::ZkLogin(
         ZkLoginPublicIdentifier::new(
@@ -669,12 +682,12 @@ fn test_multisig_mldsa65_hybrid() {
             .is_ok()
     );
 
-    // Default params (flag off) reject the same multisig.
+    // With the flag off the same multisig is rejected.
     let res = parsed
         .verify_claims(
             &msg,
             multisig_address,
-            &VerifyParams::default(),
+            &VerifyParams::default().with_mldsa65_in_multisig(false),
             Arc::new(VerifiedDigestCache::new_empty()),
         )
         .map_err(|e| e.into_inner());

@@ -283,10 +283,27 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             VerifiedTransaction::new_unchecked(transaction)
         } else {
             transaction
-                .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?
+                .try_into_verified_for_testing(self.epoch_state.epoch(), &self.verify_params())?
         };
 
         self.execute_transaction_impl(verified_transaction)
+    }
+
+    /// Signature flags from the simulated protocol config, like a validator's.
+    /// Execution here skips `validity_check`, so nothing else gates a scheme.
+    fn verify_params(&self) -> VerifyParams {
+        let config = self.epoch_state.protocol_config();
+        VerifyParams {
+            zklogin_circuit_mode: config.zklogin_circuit_mode(),
+            verify_legacy_zklogin_address: config.verify_legacy_zklogin_address(),
+            accept_zklogin_in_multisig: config.accept_zklogin_in_multisig(),
+            accept_passkey_in_multisig: config.accept_passkey_in_multisig(),
+            accept_mldsa65_in_multisig: config.mldsa65_auth(),
+            zklogin_max_epoch_upper_bound_delta: config.zklogin_max_epoch_upper_bound_delta(),
+            additional_multisig_checks: config.additional_multisig_checks(),
+            validate_zklogin_public_identifier: config.validate_zklogin_public_identifier(),
+            ..Default::default()
+        }
     }
 
     /// Attempts to execute the provided Transaction.
@@ -305,7 +322,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = transaction
-            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+            .try_into_verified_for_testing(self.epoch_state.epoch(), &self.verify_params())?;
         self.execute_transaction_impl(transaction)
     }
 
@@ -970,7 +987,10 @@ mod tests {
 
     use rand::{SeedableRng, rngs::StdRng};
     use sui_types::{
-        base_types::SuiAddress, effects::TransactionEffectsAPI, gas_coin::GasCoin,
+        base_types::SuiAddress,
+        crypto::{SignatureScheme, SuiKeyPair},
+        effects::TransactionEffectsAPI,
+        gas_coin::GasCoin,
         transaction::TransactionDataAPI,
     };
 
@@ -1167,5 +1187,56 @@ mod tests {
         } else {
             assert_eq!(checkpoint.network_total_transactions, 2); // genesis + 1 user txn
         };
+    }
+
+    // Execution skips `validity_check`, so the verify params are the only ML-DSA-65 gate here.
+    #[test]
+    fn mldsa65_follows_the_protocol_config() {
+        let mut key = vec![SignatureScheme::MLDSA65.flag()];
+        key.extend([7; 32]);
+        let kp = SuiKeyPair::from_bytes(&key).unwrap();
+        let sender = SuiAddress::from(&kp.public());
+
+        for enabled in [true, false] {
+            let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+                config.set_mldsa65_auth_for_testing(enabled);
+                config
+            });
+            let mut sim = Simulacrum::new();
+            assert_eq!(sim.protocol_config().mldsa65_auth(), enabled);
+
+            let (fund, _) = sim.transfer_txn(sender);
+            sim.execute_transaction(fund).unwrap();
+            let gas = sim.store().owned_objects(sender).next().unwrap();
+
+            let pt = {
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.transfer_sui(SuiAddress::ZERO, Some(1));
+                builder.finish()
+            };
+            let gas_data = GasData {
+                payment: vec![gas.compute_object_reference()],
+                owner: sender,
+                price: sim.reference_gas_price(),
+                budget: 1_000_000_000,
+            };
+            let tx_data = TransactionData::new_with_gas_data(
+                TransactionKind::ProgrammableTransaction(pt),
+                sender,
+                gas_data,
+            );
+            let res =
+                sim.execute_transaction(Transaction::from_data_and_signer(tx_data, vec![&kp]));
+            if enabled {
+                assert!(res.unwrap().0.status().is_ok());
+            } else {
+                let err = res.unwrap_err();
+                assert!(
+                    err.to_string()
+                        .contains("ML-DSA-65 signatures not supported"),
+                    "{err}"
+                );
+            }
+        }
     }
 }
