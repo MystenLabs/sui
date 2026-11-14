@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_GAS_BUDGET"],"fn":["send_sui"]};

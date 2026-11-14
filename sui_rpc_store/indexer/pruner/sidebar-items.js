@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_RETRACTION_CURSORS_CAPACITY"],"fn":["embedded_prunable_checkpoint","prune_history_cohort","start_pruner"],"struct":["PrunerMetrics","RetractionCursors"]};

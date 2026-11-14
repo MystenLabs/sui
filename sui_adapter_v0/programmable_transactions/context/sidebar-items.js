@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["load_type","reset_linkage","restore_linkage","set_linkage","steal_linkage"],"struct":["ExecutionContext"]};

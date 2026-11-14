@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["action","data","data_source","id","nonce","sender_address","star","timestamp_ms","txn_digest"]};

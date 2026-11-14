@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Point"],"fn":["schema","start_rpc"],"mod":["args","config","extensions"],"struct":["CheckpointToken","JsonCursor","RpcArgs","RpcService"],"type":["CCheckpoint","CEvent","CTransaction"]};

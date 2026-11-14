@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FILE_DESCRIPTOR_SET"],"mod":["bad_request","help","precondition_failure","quota_failure"],"struct":["BadRequest","DebugInfo","ErrorInfo","Help","LocalizedMessage","PreconditionFailure","QuotaFailure","RequestInfo","ResourceInfo","RetryInfo","Status"]};

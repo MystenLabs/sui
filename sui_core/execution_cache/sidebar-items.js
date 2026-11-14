@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_execution_cache","build_execution_cache_from_env"],"mod":["metrics","writeback_cache"],"struct":["ExecutionCacheTraitPointers"],"trait":["CheckpointCache","ExecutionCacheAPI","ExecutionCacheCommit","ExecutionCacheReconfigAPI","ExecutionCacheWrite","ObjectCacheRead","StateSyncAPI","TestingAPI","TransactionCacheRead"],"type":["Batch"]};
