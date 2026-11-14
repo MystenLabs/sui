@@ -316,6 +316,17 @@ impl StateReader {
         Ok(AtCheckpointUpperBound { highest_indexed })
     }
 
+    /// [`version_not_retained`] if this node does not keep object versions once they are replaced
+    /// (see [`RpcStateReader::retains_object_version_history`]): reads that depend on an object's
+    /// replaced versions would find them gone and answer `NotFound`. The refusal depends only on
+    /// the node's configuration, so check it before anything that depends on the node's state.
+    pub fn require_object_version_history(&self) -> Result<(), crate::RpcError> {
+        if self.inner().retains_object_version_history() {
+            return Ok(());
+        }
+        Err(version_not_retained())
+    }
+
     /// The lower bound for checkpoint-pinned reads: the checkpoint just below the higher of
     /// [`RpcStateReader::get_lowest_available_checkpoint_objects`] and
     /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]. The lowest available
@@ -528,6 +539,22 @@ fn refusal(
 /// that need them cannot be answered.
 pub(crate) fn indexes_disabled() -> crate::RpcError {
     not_served_here(NotServedHereCause::NoRpcIndexes, "rpc indexes are disabled")
+}
+
+/// The refusal for a read of an object version that this node, which keeps only each object's
+/// latest version, deleted when a later version replaced it: `OutOfRange` with a
+/// `VERSION_NOT_RETAINED` [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo) and no metadata.
+/// The same request fails the same way on this node; a node that keeps object version history
+/// may serve it.
+pub(crate) fn version_not_retained() -> crate::RpcError {
+    crate::RpcError::new(
+        tonic::Code::OutOfRange,
+        "this node keeps only the latest version of each object, so it cannot answer reads of \
+         earlier versions",
+    )
+    .with_details(
+        ErrorDetails::new().with_error_info(ledger_error_info(ErrorReason::VersionNotRetained, [])),
+    )
 }
 
 /// [`not_ready`] with cause `index_empty`: the rpc indexes have not committed a checkpoint yet.

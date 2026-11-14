@@ -42,6 +42,7 @@ sui-swarm-config.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
+move-binary-format.workspace = true
 tempfile.workspace = true
 wiremock.workspace = true
 

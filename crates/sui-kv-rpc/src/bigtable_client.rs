@@ -51,6 +51,8 @@ use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
+use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::PackageData;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
@@ -59,6 +61,7 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::row_placement::RowPlacement;
+use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -74,11 +77,12 @@ pub(crate) mod stage {
     pub const TX_SEQ_DIGEST: &str = "tx_seq_digest";
     pub const TX_CP_RESOLVE: &str = "tx_cp_resolve";
     pub const CHECKPOINTS: &str = "checkpoints";
+    pub const PACKAGES: &str = "packages";
 }
 
 /// Metrics for the request-scoped `BigTableClient` limiter and the reads it
-/// gates. Cardinality is bounded: per method, 5 stages for `permit_wait_ms`,
-/// `permit_hold_ms`, and `reads_started`, 5 stages × 3 outcomes for
+/// gates. Cardinality is bounded: per method, 6 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 6 stages × 3 outcomes for
 /// `reads_finished`, and one series each for the request-end `permits_peak`
 /// and `ops_total` histograms.
 #[derive(Clone)]
@@ -350,6 +354,91 @@ impl BigTableClient {
         self.call_gated(
             stage::TX_CP_RESOLVE,
             inner.resolve_tx_checkpoint_position(tx_seq),
+        )
+        .await
+    }
+
+    /// The newest version of `object_id`, unless the object was deleted or wrapped at it. One
+    /// reverse range scan of the `objects` table, under one permit.
+    pub(crate) async fn get_latest_object(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::OBJECTS, inner.get_latest_object(&object_id))
+            .await
+    }
+
+    /// The objects at `object_keys` that exist, in one multi-get of the `objects` table, under
+    /// one permit.
+    pub(crate) async fn get_objects(
+        &self,
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::OBJECTS, inner.get_objects(object_keys))
+            .await
+    }
+
+    /// The original package ID of each of `package_ids` that has a `packages_by_id` row, as
+    /// `(storage ID, original ID)` pairs, under one permit.
+    pub(crate) async fn get_package_original_ids(
+        &self,
+        package_ids: &[ObjectID],
+    ) -> Result<Vec<(ObjectID, ObjectID)>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::PACKAGES, inner.get_package_original_ids(package_ids))
+            .await
+    }
+
+    /// The `packages` rows for `(original ID, version)` `keys`, in one multi-get, under one
+    /// permit.
+    pub(crate) async fn get_packages_by_version(
+        &self,
+        keys: &[(ObjectID, u64)],
+    ) -> Result<Vec<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::PACKAGES, inner.get_packages_by_version(keys))
+            .await
+    }
+
+    /// The newest version of the package `original_id` published at or before `cp_bound`,
+    /// under one permit.
+    pub(crate) async fn get_package_latest(
+        &self,
+        original_id: ObjectID,
+        cp_bound: u64,
+    ) -> Result<Option<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PACKAGES,
+            inner.get_package_latest(original_id, cp_bound),
+        )
+        .await
+    }
+
+    /// One page of the versions of the package `original_id` published at or before
+    /// `cp_bound`, from one `packages` range scan, under one permit.
+    pub(crate) async fn get_package_versions(
+        &self,
+        original_id: ObjectID,
+        cp_bound: u64,
+        after_version: Option<u64>,
+        before_version: Option<u64>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PACKAGES,
+            inner.get_package_versions(
+                original_id,
+                cp_bound,
+                after_version,
+                before_version,
+                limit,
+                descending,
+            ),
         )
         .await
     }
