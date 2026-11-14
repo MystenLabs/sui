@@ -582,7 +582,6 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
             parsed.allowed_qualifiers = Some(qualifiers_from_regex(&pattern)?);
         }
-        Some(Filter::StripValueTransformer(true)) => parsed.strip_values = true,
         Some(Filter::Interleave(interleave)) => parse_interleave(interleave, &mut parsed)?,
         Some(Filter::Chain(chain)) => {
             for f in chain.filters {

@@ -2238,8 +2238,8 @@ impl KeyValueStoreReader for BigTableClient {
         let Some((row_key, row)) = self
             .range_scan(
                 tables::objects::NAME,
-                Some(lower_limit),
-                Some(upper_limit),
+                Bound::Included(lower_limit),
+                Bound::Included(upper_limit),
                 1,
                 true,
                 Some(Self::keys_only_filter()),
