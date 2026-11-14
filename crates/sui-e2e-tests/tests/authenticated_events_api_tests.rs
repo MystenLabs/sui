@@ -459,6 +459,10 @@ async fn verify_events_with_stream_head(
         .state()
         .epoch_store_for_testing()
         .epoch();
+    // `build_epoch_cache` reads `current_epoch` through `GetEpoch`, which follows the indexes and
+    // misses an epoch until its first checkpoint is indexed. The cluster's 10s epochs can start
+    // one between the event listing and here.
+    test_cluster.wait_for_epoch_indexed().await;
     let genesis_committee = get_genesis_committee(test_cluster).await.unwrap();
     let epoch_cache = build_epoch_cache(&mut ledger_client, genesis_committee, current_epoch)
         .await
