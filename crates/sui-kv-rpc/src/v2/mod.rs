@@ -125,7 +125,7 @@ impl LedgerService for KvRpcServer {
         request: tonic::Request<GetEpochRequest>,
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(
-            self.client.clone(),
+            self.limited_client("GetEpoch"),
             ServedHeight::of(&request)?,
             request.into_inner(),
             self.chain_id.chain(),
