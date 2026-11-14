@@ -10,34 +10,34 @@ task 1, lines 6-13:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6224400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 6224400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 15-22:
 //# upgrade --package Test_DepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6224400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 6224400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 24-35:
 //# upgrade --package Test_DepV2 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6536000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 6536000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 4, lines 37-44:
 //# publish --upgradeable --dependencies Test_DepV1 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6209200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 6209200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 46-53:
 //# upgrade --package Test_V1 --upgrade-capability 4,1 --dependencies Test_DepV2 --sender A
 created: object(5,0)
 mutated: object(0,0), object(4,1)
-gas summary: computation_cost: 1000000, storage_cost: 6209200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1041000000, storage_cost: 6209200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 6, lines 55-62:
 //# upgrade --package Test_V2 --upgrade-capability 4,1 --dependencies Test_DepV3 --sender A
 created: object(6,0)
 mutated: object(0,0), object(4,1)
-gas summary: computation_cost: 1000000, storage_cost: 6254800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1041000000, storage_cost: 6254800,  storage_rebate: 2621738, non_refundable_storage_fee: 262

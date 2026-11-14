@@ -15,25 +15,25 @@ task 1, lines 11-16:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5449200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5449200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 18-23:
 //# publish --dependencies DepV1 --sender A
 created: object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4476400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 4476400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, lines 25-32:
 //# publish --sender A
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5312400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1031000000, storage_cost: 5312400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 34-49:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 7835600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 7835600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 5, line 51:
 //# run DepV2::m::make_shared --sender A
@@ -51,13 +51,13 @@ task 7, lines 55-58:
 //# publish --upgradeable --dependencies DepV1 --sender A
 created: object(7,0), object(7,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 6118000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 60-69:
 //# upgrade --package WitnessV1 --upgrade-capability 7,1 --dependencies DepV2 --sender A
 created: object(8,0)
 mutated: object(0,0), object(7,1)
-gas summary: computation_cost: 1000000, storage_cost: 8109200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1041000000, storage_cost: 8109200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 9, line 71:
 //# run WitnessV2::witness::make --sender A

@@ -18,7 +18,10 @@ use sui_types::base_types::{ConsensusObjectSequenceKey, ObjectID, ObjectRef, Sui
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
-use sui_types::transaction::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TransactionData};
+use sui_types::transaction::{
+    CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+    TransactionData,
+};
 use sui_types::{Identifier, SUI_FRAMEWORK_ADDRESS};
 use test_cluster::TestCluster;
 use tokio::sync::RwLock;
@@ -169,7 +172,7 @@ impl SurferState {
             vec![],
             self.gas_object,
             args,
-            TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
+            TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
             rgp,
         )
         .unwrap();

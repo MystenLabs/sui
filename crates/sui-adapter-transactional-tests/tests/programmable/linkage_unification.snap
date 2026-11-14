@@ -13,31 +13,31 @@ task 1, lines 9-12:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 14-19:
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5145200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 5145200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 21-25:
 //# publish --upgradeable --dependencies DepV1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 5950800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 27-30:
 //# upgrade --package DepConsumerV1 --upgrade-capability 3,1 --dependencies DepV2 --sender A
 created: object(4,0)
 mutated: object(0,0), object(3,1)
-gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1041000000, storage_cost: 5950800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 5, lines 32-37:
 //# publish --dependencies DepV1 --sender A
 created: object(5,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4316800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 4316800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, lines 44-48:
 //# programmable --sender A --inputs @A
@@ -47,7 +47,7 @@ task 7, lines 44-48:
 //> TransferObjects([Result(0)], Input(0))
 created: object(7,0), object(7,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6072400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 6072400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 50-54:
 //# programmable --sender A --inputs @A
@@ -57,7 +57,7 @@ task 8, lines 50-54:
 //> TransferObjects([Result(0)], Input(0))
 created: object(8,0), object(8,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6072400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 1041000000, storage_cost: 6072400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 9, lines 56-59:
 //# programmable --sender A

@@ -15,7 +15,7 @@ task 1, lines 10-67:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 22002000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 22002000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 69-70:
 // Transfer the newly minted coin works normally.
@@ -44,7 +44,7 @@ gas summary: computation_cost: 1000000, storage_cost: 4119200,  storage_rebate: 
 task 5, lines 78-79:
 // Enable global pause.
 //# run sui::coin::deny_list_v2_enable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
-events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 98, 100, 51, 52, 53, 48, 50, 55, 101, 101, 99, 53, 57, 50, 98, 100, 49, 51, 49, 100, 101, 48, 100, 49, 51, 101, 57, 56, 48, 50, 49, 101, 101, 52, 97, 54, 102, 102, 101, 102, 50, 48, 98, 57, 57, 98, 50, 102, 98, 49, 102, 101, 48, 49, 50, 100, 99, 52, 102, 53, 49, 100, 48, 102, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 53, 253, 89, 108, 87, 207, 176, 77, 33, 211, 78, 12, 121, 132, 85, 45, 183, 172, 19, 183, 246, 126, 2, 157, 221, 163, 163, 63, 164, 179, 115, 13] }
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 98, 100, 51, 52, 53, 48, 50, 55, 101, 101, 99, 53, 57, 50, 98, 100, 49, 51, 49, 100, 101, 48, 100, 49, 51, 101, 57, 56, 48, 50, 49, 101, 101, 52, 97, 54, 102, 102, 101, 102, 50, 48, 98, 57, 57, 98, 50, 102, 98, 49, 102, 101, 48, 49, 50, 100, 99, 52, 102, 53, 49, 100, 48, 102, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 93, 154, 146, 182, 155, 178, 59, 127, 134, 224, 39, 165, 163, 124, 239, 171, 193, 86, 223, 255, 231, 176, 147, 67, 117, 136, 43, 127, 205, 187, 159, 0] }
 created: object(5,0), object(5,1), object(5,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 gas summary: computation_cost: 1000000, storage_cost: 11985200,  storage_rebate: 2773723, non_refundable_storage_fee: 277

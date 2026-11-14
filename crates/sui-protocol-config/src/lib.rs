@@ -438,6 +438,7 @@ const MAINNET_USDB: &str =
 // Version 143: Add and enable a new execution version.
 //              Simplify Nitro attestation header validation.
 //              Disable forwarding addresses on devnet.
+//              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5040,6 +5041,10 @@ impl ProtocolConfig {
                     cfg.package_arena_size_in_bytes = Some(20_000_000);
                     cfg.feature_flags.simplify_nitro_header_validation = true;
                     cfg.feature_flags.enable_forwarding_addresses = false;
+                    cfg.feature_flags.package_publish_charge = true;
+                    cfg.package_publish_charge_fixed = Some(1_000_000_000);
+                    cfg.package_publish_charge_per_module = Some(10_000_000);
+                    cfg.package_publish_charge_per_dependency = Some(10_000_000);
                 }
                 // Use this template when making changes:
                 //

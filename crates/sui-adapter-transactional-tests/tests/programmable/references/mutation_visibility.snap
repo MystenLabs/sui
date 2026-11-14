@@ -13,13 +13,13 @@ task 1, lines 9-61:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 11886400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 11886400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 63-66:
 //# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 5, lines 82-84:
 //# programmable --sender A --inputs @A
@@ -322,7 +322,7 @@ task 29, lines 231-237:
 //> 4: TransferObjects([Result(2)], Input(2));
 created: object(29,0), object(29,1), object(29,2)
 mutated: object(0,0), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 9287200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
+gas summary: computation_cost: 1031000000, storage_cost: 9287200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 30, line 239:
 //# view-object 5,0
@@ -351,7 +351,7 @@ task 31, lines 241-248:
 //> 5: sui::package::commit_upgrade(Input(0), Result(3));
 created: object(31,0)
 mutated: object(0,0), object(2,1), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 3966803, non_refundable_storage_fee: 397
+gas summary: computation_cost: 1031000000, storage_cost: 6429600,  storage_rebate: 3966803, non_refundable_storage_fee: 397
 
 task 32, line 250:
 //# view-object 5,0

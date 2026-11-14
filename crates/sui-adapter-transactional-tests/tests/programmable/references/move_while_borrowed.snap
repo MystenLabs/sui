@@ -13,13 +13,13 @@ task 1, lines 9-81:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 15564800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 15564800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 83-86:
 //# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4, lines 93-95:
 //# programmable --sender A --inputs @A
@@ -185,7 +185,7 @@ task 20, lines 189-195:
 //> 4: sui::package::commit_upgrade(Input(0), Result(3));
 created: object(20,0)
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1031000000, storage_cost: 5084400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 // --- the gas coin, last because send_funds consumes the sender's gas object ---
 
@@ -196,5 +196,5 @@ task 21, lines 199-203:
 //> 1: test::m::value_at_least(Result(0), Input(1));
 //> 2: sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0));
 deleted: object(0,0)
-accumulators_written: (object(19,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 299999973857078)
+accumulators_written: (object(19,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 299997913857078)
 gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 987901, non_refundable_storage_fee: 99

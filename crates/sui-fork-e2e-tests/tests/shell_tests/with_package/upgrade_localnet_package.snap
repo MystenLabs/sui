@@ -18,7 +18,7 @@ sender=$(on_localnet active-address)
 
 echo "=== localnet: publish before forking ==="
 add_env_to_toml counter localnet on_localnet
-run_json publish.json on_localnet publish counter --gas-budget 100000000
+run_json publish.json on_localnet publish counter --gas-budget 2000000000
 package_v1=$(published_package_id publish.json)
 cap=$(created_object_id publish.json "::package::UpgradeCap")
 fork_point=$(wait_for_graphql_tx "$(tx_digest_of publish.json)")
@@ -32,7 +32,7 @@ assert_eq "$(object_field on_fork "$cap" .owner.AddressOwner)" "$sender" \
   "the UpgradeCap from the localnet publish is seeded on the fork"
 echo 'module counter::v2; public fun two(): u64 { 2 }' > counter/sources/v2.move
 gas=$(gas_coin on_fork)
-run_json upgrade.json on_fork upgrade counter --gas "$gas" --gas-budget 100000000
+run_json upgrade.json on_fork upgrade counter --gas "$gas" --gas-budget 2000000000
 assert_eq "$(tx_status_of upgrade.json)" success "the localnet package upgraded on the fork"
 assert_grep 'building for `localnet` instead' upgrade.json.err \
   "the CLI resolved the fork env to the localnet environment by chain id"
