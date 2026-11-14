@@ -19,7 +19,9 @@ mod list_package_versions;
 pub use get_datatype::get_datatype_response;
 pub use get_function::get_function_response;
 pub use get_package::get_package_response;
-pub use list_package_versions::{PackageVersionCursor, PackageVersionsQuery};
+pub use list_package_versions::{
+    AllPackageVersionsQuery, PackageVersionCursor, PackageVersionsQuery,
+};
 
 #[tonic::async_trait]
 impl MovePackageService for RpcService {
