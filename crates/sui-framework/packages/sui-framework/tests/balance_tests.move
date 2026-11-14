@@ -5,6 +5,7 @@
 module sui::balance_tests;
 
 use std::unit_test::destroy;
+use sui::accumulator::{Self, AccumulatorRoot};
 use sui::balance;
 use sui::coin;
 use sui::pay;
@@ -80,4 +81,33 @@ fun test_balance() {
     destroy(balance1);
     destroy(balance2);
     destroy(balance3);
+}
+
+#[test]
+fun address_owned_balance() {
+    let mut scenario = test_scenario::begin(@0x0);
+    accumulator::create_for_testing(scenario.ctx());
+
+    scenario.next_tx(@0x1);
+    let accumulator = scenario.take_shared<AccumulatorRoot>();
+    balance::create_for_testing<SUI>(1000).send_funds(@0x1);
+    assert!(balance::settled_funds_value<SUI>(&accumulator, @0x1) == 1000);
+    test_scenario::return_shared(accumulator);
+
+    scenario.end();
+}
+
+#[test]
+fun object_owned_balance() {
+    let mut scenario = test_scenario::begin(@0x0);
+    accumulator::create_for_testing(scenario.ctx());
+
+    scenario.next_tx(@0x1);
+    let accumulator = scenario.take_shared<AccumulatorRoot>();
+    let accumulator_address = accumulator.id().to_address();
+    balance::create_for_testing<SUI>(1000).send_funds(accumulator_address);
+    assert!(balance::settled_funds_value<SUI>(&accumulator, accumulator_address) == 1000);
+    test_scenario::return_shared(accumulator);
+
+    scenario.end();
 }
