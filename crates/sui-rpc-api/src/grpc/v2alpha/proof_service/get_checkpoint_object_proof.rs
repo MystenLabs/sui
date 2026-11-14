@@ -20,6 +20,10 @@ use sui_types::messages_checkpoint::CheckpointArtifacts;
 
 use crate::RpcError;
 use crate::RpcService;
+use crate::ledger_history::query_options::above_latest_available;
+use crate::ledger_history::query_options::below_serving_floor;
+use crate::reader::index_empty;
+use crate::reader::indexes_disabled;
 
 #[tracing::instrument(skip(service))]
 pub(super) fn get_checkpoint_object_proof(
@@ -33,8 +37,30 @@ pub(super) fn get_checkpoint_object_proof(
             "missing checkpoint".to_string(),
         )
     })?;
-    validate_checkpoint_bounds(service, checkpoint_seq)?;
+    // The proof loads the checkpoint's input objects and the object version it wrote, which a
+    // node without object version history deletes once they are replaced. That refusal depends
+    // only on the node's configuration, so it comes first.
+    service.reader.require_object_version_history()?;
+    check_checkpoint_indexed(service, checkpoint_seq)?;
 
+    let response = prove_object_at_checkpoint(service, object_id, checkpoint_seq);
+
+    // The floor is the higher of the checkpoint and object floors, since a proof reads both the
+    // checkpoint and the object versions it wrote. It is read after the reads because pruning can
+    // delete either while they run, making a read fail with `NotFound` or `Internal`: a
+    // checkpoint below the floor is reported as pruned whatever the reads returned.
+    let lowest_available = service.reader.get_lowest_available_checkpoint()?;
+    if checkpoint_seq < lowest_available {
+        return Err(below_serving_floor(lowest_available));
+    }
+    response
+}
+
+fn prove_object_at_checkpoint(
+    service: &RpcService,
+    object_id: ObjectID,
+    checkpoint_seq: u64,
+) -> Result<GetCheckpointObjectProofResponse, RpcError> {
     let checkpoint_data = load_checkpoint(service, checkpoint_seq)?;
     let ocs_leaves = build_ocs_leaves(&checkpoint_data, checkpoint_seq)?;
 
@@ -73,33 +99,24 @@ fn parse_object_id(request: &GetCheckpointObjectProofRequest) -> Result<ObjectID
     })
 }
 
-fn validate_checkpoint_bounds(service: &RpcService, checkpoint_seq: u64) -> Result<(), RpcError> {
-    let reader = service.reader.inner();
-    let indexes = reader.indexes().ok_or_else(RpcError::not_found)?;
+/// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) if the rpc index has not covered `checkpoint_seq` yet.
+/// The index only grows, so this holds for reads made after it. `Unimplemented` if the rpc
+/// indexes are disabled, and `Unavailable` if they have not covered any checkpoint yet.
+fn check_checkpoint_indexed(service: &RpcService, checkpoint_seq: u64) -> Result<(), RpcError> {
+    let indexes = service
+        .reader
+        .inner()
+        .indexes()
+        .ok_or_else(indexes_disabled)?;
     let highest_indexed = indexes
         .get_highest_indexed_checkpoint_seq_number()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        .unwrap_or(0);
-    let lowest_available = reader
-        .get_lowest_available_checkpoint_objects()
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-
-    if checkpoint_seq < lowest_available {
-        return Err(RpcError::new(
-            tonic::Code::NotFound,
-            format!(
-                "requested checkpoint {checkpoint_seq} has been pruned; lowest available checkpoint \
-                 is {lowest_available}",
-            ),
-        ));
-    }
+        .ok_or_else(index_empty)?;
     if checkpoint_seq > highest_indexed {
-        return Err(RpcError::new(
-            tonic::Code::NotFound,
-            format!(
-                "requested checkpoint {checkpoint_seq} is not yet indexed; highest indexed \
-                 checkpoint is {highest_indexed}",
-            ),
+        return Err(above_latest_available(
+            "checkpoint",
+            checkpoint_seq,
+            highest_indexed.saturating_add(1),
         ));
     }
     Ok(())

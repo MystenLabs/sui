@@ -5,8 +5,9 @@ use crate::{
     ErrorReason, Result, RpcError, RpcService,
     grpc::v2::move_package_service::{
         conversions::{convert_error, convert_module},
-        load_package, load_package_by_id,
+        load_package, load_package_by_id, parse_package_id,
     },
+    reader::indexes_disabled,
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
@@ -60,7 +61,7 @@ fn load_package_at_version(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
 
     let storage_id = indexes
         .get_package_version_storage_id(original_id, version)
@@ -73,54 +74,46 @@ fn load_package_at_version(
 /// Load the latest package in `package_id_str`'s upgrade lineage that
 /// existed at or before `at_checkpoint`.
 ///
-/// The bound is checked against the highest checkpoint every rpc-store
-/// pipeline has committed before any package read: a bound above it is
-/// rejected rather than served from a partially indexed index, so a
-/// successful answer is exact as of `at_checkpoint`.
+/// `at_checkpoint` is checked against the shared checkpoint-pinned read
+/// bounds, the upper bound before the package read and the lower bound after
+/// it (see `StateReader::at_checkpoint_upper_bound`), so a successful answer
+/// is exact as of `at_checkpoint`. Both bounds apply to every outcome of the
+/// read, `NotFound` included, so an out-of-range checkpoint is `OutOfRange`
+/// whether or not the package exists, as on kv-rpc. Nodes without object
+/// version history refuse: system packages are upgraded in place, so their
+/// earlier versions are gone there.
 fn load_package_at_checkpoint(
     service: &RpcService,
     package_id_str: &str,
     at_checkpoint: u64,
 ) -> Result<MovePackage> {
-    let original_id = load_package(service, package_id_str)?.original_package_id();
+    let package_id = parse_package_id(package_id_str)?;
+
+    service.reader.require_object_version_history()?;
+    service
+        .reader
+        .at_checkpoint_upper_bound()?
+        .check(at_checkpoint)?;
 
     let indexes = service
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
 
-    let lowest_available = service.reader.get_lowest_available_checkpoint()?;
-    if at_checkpoint < lowest_available {
-        return Err(RpcError::new(
-            tonic::Code::NotFound,
-            format!(
-                "requested checkpoint {at_checkpoint} has been pruned; lowest available \
-                 checkpoint is {lowest_available}",
-            ),
-        ));
-    }
+    let package = load_package_by_id(service, package_id).and_then(|package| {
+        indexes
+            .get_package_at_checkpoint(package.original_package_id(), at_checkpoint)
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+            .ok_or_else(RpcError::not_found)
+            .and_then(|(_, storage_id)| load_package_by_id(service, storage_id))
+    });
 
-    let highest_indexed = indexes
-        .get_highest_indexed_checkpoint_seq_number()
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
-    if at_checkpoint > highest_indexed {
-        return Err(RpcError::new(
-            tonic::Code::NotFound,
-            format!(
-                "requested checkpoint {at_checkpoint} is not yet indexed; highest indexed \
-                 checkpoint is {highest_indexed}",
-            ),
-        ));
-    }
-
-    let (_, storage_id) = indexes
-        .get_package_at_checkpoint(original_id, at_checkpoint)
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        .ok_or_else(RpcError::not_found)?;
-
-    load_package_by_id(service, storage_id)
+    service
+        .reader
+        .at_checkpoint_lower_bound()?
+        .check(at_checkpoint)?;
+    package
 }
 
 /// Build a `GetPackage` response from an already-loaded package. Shared with other implementors
