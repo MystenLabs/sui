@@ -1414,11 +1414,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
 
-    // If true, the consensus handler's checkpoint queue is kept from staying non-empty:
-    // a flush forced by max_transactions_per_checkpoint does not restart the
-    // min_checkpoint_interval_ms timer, and a queue that has not emptied for one second of
-    // commit time is flushed. Otherwise sustained load, or commits that each carry
-    // randomness, can keep the queue from ever emptying.
+    // If true, an overflow flush does not restart the checkpoint interval timer, and a
+    // checkpoint queue that stays non-empty for one second of commit time is flushed.
+    // Sustained load or per-commit randomness otherwise keeps the queue from emptying.
     #[serde(skip_serializing_if = "is_false")]
     checkpoint_queue_drain_fixes: bool,
 }
@@ -5129,10 +5127,8 @@ impl ProtocolConfig {
         // This draw must stay first: in upgrade tests, binaries from older releases make only
         // this draw, and every validator must derive the same limit from the epoch digest.
         let mut max_txns = rng.gen_range(10..=100u64);
-        // Caps of 2-3 put ordinary simtest load above max_tx per min_checkpoint_interval_ms,
-        // so most commits force a flush. Production reaches that regime only at high TPS.
-        // Older versions restart the checkpoint interval on a forced flush, and at these caps
-        // their checkpoint queue would never drain.
+        // Caps of 2-3 put simtest load in the overflow regime that production reaches only at
+        // high TPS. Versions without checkpoint_queue_drain_fixes never drain at these caps.
         if self.feature_flags.checkpoint_queue_drain_fixes
             && SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed)
             && rng.gen_bool(0.25)

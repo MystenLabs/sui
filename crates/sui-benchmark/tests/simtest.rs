@@ -182,10 +182,9 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
-    // Every commit reserves randomness, as it does in production when commits are at least
-    // random_beacon_min_round_interval_ms apart. Each commit then ends with randomness queued
-    // behind the end-of-commit flush, and the consensus handler's drain check fails the test
-    // if the checkpoint queue stops emptying.
+    // Every commit reserves randomness, as in production when commits are at least
+    // random_beacon_min_round_interval_ms apart, so the checkpoint queue drains only through
+    // the forced flush in CheckpointQueue::end_commit. Restarts replay from drained commits.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_randomness_every_commit() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -194,7 +193,12 @@ mod test {
             config
         });
         let test_cluster = build_test_cluster(4, 20_000, 1).await;
-        test_simulated_load(test_cluster, 45).await;
+        let node_restarter = test_cluster
+            .random_node_restarter()
+            .with_kill_interval_secs(5, 15)
+            .with_restart_delay_secs(1, 10);
+        node_restarter.run();
+        test_simulated_load(test_cluster, 60).await;
     }
 
     /// Runs the large-transaction workload in isolation and asserts it generates load.
