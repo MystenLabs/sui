@@ -49,9 +49,10 @@ async fn get_epoch(client: &mut LedgerServiceClient<Channel>, epoch: u64, paths:
 }
 
 /// A fullnode and kv-rpc serve the same stored and end-of-epoch fields and the same system state
-/// for an ended epoch. A running epoch is not compared: the fullnode answers for it from its live
-/// state and kv-rpc at its served height, so the two answers align only on a stopped chain once
-/// both servers reach the same height.
+/// for an ended epoch, and the same `NOT_FOUND` for an epoch that has not started. A running epoch
+/// is not compared: the fullnode answers for it from its live state and kv-rpc at its served
+/// height, so the two answers align only on a stopped chain once both servers reach the same
+/// height.
 #[tokio::test]
 async fn test_get_epoch_matches_between_fullnode_and_kv_rpc() {
     let temp_dir = TempDir::new().unwrap();
@@ -108,4 +109,12 @@ async fn test_get_epoch_matches_between_fullnode_and_kv_rpc() {
         get_epoch(&mut kv_rpc, 0, &["system_state"]).await,
         ended_state
     );
+
+    let request = || GetEpochRequest::new(2).with_read_mask(FieldMask::from_paths(["epoch"]));
+    let fullnode_status = fullnode.get_epoch(request()).await.unwrap_err();
+    assert_eq!(fullnode_status.code(), tonic::Code::NotFound);
+    assert_eq!(fullnode_status.message(), "Epoch 2 not found");
+    let kv_rpc_status = kv_rpc.get_epoch(request()).await.unwrap_err();
+    assert_eq!(kv_rpc_status.code(), fullnode_status.code());
+    assert_eq!(kv_rpc_status.message(), fullnode_status.message());
 }
