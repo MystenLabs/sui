@@ -22,7 +22,6 @@ use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_reg
 use rand::Rng;
 use rand::seq::SliceRandom;
 use sui_types::digests::TransactionDigest;
-use tokio::sync::OnceCell;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio_util::sync::CancellationToken;
 
@@ -241,13 +240,9 @@ enum NextOp {
     Retry(RetryType),
 }
 
-async fn print_and_start_benchmark() -> &'static Instant {
-    static ONCE: OnceCell<Instant> = OnceCell::const_new();
-    ONCE.get_or_init(|| async move {
-        info!("Starting benchmark!");
-        Instant::now()
-    })
-    .await
+fn print_and_start_benchmark() -> Instant {
+    info!("Starting benchmark!");
+    Instant::now()
 }
 
 pub struct BenchWorker {
@@ -630,7 +625,7 @@ async fn spawn_workers_scheduler(
         check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
 
         // Set the total benchmark start time
-        let total_benchmark_start_time = print_and_start_benchmark().await;
+        let total_benchmark_start_time = print_and_start_benchmark();
 
         // Initially boostrap the first tasks
         tx_workers_to_run
@@ -686,7 +681,7 @@ async fn spawn_workers_scheduler(
                         stat_delay_micros,
                         total_benchmark_progress_cloned.clone(),
                         total_benchmark_run_interval,
-                        *total_benchmark_start_time,
+                        total_benchmark_start_time,
                         total_benchmark_gas_used.clone()
                     )
                     .await;
@@ -1549,6 +1544,17 @@ fn stress_stats_collector(
 mod tests {
     use super::*;
     use std::fmt;
+
+    #[tokio::test]
+    async fn test_benchmark_start_time_is_per_run() {
+        let first = print_and_start_benchmark();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let second = print_and_start_benchmark();
+        assert!(
+            second > first,
+            "a new run must not reuse an earlier run's clock"
+        );
+    }
 
     /// Minimal mock payload for testing NextOp recycling behavior.
     #[derive(Debug)]
