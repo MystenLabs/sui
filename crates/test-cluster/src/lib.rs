@@ -446,6 +446,49 @@ impl TestCluster {
         })
     }
 
+    /// Wait until the rpc fullnode has executed and indexed the first checkpoint of the epoch it
+    /// is in. A node with rpc indexes serves `GetEpoch` as of its highest indexed checkpoint, and
+    /// a node enters an epoch when it executes the previous epoch's last checkpoint, before the
+    /// epoch has a checkpoint of its own; so after [`Self::trigger_reconfiguration`], call this
+    /// before reading the new epoch through rpc. No-op in epoch 0, for a fullnode without an
+    /// embedded rpc-store, and when the fullnode does not know the previous epoch's last
+    /// checkpoint.
+    pub async fn wait_for_epoch_indexed(&self) {
+        let handle = &self.fullnode_handle.sui_node;
+        let epoch = handle.with(|node| node.state().epoch_store_for_testing().epoch());
+        if epoch == 0 || handle.with(|node| node.embedded_rpc_store().is_none()) {
+            return;
+        }
+        let Some(first_checkpoint) = handle.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_epoch_last_checkpoint_seq_number(epoch - 1)
+                .expect("db error")
+                .map(|last| last + 1)
+        }) else {
+            return;
+        };
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            let executed = handle.with(|node| {
+                node.state()
+                    .get_checkpoint_store()
+                    .get_highest_executed_checkpoint_seq_number()
+                    .expect("db error")
+            });
+            if executed.is_some_and(|checkpoint| checkpoint >= first_checkpoint) {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting to execute checkpoint {first_checkpoint}, the first of epoch \
+                 {epoch} (highest executed = {executed:?})",
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        Self::wait_for_rpc_index_on_handle(handle, first_checkpoint, true).await;
+    }
+
     pub async fn wait_for_epoch_with_timeout(
         &self,
         target_epoch: Option<EpochId>,
