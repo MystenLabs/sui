@@ -19,7 +19,8 @@ use sui_kvstore::ReadRowsRetryConfig;
 use crate::WatermarkSource;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 30_000;
-const DEFAULT_RENDER_AHEAD: usize = 4;
+/// Most render tasks one request runs at once, unless its endpoint configures `render_ahead`.
+pub(crate) const DEFAULT_RENDER_AHEAD: usize = 4;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 4_000;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 4_000;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
@@ -56,6 +57,11 @@ const LIST_EVENTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDef
 const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 10,
     max_limit_items: 50,
+    render_ahead: DEFAULT_RENDER_AHEAD,
+};
+const LIST_OBJECT_VERSIONS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 50,
+    max_limit_items: 1_000,
     render_ahead: DEFAULT_RENDER_AHEAD,
 };
 
@@ -283,6 +289,14 @@ pub struct StagesConfig {
     /// Multi-get reads of the `objects` table. A key the request has already
     /// read, or is reading, is not read again, so reads are sized on the object
     /// keys still to read. Defaults: `max-seeks-per-read` 100, `concurrency` 50.
+    ///
+    /// Before those multi-gets, `BatchGetObjects` scans: one reverse scan of
+    /// `objects` per latest lookup, which shares this stage's `objects` metric
+    /// label, and one `object_versions_by_checkpoint` read per `at_checkpoint`
+    /// lookup. The scans run in groups of `max-seeks-per-read` lookups, so that
+    /// knob also sets the scan group size, and every group starts at once:
+    /// `concurrency` does not bound the scans, only `request-bigtable-concurrency`
+    /// does. `GetObject`'s reads likewise use only `request-bigtable-concurrency`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub objects: Option<StageConfig>,
 
@@ -340,9 +354,8 @@ impl StagesConfig {
 }
 
 /// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
-/// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are
-/// global across all three. Every field is optional and falls back to a built-in
-/// default.
+/// the `list-*` fields; the remaining knobs are global across the filtered
+/// list APIs. Every field is optional and falls back to a built-in default.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct LedgerHistoryConfig {
@@ -357,6 +370,10 @@ pub struct LedgerHistoryConfig {
     /// Per-endpoint tunables for `list_checkpoints`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
+
+    /// Per-endpoint tunables for `list_object_versions`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_object_versions: Option<LedgerHistoryMethodConfig>,
 
     /// Per-request evaluated-bucket budget for filtered tx-bitmap scans, shared
     /// across all DNF dimensions of one query. A query with more unique leaves
@@ -454,6 +471,13 @@ impl LedgerHistoryConfig {
         )
     }
 
+    pub fn list_object_versions(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(
+            self.list_object_versions.as_ref(),
+            LIST_OBJECT_VERSIONS_DEFAULTS,
+        )
+    }
+
     pub fn bitmap_bucket_budget_tx(&self) -> u64 {
         self.bitmap_bucket_budget_tx
             .unwrap_or(DEFAULT_BITMAP_BUCKET_BUDGET_TX)
@@ -497,12 +521,18 @@ impl LedgerHistoryConfig {
             ("list_transactions", self.list_transactions()),
             ("list_events", self.list_events()),
             ("list_checkpoints", self.list_checkpoints()),
+            ("list_object_versions", self.list_object_versions()),
         ] {
             anyhow::ensure!(
                 endpoint.render_ahead > 0,
                 "ledger_history.{name}.render_ahead must be greater than zero",
             );
         }
+        // A limit cannot be clamped into an empty range.
+        anyhow::ensure!(
+            self.list_object_versions().max_limit_items > 0,
+            "ledger_history.list_object_versions.max_limit_items must be greater than zero",
+        );
         anyhow::ensure!(
             self.max_bitmap_filter_literals() > 0,
             "ledger_history.max_bitmap_filter_literals must be greater than zero",
@@ -632,10 +662,38 @@ pub struct KvRpcConfig {
     pub bigtable_http2_connection_window_bytes: Option<u32>,
 
     /// Deprecated and ignored: the `GetServiceInfo` watermark set always
-    /// includes the List API pipelines and cannot be chosen per pipeline.
+    /// includes the List API pipelines, adds the object versions index and the
+    /// object tombstones when `enable-object-at-checkpoint` is on, and cannot be
+    /// chosen per pipeline.
     /// Still parsed so existing config files keep loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
+
+    /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint` or
+    /// `max_version`, every `ListObjectVersions` request (bounded by `at_checkpoint`, or by the
+    /// served height when it is unset), and the running epoch's `GetEpoch.system_state`, and fold
+    /// the alpha `kvstore_object_versions_by_checkpoint` and `kvstore_object_tombstones` pipelines
+    /// into the `GetServiceInfo` checkpoint height. Defaults to `false`, which rejects those
+    /// requests with `Unimplemented` (`NOT_SERVED_HERE`, cause `disabled_by_config`).
+    ///
+    /// Enable this only after both pipelines have been backfilled from genesis. The versions
+    /// index has no restore floor, so an object unchanged since before the pipeline's first
+    /// checkpoint would wrongly read as `NotFound`. A `max_version` read stops at the tombstone
+    /// written where the object was deleted or wrapped; without it, the read resolves to the
+    /// object's last live version before the removal instead of `NotFound`. The tombstones must
+    /// also come from a build that records each removal's transaction (column `t`), since
+    /// `ListObjectVersions` fails with `Internal` on a tombstone without one when the request
+    /// asks for it. The server cannot check this: a backfill run as a separate task writes its
+    /// own watermark row, so a main pipeline's `reader_lo` does not say whether history is
+    /// complete. Setting this flag is the operator's statement that it is.
+    ///
+    /// If this is on but either pipeline is not running, that pipeline has no watermark and the
+    /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and
+    /// every request bounded by the served height fails with `Unavailable`. Requests that do not
+    /// use the served height, such as latest and exact-version `GetObject` reads, are still
+    /// served.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_object_at_checkpoint: Option<bool>,
 
     /// Tunables for the ledger-history list APIs.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -741,6 +799,10 @@ impl KvRpcConfig {
 
     pub fn channel_timeout(&self) -> Option<Duration> {
         self.bigtable_channel_timeout_ms.map(Duration::from_millis)
+    }
+
+    pub fn enable_object_at_checkpoint(&self) -> bool {
+        self.enable_object_at_checkpoint.unwrap_or(false)
     }
 
     /// TLS identity, when both cert and key are set and non-empty.
@@ -1164,12 +1226,14 @@ render-ahead = 3
     fn bitmap_schema_selects_the_bitmap_pipelines_that_bound_the_height() {
         let v1 = KvRpcConfig::default();
         v1.validate().unwrap();
-        let v1_pipelines = service_info_watermark_pipelines(v1.ledger_history().bitmap_schema());
+        let v1_pipelines =
+            service_info_watermark_pipelines(v1.ledger_history().bitmap_schema(), false);
 
         let v2: KvRpcConfig =
             serde_yaml::from_str("ledger-history:\n  bitmap-schema: v2\n").unwrap();
         v2.validate().unwrap();
-        let v2_pipelines = service_info_watermark_pipelines(v2.ledger_history().bitmap_schema());
+        let v2_pipelines =
+            service_info_watermark_pipelines(v2.ledger_history().bitmap_schema(), false);
 
         for (pipeline, in_v1, in_v2) in [
             ("kvstore_tx_seq_digest", true, true),
@@ -1182,6 +1246,37 @@ render-ahead = 3
         ] {
             assert_eq!(v1_pipelines.contains(&pipeline), in_v1, "{pipeline} in v1");
             assert_eq!(v2_pipelines.contains(&pipeline), in_v2, "{pipeline} in v2");
+        }
+    }
+
+    #[test]
+    fn object_at_checkpoint_off_by_default_and_bounds_the_watermark_set() {
+        let object_pipelines = [
+            sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
+            sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
+        ];
+        let cfg = KvRpcConfig::default();
+        assert!(!cfg.enable_object_at_checkpoint());
+        let pipelines = service_info_watermark_pipelines(
+            cfg.ledger_history().bitmap_schema(),
+            cfg.enable_object_at_checkpoint(),
+        );
+        for pipeline in object_pipelines {
+            assert!(!pipelines.contains(&pipeline), "{pipeline}");
+        }
+
+        let yaml = "enable-object-at-checkpoint: true\n";
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(cfg.enable_object_at_checkpoint());
+        let pipelines = service_info_watermark_pipelines(
+            cfg.ledger_history().bitmap_schema(),
+            cfg.enable_object_at_checkpoint(),
+        );
+        for pipeline in object_pipelines {
+            assert!(
+                pipelines.contains(&pipeline),
+                "{pipeline} must bound the height"
+            );
         }
     }
 

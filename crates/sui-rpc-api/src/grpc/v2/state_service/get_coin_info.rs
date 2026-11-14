@@ -4,6 +4,7 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::reader::indexes_disabled;
 use sui_rpc::proto::sui::rpc::v2::CoinTreasury;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoResponse;
@@ -50,7 +51,7 @@ pub fn get_coin_info(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(indexes_disabled)?;
 
     let coin_type = request.coin_type().parse::<StructTag>().map_err(|e| {
         RpcError::new(

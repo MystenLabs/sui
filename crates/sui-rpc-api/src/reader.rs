@@ -7,6 +7,8 @@ use std::sync::Arc;
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_package_resolver::{SyncPackageStore, SyncResolver};
 use sui_sdk_types::{EpochId, ValidatorCommittee};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
@@ -287,8 +289,8 @@ impl StateReader {
         Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
     }
 
-    /// The upper bound for checkpoint-pinned reads (`GetPackage`'s `at_checkpoint`): the highest
-    /// checkpoint every rpc index has committed.
+    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_version_at_checkpoint`]
+    /// and `GetPackage`'s `at_checkpoint`): the highest checkpoint every rpc index has committed.
     ///
     /// Read it before the reads. It only grows, and the indexes only add data above it, so it
     /// stays valid for reads made after it was read. The lower bound is the opposite; see
@@ -352,6 +354,26 @@ impl StateReader {
         Ok(AtCheckpointLowerBound {
             lowest_available: lowest_available_objects.max(lowest_with_index_history),
         })
+    }
+
+    /// The version `object_id` had at the end of `checkpoint`: its newest version written at or
+    /// before `checkpoint`, including a version at which it was deleted or wrapped. An object's
+    /// versions increase in checkpoint order, so every version above this one was written after
+    /// `checkpoint`. `None` if the object did not exist yet. `OutOfRange`
+    /// (`ABOVE_LATEST_AVAILABLE`) if `checkpoint` is above `upper_bound`; check the lower bound
+    /// after the read with [`Self::at_checkpoint_lower_bound`].
+    pub fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: u64,
+        upper_bound: &AtCheckpointUpperBound,
+    ) -> Result<Option<SequenceNumber>, crate::RpcError> {
+        upper_bound.check(checkpoint)?;
+
+        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
+        indexes
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+            .map_err(index_error)
     }
 }
 
@@ -479,6 +501,8 @@ pub enum NotServedHereCause {
     /// The node keeps only the latest version of each object (see
     /// [`RpcStateReader::retains_object_version_history`]).
     NoObjectHistory,
+    /// A kv-rpc `enable-*` flag the request needs is off.
+    DisabledByConfig,
 }
 
 impl NotServedHereCause {
@@ -487,6 +511,7 @@ impl NotServedHereCause {
         match self {
             Self::NoRpcIndexes => "no_rpc_indexes",
             Self::NoObjectHistory => "no_object_history",
+            Self::DisabledByConfig => "disabled_by_config",
         }
     }
 }
@@ -640,11 +665,74 @@ impl<S: SyncPackageStore + Sync> sui_display::v2::Store for DisplayStore<'_, S> 
     }
 }
 
+/// Asserts `error` is `code` with exactly one [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo):
+/// `reason` in the [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
+#[cfg(test)]
+pub(crate) fn assert_refusal(
+    error: crate::RpcError,
+    code: tonic::Code,
+    reason: ErrorReason,
+    cause: &str,
+) {
+    assert_status_refusal(&error.into_status_proto(), code, reason, cause);
+}
+
+/// [`assert_refusal`] for a status already converted to its proto, such as a per-item error of a
+/// batch response.
+#[cfg(test)]
+pub(crate) fn assert_status_refusal(
+    status: &crate::proto::google::rpc::Status,
+    code: tonic::Code,
+    reason: ErrorReason,
+    cause: &str,
+) {
+    use crate::proto::google::rpc::ErrorInfo;
+
+    assert_eq!(status.code, code as i32, "{status:?}");
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    assert_eq!(
+        error_info.metadata,
+        [("cause".to_owned(), cause.to_owned())].into(),
+        "{status:?}"
+    );
+}
+
+/// [`assert_refusal`] for [`not_served_here`] with `cause`.
+#[cfg(test)]
+pub(crate) fn assert_not_served_here(error: crate::RpcError, cause: NotServedHereCause) {
+    assert_status_not_served_here(&error.into_status_proto(), cause);
+}
+
+/// [`assert_not_served_here`] for a status already converted to its proto.
+#[cfg(test)]
+pub(crate) fn assert_status_not_served_here(
+    status: &crate::proto::google::rpc::Status,
+    cause: NotServedHereCause,
+) {
+    assert_status_refusal(
+        status,
+        tonic::Code::Unimplemented,
+        ErrorReason::NotServedHere,
+        cause.as_str(),
+    );
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::cell::Cell;
 
     use super::*;
+    // Tests in other modules import the helpers from here.
+    pub(crate) use super::assert_refusal;
 
     #[test]
     fn dedup_checkpoint_timestamps_fetches_sorted_unique_checkpoints_once() {
@@ -736,35 +824,6 @@ pub(crate) mod tests {
                 .unwrap();
         }
         batch.commit().unwrap();
-    }
-
-    /// Asserts `error` is `code` with exactly one [`ErrorInfo`]: `reason` in the
-    /// [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
-    pub(crate) fn assert_refusal(
-        error: crate::RpcError,
-        code: tonic::Code,
-        reason: ErrorReason,
-        cause: &str,
-    ) {
-        use crate::proto::google::rpc::ErrorInfo;
-
-        let status = error.into_status_proto();
-        assert_eq!(status.code, code as i32, "{status:?}");
-        let error_infos: Vec<ErrorInfo> = status
-            .details
-            .iter()
-            .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
-            .collect();
-        let [error_info] = error_infos.as_slice() else {
-            panic!("expected exactly one ErrorInfo in {status:?}");
-        };
-        assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
-        assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
-        assert_eq!(
-            error_info.metadata,
-            [("cause".to_owned(), cause.to_owned())].into(),
-            "{status:?}"
-        );
     }
 
     /// Checkpoint-pinned reads are refused as not ready while the indexes are empty and while a

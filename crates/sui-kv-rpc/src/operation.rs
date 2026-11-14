@@ -221,9 +221,12 @@ impl KvRpcServer {
         )
     }
 
-    fn query_context(
+    /// The context of an `operation` request served at `served_height`, reading through
+    /// `client`, the request's gated client (see [`Self::limited_client`]).
+    pub(crate) fn query_context(
         &self,
         operation: &'static str,
+        client: BigTableClient,
         served_height: ServedHeight,
     ) -> Result<QueryContext, RpcError> {
         let checkpoint_hi_exclusive = served_height.checkpoint.checked_add(1).ok_or_else(|| {
@@ -233,7 +236,7 @@ impl KvRpcServer {
             )
         })?;
         Ok(QueryContext::new(
-            self.limited_client(operation),
+            client,
             self.package_resolver.clone(),
             self.metrics.clone(),
             operation,
@@ -255,10 +258,28 @@ impl KvRpcServer {
         F: FnOnce(QueryContext, Req) -> Fut + Send,
         Fut: Future<Output = Result<BoxStream<'static, Result<T, RpcError>>, RpcError>> + Send,
     {
-        let deadline = Instant::now() + spec.timeout;
-        let ctx = self.query_context(spec.name, ServedHeight::of(&request)?)?;
+        let ctx = self.query_context(
+            spec.name,
+            self.limited_client(spec.name),
+            ServedHeight::of(&request)?,
+        )?;
+        self.serve_stream(spec, handler(ctx, request.into_inner()))
+            .await
+    }
 
-        let stream = tokio::time::timeout_at(deadline, handler(ctx, request.into_inner()))
+    /// Serve the stream `stream` builds, under `spec`'s deadline, which covers both building it
+    /// and delivering it.
+    pub(crate) async fn serve_stream<T, Fut>(
+        &self,
+        spec: OperationSpec,
+        stream: Fut,
+    ) -> Result<tonic::Response<BoxStream<'static, Result<T, tonic::Status>>>, tonic::Status>
+    where
+        T: Send + 'static,
+        Fut: Future<Output = Result<BoxStream<'static, Result<T, RpcError>>, RpcError>> + Send,
+    {
+        let deadline = Instant::now() + spec.timeout;
+        let stream = tokio::time::timeout_at(deadline, stream)
             .await
             .map_err(|_| {
                 tracing::warn!(operation = spec.name, "construction phase timed out");

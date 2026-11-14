@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::reader::indexes_disabled;
 use bytes::Bytes;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::ListBalancesRequest;
@@ -21,7 +22,7 @@ pub fn list_balances(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(indexes_disabled)?;
 
     let owner: Address = request
         .owner

@@ -1992,6 +1992,19 @@ impl ObjectCacheRead for WritebackCache {
         Ok(obj.compute_object_reference())
     }
 
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: std::ops::RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> SuiResult<Box<dyn Iterator<Item = SuiResult<ObjectOrTombstone>> + '_>> {
+        let versions = self
+            .store
+            .perpetual_tables
+            .object_versions_iter(object_id, versions, descending)?;
+        Ok(Box::new(versions))
+    }
+
     fn get_highest_pruned_checkpoint(&self) -> Option<CheckpointSequenceNumber> {
         self.store
             .perpetual_tables

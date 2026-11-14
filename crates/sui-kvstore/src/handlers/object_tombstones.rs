@@ -74,6 +74,7 @@ mod tests {
     use crate::bigtable::mock_server::MockBigtableServer;
     use crate::bigtable::proto::bigtable::v2::mutation;
     use crate::tables::objects::ObjectRow;
+    use crate::tables::objects::ObjectTombstone;
 
     /// Every tombstone records the digest of the transaction that removed the object, for each
     /// kind of removal, from both V1 and V2 effects.
@@ -187,7 +188,10 @@ mod tests {
             (
                 Bytes::from(tables::objects::encode_key(&ObjectKey(id, removal_version))),
                 (
-                    ObjectRow::Tombstone(status),
+                    ObjectRow::Tombstone(ObjectTombstone {
+                        status,
+                        transaction: Some(transaction),
+                    }),
                     Some(Bytes::copy_from_slice(transaction.inner())),
                 ),
             )

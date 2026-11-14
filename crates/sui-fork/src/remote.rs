@@ -147,13 +147,24 @@ impl RemoteSource {
         )
     }
 
-    /// Fetch the highest object version at or below `version_bound` (bounded child reads).
+    /// Fetch the highest object version at or below `version_bound`, only if it existed by the
+    /// fork checkpoint and is live.
+    ///
+    /// `None` also when that version was created after the fork checkpoint, without falling back
+    /// to an older one, so a caller must first rule out that the object's version at the fork
+    /// checkpoint is itself within the bound.
     pub(crate) fn object_at_or_before(
         &self,
         object_id: &ObjectID,
         version_bound: u64,
     ) -> anyhow::Result<Option<Object>> {
-        self.object_query(object_id, VersionQuery::RootVersion(version_bound))
+        self.object_query(
+            object_id,
+            VersionQuery::RootVersionAtCheckpoint {
+                root_version: version_bound,
+                checkpoint: self.forked_at_checkpoint,
+            },
+        )
     }
 
     /// Fetch an object by ID and version query, only if it existed by the fork checkpoint.

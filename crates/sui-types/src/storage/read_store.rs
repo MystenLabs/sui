@@ -20,7 +20,7 @@ use crate::messages_checkpoint::{
     VersionedFullCheckpointContents,
 };
 use crate::object::Object;
-use crate::storage::{BackingPackageStore, ObjectKey};
+use crate::storage::{BackingPackageStore, ObjectKey, ObjectOrTombstone};
 use crate::transaction::{TransactionData, VerifiedTransaction};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
@@ -29,6 +29,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap};
 use std::ops::Bound;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use typed_store_error::TypedStoreError;
 
@@ -788,6 +789,39 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
+    /// The object's newest version at or below `version`, like the execution cache's
+    /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below
+    /// `version`, or if it was deleted or wrapped at that newest version.
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<Object>>;
+
+    /// The object's latest state: its newest version, or the tombstone (see
+    /// [`ObjectOrTombstone`]) if it was deleted or wrapped there. Reads use it only to tell a
+    /// removed object apart from one that never existed, after finding no live object. `None`
+    /// if the object has no version, and always `None` by default, for stores that cannot tell
+    /// a removal from absence.
+    fn get_latest_object_or_tombstone(
+        &self,
+        _object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(None)
+    }
+
+    /// [`Self::get_object_lt_or_eq_version`], but the newest version at or below `version` is
+    /// returned as a tombstone if the object was deleted or wrapped there, rather than as
+    /// `None`. Like [`Self::get_latest_object_or_tombstone`], used only to describe removals, and
+    /// always `None` by default.
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        _object_id: &ObjectID,
+        _version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(None)
+    }
+
     /// The sequence number of the highest executed checkpoint, independent of
     /// how far any embedded index has caught up.
     ///
@@ -812,6 +846,7 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub type LedgerTxSeqDigestIterator<'a> =
     Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
+pub type ObjectVersionsIterator<'a> = Box<dyn Iterator<Item = Result<ObjectOrTombstone>> + 'a>;
 /// Iterator over ledger bitmap buckets that can skip directly to a bucket.
 pub trait LedgerBitmapBucketIter:
     Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>>
@@ -935,6 +970,26 @@ pub trait RpcIndexes: Send + Sync {
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Option<SequenceNumber>>;
 
+    /// Iterate the versions of `object_id` within `versions`, oldest first, or newest first if
+    /// `descending`, each a live object or the tombstone marking a version at which the object
+    /// was deleted or wrapped (an object reference whose digest is
+    /// [`crate::digests::ObjectDigest::OBJECT_DIGEST_DELETED`] or
+    /// [`crate::digests::ObjectDigest::OBJECT_DIGEST_WRAPPED`]).
+    ///
+    /// Only versions at or below the object's version at the end of a checkpoint the indexes
+    /// have committed are complete. Below the object's version at the end of the lowest
+    /// checkpoint whose object state is intact (see
+    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`] and
+    /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]), versions are pruned or
+    /// about to be, and what remains there is no history: callers that read there must tell
+    /// those versions apart themselves.
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> Result<ObjectVersionsIterator<'_>>;
+
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
 
@@ -967,6 +1022,10 @@ pub trait RpcIndexes: Send + Sync {
     }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
+
+    /// The sequence number of transaction `digest`, or `None` if the indexes have not committed
+    /// it or it is pruned.
+    fn ledger_tx_seq_by_digest(&self, digest: &TransactionDigest) -> Result<Option<u64>>;
 
     fn ledger_tx_seq_digest_multi_get(
         &self,

@@ -22,8 +22,12 @@ pub const EVENT: &str = "event_type";
 /// Default read mask for an epoch (`get_epoch`; there is no `list_epochs`).
 pub const EPOCH: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
-/// Default read mask for an object (`get_object`).
+/// Default read mask for an object (`get_object`, `list_object_versions`).
 pub const OBJECT: &str = "object_id,version,digest";
+
+/// Default `removal_read_mask` for each removal in an object's version listing
+/// (`list_object_versions`).
+pub const OBJECT_REMOVAL: &str = "version,kind";
 
 /// Default read mask for an owned-object listing (`list_owned_objects`).
 pub const OWNED_OBJECT: &str = "object_id,version,object_type";
@@ -45,11 +49,21 @@ pub fn validate_read_mask<M: MessageFields>(
     read_mask: Option<FieldMask>,
     default: &str,
 ) -> Result<FieldMaskTree, RpcError> {
-    let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(default));
-    read_mask.validate::<M>().map_err(|path| {
-        FieldViolation::new("read_mask")
-            .with_description(format!("invalid read_mask path: {path}"))
+    validate_field_mask::<M>("read_mask", read_mask, default)
+}
+
+/// [`validate_read_mask`] for a mask in request field `field`, which an invalid
+/// path's `FieldViolation` names.
+pub fn validate_field_mask<M: MessageFields>(
+    field: &str,
+    mask: Option<FieldMask>,
+    default: &str,
+) -> Result<FieldMaskTree, RpcError> {
+    let mask = mask.unwrap_or_else(|| FieldMask::from_str(default));
+    mask.validate::<M>().map_err(|path| {
+        FieldViolation::new(field)
+            .with_description(format!("invalid {field} path: {path}"))
             .with_reason(ErrorReason::FieldInvalid)
     })?;
-    Ok(FieldMaskTree::from(read_mask))
+    Ok(FieldMaskTree::from(mask))
 }

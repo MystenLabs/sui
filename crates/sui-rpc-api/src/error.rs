@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_types::digests::TransactionDigest;
 use sui_types::error::ErrorCategory;
 use tonic::Code;
 
+use crate::ledger_history::object_versions::ObjectRemovalKind;
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
 use crate::proto::sui::rpc::v2::ExecutionError;
+use crate::proto::sui::rpc::v2::object_removal;
 pub use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
@@ -354,6 +357,21 @@ impl ErrorDetails {
 pub struct ObjectNotFoundError {
     object_id: sui_sdk_types::Address,
     version: Option<sui_sdk_types::Version>,
+    max_version: Option<sui_sdk_types::Version>,
+    checkpoint: Option<sui_sdk_types::CheckpointSequenceNumber>,
+    removal: Option<ObjectRemoval>,
+}
+
+/// The deletion or wrap a read resolved to: the object is not found because the version the read
+/// selected removed it from the live set. Servers describe a removal only when they find it (see
+/// [`ObjectNotFoundError::removed`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectRemoval {
+    /// The version at which the object was deleted or wrapped.
+    pub version: sui_sdk_types::Version,
+    pub kind: ObjectRemovalKind,
+    /// The transaction that removed the object, when the server has it.
+    pub transaction: Option<TransactionDigest>,
 }
 
 impl ObjectNotFoundError {
@@ -361,6 +379,9 @@ impl ObjectNotFoundError {
         Self {
             object_id,
             version: None,
+            max_version: None,
+            checkpoint: None,
+            removal: None,
         }
     }
 
@@ -369,8 +390,45 @@ impl ObjectNotFoundError {
         version: sui_sdk_types::Version,
     ) -> Self {
         Self {
-            object_id,
             version: Some(version),
+            ..Self::new(object_id)
+        }
+    }
+
+    /// The object had no version at or below `max_version`, or was deleted or wrapped at the
+    /// newest one.
+    pub fn new_with_max_version(
+        object_id: sui_sdk_types::Address,
+        max_version: sui_sdk_types::Version,
+    ) -> Self {
+        Self {
+            max_version: Some(max_version),
+            ..Self::new(object_id)
+        }
+    }
+
+    /// Bound the read by `checkpoint`: the object had no live state at the end of `checkpoint`,
+    /// or the exact version was not found or was written after `checkpoint`, or the newest
+    /// version at or below `max_version` was written after `checkpoint`, deleted or wrapped the
+    /// object, or does not exist.
+    pub fn at_checkpoint(self, checkpoint: sui_sdk_types::CheckpointSequenceNumber) -> Self {
+        Self {
+            checkpoint: Some(checkpoint),
+            ..self
+        }
+    }
+
+    /// The read resolved to `removal`. The error keeps code `NotFound` and carries an
+    /// `OBJECT_REMOVED` [`ErrorInfo`] describing the removal.
+    ///
+    /// The detail is best effort: a server attaches it only when it finds the removal, so a
+    /// `NotFound` without it does not prove that the object never existed. A fullnode that has
+    /// pruned the removal's tombstone or fails to read it, or a store that keeps no tombstones,
+    /// answers a read that resolves to a removal with a plain `NotFound`.
+    pub fn removed(self, removal: ObjectRemoval) -> Self {
+        Self {
+            removal: Some(removal),
+            ..self
         }
     }
 }
@@ -383,6 +441,14 @@ impl std::fmt::Display for ObjectNotFoundError {
             write!(f, " with version {version}")?;
         }
 
+        if let Some(max_version) = self.max_version {
+            write!(f, " with version at most {max_version}")?;
+        }
+
+        if let Some(checkpoint) = self.checkpoint {
+            write!(f, " at checkpoint {checkpoint}")?;
+        }
+
         write!(f, " not found")
     }
 }
@@ -391,7 +457,31 @@ impl std::error::Error for ObjectNotFoundError {}
 
 impl From<ObjectNotFoundError> for crate::RpcError {
     fn from(value: ObjectNotFoundError) -> Self {
-        Self::new(tonic::Code::NotFound, value.to_string())
+        let message = value.to_string();
+        let Some(removal) = value.removal else {
+            return Self::new(tonic::Code::NotFound, message);
+        };
+        let kind = object_removal::Kind::from(removal.kind).as_str_name();
+        let metadata = [
+            ("removedVersion", Some(removal.version.to_string())),
+            ("removalKind", Some(kind.to_owned())),
+            (
+                "transaction",
+                removal.transaction.map(|digest| digest.to_string()),
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(key, value)| Some((key.to_owned(), value?)))
+        .collect();
+        let error_info = ErrorInfo::default()
+            .with_reason(ErrorReason::ObjectRemoved.as_str_name())
+            .with_domain(ErrorReason::DOMAIN)
+            .with_metadata(metadata);
+        Self {
+            code: Code::NotFound,
+            message: Some(message),
+            details: Some(Box::new(ErrorDetails::new().with_error_info(error_info))),
+        }
     }
 }
 

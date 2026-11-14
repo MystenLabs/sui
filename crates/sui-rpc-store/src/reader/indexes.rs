@@ -17,6 +17,7 @@ use sui_consistent_store::reader::Reader;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
+use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
@@ -30,6 +31,7 @@ use sui_types::storage::LedgerBitmapBucketIter;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
+use sui_types::storage::ObjectVersionsIterator;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackagePublishKey;
 use sui_types::storage::PackageVersionsIterator;
@@ -442,6 +444,21 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             .map_err(sui_types::storage::error::Error::custom)
     }
 
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: std::ops::RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> StorageResult<ObjectVersionsIterator<'_>> {
+        let versions = self
+            .schema()
+            .object_versions_iter(object_id, versions, descending)
+            .map_err(sui_types::storage::error::Error::custom)?;
+        Ok(Box::new(versions.map(|version| {
+            version.map_err(sui_types::storage::error::Error::custom)
+        })))
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
@@ -482,6 +499,12 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             tx_offset: m.ckpt_position,
             checkpoint_number: m.checkpoint_seq,
         }))
+    }
+
+    fn ledger_tx_seq_by_digest(&self, digest: &TransactionDigest) -> StorageResult<Option<u64>> {
+        self.schema()
+            .get_tx_seq_by_digest(digest)
+            .map_err(sui_types::storage::error::Error::custom)
     }
 
     fn ledger_tx_seq_digest_iter(

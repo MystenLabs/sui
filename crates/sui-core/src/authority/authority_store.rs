@@ -6,7 +6,7 @@ use std::{iter, mem, thread};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING, PruningMode,
 };
 use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper, get_store_object};
 use crate::authority::epoch_marker_key::EpochMarkerKey;
@@ -1298,6 +1298,44 @@ impl AuthorityStore {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.perpetual_tables);
+    }
+
+    /// Prune object versions through `through_checkpoint` with zero retention, as the node's
+    /// pruner does, pruning `rpc_store`'s history cohort to the same floor in the same step, then
+    /// compact the object table, so that no range-deleted version is still readable. Everything
+    /// is pruned in one batch, so the floor moves once. Tombstones are kept when
+    /// `keep_tombstones`, as with `killswitch_tombstone_pruning`. The rpc indexes must have
+    /// committed `through_checkpoint`: unlike the node's pruner, this does not wait for them.
+    pub async fn prune_objects_and_rpc_store_for_testing(
+        &self,
+        checkpoint_store: &Arc<CheckpointStore>,
+        rpc_store: &sui_rpc_store::Store,
+        through_checkpoint: CheckpointSequenceNumber,
+        keep_tombstones: bool,
+    ) -> anyhow::Result<()> {
+        let pruning_config = AuthorityStorePruningConfig {
+            max_checkpoints_in_batch: usize::MAX,
+            max_transactions_in_batch: usize::MAX,
+            killswitch_tombstone_pruning: keep_tombstones,
+            ..Default::default()
+        };
+        AuthorityStorePruner::prune_for_eligible_epochs(
+            &self.perpetual_tables,
+            checkpoint_store,
+            Some(rpc_store),
+            &mut sui_rpc_store::RetractionCursors::default(),
+            PruningMode::Objects,
+            0,
+            self.perpetual_tables
+                .get_highest_pruned_checkpoint()?
+                .unwrap_or_default(),
+            through_checkpoint + 1,
+            pruning_config,
+            AuthorityStorePruningMetrics::new_for_test(),
+        )
+        .await?;
+        AuthorityStorePruner::compact(&self.perpetual_tables)?;
+        Ok(())
     }
 
     pub fn remove_executed_effects_for_testing(

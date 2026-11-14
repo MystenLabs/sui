@@ -5,6 +5,7 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use crate::grpc::v2::render::RenderContext;
+use crate::reader::indexes_disabled;
 use bytes::Bytes;
 use prost::Message;
 use prost_types::FieldMask;
@@ -32,7 +33,7 @@ pub fn list_owned_objects(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(indexes_disabled)?;
 
     let owner: Address = request
         .owner

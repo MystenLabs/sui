@@ -1145,11 +1145,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_objects() {
-        // Exercises the multiGetObjects batch path, which serves the
-        // "standard" key kinds. `VersionAtCheckpoint` keys are routed to a
-        // separate checkpoint-scoped query and are covered elsewhere.
+        // Exercises the multiGetObjects batch path, which serves `AtCheckpoint`
+        // keys. Keys pinned at a checkpoint with a version or root version are
+        // routed to a separate checkpoint-scoped query and are covered elsewhere.
         let server = MockServer::start().await;
-        let root_version_object = Object::immutable_with_id_for_testing(ObjectID::random());
+        let found_object = Object::immutable_with_id_for_testing(ObjectID::random());
         let missing_object_id = ObjectID::random();
 
         Mock::given(method("POST"))
@@ -1159,8 +1159,8 @@ mod tests {
                 "variables": {
                     "keys": [
                         {
-                            "address": root_version_object.id().to_string(),
-                            "rootVersion": 17,
+                            "address": found_object.id().to_string(),
+                            "atCheckpoint": 17,
                         },
                         {
                             "address": missing_object_id.to_string(),
@@ -1171,7 +1171,7 @@ mod tests {
             })))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_json(object_response_body(&[Some(&root_version_object), None])),
+                    .set_body_json(object_response_body(&[Some(&found_object), None])),
             )
             .mount(&server)
             .await;
@@ -1180,8 +1180,8 @@ mod tests {
         let objects = store
             .get_objects(&[
                 ObjectKey {
-                    object_id: root_version_object.id(),
-                    version_query: VersionQuery::RootVersion(17),
+                    object_id: found_object.id(),
+                    version_query: VersionQuery::AtCheckpoint(17),
                 },
                 ObjectKey {
                     object_id: missing_object_id,
@@ -1193,10 +1193,7 @@ mod tests {
         assert_eq!(
             objects,
             vec![
-                Some((
-                    root_version_object.clone(),
-                    root_version_object.version().value(),
-                )),
+                Some((found_object.clone(), found_object.version().value())),
                 None,
             ]
         );
@@ -1273,6 +1270,66 @@ mod tests {
         assert!(query.contains("checkpoint(sequenceNumber: $sequenceNumber)"));
         assert!(query.contains("multiGetObjects(keys: $keys)"));
         assert!(!query.contains("atCheckpoint"));
+    }
+
+    /// A root-version bound pinned at a checkpoint goes through the checkpoint-scoped query, whose
+    /// scope drops a version created after the checkpoint instead of returning it.
+    #[tokio::test]
+    async fn test_get_object_root_version_at_checkpoint() {
+        let server = MockServer::start().await;
+        let object = Object::immutable_with_id_for_testing(ObjectID::random());
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": 31,
+                    "keys": [{
+                        "address": object.id().to_string(),
+                        "rootVersion": 40,
+                    }],
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(versioned_object_at_checkpoint_response_body(Some(&object))),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let objects = store
+            .get_objects(&[ObjectKey {
+                object_id: object.id(),
+                version_query: VersionQuery::RootVersionAtCheckpoint {
+                    root_version: 40,
+                    checkpoint: 31,
+                },
+            }])
+            .expect("root version query should succeed");
+
+        assert_eq!(
+            objects,
+            vec![Some((object.clone(), object.version().value()))]
+        );
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        let request_body: serde_json::Value = requests[0]
+            .body_json()
+            .expect("request body should be json");
+        let query = request_body
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .expect("query string should be present");
+        assert!(query.contains("checkpoint(sequenceNumber: $sequenceNumber)"));
+        assert!(
+            request_body["variables"]["keys"][0]["atCheckpoint"].is_null(),
+            "the pin lives on the query scope, not on the key",
+        );
     }
 
     /// Seeding hydrates every manifest entry through this path, so a regression to one request per
