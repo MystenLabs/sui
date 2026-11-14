@@ -29,6 +29,8 @@ use sui_rpc::proto::sui::rpc::v2::EventStreamHeadFilter;
 use sui_rpc::proto::sui::rpc::v2::EventTerm;
 use sui_rpc::proto::sui::rpc::v2::EventTypeFilter;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
+use sui_rpc::proto::sui::rpc::v2::GetDatatypeRequest;
+use sui_rpc::proto::sui::rpc::v2::GetFunctionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
@@ -6903,5 +6905,74 @@ async fn test_list_all_package_versions() {
     .await;
     for version in &lineage.versions {
         assert_eq!(version.original_id, Some(v1.to_string()));
+    }
+}
+
+/// `GetDatatype` and `GetFunction` answer `NotFound` for a module, datatype or function the
+/// package does not have.
+#[tokio::test]
+async fn test_get_datatype_and_function_unknown_member_is_not_found() {
+    let mut cluster = list_api_cluster().await;
+    cluster.create_checkpoint().await;
+
+    let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let framework = SUI_FRAMEWORK_PACKAGE_ID.to_canonical_string(true);
+    let datatype_request = |module_name: &str, name: &str| {
+        let mut request = GetDatatypeRequest::default();
+        request.package_id = Some(framework.clone());
+        request.module_name = Some(module_name.to_owned());
+        request.name = Some(name.to_owned());
+        request
+    };
+    let function_request = |module_name: &str, name: &str| {
+        let mut request = GetFunctionRequest::default();
+        request.package_id = Some(framework.clone());
+        request.module_name = Some(module_name.to_owned());
+        request.name = Some(name.to_owned());
+        request
+    };
+
+    // The package and its members resolve, so the errors below are about the named member.
+    client
+        .get_datatype(datatype_request("coin", "Coin"))
+        .await
+        .unwrap();
+    client
+        .get_function(function_request("coin", "value"))
+        .await
+        .unwrap();
+
+    let datatype_errors = [
+        (
+            datatype_request("no_such_module", "Coin"),
+            "Module not found",
+        ),
+        (
+            datatype_request("coin", "NoSuchType"),
+            "Datatype 'NoSuchType' not found",
+        ),
+    ];
+    for (request, message) in datatype_errors {
+        let status = client.get_datatype(request).await.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::NotFound, "{status:?}");
+        assert!(status.message().contains(message), "{status:?}");
+    }
+
+    let function_errors = [
+        (
+            function_request("no_such_module", "value"),
+            "Module not found",
+        ),
+        (
+            function_request("coin", "no_such_function"),
+            "Function not found: no_such_function",
+        ),
+    ];
+    for (request, message) in function_errors {
+        let status = client.get_function(request).await.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::NotFound, "{status:?}");
+        assert!(status.message().contains(message), "{status:?}");
     }
 }

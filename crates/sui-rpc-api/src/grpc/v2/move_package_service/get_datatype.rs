@@ -59,7 +59,7 @@ pub fn get_datatype_response(
         .map_err(convert_error)?
         .ok_or_else(|| {
             crate::RpcError::new(
-                tonic::Code::Internal,
+                tonic::Code::NotFound,
                 format!("Datatype '{}' not found", datatype_name),
             )
         })?;
