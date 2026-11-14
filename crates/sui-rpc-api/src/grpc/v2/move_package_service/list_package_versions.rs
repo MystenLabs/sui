@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Range;
+
 use super::{load_package_by_id, parse_package_id};
 use crate::ledger_history::query_options::below_oldest_retained_version;
 use crate::reader::{AtCheckpointLowerBound, indexes_disabled};
@@ -8,28 +10,227 @@ use crate::{ErrorReason, Result, RpcError, RpcService};
 use bytes::Bytes;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{
-    ListPackageVersionsRequest, ListPackageVersionsResponse, PackageVersion,
+    ListPackageVersionsRequest, ListPackageVersionsResponse, Ordering, PackageVersion,
 };
 use sui_types::base_types::ObjectID;
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::storage::IndexedPackageVersion;
-use tap::Pipe;
 
-/// Cursor for `ListPackageVersions` pagination. Public so other implementors of
-/// `MovePackageService` mint wire-compatible page tokens.
+/// Versions per page when the request sets neither `page_size` nor `options.limit`.
+const DEFAULT_PAGE_SIZE: u32 = 1000;
+/// Larger `page_size` and `options.limit` values are coerced down to this.
+const MAX_PAGE_SIZE: u32 = 10000;
+
+/// Page token for `ListPackageVersions`: the first version of the next page.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct PageToken {
-    pub original_package_id: ObjectID,
-    pub version: u64,
+struct PageToken {
+    original_package_id: ObjectID,
+    version: u64,
 }
 
-impl PageToken {
-    pub fn decode(page_token: &[u8]) -> Result<Self> {
-        decode_page_token(page_token)
+/// The position of one listed version, set as `PackageVersion.cursor` and accepted back as
+/// `options.after` and `options.before`. Public so other implementors of `MovePackageService`
+/// mint and accept the same cursors. BCS-encoded as an enum so that a listing in another order
+/// can add a variant without changing the encoding of existing cursors.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum PackageVersionCursor {
+    /// A version in the upgrade lineage of the package originally published at
+    /// `original_package_id`, listed in ascending version order.
+    Lineage {
+        original_package_id: ObjectID,
+        version: u64,
+    },
+}
+
+impl PackageVersionCursor {
+    pub fn encode(&self) -> Bytes {
+        bcs::to_bytes(self).unwrap().into()
+    }
+}
+
+/// The versions a `ListPackageVersions` request lists and how its response pages: the request's
+/// version bounds, page token, and cursors intersected into one version range, validated against
+/// the lineage being listed. Public so other implementors of `MovePackageService` parse requests
+/// and page responses the same way.
+#[derive(Clone, Debug)]
+pub struct PackageVersionsQuery {
+    original_package_id: ObjectID,
+    /// The versions to list. An end of `u64::MAX` leaves the range unbounded above, since no
+    /// version reaches it.
+    pub versions: Range<u64>,
+    /// Whether to list `versions` from highest to lowest.
+    pub descending: bool,
+    /// The number of versions in a full page.
+    page_size: usize,
+    /// Whether the request sets `options`, whose pages carry no `next_page_token`.
+    cursor_mode: bool,
+    /// Whether the request continues from a page token or cursor.
+    resumed: bool,
+    /// The versions the request's page token, or its `after` and `before` cursors, name.
+    cursor_versions: [Option<u64>; 2],
+}
+
+impl PackageVersionsQuery {
+    /// Parse the paging of `request`, which lists the upgrade lineage of the package originally
+    /// published at `original_package_id`.
+    pub fn new(
+        request: &ListPackageVersionsRequest,
+        original_package_id: ObjectID,
+    ) -> Result<Self> {
+        let mut versions =
+            request.start_version.unwrap_or(0)..request.end_version.unwrap_or(u64::MAX);
+
+        let Some(options) = &request.options else {
+            let page_token = request
+                .page_token
+                .as_deref()
+                .map(decode_page_token)
+                .transpose()?;
+            if let Some(token) = &page_token {
+                if token.original_package_id != original_package_id {
+                    return Err(FieldViolation::new("page_token")
+                        .with_description("page token package ID does not match request package ID")
+                        .with_reason(ErrorReason::FieldInvalid)
+                        .into());
+                }
+                versions.start = versions.start.max(token.version);
+            }
+
+            return Ok(Self {
+                original_package_id,
+                versions,
+                descending: false,
+                page_size: page_size(request.page_size),
+                cursor_mode: false,
+                resumed: page_token.is_some(),
+                cursor_versions: [page_token.map(|token| token.version), None],
+            });
+        };
+
+        for (field, set) in [
+            ("page_size", request.page_size.is_some()),
+            ("page_token", request.page_token.is_some()),
+        ] {
+            if set {
+                return Err(FieldViolation::new(field)
+                    .with_description(format!("{field} and options are mutually exclusive"))
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into());
+            }
+        }
+
+        let descending = match options.ordering.map(Ordering::try_from) {
+            None | Some(Ok(Ordering::Ascending)) => false,
+            Some(Ok(Ordering::Descending)) => true,
+            Some(_) => {
+                return Err(FieldViolation::new("options.ordering")
+                    .with_description("invalid ordering")
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into());
+            }
+        };
+
+        let after = options
+            .after
+            .as_deref()
+            .map(|cursor| cursor_version("options.after", cursor, original_package_id))
+            .transpose()?;
+        let before = options
+            .before
+            .as_deref()
+            .map(|cursor| cursor_version("options.before", cursor, original_package_id))
+            .transpose()?;
+        if let Some(after) = after {
+            versions.start = versions.start.max(after.saturating_add(1));
+        }
+        if let Some(before) = before {
+            versions.end = versions.end.min(before);
+        }
+
+        Ok(Self {
+            original_package_id,
+            versions,
+            descending,
+            page_size: page_size(options.limit),
+            cursor_mode: true,
+            resumed: after.is_some() || before.is_some(),
+            cursor_versions: [after, before],
+        })
     }
 
-    pub fn encode(self) -> Bytes {
-        encode_page_token(self)
+    /// The most versions to read for one response: a full page, plus in page-token mode the
+    /// first version of the next page, which the next page token points at.
+    pub fn read_limit(&self) -> usize {
+        if self.cursor_mode {
+            self.page_size
+        } else {
+            self.page_size + 1
+        }
+    }
+
+    /// Whether the request starts a listing, rather than continuing one from a page token or
+    /// cursor.
+    pub fn is_first_page(&self) -> bool {
+        !self.resumed
+    }
+
+    /// The versions named by the request's page token or cursors, each of which the server must
+    /// serve to answer the listing, in either order. A page token names the first version of the
+    /// next page, a version the server that minted it served. A lineage's versions are published in
+    /// version order, so a server serving such a version serves every version from it down to
+    /// where its history begins. A page token or cursor naming a version the server does not
+    /// serve comes from another view of the lineage, such as another replica's, and listing from
+    /// this server's view would skip versions without saying so: a descending page would start
+    /// below versions the server lacks, and an ascending page would end at the highest version
+    /// the server serves, or find nothing from the page token's version or above an `after`
+    /// cursor, which a client cannot tell from the end of the lineage.
+    /// The server rejects such a page token or cursor. When it serves no version above the named
+    /// one, that version lies past its tip, and it answers with
+    /// [`crate::AtCheckpointUpperBound::unindexed_cursor_error`]. When it serves a version above
+    /// the named one, that version lies below where its history begins, such as an old version
+    /// of a system package on a node restored from a snapshot, and it answers as for
+    /// pruned data (`BELOW_EARLIEST_AVAILABLE`). A backend holding every version from genesis
+    /// only meets the first case. Versions below `OBJECT_START_VERSION` are left out: no lineage
+    /// has one, so a page token or cursor naming one skips nothing.
+    pub fn cursor_versions(&self) -> impl Iterator<Item = u64> {
+        self.cursor_versions
+            .into_iter()
+            .flatten()
+            .filter(|version| *version >= OBJECT_START_VERSION.value())
+    }
+
+    /// One listed version, carrying its cursor.
+    pub fn listed_version(
+        &self,
+        storage_id: ObjectID,
+        version: u64,
+        checkpoint: Option<u64>,
+    ) -> PackageVersion {
+        let cursor = PackageVersionCursor::Lineage {
+            original_package_id: self.original_package_id,
+            version,
+        };
+        let mut listed =
+            PackageVersion::new(&storage_id.into(), version).with_cursor(cursor.encode());
+        listed.checkpoint = checkpoint;
+        listed
+    }
+
+    /// The response listing `versions`: at most [`Self::read_limit`] versions, read in this
+    /// query's order.
+    pub fn response(&self, mut versions: Vec<PackageVersion>) -> ListPackageVersionsResponse {
+        let next_page_token = if !self.cursor_mode && versions.len() > self.page_size {
+            versions.pop().and_then(|next| next.version).map(|version| {
+                encode_page_token(PageToken {
+                    original_package_id: self.original_package_id,
+                    version,
+                })
+            })
+        } else {
+            None
+        };
+
+        ListPackageVersionsResponse::new(versions, next_page_token)
     }
 }
 
@@ -39,9 +240,14 @@ impl PageToken {
 /// Versions with no recorded publish checkpoint are listed with `checkpoint` unset; see the
 /// `at_checkpoint` bounds below for why a bound may include them.
 ///
-/// With `at_checkpoint`, a listing that starts below the lowest version of the lineage this node
-/// stores, such as a system package's versions replaced before the pruning floor, is refused as
-/// `OutOfRange` (`BELOW_EARLIEST_AVAILABLE`) with that version as `lowestAvailableVersion`.
+/// In cursor mode or with `at_checkpoint`, a page that reaches below the lowest version of the
+/// lineage this node stores, such as a system package's versions replaced before the pruning
+/// floor, is refused as `OutOfRange` (`BELOW_EARLIEST_AVAILABLE`) with that version as
+/// `lowestAvailableVersion`. A page token or cursor naming a version this node has no row for,
+/// below versions it serves, as on a node restored from a snapshot or a fork, is refused the same
+/// way, except version 0, which no lineage has. A pruned node keeps the rows of the versions it
+/// pruned, so it accepts a page token or cursor naming one, and serves the page it starts when
+/// that page stays at or above the lowest stored version.
 #[tracing::instrument(skip(service))]
 pub fn list_package_versions(
     service: &RpcService,
@@ -93,25 +299,7 @@ pub fn list_package_versions(
     }
 
     let original_package_id = load_package_by_id(service, package_id)?.original_package_id();
-
-    let page_size = request
-        .page_size
-        .map(|s| (s as usize).clamp(1, 10000))
-        .unwrap_or(1000);
-
-    let page_token = request
-        .page_token
-        .map(|token| decode_page_token(&token))
-        .transpose()?;
-
-    if let Some(token) = &page_token
-        && token.original_package_id != original_package_id
-    {
-        return Err(FieldViolation::new("page_token")
-            .with_description("page token package ID does not match request package ID")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
-    }
+    let query = PackageVersionsQuery::new(&request, original_package_id)?;
 
     let indexes = service
         .reader
@@ -119,85 +307,156 @@ pub fn list_package_versions(
         .indexes()
         .ok_or_else(indexes_disabled)?;
 
-    // A listing bounded by `at_checkpoint` that starts below the lowest version of the lineage this
-    // node stores is refused, rather than answered with a history that is cut short or lists
-    // versions this node cannot load: `package_versions` rows outlive pruning (see
-    // `range_start_against_stored_versions`). A listing without `at_checkpoint` lists every row.
-    if request.at_checkpoint.is_some() {
-        let range_start = page_token
-            .as_ref()
-            .map_or(OBJECT_START_VERSION.value(), |token| token.version)
-            .max(OBJECT_START_VERSION.value());
-        let rows = indexes
-            .package_versions_iter(original_package_id, Some(range_start))
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-            .map(|row| row.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string())));
-        let is_stored = |row: &IndexedPackageVersion| {
-            service
-                .reader
-                .inner()
-                .get_object_by_key(&row.storage_id, row.version.into())
-                .is_some()
-        };
-        if let RangeStart::BelowLowestStored { lowest_stored } =
-            range_start_against_stored_versions(range_start, rows, is_stored)?
-        {
-            // As `GetPackage` does for a version this node no longer stores.
-            service.reader.require_object_version_history()?;
-            return Err(refuse_range_below_lowest_stored(
-                service.reader.at_checkpoint_lower_bound()?,
-                original_package_id,
-                range_start,
-                lowest_stored,
-            ));
-        }
-    }
-
     // Without `at_checkpoint`, the listing stops at the highest indexed checkpoint, so it never
     // includes a version published above every checkpoint this node serves as an `at_checkpoint`.
-    // It lists every row it reaches, including system-package versions whose packages are pruned.
     let cp_bound = request
         .at_checkpoint
         .unwrap_or(upper_bound.highest_indexed());
+    // The refusal for a listing from `range_start` below the lowest version of the lineage this
+    // node stores. The lower bound is read after the rows, as `GetPackage` reads it.
+    let below_lowest_stored = |range_start: u64, lowest_stored: Option<u64>| -> Result<RpcError> {
+        Ok(refuse_range_below_lowest_stored(
+            service.reader.at_checkpoint_lower_bound()?,
+            original_package_id,
+            range_start,
+            lowest_stored,
+        ))
+    };
+    // This node serves a version when it has the version's `package_versions` row, published at
+    // or below the highest indexed checkpoint or before its history begins. Recorded publish
+    // checkpoints are non-decreasing in version, so the lowest version above one this node does
+    // not serve tells whether it serves any higher version. See
+    // `PackageVersionsQuery::cursor_versions`.
+    let served = |entry: &IndexedPackageVersion| {
+        entry
+            .checkpoint
+            .is_none_or(|published| published <= upper_bound.highest_indexed())
+    };
+    let is_stored = |row: &IndexedPackageVersion| {
+        service
+            .reader
+            .inner()
+            .get_object_by_key(&row.storage_id, row.version.into())
+            .is_some()
+    };
+    // The lineage's rows from `version` up, in version order.
+    let rows_from = |version: u64| {
+        indexes
+            .package_versions_iter(original_package_id, version, u64::MAX, false)
+            .map(|rows| {
+                rows.map(|row| row.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string())))
+            })
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))
+    };
+
+    for version in query.cursor_versions() {
+        let mut rows = rows_from(version)?;
+        let higher = match rows.next().transpose()? {
+            Some(entry) if entry.version == version && served(&entry) => continue,
+            Some(entry) if entry.version == version => rows.next().transpose()?,
+            first_higher => first_higher,
+        };
+        if !higher.as_ref().is_some_and(served) {
+            return Err(upper_bound.unindexed_cursor_error());
+        }
+        // The lineage has a row this node serves above the named version and none at it, so the
+        // named version lies below where this node's history of the lineage begins.
+        let lowest_stored =
+            match range_start_against_stored_versions(version, rows_from(version)?, is_stored)? {
+                RangeStart::BelowLowestStored { lowest_stored } => lowest_stored,
+                RangeStart::Stored => None,
+            };
+        return Err(below_lowest_stored(version, lowest_stored)?);
+    }
+
     let mut versions = vec![];
-    let iter = indexes
-        .package_versions_iter(original_package_id, page_token.map(|t| t.version))
+    let mut iter = indexes
+        .package_versions_iter(
+            original_package_id,
+            query.versions.start,
+            query.versions.end,
+            query.descending,
+        )
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-    for result in iter.take(page_size + 1) {
+    while versions.len() < query.read_limit() {
+        let Some(result) = iter.next() else {
+            break;
+        };
         let entry = result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-        // Recorded publish checkpoints are non-decreasing in version, so the first version
-        // published after the bound ends the scan. Versions with no recorded checkpoint come
-        // first and were published before the history the index holds begins, so they belong
-        // under any bound this listing serves (see the floor checked above).
+        // Recorded publish checkpoints are non-decreasing in version, and versions with no
+        // recorded checkpoint are the lowest and were published before the floor checked above.
+        // An ascending scan therefore ends at the first version published after the bound, and a
+        // descending scan meets the versions published after it first and skips them.
         if let Some(published) = entry.checkpoint
             && published > cp_bound
         {
+            if query.descending {
+                continue;
+            }
             break;
         }
 
-        let mut version = PackageVersion::new(&entry.storage_id.into(), entry.version);
-        version.checkpoint = entry.checkpoint;
-        versions.push(version);
+        versions.push(query.listed_version(entry.storage_id, entry.version, entry.checkpoint));
     }
 
-    let next_page_token = if versions.len() > page_size {
-        // SAFETY: We've already verified that versions is greater than page_size, which is
-        // guaranteed to be >= 1.
-        versions.pop().unwrap().pipe(|v| {
-            v.version.map(|version| {
-                encode_page_token(PageToken {
-                    original_package_id,
-                    version,
-                })
-            })
-        })
-    } else {
-        None
-    };
+    // In cursor mode or under `at_checkpoint`, a page that reaches below the lowest version of the
+    // lineage this node stores, such as a system package's versions replaced before the pruning
+    // floor, is refused rather than answered with a history that is cut short or lists versions
+    // this node cannot load: `package_versions` rows outlive pruning (see
+    // `range_start_against_stored_versions`). A full descending page reaches down to its lowest
+    // listed version; every other page reaches the low end of the query's range, and one that
+    // ends at or below `OBJECT_START_VERSION` holds no version on any node. A legacy page-token
+    // listing without `at_checkpoint` lists every row it reaches, including system-package
+    // versions whose packages are pruned.
+    if request.at_checkpoint.is_some() || request.options.is_some() {
+        let lowest_listed = versions.last().and_then(|listed| listed.version);
+        let range_start = match lowest_listed {
+            Some(version) if query.descending && versions.len() == query.read_limit() => version,
+            _ => query.versions.start.max(OBJECT_START_VERSION.value()),
+        };
+        if range_start < query.versions.end
+            && let RangeStart::BelowLowestStored { lowest_stored } =
+                range_start_against_stored_versions(
+                    range_start,
+                    rows_from(range_start)?,
+                    is_stored,
+                )?
+        {
+            // As `GetPackage` does for a version this node no longer stores.
+            service.reader.require_object_version_history()?;
+            return Err(below_lowest_stored(range_start, lowest_stored)?);
+        }
+    }
 
-    Ok(ListPackageVersionsResponse::new(versions, next_page_token))
+    Ok(query.response(versions))
+}
+
+/// The version that the cursor in request field `field` names in the upgrade lineage of the
+/// package originally published at `original_package_id`.
+fn cursor_version(field: &str, cursor: &[u8], original_package_id: ObjectID) -> Result<u64> {
+    let cursor: PackageVersionCursor = bcs::from_bytes(cursor).map_err(|e| {
+        FieldViolation::new(field)
+            .with_description(format!("invalid cursor encoding: {e}"))
+            .with_reason(ErrorReason::FieldInvalid)
+    })?;
+    match cursor {
+        PackageVersionCursor::Lineage {
+            original_package_id: cursor_package_id,
+            version,
+        } if cursor_package_id == original_package_id => Ok(version),
+        PackageVersionCursor::Lineage { .. } => Err(FieldViolation::new(field)
+            .with_description("cursor package ID does not match request package ID")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into()),
+    }
+}
+
+fn page_size(requested: Option<u32>) -> usize {
+    requested
+        .unwrap_or(DEFAULT_PAGE_SIZE)
+        .clamp(1, MAX_PAGE_SIZE) as usize
 }
 
 /// How a lineage listing that starts at some version stands against the versions of the lineage

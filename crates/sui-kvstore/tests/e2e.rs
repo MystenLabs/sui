@@ -770,7 +770,7 @@ async fn test_indexer_e2e() -> Result<()> {
     // get_package_versions: paginate versions
     let versions = harness
         .bigtable_client()
-        .get_package_versions(original_id, max_checkpoint, None, None, 10, false)
+        .get_package_versions(original_id, max_checkpoint, 0..u64::MAX, 10, false)
         .await?;
     assert_eq!(versions.len(), 1);
     assert_eq!(versions[0].package_version, package_version);

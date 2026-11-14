@@ -423,22 +423,14 @@ impl BigTableClient {
         &self,
         original_id: ObjectID,
         cp_bound: u64,
-        after_version: Option<u64>,
-        before_version: Option<u64>,
+        versions: Range<u64>,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>, RpcError> {
         let mut inner = self.inner.clone();
         self.call_gated(
             stage::PACKAGES,
-            inner.get_package_versions(
-                original_id,
-                cp_bound,
-                after_version,
-                before_version,
-                limit,
-                descending,
-            ),
+            inner.get_package_versions(original_id, cp_bound, versions, limit, descending),
         )
         .await
     }
