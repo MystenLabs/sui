@@ -531,15 +531,14 @@ pub(crate) struct CheckpointQueue {
     // When set, a flush forced by max_tx overflow leaves last_built_timestamp unchanged, and
     // end_commit bounds how long the queue stays non-empty.
     drain_fixes: bool,
+    // The consensus output quarantine persists only up to commits that end with an empty
+    // queue, so end_commit flushes a queue that stays non-empty this long. Unset without
+    // drain_fixes.
+    max_undrained_ms: u64,
     execution_scheduler_sender: ExecutionSchedulerSender,
     // Timestamp of the first commit in the current run of commits that ended non-empty.
     undrained_since: Option<CheckpointTimestamp>,
 }
-
-// The consensus output quarantine persists commit outputs only up to the last commit that
-// ended with an empty queue, so end_commit forces a flush once the queue has stayed non-empty
-// this long. It decides checkpoint boundaries: changing it needs a new protocol version.
-const UNDRAINED_FLUSH_MS: u64 = 1_000;
 
 impl CheckpointQueue {
     pub(crate) fn new(
@@ -549,6 +548,7 @@ impl CheckpointQueue {
         max_tx: usize,
         min_checkpoint_interval_ms: u64,
         drain_fixes: bool,
+        max_undrained_ms: u64,
         execution_scheduler_sender: ExecutionSchedulerSender,
     ) -> Self {
         Self {
@@ -560,6 +560,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             drain_fixes,
+            max_undrained_ms,
             execution_scheduler_sender,
             undrained_since: None,
         }
@@ -600,6 +601,7 @@ impl CheckpointQueue {
             max_tx,
             min_checkpoint_interval_ms,
             true,
+            1_000,
             ExecutionSchedulerSender::new_for_testing(sender),
         )
     }
@@ -609,7 +611,7 @@ impl CheckpointQueue {
     }
 
     fn undrained_flush_ms(&self) -> CheckpointTimestamp {
-        UNDRAINED_FLUSH_MS.max(self.min_checkpoint_interval_ms)
+        self.max_undrained_ms.max(self.min_checkpoint_interval_ms)
     }
 
     /// Called once at the end of each commit, after its randomness chunks are queued.
@@ -885,6 +887,13 @@ impl<C> ConsensusHandler<C> {
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
         let drain_fixes = epoch_store.protocol_config().checkpoint_queue_drain_fixes();
+        let max_undrained_ms = if drain_fixes {
+            epoch_store
+                .protocol_config()
+                .checkpoint_queue_max_undrained_ms()
+        } else {
+            0
+        };
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         let next_checkpoint_seq = last_consensus_stats.checkpoint_seq + 1;
@@ -914,6 +923,7 @@ impl<C> ConsensusHandler<C> {
                 max_tx,
                 min_checkpoint_interval_ms,
                 drain_fixes,
+                max_undrained_ms,
                 execution_scheduler_sender,
             )),
         }
@@ -950,6 +960,13 @@ impl<C> ConsensusHandler<C> {
             .min_checkpoint_interval_ms_as_option()
             .unwrap_or_default();
         let drain_fixes = epoch_store.protocol_config().checkpoint_queue_drain_fixes();
+        let max_undrained_ms = if drain_fixes {
+            epoch_store
+                .protocol_config()
+                .checkpoint_queue_max_undrained_ms()
+        } else {
+            0
+        };
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         Self {
@@ -978,6 +995,7 @@ impl<C> ConsensusHandler<C> {
                 max_tx,
                 min_checkpoint_interval_ms,
                 drain_fixes,
+                max_undrained_ms,
                 execution_scheduler_sender,
             )),
         }
@@ -5659,7 +5677,7 @@ mod tests {
 
         #[test]
         fn test_queue_drains_when_every_commit_has_randomness() {
-            // Commits at 0, 500 and 1000 ms into a run: the third reaches UNDRAINED_FLUSH_MS.
+            // Commits at 0, 500 and 1000 ms into a run: the third reaches max_undrained_ms.
             let runs = undrained_runs_with_randomness(true, 500);
             assert_eq!(runs.iter().max(), Some(&2));
             // Runs at 300 ms spacing reach 1000 ms at the fifth commit.

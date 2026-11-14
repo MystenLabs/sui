@@ -1415,7 +1415,7 @@ struct FeatureFlags {
     enable_timestamp_transaction_expiration: bool,
 
     // If true, an overflow flush does not restart the checkpoint interval timer, and a
-    // checkpoint queue that stays non-empty for one second of commit time is flushed.
+    // checkpoint queue that stays non-empty for checkpoint_queue_max_undrained_ms is flushed.
     // Sustained load or per-commit randomness otherwise keeps the queue from emptying.
     #[serde(skip_serializing_if = "is_false")]
     checkpoint_queue_drain_fixes: bool,
@@ -2318,6 +2318,10 @@ pub struct ProtocolConfig {
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
+
+    /// Commit time after which the consensus handler flushes a checkpoint queue that has not
+    /// emptied. Used only with checkpoint_queue_drain_fixes.
+    checkpoint_queue_max_undrained_ms: Option<u64>,
 
     /// Version number to use for version_specific_data in `CheckpointSummary`.
     checkpoint_summary_version_specific_data: Option<u64>,
@@ -3280,6 +3284,7 @@ impl ProtocolConfig {
             allowed_txn_cost_overage_burst_per_object_in_commit: None,
 
             min_checkpoint_interval_ms: None,
+            checkpoint_queue_max_undrained_ms: None,
 
             checkpoint_summary_version_specific_data: None,
 
@@ -5093,6 +5098,7 @@ impl ProtocolConfig {
                     }
                     cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
                     cfg.feature_flags.checkpoint_queue_drain_fixes = true;
+                    cfg.checkpoint_queue_max_undrained_ms = Some(1_000);
                 }
                 // Use this template when making changes:
                 //

@@ -550,6 +550,7 @@ epoch_close_deadline_ms: 120000
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
 allowed_txn_cost_overage_burst_per_object_in_commit: 370000000
 min_checkpoint_interval_ms: 200
+checkpoint_queue_max_undrained_ms: 1000
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
