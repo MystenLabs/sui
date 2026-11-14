@@ -41,6 +41,7 @@ use tokio::time::sleep;
 use move_package::schema::{Environment, ParsedPublishedFile};
 use mysten_common::random_util::TempDir;
 use mysten_common::tempdir;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::{fs, io};
@@ -55,6 +56,7 @@ use sui_config::{
     SUI_KEYSTORE_ALIASES_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
+use sui_keys::encryption::{KEYSTORE_PASSWORD_ENV_VAR, NEW_KEYSTORE_PASSWORD_ENV_VAR};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
@@ -63,9 +65,10 @@ use sui_sdk::sui_client_config::SuiClientConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
 use sui_swarm_config::network_config::NetworkConfig;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{SuiAddress, random_object_ref};
 use sui_types::crypto::{
-    Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
+    Ed25519SuiSignature, EncodeDecodeBase64, Secp256k1SuiSignature, Signature, SignatureScheme,
+    SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::move_package::{MovePackage, UpgradeInfo};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
@@ -502,6 +505,155 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     .execute()
     .await;
     assert!(matches!(result, Err(..)));
+
+    temp_dir.close()?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_genesis_force_keeps_an_encrypted_keystore_that_it_cannot_read()
+-> Result<(), anyhow::Error> {
+    let temp_dir = tempfile::tempdir()?;
+    let working_dir = temp_dir.path();
+    let keystore_path = working_dir.join(SUI_KEYSTORE_FILENAME);
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    keystore
+        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+        .await?;
+    keystore.encrypt("password").await?;
+    // A newer version of Sui can write a format version that this version cannot read.
+    let mut file: serde_json::Value = serde_json::from_slice(&fs::read(&keystore_path)?)?;
+    file["version"] = 2.into();
+    fs::write(&keystore_path, serde_json::to_vec_pretty(&file)?)?;
+    let contents = fs::read(&keystore_path)?;
+
+    let result = SuiCommand::Genesis {
+        working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
+        force: true,
+        from_config: None,
+        epoch_duration_ms: None,
+        benchmark_ips: None,
+        with_faucet: false,
+        committee_size: None,
+    }
+    .execute()
+    .await;
+    let Err(error) = result else {
+        panic!("Genesis removed the keystore");
+    };
+    let error = format!("{error:#}");
+    assert!(error.contains("format version 2"), "{error}");
+    assert!(error.contains("would remove it"), "{error}");
+    assert_eq!(fs::read(&keystore_path)?, contents);
+
+    temp_dir.close()?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_genesis_force_with_faucet_unlocks_the_keystore_before_it_removes_files()
+-> Result<(), anyhow::Error> {
+    // No environment variable of a developer holds this password.
+    const PASSWORD: &str = "the password of a genesis test";
+    let temp_dir = tempfile::tempdir()?;
+    let working_dir = temp_dir.path();
+    let keystore_path = working_dir.join(SUI_KEYSTORE_FILENAME);
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    keystore
+        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+        .await?;
+    keystore.encrypt(PASSWORD).await?;
+    SuiClientConfig::new(Keystore::from(keystore)).save(working_dir.join(SUI_CLIENT_CONFIG))?;
+    let other_file = working_dir.join(SUI_NETWORK_CONFIG);
+    fs::write(&other_file, "")?;
+
+    // The test process registers no password prompt, so the keystore cannot be unlocked for the
+    // import of the faucet key.
+    let result = SuiCommand::Genesis {
+        working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
+        force: true,
+        from_config: None,
+        epoch_duration_ms: None,
+        benchmark_ips: None,
+        with_faucet: true,
+        committee_size: None,
+    }
+    .execute()
+    .await;
+    assert!(result.is_err());
+    assert!(other_file.exists());
+
+    temp_dir.close()?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_genesis_force_keeps_the_aliases_of_the_keystore() -> Result<(), anyhow::Error> {
+    let temp_dir = tempfile::tempdir()?;
+    let working_dir = temp_dir.path();
+    let keystore_path = working_dir.join(SUI_KEYSTORE_FILENAME);
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    keystore
+        .import(
+            Some("kept-alias".to_string()),
+            SuiKeyPair::Ed25519(get_key_pair().1),
+        )
+        .await?;
+    SuiClientConfig::new(Keystore::from(keystore)).save(working_dir.join(SUI_CLIENT_CONFIG))?;
+    // Another file makes genesis need --force.
+    fs::write(working_dir.join(SUI_NETWORK_CONFIG), "")?;
+
+    SuiCommand::Genesis {
+        working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
+        force: true,
+        from_config: None,
+        epoch_duration_ms: None,
+        benchmark_ips: None,
+        with_faucet: true,
+        committee_size: None,
+    }
+    .execute()
+    .await?;
+    let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    assert!(keystore.alias_exists("kept-alias"));
+    assert_eq!(keystore.addresses().len(), 2);
+
+    temp_dir.close()?;
+    Ok(())
+}
+
+#[tokio::test]
+#[allow(deprecated)] // cargo_bin is deprecated but cargo_bin_cmd! doesn't work with assert_cmd
+async fn test_start_reports_the_error_of_genesis() -> Result<(), anyhow::Error> {
+    let temp_dir = tempfile::tempdir()?;
+    let config_dir = temp_dir.path();
+    let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    keystore
+        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+        .await?;
+    keystore.encrypt("password").await?;
+    SuiClientConfig::new(Keystore::from(keystore)).save(config_dir.join(SUI_CLIENT_CONFIG))?;
+    // A newer version of Sui can write a format version that this version cannot read.
+    let mut file: serde_json::Value = serde_json::from_slice(&fs::read(&keystore_path)?)?;
+    file["version"] = 2.into();
+    fs::write(&keystore_path, serde_json::to_vec_pretty(&file)?)?;
+    // Genesis accepts a config directory that holds only a client config and its keystore, so its
+    // error comes from the keystore, not from the other files of the directory.
+    fs::remove_file(config_dir.join(SUI_KEYSTORE_ALIASES_FILENAME))?;
+
+    let output = assert_cmd::Command::cargo_bin("sui")?
+        .env("SUI_CONFIG_DIR", config_dir)
+        .arg("start")
+        .timeout(Duration::from_secs(120))
+        .output()?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("format version 2"), "{text}");
+    assert!(!text.contains("non-empty"), "{text}");
 
     temp_dir.close()?;
     Ok(())
@@ -5941,6 +6093,310 @@ async fn test_keytool_keystore_path_override() -> Result<(), anyhow::Error> {
     assert_eq!(listed_keys.len(), 1);
     assert_eq!(listed_keys[0]["suiAddress"], secondary_address.to_string());
     assert_ne!(listed_keys[0]["suiAddress"], primary_address.to_string());
+
+    Ok(())
+}
+
+/// Runs the `sui` binary on the configuration in `config_dir`, with the keystore password
+/// environment variables set only to the given values. The stdin and stderr of the binary are not
+/// terminals, so it cannot prompt for a password.
+#[allow(deprecated)] // cargo_bin is deprecated but cargo_bin_cmd! doesn't work with assert_cmd
+fn run_sui_with_passwords(
+    config_dir: &Path,
+    password: Option<&str>,
+    new_password: Option<&str>,
+    args: &[&str],
+) -> Result<std::process::Output, anyhow::Error> {
+    let mut command = assert_cmd::Command::cargo_bin("sui")?;
+    command
+        .env("SUI_CONFIG_DIR", config_dir)
+        .env_remove(KEYSTORE_PASSWORD_ENV_VAR)
+        .env_remove(NEW_KEYSTORE_PASSWORD_ENV_VAR)
+        .args(args);
+    if let Some(password) = password {
+        command.env(KEYSTORE_PASSWORD_ENV_VAR, password);
+    }
+    if let Some(new_password) = new_password {
+        command.env(NEW_KEYSTORE_PASSWORD_ENV_VAR, new_password);
+    }
+    Ok(command.output()?)
+}
+
+/// Returns stdout followed by stderr. The CLI prints errors to stdout.
+fn output_text(output: &std::process::Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+#[tokio::test]
+async fn test_keytool_encrypted_keystore() -> Result<(), anyhow::Error> {
+    let temp_dir = tempfile::tempdir()?;
+    let config_dir = temp_dir.path();
+    let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    let keypair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let address = SuiAddress::from(&keypair.public());
+    let exported_key = keypair.encode().unwrap();
+    let stored_key = keypair.encode_base64();
+    keystore
+        .import(Some("main".to_string()), keypair.copy())
+        .await?;
+    SuiClientConfig::new(Keystore::from(keystore)).save(config_dir.join(SUI_CLIENT_CONFIG))?;
+    let export = ["keytool", "--json", "export", "--key-identity", "main"];
+
+    // A new password with a line break could not be typed at the password prompt.
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("password\n"),
+        None,
+        &["keytool", "encrypt"],
+    )?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("line break"), "{text}");
+    assert!(fs::read_to_string(&keystore_path)?.contains(&stored_key));
+
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("password"),
+        None,
+        &["keytool", "--json", "encrypt"],
+    )?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let encrypted: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(encrypted["encrypted"], true);
+    let contents = fs::read_to_string(&keystore_path)?;
+    assert!(serde_json::from_str::<serde_json::Value>(&contents)?.is_object());
+    assert!(!contents.contains(&stored_key));
+
+    // Commands that only need public keys work without the password.
+    let output = run_sui_with_passwords(config_dir, None, None, &["keytool", "--json", "list"])?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let keys: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(keys[0]["suiAddress"], address.to_string());
+    assert_eq!(keys[0]["alias"], "main");
+
+    // Commands that need a private key fail without the password, because they cannot prompt.
+    let output = run_sui_with_passwords(config_dir, None, None, &export)?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("is encrypted"), "{text}");
+    assert!(text.contains(KEYSTORE_PASSWORD_ENV_VAR), "{text}");
+    assert!(!text.contains(&exported_key), "{text}");
+
+    let output = run_sui_with_passwords(config_dir, Some("wrong password"), None, &export)?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("the password is incorrect"), "{text}");
+
+    let output = run_sui_with_passwords(config_dir, Some("password"), None, &export)?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let exported: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(exported["exportedPrivateKey"], exported_key);
+
+    let tx_data = TransactionData::new_transfer_sui(
+        address,
+        address,
+        Some(1),
+        random_object_ref(),
+        1_000_000,
+        1_000,
+    );
+    let tx_bytes = Base64::encode(bcs::to_bytes(&tx_data)?);
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("password"),
+        None,
+        &[
+            "keytool",
+            "--json",
+            "sign",
+            "--address",
+            "main",
+            "--data",
+            &tx_bytes,
+        ],
+    )?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let signed: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let signature = Signature::new_secure(
+        &IntentMessage::new(Intent::sui_transaction(), tx_data),
+        &keypair,
+    );
+    assert_eq!(signed["suiSignature"], signature.encode_base64());
+
+    let output =
+        run_sui_with_passwords(config_dir, Some("password"), None, &["keytool", "encrypt"])?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("already encrypted"), "{text}");
+
+    // `change-password` reads the new password from its own environment variable.
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("password"),
+        None,
+        &["keytool", "change-password"],
+    )?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains(NEW_KEYSTORE_PASSWORD_ENV_VAR), "{text}");
+
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("password"),
+        Some("new password\r\n"),
+        &["keytool", "change-password"],
+    )?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("line break"), "{text}");
+
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("password"),
+        Some("new password"),
+        &["keytool", "--json", "change-password"],
+    )?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let output = run_sui_with_passwords(config_dir, Some("password"), None, &export)?;
+    assert!(!output.status.success(), "{}", output_text(&output));
+    let output = run_sui_with_passwords(config_dir, Some("new password"), None, &export)?;
+    assert!(output.status.success(), "{}", output_text(&output));
+
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("new password"),
+        None,
+        &["keytool", "--json", "decrypt"],
+    )?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let decrypted: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(decrypted["encrypted"], false);
+    let contents: Vec<String> = serde_json::from_str(&fs::read_to_string(&keystore_path)?)?;
+    assert_eq!(contents, vec![stored_key]);
+    let output = run_sui_with_passwords(config_dir, None, None, &export)?;
+    assert!(output.status.success(), "{}", output_text(&output));
+
+    let output = run_sui_with_passwords(config_dir, None, None, &["keytool", "decrypt"])?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("not encrypted"), "{text}");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_client_addresses_with_encrypted_keystore() -> Result<(), anyhow::Error> {
+    let temp_dir = tempfile::tempdir()?;
+    let config_dir = temp_dir.path();
+    let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    keystore
+        .import(
+            Some("main".to_string()),
+            SuiKeyPair::Ed25519(get_key_pair().1),
+        )
+        .await?;
+    keystore.encrypt("password").await?;
+    SuiClientConfig::new(Keystore::from(keystore)).save(config_dir.join(SUI_CLIENT_CONFIG))?;
+
+    let new_address = ["client", "--json", "new-address", "ed25519", "second"];
+    let output = run_sui_with_passwords(config_dir, None, None, &new_address)?;
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("is encrypted"), "{text}");
+
+    let output = run_sui_with_passwords(config_dir, Some("password"), None, &new_address)?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let created: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let second = SuiAddress::from_str(created["address"].as_str().unwrap())?;
+
+    let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    assert!(keystore.is_encrypted());
+    assert_eq!(keystore.addresses().len(), 2);
+    keystore.unlock("password")?;
+    keystore.export(&second)?;
+
+    let output = run_sui_with_passwords(
+        config_dir,
+        Some("password"),
+        None,
+        &["client", "--json", "remove-address", "second"],
+    )?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    assert!(keystore.is_encrypted());
+    assert!(!keystore.addresses().contains(&second));
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_encrypted_keystore_signs_transactions() -> Result<(), anyhow::Error> {
+    // No environment variable of a developer holds this password.
+    const PASSWORD: &str = "the password of test_encrypted_keystore_signs_transactions";
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let config_path = test_cluster.wallet.config.path().to_path_buf();
+    let Keystore::File(keystore) = &mut test_cluster.wallet.config.keystore else {
+        panic!("The test cluster wallet does not use a file-based keystore");
+    };
+    keystore.encrypt(PASSWORD).await?;
+    let keystore_path = keystore.path().unwrap().to_path_buf();
+
+    // A new wallet context reads the encrypted keystore from disk, as a new CLI process does.
+    let mut context = WalletContext::new(&config_path)?;
+    // The test process registers no password prompt, so the unlock on a blocking thread fails.
+    assert!(context.config.keystore.ensure_unlocked().await.is_err());
+    let Keystore::File(keystore) = &context.config.keystore else {
+        panic!("The wallet does not use a file-based keystore");
+    };
+    assert!(keystore.is_encrypted());
+    keystore.unlock(PASSWORD)?;
+
+    let pay_sui = SuiClientCommands::PaySui {
+        input_coins: vec![objects[0]],
+        recipients: vec![recipients[0].clone()],
+        amounts: vec![1000],
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(&mut context)
+    .await?;
+    let SuiClientCommandResult::TransactionBlock(response) = pay_sui else {
+        panic!("PaySui did not return a transaction");
+    };
+    assert!(response.effects.status().is_ok());
+    assert_eq!(
+        client
+            .get_balance(addresses[0], &GAS::type_())
+            .await?
+            .balance(),
+        1000
+    );
+
+    let SuiClientCommandResult::NewAddress(new_address) = SuiClientCommands::NewAddress {
+        key_scheme: SignatureScheme::ED25519,
+        alias: None,
+        word_length: None,
+        derivation_path: None,
+    }
+    .execute(&mut context)
+    .await?
+    else {
+        panic!("NewAddress did not return an address");
+    };
+    let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
+    assert!(keystore.is_encrypted());
+    keystore.unlock(PASSWORD)?;
+    keystore.export(&new_address.address)?;
 
     Ok(())
 }

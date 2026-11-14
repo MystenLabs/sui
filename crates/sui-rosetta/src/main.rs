@@ -3,18 +3,17 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::fs::File;
-use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow, ensure};
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::EncodeDecodeBase64;
 use serde_json::{Value, json};
 use sui_config::{SUI_KEYSTORE_FILENAME, sui_config_dir};
+use sui_keys::encryption::is_encrypted_file;
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_rpc::client::Client as GrpcClient;
@@ -188,8 +187,18 @@ fn parse_grpc_header(header: &str) -> Result<(MetadataKey<Ascii>, MetadataValue<
 /// PrefundedAccount will be written to the rosetta-cli config file for testing.
 ///
 fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::Error> {
-    let reader = BufReader::new(File::open(path).unwrap());
-    let kp_strings: Vec<String> = serde_json::from_reader(reader).unwrap();
+    let contents = fs::read(path)
+        .with_context(|| format!("Cannot open the keystore file: {}", path.display()))?;
+    // The rosetta-cli config stores the private keys in plaintext, so it is generated only from a
+    // plaintext keystore.
+    ensure!(
+        !is_encrypted_file(&contents),
+        "The keystore at {} is encrypted. Decrypt it with `sui keytool decrypt` to generate a \
+         rosetta-cli config from it",
+        path.display()
+    );
+    let kp_strings: Vec<String> = serde_json::from_slice(&contents)
+        .with_context(|| format!("Cannot deserialize the keystore file: {}", path.display()))?;
     let keys = kp_strings
         .iter()
         .map(|kpstr| {
@@ -197,7 +206,7 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
             key.map(|k| (SuiAddress::from(&k.public()), k))
         })
         .collect::<Result<BTreeMap<_, _>, _>>()
-        .unwrap();
+        .map_err(|e| anyhow!("Invalid keystore file: {}. {}", path.display(), e))?;
 
     Ok(keys
         .into_iter()
@@ -303,4 +312,38 @@ async fn main() -> Result<(), anyhow::Error> {
         .init();
 
     cmd.execute().await
+}
+
+#[tokio::test]
+async fn test_read_encrypted_keystore() {
+    use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, GenerateOptions, Keystore};
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let path = temp_dir.path().join("sui.keystore");
+    let mut ks = Keystore::from(FileBasedKeystore::load_or_create(&path).unwrap());
+    ks.generate(None, GenerateOptions::default()).await.unwrap();
+    let Keystore::File(ks) = &mut ks else {
+        panic!("The keystore is not file-based");
+    };
+    ks.encrypt("password").await.unwrap();
+
+    let Err(error) = read_prefunded_account(&path) else {
+        panic!("An encrypted keystore was read");
+    };
+    assert!(error.to_string().contains("is encrypted"), "{error:#}");
+}
+
+#[test]
+fn test_read_missing_keystore() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let path = temp_dir.path().join("sui.keystore");
+
+    let Err(error) = read_prefunded_account(&path) else {
+        panic!("A missing keystore file was read");
+    };
+    assert!(
+        error.to_string().contains("Cannot open the keystore file"),
+        "{error:#}"
+    );
+    assert!(!path.exists());
 }

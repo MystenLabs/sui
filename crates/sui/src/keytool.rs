@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
-use anyhow::anyhow;
+use anyhow::{anyhow, bail, ensure};
 use aws_sdk_kms::{
     Client as KmsClient,
     primitives::Blob,
@@ -23,6 +23,7 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, fetch_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use imbl::hashmap::HashMap as ImHashMap;
+use inquire::{InquireError, Password, PasswordDisplayMode};
 use json_to_table::{Orientation, json_to_table};
 use mysten_common::ZipDebugEqIteratorExt;
 use num_bigint::BigUint;
@@ -34,15 +35,19 @@ use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope, PersonalMessage};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use sui_keys::encryption::{
+    KEYSTORE_PASSWORD_ENV_VAR, NEW_KEYSTORE_PASSWORD_ENV_VAR, password_from_env,
+};
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
     write_keypair_to_file,
 };
-use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
@@ -62,9 +67,13 @@ use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{Modify, Width, object::Rows};
 use tracing::info;
+use zeroize::Zeroizing;
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
+
+/// The number of times a command asks for a new password and its confirmation before it fails.
+const MAX_NEW_PASSWORD_ATTEMPTS: usize = 3;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
@@ -78,6 +87,12 @@ pub enum KeyToolCommand {
         /// The alias must start with a letter and can contain only letters, digits, dots, hyphens (-), or underscores (_).
         new_alias: Option<String>,
     },
+    /// Change the password of an encrypted keystore.
+    ///
+    /// The command reads the current password from SUI_KEYSTORE_PASSWORD and the new one from
+    /// SUI_KEYSTORE_NEW_PASSWORD. If a variable is not set, the command asks for its password,
+    /// and it asks twice for the new one.
+    ChangePassword,
     /// Convert private key in Hex or Base64 to new format (Bech32
     /// encoded 33 byte flag || private key starting with "suiprivkey").
     /// Hex private key format import and export are both deprecated in
@@ -104,6 +119,24 @@ pub enum KeyToolCommand {
         #[clap(long, default_value = "0")]
         cur_epoch: u64,
     },
+    /// Decrypt an encrypted keystore, so that it stores the private keys in plaintext again.
+    ///
+    /// The command reads the password from SUI_KEYSTORE_PASSWORD, or asks for it if that variable
+    /// is not set.
+    Decrypt,
+    /// Encrypt the private keys in the keystore with a password.
+    ///
+    /// The keystore file then stores the private keys encrypted with AES-256-GCM, under a key
+    /// that Argon2id derives from the password. Commands that need a private key, such as the
+    /// commands that sign transactions, read the password from SUI_KEYSTORE_PASSWORD, or ask for
+    /// it if that variable is not set. Commands that only need addresses or public keys work
+    /// without the password.
+    ///
+    /// The command reads the new password from SUI_KEYSTORE_PASSWORD, or asks twice for it if that
+    /// variable is not set. If you lose the password, you can recover the keys only from their
+    /// recovery phrases. Copies of the keystore that were made before this command, such as
+    /// backups, still contain the private keys in plaintext.
+    Encrypt,
     /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1 | mldsa65}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
     /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1 or
@@ -351,6 +384,13 @@ pub struct ExportedKey {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct KeystoreEncryption {
+    keystore_path: Option<PathBuf>,
+    encrypted: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KeypairData {
     account_keypair: String,
     network_keypair: Option<String>,
@@ -465,6 +505,7 @@ pub enum CommandOutput {
     Generate(Key),
     Import(Key),
     Export(ExportedKey),
+    KeystoreEncryption(KeystoreEncryption),
     List(Vec<Key>),
     LoadKeypair(KeypairData),
     MultiSigAddress(MultiSigAddress),
@@ -498,6 +539,22 @@ impl KeyToolCommand {
                     old_alias,
                     new_alias,
                 })
+            }
+            KeyToolCommand::ChangePassword => {
+                let keystore = file_keystore(&mut context.config.keystore)?;
+                ensure!(
+                    keystore.is_encrypted(),
+                    "The keystore at {} is not encrypted. Use `sui keytool encrypt` to encrypt it",
+                    display_path(keystore)
+                );
+                // The current password is asked for before the new one.
+                keystore.ensure_unlocked().await?;
+                let password = read_new_password(
+                    "New password for the keystore:",
+                    NEW_KEYSTORE_PASSWORD_ENV_VAR,
+                )?;
+                keystore.change_password(&password).await?;
+                CommandOutput::KeystoreEncryption(KeystoreEncryption::new(keystore))
             }
             KeyToolCommand::Convert { value } => {
                 let result = convert_private_key_to_bech32(value)?;
@@ -593,6 +650,29 @@ impl KeyToolCommand {
                         })
                     }
                 }
+            }
+            KeyToolCommand::Decrypt => {
+                let keystore = file_keystore(&mut context.config.keystore)?;
+                ensure!(
+                    keystore.is_encrypted(),
+                    "The keystore at {} is not encrypted",
+                    display_path(keystore)
+                );
+                keystore.decrypt().await?;
+                CommandOutput::KeystoreEncryption(KeystoreEncryption::new(keystore))
+            }
+            KeyToolCommand::Encrypt => {
+                let keystore = file_keystore(&mut context.config.keystore)?;
+                ensure!(
+                    !keystore.is_encrypted(),
+                    "The keystore at {} is already encrypted. Use `sui keytool change-password` \
+                     to change its password",
+                    display_path(keystore)
+                );
+                let password =
+                    read_new_password("Password for the keystore:", KEYSTORE_PASSWORD_ENV_VAR)?;
+                keystore.encrypt(&password).await?;
+                CommandOutput::KeystoreEncryption(KeystoreEncryption::new(keystore))
             }
             KeyToolCommand::Generate {
                 key_scheme,
@@ -1557,4 +1637,93 @@ fn anemo_styling(pk: &PublicKey) -> Option<String> {
     } else {
         None
     }
+}
+
+impl KeystoreEncryption {
+    fn new(keystore: &FileBasedKeystore) -> Self {
+        Self {
+            keystore_path: keystore.path().map(Path::to_path_buf),
+            encrypted: keystore.is_encrypted(),
+        }
+    }
+}
+
+/// Asks for the password of an encrypted keystore, given the message to show. It returns
+/// `Ok(None)` if stdin or stderr is not a terminal. The `sui` binary registers it with
+/// [`sui_keys::encryption::set_password_prompt`].
+pub fn prompt_for_keystore_password(message: &str) -> Result<Option<String>, anyhow::Error> {
+    if !is_interactive() {
+        return Ok(None);
+    }
+    match password_prompt(message).prompt() {
+        Ok(password) => Ok(Some(password)),
+        Err(InquireError::NotTTY) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Reads a new keystore password from the environment variable `env_var` or, if it is not set,
+/// asks for it twice with `message`.
+fn read_new_password(message: &str, env_var: &str) -> Result<Zeroizing<String>, anyhow::Error> {
+    if let Some(password) = password_from_env(env_var)? {
+        // A value read from a file can end with a line break, which the password prompt cannot
+        // accept, so a password with one could only ever be entered through the environment.
+        ensure!(
+            !password.contains(['\n', '\r']),
+            "The password in {env_var} contains a line break, which cannot be typed at the \
+             password prompt. Remove the line break from {env_var}"
+        );
+        return Ok(password);
+    }
+    ensure!(
+        is_interactive(),
+        "Set the {env_var} environment variable to the new password, or run the command in an \
+         interactive terminal"
+    );
+    // The confirmation of `inquire::Password` keeps the hidden first answer after a mismatch, so
+    // a password typed again is appended to it. Separate prompts start empty.
+    for _ in 0..MAX_NEW_PASSWORD_ATTEMPTS {
+        let password = Zeroizing::new(
+            password_prompt(message)
+                .with_validator(inquire::required!("The password cannot be empty."))
+                .with_help_message(
+                    "If you lose this password, you can recover the keys only from their \
+                     recovery phrases",
+                )
+                .prompt()?,
+        );
+        let confirmation =
+            Zeroizing::new(password_prompt("Enter the same password again:").prompt()?);
+        if password == confirmation {
+            return Ok(password);
+        }
+        eprintln!("The passwords don't match.");
+    }
+    bail!("The passwords don't match")
+}
+
+/// Returns a prompt that does not show the password as it is typed and does not ask for it twice.
+fn password_prompt(message: &str) -> Password<'_> {
+    Password::new(message)
+        .with_display_mode(PasswordDisplayMode::Hidden)
+        .without_confirmation()
+}
+
+/// Returns whether the CLI can prompt the user. A prompt reads from stdin and writes to stderr.
+fn is_interactive() -> bool {
+    std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
+fn file_keystore(keystore: &mut Keystore) -> Result<&mut FileBasedKeystore, anyhow::Error> {
+    match keystore {
+        Keystore::File(keystore) => Ok(keystore),
+        _ => bail!("Only a file-based keystore supports password encryption"),
+    }
+}
+
+fn display_path(keystore: &FileBasedKeystore) -> String {
+    keystore
+        .path()
+        .map(|path| path.display().to_string())
+        .unwrap_or_default()
 }

@@ -55,7 +55,7 @@ use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKe
 use sui_types::crypto::{
     AuthorityPublicKeyBytes, generate_proof_of_possession, get_authority_key_pair,
 };
-use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
+use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
 
 #[path = "unit_tests/validator_tests.rs"]
 #[cfg(test)]
@@ -648,7 +648,7 @@ impl SuiValidatorCommand {
                         serialized_unsigned_transaction: Some(serialized_data),
                     }
                 } else {
-                    let tx = context.sign_transaction(&tx_data).await;
+                    let tx = context.try_sign_transaction(&tx_data).await?;
                     let response = context.execute_transaction_must_succeed(tx).await;
                     println!(
                         "Committee registration successful. Transaction digest: {}",
@@ -726,7 +726,7 @@ impl SuiValidatorCommand {
                         serialized_unsigned_transaction: Some(serialized_data),
                     }
                 } else {
-                    let tx = context.sign_transaction(&tx_data).await;
+                    let tx = context.try_sign_transaction(&tx_data).await?;
                     let response = context.execute_transaction_must_succeed(tx).await;
                     println!(
                         "Update Bridge validator node URL successful. Transaction digest: {}",
@@ -941,12 +941,7 @@ async fn call_0x5(
         let serialized_data = Base64::encode(bcs::to_bytes(&tx_data)?);
         return Ok((None, Some(serialized_data)));
     }
-    let signature = context
-        .config
-        .keystore
-        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
-        .await?;
-    let transaction = Transaction::from_data(tx_data, vec![signature]);
+    let transaction = context.try_sign_transaction(&tx_data).await?;
     let response = context
         .grpc_client()?
         .execute_transaction_and_wait_for_checkpoint(&transaction)
