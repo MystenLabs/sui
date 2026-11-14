@@ -51,6 +51,7 @@ use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
+use sui_kvstore::EpochData;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
@@ -59,6 +60,7 @@ use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::row_placement::RowPlacement;
+use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -74,11 +76,12 @@ pub(crate) mod stage {
     pub const TX_SEQ_DIGEST: &str = "tx_seq_digest";
     pub const TX_CP_RESOLVE: &str = "tx_cp_resolve";
     pub const CHECKPOINTS: &str = "checkpoints";
+    pub const EPOCHS: &str = "epochs";
 }
 
 /// Metrics for the request-scoped `BigTableClient` limiter and the reads it
-/// gates. Cardinality is bounded: per method, 5 stages for `permit_wait_ms`,
-/// `permit_hold_ms`, and `reads_started`, 5 stages × 3 outcomes for
+/// gates. Cardinality is bounded: per method, 6 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 6 stages × 3 outcomes for
 /// `reads_finished`, and one series each for the request-end `permits_peak`
 /// and `ops_total` histograms.
 #[derive(Clone)]
@@ -352,6 +355,18 @@ impl BigTableClient {
             inner.resolve_tx_checkpoint_position(tx_seq),
         )
         .await
+    }
+
+    /// The `epochs` rows for `epoch_ids`, reading only `columns` (every column if `None`). One
+    /// multi-get, under one permit.
+    pub(crate) async fn get_epochs_filtered(
+        &self,
+        epoch_ids: &[EpochId],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<EpochData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::EPOCHS, inner.get_epochs_filtered(epoch_ids, columns))
+            .await
     }
 
     /// Stream the checkpoint of each of `tx_sequence_numbers`, reading only the
