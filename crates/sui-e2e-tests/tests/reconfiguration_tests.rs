@@ -1,18 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use consensus_config::ObserverParameters;
+use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use sui_config::node::NodeConfig;
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
     AccountConfig, DEFAULT_GAS_AMOUNT, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
 };
+use sui_swarm_config::node_config_builder::{ValidatorConfigBuilder, observer_peer_record};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
@@ -20,6 +26,8 @@ use sui_types::error::SuiErrorKind;
 use sui_types::governance::{
     VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
 };
+use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResult, SystemStateRequest};
+use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::sui_system_state::{
     SuiSystemStateTrait, get_validator_from_table,
     sui_system_state_summary::get_validator_by_pool_id,
@@ -430,6 +438,275 @@ async fn test_reconfig_with_committee_change_basic() {
             initial_num_validators
         );
     });
+}
+
+/// A node configured as a consensus observer that joins the committee must become a working
+/// validator: it serves validator gRPC and its consensus signs blocks, so a transaction submitted
+/// only to it gets sequenced and executed.
+#[sim_test]
+async fn test_consensus_observer_joins_committee() {
+    let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
+    let address = (&new_validator.account_key_pair.public()).into();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![VALIDATOR_STARTING_STAKE * 1_000],
+            address: None,
+        }])
+        .with_num_validators(4)
+        .with_validator_observer_config(Arc::new(|idx| {
+            (idx == 0).then(ObserverParameters::default)
+        }))
+        .with_validator_candidates([address])
+        .build()
+        .await;
+
+    let stake = Some(total_stake(&test_cluster) / 10);
+    execute_add_validator_transactions(&mut test_cluster, &new_validator, stake).await;
+
+    let config = consensus_observer_validator_config(&test_cluster, new_validator);
+    let network_address = config.network_address.clone();
+    let network_public_key = config.network_key_pair().public().clone();
+    let new_validator_handle = test_cluster.swarm.spawn_new_node(config).await;
+    assert_eq!(
+        node_role(&new_validator_handle),
+        NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+    );
+    assert!(new_validator_handle.with(|node| node.transaction_orchestrator().is_some()));
+
+    test_cluster.trigger_reconfiguration().await;
+    assert_eq!(node_role(&new_validator_handle), NodeRole::Validator);
+    assert!(
+        new_validator_handle.with(|node| node.transaction_orchestrator().is_none()),
+        "promoted validator must shut down the fullnode RPC services"
+    );
+
+    let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key);
+    submit_transaction_to_validator(&test_cluster, &client).await;
+}
+
+/// A validator configured as a consensus observer that leaves the committee must shut down its
+/// validator services and keep running consensus as an observer. When it rejoins the committee
+/// in the same process, it must become a working validator again.
+#[sim_test]
+async fn test_validator_leaves_and_rejoins_committee() {
+    let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
+    // The node config builder consumes the genesis config, and rejoining needs it again.
+    let rejoining_validator = new_validator.copy();
+    let address = (&new_validator.account_key_pair.public()).into();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![VALIDATOR_STARTING_STAKE * 1_000],
+            address: None,
+        }])
+        .with_num_validators(4)
+        .with_validator_observer_config(Arc::new(|idx| {
+            (idx == 0).then(ObserverParameters::default)
+        }))
+        .with_validator_candidates([address])
+        .build()
+        .await;
+
+    let stake = Some(total_stake(&test_cluster) / 10);
+    execute_add_validator_transactions(&mut test_cluster, &new_validator, stake).await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let config = consensus_observer_validator_config(&test_cluster, new_validator);
+    let network_address = config.network_address.clone();
+    let network_public_key = config.network_key_pair().public().clone();
+    let handle = test_cluster.swarm.spawn_new_node(config).await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
+    assert_eq!(node_role(&handle), NodeRole::Validator);
+
+    execute_remove_validator_tx(&test_cluster, &handle).await;
+    test_cluster.trigger_reconfiguration().await;
+    assert_eq!(
+        node_role(&handle),
+        NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+    );
+    assert!(
+        handle
+            .with_async(|node| async { node.consensus_adapter().await.is_some() })
+            .await,
+        "demoted validator must keep running consensus as an observer"
+    );
+
+    // The validator gRPC server shuts down shortly after the epoch store switches to the new
+    // epoch, so a request that a validator answers regardless of its role must start failing.
+    let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key.clone());
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while client
+        .handle_system_state_object(SystemStateRequest { _unused: false })
+        .await
+        .is_ok()
+    {
+        assert!(
+            Instant::now() < deadline,
+            "demoted validator still serves validator gRPC"
+        );
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    // The observer keeps executing the transactions that the committee sequences.
+    let (sender, gas) = test_cluster
+        .wallet
+        .get_one_gas_object()
+        .await
+        .unwrap()
+        .unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .transfer_sui(Some(1), sender)
+                .build(),
+        )
+        .await;
+    let digest = *tx.digest();
+    test_cluster.execute_transaction(tx).await;
+    wait_for_execution(&handle, digest).await;
+
+    execute_add_validator_transactions(&mut test_cluster, &rejoining_validator, stake).await;
+    test_cluster.trigger_reconfiguration().await;
+    assert_eq!(node_role(&handle), NodeRole::Validator);
+
+    let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key);
+    submit_transaction_to_validator(&test_cluster, &client).await;
+}
+
+fn node_role(handle: &SuiNodeHandle) -> NodeRole {
+    handle.with(|node| node.node_role())
+}
+
+fn total_stake(test_cluster: &TestCluster) -> u64 {
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .total_stake
+    })
+}
+
+/// Builds the config of a validator node that subscribes to the observer server of the first
+/// validator, which the cluster must have enabled, so that the node runs consensus as an
+/// observer whenever it is not in the committee.
+fn consensus_observer_validator_config(
+    test_cluster: &TestCluster,
+    validator: ValidatorGenesisConfig,
+) -> NodeConfig {
+    let mut config = ValidatorConfigBuilder::new()
+        .with_observer_config(ObserverParameters {
+            peers: vec![observer_peer_record(
+                &test_cluster.swarm.config().validator_configs()[0],
+            )],
+            ..Default::default()
+        })
+        .build(validator, test_cluster.swarm.config().genesis.clone());
+    // The validator config builder leaves the sync mode unset, which would make the node a
+    // state-sync-only fullnode outside the committee.
+    config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+    config
+}
+
+/// Submits a transaction only to the validator behind `client` and waits until the cluster's
+/// fullnode executes it, which proves that the validator sequenced it through consensus.
+///
+/// Submission is repeated until the transaction executes, for two reasons. The epoch store
+/// switches to the new epoch before reconfiguration starts the validator gRPC server, so the
+/// first attempts can fail with a transport error. A `Submitted` response also does not
+/// guarantee sequencing: a validator that starts consensus after the rest of the committee can
+/// have its blocks garbage collected or its transactions rejected by consensus, and the client
+/// owns the retry in that case. Any other error fails the test.
+async fn submit_transaction_to_validator(
+    test_cluster: &TestCluster,
+    client: &NetworkAuthorityClient,
+) {
+    let (sender, gas) = test_cluster
+        .wallet
+        .get_one_gas_object()
+        .await
+        .unwrap()
+        .unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .transfer_sui(Some(1), sender)
+                .build(),
+        )
+        .await;
+    let digest = *tx.digest();
+
+    // The interval exceeds the window in which the validator suppresses a resubmission.
+    const RESUBMIT_INTERVAL: Duration = Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(120);
+    loop {
+        match client
+            .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
+            .await
+        {
+            Ok(response) => match response.results.as_slice() {
+                [SubmitTxResult::Submitted { .. } | SubmitTxResult::Executed { .. }] => {}
+                // The validator is still processing an earlier submission.
+                [SubmitTxResult::Rejected { error }]
+                    if matches!(
+                        error.as_inner(),
+                        SuiErrorKind::TransactionSubmitted { .. }
+                            | SuiErrorKind::TransactionProcessing { .. }
+                    ) => {}
+                _ => panic!("unexpected submit result: {response:?}"),
+            },
+            Err(e) if matches!(e.as_inner(), SuiErrorKind::RpcError(..)) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "validator did not accept connections: {e:?}"
+                );
+                sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+            Err(e) => panic!("validator rejected the transaction: {e:?}"),
+        }
+
+        if executed_within(
+            &test_cluster.fullnode_handle.sui_node,
+            digest,
+            RESUBMIT_INTERVAL,
+        )
+        .await
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "transaction {digest} was not executed"
+        );
+    }
+}
+
+/// Waits until the node behind `handle` executes the transaction with `digest`.
+async fn wait_for_execution(handle: &SuiNodeHandle, digest: TransactionDigest) {
+    assert!(
+        executed_within(handle, digest, Duration::from_secs(60)).await,
+        "transaction {digest} was not executed"
+    );
+}
+
+/// Returns whether the node behind `handle` executes the transaction with `digest` within
+/// `timeout`.
+async fn executed_within(
+    handle: &SuiNodeHandle,
+    digest: TransactionDigest,
+    timeout: Duration,
+) -> bool {
+    let epoch_store = handle.with(|node| Arc::clone(&*node.state().epoch_store_for_testing()));
+    tokio::time::timeout(
+        timeout,
+        epoch_store.transactions_executed_in_checkpoint_notify(vec![digest]),
+    )
+    .await
+    .is_ok()
 }
 
 /// A validator that leaves the committee must release the store of its last epoch as a

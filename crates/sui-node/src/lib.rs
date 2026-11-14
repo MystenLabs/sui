@@ -10,7 +10,7 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::FutureExt;
@@ -81,7 +81,7 @@ macro_rules! jwk_log {
 
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
-use mysten_metrics::{RegistryService, spawn_monitored_task};
+use mysten_metrics::{RegistryID, RegistryService, spawn_monitored_task};
 use mysten_service::server_timing::server_timing_middleware;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
@@ -152,15 +152,65 @@ mod handle;
 pub mod metrics;
 
 pub struct ValidatorComponents {
-    validator_server_handle: Option<ValidatorGrpcServer>,
-    validator_overload_monitor_handle: Option<JoinHandle<()>>,
+    /// Present only while the node is in the committee.
+    validator_services: Option<ValidatorServices>,
     consensus_manager: Arc<ConsensusManager>,
     consensus_store_pruner: ConsensusStorePruner,
     consensus_adapter: Arc<ConsensusAdapter>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
-    admission_queue: Option<AdmissionQueueContext>,
     transaction_pool_context: Option<Arc<TransactionPoolContext>>,
+}
+
+/// The services that only a validator runs. They are built when the node starts as a validator
+/// or joins the committee, and shut down when it leaves the committee.
+struct ValidatorServices {
+    grpc_server: ValidatorGrpcServer,
+    admission_queue: Option<AdmissionQueueContext>,
+    overload_monitor_handle: Option<JoinHandle<()>>,
+    /// The registry holding the metrics of these services. It is removed on shutdown so that
+    /// the services can register their metrics again if the node rejoins the committee. The
+    /// metrics therefore restart from zero after a rejoin.
+    registry_id: RegistryID,
+}
+
+impl ValidatorServices {
+    /// Stops the validator gRPC server and the validator-only background tasks. The server owns
+    /// per-epoch state (e.g. the admission queue), so leaving it running would also keep the
+    /// previous epoch's store alive for the rest of the process.
+    async fn shutdown(self, registry_service: &RegistryService) {
+        self.grpc_server.shutdown().await;
+        if let Some(handle) = self.overload_monitor_handle {
+            handle.abort();
+        }
+        registry_service.remove(self.registry_id);
+    }
+}
+
+/// The RPC services that only a fullnode runs. They are built once, when the node starts as a
+/// fullnode, and shut down when it joins the committee. They are not rebuilt if the node later
+/// leaves the committee, so such a node serves no RPC until it restarts, like a node that
+/// started as a validator.
+struct FullnodeRpcServices {
+    http_servers: HttpServers,
+    transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
+    /// Feeds executed checkpoints to the RPC subscription service, which panics on a gap in
+    /// the checkpoint sequence. A validator does not publish the checkpoints it builds, so the
+    /// checkpoint executor must stop using this sender once the node joins the committee.
+    subscription_service_checkpoint_sender: Option<broadcast::Sender<Arc<Checkpoint>>>,
+}
+
+impl FullnodeRpcServices {
+    /// Stops accepting RPC connections. Open connections receive GOAWAY and are closed after
+    /// the configured grace period, so this does not wait for them.
+    fn shutdown(&self) {
+        for server in [&self.http_servers.http, &self.http_servers.https]
+            .into_iter()
+            .flatten()
+        {
+            server.trigger_shutdown();
+        }
+    }
 }
 
 pub struct P2pComponents {
@@ -257,12 +307,10 @@ pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
 
-    /// The http servers responsible for serving RPC traffic.
-    #[allow(unused)]
-    http_servers: HttpServers,
+    /// Present only on a node that started as a fullnode and has not joined the committee since.
+    fullnode_rpc_services: ArcSwapOption<FullnodeRpcServices>,
 
     state: Arc<AuthorityState>,
-    transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
     metrics: Arc<SuiNodeMetrics>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -308,8 +356,6 @@ pub struct SuiNode {
     // TODO: Eventually we can make this auth aggregator a shared reference so that this
     // update will automatically propagate to other uses.
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
-
-    subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 
     /// The embedded `sui-rpc-store`, present when the node is a fullnode
     /// with indexing enabled. Held for the node's lifetime so its tip
@@ -984,19 +1030,7 @@ impl SuiNode {
                     .consensus_adapter
                     .recover_end_of_publish(&epoch_store);
 
-                // Start the gRPC server
-                components.validator_server_handle = Some(
-                    components
-                        .validator_server_handle
-                        .take()
-                        .unwrap()
-                        .start()
-                        .await,
-                );
-
-                // Set the consensus address updater so that we can update the consensus peer addresses when requested.
-                endpoint_manager
-                    .set_consensus_address_updater(components.consensus_manager.clone());
+                Self::start_validator_services(&mut components, &endpoint_manager).await;
             } else {
                 info!("Starting node as Observer — connecting to configured peers");
             }
@@ -1034,12 +1068,19 @@ impl SuiNode {
         // setup shutdown channel
         let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
 
+        let fullnode_rpc_services = node_role.is_fullnode().then(|| {
+            Arc::new(FullnodeRpcServices {
+                http_servers,
+                transaction_orchestrator,
+                subscription_service_checkpoint_sender,
+            })
+        });
+
         let node = Self {
             config,
             validator_components: Mutex::new(validator_components),
-            http_servers,
+            fullnode_rpc_services: ArcSwapOption::new(fullnode_rpc_services),
             state,
-            transaction_orchestrator,
             registry_service,
             metrics: sui_node_metrics,
             checkpoint_metrics,
@@ -1067,7 +1108,6 @@ impl SuiNode {
             consensus_adapter_metrics,
 
             auth_agg,
-            subscription_service_checkpoint_sender,
             embedded_rpc_store,
         };
 
@@ -1416,7 +1456,6 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Node is missing consensus config"))?;
 
         let client = Arc::new(UpdatableConsensusClient::new());
-        let inflight_slot_freed_notify = Arc::new(tokio::sync::Notify::new());
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             &committee,
             consensus_config,
@@ -1426,7 +1465,7 @@ impl SuiNode {
                 .clone(),
             client.clone(),
             checkpoint_store.clone(),
-            inflight_slot_freed_notify.clone(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
 
         let consensus_manager = Arc::new(ConsensusManager::new(
@@ -1435,7 +1474,6 @@ impl SuiNode {
             registry_service,
             client,
             transaction_pool_context.clone(),
-            node_role,
         ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
@@ -1449,37 +1487,18 @@ impl SuiNode {
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
-        let (validator_server_handle, admission_queue) = if node_role.is_validator() {
-            let (handle, queue) = Self::start_grpc_validator_service(
-                &config,
-                state.clone(),
-                consensus_adapter.clone(),
-                epoch_store.clone(),
-                &registry_service.default_registry(),
-                inflight_slot_freed_notify,
-                transaction_pool_context.clone(),
+        let validator_services = if node_role.is_validator() {
+            Some(
+                Self::build_validator_services(
+                    &config,
+                    &state,
+                    &consensus_adapter,
+                    &epoch_store,
+                    registry_service,
+                    &transaction_pool_context,
+                )
+                .await?,
             )
-            .await?;
-            (Some(handle), queue)
-        } else {
-            (None, None)
-        };
-
-        // Starts an overload monitor that monitors the execution of the authority.
-        // Don't start the overload monitor when max_load_shedding_percentage is 0.
-        let validator_overload_monitor_handle = if node_role.is_validator()
-            && config
-                .authority_overload_config
-                .max_load_shedding_percentage
-                > 0
-        {
-            let authority_state = Arc::downgrade(&state);
-            let overload_config = config.authority_overload_config.clone();
-            fail_point!("starting_overload_monitor");
-            Some(spawn_monitored_task!(overload_monitor(
-                authority_state,
-                overload_config,
-            )))
         } else {
             None
         };
@@ -1497,16 +1516,79 @@ impl SuiNode {
             consensus_store_pruner,
             global_state_hasher,
             backpressure_manager,
-            validator_server_handle,
-            validator_overload_monitor_handle,
+            validator_services,
             checkpoint_metrics,
             sui_node_metrics,
             sui_tx_validator_metrics,
-            admission_queue,
             transaction_pool_context,
             node_role,
         )
         .await
+    }
+
+    /// Starts the validator gRPC server and routes consensus address updates to this node's
+    /// consensus manager.
+    async fn start_validator_services(
+        components: &mut ValidatorComponents,
+        endpoint_manager: &EndpointManager,
+    ) {
+        components
+            .validator_services
+            .as_mut()
+            .expect("validator services must be built before they are started")
+            .grpc_server
+            .start()
+            .await;
+        endpoint_manager.set_consensus_address_updater(components.consensus_manager.clone());
+    }
+
+    /// Builds the services that only a validator runs: the validator gRPC server (unstarted) with
+    /// its admission queue, and the overload monitor. Their metrics live in a registry of their
+    /// own, which is removed when the services shut down, so that a node that leaves and rejoins
+    /// the committee can register them again.
+    async fn build_validator_services(
+        config: &NodeConfig,
+        state: &Arc<AuthorityState>,
+        consensus_adapter: &Arc<ConsensusAdapter>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        registry_service: &RegistryService,
+        transaction_pool_context: &Option<Arc<TransactionPoolContext>>,
+    ) -> Result<ValidatorServices> {
+        let registry = Registry::new();
+        let (grpc_server, admission_queue) = Self::start_grpc_validator_service(
+            config,
+            state.clone(),
+            consensus_adapter.clone(),
+            epoch_store.clone(),
+            &registry,
+            consensus_adapter.inflight_slot_freed_notify(),
+            transaction_pool_context.clone(),
+        )
+        .await?;
+
+        // Don't start the overload monitor when max_load_shedding_percentage is 0.
+        let overload_monitor_handle = if config
+            .authority_overload_config
+            .max_load_shedding_percentage
+            > 0
+        {
+            let authority_state = Arc::downgrade(state);
+            let overload_config = config.authority_overload_config.clone();
+            fail_point!("starting_overload_monitor");
+            Some(spawn_monitored_task!(overload_monitor(
+                authority_state,
+                overload_config,
+            )))
+        } else {
+            None
+        };
+
+        Ok(ValidatorServices {
+            grpc_server,
+            admission_queue,
+            overload_monitor_handle,
+            registry_id: registry_service.add(registry),
+        })
     }
 
     fn address_prober_enabled(config: &NodeConfig) -> bool {
@@ -1553,12 +1635,10 @@ impl SuiNode {
         consensus_store_pruner: ConsensusStorePruner,
         state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
-        validator_server_handle: Option<ValidatorGrpcServer>,
-        validator_overload_monitor_handle: Option<JoinHandle<()>>,
+        validator_services: Option<ValidatorServices>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
-        admission_queue: Option<AdmissionQueueContext>,
         transaction_pool_context: Option<Arc<TransactionPoolContext>>,
         node_role: NodeRole,
     ) -> Result<ValidatorComponents> {
@@ -1673,19 +1753,20 @@ impl SuiNode {
             );
         }
 
-        if let Some(ctx) = &admission_queue {
+        if let Some(ctx) = validator_services
+            .as_ref()
+            .and_then(|services| services.admission_queue.as_ref())
+        {
             ctx.rotate_for_epoch(epoch_store);
         }
 
         Ok(ValidatorComponents {
-            validator_server_handle,
-            validator_overload_monitor_handle,
+            validator_services,
             consensus_manager,
             consensus_store_pruner,
             consensus_adapter,
             checkpoint_metrics,
             sui_tx_validator_metrics,
-            admission_queue,
             transaction_pool_context,
         })
     }
@@ -1846,7 +1927,7 @@ impl SuiNode {
 
     #[cfg(feature = "testing")]
     pub fn prometheus_metrics_for_testing(&self) -> Vec<prometheus::proto::MetricFamily> {
-        self.registry_service.default_registry().gather()
+        self.registry_service.gather_all()
     }
 
     pub fn node_role(&self) -> NodeRole {
@@ -1900,15 +1981,17 @@ impl SuiNode {
     pub fn clone_authority_aggregator(
         &self,
     ) -> Option<Arc<AuthorityAggregator<NetworkAuthorityClient>>> {
-        self.transaction_orchestrator
-            .as_ref()
+        self.transaction_orchestrator()
             .map(|to| to.clone_authority_aggregator())
     }
 
     pub fn transaction_orchestrator(
         &self,
     ) -> Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>> {
-        self.transaction_orchestrator.clone()
+        self.fullnode_rpc_services
+            .load()
+            .as_ref()
+            .and_then(|services| services.transaction_orchestrator.clone())
     }
 
     /// This function awaits the completion of checkpoint execution of the current epoch,
@@ -1941,7 +2024,10 @@ impl SuiNode {
                 self.backpressure_manager.clone(),
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
-                self.subscription_service_checkpoint_sender.clone(),
+                self.fullnode_rpc_services
+                    .load()
+                    .as_ref()
+                    .and_then(|services| services.subscription_service_checkpoint_sender.clone()),
             );
 
             let run_with_range = self.config.run_with_range;
@@ -2136,15 +2222,22 @@ impl SuiNode {
                 context.set_unavailable(next_epoch);
             }
 
+            // A validator does not serve the fullnode RPC APIs. The embedded rpc-store indexer
+            // keeps running, because the pruner only prunes the checkpoints it has indexed.
+            if new_role.is_validator()
+                && let Some(services) = self.fullnode_rpc_services.swap(None)
+            {
+                info!("Node joined the committee, shutting down fullnode RPC services");
+                services.shutdown();
+            }
+
             let new_validator_components = if let Some(ValidatorComponents {
-                validator_server_handle,
-                validator_overload_monitor_handle,
+                validator_services,
                 consensus_manager,
                 consensus_store_pruner,
                 consensus_adapter,
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
-                admission_queue,
                 transaction_pool_context,
             }) = validator_components_lock_guard.take()
             {
@@ -2154,13 +2247,10 @@ impl SuiNode {
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
 
-                // A node that left the committee must stop serving validator RPCs. The server
-                // owns per-epoch state (e.g. the admission queue), so leaving it running would
-                // also keep the previous epoch's store alive for the rest of the process.
-                let validator_server_handle = match validator_server_handle {
-                    Some(server) if !new_role.is_validator() => {
-                        info!("Node is no longer a validator, shutting down validator gRPC server");
-                        server.shutdown().await;
+                let validator_services = match validator_services {
+                    Some(services) if !new_role.is_validator() => {
+                        info!("Node left the committee, shutting down validator services");
+                        services.shutdown(&self.registry_service).await;
                         None
                     }
                     other => other,
@@ -2187,8 +2277,28 @@ impl SuiNode {
                 consensus_store_pruner.prune(next_epoch).await;
 
                 if new_role.runs_consensus() {
+                    // A node that ran consensus as an observer has none of the validator
+                    // services, so they are built when it joins the committee.
+                    let validator_services = match validator_services {
+                        None if new_role.is_validator() => {
+                            info!("Observer joined the committee, building validator services");
+                            Some(
+                                Self::build_validator_services(
+                                    &self.config,
+                                    &self.state,
+                                    &consensus_adapter,
+                                    &new_epoch_store,
+                                    &self.registry_service,
+                                    &transaction_pool_context,
+                                )
+                                .await?,
+                            )
+                        }
+                        other => other,
+                    };
+
                     info!("Restarting consensus as {new_role}");
-                    let components = Self::start_epoch_specific_validator_components(
+                    let mut components = Self::start_epoch_specific_validator_components(
                         &self.config,
                         self.state.clone(),
                         consensus_adapter,
@@ -2201,16 +2311,18 @@ impl SuiNode {
                         consensus_store_pruner,
                         weak_hasher,
                         self.backpressure_manager.clone(),
-                        validator_server_handle,
-                        validator_overload_monitor_handle,
+                        validator_services,
                         checkpoint_metrics,
                         self.metrics.clone(),
                         sui_tx_validator_metrics,
-                        admission_queue,
                         transaction_pool_context.clone(),
                         new_role,
                     )
                     .await?;
+                    if new_role.is_validator() {
+                        Self::start_validator_services(&mut components, &self.endpoint_manager)
+                            .await;
+                    }
                     self.update_address_prober_epoch(
                         &new_epoch_store,
                         &components.consensus_manager,
@@ -2259,17 +2371,8 @@ impl SuiNode {
                     .await?;
 
                     if new_role.is_validator() {
-                        components.validator_server_handle = Some(
-                            components
-                                .validator_server_handle
-                                .take()
-                                .unwrap()
-                                .start()
-                                .await,
-                        );
-
-                        self.endpoint_manager
-                            .set_consensus_address_updater(components.consensus_manager.clone());
+                        Self::start_validator_services(&mut components, &self.endpoint_manager)
+                            .await;
                     }
 
                     self.update_address_prober_epoch(
@@ -2829,11 +2932,12 @@ impl ValidatorGrpcServer {
         Self::Unstarted(Mutex::new(Box::pin(bind)))
     }
 
-    pub async fn start(self) -> Self {
-        match self {
-            Self::Unstarted(bind) => Self::Started(bind.into_inner().await),
-            Self::Started(_) => self,
-        }
+    pub async fn start(&mut self) {
+        let handle = match self {
+            Self::Unstarted(bind) => bind.get_mut().await,
+            Self::Started(_) => return,
+        };
+        *self = Self::Started(handle);
     }
 
     /// Stops accepting requests and waits for in-flight ones to drain. The serving task is
@@ -3147,9 +3251,7 @@ fn https_rustls_config(cert: &str, key: &str) -> Result<sui_http::rustls::Server
 
 #[derive(Default)]
 struct HttpServers {
-    #[allow(unused)]
     http: Option<sui_http::ServerHandle>,
-    #[allow(unused)]
     https: Option<sui_http::ServerHandle>,
 }
 
