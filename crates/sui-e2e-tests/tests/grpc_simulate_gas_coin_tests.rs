@@ -67,6 +67,74 @@ fn build_no_gas_coin_ptb(
     TransactionData::new_programmable(sender, gas_payment, pt, gas_budget, gas_price)
 }
 
+async fn check_gas_payment_limit(corrected: bool, payment_limit: usize) {
+    use sui_swarm_config::genesis_config::AccountConfig;
+
+    let mut env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(move |_, mut config| {
+            config.enable_coin_reservation_for_testing();
+            config.set_max_gas_payment_objects_for_testing(256);
+            config.set_correct_gas_payment_limit_check_for_testing(corrected);
+            config
+        }))
+        .with_test_cluster_builder_cb(Box::new(|builder| {
+            builder.with_accounts(vec![AccountConfig {
+                address: None,
+                gas_amounts: vec![10 * MIST_PER_SUI; 257],
+            }])
+        }))
+        .build()
+        .await;
+
+    for with_address_balance in [false, true] {
+        let (sender, _) = env.get_sender_and_gas(0);
+        if with_address_balance {
+            env.fund_one_address_balance(sender, MIST_PER_SUI).await;
+        }
+        let transaction = build_split_gas_coin_ptb(
+            sender,
+            1_000_000,
+            SuiAddress::random_for_testing_only(),
+            None,
+            MIST_PER_SUI,
+            env.rgp,
+        );
+        let response = env
+            .cluster
+            .grpc_client()
+            .simulate_transaction(&transaction, true, true)
+            .await
+            .unwrap();
+        assert!(response.transaction.effects.status().is_ok());
+        let resolved = &response.transaction.transaction;
+        let payment = &resolved.gas_data().payment;
+        // One coin is sufficient, but selection should still fill the payment slots.
+        assert_eq!(payment.len(), payment_limit);
+        assert_eq!(
+            ParsedDigest::is_coin_reservation_digest(&payment[0].2),
+            with_address_balance,
+        );
+        assert_eq!(
+            payment
+                .iter()
+                .filter(|payment| !ParsedDigest::is_coin_reservation_digest(&payment.2))
+                .count(),
+            payment_limit - usize::from(with_address_balance),
+        );
+        assert_eq!(resolved.gas_data().budget, MIST_PER_SUI);
+    }
+}
+
+#[sim_test]
+async fn test_gas_selection_payment_limit_current() {
+    check_gas_payment_limit(true, 256).await;
+}
+
+#[sim_test]
+async fn test_gas_selection_payment_limit_legacy() {
+    check_gas_payment_limit(false, 255).await;
+}
+
 // =============================================================================
 // Test 1: Has AB + has coins + GasCoin used
 // Expected: Coin reservation FIRST in gas payment (smashes coins into AB)
