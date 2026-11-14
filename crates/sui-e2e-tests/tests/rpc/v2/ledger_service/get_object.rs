@@ -796,7 +796,7 @@ fn bad_request_fields(status: &tonic::Status) -> Vec<String> {
 }
 
 /// A transaction builder for address 0, paying with one of its current gas coins.
-async fn tx_builder(cluster: &TestCluster) -> TestTransactionBuilder {
+pub(super) async fn tx_builder(cluster: &TestCluster) -> TestTransactionBuilder {
     let sender = cluster.get_address_0();
     let gas = cluster
         .wallet
@@ -811,7 +811,10 @@ async fn tx_builder(cluster: &TestCluster) -> TestTransactionBuilder {
 
 /// Sign and execute `tx_data` as address 0, wait for it to be checkpointed, and return its
 /// effects and checkpoint.
-async fn execute(cluster: &TestCluster, tx_data: TransactionData) -> (TransactionEffects, u64) {
+pub(super) async fn execute(
+    cluster: &TestCluster,
+    tx_data: TransactionData,
+) -> (TransactionEffects, u64) {
     let executed = cluster.sign_and_execute_transaction(&tx_data).await;
     let checkpoint = executed
         .checkpoint
@@ -820,7 +823,7 @@ async fn execute(cluster: &TestCluster, tx_data: TransactionData) -> (Transactio
 }
 
 /// Call `basics::object_basics::<function>` as address 0.
-async fn call_object_basics(
+pub(super) async fn call_object_basics(
     cluster: &TestCluster,
     package_id: ObjectID,
     function: &'static str,
@@ -834,7 +837,7 @@ async fn call_object_basics(
 }
 
 /// The reference `effects` wrote for `object_id`.
-fn output_ref(effects: &TransactionEffects, object_id: ObjectID) -> ObjectRef {
+pub(super) fn output_ref(effects: &TransactionEffects, object_id: ObjectID) -> ObjectRef {
     effects
         .all_changed_objects()
         .into_iter()
@@ -844,16 +847,16 @@ fn output_ref(effects: &TransactionEffects, object_id: ObjectID) -> ObjectRef {
 }
 
 /// The one object `effects` created. Panics unless exactly one object was created.
-fn created_object(effects: &TransactionEffects) -> ObjectID {
+pub(super) fn created_object(effects: &TransactionEffects) -> ObjectID {
     let created = effects.created();
     assert_eq!(created.len(), 1, "expected exactly one created object");
     created[0].0.0
 }
 
-fn owned_arg(object_ref: ObjectRef) -> CallArg {
+pub(super) fn owned_arg(object_ref: ObjectRef) -> CallArg {
     CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))
 }
 
-fn pure_arg<T: serde::Serialize>(value: &T) -> CallArg {
+pub(super) fn pure_arg<T: serde::Serialize>(value: &T) -> CallArg {
     CallArg::Pure(bcs::to_bytes(value).unwrap())
 }

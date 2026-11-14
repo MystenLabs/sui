@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::RpcService;
-use futures::StreamExt;
-use futures::TryStreamExt;
+
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
@@ -89,11 +88,12 @@ impl LedgerService for RpcService {
         &self,
         request: tonic::Request<ListObjectVersionsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListObjectVersionsResponse>>, tonic::Status> {
-        let frames =
-            list_object_versions::list_object_versions(self.clone(), request.into_inner()).await?;
-        Ok(tonic::Response::new(
-            frames.map_err(tonic::Status::from).boxed(),
-        ))
+        serve_list_stream(
+            "list_object_versions",
+            self.config.ledger_history().list_object_versions().timeout,
+            list_object_versions::list_object_versions(self.clone(), request.into_inner()),
+        )
+        .await
     }
 
     async fn get_transaction(

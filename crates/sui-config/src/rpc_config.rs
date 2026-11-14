@@ -162,6 +162,7 @@ impl RpcConfig {
             list_transactions: None,
             list_events: None,
             list_checkpoints: None,
+            list_object_versions: None,
             bitmap_bucket_scan_budget: None,
             chunk_bucket_scan_budget: None,
             max_bitmap_filter_literals: None,
@@ -419,6 +420,11 @@ const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMeth
     max_limit_items: 50,
     chunk_max: 16,
 };
+const LIST_OBJECT_VERSIONS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 50,
+    max_limit_items: 1_000,
+    chunk_max: 32,
+};
 
 /// Per-endpoint tunables for one ledger-history list API. Every field is optional
 /// and falls back to a built-in default; see [`ResolvedLedgerHistoryMethodConfig`].
@@ -473,8 +479,8 @@ impl LedgerHistoryMethodConfig {
 }
 
 /// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
-/// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are global across
-/// all three. Every field is optional and falls back to a built-in default.
+/// the [`LedgerHistoryMethodConfig`] fields; the remaining knobs are global across
+/// the bitmap-filtered lists. Every field is optional and falls back to a built-in default.
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct LedgerHistoryConfig {
@@ -489,6 +495,10 @@ pub struct LedgerHistoryConfig {
     /// Per-endpoint tunables for `list_checkpoints`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
+
+    /// Per-endpoint tunables for `list_object_versions`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_object_versions: Option<LedgerHistoryMethodConfig>,
 
     /// Total evaluated-bucket budget for one filtered request, shared by all
     /// three list APIs. Exhausting it ends the query with `SCAN_LIMIT` and a
@@ -537,6 +547,13 @@ impl LedgerHistoryConfig {
         )
     }
 
+    pub fn list_object_versions(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(
+            self.list_object_versions.as_ref(),
+            LIST_OBJECT_VERSIONS_DEFAULTS,
+        )
+    }
+
     pub fn bitmap_bucket_scan_budget(&self) -> usize {
         self.bitmap_bucket_scan_budget
             .unwrap_or(DEFAULT_BITMAP_BUCKET_SCAN_BUDGET)
@@ -569,6 +586,11 @@ impl LedgerHistoryConfig {
              each leaf's first bucket before SCAN_LIMIT",
             self.bitmap_bucket_scan_budget(),
             self.max_bitmap_filter_literals(),
+        );
+        // A limit cannot be clamped into an empty range.
+        anyhow::ensure!(
+            self.list_object_versions().max_limit_items > 0,
+            "ledger_history.list_object_versions.max_limit_items must be greater than zero",
         );
         Ok(())
     }
