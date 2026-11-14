@@ -848,6 +848,11 @@ pub enum SuiErrorKind {
         "This validator is outside the transaction's staggered-submission proposer set; submit to one of its proposers."
     )]
     StaggeredSubmissionNotProposer,
+
+    #[error(
+        "Another transaction pending at this validator uses owned object {object_id} at an equal or higher gas price."
+    )]
+    OwnedObjectConflict { object_id: ObjectID },
 }
 
 #[repr(u64)]
@@ -1077,6 +1082,9 @@ impl SuiErrorKind {
             // Retriable at another validator: one of the transaction's proposers.
             SuiErrorKind::StaggeredSubmissionNotProposer => true,
 
+            // Retriable at another validator, which does not hold the conflicting transaction.
+            SuiErrorKind::OwnedObjectConflict { .. } => true,
+
             // The transaction is already being processed by consensus, so a fresh
             // submission is pointless. The client should retry by waiting for effects
             // rather than resubmitting.
@@ -1183,6 +1191,9 @@ impl SuiErrorKind {
             // Not a fault of the validator: the client simply asked a non-proposer. It
             // retries at the next target without backoff, like any aborted submission.
             SuiErrorKind::StaggeredSubmissionNotProposer => ErrorCategory::Aborted,
+
+            // Not a fault of the validator: the submitter's own transactions conflict.
+            SuiErrorKind::OwnedObjectConflict { .. } => ErrorCategory::Aborted,
 
             // Other variants are assumed to be retriable with new transaction submissions.
             _ => ErrorCategory::Aborted,

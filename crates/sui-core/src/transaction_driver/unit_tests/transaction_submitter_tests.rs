@@ -20,11 +20,12 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
+use sui_network::tonic;
 use sui_types::{
-    base_types::{AuthorityName, random_object_ref},
+    base_types::{AuthorityName, ObjectID, random_object_ref},
     committee::Committee,
     digests::TransactionDigest,
-    error::{SuiError, SuiErrorKind, UserInputError},
+    error::{ErrorCategory, SuiError, SuiErrorKind, UserInputError},
     messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
@@ -507,4 +508,17 @@ async fn test_submit_transaction_invalid_input() {
         }
         e => panic!("Expected InvalidTransaction error, got: {:?}", e),
     }
+}
+
+#[test]
+fn owned_object_conflict_is_retriable_and_not_a_validator_error() {
+    let error: SuiError = SuiErrorKind::OwnedObjectConflict {
+        object_id: ObjectID::random(),
+    }
+    .into();
+    let decoded = SuiError::from(tonic::Status::from(error.clone()));
+    assert_eq!(decoded, error);
+    assert!(!super::is_validator_error(&decoded));
+    assert_eq!(decoded.categorize(), ErrorCategory::Aborted);
+    assert!(decoded.categorize().is_submission_retriable());
 }

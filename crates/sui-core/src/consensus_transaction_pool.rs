@@ -18,7 +18,8 @@
 //! [`TransactionPoolContext`], and closes it before stopping consensus.
 
 use crate::admission_queue::{
-    AdmissionQueueEntry, AdmissionQueueMetrics, PopAction, PriorityAdmissionQueue,
+    AdmissionQueueEntry, AdmissionQueueMetrics, DedupKey, PopAction, PriorityAdmissionQueue,
+    gas_dedup_keys, owned_object_conflict_error,
 };
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::{
@@ -44,7 +45,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
-use sui_types::base_types::{EpochId, ObjectRef};
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef};
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -215,6 +216,9 @@ impl ProcessedWatch {
 /// included in a block atomically or not at all.
 struct PoolEntry {
     transactions: Vec<Transaction>,
+    /// Captured before serialization so the admission queue can dedup without re-parsing
+    /// the consensus bytes.
+    dedup_keys: Vec<DedupKey>,
     total_bytes: usize,
     gas_price: u64,
     tx_type: &'static str, // tx label for metrics
@@ -263,6 +267,10 @@ impl AdmissionQueueEntry for PoolEntry {
         self.ack.keys.iter().cloned()
     }
 
+    fn dedup_keys(&self) -> &[DedupKey] {
+        &self.dedup_keys
+    }
+
     fn notify_evicted(self, min_gas_price: u64) {
         self.metrics.pool_depth.with_label_values(&["user"]).dec();
         self.metrics
@@ -280,6 +288,21 @@ impl AdmissionQueueEntry for PoolEntry {
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price }
                 .into(),
         );
+    }
+
+    fn notify_replaced(self, object_id: ObjectID) {
+        self.metrics.pool_depth.with_label_values(&["user"]).dec();
+        self.metrics
+            .pool_bytes
+            .with_label_values(&["user"])
+            .sub(self.total_bytes as i64);
+        self.ack
+            .resolve_error(owned_object_conflict_error(object_id));
+    }
+
+    fn notify_owned_object_conflict(self, object_id: ObjectID) {
+        self.ack
+            .resolve_error(owned_object_conflict_error(object_id));
     }
 }
 
@@ -373,6 +396,9 @@ struct ProposedEntry {
     created: Instant,
 }
 
+// One Inner exists per epoch pool, behind an Arc<Mutex<_>>, so the unused Closed variant's
+// layout slack is a single allocation; boxing Open would only add indirection on take().
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     Open(Pool),
     Closed,
@@ -493,7 +519,10 @@ impl ConsensusTransactionPool {
     /// eventual positions, and bool indicating whether all transactions in the
     /// group were newly inserted.
     /// Fails fast on epoch mismatch, a closed pool/user lane, block-limit
-    /// violations, or when outbid by the eviction policy.
+    /// violations, when outbid by the eviction policy, or when a queued entry
+    /// holds the same owned gas object at an equal or higher price. A later
+    /// higher-priced entry on that gas object resolves the receiver with the
+    /// conflict error.
     /// `gas_price` is the entry's priority in the user lane (proposed first, and
     /// outbids lower prices when the lane is full).
     pub fn try_insert(
@@ -531,6 +560,7 @@ impl ConsensusTransactionPool {
             .iter()
             .filter_map(|transaction| transaction.kind.as_user_transaction())
             .collect();
+        let dedup_keys = gas_dedup_keys(&transactions);
         let staggered_slot = self
             .stagger_quota
             .submission_slot(&user_transactions, &self.epoch_store)?;
@@ -538,6 +568,7 @@ impl ConsensusTransactionPool {
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: serialized,
+            dedup_keys,
             total_bytes,
             gas_price,
             tx_type,
@@ -626,6 +657,7 @@ impl ConsensusTransactionPool {
         };
         let entry = PoolEntry {
             transactions: serialized,
+            dedup_keys: Vec::new(),
             total_bytes,
             gas_price: 0,
             tx_type: tx_type_label(transactions),
@@ -945,9 +977,11 @@ impl TakenEntry {
 /// Holds the entries handed out by one `take()` until their fate is known:
 /// `acknowledge` (the proposer created a block) resolves every waiter with its
 /// position/inclusion ack, while dropping the guard uninvoked (failed proposal or
-/// shutdown) returns the entries to the front of their lanes so nothing is lost or
-/// reordered. All paths serialize on the pool mutex, so they compose correctly
-/// with `close()` running in between.
+/// shutdown) returns the entries to the front of their lanes in their original
+/// order. A returning entry that conflicts on an owned gas object with a newer,
+/// strictly higher-priced entry is resolved with the conflict error instead, and
+/// on an equal price it displaces the newer entry. All paths serialize on the
+/// pool mutex, so they compose correctly with `close()` running in between.
 struct TakenTransactionsGuard {
     epoch: EpochId,
     inner: Arc<Mutex<Inner>>,
@@ -1048,6 +1082,7 @@ impl Drop for TakenTransactionsGuard {
 
         let mut requeued = 0;
         let mut halted = Vec::new();
+        let mut reinsert_outcomes = Vec::new();
         // Capacity is bypassed because these entries were already admitted. Concurrent
         // inserts can put us over capacity, which we accept transiently.
         for mut taken in entries.into_iter().rev() {
@@ -1070,19 +1105,29 @@ impl Drop for TakenTransactionsGuard {
                 }
                 TakenLane::User => match &mut pool.user {
                     UserLane::Open(user) => {
-                        requeued += 1;
-                        self.metrics.pool_depth.with_label_values(&["user"]).inc();
-                        self.metrics
-                            .pool_bytes
-                            .with_label_values(&["user"])
-                            .add(taken.entry.total_bytes as i64);
                         if let Some(slot) = &mut taken.entry.staggered_slot {
                             slot.rearm();
                         }
+                        // The drained entry consumed drain budget, so refund it whether or
+                        // not it is requeued below.
                         if let Some(budget) = &mut pool.user_byte_budget {
                             budget.refund(taken.entry.total_bytes);
                         }
-                        user.reinsert_front(taken.entry);
+                        let total_bytes = taken.entry.total_bytes;
+                        // A conflicting entry may have been queued on this entry's owned
+                        // object while it was out with the proposer; the pool depth and
+                        // bytes count it only when it actually reclaims its place, and the
+                        // outcome notifies whichever entry is displaced once the lock drops.
+                        let outcome = user.reinsert_front(taken.entry);
+                        if outcome.was_inserted() {
+                            requeued += 1;
+                            self.metrics.pool_depth.with_label_values(&["user"]).inc();
+                            self.metrics
+                                .pool_bytes
+                                .with_label_values(&["user"])
+                                .add(total_bytes as i64);
+                        }
+                        reinsert_outcomes.push(outcome);
                     }
                     UserLane::Closed => halted.push(taken.entry),
                 },
@@ -1097,6 +1142,9 @@ impl Drop for TakenTransactionsGuard {
             .inc_by(requeued as u64);
         drop(inner);
 
+        for outcome in reinsert_outcomes {
+            let _ = outcome.notify();
+        }
         for entry in halted {
             entry
                 .ack
@@ -1690,8 +1738,12 @@ mod tests {
     use consensus_types::block::BlockDigest;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::{AuthorityName, ObjectID, random_object_ref};
+    use sui_types::base_types::{
+        AuthorityName, ObjectID, SequenceNumber, SuiAddress, random_object_ref,
+    };
+    use sui_types::coin_reservation::encode_object_ref;
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
+    use sui_types::digests::ChainIdentifier;
     use sui_types::error::UserInputError;
     use sui_types::object::{Object, Owner};
     use sui_types::transaction::PlainTransactionWithClaims;
@@ -1832,6 +1884,7 @@ mod tests {
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions: vec![Transaction::new(serialized.clone())],
+            dedup_keys: Vec::new(),
             total_bytes: serialized.len(),
             gas_price: 1,
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
@@ -2619,6 +2672,71 @@ mod tests {
             }
         ));
         drop(ack);
+    }
+
+    #[sim_test]
+    async fn coin_reservation_gas_does_not_dedup_against_the_same_balance() {
+        let (_state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+
+        // Two transactions paying gas from the same SUI address balance share the
+        // reservation ref's (id, version); only the amount in the digest differs. The
+        // balance is reusable, so both are valid and neither may displace the other.
+        let chain = ChainIdentifier::default();
+        let balance_id = ObjectID::random();
+        let version = SequenceNumber::from_u64(5);
+        let first_ref = encode_object_ref(balance_id, version, epoch, 100, chain);
+        let second_ref = encode_object_ref(balance_id, version, epoch, 200, chain);
+        assert_eq!((first_ref.0, first_ref.1), (second_ref.0, second_ref.1));
+        assert_ne!(first_ref.2, second_ref.2);
+
+        let (_first, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(first_ref)])
+            .unwrap();
+        let (_second, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(second_ref)])
+            .unwrap();
+
+        assert_eq!(pool.queue_depth("user"), 2);
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        ack(block(1));
+    }
+
+    #[sim_test]
+    async fn higher_priced_gas_conflict_replaces_the_queued_holder() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), SuiAddress::ZERO);
+        let gas = gas_object.compute_object_reference();
+        state.insert_genesis_object(gas_object);
+
+        let (holder, _) = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(gas)])
+            .unwrap();
+        let user_bytes = || pool.metrics.pool_bytes.with_label_values(&["user"]).get();
+        let one_entry_bytes = user_bytes();
+        let tie = pool
+            .try_insert(epoch, 10, vec![user_transaction_with_gas(gas)])
+            .unwrap_err();
+        assert!(matches!(
+            tie.as_inner(),
+            SuiErrorKind::OwnedObjectConflict { object_id } if *object_id == gas.0
+        ));
+
+        let (_replacement, _) = pool
+            .try_insert(epoch, 11, vec![user_transaction_with_gas(gas)])
+            .unwrap();
+        assert!(matches!(
+            holder.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::OwnedObjectConflict { object_id } if *object_id == gas.0
+        ));
+        assert_eq!(pool.queue_depth("user"), 1);
+        assert_eq!(user_bytes(), one_entry_bytes);
+
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        ack(block(1));
     }
 
     #[sim_test]

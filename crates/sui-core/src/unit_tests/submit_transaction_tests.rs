@@ -30,7 +30,7 @@ use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SubmitTxType,
 };
 use sui_types::object::Object;
-use sui_types::traffic_control::ClientIdSource;
+use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::transaction::{
     AllowedProposers, Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
 };
@@ -1628,5 +1628,103 @@ async fn test_pool_mode_reports_processed_transactions_per_transaction() {
     match result {
         SubmitTxResult::Submitted { .. } => {}
         other => panic!("expected the live transaction to be submitted, got: {other:?}"),
+    }
+}
+
+// A transaction refused at admission because another queued transaction holds its gas object
+// is reported per transaction, like a duplicate: the request succeeds for the admitted
+// transaction and still counts as spam.
+#[sim_test]
+async fn test_pool_mode_reports_owned_object_conflict_per_transaction() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, keypair) = get_account_key_pair();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let state = TestAuthorityBuilder::new()
+        .with_starting_objects(&[gas_object])
+        .build()
+        .await;
+    let epoch_store = state.epoch_store_for_testing().clone();
+
+    let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+    let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
+        epoch_store.clone(),
+        state.get_cache_writer().clone(),
+        10,
+        metrics.clone(),
+    ));
+    let context = Arc::new(TransactionPoolContext::new_for_tests(
+        metrics.clone(),
+        state.get_cache_writer().clone(),
+    ));
+    context.set_active(epoch_store.epoch(), pool.clone());
+    let service = ValidatorService::new(
+        state.clone(),
+        make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]),
+        Arc::new(ValidatorServiceMetrics::new_for_tests()),
+        Some(ClientIdSource::XForwardedFor(1)),
+        UserSubmissionPath::Pool(context),
+    );
+
+    let gas_price = state.reference_gas_price_for_testing().unwrap();
+    let transactions: Vec<Transaction> = (0..2)
+        .map(|_| {
+            let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
+                .transfer_sui(None, SuiAddress::random_for_testing_only())
+                .build();
+            to_sender_signed_transaction(tx_data, &keypair)
+        })
+        .collect();
+
+    let request = RawSubmitTxRequest {
+        transactions: transactions
+            .iter()
+            .map(|transaction| bcs::to_bytes(transaction).unwrap().into())
+            .collect(),
+        ..Default::default()
+    };
+    let submit = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service
+                .handle_submit_transaction(sui_network::tonic::Request::new(request))
+                .await
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while metrics.owned_object_conflicts.get() < 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the second transaction was never refused on the shared gas object");
+
+    let (taken, ack, _) = pool.take(10, usize::MAX);
+    assert_eq!(taken.len(), 1);
+    ack(BlockRef::MIN);
+
+    let (response, weight) = submit
+        .await
+        .unwrap()
+        .expect("an owned-object conflict must not fail the request");
+    assert_eq!(weight, Weight::one());
+    let results = response.into_inner().results;
+    assert_eq!(results.len(), 2);
+    let first: SubmitTxResult = results[0].clone().try_into().unwrap();
+    assert!(
+        matches!(first, SubmitTxResult::Submitted { .. }),
+        "expected the first transaction to be submitted, got: {first:?}"
+    );
+    let second: SubmitTxResult = results[1].clone().try_into().unwrap();
+    match second {
+        SubmitTxResult::Rejected { error } => assert!(
+            matches!(
+                error.as_inner(),
+                SuiErrorKind::OwnedObjectConflict { object_id }
+                    if *object_id == gas_object_ref.0
+            ),
+            "expected an owned-object conflict, got: {error}"
+        ),
+        other => panic!("expected the second transaction to be rejected, got: {other:?}"),
     }
 }

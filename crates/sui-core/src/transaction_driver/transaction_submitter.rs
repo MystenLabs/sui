@@ -394,7 +394,9 @@ fn is_staggered_rejection(error: &SuiError) -> bool {
 
 // Whether the failure is caused by the peer validator, as opposed to the user or this node.
 fn is_validator_error(error: &SuiError) -> bool {
-    if is_staggered_rejection(error) {
+    if is_staggered_rejection(error)
+        || matches!(error.as_inner(), SuiErrorKind::OwnedObjectConflict { .. })
+    {
         return false;
     }
     matches!(

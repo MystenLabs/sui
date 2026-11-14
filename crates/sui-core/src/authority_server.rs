@@ -1412,18 +1412,24 @@ impl ValidatorService {
                 let mut receivers = Vec::with_capacity(tx_groups.len());
                 for txns in tx_groups {
                     let gas_price = Self::extract_gas_price(&txns);
-                    let (rx, newly_inserted) = aq
-                        .try_insert(gas_price, txns, submitter_client_addr)
-                        .await?;
-                    if !newly_inserted {
-                        // Duplicate of an in-flight submission; flag the request as spam. The
-                        // per-tx result is still Submitted, so this is tracked separately.
-                        duplicate_at_admission = true;
+                    match aq.try_insert(gas_price, txns, submitter_client_addr).await {
+                        Ok((rx, newly_inserted)) => {
+                            if !newly_inserted {
+                                // Duplicate of an in-flight submission; flag the request as spam.
+                                // The per-tx result is still Submitted, so this is tracked
+                                // separately.
+                                duplicate_at_admission = true;
+                            }
+                            receivers.push(Ok(rx));
+                        }
+                        Err(error) if Self::is_owned_object_conflict(&error) => {
+                            receivers.push(Err(error))
+                        }
+                        Err(error) => return Err(error),
                     }
-                    receivers.push(rx);
                 }
                 future::join_all(receivers.into_iter().map(|rx| async move {
-                    match rx.await {
+                    match rx?.await {
                         Ok(result) => result.map_err(SuiError::from),
                         Err(_) => Err(SuiError::from(
                             SuiErrorKind::TooManyTransactionsPendingConsensus,
@@ -1518,6 +1524,16 @@ impl ValidatorService {
                             results[idx] = Some(SubmitTxResult::Submitted { consensus_position });
                         }
                     }
+                    // Another queued transaction holds an owned gas object of this group. Report
+                    // it per-tx, like a duplicate, so it counts toward the request's spam weight
+                    // and does not fail the other groups. The group is not queued, so its digests
+                    // are released rather than recorded as recently submitted.
+                    Err(err) if Self::is_owned_object_conflict(&err) => {
+                        for (idx, tx_digest) in txns_meta {
+                            inflight_guard.release(tx_digest);
+                            results[idx] = Some(SubmitTxResult::Rejected { error: err.clone() });
+                        }
+                    }
                     // The transaction(s) in this group are already being processed by consensus.
                     // Report per-tx as a retriable rejection rather than failing the whole request.
                     Err(err) => {
@@ -1560,6 +1576,10 @@ impl ValidatorService {
         );
         let response = Self::try_from_submit_tx_response(results)?;
         Ok((response, spam_weight))
+    }
+
+    fn is_owned_object_conflict(error: &SuiError) -> bool {
+        matches!(error.as_inner(), SuiErrorKind::OwnedObjectConflict { .. })
     }
 
     /// Traffic-control spam weight for a whole submit request. The request is spam unless it is
@@ -1756,6 +1776,17 @@ impl InflightTransactionsGuard {
 
         self.acquired.insert(digest);
         AcquireOutcome::Acquired
+    }
+
+    /// Releases a digest that was not queued, so a resubmission is handled afresh instead of
+    /// being suppressed as recently submitted.
+    fn release(&mut self, digest: TransactionDigest) {
+        if !self.acquired.remove(&digest) {
+            return;
+        }
+        let mut set = self.inflight.lock();
+        set.remove(&digest);
+        self.metrics.inflight_transactions.set(set.len() as i64);
     }
 
     fn recently_processed_outcome(&self, digest: TransactionDigest) -> Option<AcquireOutcome> {
@@ -2388,6 +2419,29 @@ mod inflight_guard_tests {
         assert!(matches!(
             g1.try_acquire(digest),
             AcquireOutcome::AlreadyAcquiredByThisRequest
+        ));
+    }
+
+    #[test]
+    fn released_digest_is_not_recorded_as_recently_submitted() {
+        let inflight = Arc::new(Mutex::new(HashSet::new()));
+        let cache = ValidatorService::new_recently_submitted_cache(Duration::from_secs(10));
+        let metrics = Arc::new(ValidatorServiceMetrics::new(&Registry::new()));
+        let digest = TransactionDigest::random();
+
+        {
+            let mut g = make_guard(inflight.clone(), cache.clone(), metrics.clone());
+            assert!(matches!(g.try_acquire(digest), AcquireOutcome::Acquired));
+            g.release(digest);
+            assert_eq!(inflight.lock().len(), 0);
+            assert_eq!(metrics.inflight_transactions.get(), 0);
+        }
+        cache.run_pending_tasks();
+
+        let mut g_after = make_guard(inflight.clone(), cache.clone(), metrics.clone());
+        assert!(matches!(
+            g_after.try_acquire(digest),
+            AcquireOutcome::Acquired
         ));
     }
 
