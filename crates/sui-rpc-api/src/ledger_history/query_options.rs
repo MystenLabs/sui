@@ -1407,7 +1407,7 @@ pub(crate) fn assert_below_oldest_retained_version_error(
 /// server that has indexed the checkpoints below `checkpoint_hi_exclusive`: its message and its
 /// `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`].
 #[cfg(test)]
-fn assert_above_latest_available_error(
+pub(crate) fn assert_above_latest_available_error(
     error: RpcError,
     bound: &str,
     requested_checkpoint: u64,

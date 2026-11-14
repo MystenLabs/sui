@@ -631,7 +631,8 @@ async fn test_availability_floor_below_the_fork_passes_through() {
 /// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
 /// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
 /// checkpoint are rejected even when the remote's retention reaches further back; at the fork
-/// checkpoint they are served.
+/// checkpoint they are served. The listing of every package, which needs each version's publish
+/// checkpoint, starts after it.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
@@ -695,6 +696,25 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     assert_eq!(versions.len(), 1);
     assert_eq!(versions[0].version, Some(1));
     assert_eq!(versions[0].checkpoint, None);
+
+    // The seeded package has no publish checkpoint, so the listing of every package cannot start
+    // at or before the fork checkpoint.
+    for (start_checkpoint, at_checkpoint) in
+        [(Some(fork_checkpoint), None), (None, Some(fork_checkpoint))]
+    {
+        let mut request = ListPackageVersionsRequest::default();
+        request.start_checkpoint = start_checkpoint;
+        request.at_checkpoint = at_checkpoint;
+        let error = service
+            .list_package_versions(tonic::Request::new(request))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::OutOfRange);
+        assert_eq!(
+            error.message(),
+            "requested data below earliest available; lowest available checkpoint is 101",
+        );
+    }
 
     let mut request = GetPackageRequest::default();
     request.package_id = Some(package_id.to_string());
@@ -1063,6 +1083,69 @@ async fn test_list_package_versions_rejects_cursors_this_fork_does_not_serve() {
     .await
     .unwrap_err();
     assert_below_loaded(error, "descending limit 2");
+}
+
+/// A cursor of the listing of every package above the fork's highest indexed checkpoint comes
+/// from a newer view of the ledger, and is rejected in either order, rather than ending a page at
+/// the fork's tip as if the listing ended there.
+#[tokio::test]
+async fn test_list_all_package_versions_rejects_cursors_past_the_tip() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), 100);
+    // The seed load sets the indexed tip.
+    store.local_store().restore_seed_objects(&[]).unwrap();
+    let highest_indexed = sui_types::storage::RpcStateReader::indexes(&store)
+        .unwrap()
+        .get_highest_indexed_checkpoint_seq_number()
+        .unwrap()
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |ordering: Ordering, after: Option<u64>, before: Option<u64>| {
+        let cursor = |checkpoint| {
+            PackageVersionCursor::AllPackages {
+                checkpoint,
+                original_package_id: ObjectID::from_single_byte(2),
+                version: 1,
+            }
+            .encode()
+        };
+        let mut options = QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(cursor);
+        options.before = before.map(cursor);
+        let mut request = ListPackageVersionsRequest::default();
+        request.options = Some(options);
+        service.list_package_versions(tonic::Request::new(request))
+    };
+
+    let past_tip = highest_indexed + 1;
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        for (after, before) in [(Some(past_tip), None), (None, Some(past_tip))] {
+            let error = list(ordering, after, before).await.unwrap_err();
+            assert_eq!(
+                (error.code(), error.message()),
+                (
+                    tonic::Code::OutOfRange,
+                    format!(
+                        "requested data above latest available; cursor is at checkpoint \
+                         {past_tip}, and only checkpoints below {past_tip} are available"
+                    )
+                    .as_str()
+                ),
+                "{ordering:?} after {after:?} before {before:?}"
+            );
+        }
+    }
 }
 
 #[tokio::test]

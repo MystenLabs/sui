@@ -358,7 +358,8 @@ mod tests {
 }
 
 /// Zero-byte key for singleton CFs. Encodes as the empty byte
-/// string; decoding requires the input to be empty too.
+/// string; decoding requires the input to be empty too. Also the
+/// value of a singleton row whose presence is its only content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct UnitKey;
 
