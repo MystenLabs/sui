@@ -224,6 +224,41 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+/// System package objects at `(id, version)`, each with the modules genesis publishes at `id`: a
+/// package past its first version names its original id through its modules' address.
+fn system_package_objects(versions: &[(ObjectID, u64)]) -> Vec<Object> {
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut OsRng)
+        .deterministic_committee_size(NonZeroUsize::MIN)
+        .build();
+    versions
+        .iter()
+        .map(|&(id, version)| {
+            let genesis_package = config
+                .genesis
+                .objects()
+                .iter()
+                .find(|object| object.id() == id)
+                .and_then(|object| object.data.try_as_package())
+                .expect("genesis publishes every system package");
+            Object::new_package_from_data(
+                sui_types::object::Data::Package(
+                    sui_types::move_package::MovePackage::new(
+                        id,
+                        SequenceNumber::from_u64(version),
+                        genesis_package.serialized_module_map().clone(),
+                        u64::MAX,
+                        vec![],
+                        BTreeMap::new(),
+                    )
+                    .unwrap(),
+                ),
+                TransactionDigest::genesis_marker(),
+            )
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn test_current_object_read_saves_into_rpc_store_when_attached() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -756,16 +791,18 @@ async fn test_system_package_versions_replaced_before_the_fork_are_pruned() {
 /// The fork has no rows for the system-package versions replaced before it, so a listing bounded
 /// by `at_checkpoint` that starts below the lowest version it stores is refused as pruned, naming
 /// that version, instead of returning the history from that version on as if it were complete. A
-/// listing that starts at that version is served, and so is a listing without `at_checkpoint`.
+/// listing that starts at that version is served, and so is a listing without `at_checkpoint`. A
+/// range ending at version 1 holds no version on any node, so it is an empty answer.
 #[tokio::test]
 async fn test_system_package_listing_below_the_lowest_stored_version_is_refused() {
     use prost::Message;
     use sui_rpc_api::RpcService;
-    use sui_rpc_api::grpc::v2::move_package_service::PageToken;
     use sui_rpc_api::proto::google::rpc::ErrorInfo;
     use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
     use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
     use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsResponse;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -796,13 +833,7 @@ async fn test_system_package_listing_below_the_lowest_stored_version_is_refused(
         let mut request = ListPackageVersionsRequest::default();
         request.package_id = Some(package_id.to_string());
         request.at_checkpoint = at_checkpoint;
-        request.page_token = from_version.map(|version| {
-            PageToken {
-                original_package_id: package_id,
-                version,
-            }
-            .encode()
-        });
+        request.start_version = from_version;
         service.list_package_versions(tonic::Request::new(request))
     };
     let listed = |response: tonic::Response<ListPackageVersionsResponse>| {
@@ -849,6 +880,189 @@ async fn test_system_package_listing_below_the_lowest_stored_version_is_refused(
     assert_eq!(listed(response), vec![3]);
     let response = list(None, None).await.unwrap();
     assert_eq!(listed(response), vec![3]);
+
+    // A range below `OBJECT_START_VERSION`, in page-token mode under `at_checkpoint` and in
+    // descending cursor mode.
+    for options in [None, Some(Ordering::Descending)] {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.at_checkpoint = Some(fork_checkpoint);
+        request.end_version = Some(1);
+        request.options = options.map(|ordering| {
+            let mut options = QueryOptions::default();
+            options.ordering = Some(ordering as i32);
+            options
+        });
+        let response = service
+            .list_package_versions(tonic::Request::new(request))
+            .await
+            .unwrap();
+        assert_eq!(listed(response), Vec::<u64>::new(), "{options:?}");
+    }
+}
+
+/// The fork loads a system package at its version at the fork checkpoint, without the versions
+/// below it. A cursor naming one of those continues a listing from a view holding them, such as
+/// kv-rpc's: it is rejected in either order, with or without `at_checkpoint`, as below where the
+/// fork's history begins, naming the loaded version, rather than listing from the loaded version
+/// and skipping the versions in between. A cursor above every version the fork has lies past its
+/// tip. A page is refused when it reaches below the loaded version, and a full descending page
+/// that stops at the loaded version, such as the latest version at a checkpoint, is served.
+#[tokio::test]
+async fn test_list_package_versions_rejects_cursors_this_fork_does_not_serve() {
+    use prost::Message;
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
+    use sui_rpc_api::proto::google::rpc::ErrorInfo;
+    use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsResponse;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    let framework = ObjectID::from_single_byte(2);
+    store
+        .local_store()
+        .restore_seed_objects(&system_package_objects(&[(framework, 3)]))
+        .unwrap();
+    let highest_indexed = sui_types::storage::RpcStateReader::indexes(&store)
+        .unwrap()
+        .get_highest_indexed_checkpoint_seq_number()
+        .unwrap()
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |ordering: Ordering,
+                after: Option<u64>,
+                before: Option<u64>,
+                at_checkpoint,
+                limit: Option<u32>| {
+        let cursor = |version| {
+            PackageVersionCursor::Lineage {
+                original_package_id: framework,
+                version,
+            }
+            .encode()
+        };
+        let mut options = QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(cursor);
+        options.before = before.map(cursor);
+        options.limit = limit;
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(framework.to_string());
+        request.options = Some(options);
+        request.at_checkpoint = at_checkpoint;
+        service.list_package_versions(tonic::Request::new(request))
+    };
+    let lowest_available_version = |error: &tonic::Status| {
+        RpcStatus::decode(error.details())
+            .unwrap()
+            .details
+            .iter()
+            .find(|detail| detail.type_url.ends_with("google.rpc.ErrorInfo"))
+            .map(|detail| ErrorInfo::decode(detail.value.as_slice()).unwrap())
+            .and_then(|info| info.metadata.get("lowestAvailableVersion").cloned())
+    };
+
+    let below_loaded = "requested object versions below earliest available; lowest available \
+                        checkpoint is 100, and lowest available version is 3";
+    let past_tip = format!(
+        "requested data above latest available; cursor is at checkpoint {0}, and only \
+         checkpoints below {0} are available",
+        highest_indexed + 1
+    );
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        for at_checkpoint in [None, Some(fork_checkpoint)] {
+            for (version, message, lowest_version) in [
+                (1, below_loaded, Some("3".to_owned())),
+                (4, past_tip.as_str(), None),
+            ] {
+                for (after, before) in [(Some(version), None), (None, Some(version))] {
+                    let error = list(ordering, after, before, at_checkpoint, None)
+                        .await
+                        .unwrap_err();
+                    let case = format!(
+                        "{ordering:?} after {after:?} before {before:?} at {at_checkpoint:?}"
+                    );
+                    assert_eq!(
+                        (error.code(), error.message()),
+                        (tonic::Code::OutOfRange, message),
+                        "{case}"
+                    );
+                    assert_eq!(lowest_available_version(&error), lowest_version, "{case}");
+                }
+            }
+        }
+    }
+
+    let listed = |response: tonic::Response<ListPackageVersionsResponse>| {
+        response
+            .into_inner()
+            .versions
+            .iter()
+            .map(|version| version.version.unwrap())
+            .collect::<Vec<_>>()
+    };
+    let assert_below_loaded = |error: tonic::Status, case: &str| {
+        assert_eq!(
+            (error.code(), error.message()),
+            (tonic::Code::OutOfRange, below_loaded),
+            "{case}"
+        );
+        assert_eq!(
+            lowest_available_version(&error),
+            Some("3".to_owned()),
+            "{case}"
+        );
+    };
+
+    // No lineage has a version below 1, so a cursor at version 0 skips nothing: the page before it
+    // is empty in either order.
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        let response = list(ordering, None, Some(0), None, None).await.unwrap();
+        assert_eq!(listed(response), Vec::<u64>::new(), "{ordering:?}");
+    }
+
+    // A cursor at the loaded version is served: the page after it is empty, and the page before
+    // it lies below the loaded version.
+    let response = list(Ordering::Ascending, Some(3), None, None, None)
+        .await
+        .unwrap();
+    assert_eq!(listed(response), Vec::<u64>::new());
+    let error = list(Ordering::Descending, None, Some(3), None, None)
+        .await
+        .unwrap_err();
+    assert_below_loaded(error, "descending before 3");
+
+    // The latest version at a checkpoint is a one-version descending page, which stops at the
+    // loaded version; a two-version page reaches below it.
+    let response = list(
+        Ordering::Descending,
+        None,
+        None,
+        Some(fork_checkpoint),
+        Some(1),
+    )
+    .await
+    .unwrap();
+    assert_eq!(listed(response), vec![3]);
+    let error = list(
+        Ordering::Descending,
+        None,
+        None,
+        Some(fork_checkpoint),
+        Some(2),
+    )
+    .await
+    .unwrap_err();
+    assert_below_loaded(error, "descending limit 2");
 }
 
 #[tokio::test]
