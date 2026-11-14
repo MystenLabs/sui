@@ -6,7 +6,7 @@
 //! impl'd in sibling modules) into the top-level trait
 //! `sui-rpc-api` consumes.
 //!
-//! Adds rpc-api-specific entry points:
+//! Adds these rpc-api-specific entry points:
 //!
 //! - [`get_lowest_available_checkpoint_objects`]: returns the
 //!   pruning watermark's `tx_seq_lo`-derived checkpoint floor. We
@@ -20,12 +20,17 @@
 //!   [`RpcIndexes`] impl through the same handle.
 //! - [`layout_package_store`]: supplies the package source in `layout.rs`
 //!   for response-local layout resolution.
+//! - [`get_object_lt_or_eq_version`]: delegates to the schema's
+//!   bounded reverse scan of the `objects` CF.
 
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::reader::Reader;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::object::Object;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
@@ -74,5 +79,15 @@ impl<R: Reader + Send + Sync> RpcStateReader for RpcStoreReader<R> {
         Box::new(super::layout::PackageStoreOverObjects {
             schema: self.schema(),
         })
+    }
+
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> StorageResult<Option<Object>> {
+        self.schema()
+            .get_object_lt_or_eq_version(*object_id, version)
+            .map_err(StorageError::custom)
     }
 }
