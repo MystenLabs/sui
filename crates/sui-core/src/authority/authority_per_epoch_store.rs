@@ -2602,6 +2602,7 @@ impl AuthorityPerEpochStore {
                 transaction.inner().transaction_data().kind(),
                 TransactionKind::RandomnessStateUpdate(_)
                     | TransactionKind::ProgrammableSystemTransaction(_)
+                    | TransactionKind::AccumulatorSettlement(_)
             )
         }
 
