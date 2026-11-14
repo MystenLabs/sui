@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::TryStreamExt;
 use sui_kvstore::EpochData;
+use sui_kvstore::ObjectStatus;
 use sui_kvstore::tables::epochs::col;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
@@ -11,13 +13,20 @@ use sui_rpc::proto::sui::rpc::v2::ProtocolConfig as RpcProtocolConfig;
 use sui_rpc::proto::sui::rpc::v2::{GetEpochRequest, GetEpochResponse};
 use sui_rpc_api::grpc::v2::ledger_service::set_epoch_end_fields;
 use sui_rpc_api::{
-    ErrorReason, RpcError,
+    ErrorReason, NotServedHereCause, RpcError,
     grpc::v2::protocol_config_to_proto,
+    not_served_here,
     proto::{google::rpc::bad_request::FieldViolation, timestamp_ms_to_proto},
 };
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
+use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::CheckpointCommitment;
-use sui_types::storage::EpochInfo;
-use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::object::Object;
+use sui_types::storage::{EpochInfo, ObjectKey};
+use sui_types::sui_system_state::{
+    SuiSystemState, SuiSystemStateTrait, get_sui_system_state, get_sui_system_state_wrapper,
+    sui_system_state_inner_id,
+};
 
 use crate::bigtable_client::BigTableClient;
 use crate::served_height::ServedHeight;
@@ -28,9 +37,15 @@ pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EPOCH;
 /// starts above it is not found, and an epoch that ends above it has not ended yet, so its end
 /// fields are left out even when the indexer has already written them.
 ///
-/// `system_state` and `committee` come from the epoch-start snapshot.
+/// `system_state` is the epoch-start snapshot for an epoch below the served one. For the served
+/// epoch it is the state at the served checkpoint, read from the object versions index when
+/// `object_at_checkpoint_enabled`, or at the checkpoint before it when the served checkpoint is the
+/// epoch's last: the change-epoch transaction there has already turned the state into the next
+/// epoch's. `committee` comes from the same state when `system_state` is read too, and from the
+/// epoch-start snapshot otherwise; the committee does not change within an epoch.
 pub async fn get_epoch(
     client: BigTableClient,
+    object_at_checkpoint_enabled: bool,
     served_height: ServedHeight,
     request: GetEpochRequest,
     chain: Chain,
@@ -53,7 +68,12 @@ pub async fn get_epoch(
     if epoch > served_height.epoch {
         return Ok(GetEpochResponse::default());
     }
-    let columns = epoch_columns(&read_mask);
+    // The served epoch's `system_state` is read at the served height, and `committee` comes from
+    // it, so the first read fetches the snapshot only for an epoch below the served one, or for
+    // `committee` without `system_state`.
+    let reads_state_at_served_height =
+        epoch == served_height.epoch && read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name);
+    let columns = epoch_columns(&read_mask, !reads_state_at_served_height);
     let epoch_future = async { client.get_epochs_filtered(&[epoch], Some(&columns)).await };
     let transaction_start_future = async {
         if !read_mask.contains(Epoch::TRANSACTION_START_INCLUSIVE_FIELD.name) {
@@ -113,8 +133,19 @@ pub async fn get_epoch(
         set_epoch_end_fields(&mut message, &read_mask, &epoch_end(&epoch_info)?);
     }
     message.transaction_start_inclusive = transaction_start_inclusive;
+    let system_state = if reads_state_at_served_height {
+        // Epoch 0's last checkpoint is never the genesis checkpoint.
+        let checkpoint = if epoch_info.end_checkpoint == Some(served_height.checkpoint) {
+            served_height.checkpoint - 1
+        } else {
+            served_height.checkpoint
+        };
+        Some(live_system_state(&client, object_at_checkpoint_enabled, checkpoint).await?)
+    } else {
+        epoch_info.system_state.take()
+    };
     if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {
-        message.committee = epoch_info.system_state.as_ref().map(|system_state| {
+        message.committee = system_state.as_ref().map(|system_state| {
             system_state
                 .get_current_epoch_committee()
                 .committee()
@@ -123,9 +154,7 @@ pub async fn get_epoch(
         });
     }
     if read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
-        message.system_state = epoch_info
-            .system_state
-            .map(|system_state| Box::new(system_state.into()));
+        message.system_state = system_state.map(|system_state| Box::new(system_state.into()));
     }
     Ok(GetEpochResponse::new(message))
 }
@@ -160,10 +189,76 @@ fn epoch_end(epoch_info: &EpochData) -> Result<EpochInfo, RpcError> {
     })
 }
 
+/// The system state at the end of `checkpoint`: the `0x5` wrapper and the inner object its
+/// `version` keys, each read at that checkpoint. The version is read too, not taken from the
+/// epoch-start snapshot, because the first mutable access to the system state after genesis or a
+/// framework upgrade migrates the inner object to a new version mid-epoch. `Unimplemented` /
+/// `NOT_SERVED_HERE` (cause `disabled_by_config`) unless `object_at_checkpoint_enabled`.
+async fn live_system_state(
+    client: &BigTableClient,
+    object_at_checkpoint_enabled: bool,
+    checkpoint: u64,
+) -> Result<SuiSystemState, RpcError> {
+    if !object_at_checkpoint_enabled {
+        return Err(not_served_here(
+            NotServedHereCause::DisabledByConfig,
+            "the running epoch's system_state needs at_checkpoint object reads, which are not \
+             enabled on this instance",
+        ));
+    }
+    let internal = |message: String| RpcError::new(tonic::Code::Internal, message);
+    let mut objects =
+        vec![object_at_checkpoint(client, SUI_SYSTEM_STATE_OBJECT_ID, checkpoint).await?];
+    let version = get_sui_system_state_wrapper(&objects.as_slice())
+        .map_err(|e| internal(format!("decode system state wrapper: {e}")))?
+        .version;
+    objects
+        .push(object_at_checkpoint(client, sui_system_state_inner_id(version), checkpoint).await?);
+    get_sui_system_state(&objects.as_slice()).map_err(|e| {
+        internal(format!(
+            "decode system state at checkpoint {checkpoint}: {e}"
+        ))
+    })
+}
+
+/// The version of `id` live at the end of `checkpoint`, from the version index (a single-row
+/// forward read), read from the `objects` table. `Internal` if it is not live there: callers read
+/// only objects that always exist.
+async fn object_at_checkpoint(
+    client: &BigTableClient,
+    id: ObjectID,
+    checkpoint: u64,
+) -> Result<Object, RpcError> {
+    let internal = |message: String| RpcError::new(tonic::Code::Internal, message);
+    let version = match client
+        .get_object_version_at_checkpoint(id, checkpoint)
+        .await?
+    {
+        Some((version, ObjectStatus::Live)) => version,
+        other => {
+            return Err(internal(format!(
+                "object {id} is not live at checkpoint {checkpoint}: {other:?}"
+            )));
+        }
+    };
+    // The read runs to its end, so it finishes as completed rather than cut off.
+    let rows: Vec<Object> = client
+        .get_objects_stream(vec![ObjectKey(id, version)])
+        .await?
+        .try_collect()
+        .await?;
+    rows.into_iter().next().ok_or_else(|| {
+        internal(format!(
+            "object {id} version {version} is not in the objects table"
+        ))
+    })
+}
+
 /// Compute the set of BigTable columns needed for the given read mask. Always includes `ep` and
 /// `ec`: the end checkpoint decides whether the epoch has ended at the served height, which every
-/// end field depends on.
-fn epoch_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
+/// end field and `system_state` depend on. The epoch-start snapshot is read for `committee` or
+/// `system_state` only if `reads_snapshot`.
+fn epoch_columns(mask: &FieldMaskTree, reads_snapshot: bool) -> Vec<&'static str> {
     let mut columns = vec![col::EPOCH, col::END_CHECKPOINT];
 
     if mask.contains(Epoch::FIRST_CHECKPOINT_FIELD.name) {
@@ -211,7 +306,10 @@ fn epoch_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     if mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name).is_some() {
         columns.push(col::PROTOCOL_VERSION);
     }
-    if mask.contains(Epoch::COMMITTEE_FIELD.name) || mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
+    if reads_snapshot
+        && (mask.contains(Epoch::COMMITTEE_FIELD.name)
+            || mask.contains(Epoch::SYSTEM_STATE_FIELD.name))
+    {
         columns.push(col::SYSTEM_STATE);
     }
 
@@ -222,8 +320,10 @@ fn epoch_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
 mod tests {
     use bytes::Bytes;
     use sui_kvstore::BigTableClient as KvStoreClient;
-    use sui_kvstore::tables::epochs;
+    use sui_kvstore::tables::{epochs, object_versions_by_checkpoint, objects};
     use sui_kvstore::testing::MockBigtableServer;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::sui_system_state::mock;
 
     use super::*;
 
@@ -235,6 +335,7 @@ mod tests {
 
     async fn try_get(
         client: &KvStoreClient,
+        object_at_checkpoint_enabled: bool,
         served_height: ServedHeight,
         epoch: Option<u64>,
         paths: &[&str],
@@ -248,9 +349,15 @@ mod tests {
             crate::bigtable_client::Metrics::for_testing().0,
             "GetEpoch",
         );
-        get_epoch(client, served_height, request, Chain::Unknown)
-            .await
-            .map(|response| response.epoch.unwrap_or_default())
+        get_epoch(
+            client,
+            object_at_checkpoint_enabled,
+            served_height,
+            request,
+            Chain::Unknown,
+        )
+        .await
+        .map(|response| response.epoch.unwrap_or_default())
     }
 
     async fn get(
@@ -259,9 +366,179 @@ mod tests {
         epoch: Option<u64>,
         paths: &[&str],
     ) -> Epoch {
-        try_get(client, served_height, epoch, paths)
+        try_get(client, false, served_height, epoch, paths)
             .await
             .expect("get_epoch succeeds")
+    }
+
+    fn v1(reference_gas_price: u64) -> SuiSystemState {
+        let mut inner = mock::sui_system_state_inner_v1();
+        inner.reference_gas_price = reference_gas_price;
+        SuiSystemState::V1(inner)
+    }
+
+    fn v2(reference_gas_price: u64) -> SuiSystemState {
+        let mut inner = mock::sui_system_state_inner_v2();
+        inner.reference_gas_price = reference_gas_price;
+        SuiSystemState::V2(inner)
+    }
+
+    /// Record `id` at `version` with `status` in the version index, from `checkpoint`.
+    async fn insert_version(
+        mock: &MockBigtableServer,
+        id: ObjectID,
+        version: SequenceNumber,
+        status: ObjectStatus,
+        checkpoint: u64,
+    ) {
+        mock.insert_row(
+            object_versions_by_checkpoint::NAME,
+            object_versions_by_checkpoint::encode_key(&id, checkpoint),
+            object_versions_by_checkpoint::encode(version, status),
+        )
+        .await;
+    }
+
+    /// Write `state`'s `0x5` wrapper and inner object, both live from `checkpoint` at an object
+    /// version equal to it.
+    async fn insert_system_state(
+        mock: &MockBigtableServer,
+        state: SuiSystemState,
+        checkpoint: u64,
+    ) {
+        let version = SequenceNumber::from_u64(checkpoint);
+        for mut object in mock::system_state_output_objects(state) {
+            object
+                .data
+                .try_as_move_mut()
+                .expect("move object")
+                .increment_version_to(version);
+            mock.insert_row(
+                objects::NAME,
+                objects::encode_key(&ObjectKey(object.id(), version)),
+                objects::encode(&object).unwrap(),
+            )
+            .await;
+            insert_version(mock, object.id(), version, ObjectStatus::Live, checkpoint).await;
+        }
+    }
+
+    /// The served epoch's `system_state` is the state at the served checkpoint, read through the
+    /// version index, never a version written above it, and following the inner object when it
+    /// migrates to a new `system_state_version` mid-epoch. At the epoch's last checkpoint it is the
+    /// state at the checkpoint before, since the change-epoch transaction there has already
+    /// written the next epoch's state. A past epoch's is its epoch-start snapshot. Without
+    /// checkpoint-pinned reads the served epoch's `system_state` is `Unimplemented` /
+    /// `NOT_SERVED_HERE` with cause `disabled_by_config`.
+    #[tokio::test]
+    async fn served_epoch_system_state_is_read_at_the_served_checkpoint() {
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        // Epoch 0 starts on a V1 inner object with reference gas price 1 and ends at checkpoint
+        // 15. The system state changes at checkpoint 3, and at checkpoint 12 it migrates to V2:
+        // the V1 inner object is deleted and a V2 one created under the new version's key. The
+        // change-epoch transaction at checkpoint 15 writes epoch 1's state.
+        mock.insert_row(
+            epochs::NAME,
+            epochs::encode_key(0),
+            [
+                u64_cell(col::EPOCH, 0),
+                u64_cell(col::START_CHECKPOINT, 0),
+                u64_cell(col::END_CHECKPOINT, 15),
+                (
+                    col::SYSTEM_STATE,
+                    Bytes::from(bcs::to_bytes(&v1(1)).unwrap()),
+                ),
+            ],
+        )
+        .await;
+        insert_system_state(&mock, v1(100), 3).await;
+        insert_system_state(&mock, v2(200), 12).await;
+        insert_version(
+            &mock,
+            sui_system_state_inner_id(1),
+            SequenceNumber::from_u64(12),
+            ObjectStatus::Deleted,
+            12,
+        )
+        .await;
+        insert_system_state(&mock, v2(300), 15).await;
+
+        let at = |checkpoint| ServedHeight {
+            checkpoint,
+            epoch: 0,
+        };
+        let reference_gas_price = |epoch: Epoch| {
+            epoch
+                .system_state
+                .expect("system_state")
+                .reference_gas_price
+        };
+
+        for (checkpoint, expected) in [(10, 100), (12, 200), (14, 200), (15, 200)] {
+            let epoch = try_get(&client, true, at(checkpoint), None, &["system_state"])
+                .await
+                .expect("get_epoch succeeds");
+            assert_eq!(
+                reference_gas_price(epoch),
+                Some(expected),
+                "served at checkpoint {checkpoint}",
+            );
+        }
+
+        // Once epoch 1 is served, epoch 0 is past: its snapshot, without touching the index, and
+        // without checkpoint-pinned reads.
+        mock.clear_read_rows_calls().await;
+        let inside_epoch_1 = ServedHeight {
+            checkpoint: 20,
+            epoch: 1,
+        };
+        let past = try_get(&client, true, inside_epoch_1, Some(0), &["system_state"])
+            .await
+            .expect("get_epoch succeeds");
+        assert_eq!(reference_gas_price(past), Some(1));
+        assert!(
+            mock.read_rows_calls()
+                .await
+                .iter()
+                .all(|call| call.table != object_versions_by_checkpoint::NAME),
+            "a past epoch's system_state reads no object versions",
+        );
+        let past = get(&client, inside_epoch_1, Some(0), &["system_state"]).await;
+        assert_eq!(reference_gas_price(past), Some(1));
+
+        for checkpoint in [10, 15] {
+            let status = try_get(&client, false, at(checkpoint), None, &["system_state"])
+                .await
+                .expect_err("system_state needs checkpoint-pinned reads");
+            let status = tonic::Status::from(status);
+            assert_eq!(
+                status.code(),
+                tonic::Code::Unimplemented,
+                "served at checkpoint {checkpoint}",
+            );
+            let error_info =
+                <sui_rpc::proto::google::rpc::Status as prost::Message>::decode(status.details())
+                    .expect("error details decode as google.rpc.Status")
+                    .details
+                    .iter()
+                    .find_map(|detail| {
+                        detail
+                            .to_msg::<sui_rpc::proto::google::rpc::ErrorInfo>()
+                            .ok()
+                    })
+                    .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"));
+            assert_eq!(error_info.reason, ErrorReason::NotServedHere.as_str_name());
+            assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+            assert_eq!(
+                error_info.metadata,
+                [("cause".to_owned(), "disabled_by_config".to_owned())].into(),
+                "served at checkpoint {checkpoint}",
+            );
+        }
     }
 
     #[tokio::test]

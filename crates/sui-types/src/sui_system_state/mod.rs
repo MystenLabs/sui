@@ -251,6 +251,17 @@ pub fn get_sui_system_state_wrapper(
     Ok(result)
 }
 
+/// The ID of the system state's inner object for `version`: the dynamic field of the
+/// `SuiSystemState` wrapper (`0x5`) keyed by the wrapper's `version`.
+pub fn sui_system_state_inner_id(version: u64) -> ObjectID {
+    crate::dynamic_field::derive_dynamic_field_id(
+        SUI_SYSTEM_STATE_OBJECT_ID,
+        &move_core_types::language_storage::TypeTag::U64,
+        &version.to_le_bytes(),
+    )
+    .expect("a u64 key type tag always serializes")
+}
+
 pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemState, SuiError> {
     let wrapper = get_sui_system_state_wrapper(object_store)?;
     let id = wrapper.id.id.bytes;

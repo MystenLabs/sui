@@ -3,8 +3,10 @@
 
 use crate::ErrorReason;
 use crate::Result;
+use crate::RpcError;
 use crate::RpcService;
 use crate::error::EpochNotFoundError;
+use crate::reader::AtCheckpointUpperBound;
 use crate::reader::StateReader;
 use crate::reader::indexes_disabled;
 use prost_types::FieldMask;
@@ -19,10 +21,14 @@ use sui_rpc::proto::sui::rpc::v2::ProtocolConfig;
 use sui_rpc::proto::sui::rpc::v2::SystemEpochInfo;
 use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::EpochId;
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::EpochInfo;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::get_sui_system_state;
+use sui_types::sui_system_state::get_sui_system_state_wrapper;
+use sui_types::sui_system_state::sui_system_state_inner_id;
 
 pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EPOCH;
 
@@ -34,9 +40,12 @@ pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EPOCH;
 /// version history, or if H's summary is not stored, the response is unpinned and the latest
 /// epoch is the live system state's.
 ///
-/// `system_state` is the live state for the live system state's epoch, which is not capped at any
-/// checkpoint, and the epoch-start snapshot for any other epoch. The end-of-epoch fields are set
-/// exactly when `last_checkpoint` is, from the same rpc-store row.
+/// `system_state` is the epoch-start snapshot for a past epoch. For the epoch running at the
+/// pinned checkpoint H it is the state at H, read like `GetObject`'s `at_checkpoint`, or at H - 1
+/// when H is the epoch's last checkpoint: the change-epoch transaction in H has already turned
+/// the state into the next epoch's. An unpinned response serves the live state for the live
+/// epoch, which is not capped at any checkpoint. The end-of-epoch fields are set exactly when
+/// `last_checkpoint` is, from the same rpc-store row.
 #[tracing::instrument(skip(service))]
 pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEpochResponse> {
     let read_mask = {
@@ -56,6 +65,7 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
     let current_system_state = service.reader.get_system_state()?;
     let live_epoch = current_system_state.epoch();
 
+    // H is read before the epoch row, so the row is at least as new as H.
     let indexes = service.reader.inner().indexes();
     let pinned_summary = pinned_checkpoint_summary(&service.reader)?;
     let pinned_checkpoint = pinned_summary
@@ -174,10 +184,18 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
     }
 
     if read_mask.contains(Epoch::SYSTEM_STATE_FIELD) {
-        let system_state = if epoch == live_epoch {
-            Some(current_system_state)
-        } else {
-            epoch_info.and_then(epoch_start_system_state)
+        // `None` without a row placing the epoch relative to H.
+        let read_at = pinned_checkpoint
+            .zip(epoch_info.as_ref())
+            .map(|(pinned, info)| (pinned, system_state_checkpoint(info, pinned)));
+        let system_state = match read_at {
+            Some((pinned, Some(checkpoint))) => Some(system_state_at_checkpoint(
+                service,
+                checkpoint,
+                &AtCheckpointUpperBound::new(pinned),
+            )?),
+            None if epoch == live_epoch => Some(current_system_state),
+            _ => epoch_info.and_then(epoch_start_system_state),
         };
         message.system_state = system_state.map(|system_state| Box::new(system_state.into()));
     }
@@ -214,6 +232,69 @@ fn as_of_checkpoint(mut epoch_info: EpochInfo, pinned_checkpoint: Option<u64>) -
         epoch_info.end_timestamp_ms = None;
     }
     epoch_info
+}
+
+/// The checkpoint at whose end `epoch_info`'s epoch serves its state, for a response pinned to
+/// `pinned`: `pinned` while the epoch runs there, or the checkpoint before it when `pinned` is the
+/// epoch's last, since the change-epoch transaction in it has already written the next epoch's
+/// state. `None` if the epoch is not running at `pinned`: it ended below it, or starts above it.
+/// A row a mid-epoch restore seeded has no start checkpoint yet; its epoch counts as started.
+fn system_state_checkpoint(epoch_info: &EpochInfo, pinned: u64) -> Option<u64> {
+    if epoch_info
+        .start_checkpoint
+        .is_some_and(|start| start > pinned)
+    {
+        return None;
+    }
+    match epoch_info.end_checkpoint {
+        Some(end) if end < pinned => None,
+        Some(end) if end == pinned => pinned.checked_sub(1),
+        _ => Some(pinned),
+    }
+}
+
+/// The system state at the end of `checkpoint`: the `0x5` wrapper and the inner object its
+/// `version` keys, each read at that checkpoint, as `GetObject`'s `at_checkpoint` reads them. The
+/// version is read too, not taken from the epoch-start snapshot, because the first mutable access
+/// to the system state after genesis or a framework upgrade migrates the inner object to a new
+/// version mid-epoch. `OutOfRange` (`BELOW_EARLIEST_AVAILABLE`) if `checkpoint` has been pruned.
+fn system_state_at_checkpoint(
+    service: &RpcService,
+    checkpoint: u64,
+    upper_bound: &AtCheckpointUpperBound,
+) -> Result<SuiSystemState> {
+    let internal = |message: String| RpcError::new(tonic::Code::Internal, message);
+    let read = || {
+        let object_at_checkpoint = |id| {
+            // A deletion or wrapping tombstone has no live object at its version.
+            service
+                .reader
+                .get_object_version_at_checkpoint(id, checkpoint, upper_bound)?
+                .and_then(|version| service.reader.inner().get_object_by_key(&id, version))
+                .ok_or_else(|| {
+                    internal(format!(
+                        "object {id} is not live at checkpoint {checkpoint}"
+                    ))
+                })
+        };
+        let mut objects = vec![object_at_checkpoint(SUI_SYSTEM_STATE_OBJECT_ID)?];
+        let version = get_sui_system_state_wrapper(&objects.as_slice())
+            .map_err(|e| internal(format!("decode system state wrapper: {e}")))?
+            .version;
+        objects.push(object_at_checkpoint(sui_system_state_inner_id(version))?);
+        get_sui_system_state(&objects.as_slice()).map_err(|e| {
+            internal(format!(
+                "decode system state at checkpoint {checkpoint}: {e}"
+            ))
+        })
+    };
+    let system_state = read();
+    // After the reads: pruning may have removed what they needed while they ran.
+    service
+        .reader
+        .at_checkpoint_lower_bound()?
+        .check(checkpoint)?;
+    system_state
 }
 
 /// The rpc-store row's epoch-start snapshot. A restore that lands mid-epoch seeds the row from
@@ -491,5 +572,37 @@ mod tests {
         assert_eq!(pinned(), Some((20, 2)));
         let running = as_of_checkpoint(ended_at(25), pinned().map(|(checkpoint, _)| checkpoint));
         assert_eq!(running.end_checkpoint, None);
+    }
+
+    /// Epoch 1 runs from checkpoint 10 through its last checkpoint 20: pinned inside it, its
+    /// state is the one at the pinned checkpoint, and pinned at 20, the one at 19, since the
+    /// change-epoch transaction in 20 wrote epoch 2's. Pinned outside it, the epoch serves its
+    /// start snapshot instead.
+    #[test]
+    fn system_state_is_read_at_the_pinned_checkpoint_or_the_one_before_the_epoch_end() {
+        let epoch = |start_checkpoint, end_checkpoint| EpochInfo {
+            start_checkpoint,
+            end_checkpoint,
+            ..EpochInfo::default()
+        };
+        let ended_at_20 = epoch(Some(10), Some(20));
+        assert_eq!(system_state_checkpoint(&ended_at_20, 15), Some(15));
+        assert_eq!(system_state_checkpoint(&ended_at_20, 20), Some(19));
+        assert_eq!(system_state_checkpoint(&ended_at_20, 21), None);
+        assert_eq!(system_state_checkpoint(&ended_at_20, 9), None);
+
+        let running = epoch(Some(10), None);
+        assert_eq!(system_state_checkpoint(&running, 10), Some(10));
+        assert_eq!(system_state_checkpoint(&running, 30), Some(30));
+        // The next epoch's row is written at the previous epoch's last checkpoint, before the
+        // epoch starts.
+        assert_eq!(system_state_checkpoint(&running, 9), None);
+
+        // A row a mid-epoch restore seeded, before its start checkpoint is known.
+        assert_eq!(system_state_checkpoint(&epoch(None, None), 30), Some(30));
+        assert_eq!(
+            system_state_checkpoint(&epoch(None, Some(20)), 20),
+            Some(19)
+        );
     }
 }
