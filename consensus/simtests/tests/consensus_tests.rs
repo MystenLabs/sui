@@ -424,6 +424,19 @@ mod consensus_tests {
                     .any(|rejected| !rejected.is_empty())
             }));
         }
+        if voting {
+            // Separate missing persistence before shutdown from loss during replay.
+            // The consumer must only receive commits whose rejection metadata is durable.
+            let store = authorities[0].store();
+            for commit in &original {
+                assert_eq!(
+                    store.read_rejected_transactions(commit.commit_ref).unwrap(),
+                    Some(commit.rejected_transactions_by_block.clone()),
+                    "Observed commit {:?} has missing or divergent rejection metadata before shutdown",
+                    commit.commit_ref,
+                );
+            }
+        }
         authorities[0].stop().await;
         drop(receiver);
 
@@ -438,7 +451,12 @@ mod consensus_tests {
                 .await
                 .unwrap()
                 .unwrap();
-            assert_replayed_commit(&commit, &original[index as usize - 1], voting);
+            assert_replayed_commit(
+                &commit,
+                &original[index as usize - 1],
+                voting,
+                monitor.replay_target(),
+            );
             if index < BATCH_SIZE {
                 monitor.set_highest_handled_commit(index);
             }
@@ -500,7 +518,7 @@ mod consensus_tests {
                 .unwrap();
             assert_eq!(commit.commit_ref.index, index);
             if let Some(expected) = original.get(index as usize - 1) {
-                assert_replayed_commit(&commit, expected, voting);
+                assert_replayed_commit(&commit, expected, voting, monitor.replay_target());
             }
             assert_eq!(monitor.replay_target(), Some(target));
             if index == target {
@@ -596,6 +614,7 @@ mod consensus_tests {
         replayed: &CommittedSubDag,
         original: &CommittedSubDag,
         voting: bool,
+        replay_target: Option<CommitIndex>,
     ) {
         assert_eq!(replayed.commit_ref, original.commit_ref);
         assert_eq!(
@@ -615,7 +634,11 @@ mod consensus_tests {
             original.rejected_transactions_by_block
         );
         if voting {
-            assert!(replayed.recovered_rejected_transactions);
+            assert!(
+                replayed.recovered_rejected_transactions,
+                "Replayed commit {:?} did not recover its persisted rejection metadata (replay target: {:?}; original recovered: {})",
+                replayed.commit_ref, replay_target, original.recovered_rejected_transactions,
+            );
         }
     }
 
