@@ -14,6 +14,8 @@ pub mod streamed_watermarks;
 pub mod tables;
 pub mod testing;
 
+use std::ops::Bound;
+use std::ops::Range;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -57,6 +59,7 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::Transaction;
 
@@ -459,33 +462,36 @@ pub trait KeyValueStoreReader {
         cp_bound: u64,
     ) -> Result<Option<PackageData>>;
 
-    /// Paginate package versions for an original_id, filtered by cp_bound.
+    /// Paginate the versions in `versions` of an original_id, keeping those published at or
+    /// before `cp_bound`. Versions along one lineage are published in non-decreasing checkpoint
+    /// order, so an ascending scan ends at the first version published after `cp_bound`.
     async fn get_package_versions(
         &mut self,
         original_id: ObjectID,
         cp_bound: u64,
-        after_version: Option<u64>,
-        before_version: Option<u64>,
+        versions: Range<u64>,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>>;
 
-    /// Get packages created in a checkpoint range, ordered by checkpoint.
+    /// Get the versions of every package whose `packages_by_checkpoint` keys lie between `lower`
+    /// and `upper`, in key order (publish checkpoint, then original id, then version), or in
+    /// reverse when `descending` is set, at most `limit` of them. A listed version with no
+    /// `packages` row is an error rather than skipped.
     async fn get_packages_by_checkpoint_range(
         &mut self,
-        cp_after: Option<u64>,
-        cp_before: Option<u64>,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>>;
 
-    /// Get all system packages with their latest version at or before `cp_bound`.
-    async fn get_system_packages(
-        &mut self,
-        cp_bound: u64,
-        after_original_id: Option<ObjectID>,
-        limit: usize,
-    ) -> Result<Vec<PackageData>>;
+    /// The original IDs of the system packages recorded in the `system_packages` table, in
+    /// ascending order. A package gets its row when a transaction sent by `0x0` first outputs one
+    /// of its versions, and rows are never removed, so the IDs include every system package
+    /// created at or below the [`SYSTEM_PACKAGES_PIPELINE`] watermark read before this call. They
+    /// may also include packages created above it.
+    async fn get_system_package_ids(&mut self) -> Result<Vec<ObjectID>>;
 }
 
 impl BigTableIndexer {

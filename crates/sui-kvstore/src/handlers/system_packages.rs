@@ -12,7 +12,9 @@ use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::handlers::BigTableProcessor;
 use crate::tables;
 
-/// Pipeline that writes system package entries (packages published by address 0x0).
+/// Pipeline that writes a `system_packages` row for every package version output by a
+/// transaction sent by `0x0`, keyed by the package's original ID. A package upgraded in place
+/// gets its row rewritten with the checkpoint of each upgrade.
 pub struct SystemPackagesPipeline;
 
 #[async_trait::async_trait]

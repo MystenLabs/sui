@@ -224,6 +224,67 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+/// Serve the seed load's request for every system package at `checkpoint`, answering with
+/// `packages` and with no object for every other system package id.
+async fn mock_system_packages(server: &MockServer, checkpoint: u64, packages: &[Object]) {
+    let package_ids: Vec<ObjectID> = sui_types::SYSTEM_PACKAGE_ADDRESSES
+        .iter()
+        .copied()
+        .map(ObjectID::from)
+        .collect();
+    let keys: Vec<_> = package_ids
+        .iter()
+        .map(|id| serde_json::json!({ "address": id.to_string(), "atCheckpoint": checkpoint }))
+        .collect();
+    let objects: Vec<_> = package_ids
+        .iter()
+        .map(|id| packages.iter().find(|package| package.id() == *id))
+        .collect();
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(
+            serde_json::json!({ "variables": { "keys": keys } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&objects)))
+        .mount(server)
+        .await;
+}
+
+/// System package objects at `(id, version)`, each with the modules genesis publishes at `id`: a
+/// package past its first version names its original id through its modules' address.
+fn system_package_objects(versions: &[(ObjectID, u64)]) -> Vec<Object> {
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut OsRng)
+        .deterministic_committee_size(NonZeroUsize::MIN)
+        .build();
+    versions
+        .iter()
+        .map(|&(id, version)| {
+            let genesis_package = config
+                .genesis
+                .objects()
+                .iter()
+                .find(|object| object.id() == id)
+                .and_then(|object| object.data.try_as_package())
+                .expect("genesis publishes every system package");
+            Object::new_package_from_data(
+                sui_types::object::Data::Package(
+                    sui_types::move_package::MovePackage::new(
+                        id,
+                        SequenceNumber::from_u64(version),
+                        genesis_package.serialized_module_map().clone(),
+                        u64::MAX,
+                        vec![],
+                        BTreeMap::new(),
+                    )
+                    .unwrap(),
+                ),
+                TransactionDigest::genesis_marker(),
+            )
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn test_current_object_read_saves_into_rpc_store_when_attached() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -383,6 +444,12 @@ async fn test_seed_load_survives_restart_without_remote() {
 
     let server = MockServer::start().await;
     mock_seed_object(&server, checkpoint, &object).await;
+    let system_packages = system_package_objects(&[
+        (ObjectID::from_single_byte(1), 1),
+        (ObjectID::from_single_byte(2), 1),
+        (ObjectID::from_single_byte(3), 1),
+    ]);
+    mock_system_packages(&server, checkpoint, &system_packages).await;
     let manifest = SeedManifest {
         network: "custom".to_owned(),
         checkpoint,
@@ -591,6 +658,713 @@ async fn test_availability_floor_below_the_fork_passes_through() {
     let (store, _services) = data_store_with_remote(temp.path(), server.uri(), 100);
     assert_eq!(store.get_lowest_available_checkpoint().unwrap(), 10);
     assert_eq!(store.get_lowest_available_checkpoint_objects().unwrap(), 10);
+}
+
+/// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
+/// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
+/// checkpoint are rejected even when the remote's retention reaches further back; at the fork
+/// checkpoint they are served. The listing of every package, which needs each version's publish
+/// checkpoint, starts after it.
+#[tokio::test]
+async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    // The remote retains history from checkpoint 10, below the fork checkpoint.
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    assert_eq!(
+        sui_types::storage::RpcStateReader::get_lowest_checkpoint_with_index_history(&store)
+            .unwrap(),
+        fork_checkpoint + 1
+    );
+
+    let package_id = ObjectID::random();
+    let package = sui_types::object::Object::new_package_from_data(
+        sui_types::object::Data::Package(
+            sui_types::move_package::MovePackage::new(
+                package_id,
+                SequenceNumber::from_u64(1),
+                std::collections::BTreeMap::new(),
+                100_000,
+                vec![],
+                std::collections::BTreeMap::new(),
+            )
+            .unwrap(),
+        ),
+        TransactionDigest::genesis_marker(),
+    );
+    store
+        .local_store()
+        .restore_seed_objects(&[package])
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |at_checkpoint| {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.at_checkpoint = Some(at_checkpoint);
+        tonic::Request::new(request)
+    };
+    let error = service
+        .list_package_versions(list(fork_checkpoint - 1))
+        .await
+        .unwrap_err();
+    let below_floor = "requested data below earliest available; lowest available checkpoint is 100";
+    assert_eq!(error.code(), tonic::Code::OutOfRange);
+    assert_eq!(error.message(), below_floor);
+    let versions = service
+        .list_package_versions(list(fork_checkpoint))
+        .await
+        .unwrap()
+        .into_inner()
+        .versions;
+    assert_eq!(versions.len(), 1);
+    assert_eq!(versions[0].version, Some(1));
+    assert_eq!(versions[0].checkpoint, None);
+
+    // The seeded package has no publish checkpoint, so the listing of every package cannot start
+    // at or before the fork checkpoint.
+    for (start_checkpoint, at_checkpoint) in
+        [(Some(fork_checkpoint), None), (None, Some(fork_checkpoint))]
+    {
+        let mut request = ListPackageVersionsRequest::default();
+        request.start_checkpoint = start_checkpoint;
+        request.at_checkpoint = at_checkpoint;
+        let error = service
+            .list_package_versions(tonic::Request::new(request))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::OutOfRange);
+        assert_eq!(
+            error.message(),
+            "requested data below earliest available; lowest available checkpoint is 101",
+        );
+    }
+
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some(package_id.to_string());
+    request.selector = Some(Selector::AtCheckpoint(fork_checkpoint - 1));
+    let error = service
+        .get_package(tonic::Request::new(request))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::OutOfRange);
+    assert_eq!(error.message(), below_floor);
+
+    // The fork checkpoint itself is served: the loaded rows hold the state at its end. Both
+    // bounds accept it and the read finds the package, whose response then fails to build only
+    // because this seeded package has no modules.
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some(package_id.to_string());
+    request.selector = Some(Selector::AtCheckpoint(fork_checkpoint));
+    let error = service
+        .get_package(tonic::Request::new(request))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::Internal, "{error:?}");
+    assert_eq!(
+        error.message(),
+        format!("Package has no modules: {package_id}")
+    );
+}
+
+/// The fork loads a system package as of the fork checkpoint, so it stores none of the versions
+/// that package replaced before the fork. `GetPackage` refuses those versions as pruned rather
+/// than as versions that never existed.
+#[tokio::test]
+async fn test_system_package_versions_replaced_before_the_fork_are_pruned() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+    // A system package at version 3, upgraded in place twice before the fork.
+    let package_id = ObjectID::random();
+    let mut module = move_binary_format::file_format::empty_module();
+    module.address_identifiers[0] = package_id.into();
+    let package = sui_types::object::Object::new_package_from_data(
+        sui_types::object::Data::Package(sui_types::move_package::MovePackage::new_system(
+            SequenceNumber::from_u64(3),
+            &[module],
+            [],
+        )),
+        TransactionDigest::genesis_marker(),
+    );
+    store
+        .local_store()
+        .restore_seed_objects(&[package])
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let get_version = |version| {
+        let mut request = GetPackageRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.selector = Some(Selector::Version(version));
+        service.get_package(tonic::Request::new(request))
+    };
+
+    for version in [1, 2] {
+        let error = get_version(version).await.unwrap_err();
+        assert_eq!(
+            error.code(),
+            tonic::Code::OutOfRange,
+            "v{version}: {error:?}"
+        );
+        assert_eq!(
+            error.message(),
+            "requested data below earliest available; lowest available checkpoint is 100",
+            "v{version}"
+        );
+    }
+
+    let package = get_version(3).await.unwrap().into_inner().package.unwrap();
+    assert_eq!(package.version, Some(3));
+
+    // Versions this lineage never had.
+    for version in [0, 4] {
+        let error = get_version(version).await.unwrap_err();
+        assert_eq!(error.code(), tonic::Code::NotFound, "v{version}: {error:?}");
+    }
+}
+
+/// The fork has no rows for the system-package versions replaced before it, so a listing bounded
+/// by `at_checkpoint` that starts below the lowest version it stores is refused as pruned, naming
+/// that version, instead of returning the history from that version on as if it were complete. A
+/// listing that starts at that version is served, and so is a listing without `at_checkpoint`. A
+/// range ending at version 1 holds no version on any node, so it is an empty answer.
+#[tokio::test]
+async fn test_system_package_listing_below_the_lowest_stored_version_is_refused() {
+    use prost::Message;
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::google::rpc::ErrorInfo;
+    use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsResponse;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+    // A system package at version 3, upgraded in place twice before the fork.
+    let package_id = ObjectID::random();
+    let mut module = move_binary_format::file_format::empty_module();
+    module.address_identifiers[0] = package_id.into();
+    let package = sui_types::object::Object::new_package_from_data(
+        sui_types::object::Data::Package(sui_types::move_package::MovePackage::new_system(
+            SequenceNumber::from_u64(3),
+            &[module],
+            [],
+        )),
+        TransactionDigest::genesis_marker(),
+    );
+    store
+        .local_store()
+        .restore_seed_objects(&[package])
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |at_checkpoint, from_version: Option<u64>| {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.at_checkpoint = at_checkpoint;
+        request.start_version = from_version;
+        service.list_package_versions(tonic::Request::new(request))
+    };
+    let listed = |response: tonic::Response<ListPackageVersionsResponse>| {
+        response
+            .into_inner()
+            .versions
+            .iter()
+            .map(|version| version.version.unwrap())
+            .collect::<Vec<_>>()
+    };
+
+    for from_version in [None, Some(1), Some(2)] {
+        let error = list(Some(fork_checkpoint), from_version).await.unwrap_err();
+        assert_eq!(
+            error.code(),
+            tonic::Code::OutOfRange,
+            "from {from_version:?}: {error:?}"
+        );
+        assert_eq!(
+            error.message(),
+            "requested object versions below earliest available; lowest available checkpoint is \
+             100, and lowest available version is 3"
+        );
+        let status = RpcStatus::decode(error.details()).unwrap();
+        let error_info = status
+            .details
+            .iter()
+            .find(|detail| detail.type_url.ends_with("google.rpc.ErrorInfo"))
+            .map(|detail| ErrorInfo::decode(detail.value.as_slice()).unwrap())
+            .unwrap();
+        assert_eq!(error_info.reason, "BELOW_EARLIEST_AVAILABLE");
+        assert_eq!(
+            error_info.metadata,
+            [
+                ("lowestAvailableCheckpoint".to_owned(), "100".to_owned()),
+                ("lowestAvailableVersion".to_owned(), "3".to_owned()),
+            ]
+            .into_iter()
+            .collect()
+        );
+    }
+
+    let response = list(Some(fork_checkpoint), Some(3)).await.unwrap();
+    assert_eq!(listed(response), vec![3]);
+    let response = list(None, None).await.unwrap();
+    assert_eq!(listed(response), vec![3]);
+
+    // A range below `OBJECT_START_VERSION`, in page-token mode under `at_checkpoint` and in
+    // descending cursor mode.
+    for options in [None, Some(Ordering::Descending)] {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.at_checkpoint = Some(fork_checkpoint);
+        request.end_version = Some(1);
+        request.options = options.map(|ordering| {
+            let mut options = QueryOptions::default();
+            options.ordering = Some(ordering as i32);
+            options
+        });
+        let response = service
+            .list_package_versions(tonic::Request::new(request))
+            .await
+            .unwrap();
+        assert_eq!(listed(response), Vec::<u64>::new(), "{options:?}");
+    }
+}
+
+/// The fork loads a system package at its version at the fork checkpoint, without the versions
+/// below it. A cursor naming one of those continues a listing from a view holding them, such as
+/// kv-rpc's: it is rejected in either order, with or without `at_checkpoint`, as below where the
+/// fork's history begins, naming the loaded version, rather than listing from the loaded version
+/// and skipping the versions in between. A cursor above every version the fork has lies past its
+/// tip. A page is refused when it reaches below the loaded version, and a full descending page
+/// that stops at the loaded version, such as the latest version at a checkpoint, is served.
+#[tokio::test]
+async fn test_list_package_versions_rejects_cursors_this_fork_does_not_serve() {
+    use prost::Message;
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
+    use sui_rpc_api::proto::google::rpc::ErrorInfo;
+    use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsResponse;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    let framework = ObjectID::from_single_byte(2);
+    store
+        .local_store()
+        .restore_seed_objects(&system_package_objects(&[(framework, 3)]))
+        .unwrap();
+    let highest_indexed = sui_types::storage::RpcStateReader::indexes(&store)
+        .unwrap()
+        .get_highest_indexed_checkpoint_seq_number()
+        .unwrap()
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |ordering: Ordering,
+                after: Option<u64>,
+                before: Option<u64>,
+                at_checkpoint,
+                limit: Option<u32>| {
+        let cursor = |version| {
+            PackageVersionCursor::Lineage {
+                original_package_id: framework,
+                version,
+            }
+            .encode()
+        };
+        let mut options = QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(cursor);
+        options.before = before.map(cursor);
+        options.limit = limit;
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(framework.to_string());
+        request.options = Some(options);
+        request.at_checkpoint = at_checkpoint;
+        service.list_package_versions(tonic::Request::new(request))
+    };
+    let lowest_available_version = |error: &tonic::Status| {
+        RpcStatus::decode(error.details())
+            .unwrap()
+            .details
+            .iter()
+            .find(|detail| detail.type_url.ends_with("google.rpc.ErrorInfo"))
+            .map(|detail| ErrorInfo::decode(detail.value.as_slice()).unwrap())
+            .and_then(|info| info.metadata.get("lowestAvailableVersion").cloned())
+    };
+
+    let below_loaded = "requested object versions below earliest available; lowest available \
+                        checkpoint is 100, and lowest available version is 3";
+    let past_tip = format!(
+        "requested data above latest available; cursor is at checkpoint {0}, and only \
+         checkpoints below {0} are available",
+        highest_indexed + 1
+    );
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        for at_checkpoint in [None, Some(fork_checkpoint)] {
+            for (version, message, lowest_version) in [
+                (1, below_loaded, Some("3".to_owned())),
+                (4, past_tip.as_str(), None),
+            ] {
+                for (after, before) in [(Some(version), None), (None, Some(version))] {
+                    let error = list(ordering, after, before, at_checkpoint, None)
+                        .await
+                        .unwrap_err();
+                    let case = format!(
+                        "{ordering:?} after {after:?} before {before:?} at {at_checkpoint:?}"
+                    );
+                    assert_eq!(
+                        (error.code(), error.message()),
+                        (tonic::Code::OutOfRange, message),
+                        "{case}"
+                    );
+                    assert_eq!(lowest_available_version(&error), lowest_version, "{case}");
+                }
+            }
+        }
+    }
+
+    let listed = |response: tonic::Response<ListPackageVersionsResponse>| {
+        response
+            .into_inner()
+            .versions
+            .iter()
+            .map(|version| version.version.unwrap())
+            .collect::<Vec<_>>()
+    };
+    let assert_below_loaded = |error: tonic::Status, case: &str| {
+        assert_eq!(
+            (error.code(), error.message()),
+            (tonic::Code::OutOfRange, below_loaded),
+            "{case}"
+        );
+        assert_eq!(
+            lowest_available_version(&error),
+            Some("3".to_owned()),
+            "{case}"
+        );
+    };
+
+    // No lineage has a version below 1, so a cursor at version 0 skips nothing: the page before it
+    // is empty in either order.
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        let response = list(ordering, None, Some(0), None, None).await.unwrap();
+        assert_eq!(listed(response), Vec::<u64>::new(), "{ordering:?}");
+    }
+
+    // A cursor at the loaded version is served: the page after it is empty, and the page before
+    // it lies below the loaded version.
+    let response = list(Ordering::Ascending, Some(3), None, None, None)
+        .await
+        .unwrap();
+    assert_eq!(listed(response), Vec::<u64>::new());
+    let error = list(Ordering::Descending, None, Some(3), None, None)
+        .await
+        .unwrap_err();
+    assert_below_loaded(error, "descending before 3");
+
+    // The latest version at a checkpoint is a one-version descending page, which stops at the
+    // loaded version; a two-version page reaches below it.
+    let response = list(
+        Ordering::Descending,
+        None,
+        None,
+        Some(fork_checkpoint),
+        Some(1),
+    )
+    .await
+    .unwrap();
+    assert_eq!(listed(response), vec![3]);
+    let error = list(
+        Ordering::Descending,
+        None,
+        None,
+        Some(fork_checkpoint),
+        Some(2),
+    )
+    .await
+    .unwrap_err();
+    assert_below_loaded(error, "descending limit 2");
+}
+
+/// A cursor of the listing of every package above the fork's highest indexed checkpoint comes
+/// from a newer view of the ledger, and is rejected in either order, rather than ending a page at
+/// the fork's tip as if the listing ended there.
+#[tokio::test]
+async fn test_list_all_package_versions_rejects_cursors_past_the_tip() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), 100);
+    // The seed load sets the indexed tip.
+    store.local_store().restore_seed_objects(&[]).unwrap();
+    let highest_indexed = sui_types::storage::RpcStateReader::indexes(&store)
+        .unwrap()
+        .get_highest_indexed_checkpoint_seq_number()
+        .unwrap()
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |ordering: Ordering, after: Option<u64>, before: Option<u64>| {
+        let cursor = |checkpoint| {
+            PackageVersionCursor::AllPackages {
+                checkpoint,
+                original_package_id: ObjectID::from_single_byte(2),
+                version: 1,
+            }
+            .encode()
+        };
+        let mut options = QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(cursor);
+        options.before = before.map(cursor);
+        let mut request = ListPackageVersionsRequest::default();
+        request.options = Some(options);
+        service.list_package_versions(tonic::Request::new(request))
+    };
+
+    let past_tip = highest_indexed + 1;
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        for (after, before) in [(Some(past_tip), None), (None, Some(past_tip))] {
+            let error = list(ordering, after, before).await.unwrap_err();
+            assert_eq!(
+                (error.code(), error.message()),
+                (
+                    tonic::Code::OutOfRange,
+                    format!(
+                        "requested data above latest available; cursor is at checkpoint \
+                         {past_tip}, and only checkpoints below {past_tip} are available"
+                    )
+                    .as_str()
+                ),
+                "{ordering:?} after {after:?} before {before:?}"
+            );
+        }
+    }
+}
+
+/// The seed load records every system package live at the fork checkpoint, so
+/// `ListSystemPackages` there lists each at its version, though nothing else fetched them.
+#[tokio::test]
+async fn test_list_system_packages_at_the_fork_checkpoint() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::ListSystemPackagesRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::PackageVersion;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let packages = system_package_objects(&[
+        (ObjectID::from_single_byte(1), 1),
+        (ObjectID::from_single_byte(2), 3),
+        (ObjectID::from_single_byte(3), 2),
+    ]);
+    mock_system_packages(&server, fork_checkpoint, &packages).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    let manifest = SeedManifest {
+        network: "custom".to_owned(),
+        checkpoint: fork_checkpoint,
+        addresses: vec![],
+        entries: vec![],
+    };
+    load_seed_objects(&store, &manifest).expect("seed load should fetch the system packages");
+
+    let service = RpcService::new(Arc::new(store));
+    let listed = service
+        .list_system_packages(tonic::Request::new(ListSystemPackagesRequest::new(
+            fork_checkpoint,
+        )))
+        .await
+        .unwrap()
+        .into_inner()
+        .system_packages;
+    // The fork's indexes hold no history before the fork checkpoint, so no publish checkpoint is
+    // known.
+    let expected: Vec<_> = packages
+        .iter()
+        .map(|package| {
+            PackageVersion::new(&package.id().into(), package.version().value())
+                .with_original_id(package.id().to_canonical_string(true))
+        })
+        .collect();
+    assert_eq!(listed, expected);
+}
+
+/// `0x1`, `0x2` and `0x3` exist at every checkpoint, so a remote answering with none for one of
+/// them fails the seed load, which stays incomplete, rather than seeding a fork that lacks it.
+/// Other system packages may be absent at the fork checkpoint.
+#[tokio::test]
+async fn test_seed_load_fails_without_a_core_system_package() {
+    let fork_checkpoint = 100;
+    let manifest = SeedManifest {
+        network: "custom".to_owned(),
+        checkpoint: fork_checkpoint,
+        addresses: vec![],
+        entries: vec![],
+    };
+    for missing in 1..=3u8 {
+        let temp = tempfile::tempdir().expect("failed to create tempdir");
+        let server = MockServer::start().await;
+        let present: Vec<_> = (1..=3u8)
+            .filter(|id| *id != missing)
+            .map(|id| (ObjectID::from_single_byte(id), 1))
+            .collect();
+        mock_system_packages(&server, fork_checkpoint, &system_package_objects(&present)).await;
+        let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+        let error = load_seed_objects(&store, &manifest).unwrap_err();
+        let missing_id = ObjectID::from_single_byte(missing);
+        assert!(
+            format!("{error:#}").contains(&format!("no system package {missing_id}")),
+            "{error:#}"
+        );
+        assert!(!store.local_store().seed_load_complete().unwrap());
+        assert!(!store.local_store().system_packages_loaded().unwrap());
+    }
+}
+
+/// A fork directory whose seed load committed without the system packages loads them on its next
+/// start, so `ListSystemPackages` at the fork checkpoint lists every one rather than only those the
+/// fork fetched on demand. Before that start the fork fetched `0x2` on demand and then wrote newer
+/// `0x2` and `0x3` locally, `0x3` without ever fetching it: both local versions stay current, and
+/// both packages are still recorded at their fork-checkpoint versions. Later starts do not fetch
+/// the packages again.
+#[tokio::test]
+async fn test_resumed_fork_loads_the_system_packages_its_seed_lacked() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::ListSystemPackagesRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::PackageVersion;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let packages = system_package_objects(&[
+        (ObjectID::from_single_byte(1), 1),
+        (ObjectID::from_single_byte(2), 3),
+        (ObjectID::from_single_byte(3), 2),
+    ]);
+    mock_system_packages(&server, fork_checkpoint, &packages).await;
+    let manifest = SeedManifest {
+        network: "custom".to_owned(),
+        checkpoint: fork_checkpoint,
+        addresses: vec![],
+        entries: vec![],
+    };
+
+    {
+        let (store, services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+        store.local_store().restore_seed_objects(&[]).unwrap();
+        store
+            .local_store()
+            .save_live_object_if_current(&packages[1])
+            .unwrap();
+        let local_versions = [
+            (ObjectID::from_single_byte(2), 4),
+            (ObjectID::from_single_byte(3), 5),
+        ];
+        let upgraded: BTreeMap<_, _> = system_package_objects(&local_versions)
+            .into_iter()
+            .map(|package| (package.id(), package))
+            .collect();
+        store
+            .local_store()
+            .commit_local_object_diff_for_testing(&upgraded, &[])
+            .unwrap();
+        assert!(!store.local_store().system_packages_loaded().unwrap());
+
+        load_seed_objects(&store, &manifest).expect("a resumed load should fetch the packages");
+        assert!(store.local_store().system_packages_loaded().unwrap());
+        for (id, fork_version, local_version) in [
+            (ObjectID::from_single_byte(2), 3, 4),
+            (ObjectID::from_single_byte(3), 2, 5),
+        ] {
+            assert_eq!(
+                store
+                    .local_store()
+                    .get_latest_object_status(id)
+                    .unwrap()
+                    .map(|(version, _)| version),
+                Some(SequenceNumber::from_u64(local_version)),
+                "{id}",
+            );
+            assert_eq!(
+                RpcIndexes::get_object_version_at_checkpoint(
+                    store.local_store().reader(),
+                    id,
+                    fork_checkpoint,
+                )
+                .unwrap(),
+                Some(SequenceNumber::from_u64(fork_version)),
+                "{id}",
+            );
+        }
+
+        let listed = RpcService::new(Arc::new(store.clone()))
+            .list_system_packages(tonic::Request::new(ListSystemPackagesRequest::new(
+                fork_checkpoint,
+            )))
+            .await
+            .unwrap()
+            .into_inner()
+            .system_packages;
+        let expected: Vec<_> = packages
+            .iter()
+            .map(|package| {
+                PackageVersion::new(&package.id().into(), package.version().value())
+                    .with_original_id(package.id().to_canonical_string(true))
+            })
+            .collect();
+        assert_eq!(listed, expected);
+        drop(services);
+    }
+
+    let (store, _services) = data_store_with_remote(
+        temp.path(),
+        "http://localhost:1".to_owned(),
+        fork_checkpoint,
+    );
+    load_seed_objects(&store, &manifest).expect("loaded system packages must not be refetched");
 }
 
 #[tokio::test]

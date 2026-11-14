@@ -20,7 +20,7 @@
 //! - **Synthetic floor rows** `(id, 0) -> window-entry version` -- for
 //!   an object that existed before the available window `[L, T]` and
 //!   first changes within it, this records the version it entered the
-//!   window with, so a read in `[L, first-change)` resolves to that
+//!   window with, so a read in `[L - 1, first-change)` resolves to that
 //!   instead of the newer restore floor. Written during the embedded
 //!   backfill only: past `T` the restore floor already covers
 //!   pre-window objects, so the dedup read is skipped. The row is keyed
@@ -311,11 +311,11 @@ impl sequential::Handler for ObjectVersionByCheckpoint {
     }
 }
 
-/// The restore anchor `T` (`__restore.restored_at`) for this pipeline,
-/// or `None` if it was never restored. Read once at registration so the
-/// processor can scope floor candidates to the backfill window `[L, T]`.
-pub(crate) fn restored_anchor(db: &Db) -> anyhow::Result<Option<u64>> {
-    let key = PipelineTaskKey::new(ObjectVersionByCheckpoint::NAME);
+/// The restore anchor `T` (`__restore.restored_at`) for `pipeline`,
+/// or `None` if it was never restored. Read once at registration so a
+/// processor can scope work to the backfill window `[L, T]`.
+pub(crate) fn restored_anchor(db: &Db, pipeline: &str) -> anyhow::Result<Option<u64>> {
+    let key = PipelineTaskKey::new(pipeline);
     Ok(db
         .framework()
         .restore
@@ -600,10 +600,16 @@ mod tests {
     fn restored_anchor_reads_restore_state() {
         let (_dir, db, _schema) = fresh_db();
         // No restore row yet.
-        assert_eq!(restored_anchor(&db).unwrap(), None);
+        assert_eq!(
+            restored_anchor(&db, ObjectVersionByCheckpoint::NAME).unwrap(),
+            None
+        );
         // A completed restore exposes its anchor.
         seed_restored_at(&db, 42);
-        assert_eq!(restored_anchor(&db).unwrap(), Some(42));
+        assert_eq!(
+            restored_anchor(&db, ObjectVersionByCheckpoint::NAME).unwrap(),
+            Some(42)
+        );
     }
 
     #[test]

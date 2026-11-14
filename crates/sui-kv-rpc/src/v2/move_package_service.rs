@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_kvstore::BigTableClient;
-use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::PackageData;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::GetDatatypeRequest;
 use sui_rpc::proto::sui::rpc::v2::GetDatatypeResponse;
@@ -12,21 +11,28 @@ use sui_rpc::proto::sui::rpc::v2::GetPackageRequest;
 use sui_rpc::proto::sui::rpc::v2::GetPackageResponse;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListSystemPackagesRequest;
+use sui_rpc::proto::sui::rpc::v2::ListSystemPackagesResponse;
 use sui_rpc::proto::sui::rpc::v2::PackageVersion;
 use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+use sui_rpc_api::AtCheckpointUpperBound;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
-use sui_rpc_api::grpc::v2::move_package_service::PageToken;
+use sui_rpc_api::grpc::v2::move_package_service::AllPackageVersionsQuery;
+use sui_rpc_api::grpc::v2::move_package_service::PackageVersionsQuery;
 use sui_rpc_api::grpc::v2::move_package_service::get_datatype_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_function_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_package_response;
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::MovePackage;
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 
 use crate::KvRpcServer;
+use crate::bigtable_client::BigTableClient as LimitedBigTableClient;
 use crate::served_height::ServedHeight;
 
 #[tonic::async_trait]
@@ -36,7 +42,7 @@ impl MovePackageService for KvRpcServer {
         request: tonic::Request<GetPackageRequest>,
     ) -> Result<tonic::Response<GetPackageResponse>, tonic::Status> {
         get_package(
-            self.client.clone(),
+            self.limited_client("GetPackage"),
             ServedHeight::of(&request)?,
             request.into_inner(),
         )
@@ -49,28 +55,60 @@ impl MovePackageService for KvRpcServer {
         &self,
         request: tonic::Request<GetDatatypeRequest>,
     ) -> Result<tonic::Response<GetDatatypeResponse>, tonic::Status> {
-        get_datatype(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_datatype(
+            self.limited_client("GetDatatype"),
+            ServedHeight::of(&request)?,
+            request.into_inner(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_function(
         &self,
         request: tonic::Request<GetFunctionRequest>,
     ) -> Result<tonic::Response<GetFunctionResponse>, tonic::Status> {
-        get_function(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_function(
+            self.limited_client("GetFunction"),
+            ServedHeight::of(&request)?,
+            request.into_inner(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn list_package_versions(
         &self,
         request: tonic::Request<ListPackageVersionsRequest>,
     ) -> Result<tonic::Response<ListPackageVersionsResponse>, tonic::Status> {
-        list_package_versions(
-            self.client.clone(),
+        let served_height = ServedHeight::of(&request)?;
+        let request = request.into_inner();
+        let response = if request.package_id.is_none() {
+            list_all_package_versions(
+                self.limited_client("ListPackageVersions"),
+                served_height,
+                &request,
+            )
+            .await
+        } else {
+            list_package_versions(
+                self.limited_client("ListPackageVersions"),
+                served_height,
+                request,
+            )
+            .await
+        };
+        response.map(tonic::Response::new).map_err(Into::into)
+    }
+
+    async fn list_system_packages(
+        &self,
+        request: tonic::Request<ListSystemPackagesRequest>,
+    ) -> Result<tonic::Response<ListSystemPackagesResponse>, tonic::Status> {
+        list_system_packages(
+            self.limited_client("ListSystemPackages"),
             ServedHeight::of(&request)?,
             request.into_inner(),
         )
@@ -80,11 +118,9 @@ impl MovePackageService for KvRpcServer {
     }
 }
 
-/// Serve a package. `Version` and `AtCheckpoint` lookups are answered as of `served_height`;
-/// the bare-id path reads the package object by its storage ID, whose row records no
-/// checkpoint to compare against.
+/// Serve a package as of `served_height`: a package published above it is `NotFound`.
 async fn get_package(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     served_height: ServedHeight,
     request: GetPackageRequest,
 ) -> Result<GetPackageResponse, RpcError> {
@@ -95,44 +131,29 @@ async fn get_package(
     })?;
     let package_id = parse_package_id(package_id_str)?;
 
-    let selector = match request.selector {
+    let data = match request.selector {
         None => {
-            let package = load_package(client, package_id).await?;
+            let package = load_package_at_served_height(client, served_height, package_id).await?;
             return get_package_response(&package);
         }
-        Some(selector) => selector,
-    };
-
-    let data = match selector {
-        Selector::Version(version) => {
+        Some(Selector::Version(version)) => {
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
             client
                 .get_packages_by_version(&[(original_id, version)])
-                .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .await?
                 .pop()
                 .filter(|data| data.cp_sequence_number <= served_height.checkpoint)
         }
-        Selector::AtCheckpoint(at_checkpoint) => {
+        Some(Selector::AtCheckpoint(at_checkpoint)) => {
             // The response does not echo the checkpoint it resolved at, so a bound above the
             // served height would let a caller persist a wrong answer; fail closed instead.
-            if at_checkpoint > served_height.checkpoint {
-                return Err(RpcError::new(
-                    tonic::Code::NotFound,
-                    format!(
-                        "requested checkpoint {at_checkpoint} is not yet indexed; highest \
-                         indexed checkpoint is {}",
-                        served_height.checkpoint,
-                    ),
-                ));
-            }
+            AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
             client
                 .get_package_latest(original_id, at_checkpoint)
-                .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .await?
         }
-        _ => {
+        Some(_) => {
             return Err(FieldViolation::new("selector")
                 .with_description("unknown selector variant")
                 .with_reason(ErrorReason::FieldInvalid)
@@ -141,26 +162,14 @@ async fn get_package(
     }
     .ok_or_else(RpcError::not_found)?;
 
-    let storage_id = ObjectID::from_bytes(&data.package_id).map_err(|e| {
-        RpcError::new(
-            tonic::Code::Internal,
-            format!("invalid stored package id: {e}"),
-        )
-    })?;
-
-    let object = client
-        .get_objects(&[ObjectKey(storage_id, data.package_version.into())])
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        .pop()
-        .ok_or_else(RpcError::not_found)?;
-    let package = into_package(object)?;
-
+    let package = load_package_version(client, data).await?;
     get_package_response(&package)
 }
 
+/// Serve a datatype of the package a bare storage ID names, resolved as `GetPackage` resolves it.
 async fn get_datatype(
-    client: BigTableClient,
+    client: LimitedBigTableClient,
+    served_height: ServedHeight,
     request: GetDatatypeRequest,
 ) -> Result<GetDatatypeResponse, RpcError> {
     let package_id_str = request.package_id.as_ref().ok_or_else(|| {
@@ -181,12 +190,16 @@ async fn get_datatype(
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = load_package(client, parse_package_id(package_id_str)?).await?;
+    let package =
+        load_package_at_served_height(client, served_height, parse_package_id(package_id_str)?)
+            .await?;
     get_datatype_response(&package, module_name, datatype_name)
 }
 
+/// Serve a function of the package a bare storage ID names, resolved as `GetPackage` resolves it.
 async fn get_function(
-    client: BigTableClient,
+    client: LimitedBigTableClient,
+    served_height: ServedHeight,
     request: GetFunctionRequest,
 ) -> Result<GetFunctionResponse, RpcError> {
     let package_id_str = request.package_id.as_ref().ok_or_else(|| {
@@ -207,13 +220,16 @@ async fn get_function(
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = load_package(client, parse_package_id(package_id_str)?).await?;
+    let package =
+        load_package_at_served_height(client, served_height, parse_package_id(package_id_str)?)
+            .await?;
     get_function_response(&package, module_name, function_name)
 }
 
-/// List the versions of a package published at or below `served_height`.
+/// List the versions of a package published at or below `served_height`, or at or below the
+/// request's `at_checkpoint` when set.
 async fn list_package_versions(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     served_height: ServedHeight,
     request: ListPackageVersionsRequest,
 ) -> Result<ListPackageVersionsResponse, RpcError> {
@@ -222,90 +238,248 @@ async fn list_package_versions(
             .with_description("missing package_id")
             .with_reason(ErrorReason::FieldMissing)
     })?;
-    let original_package_id =
-        resolve_original_package_id(client.clone(), parse_package_id(package_id_str)?).await?;
+    let package_id = parse_package_id(package_id_str)?;
 
-    let page_size = request
-        .page_size
-        .map(|s| (s as usize).clamp(1, 10000))
-        .unwrap_or(1000);
-
-    let page_token = request
-        .page_token
-        .map(|token| PageToken::decode(&token))
-        .transpose()?;
-
-    if let Some(token) = &page_token
-        && token.original_package_id != original_package_id
-    {
-        return Err(FieldViolation::new("page_token")
-            .with_description("page token package ID does not match request package ID")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
+    // The bound is checked before the package is resolved: a package published above the
+    // served height may have no rows yet, and answering `NotFound` for it would hide that the
+    // bound is not served yet. BigTable holds full history, so there is no lower bound to check.
+    if let Some(at_checkpoint) = request.at_checkpoint {
+        AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
     }
 
-    // The token's version is the first version of the next page (inclusive); the reader's
-    // `after_version` bound is exclusive.
-    let first_page = page_token.is_none();
-    let after_version = page_token.map(|token| token.version.saturating_sub(1));
+    let original_package_id = resolve_original_package_id(client.clone(), package_id).await?;
 
-    // Versions are published in checkpoint order, so those above the served height can only
-    // come at the end of this ascending scan. Cutting them here rather than passing the height
-    // as `cp_bound` keeps the scan unbounded by checkpoint, which lets BigTable stop at the row
-    // limit.
-    let mut versions: Vec<_> = client
-        .get_package_versions(
-            original_package_id,
-            u64::MAX,
-            after_version,
-            None,
-            page_size + 1,
-            false,
-        )
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+    let query = PackageVersionsQuery::new(&request, original_package_id)?;
+
+    // This server serves a version when the version has a row published at or below the served
+    // height. BigTable holds every version from genesis, so a page token or cursor for a version
+    // it does not serve lies past its tip. See `PackageVersionsQuery::cursor_versions`. The check
+    // runs alongside the listing, whose rows are dropped if it fails.
+    let cursor_keys: Vec<_> = query
+        .cursor_versions()
+        .map(|version| (original_package_id, version))
+        .collect();
+    let check_cursors = async {
+        if cursor_keys.is_empty() {
+            return Ok(());
+        }
+        let rows = client.get_packages_by_version(&cursor_keys).await?;
+        let served = cursor_keys.iter().all(|(_, version)| {
+            rows.iter().any(|pkg| {
+                pkg.package_version == *version
+                    && pkg.cp_sequence_number <= served_height.checkpoint
+            })
+        });
+        if !served {
+            return Err(
+                AtCheckpointUpperBound::new(served_height.checkpoint).unindexed_cursor_error()
+            );
+        }
+        Ok(())
+    };
+
+    let cp_bound = request.at_checkpoint.unwrap_or(served_height.checkpoint);
+
+    // An ascending scan ends at the first version published after `cp_bound`; a descending scan
+    // skips the versions published after it.
+    let list_versions = async {
+        client
+            .get_package_versions(
+                original_package_id,
+                cp_bound,
+                query.versions.clone(),
+                query.read_limit(),
+                query.descending,
+            )
+            .await
+    };
+
+    let ((), rows) = tokio::try_join!(check_cursors, list_versions)?;
+    let versions: Vec<_> = rows
         .into_iter()
-        .take_while(|pkg| pkg.cp_sequence_number <= served_height.checkpoint)
         .map(|pkg| {
             let storage_id = ObjectID::from_bytes(&pkg.package_id)
                 .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-            Ok(PackageVersion::new(&storage_id.into(), pkg.package_version))
+            Ok(query.listed_version(
+                storage_id,
+                pkg.package_version,
+                Some(pkg.cp_sequence_number),
+            ))
         })
         .collect::<Result<_, RpcError>>()?;
 
-    // Every package has a first version, so a first page with nothing at or below the served
-    // height means the package is not published yet as of that height.
-    if first_page && versions.is_empty() {
-        return Err(RpcError::not_found());
+    // A first page that finds nothing is `NotFound` only when the package has no version
+    // published at or below the served height: a package published by then but outside the
+    // request's `at_checkpoint` or version bounds lists no versions instead.
+    if query.is_first_page() && versions.is_empty() {
+        let published = !client
+            .get_package_versions(
+                original_package_id,
+                served_height.checkpoint,
+                0..u64::MAX,
+                1,
+                false,
+            )
+            .await?
+            .is_empty();
+        if !published {
+            return Err(RpcError::not_found());
+        }
     }
 
-    let next_page_token = if versions.len() > page_size {
-        versions.pop().and_then(|next| {
-            next.version.map(|version| {
-                PageToken {
-                    original_package_id,
-                    version,
-                }
-                .encode()
-            })
-        })
-    } else {
-        None
-    };
-
-    Ok(ListPackageVersionsResponse::new(versions, next_page_token))
+    Ok(query.response(versions))
 }
 
-/// Load a package by its storage ID: a storage ID identifies exactly one immutable package
-/// version, so the latest object at that ID is the package itself.
+/// List the versions of every package published from the request's `start_checkpoint` through
+/// its `at_checkpoint`, or through `served_height` when that is unset, in publish order, reading
+/// under the request limiter.
+async fn list_all_package_versions(
+    client: LimitedBigTableClient,
+    served_height: ServedHeight,
+    request: &ListPackageVersionsRequest,
+) -> Result<ListPackageVersionsResponse, RpcError> {
+    // BigTable holds full history, so a listing can start anywhere from genesis.
+    let query = AllPackageVersionsQuery::new(
+        request,
+        0,
+        AtCheckpointUpperBound::new(served_height.checkpoint),
+    )?;
+
+    let versions = client
+        .get_packages_by_checkpoint_range(query.lower, query.upper, query.limit(), query.descending)
+        .await?
+        .into_iter()
+        .map(|package| {
+            let storage_id = ObjectID::from_bytes(&package.package_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let original_id = ObjectID::from_bytes(&package.original_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let key = PackagePublishKey {
+                checkpoint: package.cp_sequence_number,
+                original_id,
+                version: package.package_version,
+            };
+            Ok(query.listed_version(key, storage_id))
+        })
+        .collect::<Result<_, RpcError>>()?;
+
+    query.response(versions)
+}
+
+/// List the system packages as of the end of `at_checkpoint`, each at its latest version as of
+/// that checkpoint. The checkpoint must be at or below `served_height`, which bounds both the
+/// `system_packages` table the IDs come from and the `packages` table the versions come from.
+/// Every read takes its own permit from `client`'s request limiter and releases it before
+/// returning, so the per-package reads run up to the limiter's capacity at a time.
+async fn list_system_packages(
+    client: LimitedBigTableClient,
+    served_height: ServedHeight,
+    request: ListSystemPackagesRequest,
+) -> Result<ListSystemPackagesResponse, RpcError> {
+    let at_checkpoint = request.at_checkpoint.ok_or_else(|| {
+        FieldViolation::new("at_checkpoint")
+            .with_description("missing at_checkpoint")
+            .with_reason(ErrorReason::FieldMissing)
+    })?;
+    AtCheckpointUpperBound::new(served_height.checkpoint).check(at_checkpoint)?;
+
+    // `served_height` was read before this scan starts, so the scan finds every system package
+    // created at or below it, and so at or below `at_checkpoint`.
+    let ids = client.get_system_package_ids().await?;
+    let latest = futures::future::try_join_all(
+        ids.iter()
+            .map(|original_id| client.get_package_latest(*original_id, at_checkpoint)),
+    )
+    .await?;
+
+    // The scan may include packages created after `at_checkpoint`; they have no version at or
+    // below it. A system package keeps its original ID across upgrades, so the IDs' ascending
+    // order is also the order of the storage IDs.
+    let system_packages = latest
+        .into_iter()
+        .flatten()
+        .map(|pkg| {
+            let storage_id = ObjectID::from_bytes(&pkg.package_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let original_id = ObjectID::from_bytes(&pkg.original_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            Ok(PackageVersion::new(&storage_id.into(), pkg.package_version)
+                .with_checkpoint(pkg.cp_sequence_number)
+                .with_original_id(original_id.to_canonical_string(true)))
+        })
+        .collect::<Result<_, RpcError>>()?;
+
+    Ok(ListSystemPackagesResponse::new(system_packages))
+}
+
+/// Load the package a bare storage ID names as of `served_height`: a package published above it
+/// is `NotFound`. A storage ID holds one package version that never changes, except for system
+/// packages, which are upgraded in place: a version above the first one at the package's
+/// original ID. Such a package resolves to its version current at the served height.
+async fn load_package_at_served_height(
+    client: LimitedBigTableClient,
+    served_height: ServedHeight,
+    package_id: ObjectID,
+) -> Result<MovePackage, RpcError> {
+    let package = load_package(client.clone(), package_id).await?;
+    let published = client
+        .get_packages_by_version(&[(package.original_package_id(), package.version().value())])
+        .await?
+        .pop()
+        .is_some_and(|data| data.cp_sequence_number <= served_height.checkpoint);
+    if published {
+        return Ok(package);
+    }
+    // Upgraded in place is decided from the package, not a list of system package IDs, which a
+    // kv-rpc build older than the chain would be missing entries from.
+    let upgraded_in_place =
+        package.version() > OBJECT_START_VERSION && package.id() == package.original_package_id();
+    if !upgraded_in_place {
+        return Err(RpcError::not_found());
+    }
+    let data = client
+        .get_package_latest(package_id, served_height.checkpoint)
+        .await?
+        .ok_or_else(RpcError::not_found)?;
+    load_package_version(client, data).await
+}
+
+/// Load the package object a `packages` row names. Callers pass a row at or below the served
+/// height, and the kvstore never prunes objects, so a missing object is `Internal`.
+async fn load_package_version(
+    client: LimitedBigTableClient,
+    data: PackageData,
+) -> Result<MovePackage, RpcError> {
+    let storage_id = ObjectID::from_bytes(&data.package_id).map_err(|e| {
+        RpcError::new(
+            tonic::Code::Internal,
+            format!("invalid stored package id: {e}"),
+        )
+    })?;
+    let object = client
+        .get_objects(&[ObjectKey(storage_id, data.package_version.into())])
+        .await?
+        .pop()
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!(
+                    "package {storage_id} version {} has a packages row but no stored object",
+                    data.package_version
+                ),
+            )
+        })?;
+    into_package(object)
+}
+
+/// Load the newest object at a storage ID as a package, whatever checkpoint wrote it.
 async fn load_package(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     package_id: ObjectID,
 ) -> Result<MovePackage, RpcError> {
     let object = client
-        .get_latest_object(&package_id)
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .get_latest_object(package_id)
+        .await?
         .ok_or_else(RpcError::not_found)?;
 
     into_package(object)
@@ -324,13 +498,10 @@ fn into_package(object: Object) -> Result<MovePackage, RpcError> {
 /// full node returns (`NotFound` vs "object is not a package"), and so a package whose
 /// `packages_by_id` row is not yet written is still served.
 async fn resolve_original_package_id(
-    mut client: BigTableClient,
+    client: LimitedBigTableClient,
     package_id: ObjectID,
 ) -> Result<ObjectID, RpcError> {
-    let pairs = client
-        .get_package_original_ids(&[package_id])
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+    let pairs = client.get_package_original_ids(&[package_id]).await?;
     if let Some((_, original_id)) = pairs
         .iter()
         .find(|(storage_id, _)| *storage_id == package_id)
@@ -356,8 +527,12 @@ fn parse_package_id(package_id_str: &str) -> Result<ObjectID, RpcError> {
 mod tests {
     use std::collections::BTreeMap;
 
+    use bytes::Bytes;
     use sui_kvstore::tables;
     use sui_kvstore::testing::MockBigtableServer;
+    use sui_rpc::proto::sui::rpc::v2::Ordering;
+    use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
     use sui_types::base_types::{ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::move_package::MovePackage;
@@ -365,7 +540,14 @@ mod tests {
     use sui_types::storage::ObjectKey;
 
     use super::*;
+    use crate::bigtable_client::Metrics;
     use crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT;
+    use sui_kvstore::BigTableClient;
+
+    /// A request-scoped limited client over `client`, as `KvRpcServer::limited_client` builds.
+    fn limited(client: &BigTableClient) -> LimitedBigTableClient {
+        LimitedBigTableClient::new(client.clone(), 2, Metrics::for_testing().0, "test")
+    }
 
     #[tokio::test]
     async fn list_package_versions_falls_back_to_object_when_packages_by_id_missing() {
@@ -404,7 +586,7 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(original_id.to_string());
         req.page_size = Some(10);
-        let resp = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+        let resp = list_package_versions(limited(&client), UNBOUNDED_SERVED_HEIGHT, req)
             .await
             .unwrap();
         assert_eq!(resp.versions.len(), 3);
@@ -443,7 +625,7 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(storage_id.to_string());
         req.page_size = Some(10);
-        let resp = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+        let resp = list_package_versions(limited(&client), UNBOUNDED_SERVED_HEIGHT, req)
             .await
             .unwrap();
         assert_eq!(resp.versions.len(), 3);
@@ -472,7 +654,7 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(ObjectID::random().to_string());
         req.page_size = Some(10);
-        let err = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+        let err = list_package_versions(limited(&client), UNBOUNDED_SERVED_HEIGHT, req)
             .await
             .unwrap_err();
         let status: tonic::Status = err.into();
@@ -497,8 +679,7 @@ mod tests {
     /// published at checkpoint 5, v2 at `upgraded_id` published at checkpoint
     /// 20) plus one non-package object.
     async fn setup_lineage_fixture() -> LineageFixture {
-        use bytes::Bytes;
-        use move_binary_format::file_format::empty_module;
+        use move_binary_format::file_format::basic_test_module;
         use move_core_types::account_address::AccountAddress;
         use sui_protocol_config::ProtocolConfig;
         use sui_types::base_types::SuiAddress;
@@ -513,9 +694,9 @@ mod tests {
         let upgraded_id = ObjectID::from_single_byte(0xBB);
         let plain_object_id = ObjectID::from_single_byte(0xCC);
 
-        // A structurally valid module whose self-address becomes the
-        // package's id, standing in for real compiled code.
-        let mut module = empty_module();
+        // A structurally valid module (`DUMMY`, with a struct `Bar` and a function `foo`) whose
+        // self-address becomes the package's id, standing in for real compiled code.
+        let mut module = basic_test_module();
         module.address_identifiers[0] = AccountAddress::from(original_id);
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
 
@@ -582,7 +763,7 @@ mod tests {
         fixture: &LineageFixture,
         request: GetPackageRequest,
     ) -> sui_rpc::proto::sui::rpc::v2::Package {
-        get_package(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, request)
+        get_package(limited(&fixture.client), FIXTURE_SERVED_HEIGHT, request)
             .await
             .expect("get_package succeeds")
             .package
@@ -590,7 +771,7 @@ mod tests {
     }
 
     async fn fetch_pkg_err(fixture: &LineageFixture, request: GetPackageRequest) -> tonic::Status {
-        get_package(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, request)
+        get_package(limited(&fixture.client), FIXTURE_SERVED_HEIGHT, request)
             .await
             .expect_err("get_package fails")
             .into()
@@ -668,22 +849,335 @@ mod tests {
         assert_eq!(package.version, Some(2));
     }
 
+    /// The `google.rpc.ErrorInfo` reason among `status`'s details.
+    fn error_reason(status: &tonic::Status) -> String {
+        use prost::Message;
+        use sui_rpc::proto::google::rpc::{ErrorInfo, Status};
+
+        Status::decode(status.details())
+            .expect("details decode as google.rpc.Status")
+            .details
+            .iter()
+            .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+            .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"))
+            .reason
+    }
+
     #[tokio::test]
     async fn at_checkpoint_above_served_height_is_rejected() {
         let fixture = setup_lineage_fixture().await;
+        let unknown = ObjectID::from_single_byte(0xDD);
 
-        for at_checkpoint in [26u64, u64::MAX] {
-            let mut req = get_package_req(fixture.original_id);
-            req.selector = Some(Selector::AtCheckpoint(at_checkpoint));
-            let status = fetch_pkg_err(&fixture, req).await;
-            assert_eq!(status.code(), tonic::Code::NotFound, "{at_checkpoint}");
-            assert!(
-                status
-                    .message()
-                    .contains("is not yet indexed; highest indexed checkpoint is 25"),
-                "unexpected message for {at_checkpoint}: {}",
-                status.message()
+        for package_id in [fixture.original_id, unknown] {
+            for at_checkpoint in [26u64, u64::MAX] {
+                let mut req = get_package_req(package_id);
+                req.selector = Some(Selector::AtCheckpoint(at_checkpoint));
+                let status = fetch_pkg_err(&fixture, req).await;
+                assert_eq!(
+                    status.code(),
+                    tonic::Code::OutOfRange,
+                    "{package_id} at {at_checkpoint}"
+                );
+                assert_eq!(
+                    error_reason(&status),
+                    ErrorReason::AboveLatestAvailable.as_str_name()
+                );
+                assert_eq!(
+                    status.message(),
+                    format!(
+                        "requested data above latest available; at_checkpoint is \
+                         {at_checkpoint}, and only checkpoints below 26 are available"
+                    ),
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn bare_id_published_above_served_height_is_not_found() {
+        let fixture = setup_lineage_fixture().await;
+
+        // v1 is published at checkpoint 5, and v2 at checkpoint 20.
+        for (package_id, version, published_at) in
+            [(fixture.original_id, 1, 5), (fixture.upgraded_id, 2, 20)]
+        {
+            for (served_checkpoint, found) in [(published_at - 1, false), (published_at, true)] {
+                let served_height = ServedHeight {
+                    checkpoint: served_checkpoint,
+                    epoch: 0,
+                };
+                let result = get_package(
+                    limited(&fixture.client),
+                    served_height,
+                    get_package_req(package_id),
+                )
+                .await;
+                let context = format!("v{version} at served height {served_checkpoint}");
+                match result {
+                    Ok(response) => {
+                        assert!(found, "{context}: served");
+                        assert_eq!(response.package.and_then(|p| p.version), Some(version));
+                    }
+                    Err(err) => {
+                        assert!(!found, "{context}: hidden");
+                        let status: tonic::Status = err.into();
+                        assert_eq!(status.code(), tonic::Code::NotFound, "{context}");
+                    }
+                }
+            }
+        }
+    }
+
+    fn get_datatype_req(package_id: ObjectID) -> GetDatatypeRequest {
+        let mut request = GetDatatypeRequest::default();
+        request.package_id = Some(package_id.to_canonical_string(true));
+        request.module_name = Some("DUMMY".to_owned());
+        request.name = Some("Bar".to_owned());
+        request
+    }
+
+    fn get_function_req(package_id: ObjectID) -> GetFunctionRequest {
+        let mut request = GetFunctionRequest::default();
+        request.package_id = Some(package_id.to_canonical_string(true));
+        request.module_name = Some("DUMMY".to_owned());
+        request.name = Some("foo".to_owned());
+        request
+    }
+
+    /// `GetDatatype` and `GetFunction` see a package exactly when bare-ID `GetPackage` does.
+    #[tokio::test]
+    async fn datatype_and_function_of_package_published_above_served_height_are_not_found() {
+        let fixture = setup_lineage_fixture().await;
+
+        // v1 is published at checkpoint 5, and v2 at checkpoint 20.
+        for (package_id, version, published_at) in
+            [(fixture.original_id, 1, 5), (fixture.upgraded_id, 2, 20)]
+        {
+            for (served_checkpoint, found) in [(published_at - 1, false), (published_at, true)] {
+                let served_height = ServedHeight {
+                    checkpoint: served_checkpoint,
+                    epoch: 0,
+                };
+                let context = format!("v{version} at served height {served_checkpoint}");
+                let datatype = get_datatype(
+                    limited(&fixture.client),
+                    served_height,
+                    get_datatype_req(package_id),
+                )
+                .await
+                .map(|response| response.datatype.and_then(|datatype| datatype.name))
+                .map_err(|err| tonic::Status::from(err).code());
+                let function = get_function(
+                    limited(&fixture.client),
+                    served_height,
+                    get_function_req(package_id),
+                )
+                .await
+                .map(|response| response.function.and_then(|function| function.name))
+                .map_err(|err| tonic::Status::from(err).code());
+                if found {
+                    assert_eq!(datatype, Ok(Some("Bar".to_owned())), "{context}");
+                    assert_eq!(function, Ok(Some("foo".to_owned())), "{context}");
+                } else {
+                    assert_eq!(datatype, Err(tonic::Code::NotFound), "{context}");
+                    assert_eq!(function, Err(tonic::Code::NotFound), "{context}");
+                }
+            }
+        }
+    }
+
+    /// Seed a package upgraded in place, at an ID outside the binary's list of system packages, as
+    /// a system package added by a protocol upgrade newer than the build would be: version 1 at
+    /// checkpoint 5, upgraded in place to version 2 at checkpoint 10. Its module `DUMMY` has a
+    /// struct `Bar`, with no abilities in version 1 and `drop` in version 2, and a function `foo`,
+    /// private in version 1 and public in version 2.
+    async fn setup_package_upgraded_in_place()
+    -> (BigTableClient, ObjectID, tokio::task::JoinHandle<()>) {
+        use move_binary_format::file_format::{Ability, AbilitySet, Visibility, basic_test_module};
+        use move_core_types::account_address::AccountAddress;
+
+        let mock = MockBigtableServer::new();
+        let (addr, server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        let package_id = ObjectID::from_single_byte(0xDD);
+        assert!(!sui_types::is_system_package(package_id));
+        let mut v1_module = basic_test_module();
+        v1_module.address_identifiers[0] = AccountAddress::from(package_id);
+        let mut v2_module = v1_module.clone();
+        v2_module.datatype_handles[0].abilities = AbilitySet::singleton(Ability::Drop);
+        v2_module.function_defs[0].visibility = Visibility::Public;
+        for (version, checkpoint, module) in [(1u64, 5u64, v1_module), (2, 10, v2_module)] {
+            let object = Object::new_package_from_data(
+                Data::Package(MovePackage::new_system(
+                    SequenceNumber::from(version),
+                    std::slice::from_ref(&module),
+                    [],
+                )),
+                TransactionDigest::genesis_marker(),
             );
+            mock.insert_row(
+                tables::objects::NAME,
+                Bytes::from(tables::objects::encode_key(&ObjectKey(
+                    object.id(),
+                    object.version(),
+                ))),
+                tables::objects::encode(&object).expect("encode object"),
+            )
+            .await;
+            mock.insert_row(
+                tables::packages::NAME,
+                Bytes::from(tables::packages::encode_key(package_id.as_ref(), version)),
+                tables::packages::encode(checkpoint, package_id.as_ref(), true),
+            )
+            .await;
+        }
+
+        (client, package_id, server)
+    }
+
+    /// A package upgraded in place resolves to the version current at the served height, and is
+    /// `NotFound` below its first version, whether or not this binary knows its ID as a system
+    /// package's.
+    #[tokio::test]
+    async fn bare_id_of_package_upgraded_in_place_resolves_the_version_at_served_height() {
+        let (client, package_id, _server) = setup_package_upgraded_in_place().await;
+
+        for (served_checkpoint, expected_version) in [(4, None), (9, Some(1)), (10, Some(2))] {
+            let served_height = ServedHeight {
+                checkpoint: served_checkpoint,
+                epoch: 0,
+            };
+            let result = get_package(limited(&client), served_height, get_package_req(package_id))
+                .await
+                .map(|response| response.package.and_then(|package| package.version))
+                .map_err(|err| tonic::Status::from(err).code());
+            let expected = expected_version.map(Some).ok_or(tonic::Code::NotFound);
+            assert_eq!(result, expected, "served height {served_checkpoint}");
+        }
+    }
+
+    /// `GetDatatype` and `GetFunction` on a package upgraded in place describe the version that
+    /// bare-ID `GetPackage` resolves at the served height.
+    #[tokio::test]
+    async fn datatype_and_function_of_package_upgraded_in_place_follow_the_served_height() {
+        use sui_rpc::proto::sui::rpc::v2::Ability as ProtoAbility;
+        use sui_rpc::proto::sui::rpc::v2::function_descriptor::Visibility;
+
+        let (client, package_id, _server) = setup_package_upgraded_in_place().await;
+
+        for (served_checkpoint, expected) in [
+            (4, None),
+            (9, Some((vec![], Visibility::Private))),
+            (
+                10,
+                Some((vec![ProtoAbility::Drop as i32], Visibility::Public)),
+            ),
+        ] {
+            let served_height = ServedHeight {
+                checkpoint: served_checkpoint,
+                epoch: 0,
+            };
+            let abilities = get_datatype(
+                limited(&client),
+                served_height,
+                get_datatype_req(package_id),
+            )
+            .await
+            .map(|response| response.datatype.expect("datatype is set").abilities)
+            .map_err(|err| tonic::Status::from(err).code());
+            let visibility = get_function(
+                limited(&client),
+                served_height,
+                get_function_req(package_id),
+            )
+            .await
+            .map(|response| response.function.expect("function is set").visibility)
+            .map_err(|err| tonic::Status::from(err).code());
+            let context = format!("served height {served_checkpoint}");
+            match expected {
+                None => {
+                    assert_eq!(abilities, Err(tonic::Code::NotFound), "{context}");
+                    assert_eq!(visibility, Err(tonic::Code::NotFound), "{context}");
+                }
+                Some((expected_abilities, expected_visibility)) => {
+                    assert_eq!(abilities, Ok(expected_abilities), "{context}");
+                    assert_eq!(
+                        visibility,
+                        Ok(Some(expected_visibility as i32)),
+                        "{context}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A `packages` row at or below the served height whose object is missing is an inconsistency
+    /// of the store, not a package that does not exist: every read that resolves to it is
+    /// `Internal`, never `NotFound`.
+    #[tokio::test]
+    async fn package_version_without_its_object_is_internal() {
+        use bytes::Bytes;
+        use move_binary_format::file_format::basic_test_module;
+        use move_core_types::account_address::AccountAddress;
+
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        // A package upgraded in place: version 1 at checkpoint 5 and version 2 at checkpoint 10,
+        // with only version 2's object stored.
+        let package_id = ObjectID::from_single_byte(0xDD);
+        let mut module = basic_test_module();
+        module.address_identifiers[0] = AccountAddress::from(package_id);
+        let v2 = Object::new_package_from_data(
+            Data::Package(MovePackage::new_system(
+                SequenceNumber::from(2),
+                std::slice::from_ref(&module),
+                [],
+            )),
+            TransactionDigest::genesis_marker(),
+        );
+        mock.insert_row(
+            tables::objects::NAME,
+            Bytes::from(tables::objects::encode_key(&ObjectKey(
+                v2.id(),
+                v2.version(),
+            ))),
+            tables::objects::encode(&v2).expect("encode object"),
+        )
+        .await;
+        for (version, checkpoint) in [(1u64, 5u64), (2, 10)] {
+            mock.insert_row(
+                tables::packages::NAME,
+                Bytes::from(tables::packages::encode_key(package_id.as_ref(), version)),
+                tables::packages::encode(checkpoint, package_id.as_ref(), true),
+            )
+            .await;
+        }
+
+        let served_height = ServedHeight {
+            checkpoint: 9,
+            epoch: 0,
+        };
+        let mut version = get_package_req(package_id);
+        version.selector = Some(Selector::Version(1));
+        let mut at_checkpoint = get_package_req(package_id);
+        at_checkpoint.selector = Some(Selector::AtCheckpoint(9));
+        for (label, req) in [
+            ("bare id", get_package_req(package_id)),
+            ("version", version),
+            ("at_checkpoint", at_checkpoint),
+        ] {
+            let status: tonic::Status = get_package(limited(&client), served_height, req)
+                .await
+                .expect_err("version 1's object is missing")
+                .into();
+            assert_eq!(status.code(), tonic::Code::Internal, "{label}");
         }
     }
 
@@ -699,7 +1193,7 @@ mod tests {
                 checkpoint: served_checkpoint,
                 epoch: 0,
             };
-            let result = get_package(fixture.client.clone(), served_height, req).await;
+            let result = get_package(limited(&fixture.client), served_height, req).await;
             match result {
                 Ok(response) => {
                     assert!(found, "served height {served_checkpoint} served v2");
@@ -767,7 +1261,7 @@ mod tests {
                 epoch: 0,
             };
             let versions: Vec<u64> =
-                list_package_versions(fixture.client.clone(), served_height, req)
+                list_package_versions(limited(&fixture.client), served_height, req)
                     .await
                     .expect("list_package_versions succeeds")
                     .versions
@@ -785,10 +1279,1309 @@ mod tests {
             epoch: 0,
         };
         let status: tonic::Status =
-            list_package_versions(fixture.client.clone(), served_height, req)
+            list_package_versions(limited(&fixture.client), served_height, req)
                 .await
                 .expect_err("package published above the served height")
                 .into();
         assert_eq!(status.code(), tonic::Code::NotFound);
+    }
+
+    fn list_req(package_id: ObjectID, at_checkpoint: Option<u64>) -> ListPackageVersionsRequest {
+        let mut req = ListPackageVersionsRequest::default();
+        req.package_id = Some(package_id.to_string());
+        req.at_checkpoint = at_checkpoint;
+        req
+    }
+
+    /// `(version, checkpoint)` of each listed version.
+    fn listed(response: &ListPackageVersionsResponse) -> Vec<(u64, Option<u64>)> {
+        response
+            .versions
+            .iter()
+            .map(|v| (v.version.expect("version is set"), v.checkpoint))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_at_checkpoint_bounds_the_lineage() {
+        let fixture = setup_lineage_fixture().await;
+
+        // v1 is published at checkpoint 5 and v2 at 20; the served height is 25.
+        for (at_checkpoint, expected) in [
+            (None, vec![(1, Some(5)), (2, Some(20))]),
+            (Some(4), vec![]),
+            (Some(5), vec![(1, Some(5))]),
+            (Some(19), vec![(1, Some(5))]),
+            (Some(20), vec![(1, Some(5)), (2, Some(20))]),
+            (Some(25), vec![(1, Some(5)), (2, Some(20))]),
+        ] {
+            let response = list_package_versions(
+                limited(&fixture.client),
+                FIXTURE_SERVED_HEIGHT,
+                list_req(fixture.upgraded_id, at_checkpoint),
+            )
+            .await
+            .expect("list_package_versions succeeds");
+            assert_eq!(
+                listed(&response),
+                expected,
+                "at_checkpoint {at_checkpoint:?}"
+            );
+            assert!(response.next_page_token.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_at_checkpoint_above_served_height_is_rejected() {
+        let fixture = setup_lineage_fixture().await;
+
+        for at_checkpoint in [26u64, u64::MAX] {
+            let status: tonic::Status = list_package_versions(
+                limited(&fixture.client),
+                FIXTURE_SERVED_HEIGHT,
+                list_req(fixture.original_id, Some(at_checkpoint)),
+            )
+            .await
+            .expect_err("bound above the served height")
+            .into();
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{at_checkpoint}");
+            assert_eq!(
+                status.message(),
+                format!(
+                    "requested data above latest available; at_checkpoint is {at_checkpoint}, \
+                     and only checkpoints below 26 are available"
+                ),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_bound_above_served_height_is_checked_before_lookup() {
+        let fixture = setup_lineage_fixture().await;
+        // Stands in for a package published at checkpoint 30, above the served height of 25,
+        // whose rows this replica has not written yet.
+        let published_above_served_height = ObjectID::from_single_byte(0xDD);
+        let never_published = ObjectID::from_single_byte(0xEE);
+
+        for (package_id, at_checkpoint) in [
+            (published_above_served_height, 30u64),
+            (never_published, u64::MAX),
+        ] {
+            let status: tonic::Status = list_package_versions(
+                limited(&fixture.client),
+                FIXTURE_SERVED_HEIGHT,
+                list_req(package_id, Some(at_checkpoint)),
+            )
+            .await
+            .expect_err("bound above the served height")
+            .into();
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{at_checkpoint}");
+            assert_eq!(
+                status.message(),
+                format!(
+                    "requested data above latest available; at_checkpoint is {at_checkpoint}, \
+                     and only checkpoints below 26 are available"
+                ),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_at_checkpoint_before_first_publish() {
+        let fixture = setup_lineage_fixture().await;
+
+        // Published at or below the served height: an empty list.
+        let response = list_package_versions(
+            limited(&fixture.client),
+            FIXTURE_SERVED_HEIGHT,
+            list_req(fixture.original_id, Some(4)),
+        )
+        .await
+        .expect("package is published as of the served height");
+        assert!(response.versions.is_empty());
+        assert!(response.next_page_token.is_none());
+
+        // Not yet published as of the served height: not found, as without a bound.
+        let served_height = ServedHeight {
+            checkpoint: 4,
+            epoch: 0,
+        };
+        let status: tonic::Status = list_package_versions(
+            limited(&fixture.client),
+            served_height,
+            list_req(fixture.original_id, Some(3)),
+        )
+        .await
+        .expect_err("package published above the served height")
+        .into();
+        assert_eq!(status.code(), tonic::Code::NotFound);
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_paginates_within_the_bound() {
+        let fixture = setup_lineage_fixture().await;
+
+        // Under a bound both versions satisfy, a one-version page points at v2.
+        let mut req = list_req(fixture.original_id, Some(20));
+        req.page_size = Some(1);
+        let first = list_package_versions(limited(&fixture.client), FIXTURE_SERVED_HEIGHT, req)
+            .await
+            .expect("first page");
+        assert_eq!(listed(&first), vec![(1, Some(5))]);
+        let token = first.next_page_token.expect("v2 is within the bound");
+
+        let mut req = list_req(fixture.original_id, Some(20));
+        req.page_size = Some(1);
+        req.page_token = Some(token);
+        let second = list_package_versions(limited(&fixture.client), FIXTURE_SERVED_HEIGHT, req)
+            .await
+            .expect("second page");
+        assert_eq!(listed(&second), vec![(2, Some(20))]);
+        assert!(second.next_page_token.is_none());
+
+        // A bound that cuts v2 ends the listing after v1, with no page token.
+        let mut req = list_req(fixture.original_id, Some(19));
+        req.page_size = Some(1);
+        let only = list_package_versions(limited(&fixture.client), FIXTURE_SERVED_HEIGHT, req)
+            .await
+            .expect("bounded page");
+        assert_eq!(listed(&only), vec![(1, Some(5))]);
+        assert!(only.next_page_token.is_none());
+    }
+
+    struct VersionsFixture {
+        client: BigTableClient,
+        original_id: ObjectID,
+        _server: tokio::task::JoinHandle<()>,
+    }
+
+    /// The served height the versions fixture's tests read at: above every publish.
+    const VERSIONS_FIXTURE_SERVED_HEIGHT: ServedHeight = ServedHeight {
+        checkpoint: 60,
+        epoch: 0,
+    };
+
+    /// Seed the mock with a five-version lineage, resolvable through `packages_by_id`, whose
+    /// version `n` is published at checkpoint `10 * n`.
+    async fn setup_versions_fixture() -> VersionsFixture {
+        let mock = MockBigtableServer::new();
+        let (addr, server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        let original_id = ObjectID::from_single_byte(0xAA);
+        mock.insert_row(
+            tables::packages_by_id::NAME,
+            tables::packages_by_id::encode_key(original_id.as_ref()),
+            tables::packages_by_id::encode(original_id.as_ref()),
+        )
+        .await;
+        for version in 1..=5u64 {
+            let storage_id = ObjectID::from_single_byte(version as u8);
+            mock.insert_row(
+                tables::packages::NAME,
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(10 * version, storage_id.as_ref(), false),
+            )
+            .await;
+        }
+
+        VersionsFixture {
+            client,
+            original_id,
+            _server: server,
+        }
+    }
+
+    fn query_options(
+        limit: Option<u32>,
+        ordering: Ordering,
+        after: Option<&Bytes>,
+        before: Option<&Bytes>,
+    ) -> QueryOptions {
+        let mut options = QueryOptions::default();
+        options.limit = limit;
+        options.ordering = Some(ordering as i32);
+        options.after = after.cloned();
+        options.before = before.cloned();
+        options
+    }
+
+    fn cursor_req(package_id: ObjectID, options: QueryOptions) -> ListPackageVersionsRequest {
+        let mut req = ListPackageVersionsRequest::default();
+        req.package_id = Some(package_id.to_string());
+        req.options = Some(options);
+        req
+    }
+
+    async fn list_versions_fixture(
+        fixture: &VersionsFixture,
+        req: ListPackageVersionsRequest,
+    ) -> Result<ListPackageVersionsResponse, tonic::Status> {
+        list_package_versions(
+            limited(&fixture.client),
+            VERSIONS_FIXTURE_SERVED_HEIGHT,
+            req,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
+    /// The versions a response lists, in order, checking that each carries a cursor.
+    fn listed_versions(response: &ListPackageVersionsResponse) -> Vec<u64> {
+        response
+            .versions
+            .iter()
+            .map(|v| {
+                assert!(v.cursor.is_some(), "version {:?} has no cursor", v.version);
+                v.version.expect("version is set")
+            })
+            .collect()
+    }
+
+    /// The cursor of each version of the fixture's lineage, by version.
+    async fn fixture_cursors(fixture: &VersionsFixture) -> BTreeMap<u64, Bytes> {
+        let response = list_versions_fixture(
+            fixture,
+            cursor_req(
+                fixture.original_id,
+                query_options(None, Ordering::Ascending, None, None),
+            ),
+        )
+        .await
+        .expect("full listing");
+        assert_eq!(listed_versions(&response), vec![1, 2, 3, 4, 5]);
+        response
+            .versions
+            .into_iter()
+            .map(|v| (v.version.unwrap(), v.cursor.unwrap()))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_pages_backward_then_forward_from_cursors() {
+        let fixture = setup_versions_fixture().await;
+        let list =
+            |options| list_versions_fixture(&fixture, cursor_req(fixture.original_id, options));
+        let last_cursor = |response: &ListPackageVersionsResponse| {
+            response.versions.last().and_then(|v| v.cursor.clone())
+        };
+
+        // Backward from the end, each page before the lowest version received so far, until a
+        // short page reaches the start of the lineage.
+        let first = list(query_options(Some(2), Ordering::Descending, None, None))
+            .await
+            .unwrap();
+        assert_eq!(listed_versions(&first), vec![5, 4]);
+        assert!(first.next_page_token.is_none());
+        let second = list(query_options(
+            Some(2),
+            Ordering::Descending,
+            None,
+            last_cursor(&first).as_ref(),
+        ))
+        .await
+        .unwrap();
+        assert_eq!(listed_versions(&second), vec![3, 2]);
+        let third = list(query_options(
+            Some(2),
+            Ordering::Descending,
+            None,
+            last_cursor(&second).as_ref(),
+        ))
+        .await
+        .unwrap();
+        assert_eq!(listed_versions(&third), vec![1]);
+
+        // A cursor from a descending page bounds an ascending one: forward from version 2 until
+        // a short page reaches the end of the lineage.
+        let forward = list(query_options(
+            Some(2),
+            Ordering::Ascending,
+            last_cursor(&second).as_ref(),
+            None,
+        ))
+        .await
+        .unwrap();
+        assert_eq!(listed_versions(&forward), vec![3, 4]);
+        let rest = list(query_options(
+            Some(2),
+            Ordering::Ascending,
+            last_cursor(&forward).as_ref(),
+            None,
+        ))
+        .await
+        .unwrap();
+        assert_eq!(listed_versions(&rest), vec![5]);
+        assert!(rest.next_page_token.is_none());
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_lists_between_two_cursors() {
+        let fixture = setup_versions_fixture().await;
+        let cursors = fixture_cursors(&fixture).await;
+
+        // A limited page takes the versions nearest its start: the lowest ascending, the
+        // highest descending.
+        for (after, before, limit, ascending, descending) in [
+            (1, 5, None, vec![2, 3, 4], vec![4, 3, 2]),
+            (1, 5, Some(2), vec![2, 3], vec![4, 3]),
+            (2, 4, None, vec![3], vec![3]),
+            (3, 3, None, vec![], vec![]),
+            (4, 2, None, vec![], vec![]),
+        ] {
+            for (ordering, expected) in [
+                (Ordering::Ascending, ascending),
+                (Ordering::Descending, descending),
+            ] {
+                let response = list_versions_fixture(
+                    &fixture,
+                    cursor_req(
+                        fixture.original_id,
+                        query_options(
+                            limit,
+                            ordering,
+                            Some(&cursors[&after]),
+                            Some(&cursors[&before]),
+                        ),
+                    ),
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    listed_versions(&response),
+                    expected,
+                    "after {after} before {before} limit {limit:?} {ordering:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_intersects_version_bounds_cursors_and_checkpoint() {
+        let fixture = setup_versions_fixture().await;
+        let cursors = fixture_cursors(&fixture).await;
+
+        // Version `n` is published at checkpoint `10 * n`. Each case lists the matching versions
+        // in ascending order; descending lists them in reverse.
+        for (start_version, end_version, after, before, at_checkpoint, ascending) in [
+            (Some(2), Some(5), None, None, None, vec![2, 3, 4]),
+            (Some(2), Some(5), Some(3), None, None, vec![4]),
+            (Some(2), None, None, Some(4), None, vec![2, 3]),
+            (None, Some(5), Some(1), None, Some(35), vec![2, 3]),
+            (Some(3), None, None, None, Some(45), vec![3, 4]),
+            (None, None, None, None, Some(35), vec![1, 2, 3]),
+            // The package is published, so bounds that exclude every version list nothing.
+            (Some(4), None, None, None, Some(35), vec![]),
+            (Some(6), None, None, None, None, vec![]),
+        ] {
+            for (ordering, expected) in [
+                (Ordering::Ascending, ascending.clone()),
+                (
+                    Ordering::Descending,
+                    ascending.iter().rev().copied().collect(),
+                ),
+            ] {
+                let mut req = cursor_req(
+                    fixture.original_id,
+                    query_options(
+                        None,
+                        ordering,
+                        after.map(|v| &cursors[&v]),
+                        before.map(|v| &cursors[&v]),
+                    ),
+                );
+                req.start_version = start_version;
+                req.end_version = end_version;
+                req.at_checkpoint = at_checkpoint;
+                let response = list_versions_fixture(&fixture, req).await.unwrap();
+                assert_eq!(
+                    listed_versions(&response),
+                    expected,
+                    "versions [{start_version:?}, {end_version:?}) after {after:?} before \
+                     {before:?} at_checkpoint {at_checkpoint:?} {ordering:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_descending_skips_versions_after_the_checkpoint() {
+        let fixture = setup_versions_fixture().await;
+
+        // Versions 4 and 5 are published after checkpoint 35, so a descending page starts at 3
+        // and still fills up.
+        let mut req = cursor_req(
+            fixture.original_id,
+            query_options(Some(2), Ordering::Descending, None, None),
+        );
+        req.at_checkpoint = Some(35);
+        let first = list_versions_fixture(&fixture, req).await.unwrap();
+        assert_eq!(listed_versions(&first), vec![3, 2]);
+
+        let mut req = cursor_req(
+            fixture.original_id,
+            query_options(
+                Some(2),
+                Ordering::Descending,
+                None,
+                first.versions[1].cursor.as_ref(),
+            ),
+        );
+        req.at_checkpoint = Some(35);
+        let second = list_versions_fixture(&fixture, req).await.unwrap();
+        assert_eq!(listed_versions(&second), vec![1]);
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_rejects_cursors_this_server_does_not_serve() {
+        let fixture = setup_versions_fixture().await;
+        // Cursors from a replica serving every version, and one for a version with no row.
+        let cursors = fixture_cursors(&fixture).await;
+        let unpublished = PackageVersionCursor::Lineage {
+            original_package_id: fixture.original_id,
+            version: 6,
+        }
+        .encode();
+        // Version `n` is published at checkpoint `10 * n`, so this replica serves versions 1 to 3.
+        let served_height = ServedHeight {
+            checkpoint: 35,
+            epoch: 0,
+        };
+        let list = |options| {
+            list_package_versions(
+                limited(&fixture.client),
+                served_height,
+                cursor_req(fixture.original_id, options),
+            )
+        };
+
+        // This replica may lack versions next to a cursor it does not serve: a descending page
+        // would skip the versions below it, and an ascending page would end at version 3, which
+        // looks like the end of the lineage. It rejects the page in either order instead, also
+        // when the other cursor names a version it serves.
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for cursor in [&cursors[&4], &cursors[&5], &unpublished] {
+                for (after, before) in [
+                    (Some(cursor), None),
+                    (None, Some(cursor)),
+                    (Some(&cursors[&1]), Some(cursor)),
+                ] {
+                    let status: tonic::Status = list(query_options(None, ordering, after, before))
+                        .await
+                        .expect_err("cursor this replica does not serve")
+                        .into();
+                    assert_eq!(status.code(), tonic::Code::OutOfRange, "{ordering:?}");
+                    assert_eq!(error_reason(&status), "ABOVE_LATEST_AVAILABLE");
+                    assert_eq!(
+                        status.message(),
+                        "requested data above latest available; cursor is at checkpoint 36, \
+                         and only checkpoints below 36 are available"
+                    );
+                }
+            }
+        }
+
+        // Pages from versions it serves list the versions it serves.
+        for (ordering, after, before, expected) in [
+            (Ordering::Descending, None, Some(&cursors[&3]), vec![2, 1]),
+            (
+                Ordering::Descending,
+                Some(&cursors[&1]),
+                Some(&cursors[&3]),
+                vec![2],
+            ),
+            (Ordering::Ascending, Some(&cursors[&1]), None, vec![2, 3]),
+            (Ordering::Ascending, None, Some(&cursors[&3]), vec![1, 2]),
+            (Ordering::Ascending, Some(&cursors[&3]), None, vec![]),
+        ] {
+            let response = list(query_options(None, ordering, after, before))
+                .await
+                .unwrap();
+            assert_eq!(
+                listed_versions(&response),
+                expected,
+                "{ordering:?} after {after:?} before {before:?}"
+            );
+        }
+
+        // No lineage has a version 0, so a cursor naming it skips nothing and is not checked:
+        // `after` lists from version 1, and `before` lists nothing.
+        let version_zero = PackageVersionCursor::Lineage {
+            original_package_id: fixture.original_id,
+            version: 0,
+        }
+        .encode();
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for (after, before, expected) in [
+                (Some(&version_zero), None, vec![1, 2, 3]),
+                (None, Some(&version_zero), vec![]),
+            ] {
+                let response = list(query_options(None, ordering, after, before))
+                    .await
+                    .unwrap();
+                let mut expected = expected;
+                if ordering == Ordering::Descending {
+                    expected.reverse();
+                }
+                assert_eq!(
+                    listed_versions(&response),
+                    expected,
+                    "{ordering:?} after {after:?} before {before:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_rejects_page_tokens_this_server_does_not_serve() {
+        let fixture = setup_versions_fixture().await;
+        // Page tokens from a replica serving every version, naming versions 2 to 5.
+        let mut page_tokens = BTreeMap::new();
+        let mut page_token = None;
+        loop {
+            let mut req = list_req(fixture.original_id, None);
+            req.page_size = Some(1);
+            req.page_token = page_token.take();
+            let page = list_versions_fixture(&fixture, req).await.unwrap();
+            let version = listed_versions(&page)[0] + 1;
+            let Some(next) = page.next_page_token else {
+                break;
+            };
+            page_tokens.insert(version, next.clone());
+            page_token = Some(next);
+        }
+        assert_eq!(
+            page_tokens.keys().copied().collect::<Vec<_>>(),
+            vec![2, 3, 4, 5]
+        );
+        // Version `n` is published at checkpoint `10 * n`, so this replica serves versions 1 to 3.
+        let served_height = ServedHeight {
+            checkpoint: 35,
+            epoch: 0,
+        };
+        let list = |page_token: &Bytes| {
+            let mut req = list_req(fixture.original_id, None);
+            req.page_size = Some(1);
+            req.page_token = Some(page_token.clone());
+            list_package_versions(limited(&fixture.client), served_height, req)
+        };
+
+        // A page from a version this replica does not serve would list nothing and carry no next
+        // page token, which looks like the end of the lineage. It is rejected instead.
+        for version in [4, 5] {
+            let status: tonic::Status = list(&page_tokens[&version])
+                .await
+                .expect_err("page token this replica does not serve")
+                .into();
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "version {version}");
+            assert_eq!(error_reason(&status), "ABOVE_LATEST_AVAILABLE");
+            assert_eq!(
+                status.message(),
+                "requested data above latest available; cursor is at checkpoint 36, and only \
+                 checkpoints below 36 are available"
+            );
+        }
+
+        // A page from a version it serves lists from there.
+        let page = list(&page_tokens[&3]).await.unwrap();
+        assert_eq!(listed_versions(&page), vec![3]);
+        assert!(page.next_page_token.is_none());
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_cursor_mode_keeps_not_found_for_unpublished_packages() {
+        let fixture = setup_versions_fixture().await;
+
+        // Version 1 is published at checkpoint 10. Below it the package does not exist yet, so
+        // a first page is not found even when version bounds alone would list nothing.
+        let served_height = ServedHeight {
+            checkpoint: 9,
+            epoch: 0,
+        };
+        for start_version in [None, Some(2)] {
+            let mut req = cursor_req(
+                fixture.original_id,
+                query_options(None, Ordering::Descending, None, None),
+            );
+            req.start_version = start_version;
+            let status: tonic::Status =
+                list_package_versions(limited(&fixture.client), served_height, req)
+                    .await
+                    .expect_err("package published above the served height")
+                    .into();
+            assert_eq!(status.code(), tonic::Code::NotFound, "{start_version:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_rejects_invalid_cursor_requests() {
+        let fixture = setup_versions_fixture().await;
+
+        let mut legacy = list_req(fixture.original_id, None);
+        legacy.page_size = Some(1);
+        let page_token = list_versions_fixture(&fixture, legacy)
+            .await
+            .unwrap()
+            .next_page_token
+            .expect("more versions follow");
+        let other_package = PackageVersionCursor::Lineage {
+            original_package_id: ObjectID::from_single_byte(0xDD),
+            version: 1,
+        }
+        .encode();
+        let every_package = PackageVersionCursor::AllPackages {
+            checkpoint: 10,
+            original_package_id: fixture.original_id,
+            version: 1,
+        }
+        .encode();
+        let malformed = Bytes::from_static(&[0xFF, 0xFF]);
+        let ascending = || query_options(None, Ordering::Ascending, None, None);
+
+        let mut with_page_size = cursor_req(fixture.original_id, ascending());
+        with_page_size.page_size = Some(1);
+        let mut with_page_token = cursor_req(fixture.original_id, ascending());
+        with_page_token.page_token = Some(page_token);
+        let mut invalid_ordering = ascending();
+        invalid_ordering.ordering = Some(7);
+        let mut with_start_checkpoint = list_req(fixture.original_id, None);
+        with_start_checkpoint.start_checkpoint = Some(10);
+        for (req, expected) in [
+            (
+                with_page_size,
+                "page_size and options are mutually exclusive",
+            ),
+            (
+                with_page_token,
+                "page_token and options are mutually exclusive",
+            ),
+            (
+                cursor_req(
+                    fixture.original_id,
+                    query_options(None, Ordering::Ascending, Some(&malformed), None),
+                ),
+                "invalid cursor encoding",
+            ),
+            (
+                cursor_req(
+                    fixture.original_id,
+                    query_options(None, Ordering::Descending, None, Some(&other_package)),
+                ),
+                "cursor package ID does not match request package ID",
+            ),
+            (
+                cursor_req(
+                    fixture.original_id,
+                    query_options(None, Ordering::Ascending, Some(&every_package), None),
+                ),
+                "cursor is from the listing of every package",
+            ),
+            (
+                cursor_req(fixture.original_id, invalid_ordering),
+                "invalid ordering",
+            ),
+            (
+                with_start_checkpoint,
+                "start_checkpoint requires package_id to be unset",
+            ),
+        ] {
+            let status = list_versions_fixture(&fixture, req).await.unwrap_err();
+            assert_eq!(status.code(), tonic::Code::InvalidArgument, "{expected}");
+            assert!(
+                status.message().contains(expected),
+                "expected {expected:?}, got {:?}",
+                status.message()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_page_tokens_resume_after_the_last_listed_version() {
+        let fixture = setup_versions_fixture().await;
+        let cursors = fixture_cursors(&fixture).await;
+
+        for (start_version, end_version, pages) in [
+            (None, None, vec![vec![1, 2], vec![3, 4], vec![5]]),
+            (Some(2), Some(5), vec![vec![2, 3], vec![4]]),
+        ] {
+            let mut page_token = None;
+            for (index, expected) in pages.iter().enumerate() {
+                let mut req = list_req(fixture.original_id, None);
+                req.page_size = Some(2);
+                req.page_token = page_token.take();
+                req.start_version = start_version;
+                req.end_version = end_version;
+                let page = list_versions_fixture(&fixture, req).await.unwrap();
+                assert_eq!(&listed_versions(&page), expected, "page {index}");
+                // Every version names its lineage.
+                for version in &page.versions {
+                    assert_eq!(
+                        version.original_id,
+                        Some(fixture.original_id.to_canonical_string(true))
+                    );
+                }
+                // Page-token items carry the same cursors as cursor mode.
+                for version in &page.versions {
+                    assert_eq!(
+                        version.cursor.as_ref(),
+                        Some(&cursors[&version.version.unwrap()])
+                    );
+                }
+                page_token = page.next_page_token;
+                assert_eq!(
+                    page_token.is_some(),
+                    index + 1 < pages.len(),
+                    "page {index}"
+                );
+            }
+        }
+    }
+
+    /// A mock seeded with the versions of three packages, published (as `(checkpoint, package,
+    /// version)`) at (10, A, 1), (10, B, 1), (20, A, 2), (30, C, 1), (30, C, 2), and (70, B, 2),
+    /// above the served height.
+    struct AllPackagesFixture {
+        client: BigTableClient,
+        _server: tokio::task::JoinHandle<()>,
+    }
+
+    const PACKAGE_A: ObjectID = ObjectID::from_single_byte(0x0A);
+    const PACKAGE_B: ObjectID = ObjectID::from_single_byte(0x0B);
+    const PACKAGE_C: ObjectID = ObjectID::from_single_byte(0x0C);
+
+    /// The versions [`AllPackagesFixture`] lists at its served height, in publish order.
+    const ALL_PACKAGES: [(u64, ObjectID, u64); 5] = [
+        (10, PACKAGE_A, 1),
+        (10, PACKAGE_B, 1),
+        (20, PACKAGE_A, 2),
+        (30, PACKAGE_C, 1),
+        (30, PACKAGE_C, 2),
+    ];
+
+    async fn setup_all_packages_fixture() -> AllPackagesFixture {
+        let mock = MockBigtableServer::new();
+        let (addr, server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        for (checkpoint, original_id, version) in
+            ALL_PACKAGES.into_iter().chain([(70, PACKAGE_B, 2)])
+        {
+            let storage_id = storage_id_of(original_id, version);
+            mock.insert_row(
+                tables::packages::NAME,
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(checkpoint, storage_id.as_ref(), false),
+            )
+            .await;
+            mock.insert_row(
+                tables::packages_by_checkpoint::NAME,
+                tables::packages_by_checkpoint::encode_key(
+                    checkpoint,
+                    original_id.as_ref(),
+                    version,
+                ),
+                tables::packages_by_checkpoint::encode(),
+            )
+            .await;
+        }
+
+        AllPackagesFixture {
+            client,
+            _server: server,
+        }
+    }
+
+    /// The storage id the fixture gives `version` of the package originally published at
+    /// `original_id`.
+    fn storage_id_of(original_id: ObjectID, version: u64) -> ObjectID {
+        let mut bytes = original_id.into_bytes();
+        bytes[0] = version as u8;
+        ObjectID::new(bytes)
+    }
+
+    fn all_packages_req(options: Option<QueryOptions>) -> ListPackageVersionsRequest {
+        let mut req = ListPackageVersionsRequest::default();
+        req.options = options;
+        req
+    }
+
+    async fn list_all_packages_fixture(
+        fixture: &AllPackagesFixture,
+        req: ListPackageVersionsRequest,
+    ) -> Result<ListPackageVersionsResponse, tonic::Status> {
+        let client =
+            LimitedBigTableClient::new(fixture.client.clone(), 2, Metrics::for_testing().0, "test");
+        list_all_package_versions(client, VERSIONS_FIXTURE_SERVED_HEIGHT, &req)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// The `(checkpoint, package, version)` of each version a response lists, in order,
+    /// checking that each version carries its storage id, original id and cursor.
+    fn listed_publishes(response: &ListPackageVersionsResponse) -> Vec<(u64, ObjectID, u64)> {
+        assert!(response.next_page_token.is_none());
+        response
+            .versions
+            .iter()
+            .map(|listed| {
+                let checkpoint = listed.checkpoint.expect("checkpoint is set");
+                let original_id: ObjectID = listed
+                    .original_id
+                    .as_deref()
+                    .expect("original_id is set")
+                    .parse()
+                    .unwrap();
+                let version = listed.version.expect("version is set");
+                let storage_id: ObjectID = listed
+                    .package_id
+                    .as_deref()
+                    .expect("package_id is set")
+                    .parse()
+                    .unwrap();
+                assert_eq!(storage_id, storage_id_of(original_id, version));
+                assert_eq!(
+                    listed.cursor,
+                    Some(
+                        PackageVersionCursor::AllPackages {
+                            checkpoint,
+                            original_package_id: original_id,
+                            version,
+                        }
+                        .encode()
+                    )
+                );
+                (checkpoint, original_id, version)
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_pages_in_publish_order_in_either_direction() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |options| list_all_packages_fixture(&fixture, all_packages_req(Some(options)));
+        let last_cursor = |response: &ListPackageVersionsResponse| {
+            response.versions.last().and_then(|v| v.cursor.clone())
+        };
+
+        // Without options, every version at or below the served height, in publish order.
+        let everything = list_all_packages_fixture(&fixture, all_packages_req(None))
+            .await
+            .unwrap();
+        assert_eq!(listed_publishes(&everything), ALL_PACKAGES.to_vec());
+
+        // Forward in pages of two, each after the last version received, until a short page.
+        let mut after = None;
+        let mut forward = vec![];
+        for expected in [&ALL_PACKAGES[0..2], &ALL_PACKAGES[2..4], &ALL_PACKAGES[4..]] {
+            let page = list(query_options(
+                Some(2),
+                Ordering::Ascending,
+                after.as_ref(),
+                None,
+            ))
+            .await
+            .unwrap();
+            assert_eq!(listed_publishes(&page), expected.to_vec());
+            after = last_cursor(&page);
+            forward.push(page);
+        }
+
+        // Backward from the end in pages of two, each before the lowest version received.
+        let mut before = None;
+        for expected in [vec![4, 3], vec![2, 1], vec![0]] {
+            let page = list(query_options(
+                Some(2),
+                Ordering::Descending,
+                None,
+                before.as_ref(),
+            ))
+            .await
+            .unwrap();
+            let expected: Vec<_> = expected.iter().map(|&i| ALL_PACKAGES[i]).collect();
+            assert_eq!(listed_publishes(&page), expected);
+            before = last_cursor(&page);
+        }
+
+        // A cursor from an ascending page bounds a descending one, inside checkpoint 10 and 30.
+        let between = list(query_options(
+            None,
+            Ordering::Descending,
+            forward[0].versions.first().and_then(|v| v.cursor.as_ref()),
+            forward[2].versions.first().and_then(|v| v.cursor.as_ref()),
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            listed_publishes(&between),
+            vec![ALL_PACKAGES[3], ALL_PACKAGES[2], ALL_PACKAGES[1]],
+        );
+    }
+
+    /// The cursor of `ALL_PACKAGES[index]`.
+    fn all_packages_cursor(index: usize) -> Bytes {
+        let (checkpoint, original_package_id, version) = ALL_PACKAGES[index];
+        PackageVersionCursor::AllPackages {
+            checkpoint,
+            original_package_id,
+            version,
+        }
+        .encode()
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_bounds_by_start_and_at_checkpoint() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |start_checkpoint,
+                    at_checkpoint,
+                    after: Option<usize>,
+                    before: Option<usize>,
+                    ordering| {
+            let (after, before) = (
+                after.map(all_packages_cursor),
+                before.map(all_packages_cursor),
+            );
+            let mut req = all_packages_req(Some(query_options(
+                None,
+                ordering,
+                after.as_ref(),
+                before.as_ref(),
+            )));
+            req.start_checkpoint = start_checkpoint;
+            req.at_checkpoint = at_checkpoint;
+            list_all_packages_fixture(&fixture, req)
+        };
+
+        // Each case's cursors are indexes into `ALL_PACKAGES`.
+        for (start_checkpoint, at_checkpoint, after, before, expected) in [
+            (Some(20), None, None, None, &ALL_PACKAGES[2..]),
+            (None, Some(20), None, None, &ALL_PACKAGES[..3]),
+            (Some(20), Some(20), None, None, &ALL_PACKAGES[2..3]),
+            (Some(11), Some(29), None, None, &ALL_PACKAGES[2..3]),
+            (Some(25), Some(20), None, None, &ALL_PACKAGES[..0]),
+            (Some(30), Some(60), None, None, &ALL_PACKAGES[3..]),
+            // Cursors inside the checkpoint bounds narrow them.
+            (Some(10), None, Some(0), None, &ALL_PACKAGES[1..]),
+            (None, Some(30), None, Some(4), &ALL_PACKAGES[..4]),
+            // Cursors outside them leave them as they are.
+            (Some(20), None, Some(0), None, &ALL_PACKAGES[2..]),
+            (None, Some(20), None, Some(4), &ALL_PACKAGES[..3]),
+            (Some(11), Some(29), Some(1), Some(3), &ALL_PACKAGES[2..3]),
+        ] {
+            let ascending = list(
+                start_checkpoint,
+                at_checkpoint,
+                after,
+                before,
+                Ordering::Ascending,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                listed_publishes(&ascending),
+                expected.to_vec(),
+                "[{start_checkpoint:?}, {at_checkpoint:?}] after {after:?} before {before:?}"
+            );
+            let descending = list(
+                start_checkpoint,
+                at_checkpoint,
+                after,
+                before,
+                Ordering::Descending,
+            )
+            .await
+            .unwrap();
+            let mut reversed = expected.to_vec();
+            reversed.reverse();
+            assert_eq!(
+                listed_publishes(&descending),
+                reversed,
+                "[{start_checkpoint:?}, {at_checkpoint:?}] after {after:?} before {before:?} \
+                 descending"
+            );
+        }
+
+        let status = list(None, Some(61), None, None, Ordering::Ascending)
+            .await
+            .unwrap_err();
+        assert_eq!(status.code(), tonic::Code::OutOfRange);
+    }
+
+    /// A `start_checkpoint` above the served height starts where this replica has not caught
+    /// up, so it is rejected rather than answered with an empty page that would read as the end
+    /// of the listing, whatever `at_checkpoint` and the ordering are. One at the served height
+    /// is served.
+    #[tokio::test]
+    async fn list_all_package_versions_rejects_start_checkpoint_above_the_served_height() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |start_checkpoint, at_checkpoint, ordering| {
+            let mut req = all_packages_req(Some(query_options(None, ordering, None, None)));
+            req.start_checkpoint = Some(start_checkpoint);
+            req.at_checkpoint = at_checkpoint;
+            list_all_packages_fixture(&fixture, req)
+        };
+
+        for start_checkpoint in [61, u64::MAX] {
+            for at_checkpoint in [None, Some(20), Some(60)] {
+                for ordering in [Ordering::Ascending, Ordering::Descending] {
+                    let status = list(start_checkpoint, at_checkpoint, ordering)
+                        .await
+                        .unwrap_err();
+                    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+                    assert_eq!(error_reason(&status), "ABOVE_LATEST_AVAILABLE");
+                    assert_eq!(
+                        status.message(),
+                        format!(
+                            "requested data above latest available; start_checkpoint is \
+                             {start_checkpoint}, and only checkpoints below 61 are available"
+                        ),
+                        "at_checkpoint {at_checkpoint:?} {ordering:?}"
+                    );
+                }
+            }
+        }
+
+        // Version 2 of package B, published at checkpoint 70, is above the served height.
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            let response = list(60, None, ordering).await.unwrap();
+            assert_eq!(listed_publishes(&response), vec![], "{ordering:?}");
+        }
+    }
+
+    /// A cursor above the served height continues a listing from a newer view, such as another
+    /// replica's. A page from it is rejected in either order: a descending page would list down
+    /// from the served height and skip the versions in between, and an ascending page would end
+    /// at the served height as if the listing ended there. A cursor at the served height is not
+    /// above it.
+    #[tokio::test]
+    async fn list_all_package_versions_rejects_cursors_above_the_served_height() {
+        let fixture = setup_all_packages_fixture().await;
+        // Version 2 of package B is published at checkpoint 70, above the served height of 60.
+        let above = PackageVersionCursor::AllPackages {
+            checkpoint: 70,
+            original_package_id: PACKAGE_B,
+            version: 2,
+        }
+        .encode();
+        let at_served_height = PackageVersionCursor::AllPackages {
+            checkpoint: 60,
+            original_package_id: PACKAGE_B,
+            version: 2,
+        }
+        .encode();
+        let list = |ordering, after, before| {
+            list_all_packages_fixture(
+                &fixture,
+                all_packages_req(Some(query_options(None, ordering, after, before))),
+            )
+        };
+
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for (after, before) in [(Some(&above), None), (None, Some(&above))] {
+                let status = list(ordering, after, before).await.unwrap_err();
+                assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+                assert_eq!(error_reason(&status), "ABOVE_LATEST_AVAILABLE");
+                assert_eq!(
+                    status.message(),
+                    "requested data above latest available; cursor is at checkpoint 70, and \
+                     only checkpoints below 61 are available"
+                );
+            }
+        }
+
+        let mut reversed = ALL_PACKAGES.to_vec();
+        reversed.reverse();
+        for (ordering, after, before, expected) in [
+            (
+                Ordering::Ascending,
+                None,
+                Some(&at_served_height),
+                ALL_PACKAGES.to_vec(),
+            ),
+            (Ordering::Ascending, Some(&at_served_height), None, vec![]),
+            (
+                Ordering::Descending,
+                None,
+                Some(&at_served_height),
+                reversed,
+            ),
+            (Ordering::Descending, Some(&at_served_height), None, vec![]),
+        ] {
+            let response = list(ordering, after, before).await.unwrap();
+            assert_eq!(
+                listed_publishes(&response),
+                expected,
+                "{ordering:?} after {after:?} before {before:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_rejects_lineage_paging_and_cursors() {
+        let fixture = setup_all_packages_fixture().await;
+        let lineage_cursor = PackageVersionCursor::Lineage {
+            original_package_id: PACKAGE_A,
+            version: 1,
+        }
+        .encode();
+
+        let mut with_page_size = all_packages_req(None);
+        with_page_size.page_size = Some(1);
+        let mut with_page_token = all_packages_req(None);
+        with_page_token.page_token = Some(Bytes::from_static(&[0]));
+        let mut with_start_version = all_packages_req(None);
+        with_start_version.start_version = Some(1);
+        let mut with_end_version = all_packages_req(None);
+        with_end_version.end_version = Some(2);
+
+        for (req, expected) in [
+            (with_page_size, "page_size requires package_id"),
+            (with_page_token, "page_token requires package_id"),
+            (with_start_version, "start_version requires package_id"),
+            (with_end_version, "end_version requires package_id"),
+            (
+                all_packages_req(Some(query_options(
+                    None,
+                    Ordering::Ascending,
+                    None,
+                    Some(&lineage_cursor),
+                ))),
+                "cursor is from the listing of one package",
+            ),
+        ] {
+            let status = list_all_packages_fixture(&fixture, req).await.unwrap_err();
+            assert_eq!(status.code(), tonic::Code::InvalidArgument, "{expected}");
+            assert!(
+                status.message().contains(expected),
+                "expected {expected:?}, got {:?}",
+                status.message()
+            );
+        }
+    }
+
+    /// A client over a mock whose system packages are `0x1`, upgraded at checkpoint 20 (the end of
+    /// epoch 0), `0x2`, and `0xb`, created at checkpoint 30 (the end of epoch 1), with every table
+    /// indexed through checkpoint 40.
+    async fn system_packages_fixture() -> (BigTableClient, tokio::task::JoinHandle<()>) {
+        let mock = MockBigtableServer::new();
+        let (addr, server) = mock.start().await.unwrap();
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .unwrap();
+
+        for (id, version, checkpoint) in
+            [(0x1u8, 1u64, 0u64), (0x1, 2, 20), (0x2, 1, 0), (0xb, 1, 30)]
+        {
+            let original_id = ObjectID::from_single_byte(id);
+            mock.insert_row(
+                tables::packages::NAME,
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(checkpoint, original_id.as_ref(), true),
+            )
+            .await;
+            mock.insert_row(
+                tables::system_packages::NAME,
+                tables::system_packages::encode_key(original_id.as_ref()),
+                tables::system_packages::encode(checkpoint),
+            )
+            .await;
+        }
+
+        (client, server)
+    }
+
+    const SYSTEM_PACKAGES_SERVED_HEIGHT: ServedHeight = ServedHeight {
+        checkpoint: 40,
+        epoch: 2,
+    };
+
+    /// Every read of the listing takes a `packages` permit, and the per-package fan-out completes
+    /// at any limiter capacity, including one permit.
+    #[tokio::test]
+    async fn list_system_packages_at_checkpoint() {
+        let (client, _server) = system_packages_fixture().await;
+
+        // `(id, version, publish checkpoint)` of each listed package.
+        for (at_checkpoint, expected) in [
+            (0, vec![(0x1, 1, 0), (0x2, 1, 0)]),
+            (19, vec![(0x1, 1, 0), (0x2, 1, 0)]),
+            (20, vec![(0x1, 2, 20), (0x2, 1, 0)]),
+            (29, vec![(0x1, 2, 20), (0x2, 1, 0)]),
+            (30, vec![(0x1, 2, 20), (0x2, 1, 0), (0xb, 1, 30)]),
+            (40, vec![(0x1, 2, 20), (0x2, 1, 0), (0xb, 1, 30)]),
+        ] {
+            for capacity in [1, 2] {
+                let (metrics, _registry) = Metrics::for_testing();
+                let limited_client =
+                    LimitedBigTableClient::new(client.clone(), capacity, metrics.clone(), "test");
+                let response = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    list_system_packages(
+                        limited_client,
+                        SYSTEM_PACKAGES_SERVED_HEIGHT,
+                        ListSystemPackagesRequest::new(at_checkpoint),
+                    ),
+                )
+                .await
+                .unwrap_or_else(|_| panic!("capacity {capacity}: listing did not finish"))
+                .unwrap();
+                // The `system_packages` scan, then one read per listed ID.
+                assert_eq!(
+                    metrics
+                        .reads_started
+                        .with_label_values(&["test", "packages"])
+                        .get(),
+                    4,
+                    "at_checkpoint {at_checkpoint}, capacity {capacity}"
+                );
+                let expected: Vec<PackageVersion> = expected
+                    .iter()
+                    .map(|&(id, version, checkpoint)| {
+                        let id = ObjectID::from_single_byte(id);
+                        PackageVersion::new(&id.into(), version)
+                            .with_checkpoint(checkpoint)
+                            .with_original_id(id.to_canonical_string(true))
+                    })
+                    .collect();
+                assert_eq!(
+                    response.system_packages, expected,
+                    "at_checkpoint {at_checkpoint}, capacity {capacity}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn list_system_packages_rejects_unanswerable_requests() {
+        let (client, _server) = system_packages_fixture().await;
+        let client = LimitedBigTableClient::new(client, 2, Metrics::for_testing().0, "test");
+
+        let status: tonic::Status = list_system_packages(
+            client.clone(),
+            SYSTEM_PACKAGES_SERVED_HEIGHT,
+            ListSystemPackagesRequest::default(),
+        )
+        .await
+        .unwrap_err()
+        .into();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+
+        let status: tonic::Status = list_system_packages(
+            client.clone(),
+            SYSTEM_PACKAGES_SERVED_HEIGHT,
+            ListSystemPackagesRequest::new(41),
+        )
+        .await
+        .unwrap_err()
+        .into();
+        assert_eq!(status.code(), tonic::Code::OutOfRange);
+        assert_eq!(
+            status.message(),
+            "requested data above latest available; at_checkpoint is 41, and only checkpoints \
+             below 41 are available",
+        );
     }
 }

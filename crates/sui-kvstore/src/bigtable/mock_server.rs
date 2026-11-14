@@ -534,18 +534,21 @@ fn extract_qualifier_alternation(pattern: &[u8]) -> Option<Vec<Vec<u8>>> {
 }
 
 /// The parsed form of a `ReadRows` row filter: an optional restriction on
-/// emitted column qualifiers (`None` means every qualifier passes) and an
-/// optional row-selecting `Condition` predicate.
+/// emitted column qualifiers (`None` means every qualifier passes), an
+/// optional row-selecting `Condition` predicate, and whether emitted cell
+/// values are emptied.
 struct ReadFilter {
     allowed_qualifiers: Option<HashSet<Vec<u8>>>,
     condition: Option<RowPredicate>,
+    strip_values: bool,
 }
 
 /// Parse a `ReadRows` row filter. Only the filter shapes this crate builds are
 /// supported: `None`, `CellsPerColumnLimitFilter(1)`,
-/// `ColumnQualifierRegexFilter`, and a `Chain` of those plus an optional
-/// `FamilyNameRegexFilter` matching [`crate::tables::FAMILY`] and at most one
-/// `Condition` (see [`parse_read_condition`]).
+/// `ColumnQualifierRegexFilter`, `StripValueTransformer(true)`, and a `Chain`
+/// of those plus an optional `FamilyNameRegexFilter` matching
+/// [`crate::tables::FAMILY`] and at most one `Condition` (see
+/// [`parse_read_condition`]).
 ///
 /// The mock evaluates a `Condition` predicate against the full stored row.
 /// BigTable feeds each `Chain` element the output of the previous one, so a
@@ -564,9 +567,11 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
     let mut parsed = ReadFilter {
         allowed_qualifiers: None,
         condition: None,
+        strip_values: false,
     };
     match filter {
         None | Some(Filter::CellsPerColumnLimitFilter(1)) => {}
+        Some(Filter::StripValueTransformer(true)) => parsed.strip_values = true,
         Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
             parsed.allowed_qualifiers = Some(qualifiers_from_regex(&pattern)?);
         }
@@ -574,6 +579,7 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
             for f in chain.filters {
                 match f.filter {
                     Some(Filter::CellsPerColumnLimitFilter(1)) | None => {}
+                    Some(Filter::StripValueTransformer(true)) => parsed.strip_values = true,
                     Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
                         parsed.allowed_qualifiers = Some(qualifiers_from_regex(&pattern)?);
                     }
@@ -608,7 +614,8 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         }
         Some(_) => {
             return Err(Status::unimplemented(
-                "mock ReadRows only supports column-qualifier / cells-per-column / chain filters",
+                "mock ReadRows only supports column-qualifier / cells-per-column / strip-value / \
+                 chain filters",
             ));
         }
     }
@@ -654,6 +661,22 @@ fn row_key_in_range(row_key: &Bytes, range: &RowRange) -> bool {
         Some(row_range::EndKey::EndKeyClosed(end)) => row_key <= end,
         Some(row_range::EndKey::EndKeyOpen(end)) => row_key < end,
         None => true,
+    }
+}
+
+/// Whether `range` starts past its end, which BigTable rejects with `INVALID_ARGUMENT`. An empty
+/// end key leaves the range unbounded above, as in BigTable.
+fn row_range_is_inverted(range: &RowRange) -> bool {
+    let start = match &range.start_key {
+        Some(row_range::StartKey::StartKeyClosed(start))
+        | Some(row_range::StartKey::StartKeyOpen(start)) => start,
+        None => return false,
+    };
+    match &range.end_key {
+        Some(row_range::EndKey::EndKeyClosed(end)) | Some(row_range::EndKey::EndKeyOpen(end)) => {
+            !end.is_empty() && start > end
+        }
+        None => false,
     }
 }
 
@@ -898,13 +921,15 @@ impl Bigtable for MockBigtableServer {
                 "mock ReadRows does not support negative rows_limit",
             ));
         }
-        // Parse the row filter into an optional set of allowed qualifiers and
-        // an optional row-selecting predicate. Only the filter shapes this
-        // crate builds are supported (see `BigTableClient::column_filter` /
+        // Parse the row filter into an optional set of allowed qualifiers, an
+        // optional row-selecting predicate, and whether to empty values. Only
+        // the filter shapes this crate builds are supported (see
+        // `BigTableClient::column_filter` / `keys_only_filter` /
         // `build_multi_get_request` / `range_scan_internal`).
         let ReadFilter {
             allowed_qualifiers,
             condition,
+            strip_values,
         } = parse_read_filter(req.filter.and_then(|f| f.filter))?;
         let Some(row_set) = req.rows else {
             return Err(Status::unimplemented(
@@ -919,6 +944,11 @@ impl Bigtable for MockBigtableServer {
         if req.reversed && !row_set.row_keys.is_empty() {
             return Err(Status::unimplemented(
                 "mock ReadRows supports reversed scans only for row ranges",
+            ));
+        }
+        if row_set.row_ranges.iter().any(row_range_is_inverted) {
+            return Err(Status::invalid_argument(
+                "row range start key must not be past its end key",
             ));
         }
 
@@ -1000,7 +1030,11 @@ impl Bigtable for MockBigtableServer {
                     qualifier: Some(qualifier.to_vec()),
                     timestamp_micros: cell.timestamp_micros,
                     labels: vec![],
-                    value: cell.value.clone(),
+                    value: if strip_values {
+                        Bytes::new()
+                    } else {
+                        cell.value.clone()
+                    },
                     value_size: 0,
                     row_status: None,
                 });

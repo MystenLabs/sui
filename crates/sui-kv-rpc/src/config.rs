@@ -1173,6 +1173,8 @@ render-ahead = 3
 
         for (pipeline, in_v1, in_v2) in [
             ("kvstore_tx_seq_digest", true, true),
+            // `ListSystemPackages` reads the `system_packages` table.
+            (sui_kvstore::SYSTEM_PACKAGES_PIPELINE, true, true),
             ("kvstore_transaction_dimensions", true, false),
             ("kvstore_event_dimensions", true, false),
             ("kvstore_transaction_dimensions_v2", false, true),

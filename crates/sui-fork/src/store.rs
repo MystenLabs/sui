@@ -8,12 +8,17 @@ use std::sync::RwLockWriteGuard;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
+use itertools::Itertools as _;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
 use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::schema::objects::Status;
 use sui_rpc_store::schema::objects::TombstoneKind;
+use sui_types::MOVE_STDLIB_PACKAGE_ID;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
+use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
@@ -578,6 +583,46 @@ impl ForkStore {
             .fetch_objects_by_obj_refs(object_refs, "seed objects")
     }
 
+    /// Fetch every system package live at the fork checkpoint from the live network, each at its
+    /// latest version there. A system package id with no package at the fork checkpoint (one
+    /// created by a later protocol upgrade) is skipped, except `0x1`, `0x2` and `0x3`: they exist
+    /// at every checkpoint, so a remote answering with none for one of them, such as one that no
+    /// longer holds the fork checkpoint's objects, is an error rather than a seed that leaves the
+    /// package out for good.
+    pub(crate) fn fetch_system_packages(&self) -> anyhow::Result<Vec<Object>> {
+        let package_ids: Vec<ObjectID> = SYSTEM_PACKAGE_ADDRESSES
+            .iter()
+            .copied()
+            .map(ObjectID::from)
+            .collect();
+        let objects = self
+            .inner
+            .remote
+            .latest_objects(&package_ids)
+            .context("failed to fetch system packages")?;
+        let mut packages = Vec::with_capacity(package_ids.len());
+        for (package_id, object) in package_ids.into_iter().zip_eq(objects) {
+            match object {
+                Some(object) => packages.push(object),
+                None if [
+                    MOVE_STDLIB_PACKAGE_ID,
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    SUI_SYSTEM_PACKAGE_ID,
+                ]
+                .contains(&package_id) =>
+                {
+                    return Err(anyhow!(
+                        "the remote returned no system package {package_id} at fork checkpoint {}, \
+                         though it exists at every checkpoint",
+                        self.forked_at_checkpoint(),
+                    ));
+                }
+                None => {}
+            }
+        }
+        Ok(packages)
+    }
+
     /// Seal the staged checkpoint matching `contents` into the rpc-store, committing every staged
     /// object diff, the summary and contents, and every staged transaction in one atomic batch and
     /// dropping the staged entries afterwards. Idempotent when the contents are already persisted.
@@ -1062,6 +1107,13 @@ impl RpcStateReader for ForkStore {
     /// with object data clamped at the fork checkpoint.
     fn get_lowest_available_checkpoint_objects(&self) -> StorageResult<CheckpointSequenceNumber> {
         ForkStore::get_lowest_available_checkpoint_objects(self).map_err(to_storage_error)
+    }
+
+    /// The checkpoint after the fork checkpoint. The local indexes record only the fork's own
+    /// checkpoints. Every pre-fork object and package version in them was loaded as of the fork
+    /// checkpoint, without the history before it.
+    fn get_lowest_checkpoint_with_index_history(&self) -> StorageResult<CheckpointSequenceNumber> {
+        Ok(self.forked_at_checkpoint().saturating_add(1))
     }
 
     /// A genuinely hybrid read. The stock side serves the framework `chain_ids` table seeded at
