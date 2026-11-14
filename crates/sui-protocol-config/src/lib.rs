@@ -442,7 +442,8 @@ const MAINNET_USDB: &str =
 //              Enable ML-DSA-65 account signatures on testnet.
 // Version 144: Enable timestamp-based transaction expiration on devnet.
 //              Do not restart the checkpoint interval timer on a flush forced by the
-//              transaction limit.
+//              transaction limit, and flush a checkpoint queue that has not emptied for
+//              one second of commit time.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1413,11 +1414,13 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
 
-    // If true, a checkpoint flush forced by max_transactions_per_checkpoint does not restart
-    // the min_checkpoint_interval_ms timer. Otherwise sustained load can keep the time-based
-    // flush from ever emptying the consensus handler's checkpoint queue.
+    // If true, the consensus handler's checkpoint queue is kept from staying non-empty:
+    // a flush forced by max_transactions_per_checkpoint does not restart the
+    // min_checkpoint_interval_ms timer, and a queue that has not emptied for one second of
+    // commit time is flushed. Otherwise sustained load, or commits that each carry
+    // randomness, can keep the queue from ever emptying.
     #[serde(skip_serializing_if = "is_false")]
-    checkpoint_interval_ignores_forced_flush: bool,
+    checkpoint_queue_drain_fixes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -5091,7 +5094,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_timestamp_transaction_expiration = true;
                     }
                     cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
-                    cfg.feature_flags.checkpoint_interval_ignores_forced_flush = true;
+                    cfg.feature_flags.checkpoint_queue_drain_fixes = true;
                 }
                 // Use this template when making changes:
                 //
@@ -5130,7 +5133,7 @@ impl ProtocolConfig {
         // so most commits force a flush. Production reaches that regime only at high TPS.
         // Older versions restart the checkpoint interval on a forced flush, and at these caps
         // their checkpoint queue would never drain.
-        if self.feature_flags.checkpoint_interval_ignores_forced_flush
+        if self.feature_flags.checkpoint_queue_drain_fixes
             && SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed)
             && rng.gen_bool(0.25)
         {
