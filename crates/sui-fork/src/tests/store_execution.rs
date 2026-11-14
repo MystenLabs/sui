@@ -224,6 +224,30 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+/// Serve `object` as the live version at `checkpoint`, the query that resolves a pre-fork object
+/// the fork holds no checkpoint-pinned row for, and expect it `requests` times.
+async fn mock_live_object_at_checkpoint(
+    server: &MockServer,
+    checkpoint: u64,
+    object: &Object,
+    requests: u64,
+) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [{
+                    "address": object.id().to_string(),
+                    "atCheckpoint": checkpoint,
+                }],
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(object)])))
+        .expect(requests)
+        .mount(server)
+        .await;
+}
+
 #[tokio::test]
 async fn test_current_object_read_saves_into_rpc_store_when_attached() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -593,14 +617,17 @@ async fn test_availability_floor_below_the_fork_passes_through() {
     assert_eq!(store.get_lowest_available_checkpoint_objects().unwrap(), 10);
 }
 
-/// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
-/// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
-/// checkpoint are rejected even when the remote's retention reaches further back.
+/// The fork's indexes record only the fork's own checkpoints and load pre-fork objects and
+/// packages as of the fork checkpoint, without the history before it, so checkpoint-pinned reads
+/// below the fork checkpoint are rejected even when the remote's retention reaches further back;
+/// at the fork checkpoint they are served.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetObjectRequest;
     use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
     use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
+    use sui_rpc_api::proto::sui::rpc::v2::ledger_service_server::LedgerService;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -630,9 +657,14 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         ),
         TransactionDigest::genesis_marker(),
     );
+    let coin = make_gas_object(
+        ObjectID::random(),
+        7,
+        Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+    );
     store
         .local_store()
-        .restore_seed_objects(&[package])
+        .restore_seed_objects(&[package, coin.clone()])
         .unwrap();
     let service = RpcService::new(Arc::new(store));
     let below_floor = "requested data below earliest available; lowest available checkpoint is 100";
@@ -662,6 +694,118 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         error.message(),
         format!("Package has no modules: {package_id}")
     );
+
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(coin.id().to_string());
+    request.at_checkpoint = Some(fork_checkpoint - 1);
+    let error = service
+        .get_object(tonic::Request::new(request))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), tonic::Code::OutOfRange);
+    assert_eq!(error.message(), below_floor);
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(coin.id().to_string());
+    request.at_checkpoint = Some(fork_checkpoint);
+    let object = service
+        .get_object(tonic::Request::new(request))
+        .await
+        .unwrap()
+        .into_inner()
+        .object
+        .unwrap();
+    assert_eq!(object.version, Some(7));
+}
+
+/// A pre-fork object the fork has never read was live at the fork checkpoint, so a read pinned at
+/// that checkpoint, or at a later one before the fork changes the object, resolves it from the
+/// remote pinned at the fork checkpoint. The fork records the answer, so the remote is asked once.
+#[tokio::test]
+async fn test_checkpoint_pinned_read_resolves_an_unread_pre_fork_object() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::sui::rpc::v2::GetObjectRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ledger_service_server::LedgerService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let object = make_gas_object(
+        ObjectID::random(),
+        7,
+        Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+    );
+    mock_live_object_at_checkpoint(&server, fork_checkpoint, &object, 1).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    // An empty seed load gives the indexes their watermark at the fork checkpoint.
+    store.local_store().restore_seed_objects(&[]).unwrap();
+    let service = RpcService::new(Arc::new(store.clone()));
+
+    let mut request = GetObjectRequest::default();
+    request.object_id = Some(object.id().to_string());
+    request.at_checkpoint = Some(fork_checkpoint);
+    let read = service
+        .get_object(tonic::Request::new(request))
+        .await
+        .expect("an object live at the fork checkpoint should be found")
+        .into_inner()
+        .object
+        .unwrap();
+    assert_eq!(read.version, Some(7));
+
+    assert_eq!(
+        store
+            .indexes()
+            .unwrap()
+            .get_object_version_at_checkpoint(object.id(), fork_checkpoint + 5)
+            .unwrap(),
+        Some(SequenceNumber::from_u64(7)),
+        "a later checkpoint before any local change resolves from the recorded row",
+    );
+}
+
+/// An object the fork read only by exact version and then changed has no row at the fork
+/// checkpoint, only one at the checkpoint that changed it. Reads pinned between the two still
+/// resolve the version it had at the fork checkpoint.
+#[tokio::test]
+async fn test_checkpoint_pinned_read_before_the_first_local_change_resolves_at_the_fork() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    let owner = Owner::AddressOwner(SuiAddress::random_for_testing_only());
+    let id = ObjectID::random();
+    let at_fork = make_gas_object(id, 7, owner.clone());
+    let changed = make_gas_object(id, 9, owner);
+    mock_live_object_at_checkpoint(&server, fork_checkpoint, &at_fork, 1).await;
+    let (mut store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+    store
+        .local_store()
+        .save_object_version_only(&at_fork)
+        .unwrap();
+    store.update_objects(BTreeMap::from([(id, changed)]), vec![]);
+    let checkpoint =
+        sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(fork_checkpoint + 3)
+            .build_checkpoint();
+    store.insert_checkpoint(VerifiedCheckpoint::new_unchecked(checkpoint.summary));
+    store.insert_checkpoint_contents(checkpoint.contents);
+
+    for (checkpoint, version) in [
+        (fork_checkpoint, 7),
+        (fork_checkpoint + 2, 7),
+        (fork_checkpoint + 3, 9),
+        (fork_checkpoint + 4, 9),
+    ] {
+        assert_eq!(
+            store
+                .indexes()
+                .unwrap()
+                .get_object_version_at_checkpoint(id, checkpoint)
+                .unwrap(),
+            Some(SequenceNumber::from_u64(version)),
+            "at checkpoint {checkpoint}",
+        );
+    }
 }
 
 #[tokio::test]
