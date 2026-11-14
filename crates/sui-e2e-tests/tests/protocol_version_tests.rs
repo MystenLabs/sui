@@ -71,6 +71,12 @@ mod sim_only_tests {
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::Chain;
+    use sui_rpc::field::{FieldMask, FieldMaskUtil};
+    use sui_rpc::proto::sui::rpc::v2::{
+        GetPackageRequest, GetTransactionRequest, get_package_request::Selector,
+        ledger_service_client::LedgerServiceClient,
+        move_package_service_client::MovePackageServiceClient,
+    };
     use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -359,6 +365,73 @@ mod sim_only_tests {
         let (modified_at, mutated_to) = get_framework_upgrade_versions(&cluster).await;
         assert_eq!(Some(SequenceNumber::from(1)), modified_at);
         assert_eq!(Some(SequenceNumber::from(2)), mutated_to);
+    }
+
+    #[sim_test]
+    async fn test_get_package_serves_system_package_versions_replaced_in_place() {
+        ProtocolConfig::poison_get_for_min_version();
+        override_sui_system_modules("extend/compatible").await;
+        // The fullnode keeps every object version, so the package the upgrade replaced can
+        // still be served.
+        let cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_objects([sui_system_package_object("extend/base").await])
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .disable_fullnode_pruning()
+            .build()
+            .await;
+        expect_upgrade_succeeded(&cluster).await;
+
+        let upgrade = get_framework_upgrade_effects(&cluster, &SUI_SYSTEM_PACKAGE_ID).await;
+        // The fullnode has executed the upgrade, so once its indexes reach its highest executed
+        // checkpoint, every read below is served.
+        cluster.wait_for_rpc_index_ready().await;
+        let mut ledger = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+        let upgrade_checkpoint = ledger
+            .get_transaction(
+                GetTransactionRequest::new(&(*upgrade.transaction_digest()).into())
+                    .with_read_mask(FieldMask::from_paths(["checkpoint"])),
+            )
+            .await
+            .unwrap()
+            .into_inner()
+            .transaction
+            .unwrap()
+            .checkpoint
+            .unwrap();
+
+        let mut packages = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+        for (selector, version) in [
+            (Some(Selector::AtCheckpoint(upgrade_checkpoint)), 2),
+            (Some(Selector::AtCheckpoint(upgrade_checkpoint - 1)), 1),
+            (Some(Selector::Version(1)), 1),
+            (Some(Selector::Version(2)), 2),
+            (None, 2),
+        ] {
+            let mut request = GetPackageRequest::default();
+            request.package_id = Some(SUI_SYSTEM_PACKAGE_ID.to_string());
+            request.selector = selector;
+            let package = packages
+                .get_package(request.clone())
+                .await
+                .unwrap_or_else(|status| panic!("{request:?}: {status}"))
+                .into_inner()
+                .package
+                .unwrap();
+            assert_eq!(package.version, Some(version), "{request:?}");
+            // Only the upgraded package has `msim_extra_2`.
+            let has_new_module = package
+                .modules
+                .iter()
+                .any(|module| module.name() == "msim_extra_2");
+            assert_eq!(has_new_module, version == 2, "{request:?}");
+        }
     }
 
     #[sim_test]

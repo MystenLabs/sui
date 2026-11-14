@@ -490,6 +490,8 @@ pub enum NotReadyCause {
     IndexEmpty,
     /// The rpc indexes are still backfilling history after a restore from a snapshot.
     RestoreBackfill,
+    /// The rpc indexes have not yet reached data this node's live state already holds.
+    HistoryCatchingUp,
 }
 
 impl NotReadyCause {
@@ -498,6 +500,7 @@ impl NotReadyCause {
         match self {
             Self::IndexEmpty => "index_empty",
             Self::RestoreBackfill => "restore_backfill",
+            Self::HistoryCatchingUp => "history_catching_up",
         }
     }
 }

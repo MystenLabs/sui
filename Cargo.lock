@@ -14639,6 +14639,7 @@ dependencies = [
  "cynic-codegen",
  "fastcrypto",
  "itertools 0.13.0",
+ "move-binary-format",
  "move-core-types",
  "prometheus",
  "prost 0.14.1",
