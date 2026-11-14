@@ -402,7 +402,17 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
         let paths = PackagePaths {
             name: Some((safe_name, config)),
             // paths: sources,
-            paths: get_sources(pkg.path(), build_config)?,
+            paths: if build_config.exclude_dependency_tests && !pkg.is_root() {
+                get_sources(
+                    pkg.path(),
+                    &BuildConfig {
+                        test_mode: false,
+                        ..build_config.clone()
+                    },
+                )?
+            } else {
+                get_sources(pkg.path(), build_config)?
+            },
             named_address_map: addresses.inner,
         };
 
