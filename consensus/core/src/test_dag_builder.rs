@@ -34,7 +34,7 @@ use crate::{
 /// let mut dag_builder = DagBuilder::new(context);
 /// dag_builder.layer(1).build(); // Round 1 is fully connected with parents by default.
 /// dag_builder.layers(2..=10).build(); // Rounds 2 ~ 10 are fully connected with parents by default.
-/// dag_builder.layer(11).min_parent_links().build(); // Round 11 is minimally and randomly connected with parents, without weak links.
+/// dag_builder.layer(11).min_ancestor_links(false, Some(7)); // Round 11 is minimally and randomly connected with parents, without weak links.
 /// dag_builder.layer(12).no_leader_block(0).build(); // Round 12 misses leader block. Other blocks are fully connected with parents.
 /// dag_builder.layer(13).no_leader_link(12, 0).build(); // Round 13 misses votes for leader block. Other blocks are fully connected with parents.
 /// dag_builder.layer(14).authorities(vec![3,5]).skip_block().build(); // Round 14 authorities 3 and 5 will not propose any block.
@@ -412,8 +412,7 @@ pub struct LayerBuilder<'a> {
 
     // All ancestors will be linked to the current layer
     fully_linked_ancestors: bool,
-    // Only 2f+1 random ancestors will be linked to the current layer using a
-    // seed, if provided
+    // Select random available ancestors by stake, using a seed if provided.
     min_ancestor_links: bool,
     min_ancestor_links_random_seed: Option<u64>,
     // Add random weak links to the current layer using a seed, if provided
@@ -476,8 +475,9 @@ impl<'a> LayerBuilder<'a> {
         self.build()
     }
 
-    // Only link 2f+1 random ancestors to the current layer round using a seed,
-    // if provided. Also provide a flag to guarantee the leader is included.
+    // Select random available parents until their stake reaches quorum, using a seed
+    // if provided. If insufficient stake is available, select all available parents.
+    // Also provide a flag to include the leader when its block is available.
     // note: configuration is terminal and layer will be built after this call.
     pub fn min_ancestor_links(mut self, include_leader: bool, seed: Option<u64>) -> Self {
         self.min_ancestor_links = true;
@@ -644,11 +644,8 @@ impl<'a> LayerBuilder<'a> {
         &mut self,
         round: Round,
     ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
-        let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
-        let authorities: Vec<AuthorityIndex> = self
-            .dag_builder
-            .context
-            .committee
+        let committee = &self.dag_builder.context.committee;
+        let authorities: Vec<AuthorityIndex> = committee
             .authorities()
             .map(|authority| authority.0)
             .collect();
@@ -689,15 +686,22 @@ impl<'a> LayerBuilder<'a> {
             .map(|authority| {
                 authorities_to_shuffle.shuffle(&mut rng);
 
-                // TODO: handle quroum threshold properly with stake
-                let mut selected_authorities = vec![*authority];
-                selected_authorities.extend(
-                    authorities_to_shuffle
-                        .iter()
-                        .filter(|ancestor_author| **ancestor_author != *authority)
-                        .take(quorum_threshold - 1)
-                        .cloned(),
-                );
+                let mut selected_authorities = Vec::new();
+                let mut selected_stake = 0;
+                if ancestors_by_author.contains_key(authority) {
+                    selected_authorities.push(*authority);
+                    selected_stake = committee.stake(*authority);
+                }
+                for ancestor_author in authorities_to_shuffle.iter().filter(|ancestor_author| {
+                    **ancestor_author != *authority
+                        && ancestors_by_author.contains_key(*ancestor_author)
+                }) {
+                    if committee.reached_quorum(selected_stake) {
+                        break;
+                    }
+                    selected_authorities.push(*ancestor_author);
+                    selected_stake += committee.stake(*ancestor_author);
+                }
                 for leader in &leaders {
                     if !selected_authorities.contains(leader) {
                         selected_authorities.push(*leader);
@@ -922,5 +926,147 @@ impl<'a> LayerBuilder<'a> {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod stake_unit_regression {
+    use super::*;
+    use consensus_config::local_committee_and_keys_with_test_options;
+
+    fn minimal_layer(stakes: Vec<u64>, include_leader: bool) -> DagBuilder {
+        let committee_size = stakes.len();
+        let (context, _) = Context::new_with_test_options(committee_size, false);
+        let (committee, _) = local_committee_and_keys_with_test_options(0, stakes, false);
+        let context = Arc::new(context.with_committee(committee));
+        let mut builder = DagBuilder::new(context.clone());
+        builder.layer(1).build();
+        builder.layer(2).min_ancestor_links(include_leader, Some(7));
+
+        let blocks = builder
+            .blocks
+            .values()
+            .filter(|block| block.round() == 2)
+            .collect::<Vec<_>>();
+        assert_eq!(blocks.len(), committee_size);
+        for block in blocks {
+            let parents = block.ancestors();
+            assert_eq!(parents[0].author, block.author());
+            let authors = parents
+                .iter()
+                .map(|parent| parent.author)
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(authors.len(), parents.len());
+            assert!(parents.iter().all(|parent| parent.round == 1));
+            let parent_stake = parents
+                .iter()
+                .map(|parent| context.committee.stake(parent.author))
+                .sum::<u64>();
+            assert!(parent_stake >= context.committee.quorum_threshold());
+        }
+        builder
+    }
+
+    fn check_minimal_equal_stake_layer(stake: u64) {
+        let builder = minimal_layer(vec![stake; 4], false);
+        for block in builder.blocks.values().filter(|block| block.round() == 2) {
+            assert_eq!(block.ancestors().len(), 3, "equal stake {stake}");
+        }
+    }
+
+    #[tokio::test]
+    async fn unit_stake_minimal_links_control() {
+        check_minimal_equal_stake_layer(1);
+    }
+
+    #[tokio::test]
+    async fn scaled_equal_stake_minimal_links() {
+        check_minimal_equal_stake_layer(10);
+    }
+
+    #[tokio::test]
+    async fn minimal_links_preserve_forced_leader() {
+        let builder = minimal_layer(vec![10; 4], true);
+        let leader = builder.leader_schedule.elect_leader(1, 0);
+        for block in builder.blocks.values().filter(|block| block.round() == 2) {
+            assert!(
+                block
+                    .ancestors()
+                    .iter()
+                    .any(|parent| parent.author == leader)
+            );
+            assert!((3..=4).contains(&block.ancestors().len()));
+        }
+    }
+
+    #[tokio::test]
+    async fn high_stake_self_parent_can_reach_quorum() {
+        let builder = minimal_layer(vec![1, 1, 1, 10], false);
+        let high_stake_block = builder
+            .blocks
+            .values()
+            .find(|block| block.round() == 2 && block.author().value() == 3)
+            .unwrap();
+        assert_eq!(high_stake_block.ancestors().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn minimal_links_count_only_available_parent_stake() {
+        for seed in 0..16 {
+            let context = Arc::new(Context::new_for_test(4).0);
+            let mut builder = DagBuilder::new(context.clone());
+            let missing = context.committee.to_authority_index(3).unwrap();
+            builder
+                .layer(1)
+                .authorities(vec![missing])
+                .skip_block()
+                .build();
+            builder
+                .layer(2)
+                .authorities(vec![missing])
+                .skip_block()
+                .min_ancestor_links(false, Some(seed));
+            for block in builder.blocks.values().filter(|block| block.round() == 2) {
+                assert_eq!(block.ancestors()[0].author, block.author());
+                assert!(block.ancestors().iter().all(|parent| parent.round == 1));
+                let stake = block
+                    .ancestors()
+                    .iter()
+                    .map(|parent| context.committee.stake(parent.author))
+                    .sum::<u64>();
+                assert!(
+                    context.committee.reached_quorum(stake),
+                    "seed={seed}, block={block:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn minimal_links_use_all_parents_when_quorum_is_unavailable() {
+        let context = Arc::new(Context::new_for_test(4).0);
+        let mut builder = DagBuilder::new(context.clone());
+        let missing = [2, 3]
+            .map(|index| context.committee.to_authority_index(index).unwrap())
+            .to_vec();
+        builder
+            .layer(1)
+            .authorities(missing.clone())
+            .skip_block()
+            .build();
+        // Only two parents exist, so this synthetic layer cannot reach quorum.
+        builder
+            .layer(2)
+            .authorities(missing)
+            .skip_block()
+            .min_ancestor_links(false, Some(7));
+        for block in builder.blocks.values().filter(|block| block.round() == 2) {
+            let authors = block
+                .ancestors()
+                .iter()
+                .map(|parent| parent.author.value())
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(authors, [0, 1].into_iter().collect());
+        }
     }
 }
