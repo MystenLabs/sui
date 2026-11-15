@@ -100,17 +100,18 @@ impl MetricsResponseCallback {
         }
 
         if let Some(err) = response.error_type() {
-            self.metrics
-                .errors
-                .with_label_values(&[&self.route, &err])
-                .inc();
+            self.on_error_status(&err);
         }
     }
 
     pub(crate) fn on_error<E>(&mut self, _error: &E) {
+        self.on_error_status("unknown");
+    }
+
+    pub(crate) fn on_error_status(&mut self, status: &str) {
         self.metrics
             .errors
-            .with_label_values(&[self.route.as_str(), "unknown"])
+            .with_label_values(&[self.route.as_str(), status])
             .inc();
     }
 }
