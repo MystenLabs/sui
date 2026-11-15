@@ -1242,7 +1242,7 @@ fn value(v: &Value) -> Doc {
         Value::U64(u) => D::text(u.to_string()).concat(D::text("u64")),
         Value::U128(u) => D::text(u.to_string()).concat(D::text("u128")),
         Value::U256(u) => D::text(u.to_string()).concat(D::text("u256")),
-        Value::Address(a) => D::text(format!("@{:X}", a)),
+        Value::Address(a) => D::text(format!("@0x{:X}", a)),
         Value::Vector(values) => D::text("vector[")
             .concat(D::intersperse(
                 values.iter().map(value),
