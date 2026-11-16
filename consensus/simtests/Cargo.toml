@@ -16,6 +16,7 @@ arc-swap.workspace = true
 consensus-config.workspace = true
 consensus-core.workspace = true
 consensus-types.workspace = true
+mysten-common.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 parking_lot.workspace = true
@@ -26,7 +27,6 @@ sui-protocol-config.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 typed-store.workspace = true
-tempfile.workspace = true
 telemetry-subscribers.workspace = true
 
 [dev-dependencies]

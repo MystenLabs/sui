@@ -67,6 +67,9 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args),*)]
             #ignore
             #sig {
+                // TODO: call tempfile::env::override_temp_dir here with a dir created under
+                // nondeterministic!, so tempfile names chosen in sim context cannot collide
+                // across concurrent test processes that share TMPDIR.
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
 
                 async fn body_fn() #return_type { #body }
