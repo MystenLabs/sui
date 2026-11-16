@@ -52,7 +52,7 @@ const SUSPENSION_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 /// and dropped. Bounds the case where the peer accepts connections (so no network error
 /// surfaces) but never responds, e.g. a wedged runtime; without it the subscription would
 /// hang until the http2 keepalive gives up, or forever.
-const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
+const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// The failure budget of the current peer: how long it may go without an accepted block,
 /// measured from the last accepted block (or from when the peer became current) and
