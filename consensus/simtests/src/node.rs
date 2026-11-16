@@ -17,11 +17,11 @@ use consensus_core::{
     TransactionClient, TransactionVerifier, storage::rocksdb_store::RocksDBStore, to_socket_addr,
 };
 use consensus_types::block::BlockTimestampMs;
+use mysten_common::random_util::TempDir;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use mysten_metrics::monitored_mpsc::unbounded_channel;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use tempfile::TempDir;
 use tracing::{info, trace};
 
 #[derive(Clone)]
@@ -80,7 +80,7 @@ impl AuthorityNode {
     ///
     /// The empty store applies only to the process that this call starts.
     pub async fn start_with_empty_store(&self) -> Result<()> {
-        let db_dir = Arc::new(TempDir::new()?);
+        let db_dir = Arc::new(mysten_common::tempdir()?);
         let mut config = self.config.clone();
         config.parameters.db_path = db_dir.path().to_path_buf();
         config.db_dir = db_dir;

@@ -6,7 +6,6 @@ use std::{sync::Arc, time::SystemTime};
 use consensus_config::{AuthorityIndex, Committee, ConsensusProtocolConfig, Parameters};
 use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
 use consensus_types::block::BlockTimestampMs;
-use tempfile::TempDir;
 use tokio::time::Instant;
 
 use crate::metrics::Metrics;
@@ -76,7 +75,7 @@ impl Context {
             unused_port,
         );
         let metrics = test_metrics();
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = mysten_common::tempdir().unwrap();
         let clock = Arc::new(Clock::default());
 
         let context = Context::new(

@@ -36,7 +36,6 @@ mod consensus_tests {
         SimConfig,
         configs::{bimodal_latency_ms, env_config, uniform_latency_ms},
     };
-    use tempfile::TempDir;
     use tokio::task::JoinSet;
     use tokio::time::{sleep, timeout};
     use typed_store::DBMetrics;
@@ -962,7 +961,7 @@ mod consensus_tests {
         let observer2_ip = local_ip_utils::get_new_ip();
 
         // Create Observer 1 - connects to validator
-        let observer1_dir = Arc::new(TempDir::new().unwrap());
+        let observer1_dir = Arc::new(mysten_common::tempdir().unwrap());
         let observer1_keypair =
             NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([42; 32]));
 
@@ -1015,7 +1014,7 @@ mod consensus_tests {
         let observer1_monitor = observer1.consumer_monitor();
 
         // Create Observer 2 - connects to Observer 1
-        let observer2_dir = Arc::new(TempDir::new().unwrap());
+        let observer2_dir = Arc::new(mysten_common::tempdir().unwrap());
         let observer2_keypair =
             NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([99; 32]));
 
@@ -1139,7 +1138,7 @@ mod consensus_tests {
         let mut transaction_clients = Vec::with_capacity(committee.size());
 
         for (authority_index, _) in committee.authorities() {
-            let db_dir = Arc::new(TempDir::new().unwrap());
+            let db_dir = Arc::new(mysten_common::tempdir().unwrap());
             let mut parameters = default_parameters();
             parameters.db_path = db_dir.path().to_path_buf();
             parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
@@ -1191,7 +1190,7 @@ mod consensus_tests {
         tracing::info!("Starting observer, catch-up target is commit {catchup_target}");
 
         // Late-start the observer against validator 0.
-        let observer_dir = Arc::new(TempDir::new().unwrap());
+        let observer_dir = Arc::new(mysten_common::tempdir().unwrap());
         let observer_keypair =
             NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([42; 32]));
         let observer_ip = local_ip_utils::get_new_ip();
@@ -1330,7 +1329,7 @@ mod consensus_tests {
         transaction_verifier: Arc<dyn TransactionVerifier>,
         configure_params: impl FnOnce(&mut Parameters),
     ) -> AuthorityNode {
-        let db_dir = Arc::new(TempDir::new().unwrap());
+        let db_dir = Arc::new(mysten_common::tempdir().unwrap());
         let mut parameters = default_parameters();
         parameters.db_path = db_dir.path().to_path_buf();
         configure_params(&mut parameters);
