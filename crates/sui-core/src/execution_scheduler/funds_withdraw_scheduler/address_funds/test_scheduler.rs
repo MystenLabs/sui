@@ -78,6 +78,7 @@ pub fn expect_schedule_results(
     results: BTreeMap<TransactionDigest, ScheduleResult>,
     expected: BTreeMap<TransactionDigest, ScheduleStatus>,
 ) {
+    assert_eq!(results.len(), expected.len());
     for (tx_digest, result) in results {
         let expected_status = expected.get(&tx_digest).unwrap();
         assert_eq!(result.unwrap_status(), *expected_status);
