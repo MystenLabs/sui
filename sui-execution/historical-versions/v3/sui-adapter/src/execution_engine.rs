@@ -682,6 +682,9 @@ mod checked {
                 )?;
                 Ok((Mode::empty_results(), vec![]))
             }
+            TransactionKind::AccumulatorSettlement(_) => {
+                panic!("AccumulatorSettlement should not exist in execution layer v3");
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let len = txns.len();

@@ -13,6 +13,7 @@ use roaring::RoaringBitmap;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::str::FromStr;
+use sui_types::accumulator_settlement::{AccumulatorSettlementTransaction, AccumulatorUpdateGroup};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     AggregateAuthoritySignature, AuthorityQuorumSignInfo, AuthorityStrongQuorumSignInfo,
@@ -256,6 +257,12 @@ fn get_registry() -> Result<Registry> {
         .unwrap();
     tracer
         .trace_type::<EndOfEpochTransactionKind>(&samples)
+        .unwrap();
+    tracer
+        .trace_type::<AccumulatorSettlementTransaction>(&samples)
+        .unwrap();
+    tracer
+        .trace_type::<AccumulatorUpdateGroup>(&samples)
         .unwrap();
 
     tracer.trace_type::<IDOperation>(&samples).unwrap();

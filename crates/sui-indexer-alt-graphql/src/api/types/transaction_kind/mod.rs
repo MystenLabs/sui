@@ -78,6 +78,8 @@ impl TransactionKind {
                     inner: programmable::ProgrammableTransaction { native: pt, scope },
                 },
             )),
+            // TODO: expose accumulator settlements once the schema has a type for them.
+            K::AccumulatorSettlement(_) => None,
         }
     }
 }

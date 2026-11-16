@@ -2495,6 +2495,8 @@ impl From<crate::transaction::TransactionKind> for TransactionKind {
             K::ProgrammableSystemTransaction(ptb) => message
                 .with_programmable_transaction(ptb)
                 .with_kind(Kind::ProgrammableSystemTransaction),
+            // TODO: map to a dedicated kind once the sui-rpc proto defines one.
+            K::AccumulatorSettlement(_) => message.with_kind(Kind::Unknown),
         }
     }
 }

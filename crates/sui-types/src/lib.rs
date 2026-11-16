@@ -28,6 +28,7 @@ pub mod error;
 pub mod accumulator_event;
 pub mod accumulator_metadata;
 pub mod accumulator_root;
+pub mod accumulator_settlement;
 pub mod address_alias;
 pub mod allowance;
 pub mod authenticator_state;

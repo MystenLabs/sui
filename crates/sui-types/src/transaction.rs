@@ -4,6 +4,7 @@
 
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue, check_accumulator_type_bounds};
+use crate::accumulator_settlement::AccumulatorSettlementTransaction;
 use crate::allowance::{ResolvedAllowance, parse_allowance_object};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
@@ -519,6 +520,10 @@ pub enum TransactionKind {
 
     /// A system transaction that is expressed as a PTB
     ProgrammableSystemTransaction(ProgrammableTransaction),
+
+    /// Natively executed accumulator settlement or barrier. Replaces the settlement
+    /// `ProgrammableSystemTransaction`s when `native_accumulator_settlement` is enabled.
+    AccumulatorSettlement(AccumulatorSettlementTransaction),
     // .. more transaction types go here
 }
 
@@ -1966,7 +1971,8 @@ impl TransactionKind {
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_)
-            | TransactionKind::ProgrammableSystemTransaction(_) => true,
+            | TransactionKind::ProgrammableSystemTransaction(_)
+            | TransactionKind::AccumulatorSettlement(_) => true,
             TransactionKind::ProgrammableTransaction(_) => false,
         }
     }
@@ -1979,6 +1985,9 @@ impl TransactionKind {
     }
 
     pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
+        if let TransactionKind::AccumulatorSettlement(settlement) = self {
+            return settlement.is_barrier();
+        }
         matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
             && self.shared_input_objects().any(|obj| {
                 obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
@@ -1989,11 +1998,12 @@ impl TransactionKind {
     /// Whether this is any accumulator settlement transaction (a settlement chunk or
     /// the barrier); every one declares the accumulator root object as a shared input.
     pub fn is_accumulator_settle_tx(&self) -> bool {
-        if let TransactionKind::ProgrammableSystemTransaction(pt) = self {
-            pt.shared_input_objects()
-                .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-        } else {
-            false
+        match self {
+            TransactionKind::ProgrammableSystemTransaction(pt) => pt
+                .shared_input_objects()
+                .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID),
+            TransactionKind::AccumulatorSettlement(_) => true,
+            _ => false,
         }
     }
 
@@ -2001,6 +2011,14 @@ impl TransactionKind {
     /// `AccumulatorSettlement` transaction key by extracting epoch and
     /// checkpoint_height from the prologue call arguments.
     pub fn accumulator_barrier_settlement_key(&self) -> Option<TransactionKey> {
+        if let TransactionKind::AccumulatorSettlement(settlement) = self {
+            return settlement.is_barrier().then(|| {
+                TransactionKey::AccumulatorSettlement(
+                    settlement.epoch(),
+                    settlement.checkpoint_height(),
+                )
+            });
+        }
         let TransactionKind::ProgrammableSystemTransaction(pt) = self else {
             return None;
         };
@@ -2086,6 +2104,9 @@ impl TransactionKind {
                     mutability: SharedObjectMutability::Mutable,
                 })))
             }
+            Self::AccumulatorSettlement(settlement) => Either::Left(Either::Left(iter::once(
+                settlement.accumulator_root_input(),
+            ))),
             Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
                 txns.iter().flat_map(|txn| txn.shared_input_objects()),
             )),
@@ -2114,7 +2135,8 @@ impl TransactionKind {
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_)
-            | TransactionKind::ProgrammableSystemTransaction(_) => vec![],
+            | TransactionKind::ProgrammableSystemTransaction(_)
+            | TransactionKind::AccumulatorSettlement(_) => vec![],
             TransactionKind::ProgrammableTransaction(pt) => pt.receiving_objects(),
         }
     }
@@ -2157,6 +2179,14 @@ impl TransactionKind {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: update.randomness_obj_initial_shared_version(),
                     mutability: SharedObjectMutability::Mutable,
+                }]
+            }
+            Self::AccumulatorSettlement(settlement) => {
+                let root = settlement.accumulator_root_input();
+                vec![InputObjectKind::SharedMoveObject {
+                    id: root.id,
+                    initial_shared_version: root.initial_shared_version,
+                    mutability: root.mutability,
                 }]
             }
             Self::EndOfEpochTransaction(txns) => {
@@ -2279,6 +2309,13 @@ impl TransactionKind {
                     ));
                 }
             }
+            TransactionKind::AccumulatorSettlement(_) => {
+                if !config.native_accumulator_settlement() {
+                    return Err(UserInputError::Unsupported(
+                        "native accumulator settlement not enabled".to_string(),
+                    ));
+                }
+            }
         };
         Ok(())
     }
@@ -2319,6 +2356,7 @@ impl TransactionKind {
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
+            Self::AccumulatorSettlement(_) => "AccumulatorSettlement",
         }
     }
 }
@@ -2388,6 +2426,10 @@ impl Display for TransactionKind {
             }
             Self::EndOfEpochTransaction(_) => {
                 writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
+            }
+            Self::AccumulatorSettlement(settlement) => {
+                writeln!(writer, "Transaction Kind : Accumulator Settlement")?;
+                writeln!(writer, "{settlement:?}")?;
             }
         }
         write!(f, "{}", writer)
@@ -3888,7 +3930,8 @@ impl TransactionDataAPI for TransactionDataV1 {
             | TransactionKind::Genesis(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_)
-            | TransactionKind::RandomnessStateUpdate(_) => false,
+            | TransactionKind::RandomnessStateUpdate(_)
+            | TransactionKind::AccumulatorSettlement(_) => false,
         }
     }
 

@@ -663,6 +663,9 @@ mod checked {
             TransactionKind::ProgrammableSystemTransaction(_) => {
                 panic!("ProgrammableSystemTransaction should not exist in execution layer v1");
             }
+            TransactionKind::AccumulatorSettlement(_) => {
+                panic!("AccumulatorSettlement should not exist in execution layer v1");
+            }
         }?;
         temporary_store.check_execution_results_consistency()?;
         Ok(result)

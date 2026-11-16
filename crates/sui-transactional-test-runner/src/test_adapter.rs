@@ -2103,7 +2103,7 @@ impl SuiTestAdapter {
                     *event.accumulator_obj.inner(),
                     event.write.address.address,
                     event.write.address.ty.clone(),
-                    event.write.operation.clone(),
+                    event.write.operation,
                     event.write.value.clone(),
                 )
             })
@@ -2273,7 +2273,7 @@ impl SuiTestAdapter {
                     *event.accumulator_obj.inner(),
                     event.write.address.address,
                     event.write.address.ty.clone(),
-                    event.write.operation.clone(),
+                    event.write.operation,
                     event.write.value.clone(),
                 )
             })

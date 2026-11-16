@@ -36,6 +36,7 @@ impl Processor for AddressBalances {
             if !matches!(
                 transaction.transaction.kind(),
                 TransactionKind::ProgrammableSystemTransaction(_)
+                    | TransactionKind::AccumulatorSettlement(_)
             ) {
                 continue;
             }
