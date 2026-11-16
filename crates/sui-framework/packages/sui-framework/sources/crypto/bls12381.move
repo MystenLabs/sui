@@ -12,6 +12,16 @@ use sui::group_ops::{Self, Element};
 ///
 /// If the signature is a valid signature of the message and public key according to
 /// BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_, return true. Otherwise, return false.
+///
+/// The function accepts both the compressed and the uncompressed encodings of its inputs. The
+/// public key can be 96 bytes (compressed) or 192 bytes (uncompressed), and the signature can be
+/// 48 bytes (compressed) or 96 bytes (uncompressed). The function returns false if the public key
+/// is the point at infinity or is not in the prime-order subgroup of G2.
+///
+/// A valid public key therefore has more than one accepted byte encoding. Callers must not use
+/// the raw `public_key` bytes as a unique identity, for example by hashing or comparing them.
+/// Callers that need a unique identity must require one length (for example 96 bytes) or convert
+/// the key to a canonical encoding first.
 public native fun bls12381_min_sig_verify(
     signature: &vector<u8>,
     public_key: &vector<u8>,
@@ -24,6 +34,16 @@ public native fun bls12381_min_sig_verify(
 ///
 /// If the signature is a valid signature of the message and public key according to
 /// BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_, return true. Otherwise, return false.
+///
+/// The function accepts both the compressed and the uncompressed encodings of its inputs. The
+/// public key can be 48 bytes (compressed) or 96 bytes (uncompressed), and the signature can be
+/// 96 bytes (compressed) or 192 bytes (uncompressed). The function returns false if the public key
+/// is the point at infinity or is not in the prime-order subgroup of G1.
+///
+/// A valid public key therefore has more than one accepted byte encoding. Callers must not use
+/// the raw `public_key` bytes as a unique identity, for example by hashing or comparing them.
+/// Callers that need a unique identity must require one length (for example 48 bytes) or convert
+/// the key to a canonical encoding first.
 public native fun bls12381_min_pk_verify(
     signature: &vector<u8>,
     public_key: &vector<u8>,

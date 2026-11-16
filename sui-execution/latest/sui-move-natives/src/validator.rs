@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{NativesCostTable, get_extension};
+use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::partial_vm_error;
 use move_binary_format::{safe_assert, safe_assert_eq};
@@ -62,7 +62,12 @@ pub fn validate_metadata_bcs(
 
     let cost = context.gas_used();
 
-    if let Result::Err(err_code) = validator_metadata.verify(true) {
+    let require_compressed_bls = get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .validator_metadata_require_compressed_bls();
+    if let Result::Err(err_code) =
+        validator_metadata.verify_with_options(true, require_compressed_bls)
+    {
         return Ok(NativeResult::err(cost, err_code));
     }
 
