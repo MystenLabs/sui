@@ -286,7 +286,9 @@ impl<'b> NativeContext<'_, 'b, '_> {
     fn charge_type_layout(&self, ty: &Type) -> PartialVMResult<()> {
         let (Some(coefficient), Some(large_layout_threshold)) = (
             self.vtables.vm_config.layout_node_cost,
-            self.vtables.vm_config.layout_node_cost_large_layout_threshold,
+            self.vtables
+                .vm_config
+                .layout_node_cost_large_layout_threshold,
         ) else {
             return Ok(());
         };

@@ -1077,6 +1077,18 @@ fn runtime_invariants_reject_missing_mismatched_or_late_bound_versions() {
         linkage: BTreeMap::new(),
         linkage_resolution: BTreeMap::new(),
     });
+    let analyzer = p.resolution_config();
+    let vm = p
+        .runtime
+        .make_vm(
+            &store.package_store,
+            empty.linkage_context::<ExecutionError>().unwrap(),
+        )
+        .unwrap();
+    let mut state = p.state();
+    let env = Env::<Normal<ExecutionError>>::new(
+        &p.config, &p.runtime, &mut state, &store, &analyzer, &vm, &empty,
+    );
     let vm_type =
         crate::static_programmable_transactions::loading::ast::Type::Datatype(std::rc::Rc::new(
             crate::static_programmable_transactions::loading::ast::Datatype {
@@ -1089,7 +1101,10 @@ fn runtime_invariants_reject_missing_mismatched_or_late_bound_versions() {
                 type_arguments: vec![],
             },
         ));
-    assert_invariant_failure(|| verify_type_linkage::<Normal<ExecutionError>>([&vm_type], &empty));
+    // The VM cache is not unwind-safe, but this invariant-only test does not use it after panic.
+    assert_invariant_failure(std::panic::AssertUnwindSafe(|| {
+        verify_type_linkage::<Normal<ExecutionError>>(&env, [&vm_type], &empty)
+    }));
     // A real package is still available: missing linkage metadata must not be silently repaired.
     assert!(get_package::<ExecutionError, _>(&DEP, &store).is_ok());
 }
