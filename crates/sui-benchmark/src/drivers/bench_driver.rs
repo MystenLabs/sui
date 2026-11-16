@@ -43,6 +43,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use sui_core::transaction_driver::TransactionDriverError;
 use sui_types::committee::Committee;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_grpc::WaitForEffectsResponse;
@@ -896,7 +897,20 @@ async fn run_bench_worker(
                         NextOp::Retry(Box::new((transaction, payload)))
                     }
                     None => {
-                        if err
+                        // A timed-out transaction can still commit from copies already in the
+                        // consensus pool. Resending the same digest returns its effects once it
+                        // executes; building a new transaction would reuse the spent gas version.
+                        if is_client_timeout(&err) {
+                            metrics
+                                .num_error
+                                .with_label_values(&[
+                                    payload_str.as_str(),
+                                    "timeout",
+                                    "transaction_driver",
+                                ])
+                                .inc();
+                            NextOp::Retry(Box::new((transaction, payload)))
+                        } else if err
                             .downcast::<TransactionSubmissionError>()
                             .and_then(|err| {
                                 if matches!(
@@ -1303,6 +1317,13 @@ async fn submit_soft_bundles(
     futures::future::join_all(bundle_futures).await
 }
 
+fn is_client_timeout(err: &anyhow::Error) -> bool {
+    matches!(
+        err.downcast_ref::<TransactionDriverError>(),
+        Some(TransactionDriverError::TimeoutWithLastRetriableError { .. })
+    )
+}
+
 fn direct_submission_error_status(error: anyhow::Error) -> BatchedTransactionStatus {
     let is_retriable = error
         .downcast_ref::<TransactionSubmissionError>()
@@ -1568,6 +1589,25 @@ mod tests {
         fn make_transaction(&mut self) -> Transaction {
             unimplemented!("not needed for recycling tests")
         }
+    }
+
+    #[test]
+    fn test_client_timeout_is_classified_for_resend() {
+        let timeout: anyhow::Error = TransactionDriverError::TimeoutWithLastRetriableError {
+            last_error: None,
+            attempts: 3,
+            timeout: Duration::from_secs(60),
+        }
+        .into();
+        assert!(is_client_timeout(&timeout));
+
+        let validation: anyhow::Error = TransactionDriverError::ValidationFailed {
+            error: "bad".to_string(),
+        }
+        .into();
+        assert!(!is_client_timeout(&validation));
+
+        assert!(!is_client_timeout(&anyhow!("other error")));
     }
 
     #[test]
