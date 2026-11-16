@@ -95,9 +95,8 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
             .charge(1, pushes, pops, push_size.into(), pop_size.into())
     }
 
-    fn charge_pop(&mut self, popped_val: impl ValueView) -> PartialVMResult<()> {
-        let decr_size = abstract_memory_size(popped_val)?;
-        self.0.charge(1, 0, 1, 0, decr_size.into())
+    fn charge_pop(&mut self, _popped_val: impl ValueView) -> PartialVMResult<()> {
+        self.0.charge(1, 0, 1, 0, 0)
     }
 
     fn charge_native_function(
@@ -141,16 +140,12 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_native_function_before_execution(
         &mut self,
-        mut args: impl ExactSizeIterator<Item = impl ValueView>,
+        args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         if legacy_charge_native_pops_args(self.0.gas_model_version) {
             // Legacy: pop args again (double-pop, masked by saturating_sub).
             let pops = args.len() as u64;
-            let stack_reduction_size = args.try_fold(
-                AbstractMemorySize::new(pops),
-                |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(elem)?) },
-            )?;
-            self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+            self.0.charge(1, 0, pops, 0, 0)
         } else {
             // The args were already popped by charge_call/charge_call_generic.
             // Only charge the instruction cost, not the pops.
@@ -160,35 +155,23 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_call(
         &mut self,
-        mut args: impl ExactSizeIterator<Item = impl ValueView>,
+        args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: u64,
     ) -> PartialVMResult<()> {
         // We will have to perform this many pops for the call.
         let pops = args.len() as u64;
-        // Size stays the same -- we're just moving it from the operand stack to the locals. But
-        // the size on the operand stack is reduced by sum_{args} arg.size()?.
-        let stack_reduction_size = args.try_fold(
-            AbstractMemorySize::new(0),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(elem)?) },
-        )?;
-        self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        self.0.charge(1, 0, pops, 0, 0)
     }
 
     fn charge_call_generic(
         &mut self,
-        mut args: impl ExactSizeIterator<Item = impl ValueView>,
+        args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: u64,
     ) -> PartialVMResult<()> {
         // We have to perform this many pops from the operand stack for this function call.
         let pops = args.len() as u64;
-        // Calculate the size reduction on the operand stack.
-        let stack_reduction_size = args.try_fold(
-            AbstractMemorySize::new(0),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(elem)?) },
-        )?;
-        // Charge for the pops, no pushes, and account for the stack size decrease. Also track the
-        // `CallGeneric` instruction we must have encountered for this.
-        self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        // Charge for the pops, no pushes, and track the `CallGeneric` instruction.
+        self.0.charge(1, 0, pops, 0, 0)
     }
 
     fn charge_ld_const(&mut self, size: AbstractMemorySize) -> PartialVMResult<()> {
@@ -214,12 +197,9 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         self.0.charge(1, 1, 0, REFERENCE_SIZE.into(), 0)
     }
 
-    fn charge_store_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        // Charge for the storing of the value on the stack into a local. Note here that if we were
-        // also accounting for the size of the locals that this would be a net-zero operation in
-        // terms of memory.
-        let decr_size = abstract_memory_size(val)?;
-        self.0.charge(1, 0, 1, 0, decr_size.into())
+    fn charge_store_loc(&mut self, _val: impl ValueView) -> PartialVMResult<()> {
+        // Charge for storing the value on the stack into a local.
+        self.0.charge(1, 0, 1, 0, 0)
     }
 
     fn charge_pack(
@@ -244,10 +224,9 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         self.0.charge(1, num_fields, 1, 0, STRUCT_SIZE.into())
     }
 
-    fn charge_variant_switch(&mut self, val: impl ValueView) -> PartialVMResult<()> {
+    fn charge_variant_switch(&mut self, _val: impl ValueView) -> PartialVMResult<()> {
         // We perform a single pop of a value from the stack.
-        let decr_size = abstract_memory_size(val)?;
-        self.0.charge(1, 0, 1, 0, decr_size.into())
+        self.0.charge(1, 0, 1, 0, 0)
     }
 
     fn charge_read_ref(&mut self, ref_val: impl ValueView) -> PartialVMResult<()> {
@@ -261,14 +240,13 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     fn charge_write_ref(
         &mut self,
         new_val: impl ValueView,
-        old_val: impl ValueView,
+        _old_val: impl ValueView,
     ) -> PartialVMResult<()> {
         // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
         let incr_size = abstract_memory_size(new_val)?;
-        let decr_size = abstract_memory_size(old_val)?;
-        self.0.charge(1, 0, 2, incr_size.into(), decr_size.into())
+        self.0.charge(1, 0, 2, incr_size.into(), 0)
     }
 
     fn charge_eq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
