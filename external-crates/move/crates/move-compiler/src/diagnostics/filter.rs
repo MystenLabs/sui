@@ -682,3 +682,15 @@ impl crate::shared::AstDebug for FilterScope {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{diagnostics::config::known_diagnostic_filters, editions::Flavor};
+
+    #[test]
+    fn diagnostic_filter_registries_do_not_conflict() {
+        let known = known_diagnostic_filters(Flavor::Sui);
+        known_filter_map(&known);
+    }
+}
