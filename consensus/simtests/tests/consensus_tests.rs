@@ -1188,7 +1188,7 @@ mod consensus_tests {
         let observer = AuthorityNode::new(observer_config);
         observer.start().await.unwrap();
         observer.spawn_committed_subdag_consumer().unwrap();
-        let observer_monitor = observer.commit_consumer_monitor();
+        let observer_monitor = observer.consumer_monitor();
 
         // Phase 1: the observer streams from validator 0.
         tracing::info!("Phase 1: streaming from validator 0");
@@ -1229,9 +1229,7 @@ mod consensus_tests {
             }
             sleep(Duration::from_secs(1)).await;
 
-            let validator_commits = authorities[1]
-                .commit_consumer_monitor()
-                .highest_handled_commit();
+            let validator_commits = authorities[1].consumer_monitor().highest_handled_commit();
             let observer_commits = observer_monitor.highest_handled_commit();
             if observer_commits > commits_before_kill
                 && validator_commits.abs_diff(observer_commits) <= MAX_COMMIT_DIFFERENCE
