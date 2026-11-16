@@ -295,6 +295,18 @@ pub enum BuiltinTypeName_ {
     U128,
     // u256
     U256,
+    // i8
+    I8,
+    // i16
+    I16,
+    // i32
+    I32,
+    // i64
+    I64,
+    // i128
+    I128,
+    // i256
+    I256,
     // Vector
     Vector,
     // bool
@@ -629,17 +641,24 @@ impl SyntaxMethodEntry {
 }
 
 static BUILTIN_TYPE_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
+    use crate::shared::builtin_types as BT;
     [
-        BuiltinTypeName_::ADDRESS,
-        BuiltinTypeName_::SIGNER,
-        BuiltinTypeName_::U_8,
-        BuiltinTypeName_::U_16,
-        BuiltinTypeName_::U_32,
-        BuiltinTypeName_::U_64,
-        BuiltinTypeName_::U_128,
-        BuiltinTypeName_::U_256,
-        BuiltinTypeName_::BOOL,
-        BuiltinTypeName_::VECTOR,
+        BT::ADDRESS,
+        BT::SIGNER,
+        BT::U8,
+        BT::U16,
+        BT::U32,
+        BT::U64,
+        BT::U128,
+        BT::U256,
+        BT::I8,
+        BT::I16,
+        BT::I32,
+        BT::I64,
+        BT::I128,
+        BT::I256,
+        BT::BOOL,
+        BT::VECTOR,
     ]
     .into_iter()
     .map(Symbol::from)
@@ -654,6 +673,25 @@ static BUILTIN_TYPE_NUMERIC: LazyLock<BTreeSet<BuiltinTypeName_>> = LazyLock::ne
         BuiltinTypeName_::U64,
         BuiltinTypeName_::U128,
         BuiltinTypeName_::U256,
+        BuiltinTypeName_::I8,
+        BuiltinTypeName_::I16,
+        BuiltinTypeName_::I32,
+        BuiltinTypeName_::I64,
+        BuiltinTypeName_::I128,
+        BuiltinTypeName_::I256,
+    ]
+    .into_iter()
+    .collect()
+});
+
+static BUILTIN_TYPE_SIGNED_NUMERIC: LazyLock<BTreeSet<BuiltinTypeName_>> = LazyLock::new(|| {
+    [
+        BuiltinTypeName_::I8,
+        BuiltinTypeName_::I16,
+        BuiltinTypeName_::I32,
+        BuiltinTypeName_::I64,
+        BuiltinTypeName_::I128,
+        BuiltinTypeName_::I256,
     ]
     .into_iter()
     .collect()
@@ -666,23 +704,16 @@ static BUILTIN_TYPE_ORDERED: LazyLock<BTreeSet<BuiltinTypeName_>> =
     LazyLock::new(|| BUILTIN_TYPE_BITS.clone());
 
 impl BuiltinTypeName_ {
-    pub const ADDRESS: &'static str = "address";
-    pub const SIGNER: &'static str = "signer";
-    pub const U_8: &'static str = "u8";
-    pub const U_16: &'static str = "u16";
-    pub const U_32: &'static str = "u32";
-    pub const U_64: &'static str = "u64";
-    pub const U_128: &'static str = "u128";
-    pub const U_256: &'static str = "u256";
-    pub const BOOL: &'static str = "bool";
-    pub const VECTOR: &'static str = "vector";
-
     pub fn all_names() -> &'static BTreeSet<Symbol> {
         &BUILTIN_TYPE_ALL_NAMES
     }
 
     pub fn numeric() -> &'static BTreeSet<BuiltinTypeName_> {
         &BUILTIN_TYPE_NUMERIC
+    }
+
+    pub fn signed_numeric() -> &'static BTreeSet<BuiltinTypeName_> {
+        &BUILTIN_TYPE_SIGNED_NUMERIC
     }
 
     pub fn bits() -> &'static BTreeSet<BuiltinTypeName_> {
@@ -697,19 +728,29 @@ impl BuiltinTypeName_ {
         Self::numeric().contains(self)
     }
 
+    pub fn is_signed_numeric(&self) -> bool {
+        Self::signed_numeric().contains(self)
+    }
+
     pub fn resolve(name_str: &str) -> Option<Self> {
-        use BuiltinTypeName_ as BT;
+        use crate::shared::builtin_types as BTN;
         match name_str {
-            BT::ADDRESS => Some(BT::Address),
-            BT::SIGNER => Some(BT::Signer),
-            BT::U_8 => Some(BT::U8),
-            BT::U_16 => Some(BT::U16),
-            BT::U_32 => Some(BT::U32),
-            BT::U_64 => Some(BT::U64),
-            BT::U_128 => Some(BT::U128),
-            BT::U_256 => Some(BT::U256),
-            BT::BOOL => Some(BT::Bool),
-            BT::VECTOR => Some(BT::Vector),
+            BTN::ADDRESS => Some(Self::Address),
+            BTN::SIGNER => Some(Self::Signer),
+            BTN::U8 => Some(Self::U8),
+            BTN::U16 => Some(Self::U16),
+            BTN::U32 => Some(Self::U32),
+            BTN::U64 => Some(Self::U64),
+            BTN::U128 => Some(Self::U128),
+            BTN::U256 => Some(Self::U256),
+            BTN::I8 => Some(Self::I8),
+            BTN::I16 => Some(Self::I16),
+            BTN::I32 => Some(Self::I32),
+            BTN::I64 => Some(Self::I64),
+            BTN::I128 => Some(Self::I128),
+            BTN::I256 => Some(Self::I256),
+            BTN::BOOL => Some(Self::Bool),
+            BTN::VECTOR => Some(Self::Vector),
             _ => None,
         }
     }
@@ -718,9 +759,20 @@ impl BuiltinTypeName_ {
         use BuiltinTypeName_ as B;
         // Match here to make sure this function is fixed when collections are added
         match self {
-            B::Address | B::U8 | B::U16 | B::U32 | B::U64 | B::U128 | B::U256 | B::Bool => {
-                AbilitySet::primitives(loc)
-            }
+            B::Address
+            | B::U8
+            | B::U16
+            | B::U32
+            | B::U64
+            | B::U128
+            | B::U256
+            | B::I8
+            | B::I16
+            | B::I32
+            | B::I64
+            | B::I128
+            | B::I256
+            | B::Bool => AbilitySet::primitives(loc),
             B::Signer => AbilitySet::signer(loc),
             B::Vector => AbilitySet::collection(loc),
         }
@@ -738,6 +790,12 @@ impl BuiltinTypeName_ {
             | B::U64
             | B::U128
             | B::U256
+            | B::I8
+            | B::I16
+            | B::I32
+            | B::I64
+            | B::I128
+            | B::I256
             | B::Bool => vec![],
             B::Vector => vec![AbilitySet::empty()],
         }
@@ -836,9 +894,20 @@ impl Type_ {
     pub fn builtin_(b: BuiltinTypeName, ty_args: Vec<Type>) -> Type_ {
         use BuiltinTypeName_ as B;
         let abilities = match &b.value {
-            B::Address | B::U8 | B::U16 | B::U32 | B::U64 | B::U128 | B::U256 | B::Bool => {
-                Some(AbilitySet::primitives(b.loc))
-            }
+            B::Address
+            | B::U8
+            | B::U16
+            | B::U32
+            | B::U64
+            | B::U128
+            | B::U256
+            | B::I8
+            | B::I16
+            | B::I32
+            | B::I64
+            | B::I128
+            | B::I256
+            | B::Bool => Some(AbilitySet::primitives(b.loc)),
             B::Signer => Some(AbilitySet::signer(b.loc)),
             B::Vector => None,
         };
@@ -884,6 +953,30 @@ impl Type_ {
 
     pub fn u256(loc: Loc) -> Type {
         Self::builtin(loc, sp(loc, BuiltinTypeName_::U256), vec![])
+    }
+
+    pub fn i8(loc: Loc) -> Type {
+        Self::builtin(loc, sp(loc, BuiltinTypeName_::I8), vec![])
+    }
+
+    pub fn i16(loc: Loc) -> Type {
+        Self::builtin(loc, sp(loc, BuiltinTypeName_::I16), vec![])
+    }
+
+    pub fn i32(loc: Loc) -> Type {
+        Self::builtin(loc, sp(loc, BuiltinTypeName_::I32), vec![])
+    }
+
+    pub fn i64(loc: Loc) -> Type {
+        Self::builtin(loc, sp(loc, BuiltinTypeName_::I64), vec![])
+    }
+
+    pub fn i128(loc: Loc) -> Type {
+        Self::builtin(loc, sp(loc, BuiltinTypeName_::I128), vec![])
+    }
+
+    pub fn i256(loc: Loc) -> Type {
+        Self::builtin(loc, sp(loc, BuiltinTypeName_::I256), vec![])
     }
 
     pub fn vector(loc: Loc, elem: Type) -> Type {
@@ -1078,6 +1171,12 @@ impl Value_ {
             U64(_) => Type_::u64(loc),
             U128(_) => Type_::u128(loc),
             U256(_) => Type_::u256(loc),
+            I8(_) => Type_::i8(loc),
+            I16(_) => Type_::i16(loc),
+            I32(_) => Type_::i32(loc),
+            I64(_) => Type_::i64(loc),
+            I128(_) => Type_::i128(loc),
+            I256(_) => Type_::i256(loc),
             Bool(_) => Type_::bool(loc),
             Bytearray(_) => Type_::vector(loc, Type_::u8(loc)),
         })
@@ -1111,21 +1210,27 @@ impl Clone for TypeName_ {
 
 impl fmt::Display for BuiltinTypeName_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        use BuiltinTypeName_ as BT;
+        use crate::shared::builtin_types as BTN;
         write!(
             f,
             "{}",
             match self {
-                BT::Address => BT::ADDRESS,
-                BT::Signer => BT::SIGNER,
-                BT::U8 => BT::U_8,
-                BT::U16 => BT::U_16,
-                BT::U32 => BT::U_32,
-                BT::U64 => BT::U_64,
-                BT::U128 => BT::U_128,
-                BT::U256 => BT::U_256,
-                BT::Bool => BT::BOOL,
-                BT::Vector => BT::VECTOR,
+                Self::Address => BTN::ADDRESS,
+                Self::Signer => BTN::SIGNER,
+                Self::U8 => BTN::U8,
+                Self::U16 => BTN::U16,
+                Self::U32 => BTN::U32,
+                Self::U64 => BTN::U64,
+                Self::U128 => BTN::U128,
+                Self::U256 => BTN::U256,
+                Self::I8 => BTN::I8,
+                Self::I16 => BTN::I16,
+                Self::I32 => BTN::I32,
+                Self::I64 => BTN::I64,
+                Self::I128 => BTN::I128,
+                Self::I256 => BTN::I256,
+                Self::Bool => BTN::BOOL,
+                Self::Vector => BTN::VECTOR,
             }
         )
     }
@@ -1808,7 +1913,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::Vector(_loc, ty_opt, sp!(_, elems)) => {
-                w.write("vector");
+                w.write(crate::shared::builtin_types::VECTOR);
                 if let Some(ty) = ty_opt {
                     w.write("<");
                     ty.ast_debug(w);
