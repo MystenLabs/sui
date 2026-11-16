@@ -1586,7 +1586,11 @@ macro_rules! make_native {
     ($native: expr) => {
         Arc::new(
             move |context, ty_args, args| -> PartialVMResult<NativeResult> {
-                $native(context, ty_args, args)
+                let result = $native(context, ty_args, args);
+                // Layout helpers propagate OUT_OF_GAS as a VM error. Returning that error
+                // directly would bypass the interpreter's NativeResult.cost charging path.
+                // Convert it to a native OOG result that charges the full native gas budget.
+                NativeResult::map_out_of_gas(context.gas_budget(), result)
             },
         )
     };

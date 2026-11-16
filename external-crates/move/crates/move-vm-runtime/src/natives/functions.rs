@@ -105,6 +105,20 @@ impl NativeResult {
         }
     }
 
+    /// Converts OOG propagated by a native helper into a fully charged native result.
+    pub fn map_out_of_gas(
+        gas_budget: InternalGas,
+        result: PartialVMResult<Self>,
+    ) -> PartialVMResult<Self> {
+        match result {
+            Err(err) if err.major_status() == StatusCode::OUT_OF_GAS => Ok(Self::err(
+                gas_budget,
+                move_core_types::vm_status::sub_status::NFE_OUT_OF_GAS,
+            )),
+            result => result,
+        }
+    }
+
     /// Convert a PartialVMResult<()> into a PartialVMResult<NativeResult>
     pub fn map_partial_vm_result_empty(
         cost: InternalGas,
@@ -260,7 +274,39 @@ impl<'b> NativeContext<'_, 'b, '_> {
         self.vtables.get_fully_annotated_type_layout(ty).ok()
     }
 
+    pub fn type_layout_node_count(&self, ty: &Type) -> PartialVMResult<u64> {
+        Ok(self
+            .vtables
+            .type_size_of(ty, &self.vtables.type_limits)?
+            .layout_size)
+    }
+
+    /// Charges for one layout construction without constructing the layout. Native entry points
+    /// must convert a propagated OOG with `NativeResult::map_out_of_gas`.
+    fn charge_type_layout(&self, ty: &Type) -> PartialVMResult<()> {
+        let (Some(coefficient), Some(large_layout_threshold)) = (
+            self.vtables.vm_config.layout_node_cost,
+            self.vtables.vm_config.layout_node_cost_large_layout_threshold,
+        ) else {
+            return Ok(());
+        };
+        // The cost is coefficient * (n + excess * floor(sqrt(excess))), where n is the
+        // expanded layout node count and excess = max(n - threshold, 0). Layouts up to the
+        // threshold pay only the linear cost; larger layouts also pay the subquadratic surcharge.
+        // The integer square root rounds down, and cost arithmetic saturates.
+        let nodes = self.type_layout_node_count(ty)?;
+        let excess = nodes.saturating_sub(large_layout_threshold);
+        let units = nodes.saturating_add(excess.saturating_mul(excess.isqrt()));
+        let cost = InternalGas::new(coefficient).saturating_mul(units);
+        if !self.charge_gas(cost)? {
+            return Err(partial_vm_error!(OUT_OF_GAS));
+        }
+        Ok(())
+    }
+
+    /// Charges for and constructs a runtime layout, including on repeated requests for the same type.
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<R::MoveTypeLayout>> {
+        self.charge_type_layout(ty)?;
         match self.vtables.type_to_type_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
@@ -272,10 +318,12 @@ impl<'b> NativeContext<'_, 'b, '_> {
         self.vtables.abilities(ty)
     }
 
+    /// Charges for and constructs an annotated layout independently of runtime layout requests.
     pub fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
     ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
+        self.charge_type_layout(ty)?;
         match self.vtables.type_to_fully_annotated_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),

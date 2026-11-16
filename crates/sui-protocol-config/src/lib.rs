@@ -2175,6 +2175,11 @@ pub struct ProtocolConfig {
     nitro_attestation_verify_base_cost: Option<u64>,
     nitro_attestation_verify_cost_per_cert: Option<u64>,
 
+    // Native layout cost multiplier in the layout cost formula.
+    layout_node_cost: Option<u64>,
+    // Layout size threshold above which the large-layout surcharge applies.
+    layout_node_cost_large_layout_threshold: Option<u64>,
+
     // Stdlib costs
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
@@ -3151,6 +3156,8 @@ impl ProtocolConfig {
             nitro_attestation_verify_base_cost: None,
             nitro_attestation_verify_cost_per_cert: None,
 
+            layout_node_cost: None,
+            layout_node_cost_large_layout_threshold: None,
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
             bcs_failure_cost: None,
@@ -5049,6 +5056,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.mldsa65_auth = true;
                     }
+                    cfg.layout_node_cost = Some(16);
+                    cfg.layout_node_cost_large_layout_threshold = Some(64);
                 }
                 // Use this template when making changes:
                 //

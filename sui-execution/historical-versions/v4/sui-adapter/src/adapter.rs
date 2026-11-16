@@ -72,6 +72,8 @@ mod checked {
             rethrow_serialization_type_layout_errors: protocol_config
                 .rethrow_serialization_type_layout_errors(),
             max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
+            layout_node_cost: None,
+            layout_node_cost_large_layout_threshold: None,
             variant_nodes: protocol_config.variant_nodes(),
             deprecate_global_storage_ops_during_deserialization: protocol_config
                 .deprecate_global_storage_ops_during_deserialization(),
