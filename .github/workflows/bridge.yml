@@ -152,7 +152,7 @@ jobs:
           echo "$pg_bin" >> "$GITHUB_PATH"
       - name: cargo test
         run: |
-          cargo nextest run --profile ci --cargo-quiet -E 'package(sui-bridge) | package(sui-bridge-indexer)'
+          cargo nextest run --profile ci --cargo-quiet -p sui-bridge -p sui-bridge-indexer
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
