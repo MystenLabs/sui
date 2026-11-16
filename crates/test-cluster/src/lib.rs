@@ -964,7 +964,8 @@ impl TestCluster {
 
     /// Wait until the embedded rpc-store on `handle` has indexed through
     /// `checkpoint`. No-op for a node without an embedded store (a validator,
-    /// or a fullnode with indexing disabled).
+    /// or a fullnode with indexing disabled), and for a node that stopped its
+    /// indexer when it joined the committee.
     ///
     /// Unlike the legacy synchronous `rpc-index`, the embedded indexer follows
     /// the tip asynchronously and is not a blocker for checkpoint execution, so
@@ -974,22 +975,21 @@ impl TestCluster {
         checkpoint: u64,
         wait_for_history: bool,
     ) {
-        // Skip nodes without an embedded index; there is nothing to wait for.
-        if handle.with(|node| node.embedded_rpc_store().is_none()) {
-            return;
-        }
         let deadline = Instant::now() + Duration::from_secs(60);
         loop {
-            let (live_committed, history_committed) = handle.with(|node| {
+            // Skip nodes without a running indexer; there is nothing to wait for.
+            let Some((live_committed, history_committed)) = handle.with(|node| {
                 node.embedded_rpc_store()
+                    .filter(|embedded| embedded.is_indexing())
                     .map(|embedded| {
                         (
                             embedded.live_committed_checkpoint(),
                             embedded.history_committed_checkpoint(),
                         )
                     })
-                    .unwrap_or((None, None))
-            });
+            }) else {
+                return;
+            };
             if live_committed.is_some_and(|c| c >= checkpoint)
                 && (!wait_for_history || history_committed.is_some_and(|c| c >= checkpoint))
             {

@@ -34,6 +34,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use mysten_common::fatal;
+use parking_lot::Mutex;
 use prometheus::Registry;
 use sui_config::NodeConfig;
 use sui_config::node::AuthorityStorePruningConfig;
@@ -75,6 +76,7 @@ use tracing::error;
 use tracing::info;
 
 use crate::authority::authority_store::AuthorityStore;
+use crate::authority::authority_store_pruner::DetachableRpcStore;
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::CheckpointStore;
 use crate::rpc_store_ingestion_client::PerpetualStoreIngestionClient;
@@ -284,9 +286,12 @@ fn decide(state: StoreState, lowest_available: u64) -> Bootstrap {
 /// A bootstrapped embedded rpc-store, ready to hand to the pruner and
 /// the rpc-api read path and to start tip indexing.
 pub struct EmbeddedRpcStore {
-    /// Shared store handle. Cloned for the pruner (via [`Self::store`])
-    /// and for the tip indexer.
+    /// Shared store handle. Cloned for the tip indexer.
     store: RpcStore,
+
+    /// The handle through which the pruner uses the store (via
+    /// [`Self::pruner_store`]). [`Self::stop_indexing`] detaches it.
+    pruner_store: DetachableRpcStore,
 
     /// Read handle exposing the rpc-store's index surface to
     /// `sui-rpc-api`.
@@ -309,7 +314,9 @@ pub struct EmbeddedRpcStore {
     /// and aborts the inner service's pipeline tasks. This is what keeps
     /// the indexer from leaking (notably across e2e tests sharing a
     /// process), so no explicit [`Drop`] is needed.
-    indexer_service: Option<Service>,
+    /// [`Self::stop_indexing`] takes the service out to stop the indexer
+    /// while the node keeps running.
+    indexer_service: Mutex<Option<Service>>,
 }
 
 impl EmbeddedRpcStore {
@@ -461,12 +468,13 @@ impl EmbeddedRpcStore {
         let reader = RpcStoreReader::new(db, schema);
 
         Ok(Self {
+            pruner_store: DetachableRpcStore::new(store.clone()),
             store,
             reader,
             ingestion_source,
             chain_id: chain_identifier,
             action,
-            indexer_service: None,
+            indexer_service: Mutex::new(None),
         })
     }
 
@@ -499,10 +507,11 @@ impl EmbeddedRpcStore {
             .flatten()
     }
 
-    /// A clone of the store handle, for the pruner's history-cohort
-    /// pruning ([`sui_rpc_store::prune_history_cohort`]).
-    pub fn store(&self) -> RpcStore {
-        self.store.clone()
+    /// The handle through which the pruner bounds pruning by the
+    /// indexer's committed checkpoint and prunes the history cohort
+    /// ([`sui_rpc_store::prune_history_cohort`]).
+    pub fn pruner_store(&self) -> DetachableRpcStore {
+        self.pruner_store.clone()
     }
 
     /// A clone of the read handle, for the rpc-api read path
@@ -602,7 +611,32 @@ impl EmbeddedRpcStore {
             }
             Ok(())
         });
-        self.indexer_service = Some(service);
+        *self.indexer_service.lock() = Some(service);
+    }
+
+    /// Whether the tip indexer runs. It runs from [`Self::spawn_indexer`]
+    /// until [`Self::stop_indexing`].
+    pub fn is_indexing(&self) -> bool {
+        self.indexer_service.lock().is_some()
+    }
+
+    /// Stops the tip indexer and detaches the store from the pruner. The
+    /// node calls this when it joins the committee: a validator does not
+    /// serve the fullnode RPC APIs, so nothing reads the indexes.
+    ///
+    /// Dropping the indexer service aborts its tasks. The store is
+    /// detached from the pruner as well, because the pruner does not
+    /// prune past the indexer's committed checkpoint, and that checkpoint
+    /// no longer advances.
+    ///
+    /// The database stays open and keeps the indexes committed so far.
+    /// The indexer does not start again in this process. The next start
+    /// of the node as a fullnode runs [`Self::bootstrap`], which resumes
+    /// from these indexes, or rebuilds them when the perpetual store has
+    /// been pruned past them.
+    pub fn stop_indexing(&self) {
+        drop(self.indexer_service.lock().take());
+        self.pruner_store.detach();
     }
 }
 

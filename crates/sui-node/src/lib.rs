@@ -357,10 +357,11 @@ pub struct SuiNode {
     // update will automatically propagate to other uses.
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
 
-    /// The embedded `sui-rpc-store`, present when the node is a fullnode
-    /// with indexing enabled. Held for the node's lifetime so its tip
-    /// indexer keeps running (dropping it aborts the indexer). Exposed
-    /// through [`SuiNode::embedded_rpc_store`] for introspection.
+    /// The embedded `sui-rpc-store`, present when the node started as a
+    /// fullnode with indexing enabled. Its tip indexer runs until the node
+    /// joins the committee or shuts down (dropping the store aborts the
+    /// indexer). Exposed through [`SuiNode::embedded_rpc_store`] for
+    /// introspection.
     embedded_rpc_store: Option<EmbeddedRpcStore>,
 }
 
@@ -773,13 +774,26 @@ impl SuiNode {
 
         let chain_identifier = epoch_store.get_chain_identifier();
 
+        // A node with a fullnode config can start while it is in the
+        // committee. It does not serve the fullnode RPC APIs in that epoch,
+        // so it builds neither the RPC servers nor the embedded rpc-store.
+        // The fullnode RPC services are not built later in the same process,
+        // so such a node serves no RPC until it restarts outside the
+        // committee.
+        let serves_fullnode_rpc =
+            node_role.is_fullnode() && !epoch_store.node_role().is_validator();
+
         // The embedded `sui-rpc-store` is the node's index backend: when
         // indexing is enabled it builds the derived-index and ledger-history
         // column families (indexed independently of the authority store) and
         // serves the index read paths from the embedded store. Raw chain data
         // is still served from the perpetual store.
+        //
+        // A node in the committee does not build the store. Its checkpoint
+        // executor does not feed the indexer, and an indexer that does not
+        // advance stops the pruner at its last committed checkpoint.
         let mut embedded_rpc_store =
-            if node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+            if serves_fullnode_rpc && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
                 info!("creating embedded rpc-store");
                 // The tip indexer pulls checkpoints from the node's local
                 // checkpoint / perpetual stores via a dedicated read handle.
@@ -884,7 +898,9 @@ impl SuiNode {
             cache_traits.clone(),
             epoch_store.clone(),
             committee_store.clone(),
-            embedded_rpc_store.as_ref().map(|embedded| embedded.store()),
+            embedded_rpc_store
+                .as_ref()
+                .map(|embedded| embedded.pruner_store()),
             checkpoint_store.clone(),
             &prometheus_registry,
             &db_checkpoint_config,
@@ -920,7 +936,7 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator = if node_role.is_fullnode() && run_with_range.is_none() {
+        let transaction_orchestrator = if serves_fullnode_rpc && run_with_range.is_none() {
             Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
                 auth_agg.load_full(),
                 state.clone(),
@@ -940,7 +956,7 @@ impl SuiNode {
             &config,
             &prometheus_registry,
             server_version,
-            node_role,
+            serves_fullnode_rpc,
             embedded_rpc_store.as_ref(),
         )
         .await?;
@@ -2222,13 +2238,20 @@ impl SuiNode {
                 context.set_unavailable(next_epoch);
             }
 
-            // A validator does not serve the fullnode RPC APIs. The embedded rpc-store indexer
-            // keeps running, because the pruner only prunes the checkpoints it has indexed.
-            if new_role.is_validator()
-                && let Some(services) = self.fullnode_rpc_services.swap(None)
-            {
-                info!("Node joined the committee, shutting down fullnode RPC services");
-                services.shutdown();
+            // A validator does not serve the fullnode RPC APIs, so nothing reads the indexes of
+            // the embedded rpc-store. The checkpoint executor of a validator also does not
+            // publish the checkpoints that the indexer follows.
+            if new_role.is_validator() {
+                if let Some(services) = self.fullnode_rpc_services.swap(None) {
+                    info!("Node joined the committee, shutting down fullnode RPC services");
+                    services.shutdown();
+                }
+                if let Some(embedded) = &self.embedded_rpc_store
+                    && embedded.is_indexing()
+                {
+                    info!("Node joined the committee, stopping the embedded rpc-store indexer");
+                    embedded.stop_indexing();
+                }
             }
 
             let new_validator_components = if let Some(ValidatorComponents {
@@ -3035,14 +3058,14 @@ async fn build_http_servers(
     config: &NodeConfig,
     prometheus_registry: &Registry,
     server_version: ServerVersion,
-    node_role: NodeRole,
+    serves_fullnode_rpc: bool,
     embedded_rpc_store: Option<&EmbeddedRpcStore>,
 ) -> Result<(
     HttpServers,
     Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
 )> {
     // Validators do not expose these APIs
-    if !node_role.is_fullnode() {
+    if !serves_fullnode_rpc {
         return Ok((HttpServers::default(), None));
     }
 

@@ -459,12 +459,17 @@ async fn test_consensus_observer_joins_committee() {
     let config = consensus_observer_validator_config(&test_cluster, new_validator);
     let network_address = config.network_address.clone();
     let network_public_key = config.network_key_pair().public().clone();
+    let rpc_address = config.json_rpc_address;
     let new_validator_handle = test_cluster.swarm.spawn_new_node(config).await;
     assert_eq!(
         node_role(&new_validator_handle),
         NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
     );
     assert!(new_validator_handle.with(|node| node.transaction_orchestrator().is_some()));
+    assert!(
+        tokio::net::TcpStream::connect(rpc_address).await.is_ok(),
+        "observer must serve the fullnode RPC"
+    );
 
     test_cluster.trigger_reconfiguration().await;
     assert_eq!(node_role(&new_validator_handle), NodeRole::Validator);
@@ -474,6 +479,30 @@ async fn test_consensus_observer_joins_committee() {
     );
 
     let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key);
+    submit_transaction_to_validator(&test_cluster, &client).await;
+
+    wait_for_pruning_past_stopped_rpc_index(&new_validator_handle).await;
+
+    // The config of the node still declares a fullnode with indexing. A restart while the node
+    // is in the committee must build neither the fullnode RPC servers nor the embedded rpc-store.
+    let name = new_validator_handle.with(|node| node.state().name);
+    drop(new_validator_handle);
+    test_cluster.stop_node(&name);
+    // The simulator releases the database locks of the stopped node asynchronously.
+    sleep(Duration::from_secs(5)).await;
+    test_cluster.start_node(&name).await;
+    let restarted_handle = test_cluster
+        .swarm
+        .node(&name)
+        .unwrap()
+        .get_node_handle()
+        .unwrap();
+    assert_eq!(node_role(&restarted_handle), NodeRole::Validator);
+    assert!(restarted_handle.with(|node| node.embedded_rpc_store().is_none()));
+    assert!(
+        tokio::net::TcpStream::connect(rpc_address).await.is_err(),
+        "a node that starts in the committee must not serve the fullnode RPC"
+    );
     submit_transaction_to_validator(&test_cluster, &client).await;
 }
 
@@ -565,6 +594,8 @@ async fn test_validator_leaves_and_rejoins_committee() {
 
     let client = NetworkAuthorityClient::connect_lazy(&network_address, network_public_key);
     submit_transaction_to_validator(&test_cluster, &client).await;
+
+    wait_for_pruning_past_stopped_rpc_index(&handle).await;
 }
 
 fn node_role(handle: &SuiNodeHandle) -> NodeRole {
@@ -599,7 +630,59 @@ fn consensus_observer_validator_config(
     // The validator config builder leaves the sync mode unset, which would make the node a
     // state-sync-only fullnode outside the committee.
     config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+    // The builder binds the RPC server to localhost, which the test cannot reach in the
+    // simulator. Bind it to the address of the node instead.
+    let ip = config.network_address.to_socket_addr().unwrap().ip();
+    config.json_rpc_address.set_ip(ip);
+    // The node runs the embedded rpc-store indexer, like a fullnode that serves indexed RPC.
+    config.rpc = Some(sui_config::RpcConfig {
+        enable_indexing: Some(true),
+        ..Default::default()
+    });
     config
+}
+
+/// Checks that the node behind `handle` stopped its embedded rpc-store indexer. In the simulator
+/// it also waits until the pruner prunes past the last checkpoint that the indexer committed.
+/// The pruner does not prune past that checkpoint while the store is attached to it, so a node
+/// that stops the indexer and leaves the store attached stops pruning.
+async fn wait_for_pruning_past_stopped_rpc_index(handle: &SuiNodeHandle) {
+    handle.with(|node| {
+        let embedded = node
+            .embedded_rpc_store()
+            .expect("node must have built the embedded rpc-store");
+        assert!(
+            !embedded.is_indexing(),
+            "a node in the committee must stop the embedded rpc-store indexer"
+        );
+    });
+
+    // Outside the simulator the pruner first runs one hour after the node starts.
+    #[cfg(msim)]
+    {
+        let indexed = handle.with(|node| {
+            let embedded = node.embedded_rpc_store().unwrap();
+            embedded
+                .live_committed_checkpoint()
+                .min(embedded.history_committed_checkpoint())
+        });
+        let deadline = Instant::now() + Duration::from_secs(120);
+        loop {
+            let pruned = handle.with(|node| {
+                node.state()
+                    .get_highest_pruned_checkpoint_for_testing()
+                    .unwrap()
+            });
+            if pruned > indexed.unwrap_or(0) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "pruner did not pass the stopped rpc-store indexer: pruned {pruned}, indexed {indexed:?}"
+            );
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
 }
 
 /// Submits a transaction only to the validator behind `client` and waits until the cluster's
