@@ -23,10 +23,7 @@ use tracing::info;
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {
-    let test_cluster = TestClusterBuilder::new()
-        .with_num_validators(4)
-        .build()
-        .await;
+    let test_cluster = TestClusterBuilder::new().build().await;
     let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
     let digest = *tx.digest();
     test_cluster.execute_transaction(tx).await;
@@ -121,7 +118,6 @@ async fn test_checkpoint_timestamps_non_decreasing() {
     let num_epochs_to_run = 3;
 
     let test_cluster = TestClusterBuilder::new()
-        .with_num_validators(4)
         .with_epoch_duration_ms(epoch_duration_ms)
         .disable_fullnode_pruning()
         .build()
