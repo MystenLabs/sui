@@ -8,8 +8,8 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@mysten/deepbook-v3": "^2.8.0",
-    "@mysten/sui": "^2.30.0"
+    "@mysten/deepbook-v3": "^2.13.0",
+    "@mysten/sui": "^2.39.1"
   },
   "devDependencies": {
     "typescript": "^5.5.3"

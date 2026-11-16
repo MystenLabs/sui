@@ -175,7 +175,8 @@ export async function closeAsSession(params: {
 
 // Claim a settled position as the session key. No pricer, because the settlement
 // price is fixed, and no quantity, because a settled claim closes the order in
-// full.
+// full. Predict protocol version 5 retires `redeem_settled`, so the wrapper aborts
+// through Predict on both networks once Sessions links that version.
 export function claimSettledAsSession(params: {
 	owner: string;
 	session: string;

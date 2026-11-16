@@ -17,8 +17,9 @@ import { UNDERLYING } from './config.js';
 // `closeLive` is the immediate close, before the delayed-execution cutover only.
 // From Predict protocol version 4, `redeem_live` aborts with
 // `EDelayedExecutionRequired`. A position held in the account then has no early
-// exit and is paid at settlement through `claimSettled`, and a queued fill is an
-// Open record in the market's queue, which `queue-sell.ts` sells.
+// exit, and a queued fill is an Open record in the market's queue, which
+// `queue-sell.ts` sells. From Predict protocol version 5, `claimSettled` below
+// aborts too, because version 5 retires `redeem_settled`.
 //
 // Close part or all of a live position. Reuse the descriptor the position was
 // minted with: the close needs it only to resolve the market object, and the
@@ -48,7 +49,9 @@ export function decodeClose(result: DecodableTransactionResult): RedeemReceipt {
 
 // Claim a position whose market has settled. The claim closes the order in full,
 // so it takes no quantity, and it needs only the market coordinates rather than
-// a side or a strike.
+// a side or a strike. Predict protocol version 5 retires `redeem_settled`, so the
+// transaction aborts with `EDelayedExecutionRequired` on both networks. The
+// queue's settlement walk pays every queued fill with no claim.
 export async function claimSettled(params: {
 	owner: string;
 	expiryMs: bigint;

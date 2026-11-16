@@ -3,13 +3,15 @@
 
 // docs::#queue-mint
 import type {
+	ActiveMarket,
 	DecodableTransactionResult,
 	MarketDescriptor,
 	MintPlan,
 	QueuedOrderOutcome,
 	QueuedOrderPreview,
+	Side,
 } from '@mysten/deepbook-v3/predict';
-import { snapStrike } from '@mysten/deepbook-v3/predict';
+import { rawToProbability, snapStrike } from '@mysten/deepbook-v3/predict';
 import type { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
 import { UNDERLYING } from './config.js';
@@ -27,10 +29,38 @@ export async function assertQueuedOrders(): Promise<void> {
 	}
 }
 
+// Admission refuses an entry probability outside the market's own band, which
+// the market snapshots at creation and which differs by network, and the
+// reference strike drifts away from the money as the price moves. So aim the
+// side's probability at the middle of the market's band, snap the strike onto
+// the admission grid, and check that the snapped strike still prices inside
+// the band.
+export async function strikeInBand(market: ActiveMarket, side: Side): Promise<number> {
+	const coordinates = { underlying: UNDERLYING, expiryMs: market.expiryMs, marketId: market.id };
+	const policy = await client.predict.read.feePolicy(coordinates);
+	const min = rawToProbability(policy.minEntryProbability);
+	const max = rawToProbability(policy.maxEntryProbability);
+	const target = (min + max) / 2;
+
+	const pricer = await client.predict.read.pricer(coordinates);
+	// `strikeAtProbability` solves for the up probability, so a down position
+	// aims at its complement.
+	const raw = pricer.strikeAtProbability(side === 'up' ? target : 1 - target);
+	if (raw === null) {
+		throw new Error(`Market ${market.id} has no strike that prices near ${target}.`);
+	}
+	const strike = snapStrike(raw, market.admissionTickSize);
+	const entry = pricer.probability(strike, side);
+	if (entry < min || entry > max) {
+		throw new Error(`Strike ${strike} prices at ${entry}, outside the band ${min} to ${max}.`);
+	}
+	return strike;
+}
+
 // Plan, then queue, a directional mint that spends `amount` USDC all in.
 export async function queueMint(params: {
 	owner: string;
-	side: 'up' | 'down';
+	side: Side;
 	// The whole debit in USDC, order fee included.
 	amount: number;
 	// How far the all-in price per contract may rise before the fill, in cents,
@@ -46,24 +76,12 @@ export async function queueMint(params: {
 	const { owner, side, amount, slippageCents } = params;
 	const market = await tradeableMarket();
 
-	// Admission refuses an entry probability outside the market's band, and the
-	// reference strike drifts away from the money as the price moves, so pick
-	// the strike that prices near 50 cents and snap it onto the admission grid.
-	const pricer = await client.predict.read.pricer({
-		underlying: UNDERLYING,
-		expiryMs: market.expiryMs,
-	});
-	const atTheMoney = pricer.strikeAtProbability(0.5);
-	if (atTheMoney === null) {
-		throw new Error(`Market ${market.id} has no strike near 50 cents.`);
-	}
-
 	const descriptor: MarketDescriptor = {
 		underlying: UNDERLYING,
 		expiryMs: market.expiryMs,
 		marketId: market.id,
 		side,
-		strike: snapStrike(atTheMoney, market.admissionTickSize),
+		strike: await strikeInBand(market, side),
 	};
 
 	// The plan quotes the order at the current price and turns the slippage into
