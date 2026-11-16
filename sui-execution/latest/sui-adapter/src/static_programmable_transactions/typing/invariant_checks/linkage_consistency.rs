@@ -101,7 +101,7 @@ fn verify_command<Mode: ExecutionMode>(
             }
         }
         T::Command__::MakeMoveVec(ty, _) => {
-            verify_type_linkage::<Mode>(std::iter::once(ty), unified_linkage)
+            verify_type_linkage::<Mode>(env, std::iter::once(ty), unified_linkage)
         }
         T::Command__::TransferObjects(_, _)
         | T::Command__::SplitCoins(_, _, _)
@@ -176,12 +176,13 @@ pub(crate) fn verify_move_call<Mode: ExecutionMode>(
         }
     }
 
-    verify_type_linkage::<Mode>(function.type_arguments.iter(), unified_linkage)
+    verify_type_linkage::<Mode>(env, function.type_arguments.iter(), unified_linkage)
 }
 
 /// Packages named by a type are pinned `at_least` at their defining ID and can resolve upwards. So
 /// the unified linkage must contain a version of that package >= the defining ID.
 pub(crate) fn verify_type_linkage<'a, Mode: ExecutionMode>(
+    env: &env::Env<Mode>,
     types: impl IntoIterator<Item = &'a Type>,
     unified_linkage: &ExecutableLinkage,
 ) -> Result<(), Mode::Error> {
@@ -190,23 +191,21 @@ pub(crate) fn verify_type_linkage<'a, Mode: ExecutionMode>(
         .flat_map(|ty| ty.all_addresses())
         .map(ObjectID::from)
     {
-        let Some(resolution) = unified_linkage.0.linkage_resolution.get(&defining_id) else {
-            invariant_violation!(
-                "a type in this command is defined by package {defining_id}, which the transaction \
-                 linkage never resolved"
-            )
-        };
-        let original_id = resolution.original_id;
+        let (original_id, declared) =
+            if let Some(resolution) = unified_linkage.0.linkage_resolution.get(&defining_id) {
+                (resolution.original_id, resolution.version)
+            } else {
+                let pkg = get_package::<Mode::Error, _>(&defining_id, env.linkable_store)?;
+                (ObjectID::from(pkg.original_id()), Some(pkg.version()))
+            };
         let Some(selected) = unified_linkage.0.linkage.get(&original_id) else {
             invariant_violation!(
                 "a type in this command is defined by package {original_id}, which is absent from \
                  the transaction linkage"
             )
         };
-        let (Some(declared), Some(got)) = (
-            unified_linkage.0.resolved_version(&defining_id),
-            unified_linkage.0.resolved_version(selected),
-        ) else {
+        let (Some(declared), Some(got)) = (declared, unified_linkage.0.resolved_version(selected))
+        else {
             invariant_violation!(
                 "a type in this command is defined by package {original_id}, whose version was not \
                  recorded while the transaction linkage was refined"
