@@ -17,7 +17,7 @@ use crate::multiaddr::Multiaddr;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use anyhow::Result;
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::traits::{Authenticator, ToFromBytes, VerifyingKey};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 
@@ -123,12 +123,38 @@ impl VerifiedValidatorMetadataV1 {
 impl ValidatorMetadataV1 {
     /// Verify validator metadata and return a verified version (on success) or error code (on failure)
     pub fn verify(&self, metadata_v2: bool) -> Result<VerifiedValidatorMetadataV1, u64> {
-        let protocol_pubkey = AuthorityPublicKey::from_bytes(self.protocol_pubkey_bytes.as_ref())
-            .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
+        self.verify_with_options(metadata_v2, false)
+    }
+
+    /// Verify validator metadata like [`Self::verify`]. If `require_compressed_bls` is true,
+    /// the protocol public keys must be exactly `AuthorityPublicKey::LENGTH` (96) bytes and the
+    /// proofs of possession must be exactly `AuthoritySignature::LENGTH` (48) bytes.
+    ///
+    /// The BLS12-381 parser also accepts the uncompressed encodings (192-byte keys and 96-byte
+    /// signatures). The Move framework already requires 96-byte protocol keys. This check applies
+    /// the same rule in Rust and gives each key and proof of possession one accepted encoding.
+    pub fn verify_with_options(
+        &self,
+        metadata_v2: bool,
+        require_compressed_bls: bool,
+    ) -> Result<VerifiedValidatorMetadataV1, u64> {
+        let parse_protocol_pubkey = |bytes: &[u8]| {
+            if require_compressed_bls && bytes.len() != AuthorityPublicKey::LENGTH {
+                return Err(E_METADATA_INVALID_PUBKEY);
+            }
+            AuthorityPublicKey::from_bytes(bytes).map_err(|_| E_METADATA_INVALID_PUBKEY)
+        };
+        let parse_pop = |bytes: &[u8]| {
+            if require_compressed_bls && bytes.len() != AuthoritySignature::LENGTH {
+                return Err(E_METADATA_INVALID_POP);
+            }
+            AuthoritySignature::from_bytes(bytes).map_err(|_| E_METADATA_INVALID_POP)
+        };
+
+        let protocol_pubkey = parse_protocol_pubkey(&self.protocol_pubkey_bytes)?;
 
         // Verify proof of possession for the protocol key
-        let pop = AuthoritySignature::from_bytes(self.proof_of_possession_bytes.as_ref())
-            .map_err(|_| E_METADATA_INVALID_POP)?;
+        let pop = parse_pop(&self.proof_of_possession_bytes)?;
         verify_proof_of_possession(&pop, &protocol_pubkey, self.sui_address)
             .map_err(|_| E_METADATA_INVALID_POP)?;
 
@@ -164,18 +190,12 @@ impl ValidatorMetadataV1 {
 
         let next_epoch_protocol_pubkey = match self.next_epoch_protocol_pubkey_bytes.clone() {
             None => Ok::<Option<AuthorityPublicKey>, u64>(None),
-            Some(bytes) => Ok(Some(
-                AuthorityPublicKey::from_bytes(bytes.as_ref())
-                    .map_err(|_| E_METADATA_INVALID_PUBKEY)?,
-            )),
+            Some(bytes) => Ok(Some(parse_protocol_pubkey(&bytes)?)),
         }?;
 
         let next_epoch_pop = match self.next_epoch_proof_of_possession.clone() {
             None => Ok::<Option<AuthoritySignature>, u64>(None),
-            Some(bytes) => Ok(Some(
-                AuthoritySignature::from_bytes(bytes.as_ref())
-                    .map_err(|_| E_METADATA_INVALID_POP)?,
-            )),
+            Some(bytes) => Ok(Some(parse_pop(&bytes)?)),
         }?;
         // Verify proof of possession for the next epoch protocol key
         if let Some(ref next_epoch_protocol_pubkey) = next_epoch_protocol_pubkey {
@@ -775,3 +795,7 @@ pub struct UnverifiedValidatorOperationCapV1 {
     pub id: ObjectID,
     pub authorizer_validator_address: SuiAddress,
 }
+
+#[cfg(test)]
+#[path = "../unit_tests/validator_metadata_tests.rs"]
+mod validator_metadata_tests;

@@ -450,6 +450,8 @@ const MAINNET_USDB: &str =
 // Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
 //              Create the FreezeList system object.
 //              Enable coin regulation.
+//              Accept only compressed BLS12-381 protocol keys and proofs of possession in
+//              validator metadata verification.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1282,6 +1284,11 @@ struct FeatureFlags {
     // If true perform consistent verification of metadata
     #[serde(skip_serializing_if = "is_false")]
     validator_metadata_verify_v2: bool,
+
+    // If true, validator metadata verification accepts only the compressed encodings of the
+    // BLS12-381 protocol public key (96 bytes) and proof of possession (48 bytes).
+    #[serde(skip_serializing_if = "is_false")]
+    validator_metadata_require_compressed_bls: bool,
 
     // If true, defer transactions with unpaid consensus amplification
     // (where duplicate count exceeds gas_price / RGP + 1)
@@ -5147,6 +5154,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.secp256r1_strict_public_keys = true;
                     cfg.feature_flags.create_freeze_list = true;
                     cfg.feature_flags.enable_coin_regulation = true;
+                    cfg.feature_flags.validator_metadata_require_compressed_bls = true;
                 }
                 // Use this template when making changes:
                 //
