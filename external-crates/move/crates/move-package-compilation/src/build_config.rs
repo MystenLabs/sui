@@ -41,6 +41,13 @@ pub struct BuildConfig {
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
 
+    /// In test mode, include the 'tests' and 'examples' directories of the root package only.
+    /// Dependencies' tests are not run, so leaving them out saves their compile time, but a
+    /// package that uses test helpers from a dependency's 'tests' directory then fails to build.
+    #[clap(skip)]
+    #[serde(default)]
+    pub exclude_dependency_tests: bool,
+
     /// Generate documentation for packages
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,

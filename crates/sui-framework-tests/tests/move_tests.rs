@@ -84,6 +84,7 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
     let mut config = BuildConfig::new_for_testing();
 
     config.config.test_mode = true;
+    config.config.exclude_dependency_tests = !uses_dependency_test_helpers(path);
     config.run_bytecode_verifier = true;
     config.print_diags_to_stderr = true;
     config.config.warnings_are_errors = true;
@@ -111,6 +112,23 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
     );
 
     Ok(())
+}
+
+/// Packages whose tests use modules from a dependency's 'tests' directory, such as
+/// `sui::token_test_utils`, `sui::kiosk_test_utils` or `sui_system::governance_test_utils`.
+/// Every other package is tested without compiling its dependencies' tests, which saves most of
+/// its compile time.
+const USES_DEPENDENCY_TEST_HELPERS: &[&str] = &[
+    "bridge",
+    "move/locked_stake",
+    "move/nft-rental",
+    "move/token",
+];
+
+fn uses_dependency_test_helpers(path: &Path) -> bool {
+    USES_DEPENDENCY_TEST_HELPERS
+        .iter()
+        .any(|dir| path.ends_with(dir))
 }
 
 /// On simtests, we exclude dirs that depend on external (git)
