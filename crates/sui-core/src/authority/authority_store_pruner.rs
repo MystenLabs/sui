@@ -45,6 +45,7 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
+use typed_store::rocks::DBBatch;
 #[cfg(not(tidehunter))]
 use typed_store::rocksdb::LiveFile;
 use typed_store::{Map, TypedStoreError};
@@ -315,6 +316,40 @@ impl AuthorityStorePruner {
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("EffectsLivePruner");
 
+        let (perpetual_batch, checkpoints_batch) = Self::checkpoint_prune_batches(
+            perpetual_db,
+            checkpoint_db,
+            checkpoint_number,
+            checkpoints_to_prune,
+            checkpoint_content_to_prune,
+            effects_to_prune,
+        )?;
+        // The pruner resumes from `HighestPruned`, which only `checkpoints_batch`
+        // advances. Committing `perpetual_batch` first means a crash between the
+        // two writes re-runs these deletes on restart, while the contents that
+        // list the transactions to delete are still present.
+        perpetual_batch.write()?;
+        checkpoints_batch.write()?;
+        metrics
+            .last_pruned_effects_checkpoint
+            .set(checkpoint_number as i64);
+
+        Ok(())
+    }
+
+    /// The batches that prune checkpoints up to and including
+    /// `checkpoint_number`: the perpetual-store batch deletes their
+    /// transaction data and advances the pruned-effects watermark; the
+    /// checkpoint-store batch deletes their contents and advances
+    /// `HighestPruned`.
+    fn checkpoint_prune_batches(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_db: &Arc<CheckpointStore>,
+        checkpoint_number: CheckpointSequenceNumber,
+        checkpoints_to_prune: Vec<CheckpointDigest>,
+        checkpoint_content_to_prune: Vec<CheckpointContents>,
+        effects_to_prune: &Vec<(CheckpointSequenceNumber, TransactionEffects)>,
+    ) -> anyhow::Result<(DBBatch, DBBatch)> {
         let mut perpetual_batch = perpetual_db.objects.batch();
         let transactions: Vec<_> = checkpoint_content_to_prune
             .iter()
@@ -344,6 +379,18 @@ impl AuthorityStorePruner {
             transactions.iter(),
         )?;
         perpetual_batch.delete_batch(&perpetual_db.effects, effect_digests)?;
+        // Readers judge transaction-data availability by this watermark as well
+        // as `HighestPruned`, so it lands in the same write as the deletes. A
+        // re-run after a crash between the two writes can end below the
+        // previous run, whose deletes are already durable, so the watermark
+        // never moves backwards.
+        let pruned_effects_checkpoint = perpetual_db
+            .get_highest_pruned_effects_checkpoint()?
+            .map_or(checkpoint_number, |pruned| pruned.max(checkpoint_number));
+        perpetual_db.set_highest_pruned_effects_checkpoint(
+            &mut perpetual_batch,
+            pruned_effects_checkpoint,
+        )?;
 
         let mut checkpoints_batch = checkpoint_db.tables.certified_checkpoints.batch();
 
@@ -371,13 +418,7 @@ impl AuthorityStorePruner {
             )],
         )?;
 
-        perpetual_batch.write()?;
-        checkpoints_batch.write()?;
-        metrics
-            .last_pruned_effects_checkpoint
-            .set(checkpoint_number as i64);
-
-        Ok(())
+        Ok((perpetual_batch, checkpoints_batch))
     }
 
     /// The exclusive upper bound the embedded rpc-store imposes on the
@@ -1502,5 +1543,116 @@ mod tests {
         );
         ma::assert_le!(after_compaction_size, before_compaction_size);
         Ok(())
+    }
+
+    /// `prune_checkpoints` commits the perpetual-store batch, which deletes
+    /// transaction data, before the checkpoint-store batch, which advances
+    /// `HighestPruned`. Between the two writes the lowest available checkpoint
+    /// must already exclude the pruned checkpoints; otherwise a reader admitted
+    /// by it finds their effects missing.
+    #[tokio::test]
+    async fn lowest_available_checkpoint_excludes_effects_pruned_before_highest_pruned() {
+        use crate::authority::test_authority_builder::TestAuthorityBuilder;
+        use crate::execution_cache::build_execution_cache_from_env;
+        use crate::storage::RocksDbStore;
+        use sui_types::base_types::ExecutionDigests;
+        use sui_types::message_envelope::Message;
+        use sui_types::messages_checkpoint::{CheckpointContents, CheckpointDigest};
+        use sui_types::storage::ReadStore;
+
+        let state = TestAuthorityBuilder::new().build().await;
+        let store = state.database_for_testing();
+        let perpetual_db = store.perpetual_tables.clone();
+        let checkpoint_store = state.get_checkpoint_store().clone();
+        let reader = RocksDbStore::new(
+            build_execution_cache_from_env(&Registry::new(), &store),
+            state.committee_store().clone(),
+            checkpoint_store.clone(),
+        );
+        assert_eq!(reader.get_lowest_available_checkpoint().unwrap(), 0);
+
+        // Checkpoint 5 holds one transaction whose effects are in the perpetual store.
+        let pruned_checkpoint = 5;
+        let effects = TransactionEffects::default();
+        let tx_digest = *effects.transaction_digest();
+        perpetual_db
+            .effects
+            .insert(&effects.digest(), &effects)
+            .unwrap();
+        perpetual_db
+            .executed_effects
+            .insert(&tx_digest, &effects.digest())
+            .unwrap();
+        let contents =
+            CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::new(
+                tx_digest,
+                effects.digest(),
+            )]);
+
+        let (perpetual_batch, checkpoints_batch) = AuthorityStorePruner::checkpoint_prune_batches(
+            &perpetual_db,
+            &checkpoint_store,
+            pruned_checkpoint,
+            vec![CheckpointDigest::random()],
+            vec![contents],
+            &vec![(pruned_checkpoint, effects.clone())],
+        )
+        .unwrap();
+
+        perpetual_batch.write().unwrap();
+        assert!(
+            perpetual_db
+                .effects
+                .get(&effects.digest())
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            perpetual_db
+                .executed_effects
+                .get(&tx_digest)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            checkpoint_store
+                .get_highest_pruned_checkpoint_seq_number()
+                .unwrap(),
+            None,
+        );
+        assert_eq!(
+            reader.get_lowest_available_checkpoint().unwrap(),
+            pruned_checkpoint + 1,
+        );
+
+        // A crash here restarts the pruner from `HighestPruned`. A re-run that
+        // stops below the checkpoint the lost run reached must not lower the
+        // watermark, because that run's deletes are durable.
+        let (rerun_perpetual_batch, _) = AuthorityStorePruner::checkpoint_prune_batches(
+            &perpetual_db,
+            &checkpoint_store,
+            pruned_checkpoint - 2,
+            vec![],
+            vec![],
+            &vec![],
+        )
+        .unwrap();
+        rerun_perpetual_batch.write().unwrap();
+        assert_eq!(
+            reader.get_lowest_available_checkpoint().unwrap(),
+            pruned_checkpoint + 1,
+        );
+
+        checkpoints_batch.write().unwrap();
+        assert_eq!(
+            checkpoint_store
+                .get_highest_pruned_checkpoint_seq_number()
+                .unwrap(),
+            Some(pruned_checkpoint),
+        );
+        assert_eq!(
+            reader.get_lowest_available_checkpoint().unwrap(),
+            pruned_checkpoint + 1,
+        );
     }
 }

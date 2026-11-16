@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::ledger_read::pruned_or_else;
 use super::object_set::fetch_transaction_object_set;
 use crate::ErrorReason;
 use crate::RpcError;
@@ -82,7 +83,16 @@ pub fn get_transaction(
     }
 
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
-    let objects = fetch_transaction_object_set(&service.reader, &transaction_read, &read_mask)?;
+    // Report a transaction pruned since the floor check above as that check does.
+    let objects = fetch_transaction_object_set(&service.reader, &transaction_read, &read_mask)
+        .map_err(|error| {
+            pruned_or_else(
+                service,
+                transaction_checkpoint,
+                |_| TransactionNotFoundError(transaction_digest).into(),
+                error,
+            )
+        })?;
 
     let render_context = RenderContext::empty(service.reader.inner());
     let transaction = render_executed_transaction(
@@ -156,7 +166,15 @@ pub fn batch_get_transactions(
 
             let transaction_read = service.reader.get_transaction_read(digest)?;
             let objects =
-                fetch_transaction_object_set(&service.reader, &transaction_read, &read_mask)?;
+                fetch_transaction_object_set(&service.reader, &transaction_read, &read_mask)
+                    .map_err(|error| {
+                        pruned_or_else(
+                            service,
+                            transaction_checkpoint,
+                            |_| TransactionNotFoundError(digest).into(),
+                            error,
+                        )
+                    })?;
 
             render_executed_transaction(
                 service,

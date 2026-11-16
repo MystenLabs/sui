@@ -56,6 +56,7 @@ use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::place_frontier;
+use super::ledger_read::pruned_or;
 use super::ledger_read::reject_window_below_serving_floor;
 use super::ledger_read::serving_floor_error_or;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
@@ -611,11 +612,15 @@ fn render_event_chunk(
             .get(&row.digest)
             .and_then(Option::as_ref)
             .ok_or_else(|| {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!(
-                        "selected event {}/{} transaction {} has no events",
-                        event_ref.position.tx_seq, event_ref.position.index, row.digest
+                pruned_or(
+                    service,
+                    row.checkpoint_number,
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        format!(
+                            "selected event {}/{} transaction {} has no events",
+                            event_ref.position.tx_seq, event_ref.position.index, row.digest
+                        ),
                     ),
                 )
             })?;
