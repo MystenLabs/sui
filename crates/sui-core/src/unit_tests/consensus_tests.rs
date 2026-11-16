@@ -37,7 +37,10 @@ use sui_types::utils::{make_committee_key_num, to_sender_signed_transaction};
 use sui_types::{
     base_types::{ExecutionDigests, ObjectID, SuiAddress},
     object::Object,
-    transaction::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TransactionData},
+    transaction::{
+        CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TransactionData,
+        TransactionDataAPI, TransactionExpiration,
+    },
 };
 use tokio::time::sleep;
 
@@ -126,6 +129,26 @@ pub async fn test_user_transaction(
     gas_object: Object,
     input_objects: Vec<Object>,
 ) -> VerifiedTransactionWithAliases {
+    test_user_transaction_with_expiration(
+        authority,
+        sender,
+        keypair,
+        gas_object,
+        input_objects,
+        TransactionExpiration::None,
+    )
+    .await
+}
+
+/// Fixture: like `test_user_transaction`, but with the given expiration.
+pub async fn test_user_transaction_with_expiration(
+    authority: &AuthorityState,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    gas_object: Object,
+    input_objects: Vec<Object>,
+    expiration: TransactionExpiration,
+) -> VerifiedTransactionWithAliases {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let rgp = epoch_store.reference_gas_price();
 
@@ -160,7 +183,7 @@ pub async fn test_user_transaction(
     let module = "object_basics";
     let function = "create";
 
-    let data = TransactionData::new_move_call(
+    let mut data = TransactionData::new_move_call(
         sender,
         SUI_FRAMEWORK_PACKAGE_ID,
         ident_str!(module).to_owned(),
@@ -172,6 +195,7 @@ pub async fn test_user_transaction(
         rgp,
     )
     .unwrap();
+    *data.expiration_mut_for_testing() = expiration;
 
     epoch_store
         .verify_transaction_with_current_aliases(to_sender_signed_transaction(data, keypair))

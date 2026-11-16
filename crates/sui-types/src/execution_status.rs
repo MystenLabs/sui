@@ -298,6 +298,9 @@ pub enum ExecutionErrorKind {
 
     #[error("Non-exclusive write input object {id} has been modified")]
     NonExclusiveWriteInputObjectModified { id: ObjectID },
+
+    #[error("Transaction expired: the consensus commit timestamp is after its max_timestamp")]
+    TransactionExpired,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

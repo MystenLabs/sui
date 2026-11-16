@@ -1285,13 +1285,16 @@ fn valid_during_transaction_expiration_round_trips_through_proto() {
     let original = TransactionExpiration::ValidDuring {
         min_epoch: Some(42),
         max_epoch: Some(43),
-        min_timestamp: Some(1_700_000_000_123),
-        max_timestamp: Some(1_700_000_999_456),
+        min_timestamp: Some(1_700_000_000),
+        max_timestamp: Some(1_700_000_999),
         chain,
         nonce: 0xc0ffee,
     };
 
     let proto = ProtoTransactionExpiration::from(original.clone());
+    // Expiration timestamps are Unix seconds.
+    assert_eq!(proto.min_timestamp.unwrap().seconds, 1_700_000_000);
+    assert_eq!(proto.max_timestamp.unwrap().seconds, 1_700_000_999);
     let round_tripped = TransactionExpiration::try_from(&proto).unwrap();
 
     assert_eq!(round_tripped, original);
@@ -1307,8 +1310,8 @@ fn validity_transaction_expiration_round_trips_through_proto() {
     let expiration = |allowed_proposers| TransactionExpiration::Validity {
         min_epoch: Some(42),
         max_epoch: Some(43),
-        min_timestamp: Some(1_700_000_000_123),
-        max_timestamp: Some(1_700_000_999_456),
+        min_timestamp: Some(1_700_000_000),
+        max_timestamp: Some(1_700_000_999),
         chain,
         nonce: 0xc0ffee,
         allowed_proposers,
