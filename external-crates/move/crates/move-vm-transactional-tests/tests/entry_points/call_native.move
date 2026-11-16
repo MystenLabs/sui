@@ -1,5 +1,5 @@
 
-//# run std::bcs::to_bytes --type-args u256 --args 0u256
+//# run std::bcs::to_bytes --type-args u256 --args 0u256 --gas-budget 100000
 
 //# run std::vector::borrow --type-args u64 --args vector[42] 0
 

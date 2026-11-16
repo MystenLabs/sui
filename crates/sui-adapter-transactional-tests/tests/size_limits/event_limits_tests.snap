@@ -24,7 +24,7 @@ task 3, lines 58-59:
 //# run Test::M1::emit_n_small_events --args 1024 --gas-budget 100000000000000 --summarize
 events: 50
 mutated: 1
-gas summary: computation_cost: 53500000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+gas summary: computation_cost: 56800000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 61-62:
 // emit above event count limit should fail

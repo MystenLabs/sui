@@ -29,6 +29,11 @@ pub struct VMConfig {
     /// Maximal nodes which are allowed when converting to layout. This includes the types of
     /// fields for struct types.
     pub max_type_to_layout_nodes: Option<u64>,
+    /// Internal gas coefficient for native layout construction, including its large-layout surcharge.
+    /// `None` disables layout charging.
+    pub layout_node_cost: Option<u64>,
+    /// Layout size threshold above which the large-layout surcharge applies.
+    pub layout_node_cost_large_layout_threshold: Option<u64>,
     /// Count variants as nodes.
     pub variant_nodes: bool,
     /// Check for deprecated global storage operations during deserialization.
@@ -71,6 +76,8 @@ impl VMConfig {
             binary_config,
             rethrow_serialization_type_layout_errors: false,
             max_type_to_layout_nodes: Some(512),
+            layout_node_cost: Some(16),
+            layout_node_cost_large_layout_threshold: Some(64),
             variant_nodes: true,
             deprecate_global_storage_ops_during_deserialization: false,
             normalize_depth_formula: true,

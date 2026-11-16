@@ -56,6 +56,7 @@ pub(crate) fn transaction<Mode: ExecutionMode>(
         .collect::<Result<Vec<_>, _>>()?;
     // Check every known input before typing can transform or discard unused inputs.
     linkage_consistency::verify_type_linkage::<Mode>(
+        env,
         inputs.iter().filter_map(|(_, ty)| match ty {
             L::InputType::Fixed(ty) => Some(ty),
             L::InputType::Bytes => None,

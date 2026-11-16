@@ -1,5 +1,5 @@
 Command `sandbox publish`:
-Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000007/package/print_stack_trace.mv print_stack_trace --dry-run`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000007/package/print_stack_trace.mv print_stack_trace --dry-run --gas-budget 100000`:
 Call Stack:
     [5] 0000000000000000000000000000000000000000000000000000000000000007::print_stack_trace::print_stack_trace
 

@@ -69,6 +69,9 @@ mod checked {
             binary_config: protocol_config.binary_config(None),
             rethrow_serialization_type_layout_errors: true,
             max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
+            layout_node_cost: protocol_config.layout_node_cost_as_option(),
+            layout_node_cost_large_layout_threshold: protocol_config
+                .layout_node_cost_large_layout_threshold_as_option(),
             variant_nodes: true,
             deprecate_global_storage_ops_during_deserialization: false,
             normalize_depth_formula: true,

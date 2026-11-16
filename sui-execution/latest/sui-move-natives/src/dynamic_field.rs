@@ -138,12 +138,17 @@ pub fn hash_type_and_key(
             .saturating_mul(k_tag_size)
     );
 
-    let cost = context.gas_used();
-
     let k_layout = match context.type_to_type_layout(&k_ty) {
         Ok(Some(layout)) => layout,
-        _ => return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE)),
+        Err(err) if err.major_status() == StatusCode::OUT_OF_GAS => return Err(err),
+        _ => {
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_BCS_SERIALIZATION_FAILURE,
+            ));
+        }
     };
+    let cost = context.gas_used();
     let Some(k_bytes) = k.typed_serialize(&k_layout) else {
         return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };

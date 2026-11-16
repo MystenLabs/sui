@@ -21,12 +21,10 @@ use std::{collections::VecDeque, sync::Arc};
 /***************************************************************************************************
  * native fun to_bytes
  *
- *   gas cost: size_of(val_type) * input_unit_cost +        | get type layout
- *             size_of(val) * input_unit_cost +             | serialize value
- *             max(size_of(output), 1) * output_unit_cost
+ *   gas cost: layout_cost(val_type) +
+ *             max(size_of(output), legacy_min_output_size) * output_unit_cost
  *
- *             If any of the first two steps fails, a partial cost + an additional failure_cost
- *             will be charged.
+ *             Layout or serialization failures additionally attempt to charge failure_cost.
  *
  **************************************************************************************************/
 #[derive(Debug, Clone)]
@@ -95,7 +93,8 @@ fn native_to_bytes(
 pub fn make_native_to_bytes(gas_params: ToBytesGasParameters) -> NativeFunction {
     Arc::new(
         move |context, ty_args, args| -> PartialVMResult<NativeResult> {
-            native_to_bytes(&gas_params, context, ty_args, args)
+            let result = native_to_bytes(&gas_params, context, ty_args, args);
+            NativeResult::map_out_of_gas(context.gas_budget(), result)
         },
     )
 }

@@ -27,7 +27,7 @@ use move_bytecode_verifier::{
 use move_core_types::language_storage::ModuleId;
 use quick_cache::unsync::Cache as QCache;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     rc::Rc,
 };
 use tracing::instrument;
@@ -158,10 +158,16 @@ pub fn verify_linkage_and_cyclic_checks(
     let mut validation_environment =
         LinkageValidationEnvironment::new(cached_packages, &relocation_map)?;
 
+    let mut acyclic_modules = BTreeSet::new();
     for package in cached_packages.values() {
         let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
         verify_package_valid_linkage(&package_modules, &mut validation_environment)?;
-        verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
+        verify_package_no_cyclic_relationships(
+            &package_modules,
+            cached_packages,
+            &relocation_map,
+            &mut acyclic_modules,
+        )?;
     }
 
     Ok(())
@@ -198,10 +204,16 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
     // to-be-published package first.
     let mut validation_environment =
         LinkageValidationEnvironment::new(cached_packages, &relocation_map)?;
+    let mut acyclic_modules = BTreeSet::new();
     for package in cached_packages.values() {
         let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
         verify_package_valid_linkage(&package_modules, &mut validation_environment)?;
-        verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
+        verify_package_no_cyclic_relationships(
+            &package_modules,
+            cached_packages,
+            &relocation_map,
+            &mut acyclic_modules,
+        )?;
     }
 
     // Extend the validation environment with the package to publish before validating it.
@@ -211,7 +223,13 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
         .into_iter()
         .collect::<Vec<_>>();
     verify_package_valid_linkage(&package_modules, &mut validation_environment)?;
-    verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
+    let mut acyclic_modules = BTreeSet::new();
+    verify_package_no_cyclic_relationships(
+        &package_modules,
+        cached_packages,
+        &relocation_map,
+        &mut acyclic_modules,
+    )?;
 
     Ok(())
 }
@@ -224,15 +242,20 @@ fn verify_package_no_cyclic_relationships(
     package: &[&Module],
     cached_packages: &BTreeMap<VersionId, &Package>,
     relocation_map: &HashMap<OriginalId, VersionId>,
+    acyclic_modules: &mut BTreeSet<ModuleId>,
 ) -> VMResult<()> {
     let mut to_visit_modules: BTreeMap<_, _> =
         package.iter().map(|m| (m.value.self_id(), m)).collect();
     let module_map = to_visit_modules.clone();
 
-    // Iteratively visit modules, removing them from the to-visit set as we go. If we encounter a
-    // cycle an error is returned.
-    while let Some((_, module)) = to_visit_modules.pop_last() {
+    while let Some((module_id, module)) = to_visit_modules.pop_last() {
+        if acyclic_modules.contains(&module_id) {
+            continue;
+        }
         let visited = cyclic_dependencies::verify_module(&module.value, |original_module_id| {
+            if acyclic_modules.contains(original_module_id) {
+                return Ok(vec![]);
+            }
             let module = if let Some(bundled) = module_map.get(original_module_id) {
                 Some(**bundled)
             } else {
@@ -249,10 +272,8 @@ fn verify_package_no_cyclic_relationships(
                 .ok_or_else(|| partial_vm_error!(MISSING_DEPENDENCY))
         })?;
 
-        // Remove all visited modules from the to-visit set.
-        for k in visited.iter() {
-            to_visit_modules.remove(k);
-        }
+        acyclic_modules.extend(visited);
+        acyclic_modules.insert(module_id);
     }
 
     Ok(())
