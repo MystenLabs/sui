@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-# Packages without simulator tests whose plain tests do not cover msim-only code. Their tests
-# run in the test job.
+# Packages without simulator tests whose tests neither cover msim-only code nor read the chain
+# at run time. Their tests run in other jobs.
 EXCLUDED_PACKAGES=(
   anemo-benchmark
   bin-version
@@ -24,7 +24,6 @@ EXCLUDED_PACKAGES=(
   mysten-service
   prometheus-closure-metric
   shared-crypto
-  simulacrum
   sui-adapter-latest
   sui-adapter-transactional-tests
   sui-adapter-v0
@@ -60,13 +59,11 @@ EXCLUDED_PACKAGES=(
   sui-framework
   sui-framework-snapshot
   sui-futures
-  sui-genesis-builder
   sui-indexer-alt
   sui-indexer-alt-consistent-api
   sui-indexer-alt-consistent-store
   sui-indexer-alt-framework
   sui-indexer-alt-framework-store-traits
-  sui-indexer-alt-graphql
   sui-indexer-alt-metrics
   sui-indexer-alt-object-store
   sui-indexer-alt-reader
@@ -105,7 +102,6 @@ EXCLUDED_PACKAGES=(
   sui-proxy
   sui-replay-2
   sui-rosetta
-  sui-rpc-api
   sui-rpc-benchmark
   sui-rpc-resolver
   sui-rpc-store
@@ -113,8 +109,6 @@ EXCLUDED_PACKAGES=(
   sui-snapshot
   sui-source-verification
   sui-sql-macro
-  sui-swarm
-  sui-swarm-config
   sui-synthetic-ingestion
   sui-telemetry
   sui-test-transaction-builder
@@ -123,7 +117,6 @@ EXCLUDED_PACKAGES=(
   sui-tool
   sui-transaction-builder
   sui-transaction-checks
-  sui-transactional-test-runner
   sui-types
   sui-upgrade-compatibility-transactional-tests
   sui-verifier-latest
@@ -142,7 +135,7 @@ EXCLUDED_PACKAGES=(
   x
 )
 
-# Packages whose simulator tests do not depend on chain-specific protocol config.
+# Packages whose tests do not depend on chain-specific protocol config.
 MAINNET_EXCLUDED_PACKAGES=(
   consensus-core
   consensus-simtests
@@ -150,8 +143,6 @@ MAINNET_EXCLUDED_PACKAGES=(
   sui-framework-tests
   sui-network
   sui-storage
-  sui-surfer
-  test-cluster
 )
 
 filter_excluding() {
@@ -181,29 +172,29 @@ esac
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-# Name of the package that owns a source file: the nearest Cargo.toml above it.
-package_of() {
-  local dir
-  dir="$(dirname "$1")"
-  while [[ ! -f "$dir/Cargo.toml" ]]; do
-    dir="$(dirname "$dir")"
-  done
-  sed -n 's/^name *= *"\(.*\)"/\1/p' "$dir/Cargo.toml" | head -1
-}
-
 # Matches #[sim_test], #[sui_test] and their path-qualified and cfg_attr forms.
 SIM_TEST_ATTR='(#\[|cfg_attr\([^,]*, *)(::)?((sui_macros|sui_simulator|msim)::)?(sim_test|sui_test)[](]'
 
-# Capture each scan before comparing so that a failed scan fails the check.
+# Each assignment fails the check if its command fails.
 files="$(git grep -lE "$SIM_TEST_ATTR" -- '*.rs' ':!crates/sui-proc-macros' ':!external-crates')"
-found=()
-while read -r dir; do
-  found+=("$(package_of "$dir/x")")
-done < <(echo "$files" | xargs -n1 dirname | sort -u)
-found_list=" $(printf '%s\n' "${found[@]}" | sort -u | tr '\n' ' ') "
-
 metadata="$(cargo metadata --no-deps --format-version 1)"
-workspace_list=" $(echo "$metadata" | python3 -c 'import json,sys; print(" ".join(p["name"] for p in json.load(sys.stdin)["packages"]))') "
+workspace_list=" $(python3 -c 'import json,sys; print(" ".join(p["name"] for p in json.load(sys.stdin)["packages"]))' <<<"$metadata") "
+# A file belongs to the workspace member whose manifest is in the nearest directory above it.
+found_list=" $(FILES="$files" python3 -c '
+import json, os, sys
+m = json.load(sys.stdin)
+root = m["workspace_root"]
+owners = {os.path.relpath(os.path.dirname(p["manifest_path"]), root): p["name"] for p in m["packages"]}
+found = set()
+for f in os.environ["FILES"].split():
+    d = os.path.dirname(f) or "."
+    while d not in owners:
+        if d == ".":
+            sys.exit(f"no workspace package owns {f}")
+        d = os.path.dirname(d) or "."
+    found.add(owners[d])
+print(" ".join(sorted(found)))
+' <<<"$metadata") "
 
 status=0
 for pkg in "${EXCLUDED_PACKAGES[@]}"; do

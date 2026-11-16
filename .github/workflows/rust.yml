@@ -478,15 +478,19 @@ jobs:
           swap-size-gb: 256
       - name: check simtest package list
         run: scripts/simtest/ci-packages.sh --check
-      # Builds the whole workspace, which checks msim-gated code in every crate, but skips the
-      # packages that ci-packages.sh excludes. Their tests run in the `test` job.
+      # Builds the whole workspace, which checks msim-gated code in every crate.
+      - name: cargo simtest build
+        id: simtest-build
+        run: scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-run
+      # Skips the packages that ci-packages.sh excludes. Their tests run in other jobs.
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast \
             -E "$(scripts/simtest/ci-packages.sh)"
-      # The chain override is read at run time, so this reuses the build from the step above.
+      # The chain override is read at run time, so this reuses the build above. It runs after
+      # test failures in the previous step, but not after a build failure.
       - name: cargo simtest (mainnet protocol config)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.simtest-build.outcome == 'success' }}
         env:
           SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
         run: |
