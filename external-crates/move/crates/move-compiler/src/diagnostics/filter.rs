@@ -14,8 +14,8 @@
 //!
 //! ## Allocation strategy
 //!
-//! Each [`FilterScope`] wraps an `Arc<FilterScopeData>`. Singletons (empty, all, test,
-//! dependency-drop) are shared via `LazyLock`; per-item scopes are allocated individually.
+//! Each [`FilterScope`] wraps an `Arc<FilterScopeData>`. Empty and dependency-drop singletons are
+//! shared via `LazyLock`; per-item scopes are allocated individually.
 //! Scopes are *not* deduplicated: each item gets its own `Arc` even when filters are
 //! identical. This preserves per-item source locations on filter entries (needed for
 //! `#[deny]` secondary labels and `#[expect]` unfulfilled diagnostics) and avoids the
@@ -209,14 +209,6 @@ static EMPTY_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
     }))
 });
 
-static ALL_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let target = FilterTarget::All;
-    FilterScope(Arc::new(FilterScopeData {
-        filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), FilterKind::Allow))]),
-        expects: vec![],
-    }))
-});
-
 static DEPENDENCY_DROP_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
     let target = FilterTarget::All;
     FilterScope(Arc::new(FilterScopeData {
@@ -228,11 +220,6 @@ static DEPENDENCY_DROP_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
 /// Scope with no filter entries: the common case for any item without lint attributes.
 pub(crate) fn empty_filter_scope() -> FilterScope {
     EMPTY_FILTER_SCOPE.clone()
-}
-
-/// Scope that allows all compiler diagnostics (used for `--silence-warnings`).
-pub(crate) fn all_filter_scope() -> FilterScope {
-    ALL_FILTER_SCOPE.clone()
 }
 
 /// Scope that drops every diagnostic entirely. Used for dependency compilation.
@@ -485,6 +472,20 @@ impl FilterScope {
 
     pub(crate) fn is_empty(&self) -> bool {
         self.0.filter_entries.is_empty()
+    }
+
+    /// Suppresses every non-`Deny` level and unconfigured warning in this scope.
+    pub(crate) fn silence_warnings(&self) -> Self {
+        let mut entries = self.0.filter_entries.clone();
+        for kind in entries.values_mut() {
+            if kind.value != FilterKind::Deny {
+                kind.value = FilterKind::Allow;
+            }
+        }
+        entries
+            .entry(FilterTarget::All)
+            .or_insert(sp(Loc::invalid(), FilterKind::Allow));
+        Self::from_filter_entries(entries)
     }
 
     /// Combines root settings before diagnostic reporting starts.

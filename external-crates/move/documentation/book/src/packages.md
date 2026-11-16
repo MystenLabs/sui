@@ -151,7 +151,8 @@ using `correctness`, `complexity`, `suspicious`, `deprecated`, `style`, `securit
 Specific lint settings override their category, and category settings override `all`. Configuring a
 lint as `warn` or `deny` enables its analysis; `allow` disables it.
 `--lint` enables otherwise unconfigured optional lints, but respects manifest settings.
-`--silence-warnings` suppresses warnings and lints regardless of manifest settings.
+`--silence-warnings` suppresses unconfigured warnings and manifest `warn` levels. Manifest `deny`
+levels still emit errors, and source attributes retain precedence over the flag.
 `--no-lint` disables all lint analysis regardless of manifest settings.
 
 Only the root manifest configures package diagnostics. Dependency diagnostics are suppressed.

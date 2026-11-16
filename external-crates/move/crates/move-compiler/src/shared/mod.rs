@@ -363,11 +363,13 @@ impl CompilationEnv {
     }
 
     fn root_filter_stack(&self) -> FilterStack {
+        let root_scope = if self.flags.silence_warnings() {
+            self.root_scope.silence_warnings()
+        } else {
+            self.root_scope.clone()
+        };
         let mut stack = FilterStack::new();
-        stack.push(self.root_scope.clone());
-        if self.flags.silence_warnings() {
-            stack.push(filter::all_filter_scope());
-        }
+        stack.push(root_scope);
         stack
     }
 

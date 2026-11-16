@@ -6,5 +6,5 @@ name = "manifest_lints"
 edition = "2024"
 
 [warnings]
-all = "allow"
+all = "deny"
 unused_variable = "warn"
