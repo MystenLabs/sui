@@ -46,6 +46,13 @@ pub struct AuthorityPerpetualTablesOptions {
 }
 
 impl AuthorityPerpetualTablesOptions {
+    /// Whether a node runs the tidehunter objects compactor: validators, which never prune, and
+    /// any node configured with `num_epochs_to_retain = 0`, the setting the compactor replaces.
+    /// Always `false` on RocksDB builds, which have no compactor.
+    pub fn objects_compactor_enabled(is_validator: bool, num_epochs_to_retain: u64) -> bool {
+        cfg!(tidehunter) && (is_validator || num_epochs_to_retain == 0)
+    }
+
     #[cfg(not(tidehunter))]
     fn apply_to(&self, mut db_options: DBOptions) -> DBOptions {
         if !self.enable_write_stall {
@@ -965,4 +972,19 @@ fn effects_table_config(db_options: DBOptions) -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AuthorityPerpetualTablesOptions;
+
+    #[test]
+    fn objects_compactor_enabled_only_on_tidehunter() {
+        let enabled = AuthorityPerpetualTablesOptions::objects_compactor_enabled;
+        // RocksDB has no compactor, so its full nodes may combine retention 0 with rpc indexing.
+        assert_eq!(enabled(false, 0), cfg!(tidehunter));
+        assert_eq!(enabled(true, 2), cfg!(tidehunter));
+        // Full nodes that retain old object versions keep the object pruner.
+        assert!(!enabled(false, 2));
+    }
 }

@@ -643,11 +643,22 @@ impl FullnodeConfigBuilder {
             ..Default::default()
         };
 
+        let rpc_config = self.rpc_config.unwrap_or_else(|| sui_rpc_api::Config {
+            enable_indexing: Some(true),
+            ..Default::default()
+        });
+
         let mut pruning_config = AuthorityStorePruningConfig::default();
         if self.disable_pruning {
             pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
             pruning_config.set_num_epochs_to_retain(u64::MAX);
         };
+        // On tidehunter, the default retention of 0 attaches the objects compactor (see
+        // `AuthorityPerpetualTablesOptions::objects_compactor_enabled`), which sui-node rejects on
+        // a full node serving rpc indexes. Keep every object version instead.
+        if cfg!(tidehunter) && rpc_config.enable_indexing() {
+            pruning_config.set_num_epochs_to_retain(u64::MAX);
+        }
 
         NodeConfig {
             recent_submission_dedup_window_ms: None,
@@ -698,12 +709,7 @@ impl FullnodeConfigBuilder {
             state_debug_dump_config: Default::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
-            rpc: self.rpc_config.or_else(|| {
-                Some(sui_rpc_api::Config {
-                    enable_indexing: Some(true),
-                    ..Default::default()
-                })
-            }),
+            rpc: Some(rpc_config),
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
