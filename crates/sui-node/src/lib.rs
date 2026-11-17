@@ -575,13 +575,23 @@ impl SuiNode {
             .enable_db_write_stall
             .unwrap_or(node_role.runs_consensus());
         // The tidehunter objects compactor retains only the latest version per
-        // ObjectID and is mutually exclusive with the object pruner. Enable it
-        // for validators (which always disable the pruner), and also for any
-        // node configured with `num_epochs_to_retain = 0` — that aggressive
-        // setting is what the compactor replaces. The pruner is force-disabled
-        // in `AuthorityStorePruner::new` whenever this is true.
-        let enable_objects_compactor = node_role.is_validator()
-            || config.authority_store_pruning_config.num_epochs_to_retain == 0;
+        // ObjectID and is mutually exclusive with the object pruner, which
+        // `AuthorityStorePruner::new` force-disables whenever it runs.
+        let enable_objects_compactor = AuthorityPerpetualTablesOptions::objects_compactor_enabled(
+            node_role.is_validator(),
+            config.authority_store_pruning_config.num_epochs_to_retain,
+        );
+        let enable_rpc_indexing =
+            node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing());
+        // The compactor drops object versions without regard to the embedded rpc-store, whose
+        // indexes expect every object version they reference to remain readable.
+        anyhow::ensure!(
+            !(enable_objects_compactor && enable_rpc_indexing),
+            "authority-store-pruning-config.num-epochs-to-retain = 0 attaches the tidehunter \
+             objects compactor, which drops non-latest object versions that rpc indexes \
+             (rpc.enable-indexing = true) depend on. Set num-epochs-to-retain > 0 on a full node \
+             that serves rpc indexes, or set rpc.enable-indexing = false."
+        );
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
             enable_objects_compactor,
@@ -732,29 +742,28 @@ impl SuiNode {
         // column families (indexed independently of the authority store) and
         // serves the index read paths from the embedded store. Raw chain data
         // is still served from the perpetual store.
-        let mut embedded_rpc_store =
-            if node_role.is_fullnode() && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
-                info!("creating embedded rpc-store");
-                // The tip indexer pulls checkpoints from the node's local
-                // checkpoint / perpetual stores via a dedicated read handle.
-                let ingestion_source = RocksDbStore::new(
-                    cache_traits.clone(),
-                    committee_store.clone(),
-                    checkpoint_store.clone(),
-                );
-                let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
-                    &config,
-                    &store,
-                    &checkpoint_store,
-                    ingestion_source,
-                    chain_identifier,
-                    &prometheus_registry,
-                )
-                .await?;
-                Some(embedded_rpc_store)
-            } else {
-                None
-            };
+        let mut embedded_rpc_store = if enable_rpc_indexing {
+            info!("creating embedded rpc-store");
+            // The tip indexer pulls checkpoints from the node's local
+            // checkpoint / perpetual stores via a dedicated read handle.
+            let ingestion_source = RocksDbStore::new(
+                cache_traits.clone(),
+                committee_store.clone(),
+                checkpoint_store.clone(),
+            );
+            let embedded_rpc_store = EmbeddedRpcStore::bootstrap(
+                &config,
+                &store,
+                &checkpoint_store,
+                ingestion_source,
+                chain_identifier,
+                &prometheus_registry,
+            )
+            .await?;
+            Some(embedded_rpc_store)
+        } else {
+            None
+        };
 
         info!("creating archive reader");
         // Create network

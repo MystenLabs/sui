@@ -1089,14 +1089,14 @@ impl AuthorityStorePruner {
         // On tidehunter, the per-keyspace `objects_compactor`
         // (see `AuthorityPerpetualTables::open`) already retains only the latest
         // version per ObjectID during compaction, so running the object pruner
-        // would duplicate that work. The compactor is enabled for validators
-        // and for any node configured with `num_epochs_to_retain = 0` — keep
-        // this predicate in sync with the one in `sui-node/src/lib.rs`.
-        // Force-disable the pruner whenever the compactor is active.
+        // would duplicate that work. Force-disable the pruner whenever the
+        // compactor is active.
         #[cfg(tidehunter)]
         {
-            let objects_compactor_enabled =
-                is_validator || pruning_config.num_epochs_to_retain == 0;
+            let objects_compactor_enabled = super::authority_store_tables::AuthorityPerpetualTablesOptions::objects_compactor_enabled(
+                is_validator,
+                pruning_config.num_epochs_to_retain,
+            );
             if objects_compactor_enabled && pruning_config.num_epochs_to_retain != u64::MAX {
                 info!(
                     "Tidehunter: disabling object pruner (was num_epochs_to_retain={}). The objects compactor performs equivalent compaction.",
