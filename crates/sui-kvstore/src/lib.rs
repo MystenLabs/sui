@@ -84,6 +84,7 @@ pub use crate::handlers::PackagesByCheckpointPipeline;
 pub use crate::handlers::PackagesByIdPipeline;
 pub use crate::handlers::PackagesPipeline;
 pub use crate::handlers::ProtocolConfigsPipeline;
+pub use crate::handlers::ProtocolConfigsV2Pipeline;
 pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionBitmapProcessor;
 pub use crate::handlers::TransactionBitmapV2Processor;
@@ -123,6 +124,8 @@ pub const EPOCH_END_PIPELINE: &str =
     <BigTableHandler<EpochEndPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const PROTOCOL_CONFIGS_PIPELINE: &str =
     <BigTableHandler<ProtocolConfigsPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const PROTOCOL_CONFIGS_V2_PIPELINE: &str =
+    <BigTableHandler<ProtocolConfigsV2Pipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const PACKAGES_PIPELINE: &str =
     <BigTableHandler<PackagesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const PACKAGES_BY_ID_PIPELINE: &str =
@@ -163,11 +166,12 @@ pub const ALL_PIPELINE_NAMES: [&str; 14] = [
 
 /// Pipelines the indexer registers only when they are named in the `alpha_pipelines` argument of
 /// [`BigTableIndexer::new`], so deployments do not start writing their tables by default.
-pub const ALPHA_PIPELINE_NAMES: [&str; 4] = [
+pub const ALPHA_PIPELINE_NAMES: [&str; 5] = [
     OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
     OBJECT_TOMBSTONES_PIPELINE,
     BITMAP_INDEX_V2_PIPELINE,
     EVENT_BITMAP_INDEX_V2_PIPELINE,
+    PROTOCOL_CONFIGS_V2_PIPELINE,
 ];
 
 /// The transaction and event bitmap index pipelines that write the tables of `schema`.
@@ -325,6 +329,17 @@ pub struct ProtocolConfigData {
     pub configs: std::collections::BTreeMap<String, prost_types::Value>,
 }
 
+/// Protocol config data returned by [`KeyValueStoreReader::get_protocol_configs_v2`].
+#[derive(Clone, Debug, Default)]
+pub struct ProtocolConfigV2Data {
+    /// Every protocol-config attribute (scalar and non-scalar) rendered to `prost_types::Value`.
+    /// Attributes unset at this protocol version are explicit `NullValue` entries, so the keyset
+    /// is stable across versions. Holds no feature flags.
+    pub attributes: std::collections::BTreeMap<String, prost_types::Value>,
+    /// Every feature flag and whether it is enabled at this protocol version.
+    pub feature_flags: std::collections::BTreeMap<String, bool>,
+}
+
 /// Serializable watermark for per-pipeline tracking in BigTable. BCS-encoded into the `w`
 /// column. The `BigTableConnection` write paths keep this column in sync alongside the new
 /// per-field schema (see `WatermarkV1`) so existing readers continue to work.
@@ -429,6 +444,13 @@ pub trait KeyValueStoreReader {
         &mut self,
         protocol_version: u64,
     ) -> Result<Option<ProtocolConfigData>>;
+    /// The attributes and feature flags of `protocol_version`. `None` if the chain never ran that
+    /// version, or if the alpha [`PROTOCOL_CONFIGS_V2_PIPELINE`] has not yet indexed the
+    /// checkpoint that started it.
+    async fn get_protocol_configs_v2(
+        &mut self,
+        protocol_version: u64,
+    ) -> Result<Option<ProtocolConfigV2Data>>;
     async fn get_events_for_transactions(
         &mut self,
         keys: &[TransactionDigest],
@@ -679,9 +701,26 @@ impl BigTableIndexer {
                         &global,
                     ),
                 ),
-                pipeline.protocol_configs.finish(base.clone()),
+                pipeline.protocol_configs.clone().finish(base.clone()),
             )
             .await?;
+        // The V2 pipeline shares the configuration of the V1 pipeline.
+        if alpha_pipelines.contains(&PROTOCOL_CONFIGS_V2_PIPELINE) {
+            indexer
+                .concurrent_pipeline(
+                    BigTableHandler::new(
+                        ProtocolConfigsV2Pipeline(chain),
+                        &pipeline.protocol_configs,
+                        build_rate_limiter(
+                            pipeline.protocol_configs.max_rows_per_second,
+                            base_rps,
+                            &global,
+                        ),
+                    ),
+                    pipeline.protocol_configs.finish(base.clone()),
+                )
+                .await?;
+        }
         indexer
             .concurrent_pipeline(
                 BigTableHandler::new(
