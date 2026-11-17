@@ -967,6 +967,7 @@ async fn start_archival(
         kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),
         kv_rpc_config.watermark_source(),
+        kv_rpc_config.alpha_features(),
     )
     .await
     .context("Failed to create KvRpcServer")?;
