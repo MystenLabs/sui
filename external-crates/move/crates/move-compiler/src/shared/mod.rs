@@ -305,6 +305,11 @@ impl CompilationEnv {
             .collect();
 
         let root_scope = root_scope.unwrap_or_else(filter::empty_filter_scope);
+        let root_scope = if flags.silence_warnings() {
+            root_scope.silence_warnings()
+        } else {
+            root_scope
+        };
 
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
@@ -363,13 +368,8 @@ impl CompilationEnv {
     }
 
     fn root_filter_stack(&self) -> FilterStack {
-        let root_scope = if self.flags.silence_warnings() {
-            self.root_scope.silence_warnings()
-        } else {
-            self.root_scope.clone()
-        };
         let mut stack = FilterStack::new();
-        stack.push(root_scope);
+        stack.push(self.root_scope.clone());
         stack
     }
 
