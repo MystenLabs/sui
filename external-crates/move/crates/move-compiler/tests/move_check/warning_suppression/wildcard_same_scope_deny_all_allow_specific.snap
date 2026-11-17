@@ -5,4 +5,11 @@ info:
   edition: legacy
   lint: false
 ---
-
+error[EC09008]: unused function
+  ┌─ tests/move_check/warning_suppression/wildcard_same_scope_deny_all_allow_specific.move:5:9
+  │
+2 │ #[deny(all)]
+  │        --- the lint level is defined here
+  ·
+5 │     fun foo(a: u64) {
+  │         ^^^ The non-'public', non-'entry' function 'foo' is never called. Consider removing it.

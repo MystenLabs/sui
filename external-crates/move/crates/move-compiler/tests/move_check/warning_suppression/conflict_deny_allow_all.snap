@@ -13,6 +13,15 @@ error[EC10008]: ambiguous attribute value
 3 │ #[allow(all)]
   │         --- Conflicting filter for 'all' specified here
 
+error[EC09008]: unused function
+  ┌─ tests/move_check/warning_suppression/conflict_deny_allow_all.move:5:9
+  │
+2 │ #[deny(all)]
+  │        --- the lint level is defined here
+  ·
+5 │     fun foo(a: u64) {
+  │         ^^^ The non-'public', non-'entry' function 'foo' is never called. Consider removing it.
+
 error[EC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/conflict_deny_allow_all.move:5:13
   │

@@ -3,14 +3,15 @@
 
 use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
-    command_line::compiler::Visitor,
+    command_line::compiler::{Visitor, VisitorConstructor},
     diagnostics::{
         codes::{DiagnosticOrigin, DiagnosticsID},
+        config::DiagnosticFilterConfig,
         filter::FilterName,
     },
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{LintLevel, filters_from_table, lints},
+    linters::{LintSelection, filters_from_table, lints},
     shared::known_attributes::DiagnosticAttribute,
     typing::visitor::TypingVisitor,
 };
@@ -166,33 +167,65 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
     )
 }
 
-pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    match level {
-        LintLevel::None => vec![],
-        LintLevel::Default => vec![
-            share_owned::ShareOwnedVerifier.visitor(),
-            self_transfer::SelfTransferVerifier.visitor(),
-            custom_state_change::CustomStateChangeVerifier.visitor(),
-            coin_field::CoinFieldVisitor.visitor(),
-            freeze_wrapped::FreezeWrappedVisitor.visitor(),
-            collection_equality::CollectionEqualityVisitor.visitor(),
-            public_random::PublicRandomVisitor.visitor(),
-            missing_key::MissingKeyVisitor.visitor(),
-            unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
-            uncallable_function::UncallableFunction.visitor(),
-            unused_object_with_fields::UnusedObjWithFieldsVerifier.visitor(),
-            // This is not on by default outside of Sui mode
-            crate::linters::unused_return_value::UnusedReturnValue.visitor(),
+const DEFAULT_LINTS: &[(&str, VisitorConstructor)] = &[
+    ("share_owned", || share_owned::ShareOwnedVerifier.visitor()),
+    ("self_transfer", || {
+        self_transfer::SelfTransferVerifier.visitor()
+    }),
+    ("custom_state_change", || {
+        custom_state_change::CustomStateChangeVerifier.visitor()
+    }),
+    ("coin_field", || coin_field::CoinFieldVisitor.visitor()),
+    ("freeze_wrapped", || {
+        freeze_wrapped::FreezeWrappedVisitor.visitor()
+    }),
+    ("collection_equality", || {
+        collection_equality::CollectionEqualityVisitor.visitor()
+    }),
+    ("public_random", || {
+        public_random::PublicRandomVisitor.visitor()
+    }),
+    ("missing_key", || missing_key::MissingKeyVisitor.visitor()),
+    ("public_entry", || {
+        unnecessary_public_entry::UnnecessaryPublicEntry.visitor()
+    }),
+    ("uncallable_function", || {
+        uncallable_function::UncallableFunction.visitor()
+    }),
+    ("unused_object_with_fields", || {
+        unused_object_with_fields::UnusedObjWithFieldsVerifier.visitor()
+    }),
+    ("unused_return_value", || {
+        crate::linters::unused_return_value::UnusedReturnValue.visitor()
+    }),
+];
+
+const OPTIONAL_LINTS: &[(&str, VisitorConstructor)] = &[
+    ("freezing_capability", || {
+        freezing_capability::WarnFreezeCapability.visitor()
+    }),
+    ("prefer_mut_tx_context", || {
+        public_mut_tx_context::PreferMutableTxContext.visitor()
+    }),
+];
+
+pub fn linter_visitors(selection: LintSelection) -> Vec<Visitor> {
+    linter_visitors_with_config(selection, &DiagnosticFilterConfig::default())
+}
+
+pub fn linter_visitors_with_config(
+    selection: LintSelection,
+    config: &DiagnosticFilterConfig,
+) -> Vec<Visitor> {
+    config.select_lints(
+        selection,
+        &[
+            SUI_LINT_WARNING_FILTERS,
+            crate::linters::CORE_LINT_WARNING_FILTERS,
         ],
-        LintLevel::All => {
-            let mut visitors = linter_visitors(LintLevel::Default);
-            visitors.extend([
-                freezing_capability::WarnFreezeCapability.visitor(),
-                public_mut_tx_context::PreferMutableTxContext.visitor(),
-            ]);
-            visitors
-        }
-    }
+        DEFAULT_LINTS,
+        OPTIONAL_LINTS,
+    )
 }
 
 /// Returns abilities of a given type, if any.

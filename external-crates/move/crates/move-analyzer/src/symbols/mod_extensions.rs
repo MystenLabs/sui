@@ -162,10 +162,7 @@ fn parse_file_for_modules(
         vec![],
         None,
         std::collections::BTreeMap::new(),
-        Some(PackageConfig {
-            edition,
-            ..Default::default()
-        }),
+        Some(PackageConfig::default().set_edition(edition)),
         None,
     );
 

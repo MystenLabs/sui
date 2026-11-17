@@ -1,0 +1,9 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "dep"
+edition = "2024"
+
+[lints]
+abort_without_constant = "banana"

@@ -1,0 +1,7 @@
+Command `build`:
+Error: Error while loading dependency .: error while parsing "./Move.toml": TOML parse error at line 8, column 1
+  |
+8 | [warnings]
+  | ^^^^^^^^^^
+unknown variant `forbid`, expected one of `allow`, `warn`, `deny`
+

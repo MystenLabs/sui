@@ -22,7 +22,7 @@ use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     editions::{Edition, Flavor},
-    linters::LintLevel,
+    linters::LintSelection,
     parser::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
@@ -211,7 +211,7 @@ fn compute_completions_new_symbols<F: MoveFlavor>(
         pkg_dependencies,
         ide_files_root,
         &pkg_path,
-        LintLevel::None,
+        LintSelection::None,
         move_flavor,
         cursor_info,
         flavor,

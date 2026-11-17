@@ -159,6 +159,13 @@ macro_rules! codes {
                 $($(#[$attr])* $code,)*
             }
 
+            impl $cat {
+                #[allow(dead_code, deprecated)]
+                pub(crate) const CODES: &'static [Self] = &[
+                    $(Self::$code,)*
+                ];
+            }
+
             #[allow(deprecated)]
             impl DiagnosticCode for $cat {
                 const CATEGORY: Category = {
@@ -430,6 +437,31 @@ codes!(
         StringValue: { msg: "IDE string value", severity: Note },
     ],
 );
+
+impl UnusedItem {
+    pub(crate) const fn allowed_in_test(self) -> bool {
+        match self {
+            Self::DontStartAtZeroPlaceholder => panic!("ICE do not use placeholder error code"),
+            Self::Function
+            | Self::StructField
+            | Self::FunTypeParam
+            | Self::Constant
+            | Self::MutReference
+            | Self::MutParam => true,
+            Self::Alias
+            | Self::Variable
+            | Self::Assignment
+            | Self::TrailingSemi
+            | Self::DeadCode
+            | Self::StructTypeParam
+            | Self::Attribute
+            | Self::MutModifier => false,
+        }
+    }
+}
+
+pub(crate) const UNUSED_ITEM_CATEGORY: u8 = Category::UnusedItem as u8;
+pub(crate) const UNUSED_ITEM_CODES: &[UnusedItem] = UnusedItem::CODES;
 
 //**************************************************************************************************
 // impls

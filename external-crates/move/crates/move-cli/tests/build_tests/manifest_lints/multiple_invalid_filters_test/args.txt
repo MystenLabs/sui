@@ -1,0 +1,1 @@
+build --mode test --no-lint

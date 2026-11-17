@@ -21,19 +21,17 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::filter::empty_filter_scope,
+    diagnostics::config::known_diagnostic_filters,
     editions::{Edition, Flavor},
-    linters,
     shared::{
         PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
         known_attributes::ModeAttribute,
     },
-    sui_mode,
 };
 use move_docgen::DocgenFlags;
 use move_package::{
     MoveFlavor, PackageInfo, RootPackage,
-    schema::{Environment, PackageID},
+    schema::{DiagnosticProfile, Environment, PackageID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -225,6 +223,19 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
 
     debug!("Package paths {:#?}", package_paths);
 
+    let root_flavor = package_paths
+        .iter()
+        .filter_map(|path| path.name.as_ref())
+        .find(|(_, config)| !config.is_dependency)
+        .expect("root package is included")
+        .1
+        .flavor;
+    let package_info = root_pkg.package_info();
+    let diagnostic_settings = package_info.diagnostics().resolve_for_profile(
+        active_diagnostic_profile(build_config),
+        &known_diagnostic_filters(root_flavor),
+    )?;
+
     writeln!(
         w,
         "{} {}",
@@ -232,24 +243,21 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
         root_pkg.display_name()
     )?;
 
-    let lint_level = build_config.lint_flag.get();
-    let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
-    let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
+    let compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
         .unwrap()
-        .set_flags(flags);
-    if sui_mode {
-        let (filter_attr_name, filters) = sui_mode::linters::known_filters();
-        compiler = compiler
-            .add_custom_known_filters(filter_attr_name, filters)
-            .add_visitors(sui_mode::linters::linter_visitors(lint_level))
-    }
-    let (filter_attr_name, filters) = linters::known_filters();
-    compiler = compiler
-        .add_custom_known_filters(filter_attr_name, filters)
-        .add_visitors(linters::linter_visitors(lint_level));
+        .set_flags(flags)
+        .set_diagnostic_filters(build_config.lint_flag.get(), diagnostic_settings);
 
     compiler_driver(compiler)
+}
+
+fn active_diagnostic_profile(build_config: &BuildConfig) -> DiagnosticProfile {
+    if build_config.test_mode || build_config.modes.contains(&ModeAttribute::TEST.into()) {
+        DiagnosticProfile::Test
+    } else {
+        DiagnosticProfile::Build
+    }
 }
 
 /// Save the compiled package to disk
@@ -383,16 +391,18 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
         // mapped to `0x0`
         let addresses = build_config.addresses_for_config(pkg.named_addresses()?);
 
-        // TODO: better default handling for edition and flavor
-        let config = PackageConfig {
-            is_dependency: !pkg.is_root(),
-            edition: pkg
-                .edition()
-                .or(build_config.default_edition)
-                .unwrap_or(Edition::LEGACY), // TODO require edition
-            flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
-            warning_filter: empty_filter_scope(),
-        };
+        let flavor = build_config
+            .default_flavor
+            .or(pkg.flavor().map(Flavor::from_str).transpose()?)
+            .unwrap_or(Flavor::Sui);
+        let config = PackageConfig::default()
+            .set_is_dependency(!pkg.is_root())
+            .set_edition(
+                pkg.edition()
+                    .or(build_config.default_edition)
+                    .unwrap_or(Edition::LEGACY),
+            )
+            .set_flavor(flavor);
 
         // Assign a unique name for the compiler for each package.
         let safe_name = Symbol::from(pkg.id().clone());

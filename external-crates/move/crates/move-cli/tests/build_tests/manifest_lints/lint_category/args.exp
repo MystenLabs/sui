@@ -1,0 +1,8 @@
+Command `build`:
+BUILDING manifest_lints
+warning[WL04004]: unneeded return
+   ┌─ ./sources/m.move:10:9
+   │
+10 │         return 0
+   │         ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+

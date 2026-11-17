@@ -38,7 +38,7 @@ use move_compiler::{
     diagnostics::codes::Severity,
     editions::{Edition, Flavor},
     expansion::ast::ModuleIdent,
-    linters::LintLevel,
+    linters::LintSelection,
     parser::ast as P,
     shared::{
         Identifier, NamedAddressMap, NamedAddressMaps, PackagePaths, files::MappedFiles,
@@ -391,7 +391,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
-    lint: LintLevel,
+    lint: LintSelection,
     move_flavor: Arc<F>,
     flavor: Option<Flavor>,
     cursor_file_opt: Option<&PathBuf>,

@@ -478,13 +478,13 @@ mod tests {
         let mtx = path.lock().unwrap();
         let error = path.read_manifest(&mtx).unwrap_err().to_string();
         assert_snapshot!(error.replace(tempdir.path().to_string_lossy().as_ref(), "<TEMPDIR>"),
-            @r###"
+            @r#"
         error while parsing "<TEMPDIR>/Move.toml": TOML parse error at line 1, column 2
           |
         1 | [not-package]
           |  ^^^^^^^^^^^
-        unknown field `not-package`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
-        "###
+        unknown field `not-package`, expected one of `package`, `warnings`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        "#
         );
     }
 

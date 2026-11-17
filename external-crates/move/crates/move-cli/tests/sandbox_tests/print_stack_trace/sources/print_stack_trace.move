@@ -2,7 +2,7 @@ module 0x7::print_stack_trace {
     use std::debug;
     use 0x7::N;
 
-    #[allow(unused_mut_ref)]
+    #[allow(unused_mut_ref, lint(unused_return_value))]
     entry fun print_stack_trace() {
         let mut v = vector[];
         vector::push_back(&mut v, true);

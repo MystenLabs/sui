@@ -1,0 +1,180 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::{collections::BTreeMap, sync::LazyLock};
+
+use move_ir_types::location::{Loc, sp};
+
+use crate::{
+    command_line::compiler::{Visitor, VisitorConstructor},
+    diagnostics::{
+        codes::{DiagnosticOrigin, DiagnosticsID, UNUSED_ITEM_CATEGORY, UNUSED_ITEM_CODES},
+        filter::{
+            FILTER_ALL, FilterKind, FilterName, FilterPrefix, FilterScope, empty_filter_scope,
+            resolve_filter_names,
+        },
+    },
+    editions::Flavor,
+    linters::{self, LintSelection, LinterDiagnosticCategory},
+    shared::known_attributes::DiagnosticAttribute,
+    sui_mode,
+};
+
+pub type KnownDiagnosticFilterGroup = (FilterPrefix, Vec<(FilterName, Vec<DiagnosticsID>)>);
+pub type KnownDiagnosticFilters = Vec<KnownDiagnosticFilterGroup>;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DiagnosticFilterSettings {
+    pub warnings: Option<DiagnosticFilterConfig>,
+    pub lints: Option<DiagnosticFilterConfig>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DiagnosticFilterConfig {
+    all: Option<FilterKind>,
+    filters: BTreeMap<FilterName, FilterKind>,
+    code_scope: Option<FilterScope>,
+}
+
+static TESTING_DIAGNOSTIC_FILTERS: LazyLock<DiagnosticFilterSettings> = LazyLock::new(|| {
+    let entries = UNUSED_ITEM_CODES
+        .iter()
+        .copied()
+        .filter(|code| code.allowed_in_test())
+        .map(|code| {
+            let id =
+                DiagnosticsID::exact(DiagnosticOrigin::Compiler, UNUSED_ITEM_CATEGORY, code as u8);
+            (id, sp(Loc::invalid(), FilterKind::Allow))
+        })
+        .collect();
+    DiagnosticFilterSettings {
+        warnings: Some(DiagnosticFilterConfig {
+            code_scope: Some(FilterScope::new(entries)),
+            ..DiagnosticFilterConfig::default()
+        }),
+        lints: None,
+    }
+});
+
+pub fn known_diagnostic_filters(flavor: Flavor) -> KnownDiagnosticFilters {
+    let mut known = vec![linters::known_filters()];
+    match flavor {
+        Flavor::Core => (),
+        Flavor::Sui => known.push(sui_mode::linters::known_filters()),
+    }
+    known
+}
+
+impl DiagnosticFilterSettings {
+    /// Create a diagnostic filter that allows unused-item warnings in test fixtures.
+    pub fn for_testing() -> Self {
+        TESTING_DIAGNOSTIC_FILTERS.clone()
+    }
+
+    /// Builds the scope for settings validated against the supplied registry.
+    pub(crate) fn filter_scope(&self, known: &KnownDiagnosticFilters) -> FilterScope {
+        let mut configured = [
+            (None, &self.warnings),
+            (Some(DiagnosticAttribute::LINT_SYMBOL), &self.lints),
+        ]
+        .into_iter()
+        .flat_map(|(prefix, config)| {
+            config
+                .iter()
+                .flat_map(|config| config.iter())
+                .map(move |(name, kind)| (prefix, name, kind))
+        })
+        .peekable();
+        let mut scope = if configured.peek().is_none() {
+            empty_filter_scope()
+        } else {
+            resolve_filter_names(configured, known.iter())
+                .expect("diagnostic settings must be validated against the supplied registry")
+        };
+        for config in [&self.warnings, &self.lints].into_iter().flatten() {
+            if let Some(code_scope) = &config.code_scope {
+                scope = scope.merge_root(code_scope);
+            }
+        }
+        scope
+    }
+}
+
+impl DiagnosticFilterConfig {
+    pub fn is_empty(&self) -> bool {
+        self.all.is_none()
+            && self.filters.is_empty()
+            && self.code_scope.as_ref().is_none_or(FilterScope::is_empty)
+    }
+
+    /// Returns the named filter settings.
+    pub fn iter(&self) -> impl Iterator<Item = (FilterName, FilterKind)> + '_ {
+        self.all
+            .map(|kind| (FilterName::from(FILTER_ALL), kind))
+            .into_iter()
+            .chain(self.filters.iter().map(|(name, kind)| (*name, *kind)))
+    }
+
+    /// Checks the named setting, its category, then `all`, then the supplied default.
+    pub fn enabled(&self, name: &str, category: &str, default_enabled: bool) -> bool {
+        match self
+            .filters
+            .get(&FilterName::from(name))
+            .or_else(|| self.filters.get(&FilterName::from(category)))
+            .copied()
+            .or(self.all)
+        {
+            Some(FilterKind::Allow | FilterKind::Drop) => false,
+            Some(FilterKind::Warn | FilterKind::Expect | FilterKind::Deny) => true,
+            None => default_enabled,
+        }
+    }
+
+    pub fn select_lints(
+        &self,
+        selection: LintSelection,
+        lint_code_tables: &[&[(u8, u8, &'static str)]],
+        default_lints: &[(&str, VisitorConstructor)],
+        optional_lints: &[(&str, VisitorConstructor)],
+    ) -> Vec<Visitor> {
+        let optional_enabled = match selection {
+            LintSelection::None => return vec![],
+            LintSelection::Default => false,
+            LintSelection::All => true,
+        };
+        default_lints
+            .iter()
+            .map(|lint| (true, lint))
+            .chain(optional_lints.iter().map(|lint| (optional_enabled, lint)))
+            .filter(|(default_enabled, (name, _))| {
+                let category = lint_code_tables
+                    .iter()
+                    .flat_map(|table| table.iter())
+                    .find_map(|(category, _, filter_name)| {
+                        (*filter_name == *name).then_some(*category)
+                    })
+                    .expect("ICE lint visitor must have a diagnostic code");
+                self.enabled(
+                    name,
+                    LinterDiagnosticCategory::name_from_code(category),
+                    *default_enabled,
+                )
+            })
+            .map(|(_, (_, constructor))| constructor())
+            .collect()
+    }
+}
+
+impl FromIterator<(FilterName, FilterKind)> for DiagnosticFilterConfig {
+    fn from_iter<T: IntoIterator<Item = (FilterName, FilterKind)>>(entries: T) -> Self {
+        let mut config = Self::default();
+        for (name, kind) in entries {
+            if name.as_str() == FILTER_ALL {
+                config.all = Some(kind);
+            } else {
+                config.filters.insert(name, kind);
+            }
+        }
+        config
+    }
+}

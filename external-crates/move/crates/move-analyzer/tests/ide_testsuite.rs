@@ -25,7 +25,7 @@ use move_analyzer::{
     utils::canonicalize_path,
 };
 use move_command_line_common::testing::insta_assert;
-use move_compiler::{editions::Flavor, linters::LintLevel};
+use move_compiler::{editions::Flavor, linters::LintSelection};
 use move_package::{MoveFlavor, Vanilla};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -693,7 +693,7 @@ fn test_symbols_with_optional_modifications<F: MoveFlavor + Default>(
         packages_info.clone(),
         ide_files_root,
         project_path.as_path(),
-        LintLevel::None,
+        LintSelection::None,
         move_flavor,
         Some(Flavor::Sui),
         None, // No cursor file
@@ -724,7 +724,7 @@ fn test_symbols_with_cursor<F: MoveFlavor + Default>(
         packages_info.clone(),
         ide_files_root,
         project_path.as_path(),
-        LintLevel::None,
+        LintSelection::None,
         move_flavor,
         Some(Flavor::Sui),
         Some(cursor_path),
