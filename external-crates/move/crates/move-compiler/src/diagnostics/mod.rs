@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod codes;
+pub mod explain;
 pub mod filter;
 
 use crate::{
