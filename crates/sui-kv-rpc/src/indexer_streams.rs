@@ -179,6 +179,7 @@ mod tests {
     use sui_kvstore::BitmapSchema;
     use sui_kvstore::EPOCH_END_PIPELINE;
     use sui_kvstore::OBJECTS_PIPELINE;
+    use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
     use sui_kvstore::rpc::RpcService;
     use sui_kvstore::rpc::proto::v1alpha::watermark_service_server::WatermarkServiceServer;
     use sui_kvstore::rpc::watermark_service::WatermarkService;
@@ -189,6 +190,7 @@ mod tests {
     use tokio::time::timeout;
 
     use super::*;
+    use crate::AlphaFeatures;
     use crate::KvRpcConfig;
     use crate::ServerConfig;
     use crate::StagesConfig;
@@ -216,10 +218,10 @@ mod tests {
         }
     }
 
-    /// A watermark for every pipeline a replica serves, at the checkpoint `checkpoint` picks for
-    /// it.
+    /// A watermark for every pipeline a replica serving every alpha feature reads, at the
+    /// checkpoint `checkpoint` picks for it.
     fn served_watermarks(checkpoint: impl Fn(&str) -> u64) -> HashMap<String, CommitterWatermark> {
-        service_info_watermark_pipelines(BitmapSchema::V2, false)
+        service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::all())
             .iter()
             .map(|&pipeline| (pipeline.to_string(), watermark(checkpoint(pipeline))))
             .collect()
@@ -266,10 +268,11 @@ mod tests {
     }
 
     /// A replica reading the mock Bigtable at `bigtable` that follows the indexers at
-    /// `indexer_urls`, with its gRPC service started.
+    /// `indexer_urls` and serves `alpha_features`, with its gRPC service started.
     async fn start_replica(
         bigtable: SocketAddr,
         indexer_urls: Vec<String>,
+        alpha_features: AlphaFeatures,
     ) -> (KvRpcServer, Service) {
         let server = KvRpcServer::new_local_with_config(
             bigtable.to_string(),
@@ -281,6 +284,7 @@ mod tests {
             StagesConfig::default(),
             WatermarkSource::IndexerStreams(indexer_urls),
             false,
+            alpha_features,
         )
         .await
         .expect("create kv-rpc server");
@@ -351,7 +355,12 @@ mod tests {
             served_watermarks(|pipeline| if pipeline == OBJECTS_PIPELINE { 12 } else { 28 }),
         )
         .await;
-        let (server, _replica) = start_replica(bigtable, vec![a.url.clone(), b.url.clone()]).await;
+        let (server, _replica) = start_replica(
+            bigtable,
+            vec![a.url.clone(), b.url.clone()],
+            AlphaFeatures::default(),
+        )
+        .await;
 
         let info = wait_for_served_checkpoint(&server, 28).await;
         assert_eq!(info.epoch, Some(2));
@@ -374,6 +383,33 @@ mod tests {
         assert_eq!(watermark_reads(&mock).await, 0);
     }
 
+    /// A streamed protocol configs v2 watermark bounds the served checkpoint only on a replica
+    /// that serves protocol configs from its table.
+    #[tokio::test]
+    async fn protocol_configs_v2_watermark_bounds_the_served_checkpoint_only_when_enabled() {
+        let mock = MockBigtableServer::new();
+        let (bigtable, _mock_server) = mock.start().await.expect("start mock Bigtable");
+        let indexer = Indexer::start(
+            local_address(),
+            served_watermarks(|pipeline| {
+                if pipeline == PROTOCOL_CONFIGS_V2_PIPELINE {
+                    20
+                } else {
+                    25
+                }
+            }),
+        )
+        .await;
+
+        for (alpha_features, served_checkpoint) in
+            [(AlphaFeatures::default(), 25), (AlphaFeatures::all(), 20)]
+        {
+            let (server, _replica) =
+                start_replica(bigtable, vec![indexer.url.clone()], alpha_features).await;
+            wait_for_served_checkpoint(&server, served_checkpoint).await;
+        }
+    }
+
     #[tokio::test]
     async fn never_falls_back_to_bigtable_watermark_rows() {
         let mock = MockBigtableServer::new();
@@ -382,7 +418,8 @@ mod tests {
         let mut client = BigTableClient::new_local(bigtable.to_string(), "test".to_string())
             .await
             .expect("connect to mock Bigtable");
-        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, false);
+        let pipelines =
+            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::default());
         seed_watermarks(&mut client, &pipelines, |_| 50).await;
         mock.clear_read_rows_calls().await;
 
@@ -391,7 +428,12 @@ mod tests {
         let mut progress = served_watermarks(|_| 20);
         progress.remove(EPOCH_END_PIPELINE);
         let indexer = Indexer::start(address, progress).await;
-        let (server, _replica) = start_replica(bigtable, vec![indexer.url.clone()]).await;
+        let (server, _replica) = start_replica(
+            bigtable,
+            vec![indexer.url.clone()],
+            AlphaFeatures::default(),
+        )
+        .await;
 
         sleep(QUIET_PERIOD).await;
         assert_eq!(cached_checkpoint(&server), None);
@@ -427,7 +469,12 @@ mod tests {
         let mock = MockBigtableServer::new();
         let (bigtable, _mock_server) = mock.start().await.expect("start mock Bigtable");
         let indexer = Indexer::start(local_address(), served_watermarks(|_| 20)).await;
-        let (server, replica) = start_replica(bigtable, vec![indexer.url.clone()]).await;
+        let (server, replica) = start_replica(
+            bigtable,
+            vec![indexer.url.clone()],
+            AlphaFeatures::default(),
+        )
+        .await;
         wait_for_served_checkpoint(&server, 20).await;
 
         timeout(WAIT, replica.shutdown())

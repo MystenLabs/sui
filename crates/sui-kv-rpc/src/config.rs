@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::BitmapSchema;
+use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
 use sui_kvstore::PoolConfig;
 use sui_kvstore::ReadRowsRetryConfig;
 
@@ -561,6 +562,35 @@ const DEFAULT_ADDRESS: &str = "[::1]:8000";
 const DEFAULT_METRICS_HOST: &str = "127.0.0.1";
 const DEFAULT_METRICS_PORT: u16 = 9184;
 
+/// Features served from alpha kvstore pipelines, which the indexer runs only when asked to.
+/// Operators enable each one with its `enable-*` setting once its pipeline has been backfilled
+/// from genesis. Each enabled feature adds its pipeline to the watermarks that bound the served
+/// checkpoint (see [`AlphaFeatures::watermark_pipelines`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AlphaFeatures {
+    /// Serve `GetProtocolConfig`, and `GetEpoch`'s `protocol_config`, from the
+    /// [`PROTOCOL_CONFIGS_V2_PIPELINE`] table (see [`KvRpcConfig::enable_protocol_configs_v2`]).
+    pub protocol_configs_v2: bool,
+}
+
+impl AlphaFeatures {
+    /// Every feature enabled.
+    pub fn all() -> Self {
+        Self {
+            protocol_configs_v2: true,
+        }
+    }
+
+    /// The pipelines of the enabled features. Bounding the served checkpoint by them makes a row
+    /// missing below it mean the chain has no such data, rather than that the pipeline has not
+    /// reached it yet.
+    pub fn watermark_pipelines(&self) -> impl Iterator<Item = &'static str> {
+        [(self.protocol_configs_v2, PROTOCOL_CONFIGS_V2_PIPELINE)]
+            .into_iter()
+            .filter_map(|(enabled, pipeline)| enabled.then_some(pipeline))
+    }
+}
+
 /// Root archival KV RPC config, deserialized from TOML by `--config`.
 ///
 /// Every field is optional and falls back to a built-in default via the
@@ -663,8 +693,9 @@ pub struct KvRpcConfig {
 
     /// Deprecated and ignored: the `GetServiceInfo` watermark set always
     /// includes the List API pipelines, adds the object versions index and the
-    /// object tombstones when `enable-object-at-checkpoint` is on, and cannot be
-    /// chosen per pipeline.
+    /// object tombstones when `enable-object-at-checkpoint` is on and the
+    /// protocol configs v2 pipeline when `enable-protocol-configs-v2` is on, and
+    /// cannot be chosen per pipeline.
     /// Still parsed so existing config files keep loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
@@ -700,6 +731,31 @@ pub struct KvRpcConfig {
     /// served.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_object_at_checkpoint: Option<bool>,
+
+    /// Serve `GetProtocolConfig`, and the `protocol_config` of `GetEpoch`, from the alpha
+    /// `kvstore_protocol_configs_v2` pipeline's table, and fold that pipeline into the
+    /// `GetServiceInfo` checkpoint height. Defaults to `false`, which rejects `GetProtocolConfig`
+    /// with `Unimplemented` (`NOT_SERVED_HERE`, cause `disabled_by_config`) and computes
+    /// `GetEpoch`'s `protocol_config` from the protocol configs compiled into this binary.
+    ///
+    /// Enable this only after `kvstore_protocol_configs_v2` has been backfilled from genesis. A
+    /// protocol version below the one in force without a row is answered as one the chain never
+    /// ran (`NotFound` from `GetProtocolConfig`). The version in force without a row fails
+    /// `GetProtocolConfig` with `Internal`, and so does `GetEpoch` for an epoch whose version has
+    /// no row when its `protocol_config.feature_flags`, `attributes` or `configs` are requested;
+    /// `protocol_config.protocol_version` alone comes from the `epochs` row. Setting this flag is
+    /// the operator's statement that the table is complete.
+    ///
+    /// If this is on but the pipeline is not running, the pipeline has no watermark and the
+    /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and
+    /// every request bounded by the served height fails with `Unavailable`.
+    ///
+    /// The kvstore indexer must run a binary that supports the next protocol version before the
+    /// epoch that adopts it. Otherwise the pipeline cannot write that version's row at the
+    /// end-of-epoch checkpoint that decides it, and the `GetServiceInfo` height, which bounds
+    /// every request, stops at the checkpoint before it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_protocol_configs_v2: Option<bool>,
 
     /// Tunables for the ledger-history list APIs.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -809,6 +865,13 @@ impl KvRpcConfig {
 
     pub fn enable_object_at_checkpoint(&self) -> bool {
         self.enable_object_at_checkpoint.unwrap_or(false)
+    }
+
+    /// The alpha-pipeline features the `enable-*` settings turn on.
+    pub fn alpha_features(&self) -> AlphaFeatures {
+        AlphaFeatures {
+            protocol_configs_v2: self.enable_protocol_configs_v2.unwrap_or(false),
+        }
     }
 
     /// TLS identity, when both cert and key are set and non-empty.
@@ -1232,14 +1295,20 @@ render-ahead = 3
     fn bitmap_schema_selects_the_bitmap_pipelines_that_bound_the_height() {
         let v1 = KvRpcConfig::default();
         v1.validate().unwrap();
-        let v1_pipelines =
-            service_info_watermark_pipelines(v1.ledger_history().bitmap_schema(), false);
+        let v1_pipelines = service_info_watermark_pipelines(
+            v1.ledger_history().bitmap_schema(),
+            false,
+            AlphaFeatures::default(),
+        );
 
         let v2: KvRpcConfig =
             serde_yaml::from_str("ledger-history:\n  bitmap-schema: v2\n").unwrap();
         v2.validate().unwrap();
-        let v2_pipelines =
-            service_info_watermark_pipelines(v2.ledger_history().bitmap_schema(), false);
+        let v2_pipelines = service_info_watermark_pipelines(
+            v2.ledger_history().bitmap_schema(),
+            false,
+            AlphaFeatures::default(),
+        );
 
         for (pipeline, in_v1, in_v2) in [
             ("kvstore_tx_seq_digest", true, true),
@@ -1266,6 +1335,7 @@ render-ahead = 3
         let pipelines = service_info_watermark_pipelines(
             cfg.ledger_history().bitmap_schema(),
             cfg.enable_object_at_checkpoint(),
+            cfg.alpha_features(),
         );
         for pipeline in object_pipelines {
             assert!(!pipelines.contains(&pipeline), "{pipeline}");
@@ -1277,6 +1347,7 @@ render-ahead = 3
         let pipelines = service_info_watermark_pipelines(
             cfg.ledger_history().bitmap_schema(),
             cfg.enable_object_at_checkpoint(),
+            cfg.alpha_features(),
         );
         for pipeline in object_pipelines {
             assert!(
@@ -1284,6 +1355,32 @@ render-ahead = 3
                 "{pipeline} must bound the height"
             );
         }
+    }
+
+    #[test]
+    fn protocol_configs_v2_off_by_default_and_bounds_the_watermark_set() {
+        let cfg = KvRpcConfig::default();
+        assert_eq!(cfg.alpha_features(), AlphaFeatures::default());
+        assert!(
+            !service_info_watermark_pipelines(
+                cfg.ledger_history().bitmap_schema(),
+                cfg.enable_object_at_checkpoint(),
+                cfg.alpha_features()
+            )
+            .contains(&PROTOCOL_CONFIGS_V2_PIPELINE)
+        );
+
+        let cfg: KvRpcConfig = toml::from_str("enable-protocol-configs-v2 = true\n").unwrap();
+        assert!(cfg.alpha_features().protocol_configs_v2);
+        assert!(
+            service_info_watermark_pipelines(
+                cfg.ledger_history().bitmap_schema(),
+                cfg.enable_object_at_checkpoint(),
+                cfg.alpha_features()
+            )
+            .contains(&PROTOCOL_CONFIGS_V2_PIPELINE),
+            "the protocol configs v2 pipeline must bound the height",
+        );
     }
 
     #[test]

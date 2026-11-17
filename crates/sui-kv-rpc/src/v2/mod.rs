@@ -5,11 +5,11 @@ use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
     BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
-    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
-    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest,
-    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListObjectVersionsRequest,
-    ListObjectVersionsResponse, ListTransactionsRequest, ListTransactionsResponse,
-    ledger_service_server::LedgerService,
+    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetProtocolConfigRequest,
+    GetProtocolConfigResponse, GetServiceInfoRequest, GetServiceInfoResponse,
+    GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest, ListCheckpointsResponse,
+    ListEventsRequest, ListEventsResponse, ListObjectVersionsRequest, ListObjectVersionsResponse,
+    ListTransactionsRequest, ListTransactionsResponse, ledger_service_server::LedgerService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -24,6 +24,7 @@ use crate::served_height::ServedHeight;
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
+mod get_protocol_config;
 pub(crate) mod get_transaction;
 mod list_checkpoints;
 mod list_events;
@@ -132,12 +133,35 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetEpochRequest>,
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
+        let protocol_configs = if self.alpha_features.protocol_configs_v2 {
+            get_epoch::ProtocolConfigSource::ProtocolConfigsV2
+        } else {
+            get_epoch::ProtocolConfigSource::Binary(self.chain_id.chain())
+        };
         get_epoch::get_epoch(
             self.limited_client("GetEpoch"),
+            self.client.clone(),
             self.object_at_checkpoint_enabled,
             ServedHeight::of(&request)?,
             request.into_inner(),
-            self.chain_id.chain(),
+            protocol_configs,
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
+    }
+
+    async fn get_protocol_config(
+        &self,
+        request: tonic::Request<GetProtocolConfigRequest>,
+    ) -> Result<tonic::Response<GetProtocolConfigResponse>, tonic::Status> {
+        if !self.alpha_features.protocol_configs_v2 {
+            return Err(get_protocol_config::not_served_here().into());
+        }
+        get_protocol_config::get_protocol_config(
+            self.client.clone(),
+            ServedHeight::of(&request)?,
+            request.into_inner(),
         )
         .await
         .map(tonic::Response::new)
@@ -515,6 +539,7 @@ pub(crate) mod test_utils {
         let pipelines = service_info_watermark_pipelines(
             LedgerHistoryConfig::default().bitmap_schema(),
             enable_object_at_checkpoint,
+            crate::AlphaFeatures::default(),
         );
         seed_watermarks(&mut client, &pipelines, height).await;
         let config = KvRpcConfig::default();
@@ -528,6 +553,7 @@ pub(crate) mod test_utils {
             stages,
             config.watermark_source(),
             enable_object_at_checkpoint,
+            crate::AlphaFeatures::default(),
         )
         .await
         .expect("start kv-rpc server");
@@ -718,6 +744,48 @@ pub(crate) mod test_utils {
             server,
         )
     }
+
+    /// Write the `protocol_configs_v2` row the indexer writes for protocol version `version` of
+    /// `Chain::Unknown`, rendered from the configs compiled into this binary.
+    pub(crate) async fn insert_protocol_configs_v2_row(mock: &MockBigtableServer, version: u64) {
+        let config = sui_protocol_config::ProtocolConfig::get_for_version(
+            version.into(),
+            sui_protocol_config::Chain::Unknown,
+        );
+        let attributes = config
+            .render::<prost_types::Value>(&mut mysten_common::rpc_format::Unmetered)
+            .expect("render protocol config");
+        mock.insert_row(
+            sui_kvstore::tables::protocol_configs_v2::NAME,
+            sui_kvstore::tables::protocol_configs_v2::encode_key(version),
+            sui_kvstore::tables::protocol_configs_v2::encode(attributes, config.feature_map()),
+        )
+        .await;
+    }
+
+    /// Write the `epochs` row of `epoch`, which runs protocol version `protocol_version`.
+    pub(crate) async fn insert_epoch_protocol_version(
+        mock: &MockBigtableServer,
+        epoch: u64,
+        protocol_version: u64,
+    ) {
+        use sui_kvstore::tables::epochs;
+        mock.insert_row(
+            epochs::NAME,
+            epochs::encode_key(epoch),
+            [
+                (
+                    epochs::col::EPOCH,
+                    bytes::Bytes::copy_from_slice(&epoch.to_be_bytes()),
+                ),
+                (
+                    epochs::col::PROTOCOL_VERSION,
+                    bytes::Bytes::copy_from_slice(&protocol_version.to_be_bytes()),
+                ),
+            ],
+        )
+        .await;
+    }
 }
 
 #[cfg(test)]
@@ -771,6 +839,7 @@ mod tests {
                 StagesConfig::default(),
                 WatermarkSource::IndexerStreams(vec![]),
                 false,
+                crate::AlphaFeatures::default(),
             )
             .await
             .expect("create kv-rpc server");

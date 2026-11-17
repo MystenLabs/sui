@@ -30,8 +30,18 @@ use sui_types::sui_system_state::{
 
 use crate::bigtable_client::BigTableClient;
 use crate::served_height::ServedHeight;
+use crate::v2::get_protocol_config::read_protocol_config;
 
 pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EPOCH;
+
+/// Where an epoch's `protocol_config` comes from.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ProtocolConfigSource {
+    /// The `protocol_configs_v2` table, which has a row for every protocol version the chain ran.
+    ProtocolConfigsV2,
+    /// The protocol configs compiled into this binary for the chain.
+    Binary(Chain),
+}
 
 /// Serve the epoch the request names, or the latest one, as of `served_height`: an epoch that
 /// starts above it is not found, and an epoch that ends above it has not ended yet, so its end
@@ -45,12 +55,16 @@ pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EPOCH;
 /// `system_state` is `Unimplemented` / `NOT_SERVED_HERE` (cause `disabled_by_config`), refused
 /// before any read. `committee` comes from the same state when `system_state` is read too, and
 /// from the epoch-start snapshot otherwise; the committee does not change within an epoch.
+///
+/// Every read goes through `client`, the request's limited client, except the
+/// `protocol_configs_v2` row, which `protocol_configs_client` reads.
 pub async fn get_epoch(
     client: BigTableClient,
+    mut protocol_configs_client: sui_kvstore::BigTableClient,
     object_at_checkpoint_enabled: bool,
     served_height: ServedHeight,
     request: GetEpochRequest,
-    chain: Chain,
+    protocol_configs: ProtocolConfigSource,
 ) -> sui_rpc_api::Result<GetEpochResponse> {
     let read_mask = {
         let read_mask = request
@@ -131,10 +145,42 @@ pub async fn get_epoch(
         read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name),
         epoch_info.protocol_version,
     ) {
-        let protocol_config = ProtocolConfig::get_for_version_if_supported(version.into(), chain);
-        message.protocol_config = protocol_config.map(|config| {
-            RpcProtocolConfig::merge_from(protocol_config_to_proto(config), &submask)
-        });
+        // The `epochs` row already holds the version, so the `protocol_configs_v2` row is read
+        // only for the settings it stores.
+        let needs_settings = [
+            RpcProtocolConfig::FEATURE_FLAGS_FIELD,
+            RpcProtocolConfig::ATTRIBUTES_FIELD,
+            RpcProtocolConfig::CONFIGS_FIELD,
+        ]
+        .iter()
+        .any(|field| submask.contains(field.name));
+        let protocol_config = match protocol_configs {
+            ProtocolConfigSource::Binary(chain) => {
+                ProtocolConfig::get_for_version_if_supported(version.into(), chain)
+                    .map(protocol_config_to_proto)
+            }
+            ProtocolConfigSource::ProtocolConfigsV2 if !needs_settings => {
+                Some(RpcProtocolConfig::default().with_protocol_version(version))
+            }
+            ProtocolConfigSource::ProtocolConfigsV2 => {
+                // The epoch is served, so its version was decided at or below the served height,
+                // which the `protocol_configs_v2` pipeline's watermark bounds.
+                let protocol_config = read_protocol_config(&mut protocol_configs_client, version)
+                    .await?
+                    .ok_or_else(|| {
+                        RpcError::new(
+                            tonic::Code::Internal,
+                            format!(
+                                "epoch {epoch} ran protocol version {version}, which has no \
+                                 protocol_configs_v2 row"
+                            ),
+                        )
+                    })?;
+                Some(protocol_config)
+            }
+        };
+        message.protocol_config = protocol_config
+            .map(|protocol_config| RpcProtocolConfig::merge_from(protocol_config, &submask));
     }
     if epoch_info.end_checkpoint.is_some() {
         set_epoch_end_fields(&mut message, &read_mask, &epoch_end(&epoch_info)?);
@@ -331,6 +377,16 @@ mod tests {
 
     const BOUNDS_MASK: &[&str] = &["epoch", "first_checkpoint", "last_checkpoint", "end"];
 
+    /// `client` limited as a `GetEpoch` request's client is.
+    fn limited(client: &KvStoreClient) -> BigTableClient {
+        BigTableClient::new(
+            client.clone(),
+            8,
+            crate::bigtable_client::Metrics::for_testing().0,
+            "GetEpoch",
+        )
+    }
+
     async fn try_get(
         client: &KvStoreClient,
         object_at_checkpoint_enabled: bool,
@@ -341,18 +397,13 @@ mod tests {
         let mut request = GetEpochRequest::default();
         request.epoch = epoch;
         request.read_mask = Some(FieldMask::from_paths(paths.iter().copied()));
-        let client = BigTableClient::new(
-            client.clone(),
-            8,
-            crate::bigtable_client::Metrics::for_testing().0,
-            "GetEpoch",
-        );
         get_epoch(
-            client,
+            limited(client),
+            client.clone(),
             object_at_checkpoint_enabled,
             served_height,
             request,
-            Chain::Unknown,
+            ProtocolConfigSource::Binary(Chain::Unknown),
         )
         .await
         .map(|response| response.epoch.unwrap_or_default())
@@ -770,5 +821,118 @@ mod tests {
         assert_eq!(safe_mode.ended_in_safe_mode, Some(true));
         assert_eq!(safe_mode.system_epoch_info, None);
         assert!(safe_mode.epoch_commitments.is_empty());
+    }
+
+    async fn get_protocol_config(
+        client: &KvStoreClient,
+        epoch: u64,
+        protocol_configs: ProtocolConfigSource,
+    ) -> sui_rpc_api::Result<Option<RpcProtocolConfig>> {
+        let mut request = GetEpochRequest::default();
+        request.epoch = Some(epoch);
+        request.read_mask = Some(FieldMask::from_paths(["protocol_config"]));
+        let response = get_epoch(
+            limited(client),
+            client.clone(),
+            false,
+            crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT,
+            request,
+            protocol_configs,
+        )
+        .await?;
+        Ok(response.epoch.unwrap_or_default().protocol_config)
+    }
+
+    /// Read from the `protocol_configs_v2` table, an epoch's protocol config is the one computed
+    /// from the binary: settings unset at its version are left out.
+    #[tokio::test]
+    async fn protocol_config_from_the_table_matches_the_binary() {
+        use crate::v2::test_utils::{
+            insert_epoch_protocol_version, insert_protocol_configs_v2_row,
+        };
+        use sui_protocol_config::ProtocolVersion;
+
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        // The earliest version leaves settings unset; the latest sets more of them.
+        let versions = [ProtocolVersion::MIN.as_u64(), ProtocolVersion::MAX.as_u64()];
+        for (epoch, version) in versions.into_iter().enumerate() {
+            insert_epoch_protocol_version(&mock, epoch as u64, version).await;
+            insert_protocol_configs_v2_row(&mock, version).await;
+        }
+
+        for (epoch, version) in versions.into_iter().enumerate() {
+            let from_binary = get_protocol_config(
+                &client,
+                epoch as u64,
+                ProtocolConfigSource::Binary(Chain::Unknown),
+            )
+            .await
+            .unwrap()
+            .expect("binary supports the version");
+            assert_eq!(from_binary.protocol_version, Some(version));
+            assert!(!from_binary.configs.is_empty() && !from_binary.feature_flags.is_empty());
+            let from_table = get_protocol_config(
+                &client,
+                epoch as u64,
+                ProtocolConfigSource::ProtocolConfigsV2,
+            )
+            .await
+            .unwrap();
+            assert_eq!(from_table, Some(from_binary), "epoch {epoch}");
+        }
+    }
+
+    /// Reading from the table, an epoch whose version has no row is an inconsistency between the
+    /// `epochs` and `protocol_configs_v2` tables.
+    #[tokio::test]
+    async fn protocol_config_missing_from_the_table_is_internal() {
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        crate::v2::test_utils::insert_epoch_protocol_version(&mock, 0, 1).await;
+
+        let error = get_protocol_config(&client, 0, ProtocolConfigSource::ProtocolConfigsV2)
+            .await
+            .unwrap_err();
+        assert_eq!(tonic::Status::from(error).code(), tonic::Code::Internal);
+    }
+
+    /// Reading from the table, a mask that asks only for `protocol_config.protocol_version`, as the
+    /// default mask does, is answered from the `epochs` row without reading the version's
+    /// `protocol_configs_v2` row.
+    #[tokio::test]
+    async fn protocol_version_alone_does_not_read_the_table() {
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        crate::v2::test_utils::insert_epoch_protocol_version(&mock, 0, 1).await;
+
+        let mut request = GetEpochRequest::default();
+        request.epoch = Some(0);
+        let epoch = get_epoch(
+            limited(&client),
+            client.clone(),
+            false,
+            crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT,
+            request,
+            ProtocolConfigSource::ProtocolConfigsV2,
+        )
+        .await
+        .expect("get_epoch succeeds without the protocol_configs_v2 row")
+        .epoch
+        .unwrap_or_default();
+        assert_eq!(
+            epoch.protocol_config,
+            Some(RpcProtocolConfig::default().with_protocol_version(1))
+        );
+        assert_eq!(mock.read_rows_calls().await.len(), 1);
     }
 }

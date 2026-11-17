@@ -68,6 +68,7 @@ mod v2;
 use admission::AdmissionLayer;
 pub use admission::X_SUI_MIN_CHECKPOINT;
 use bigtable_client::Metrics as BigTableLimiterMetrics;
+pub use config::AlphaFeatures;
 pub use config::KvRpcConfig;
 pub use config::LedgerHistoryConfig;
 pub use config::LedgerHistoryMethodConfig;
@@ -308,6 +309,10 @@ pub struct KvRpcServer {
     /// Instances without them reject those requests with `Unimplemented` (`NOT_SERVED_HERE`,
     /// cause `disabled_by_config`).
     object_at_checkpoint_enabled: bool,
+    /// The alpha-pipeline features this instance serves. Without `protocol_configs_v2`, it rejects
+    /// `GetProtocolConfig` with `Unimplemented` (`NOT_SERVED_HERE`, cause `disabled_by_config`)
+    /// and computes `GetEpoch`'s `protocol_config` from the configs compiled into this binary.
+    alpha_features: AlphaFeatures,
 }
 
 /// Answers whether a replica is ready for traffic, for its `/health` endpoint.
@@ -455,6 +460,7 @@ impl KvRpcServer {
         stages: StagesConfig,
         watermark_source: WatermarkSource,
         enable_object_at_checkpoint: bool,
+        alpha_features: AlphaFeatures,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -485,6 +491,7 @@ impl KvRpcServer {
             chain_id,
             server_version,
             enable_object_at_checkpoint,
+            alpha_features,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -508,6 +515,7 @@ impl KvRpcServer {
         stages: StagesConfig,
         watermark_source: WatermarkSource,
         enable_object_at_checkpoint: bool,
+        alpha_features: AlphaFeatures,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
@@ -518,6 +526,7 @@ impl KvRpcServer {
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
             enable_object_at_checkpoint,
+            alpha_features,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -532,6 +541,7 @@ impl KvRpcServer {
         chain_id: ChainIdentifier,
         server_version: Option<ServerVersion>,
         enable_object_at_checkpoint: bool,
+        alpha_features: AlphaFeatures,
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
@@ -555,6 +565,7 @@ impl KvRpcServer {
             service_info_watermark_pipelines: service_info_watermark_pipelines(
                 ledger_history.bitmap_schema(),
                 enable_object_at_checkpoint,
+                alpha_features,
             ),
             cache,
             watermark_source,
@@ -565,6 +576,7 @@ impl KvRpcServer {
             monotonic_read_wait_timeout,
             stages,
             object_at_checkpoint_enabled: enable_object_at_checkpoint,
+            alpha_features,
         };
 
         if server.watermark_source == WatermarkSource::Bigtable {
@@ -695,10 +707,12 @@ impl KvRpcServer {
 /// instance does not advertise a height it cannot serve. They include the packages pipelines, so
 /// a package lookup bounded by the served height sees every package published by then.
 /// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECT_TOMBSTONES_PIPELINE`] are among them
-/// when `at_checkpoint` and `max_version` object reads are enabled.
+/// when `at_checkpoint` and `max_version` object reads are enabled, and so are the pipelines of
+/// the enabled `alpha_features`.
 pub fn service_info_watermark_pipelines(
     bitmap_schema: BitmapSchema,
     enable_object_at_checkpoint: bool,
+    alpha_features: AlphaFeatures,
 ) -> Vec<&'static str> {
     let [transaction_bitmap, event_bitmap] = sui_kvstore::bitmap_index_pipelines(bitmap_schema);
     let mut pipelines = vec![
@@ -722,12 +736,14 @@ pub fn service_info_watermark_pipelines(
         pipelines.push(OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE);
         pipelines.push(OBJECT_TOMBSTONES_PIPELINE);
     }
+    pipelines.extend(alpha_features.watermark_pipelines());
     pipelines
 }
 
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
+    use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
     use sui_kvstore::WatermarkV1;
     use sui_kvstore::tables::watermarks;
     use sui_kvstore::testing::MockBigtableServer;
@@ -769,8 +785,9 @@ mod tests {
         .unwrap_or_else(|_| panic!("served checkpoint never reached {checkpoint}"));
     }
 
-    /// Start a replica that polls Bigtable for watermarks and reads the v2 bitmap tables.
-    async fn start_v2_server(bigtable: SocketAddr) -> KvRpcServer {
+    /// Start a replica that polls Bigtable for watermarks, reads the v2 bitmap tables, and serves
+    /// `alpha_features`.
+    async fn start_v2_server(bigtable: SocketAddr, alpha_features: AlphaFeatures) -> KvRpcServer {
         KvRpcServer::new_local_with_config(
             bigtable.to_string(),
             "test".to_string(),
@@ -781,6 +798,7 @@ mod tests {
             StagesConfig::default(),
             WatermarkSource::Bigtable,
             false,
+            alpha_features,
         )
         .await
         .expect("start kv-rpc server")
@@ -832,7 +850,7 @@ mod tests {
         let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
             .await
             .expect("connect to mock BigTable");
-        let server = start_v2_server(addr).await;
+        let server = start_v2_server(addr, AlphaFeatures::default()).await;
 
         // Without watermark rows no refresh succeeds, so the served checkpoint stays unknown.
         sleep(Duration::from_millis(50)).await;
@@ -840,7 +858,8 @@ mod tests {
         let error = get_service_info(&server).await.unwrap_err();
         assert_eq!(error.code(), tonic::Code::Unavailable);
 
-        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, false);
+        let pipelines =
+            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::default());
         seed_watermarks(&mut client, &pipelines, |_| 20).await;
         timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
             .await
@@ -861,13 +880,14 @@ mod tests {
 
         // The objects pipeline lags, so it bounds the served checkpoint, and the timestamp must
         // come from its watermark rather than from a pipeline that is further ahead.
-        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, false);
+        let pipelines =
+            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::default());
         seed_watermarks(&mut client, &pipelines, |pipeline| {
             if pipeline == OBJECTS_PIPELINE { 20 } else { 25 }
         })
         .await;
 
-        let server = start_v2_server(addr).await;
+        let server = start_v2_server(addr, AlphaFeatures::default()).await;
         timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
             .await
             .expect("service info never refreshed")
@@ -908,5 +928,42 @@ mod tests {
         .await;
         wait_for_served_checkpoint(&server, 25).await;
         assert_eq!(server.metrics.served_checkpoint_timestamp_ms.get(), 25_000);
+    }
+
+    /// The protocol configs v2 pipeline bounds the served checkpoint only on a replica that serves
+    /// protocol configs from its table.
+    #[tokio::test]
+    async fn protocol_configs_v2_watermark_bounds_the_served_checkpoint_only_when_enabled() {
+        let mock = MockBigtableServer::new();
+        let (addr, _mock_server) = mock.start().await.expect("start mock BigTable");
+        let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        let pipelines =
+            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::all());
+        seed_watermarks(&mut client, &pipelines, |pipeline| {
+            if pipeline == PROTOCOL_CONFIGS_V2_PIPELINE {
+                20
+            } else {
+                25
+            }
+        })
+        .await;
+
+        for (alpha_features, served_checkpoint) in
+            [(AlphaFeatures::default(), 25), (AlphaFeatures::all(), 20)]
+        {
+            let server = start_v2_server(addr, alpha_features).await;
+            timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
+                .await
+                .expect("service info never refreshed")
+                .expect("service info sender dropped");
+            let info = get_service_info(&server).await.unwrap();
+            assert_eq!(
+                info.checkpoint_height,
+                Some(served_checkpoint),
+                "{alpha_features:?}"
+            );
+        }
     }
 }
