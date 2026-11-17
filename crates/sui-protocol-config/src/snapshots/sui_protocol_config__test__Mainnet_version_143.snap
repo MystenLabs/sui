@@ -194,7 +194,6 @@ feature_flags:
   disable_effects_tx_dependencies: true
   merge_colliding_deferrals: true
   disable_id_leak_verifier: true
-  checkpoint_queue_drain_fixes: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -539,7 +538,6 @@ epoch_close_deadline_ms: 120000
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
 allowed_txn_cost_overage_burst_per_object_in_commit: 370000000
 min_checkpoint_interval_ms: 200
-checkpoint_queue_max_undrained_ms: 1000
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
