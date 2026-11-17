@@ -383,6 +383,7 @@ pub struct PipelineLayer {
     pub objects: ConcurrentLayer,
     pub epoch_start: ConcurrentLayer,
     pub epoch_end: ConcurrentLayer,
+    /// Configures `kvstore_protocol_configs` and `kvstore_protocol_configs_v2`.
     pub protocol_configs: ConcurrentLayer,
     pub packages: ConcurrentLayer,
     pub packages_by_id: ConcurrentLayer,
