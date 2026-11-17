@@ -22,6 +22,9 @@ pub const EVENT: &str = "event_type";
 /// Default read mask for an epoch (`get_epoch`; there is no `list_epochs`).
 pub const EPOCH: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
+/// Default read mask for a protocol config (`get_protocol_config`).
+pub const PROTOCOL_CONFIG: &str = "protocol_version";
+
 /// Default read mask for an object (`get_object`, `list_object_versions`).
 pub const OBJECT: &str = "object_id,version,digest";
 

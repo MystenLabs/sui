@@ -13,6 +13,8 @@ use sui_rpc::proto::sui::rpc::v2::GetEpochRequest;
 use sui_rpc::proto::sui::rpc::v2::GetEpochResponse;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectResponse;
+use sui_rpc::proto::sui::rpc::v2::GetProtocolConfigRequest;
+use sui_rpc::proto::sui::rpc::v2::GetProtocolConfigResponse;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
@@ -34,6 +36,7 @@ mod event_scan;
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
+mod get_protocol_config;
 mod get_service_info;
 pub(crate) mod get_transaction;
 mod ledger_read;
@@ -44,7 +47,7 @@ mod list_transactions;
 mod object_set;
 mod query_end;
 mod stream;
-pub use get_epoch::{protocol_config_to_proto, set_epoch_end_fields};
+pub use get_epoch::{protocol_config_from_parts, protocol_config_to_proto, set_epoch_end_fields};
 pub use get_object::ObjectSelector;
 pub use get_object::validate_get_object_requests;
 
@@ -133,6 +136,15 @@ impl LedgerService for RpcService {
         request: tonic::Request<GetEpochRequest>,
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn get_protocol_config(
+        &self,
+        request: tonic::Request<GetProtocolConfigRequest>,
+    ) -> Result<tonic::Response<GetProtocolConfigResponse>, tonic::Status> {
+        get_protocol_config::get_protocol_config(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
