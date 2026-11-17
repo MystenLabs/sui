@@ -479,6 +479,8 @@ nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600
 nitro_attestation_verify_cost_per_cert: 2618450
+layout_node_cost: 16
+layout_node_cost_large_layout_threshold: 64
 bcs_per_byte_serialized_cost: 2
 bcs_legacy_min_output_size_cost: 1
 bcs_failure_cost: 52
