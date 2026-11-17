@@ -100,7 +100,9 @@ use tokio::time::timeout;
 use tracing::{debug, error, info, instrument, warn};
 
 use self::authority_store::ExecutionLockWriteGuard;
-use self::authority_store_pruner::{AuthorityStorePruningMetrics, PrunerWatermarks};
+use self::authority_store_pruner::{
+    AuthorityStorePruningMetrics, DetachableRpcStore, PrunerWatermarks,
+};
 pub use authority_store::{AuthorityStore, ResolverWrapper};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
@@ -110,7 +112,6 @@ use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
-use sui_rpc_store::Store as RpcStore;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::coin_reservation::CoinReservationResolverTrait;
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -2648,7 +2649,7 @@ impl AuthorityState {
         execution_cache_trait_pointers: ExecutionCacheTraitPointers,
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
-        rpc_store: Option<RpcStore>,
+        rpc_store: Option<DetachableRpcStore>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         db_checkpoint_config: &DBCheckpointConfig,

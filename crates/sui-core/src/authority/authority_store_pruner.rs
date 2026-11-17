@@ -4,6 +4,7 @@
 use super::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
 use anyhow::anyhow;
+use arc_swap::ArcSwapOption;
 use mysten_metrics::monitored_scope;
 #[cfg(not(tidehunter))]
 use mysten_metrics::spawn_monitored_task;
@@ -66,6 +67,28 @@ static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
 pub const EPOCH_DURATION_MS_FOR_TESTING: u64 = 24 * 60 * 60 * 1000;
 pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
+}
+
+/// The embedded rpc-store as the pruner uses it. While the store is attached, the pruner does not
+/// prune past the checkpoints that the store's indexer has committed, and it prunes the store's
+/// history cohort together with the perpetual store. The node detaches the store when it stops
+/// the indexer, because the committed checkpoint of a stopped indexer does not advance and
+/// would stop pruning. The pruner then runs as it does on a node without an rpc-store.
+#[derive(Clone)]
+pub struct DetachableRpcStore(Arc<ArcSwapOption<RpcStore>>);
+
+impl DetachableRpcStore {
+    pub fn new(store: RpcStore) -> Self {
+        Self(Arc::new(ArcSwapOption::from_pointee(store)))
+    }
+
+    pub fn detach(&self) {
+        self.0.store(None);
+    }
+
+    fn attached(&self) -> Option<Arc<RpcStore>> {
+        self.0.load_full()
+    }
 }
 
 #[derive(Default)]
@@ -914,7 +937,7 @@ impl AuthorityStorePruner {
         epoch_duration_ms: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
-        rpc_store: Option<RpcStore>,
+        rpc_store: Option<DetachableRpcStore>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Sender<()> {
@@ -963,7 +986,8 @@ impl AuthorityStorePruner {
                 loop {
                     tokio::select! {
                         _ = objects_prune_interval.tick(), if prune_objects => {
-                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
+                            let rpc_store = rpc_store.as_ref().and_then(DetachableRpcStore::attached);
+                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_deref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
                                 error!("Failed to prune objects: {:?}", err);
                             }
                         },
@@ -1039,7 +1063,8 @@ impl AuthorityStorePruner {
                 loop {
                     tokio::select! {
                         _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
+                            let rpc_store = rpc_store.as_ref().and_then(DetachableRpcStore::attached);
+                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_deref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
                                 error!("Failed to prune objects: {:?}", err);
                             }
                         },
@@ -1049,7 +1074,8 @@ impl AuthorityStorePruner {
                             }
                         },
                         _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
+                            let rpc_store = rpc_store.as_ref().and_then(DetachableRpcStore::attached);
+                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_deref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
                                 error!("Failed to prune checkpoints: {:?}", err);
                             }
                         },
@@ -1079,7 +1105,7 @@ impl AuthorityStorePruner {
     pub fn new(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
-        rpc_store: Option<RpcStore>,
+        rpc_store: Option<DetachableRpcStore>,
         mut pruning_config: AuthorityStorePruningConfig,
         is_validator: bool,
         epoch_duration_ms: u64,
@@ -1198,6 +1224,7 @@ mod tests {
     use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions, default_db_options};
 
     use super::AuthorityStorePruner;
+    use super::DetachableRpcStore;
     use sui_rpc_store::RetractionCursors;
     /// The embedded rpc-store gate: no bound without a store, nothing
     /// eligible while any cohort pipeline is unwatermarked, and one
@@ -1255,6 +1282,25 @@ mod tests {
         assert_eq!(
             AuthorityStorePruner::rpc_store_max_eligible_checkpoint(Some(&store)).unwrap(),
             8,
+        );
+
+        // The pruner reads the store through the detachable handle on every tick. Once the
+        // node detaches the store, the lagging watermark no longer bounds pruning.
+        let detachable = DetachableRpcStore::new(store);
+        assert_eq!(
+            AuthorityStorePruner::rpc_store_max_eligible_checkpoint(
+                detachable.attached().as_deref()
+            )
+            .unwrap(),
+            8,
+        );
+        detachable.detach();
+        assert_eq!(
+            AuthorityStorePruner::rpc_store_max_eligible_checkpoint(
+                detachable.attached().as_deref()
+            )
+            .unwrap(),
+            u64::MAX,
         );
     }
 
