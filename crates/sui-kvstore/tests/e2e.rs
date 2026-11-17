@@ -39,6 +39,7 @@ use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
 use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::ObjectStatus;
+use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
 use sui_kvstore::default_committer_config;
@@ -48,6 +49,8 @@ use sui_kvstore::testing::INSTANCE_ID;
 use sui_kvstore::testing::create_tables;
 use sui_kvstore::testing::require_bigtable_emulator;
 use sui_protocol_config::Chain;
+use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::ProtocolVersion;
 use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
@@ -1167,6 +1170,57 @@ async fn test_object_versions_by_checkpoint() -> Result<()> {
             }
         }
     }
+
+    Ok(())
+}
+
+/// The genesis checkpoint writes the genesis protocol version's attributes and feature flags to
+/// separate columns, and a version the chain never ran has no row.
+#[tokio::test]
+async fn test_protocol_configs_v2() -> Result<()> {
+    let mut harness = TestHarness::new().await?;
+
+    // Alpha pipelines are opt-in: an indexer that does not name them does not register them.
+    let default_indexer = build_indexer(&harness.client, harness.cluster.rpc_url(), &[]).await?;
+    assert!(
+        !default_indexer
+            .pipeline_names()
+            .contains(&PROTOCOL_CONFIGS_V2_PIPELINE),
+        "alpha pipeline registered by default",
+    );
+    drop(default_indexer);
+
+    harness.wait_for_watermark(0, 0).await?;
+    let genesis_version = harness
+        .client
+        .get_epoch(0)
+        .await?
+        .and_then(|epoch| epoch.protocol_version)
+        .context("epoch 0 has no protocol version")?;
+
+    let configs = harness
+        .client
+        .get_protocol_configs_v2(genesis_version)
+        .await?
+        .context("no row for the genesis protocol version")?;
+    let expected =
+        ProtocolConfig::get_for_version(ProtocolVersion::new(genesis_version), Chain::Unknown);
+    assert_eq!(configs.feature_flags, expected.feature_map());
+    assert_eq!(
+        configs.attributes,
+        expected
+            .render::<prost_types::Value>(&mut mysten_common::rpc_format::Unmetered)
+            .context("rendering protocol config")?,
+    );
+
+    assert!(
+        harness
+            .client
+            .get_protocol_configs_v2(genesis_version + 1)
+            .await?
+            .is_none(),
+        "row for a protocol version the chain never ran",
+    );
 
     Ok(())
 }

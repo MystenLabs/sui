@@ -12,8 +12,8 @@ fi
 
 for table in transaction_bitmap_index transaction_bitmap_index_v2 event_bitmap_index \
     event_bitmap_index_v2 checkpoints checkpoints_by_digest transactions objects \
-    object_versions_by_checkpoint epochs watermark_alt protocol_configs packages packages_by_id \
-    packages_by_checkpoint system_packages tx_seq_digest; do
+    object_versions_by_checkpoint epochs watermark_alt protocol_configs protocol_configs_v2 \
+    packages packages_by_id packages_by_checkpoint system_packages tx_seq_digest; do
   (
     set -x
     "${command[@]}" createtable $table
