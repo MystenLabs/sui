@@ -59,6 +59,7 @@ use crate::EpochData;
 use crate::KeyValueStoreReader;
 use crate::PackageData;
 use crate::ProtocolConfigData;
+use crate::ProtocolConfigV2Data;
 use crate::TransactionData;
 use crate::TransactionEventsData;
 use crate::TxCheckpointPosition;
@@ -2170,6 +2171,21 @@ impl KeyValueStoreReader for BigTableClient {
             .pop()
         {
             Some((_, row)) => Ok(Some(tables::protocol_configs::decode(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn get_protocol_configs_v2(
+        &mut self,
+        protocol_version: u64,
+    ) -> Result<Option<ProtocolConfigV2Data>> {
+        let key = tables::protocol_configs_v2::encode_key(protocol_version);
+        match self
+            .multi_get(tables::protocol_configs_v2::NAME, vec![key], None)
+            .await?
+            .pop()
+        {
+            Some((_, row)) => Ok(Some(tables::protocol_configs_v2::decode(&row)?)),
             None => Ok(None),
         }
     }

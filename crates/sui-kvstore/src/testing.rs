@@ -39,6 +39,7 @@ pub const TABLES: &[&str] = &[
     crate::tables::watermarks::NAME,
     crate::tables::epochs::NAME,
     crate::tables::protocol_configs::NAME,
+    crate::tables::protocol_configs_v2::NAME,
     crate::tables::packages::NAME,
     crate::tables::packages_by_id::NAME,
     crate::tables::packages_by_checkpoint::NAME,

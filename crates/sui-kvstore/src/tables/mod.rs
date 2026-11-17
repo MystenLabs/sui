@@ -28,6 +28,7 @@ pub mod packages;
 pub mod packages_by_checkpoint;
 pub mod packages_by_id;
 pub mod protocol_configs;
+pub mod protocol_configs_v2;
 pub mod system_packages;
 pub mod transaction_bitmap_index;
 pub mod transactions;
