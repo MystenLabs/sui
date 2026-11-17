@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod ledger_service;
+pub use ledger_service::protocol_config_from_parts;
 pub use ledger_service::protocol_config_to_proto;
 pub mod move_package_service;
 mod name_service;
