@@ -441,9 +441,8 @@ const MAINNET_USDB: &str =
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 //              Enable ML-DSA-65 account signatures on testnet.
 // Version 144: Enable timestamp-based transaction expiration on devnet.
-//              Do not restart the checkpoint interval timer on a flush forced by the
-//              transaction limit, and flush a checkpoint queue that has not emptied for
-//              one second of commit time.
+//              Flush a consensus handler checkpoint queue that has not emptied for one
+//              second of commit time.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1414,9 +1413,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
 
-    // If true, an overflow flush does not restart the checkpoint interval timer, and a
-    // checkpoint queue that stays non-empty for checkpoint_queue_max_undrained_ms is flushed.
-    // Sustained load or per-commit randomness otherwise keeps the queue from emptying.
+    // If true, the consensus handler flushes a checkpoint queue that has not emptied for
+    // checkpoint_queue_max_undrained_ms of commit time. Sustained load above
+    // max_transactions_per_checkpoint, or randomness on every commit, otherwise keeps it full.
     #[serde(skip_serializing_if = "is_false")]
     checkpoint_queue_drain_fixes: bool,
 }
@@ -2320,7 +2319,8 @@ pub struct ProtocolConfig {
     min_checkpoint_interval_ms: Option<u64>,
 
     /// Commit time after which the consensus handler flushes a checkpoint queue that has not
-    /// emptied. Used only with checkpoint_queue_drain_fixes.
+    /// emptied, raised to min_checkpoint_interval_ms if that is larger. Used only with
+    /// checkpoint_queue_drain_fixes.
     checkpoint_queue_max_undrained_ms: Option<u64>,
 
     /// Version number to use for version_specific_data in `CheckpointSummary`.
@@ -2755,6 +2755,7 @@ impl ProtocolConfig {
 
     /// Lets apply_seeded_test_overrides pick checkpoint transaction limits of 2-3. Tests that
     /// assume a commit lands in one checkpoint must not call this.
+    #[cfg(feature = "testing")]
     pub fn enable_small_checkpoint_tx_limits_in_tests() {
         SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.store(true, Ordering::Relaxed);
     }
@@ -5133,8 +5134,8 @@ impl ProtocolConfig {
         // This draw must stay first: in upgrade tests, binaries from older releases make only
         // this draw, and every validator must derive the same limit from the epoch digest.
         let mut max_txns = rng.gen_range(10..=100u64);
-        // Caps of 2-3 put simtest load in the overflow regime that production reaches only at
-        // high TPS. Versions without checkpoint_queue_drain_fixes never drain at these caps.
+        // Caps of 2-3 put simtest load above max_tx per checkpoint interval. Versions without
+        // checkpoint_queue_drain_fixes never drain at these caps.
         if self.feature_flags.checkpoint_queue_drain_fixes
             && SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed)
             && rng.gen_bool(0.25)

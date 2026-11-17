@@ -744,6 +744,7 @@ mod test {
             dry_run: false,
             ..Default::default()
         };
+        ProtocolConfig::enable_small_checkpoint_tx_limits_in_tests();
         let network_config = ConfigBuilder::new_with_temp_dir()
             .committee_size(NonZeroUsize::new(4).unwrap())
             .with_policy_config(Some(policy_config))

@@ -6,6 +6,7 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
+use crate::consensus_handler::checkpoint_queue_undrained_flush_ms;
 use crate::epoch::randomness::SINGLETON_KEY;
 use dashmap::DashMap;
 use fastcrypto_threshold::{dkg_v1, nodes::PartyId};
@@ -13,8 +14,8 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::ZipDebugEqIteratorExt;
-use mysten_common::fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
+use mysten_common::{debug_fatal, fatal};
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
@@ -101,6 +102,9 @@ pub(crate) struct ConsensusCommitOutput {
     // True when the checkpoint queue had no pending roots after this commit's flush.
     // Used by quarantine to determine safe commit boundaries on restart.
     checkpoint_queue_drained: bool,
+
+    // Not persisted.
+    commit_timestamp_ms: TimestampMs,
 }
 
 impl ConsensusCommitOutput {
@@ -271,6 +275,10 @@ impl ConsensusCommitOutput {
 
     pub fn set_checkpoint_queue_drained(&mut self, drained: bool) {
         self.checkpoint_queue_drained = drained;
+    }
+
+    pub fn set_commit_timestamp(&mut self, timestamp_ms: TimestampMs) {
+        self.commit_timestamp_ms = timestamp_ms;
     }
 
     pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
@@ -523,6 +531,8 @@ pub(crate) struct ConsensusOutputQuarantine {
     // Owned object locks acquired post-consensus.
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
 
+    reported_undrained_hold: bool,
+
     metrics: Arc<EpochMetrics>,
 }
 
@@ -541,6 +551,7 @@ impl ConsensusOutputQuarantine {
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
             owned_object_locks: HashMap::new(),
+            reported_undrained_hold: false,
             metrics: authority_metrics,
         }
     }
@@ -680,6 +691,19 @@ impl ConsensusOutputQuarantine {
             }
         }
 
+        // CheckpointQueue::end_commit forces a drain within the limit, so outputs whose
+        // checkpoints are built can only be held for less than that much commit time.
+        if let Some(limit_ms) = checkpoint_queue_undrained_flush_ms(epoch_store.protocol_config()) {
+            let held_ms = self.undrained_hold_ms(highest_committed_height);
+            if held_ms > 2 * limit_ms && !self.reported_undrained_hold {
+                self.reported_undrained_hold = true;
+                debug_fatal!(
+                    "consensus outputs with built checkpoints have waited {held_ms} ms of commit \
+                     time for the checkpoint queue to drain (limit {limit_ms} ms)"
+                );
+            }
+        }
+
         self.metrics
             .consensus_quarantine_queue_size
             .set(self.output_queue.len() as i64);
@@ -689,6 +713,25 @@ impl ConsensusOutputQuarantine {
 }
 
 impl ConsensusOutputQuarantine {
+    // Commit time spanned by queued outputs that are held back only because no later commit
+    // with built checkpoints left the checkpoint queue drained.
+    fn undrained_hold_ms(&self, highest_committed_height: u64) -> u64 {
+        let mut held = self.output_queue.iter().take_while(|output| {
+            output
+                .consensus_commit_stats
+                .as_ref()
+                .expect("consensus_commit_stats must be set")
+                .height
+                <= highest_committed_height
+        });
+        let Some(first) = held.next() else {
+            return 0;
+        };
+        let last = held.last().unwrap_or(first);
+        last.commit_timestamp_ms
+            .saturating_sub(first.commit_timestamp_ms)
+    }
+
     fn insert_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
         if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
             for (object_id, next_version) in next_versions {
@@ -1084,6 +1127,24 @@ mod tests {
         });
         output.set_checkpoint_queue_drained(drained);
         output
+    }
+
+    #[sim_test]
+    async fn test_undrained_hold_counts_only_outputs_with_built_checkpoints() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, epoch_store.metrics.clone());
+        for (height, ts) in [(1, 1000), (2, 1500), (3, 2600), (4, 9000)] {
+            let mut output = make_output(height, height, false);
+            output.set_commit_timestamp(ts);
+            quarantine
+                .push_consensus_output(output, &epoch_store)
+                .unwrap();
+        }
+        assert_eq!(quarantine.undrained_hold_ms(0), 0);
+        assert_eq!(quarantine.undrained_hold_ms(1), 0);
+        assert_eq!(quarantine.undrained_hold_ms(3), 1600);
+        assert_eq!(quarantine.undrained_hold_ms(10), 8000);
     }
 
     fn make_builder_summary(

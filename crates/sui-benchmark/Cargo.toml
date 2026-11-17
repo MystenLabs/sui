@@ -35,7 +35,7 @@ sui-config.workspace = true
 sui-network.workspace = true
 sui-types.workspace = true
 sui-keys.workspace = true
-sui-protocol-config.workspace = true
+sui-protocol-config = { workspace = true, features = ["testing"] }
 sui-test-transaction-builder.workspace = true
 sui-swarm-config.workspace = true
 sui-surfer.workspace = true
