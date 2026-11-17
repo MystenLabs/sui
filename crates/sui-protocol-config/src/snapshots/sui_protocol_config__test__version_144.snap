@@ -204,6 +204,7 @@ feature_flags:
   shuffle_consensus_commit_blocks: true
   disable_id_leak_verifier: true
   enable_timestamp_transaction_expiration: true
+  gasless_allowance_spend: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -491,6 +492,8 @@ nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600
 nitro_attestation_verify_cost_per_cert: 2618450
+layout_node_cost: 16
+layout_node_cost_large_layout_threshold: 64
 bcs_per_byte_serialized_cost: 2
 bcs_legacy_min_output_size_cost: 1
 bcs_failure_cost: 52
