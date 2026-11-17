@@ -96,12 +96,15 @@ pub trait AdmissionQueueEntry {
     fn notify_replaced(self, object_id: ObjectID);
     /// An entry was refused because a queued entry already holds `object_id`.
     fn notify_owned_object_conflict(self, object_id: ObjectID);
+    /// Returns the bytes that the queue counts against its byte capacity. The value must
+    /// not change while the entry is queued.
+    fn byte_size(&self) -> usize;
 }
 
-/// Outcome of [`PriorityAdmissionQueue::try_insert`]. Any displaced entry is
-/// carried here unnotified so that the caller can deliver the notification
+/// Outcome of [`PriorityAdmissionQueue::try_insert`]. Displaced entries are
+/// carried here unnotified so that the caller can deliver the notifications
 /// outside of any held locks.
-#[must_use = "call `notify` to deliver the outcome to the displaced entry"]
+#[must_use = "call `notify` to deliver the outcome to the displaced entries"]
 pub struct InsertOutcome<E> {
     outcome: Option<Outcome<E>>,
     created_at: &'static std::panic::Location<'static>,
@@ -111,14 +114,15 @@ enum Outcome<E> {
     Inserted {
         /// False if an entry sharing one of the transaction keys was already queued.
         newly_inserted: bool,
-        /// The lowest-priced entry evicted to make room, if any.
-        evicted: Option<E>,
+        /// The lowest-priced entries evicted to make room, cheapest first.
+        evicted: Vec<E>,
         /// Queued entries this entry displaced from an owned object, with that object.
         replaced: Vec<(E, ObjectID)>,
         /// The inserted entry's gas price.
         gas_price: u64,
     },
-    /// Rejected: the queue is full and `min_gas_price` was not met.
+    /// Rejected: evicting the entries priced below this one cannot make room. A new bid
+    /// must exceed `min_gas_price`.
     Rejected { entry: E, min_gas_price: u64 },
     /// Rejected: an owned gas object this entry consumes is already pending.
     OwnedObjectConflict { entry: E, object_id: ObjectID },
@@ -137,7 +141,7 @@ impl<E: AdmissionQueueEntry> InsertOutcome<E> {
         matches!(self.outcome, Some(Outcome::Inserted { .. }))
     }
 
-    /// Notifies the displaced entry, if any, then reports the insert result.
+    /// Notifies the displaced entries, if any, then reports the insert result.
     /// `try_insert(e).notify()` is equivalent to `insert(e)`.
     pub fn notify(mut self) -> SuiResult<bool> {
         match self
@@ -154,8 +158,8 @@ impl<E: AdmissionQueueEntry> InsertOutcome<E> {
                 for (entry, object_id) in replaced {
                     entry.notify_replaced(object_id);
                 }
-                if let Some(evicted) = evicted {
-                    evicted.notify_evicted(gas_price);
+                for entry in evicted {
+                    entry.notify_evicted(gas_price);
                 }
                 Ok(newly_inserted)
             }
@@ -201,6 +205,12 @@ impl AdmissionQueueEntry for QueueEntry {
 
     fn dedup_keys(&self) -> &[DedupKey] {
         &self.dedup_keys
+    }
+
+    /// The push-mode queue has no byte capacity, so its entries skip serializing
+    /// themselves to measure their size.
+    fn byte_size(&self) -> usize {
+        0
     }
 
     fn notify_evicted(self, min_gas_price: u64) {
@@ -258,12 +268,13 @@ impl QueueEntry {
 /// Prometheus metrics for the admission queue.
 pub struct AdmissionQueueMetrics {
     // Pull mode intentionally reuses these admission metrics for its user lane because
-    // both modes implement the same admission policy and are mutually exclusive on a
-    // validator. This preserves dashboard continuity when switching modes.
+    // the two modes are mutually exclusive on a validator. This preserves dashboard
+    // continuity when switching modes.
     pub queue_depth: IntGauge,
     pub queue_wait_latency: HistogramVec,
     pub evictions: IntCounter,
     pub rejections: IntCounter,
+    pub byte_capacity_bound: IntCounter,
     pub expired: IntCounter,
     pub duplicate_inserts: IntCounter,
     pub expired_at_drain: IntCounter,
@@ -273,6 +284,8 @@ pub struct AdmissionQueueMetrics {
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
     pub pool_staggered_held: IntGauge,
+    pub pool_staggered_held_bytes: IntGauge,
+    pub pool_staggered_quota_rejected: IntCounterVec,
     pub pool_staggered_rejected: IntCounter,
     pub pool_staggered_delay: Histogram,
     pub pool_stagger_shadow_decisions: IntCounterVec,
@@ -314,7 +327,13 @@ impl AdmissionQueueMetrics {
             .unwrap(),
             rejections: register_int_counter_with_registry!(
                 "admission_queue_rejections",
-                "Number of transactions rejected because the queue was full and their gas price was too low",
+                "Number of transactions rejected because the queue was full, by entry count or by bytes, and evicting cheaper entries could not make room",
+                registry,
+            )
+            .unwrap(),
+            byte_capacity_bound: register_int_counter_with_registry!(
+                "admission_queue_byte_capacity_bound",
+                "Inserts that did not fit within the byte capacity without evicting, whether they then evicted entries or were rejected",
                 registry,
             )
             .unwrap(),
@@ -365,6 +384,19 @@ impl AdmissionQueueMetrics {
             pool_staggered_held: register_int_gauge_with_registry!(
                 "consensus_transaction_pool_staggered_held",
                 "User-lane entries in the pool stamped with a staggered-submission hold, whether or not the hold has elapsed",
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_held_bytes: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_staggered_held_bytes",
+                "Serialized bytes of the user-lane entries counted against the staggered-submission held-byte quota",
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_quota_rejected: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_staggered_quota_rejected",
+                "Staggered submissions refused because the held entries reached a quota, by quota (entries or bytes)",
+                &["quota"],
                 registry,
             )
             .unwrap(),
@@ -469,20 +501,43 @@ impl AdmissionQueueMetrics {
     }
 }
 
+/// `Totals` holds the entry count and serialized bytes of a set of queued entries.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+struct Totals {
+    len: usize,
+    bytes: u64,
+}
+
+impl Totals {
+    fn add(&mut self, bytes: u64) {
+        self.len += 1;
+        self.bytes += bytes;
+    }
+
+    fn remove(&mut self, bytes: u64) {
+        self.len -= 1;
+        self.bytes -= bytes;
+    }
+}
+
 /// Bounded priority queue that orders transactions by gas price. Uses a BTreeMap
 /// for efficient access at both ends: lowest gas price (for eviction) and highest
 /// gas price (for draining to consensus). Entries at the same gas price are FIFO.
 pub struct PriorityAdmissionQueue<E: AdmissionQueueEntry> {
     capacity: usize,
+    /// When set, this caps the serialized bytes of queued entries, which is the
+    /// measure the block byte limit uses. It bounds the backlog of bytes waiting
+    /// to be proposed.
+    byte_capacity: Option<u64>,
     map: BTreeMap<u64, VecDeque<E>>,
     /// Number of queue entries per transaction key, for duplicate detection.
     queued_keys: HashMap<ConsensusTransactionKey, u32>,
     /// Gas price of the single queued entry consuming each owned gas object, keyed by
     /// `(id, version)`. One object is consumable by one transaction, so there is at most
     /// one holder, and a higher bid replaces it rather than stacking; its price is all
-    /// remove_owned_conflicts needs.
+    /// the holder lookups need.
     queued_dedup_objects: HashMap<DedupKey, u64>,
-    total_len: usize,
+    totals: Totals,
     metrics: Arc<AdmissionQueueMetrics>,
 }
 
@@ -490,16 +545,52 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     pub fn new(capacity: usize, metrics: Arc<AdmissionQueueMetrics>) -> Self {
         Self {
             capacity,
+            byte_capacity: None,
             map: BTreeMap::new(),
             queued_keys: HashMap::new(),
             queued_dedup_objects: HashMap::new(),
-            total_len: 0,
+            totals: Totals::default(),
             metrics,
         }
     }
 
+    /// Adds a cap on total queued serialized bytes. Entries are evicted lowest
+    /// gas price first to stay within it, on the same terms as the entry-count cap.
+    pub fn with_byte_capacity(mut self, byte_capacity: Option<u64>) -> Self {
+        self.byte_capacity = byte_capacity;
+        self
+    }
+
     pub fn len(&self) -> usize {
-        self.total_len
+        self.totals.len
+    }
+
+    #[cfg(test)]
+    pub fn byte_capacity(&self) -> Option<u64> {
+        self.byte_capacity
+    }
+
+    #[cfg(test)]
+    fn assert_consistent(&self) {
+        let mut totals = Totals::default();
+        let mut queued_keys: HashMap<ConsensusTransactionKey, u32> = HashMap::new();
+        let mut queued_dedup_objects: HashMap<DedupKey, u64> = HashMap::new();
+        for (&gas_price, deque) in &self.map {
+            assert!(!deque.is_empty());
+            for entry in deque {
+                assert_eq!(entry.gas_price(), gas_price);
+                totals.add(entry.byte_size() as u64);
+                for key in entry.transaction_keys() {
+                    *queued_keys.entry(key).or_default() += 1;
+                }
+                for key in entry.dedup_keys() {
+                    assert!(queued_dedup_objects.insert(*key, gas_price).is_none());
+                }
+            }
+        }
+        assert_eq!(self.totals, totals);
+        assert_eq!(self.queued_keys, queued_keys);
+        assert_eq!(self.queued_dedup_objects, queued_dedup_objects);
     }
 
     pub fn min_gas_price(&self) -> Option<u64> {
@@ -507,27 +598,35 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     }
 
     /// On success, returns `Ok(true)` or `Ok(false)` to indicate whether the
-    /// value was newly inserted. Returns `Err` if the queue was full and the
-    /// tx's gas price was not high enough to evict an existing entry, or if a
-    /// queued entry consumes the same owned gas object at an equal or higher price.
+    /// value was newly inserted. Returns `Err` if the entry does not fit and
+    /// evicting the entries priced below it cannot make room, or if a queued
+    /// entry consumes the same owned gas object at an equal or higher price.
     pub fn insert(&mut self, entry: E) -> SuiResult<bool> {
         self.try_insert(entry).notify()
     }
 
-    /// Same as `insert`, without notifying displaced entries. The evicted entry and the
+    /// Same as `insert`, without notifying displaced entries. The evicted entries and the
     /// holders replaced on an owned gas object (on success), or the refused entry itself
     /// (on rejection), are handed back in the outcome for the caller to notify manually.
+    ///
+    /// A newcomer must strictly outbid the queued holder of each owned gas object it
+    /// consumes. The holders it outbids leave the queue if it is admitted, so their room
+    /// counts toward the room it needs. If it still does not fit, it evicts the cheapest
+    /// queued entries, FIFO within a gas price, until it fits both capacities. Only
+    /// entries priced strictly below it can be evicted. Admission is decided before any
+    /// entry is removed, so a refusal leaves the queue unchanged, including the holders,
+    /// and reports the first queued gas price at or above the entry's.
     #[track_caller]
     pub fn try_insert(&mut self, entry: E) -> InsertOutcome<E> {
-        let keys: Vec<_> = entry.transaction_keys().collect();
-        let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
+        let newly_inserted = !entry
+            .transaction_keys()
+            .any(|key| self.queued_keys.contains_key(&key));
         let gas_price = entry.gas_price();
 
-        // A newcomer must strictly outbid the queued holder of an owned gas object. A
-        // resubmission of a still-queued transaction ties against its own copy, so it is
+        // A resubmission of a still-queued transaction ties against its own copy, so it is
         // refused and the queued copy keeps its position.
-        let replaced = match self.resolve_owned_conflicts(entry.dedup_keys(), gas_price, false) {
-            Ok(replaced) => replaced,
+        let replaces_holders = match self.owned_conflict(entry.dedup_keys(), gas_price, false) {
+            Ok(replaces_holders) => replaces_holders,
             Err(object_id) => {
                 return InsertOutcome::new(Outcome::OwnedObjectConflict { entry, object_id });
             }
@@ -537,48 +636,97 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             self.metrics.duplicate_inserts.inc();
         }
 
-        // Removing an owned-object incumbent frees a slot, so a replacing newcomer is always
-        // admitted even when a dropped-proposal reinsert has transiently pushed the queue over
-        // capacity; only a newcomer that displaced nothing is subject to the capacity bound.
-        if !replaced.is_empty() || self.total_len < self.capacity {
-            self.push_entry(entry, keys, false);
+        let entry_bytes = entry.byte_size() as u64;
+        if !replaces_holders && self.fits_after(Totals::default(), entry_bytes) {
+            self.push(entry, false);
             return InsertOutcome::new(Outcome::Inserted {
                 newly_inserted,
-                evicted: None,
-                replaced,
+                evicted: Vec::new(),
+                replaced: Vec::new(),
                 gas_price,
             });
         }
 
-        let min_gas_price = self.min_gas_price().unwrap();
-        if gas_price > min_gas_price {
-            let evicted = self.evict_lowest();
-            self.push_entry(entry, keys, false);
-            self.metrics.evictions.inc();
-            return InsertOutcome::new(Outcome::Inserted {
-                newly_inserted,
-                evicted: Some(evicted),
-                replaced,
-                gas_price,
+        let mut freed = if replaces_holders {
+            self.owned_holder_totals(entry.dedup_keys())
+        } else {
+            Totals::default()
+        };
+        if !self.fits_bytes_after(freed, entry_bytes) {
+            self.metrics.byte_capacity_bound.inc();
+        }
+
+        // The entries to evict are counted before any is removed, so that a refusal
+        // leaves the queue unchanged. Holders are already counted in `freed` and are
+        // skipped. They are priced strictly below the entry, so once they are removed
+        // the walked entries are the cheapest ones left.
+        let mut walked = 0;
+        let mut blocking_price = None;
+        'walk: for (&price, deque) in &self.map {
+            for queued in deque {
+                if self.fits_after(freed, entry_bytes) {
+                    break 'walk;
+                }
+                if price >= gas_price {
+                    blocking_price = Some(price);
+                    break 'walk;
+                }
+                if replaces_holders && Self::holds_any(queued, entry.dedup_keys()) {
+                    continue;
+                }
+                freed.add(queued.byte_size() as u64);
+                walked += 1;
+            }
+        }
+        if !self.fits_after(freed, entry_bytes) {
+            self.metrics.rejections.inc();
+            return InsertOutcome::new(Outcome::Rejected {
+                entry,
+                min_gas_price: blocking_price.unwrap_or(gas_price),
             });
         }
 
-        self.metrics.rejections.inc();
-        InsertOutcome::new(Outcome::Rejected {
-            entry,
-            min_gas_price,
+        let replaced = if replaces_holders {
+            self.remove_owned_holders(entry.dedup_keys())
+        } else {
+            Vec::new()
+        };
+        let evicted: Vec<E> = (0..walked).map(|_| self.evict_lowest()).collect();
+        self.metrics.evictions.inc_by(evicted.len() as u64);
+        self.push(entry, false);
+        InsertOutcome::new(Outcome::Inserted {
+            newly_inserted,
+            evicted,
+            replaced,
+            gas_price,
         })
     }
 
-    /// Resolves an incoming entry's claims on owned objects against their queued holders.
-    /// Returns the holders it displaces, or the contested object when it does not outbid
-    /// them. `tie_wins` decides an equal bid.
-    fn resolve_owned_conflicts(
-        &mut self,
+    /// Returns whether an entry of `entry_bytes` can be admitted after the queued
+    /// entries counted in `freed` leave. A reinsert can leave the queue over a
+    /// capacity. While it is over, an admission must not increase that total, so it
+    /// frees at least one entry for the entry count and at least its own bytes for
+    /// the byte capacity.
+    fn fits_after(&self, freed: Totals, entry_bytes: u64) -> bool {
+        self.totals.len - freed.len < self.capacity.max(self.totals.len)
+            && self.fits_bytes_after(freed, entry_bytes)
+    }
+
+    fn fits_bytes_after(&self, freed: Totals, entry_bytes: u64) -> bool {
+        self.byte_capacity.is_none_or(|cap| {
+            self.totals.bytes - freed.bytes + entry_bytes <= cap.max(self.totals.bytes)
+        })
+    }
+
+    /// Decides an incoming entry's claims on owned objects against their queued holders,
+    /// without changing the queue. Returns whether it outbids any holder, or the contested
+    /// object when it does not outbid them all. `tie_wins` decides an equal bid.
+    fn owned_conflict(
+        &self,
         owned: &[DedupKey],
         gas_price: u64,
         tie_wins: bool,
-    ) -> Result<Vec<(E, ObjectID)>, ObjectID> {
+    ) -> Result<bool, ObjectID> {
         let incumbent = owned
             .iter()
             .filter_map(|key| {
@@ -588,20 +736,25 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             })
             .max_by_key(|&(price, _)| price);
         let Some((incumbent_gas, object_id)) = incumbent else {
-            return Ok(Vec::new());
+            return Ok(false);
         };
         if gas_price > incumbent_gas || (tie_wins && gas_price == incumbent_gas) {
-            Ok(self.remove_owned_conflicts(owned))
+            Ok(true)
         } else {
             self.metrics.owned_object_conflicts.inc();
             Err(object_id)
         }
     }
 
-    /// Removes every queued entry that consumes one of `owned` (sorted), returning each with
-    /// the object it lost so the caller can notify it outside the lock. Only the price levels
-    /// recorded for those objects are walked.
-    fn remove_owned_conflicts(&mut self, owned: &[DedupKey]) -> Vec<(E, ObjectID)> {
+    fn holds_any(entry: &E, owned: &[DedupKey]) -> bool {
+        entry
+            .dedup_keys()
+            .iter()
+            .any(|key| owned.binary_search(key).is_ok())
+    }
+
+    /// Price levels of the queued holders of `owned` (sorted), ascending.
+    fn owned_holder_levels(&self, owned: &[DedupKey]) -> Vec<u64> {
         let mut levels: Vec<u64> = owned
             .iter()
             .filter_map(|key| self.queued_dedup_objects.get(key))
@@ -609,9 +762,28 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             .collect();
         levels.sort_unstable();
         levels.dedup();
+        levels
+    }
 
+    /// Counts the queued entries that consume one of `owned` (sorted).
+    fn owned_holder_totals(&self, owned: &[DedupKey]) -> Totals {
+        let mut totals = Totals::default();
+        for gas_price in self.owned_holder_levels(owned) {
+            for entry in self.map.get(&gas_price).into_iter().flatten() {
+                if Self::holds_any(entry, owned) {
+                    totals.add(entry.byte_size() as u64);
+                }
+            }
+        }
+        totals
+    }
+
+    /// Removes every queued entry that consumes one of `owned` (sorted), returning each with
+    /// the object it lost so the caller can notify it outside the lock. Only the price levels
+    /// recorded for those objects are walked.
+    fn remove_owned_holders(&mut self, owned: &[DedupKey]) -> Vec<(E, ObjectID)> {
         let mut removed = Vec::new();
-        for gas_price in levels {
+        for gas_price in self.owned_holder_levels(owned) {
             // A recorded object always has its holder queued at the recorded price, so the
             // level exists while the record does; its absence means the bookkeeping drifted.
             let Some(deque) = self.map.get_mut(&gas_price) else {
@@ -636,13 +808,13 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                 self.map.remove(&gas_price);
             }
         }
-        self.total_len -= removed.len();
         for (entry, _) in &removed {
-            self.remove_keys(entry);
+            self.untrack(entry);
         }
         self.metrics
             .owned_object_replacements
             .inc_by(removed.len() as u64);
+        self.metrics.queue_depth.set(self.totals.len as i64);
         removed
     }
 
@@ -698,22 +870,16 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
                         deque.push_back(entry);
                     }
                     PopAction::Skip => deque.push_back(entry),
-                    PopAction::Include => {
-                        self.total_len -= 1;
-                        included.push(entry);
-                    }
-                    PopAction::Exclude => {
-                        self.total_len -= 1;
-                        excluded.push(entry);
-                    }
+                    PopAction::Include => included.push(entry),
+                    PopAction::Exclude => excluded.push(entry),
                 }
             }
         }
         self.map.retain(|_, deque| !deque.is_empty());
         for entry in included.iter().chain(&excluded) {
-            self.remove_keys(entry);
+            self.untrack(entry);
         }
-        self.metrics.queue_depth.set(self.total_len as i64);
+        self.metrics.queue_depth.set(self.totals.len as i64);
         (included, excluded)
     }
 
@@ -733,48 +899,50 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         if popped.is_empty() {
             return popped;
         }
-        self.total_len -= popped.len();
         for entry in &popped {
-            self.remove_keys(entry);
+            self.untrack(entry);
         }
         self.map.retain(|_, deque| !deque.is_empty());
-        self.metrics.queue_depth.set(self.total_len as i64);
+        self.metrics.queue_depth.set(self.totals.len as i64);
         popped
     }
 
     pub fn is_empty(&self) -> bool {
-        self.total_len == 0
+        self.totals.len == 0
     }
 
     /// Reinserts an entry that was taken for a proposal whose block was dropped, at the
     /// front of its price level so it reclaims the position it held before being drained.
-    /// Capacity is bypassed because the entry was already admitted. While it was out with
-    /// the proposer a conflicting entry may have been queued on one of its owned objects:
-    /// the higher gas price wins, and a tie is kept for this returning entry since it held
-    /// the object first. The outcome carries any displaced entry, or this entry when it is
-    /// outbid, for the caller to notify outside the lock.
+    /// The entry-count and byte capacities are bypassed because the entry was already
+    /// admitted. While it was out with the proposer a conflicting entry may have been
+    /// queued on one of its owned objects: the higher gas price wins, and a tie is kept
+    /// for this returning entry since it held the object first. The outcome carries any
+    /// displaced entry, or this entry when it is outbid, for the caller to notify outside
+    /// the lock.
     #[track_caller]
     pub fn reinsert_front(&mut self, entry: E) -> InsertOutcome<E> {
-        let keys: Vec<_> = entry.transaction_keys().collect();
-        let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
+        let newly_inserted = !entry
+            .transaction_keys()
+            .any(|key| self.queued_keys.contains_key(&key));
         let gas_price = entry.gas_price();
-        let replaced = match self.resolve_owned_conflicts(entry.dedup_keys(), gas_price, true) {
-            Ok(replaced) => replaced,
+        let replaced = match self.owned_conflict(entry.dedup_keys(), gas_price, true) {
+            Ok(true) => self.remove_owned_holders(entry.dedup_keys()),
+            Ok(false) => Vec::new(),
             Err(object_id) => {
                 return InsertOutcome::new(Outcome::OwnedObjectConflict { entry, object_id });
             }
         };
-        self.push_entry(entry, keys, true);
+        self.push(entry, true);
         InsertOutcome::new(Outcome::Inserted {
             newly_inserted,
-            evicted: None,
+            evicted: Vec::new(),
             replaced,
             gas_price,
         })
     }
 
-    fn push_entry(&mut self, entry: E, keys: Vec<ConsensusTransactionKey>, front: bool) {
-        for key in keys {
+    fn push(&mut self, entry: E, front: bool) {
+        for key in entry.transaction_keys() {
             *self.queued_keys.entry(key).or_insert(0) += 1;
         }
         let gas_price = entry.gas_price();
@@ -784,14 +952,14 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             let previous = self.queued_dedup_objects.insert(*key, gas_price);
             debug_assert!(previous.is_none_or(|price| price == gas_price));
         }
-        let level = self.map.entry(gas_price).or_default();
+        self.totals.add(entry.byte_size() as u64);
+        let deque = self.map.entry(gas_price).or_default();
         if front {
-            level.push_front(entry);
+            deque.push_front(entry);
         } else {
-            level.push_back(entry);
+            deque.push_back(entry);
         }
-        self.total_len += 1;
-        self.metrics.queue_depth.set(self.total_len as i64);
+        self.metrics.queue_depth.set(self.totals.len as i64);
     }
 
     fn evict_lowest(&mut self) -> E {
@@ -807,9 +975,15 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
             }
             evicted
         };
-        self.remove_keys(&evicted);
-        self.total_len -= 1;
+        self.untrack(&evicted);
         evicted
+    }
+
+    /// Removes an entry that has left the queue from the totals and the key indexes.
+    /// Every path that removes an entry calls this, so the totals stay consistent.
+    fn untrack(&mut self, entry: &E) {
+        self.totals.remove(entry.byte_size() as u64);
+        self.remove_keys(entry);
     }
 
     fn remove_keys(&mut self, entry: &E) {
@@ -1204,13 +1378,24 @@ mod tests {
     use sui_types::digests::{ChainIdentifier, TransactionDigest};
     use sui_types::transaction::PlainTransactionWithClaims;
 
-    /// Minimal entry for exercising the queue's ordering and owned-object dedup without
-    /// building real transactions. Records which notification it received.
+    #[derive(Clone, Default)]
+    struct MockOutcomeLog {
+        evicted: Arc<Mutex<Vec<u64>>>,
+        rejected: Arc<Mutex<Vec<u64>>>,
+        replaced: Arc<Mutex<Vec<u64>>>,
+    }
+
+    /// Minimal entry for exercising the queue's ordering, capacities and owned-object
+    /// dedup without building real transactions. Records which notification it received
+    /// in `outcome`, and its id in `log`.
     struct MockEntry {
+        id: u64,
         gas_price: u64,
-        key: ConsensusTransactionKey,
+        bytes: usize,
+        keys: Vec<ConsensusTransactionKey>,
         owned: Vec<DedupKey>,
         outcome: Arc<Mutex<Option<&'static str>>>,
+        log: MockOutcomeLog,
     }
 
     fn keys_of(owned: &[ObjectRef]) -> Vec<DedupKey> {
@@ -1226,12 +1411,58 @@ mod tests {
     ) -> (MockEntry, Arc<Mutex<Option<&'static str>>>) {
         let outcome = Arc::new(Mutex::new(None));
         let entry = MockEntry {
-            gas_price,
-            key: ConsensusTransactionKey::Certificate(TransactionDigest::random()),
+            keys: vec![ConsensusTransactionKey::Certificate(
+                TransactionDigest::random(),
+            )],
             owned: keys_of(&owned),
             outcome: outcome.clone(),
+            ..sized_entry(0, gas_price, 0, &MockOutcomeLog::default())
         };
         (entry, outcome)
+    }
+
+    fn byte_capped_queue(capacity: usize, byte_capacity: u64) -> PriorityAdmissionQueue<MockEntry> {
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        PriorityAdmissionQueue::new(capacity, metrics).with_byte_capacity(Some(byte_capacity))
+    }
+
+    /// A mock entry of `bytes` bytes with no transaction keys and no owned objects.
+    fn sized_entry(id: u64, gas_price: u64, bytes: usize, log: &MockOutcomeLog) -> MockEntry {
+        MockEntry {
+            id,
+            gas_price,
+            bytes,
+            keys: Vec::new(),
+            owned: Vec::new(),
+            outcome: Arc::new(Mutex::new(None)),
+            log: log.clone(),
+        }
+    }
+
+    /// A mock entry holding one transaction key derived from `id`.
+    fn keyed_entry(id: u64, gas_price: u64, bytes: usize, log: &MockOutcomeLog) -> MockEntry {
+        let mut digest = [0; 32];
+        digest[..8].copy_from_slice(&id.to_le_bytes());
+        MockEntry {
+            keys: vec![ConsensusTransactionKey::Certificate(
+                TransactionDigest::new(digest),
+            )],
+            ..sized_entry(id, gas_price, bytes, log)
+        }
+    }
+
+    /// A mock entry of `bytes` bytes that consumes the owned objects `owned`.
+    fn owning_entry(
+        id: u64,
+        gas_price: u64,
+        bytes: usize,
+        owned: &[ObjectRef],
+        log: &MockOutcomeLog,
+    ) -> MockEntry {
+        MockEntry {
+            owned: keys_of(owned),
+            ..sized_entry(id, gas_price, bytes, log)
+        }
     }
 
     fn owned_ref(id: u8, version: u64) -> ObjectRef {
@@ -1247,23 +1478,375 @@ mod tests {
             self.gas_price
         }
         fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey> {
-            std::iter::once(self.key.clone())
+            self.keys.iter().cloned()
         }
         fn dedup_keys(&self) -> &[DedupKey] {
             &self.owned
         }
+        fn byte_size(&self) -> usize {
+            self.bytes
+        }
         fn notify_evicted(self, _min_gas_price: u64) {
             *self.outcome.lock().unwrap() = Some("evicted");
+            self.log.evicted.lock().unwrap().push(self.id);
         }
         fn notify_rejected(self, _min_gas_price: u64) {
             *self.outcome.lock().unwrap() = Some("rejected");
+            self.log.rejected.lock().unwrap().push(self.id);
         }
         fn notify_replaced(self, _object_id: ObjectID) {
             *self.outcome.lock().unwrap() = Some("replaced");
+            self.log.replaced.lock().unwrap().push(self.id);
         }
         fn notify_owned_object_conflict(self, _object_id: ObjectID) {
             *self.outcome.lock().unwrap() = Some("conflict");
         }
+    }
+
+    #[test]
+    fn byte_cap_admits_entries_within_budget() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        assert!(q.insert(sized_entry(1, 10, 400, &log)).is_ok());
+        assert!(q.insert(sized_entry(2, 10, 400, &log)).is_ok());
+        assert_eq!(q.len(), 2);
+        assert!(log.evicted.lock().unwrap().is_empty());
+        assert!(log.rejected.lock().unwrap().is_empty());
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn byte_cap_evicts_multiple_cheaper_entries_for_one_large() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(sized_entry(1, 10, 300, &log)).unwrap();
+        q.insert(sized_entry(2, 10, 300, &log)).unwrap();
+        q.insert(sized_entry(3, 10, 300, &log)).unwrap();
+        q.insert(sized_entry(4, 20, 600, &log)).unwrap();
+        assert_eq!(q.len(), 2);
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
+        assert!(log.rejected.lock().unwrap().is_empty());
+        assert_eq!(q.metrics.evictions.get(), 2);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn byte_cap_rejects_when_cheaper_entries_cannot_free_enough() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(sized_entry(1, 30, 700, &log)).unwrap();
+        q.insert(sized_entry(2, 10, 200, &log)).unwrap();
+        assert!(matches!(
+            q.insert(sized_entry(3, 20, 500, &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 30 }
+        ));
+        assert_eq!(*log.rejected.lock().unwrap(), vec![3]);
+        assert!(log.evicted.lock().unwrap().is_empty());
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.metrics.evictions.get(), 0);
+        q.insert(sized_entry(4, 31, 500, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![2, 1]);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn byte_cap_evicts_across_price_levels() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(sized_entry(1, 10, 300, &log)).unwrap();
+        q.insert(sized_entry(2, 20, 200, &log)).unwrap();
+        q.insert(sized_entry(3, 20, 200, &log)).unwrap();
+        q.insert(sized_entry(4, 30, 300, &log)).unwrap();
+        q.insert(sized_entry(5, 40, 600, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3]);
+        assert_eq!(q.len(), 2);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn byte_cap_rejects_entry_larger_than_budget_when_empty() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        assert!(q.insert(sized_entry(1, 10, 1001, &log)).is_err());
+        assert_eq!(*log.rejected.lock().unwrap(), vec![1]);
+        assert_eq!(q.len(), 0);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn byte_cap_never_evicts_equal_priced_entries() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(sized_entry(1, 10, 600, &log)).unwrap();
+        q.insert(sized_entry(2, 10, 300, &log)).unwrap();
+        assert!(q.insert(sized_entry(3, 10, 300, &log)).is_err());
+        assert_eq!(*log.rejected.lock().unwrap(), vec![3]);
+        assert!(log.evicted.lock().unwrap().is_empty());
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn entry_count_cap_binds_under_byte_cap() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(2, 1000);
+        q.insert(sized_entry(1, 10, 100, &log)).unwrap();
+        q.insert(sized_entry(2, 10, 100, &log)).unwrap();
+        q.insert(sized_entry(3, 20, 100, &log)).unwrap();
+        assert_eq!(q.len(), 2);
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1]);
+        assert!(q.insert(sized_entry(4, 5, 100, &log)).is_err());
+        assert_eq!(*log.rejected.lock().unwrap(), vec![4]);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn byte_cap_frees_budget_when_entries_are_popped() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(sized_entry(1, 10, 800, &log)).unwrap();
+        assert!(q.insert(sized_entry(2, 5, 800, &log)).is_err());
+        assert_eq!(q.pop_batch(1).len(), 1);
+        q.assert_consistent();
+        assert!(q.insert(sized_entry(3, 5, 800, &log)).is_ok());
+        assert_eq!(q.len(), 1);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn byte_cap_counts_reinserted_entries() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(sized_entry(1, 10, 800, &log)).unwrap();
+        let popped = q.pop_batch(1).pop().unwrap();
+        q.assert_consistent();
+        q.reinsert_front(popped).notify().unwrap();
+        assert!(q.insert(sized_entry(2, 5, 300, &log)).is_err());
+        assert_eq!(*log.rejected.lock().unwrap(), vec![2]);
+        assert_eq!(q.len(), 1);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn over_entry_capacity_admission_evicts_one_entry() {
+        let log = MockOutcomeLog::default();
+        let mut q =
+            PriorityAdmissionQueue::new(3, Arc::new(AdmissionQueueMetrics::new_for_tests()));
+        for (id, gas_price) in [(1, 10), (2, 10), (3, 20)] {
+            q.insert(sized_entry(id, gas_price, 100, &log)).unwrap();
+        }
+        let popped = q.pop_batch(3);
+        for (id, gas_price) in [(4, 15), (5, 15), (6, 30)] {
+            q.insert(sized_entry(id, gas_price, 100, &log)).unwrap();
+        }
+        for entry in popped.into_iter().rev() {
+            q.reinsert_front(entry).notify().unwrap();
+        }
+        assert_eq!(q.len(), 6);
+        q.assert_consistent();
+
+        q.insert(sized_entry(7, 40, 100, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1]);
+        q.insert(sized_entry(8, 12, 100, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
+        assert_eq!(q.len(), 6);
+        assert!(matches!(
+            q.insert(sized_entry(9, 12, 100, &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 12 }
+        ));
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn over_byte_capacity_admission_evicts_at_least_its_own_bytes() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        q.insert(sized_entry(1, 10, 600, &log)).unwrap();
+        let popped = q.pop_batch(1);
+        q.insert(sized_entry(2, 10, 300, &log)).unwrap();
+        q.insert(sized_entry(3, 10, 300, &log)).unwrap();
+        q.insert(sized_entry(4, 20, 400, &log)).unwrap();
+        q.reinsert_front(popped.into_iter().next().unwrap())
+            .notify()
+            .unwrap();
+        assert_eq!(q.metrics.byte_capacity_bound.get(), 0);
+        q.assert_consistent();
+
+        // The queue holds 1600 bytes. Evicting entry 1 frees enough for entry 5.
+        q.insert(sized_entry(5, 30, 500, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1]);
+        // Entry 6 must free 700 bytes, which takes entries 2, 3 and 4.
+        q.insert(sized_entry(6, 30, 700, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3, 4]);
+        assert_eq!(q.metrics.byte_capacity_bound.get(), 2);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn rejection_reports_the_first_level_at_or_above_the_bid() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        for (id, gas_price) in [(1, 10), (2, 20), (3, 30), (4, 40)] {
+            q.insert(sized_entry(id, gas_price, 250, &log)).unwrap();
+        }
+        assert!(matches!(
+            q.insert(sized_entry(5, 15, 600, &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 20 }
+        ));
+        assert!(matches!(
+            q.insert(sized_entry(6, 21, 600, &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 30 }
+        ));
+        q.insert(sized_entry(7, 31, 600, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3]);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn over_both_capacities_admission_evicts_an_entry_and_its_own_bytes() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(2, 1000);
+        q.insert(sized_entry(1, 10, 600, &log)).unwrap();
+        let popped = q.pop_batch(1);
+        q.insert(sized_entry(2, 10, 300, &log)).unwrap();
+        q.insert(sized_entry(3, 20, 400, &log)).unwrap();
+        q.reinsert_front(popped.into_iter().next().unwrap())
+            .notify()
+            .unwrap();
+        // The queue holds 3 entries and 1300 bytes, over both capacities.
+        assert_eq!(q.len(), 3);
+        q.assert_consistent();
+
+        // Evicting entry 1 frees one entry and more than the newcomer's bytes.
+        q.insert(sized_entry(4, 30, 100, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1]);
+        // The queue holds 3 entries and 800 bytes. Entry 5 must free one entry and 300
+        // bytes, which entry 2 does.
+        q.insert(sized_entry(5, 30, 500, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
+        assert_eq!(q.len(), 3);
+        // The cheapest remaining entry is priced above entry 6, so entry 6 is refused
+        // and nothing is evicted.
+        assert!(matches!(
+            q.insert(sized_entry(6, 15, 100, &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 20 }
+        ));
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2]);
+        assert_eq!(q.len(), 3);
+        assert_eq!(q.metrics.byte_capacity_bound.get(), 3);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn multi_entry_eviction_releases_every_evicted_key() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(100, 1000);
+        for id in 1..=4 {
+            q.insert(keyed_entry(id, 10, 250, &log)).unwrap();
+        }
+        q.insert(keyed_entry(5, 20, 700, &log)).unwrap();
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3]);
+        q.assert_consistent();
+
+        // A copy of an evicted transaction is not reported as a duplicate, and a copy of
+        // a queued one is.
+        assert!(q.insert(keyed_entry(1, 30, 20, &log)).unwrap());
+        assert!(!q.insert(keyed_entry(4, 30, 20, &log)).unwrap());
+        assert_eq!(*log.evicted.lock().unwrap(), vec![1, 2, 3]);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn replacement_counts_holder_bytes_as_freed() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(10, 100);
+        let gas = owned_ref(1, 6);
+        q.insert(owning_entry(1, 100, 60, &[gas], &log)).unwrap();
+        q.insert(sized_entry(2, 50, 40, &log)).unwrap();
+
+        // The holder's 60 bytes leave with it, and evicting the cheaper entry frees the rest.
+        assert!(q.insert(owning_entry(3, 200, 70, &[gas], &log)).unwrap());
+        assert_eq!(*log.replaced.lock().unwrap(), vec![1]);
+        assert_eq!(*log.evicted.lock().unwrap(), vec![2]);
+        assert_eq!(q.len(), 1);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn replacement_that_does_not_fit_keeps_the_holder() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(10, 100);
+        let gas = owned_ref(1, 6);
+        q.insert(owning_entry(1, 100, 60, &[gas], &log)).unwrap();
+        q.insert(sized_entry(2, 300, 40, &log)).unwrap();
+
+        // Removing the holder frees 60 bytes, which is not enough for 80, and the other
+        // entry is priced above the newcomer.
+        assert!(matches!(
+            q.insert(owning_entry(3, 200, 80, &[gas], &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 300 }
+        ));
+        assert_eq!(*log.rejected.lock().unwrap(), vec![3]);
+        assert!(log.replaced.lock().unwrap().is_empty());
+        assert!(log.evicted.lock().unwrap().is_empty());
+        assert_eq!(q.len(), 2);
+        q.assert_consistent();
+
+        // The holder still holds the object.
+        assert!(matches!(
+            q.insert(owning_entry(4, 100, 1, &[gas], &log))
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::OwnedObjectConflict { .. }
+        ));
+    }
+
+    #[test]
+    fn over_byte_capacity_replacement_frees_at_least_its_own_bytes() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(10, 100);
+        let gas = owned_ref(1, 6);
+        q.insert(owning_entry(1, 100, 30, &[gas], &log)).unwrap();
+        q.insert(sized_entry(2, 50, 60, &log)).unwrap();
+        let popped = q.pop_batch(2);
+        q.insert(sized_entry(3, 40, 50, &log)).unwrap();
+        for entry in popped.into_iter().rev() {
+            q.reinsert_front(entry).notify().unwrap();
+        }
+        assert_eq!(q.len(), 3);
+
+        // The queue holds 140 bytes against a capacity of 100. The 40-byte newcomer frees
+        // the holder's 30 bytes and evicts the cheapest entry to free its own bytes.
+        assert!(q.insert(owning_entry(4, 200, 40, &[gas], &log)).unwrap());
+        assert_eq!(*log.replaced.lock().unwrap(), vec![1]);
+        assert_eq!(*log.evicted.lock().unwrap(), vec![3]);
+        assert_eq!(q.len(), 2);
+        q.assert_consistent();
+    }
+
+    #[test]
+    fn expired_entries_leave_the_byte_total() {
+        let log = MockOutcomeLog::default();
+        let mut q = byte_capped_queue(10, 100);
+        q.insert(sized_entry(1, 100, 60, &log)).unwrap();
+        q.insert(sized_entry(2, 200, 30, &log)).unwrap();
+        let popped = q.pop_front_while(|entry| entry.id == 1);
+        assert_eq!(popped.len(), 1);
+        q.assert_consistent();
+        assert!(q.insert(sized_entry(3, 10, 70, &log)).unwrap());
+        assert!(log.evicted.lock().unwrap().is_empty());
+        q.assert_consistent();
     }
 
     #[test]
@@ -1471,18 +2054,16 @@ mod tests {
         let gas = owned_ref(1, 6);
         let key = ConsensusTransactionKey::Certificate(TransactionDigest::random());
         let first = MockEntry {
-            gas_price: 100,
-            key: key.clone(),
+            keys: vec![key.clone()],
             owned: keys_of(&[gas]),
-            outcome: Arc::new(Mutex::new(None)),
+            ..sized_entry(0, 100, 0, &MockOutcomeLog::default())
         };
         assert!(q.insert(first).unwrap());
 
         let resubmit = MockEntry {
-            gas_price: 100,
-            key,
+            keys: vec![key],
             owned: keys_of(&[gas]),
-            outcome: Arc::new(Mutex::new(None)),
+            ..sized_entry(0, 100, 0, &MockOutcomeLog::default())
         };
         assert!(matches!(
             q.try_insert(resubmit).notify().unwrap_err().as_inner(),
@@ -2067,6 +2648,7 @@ mod tests {
         // Popping removes the key; reinserting the popped entry (the dropped-proposal
         // requeue path) must restore it, so a copy of `tx` is flagged as a duplicate.
         let popped = q.pop_batch(1).pop().unwrap();
+        q.assert_consistent();
         q.reinsert_front(popped).notify().unwrap();
         assert_eq!(q.len(), 1);
         let (entry2, _rx2) = make_dup_entry(100, tx.clone());
