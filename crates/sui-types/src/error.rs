@@ -852,6 +852,11 @@ pub enum SuiErrorKind {
     // The field is the same on every validator, so that the driver aggregates the rejections.
     #[error("Transaction is not valid until its min_timestamp {min_timestamp} (Unix seconds).")]
     TransactionNotYetValid { min_timestamp: u64 },
+
+    #[error(
+        "Another transaction pending at this validator uses owned object {object_id} at an equal or higher gas price."
+    )]
+    OwnedObjectConflict { object_id: ObjectID },
 }
 
 #[repr(u64)]
@@ -1084,6 +1089,9 @@ impl SuiErrorKind {
             // The transaction becomes valid at its `min_timestamp`.
             SuiErrorKind::TransactionNotYetValid { .. } => true,
 
+            // Retriable at another validator, which does not hold the conflicting transaction.
+            SuiErrorKind::OwnedObjectConflict { .. } => true,
+
             // The transaction is already being processed by consensus, so a fresh
             // submission is pointless. The client should retry by waiting for effects
             // rather than resubmitting.
@@ -1192,6 +1200,9 @@ impl SuiErrorKind {
             SuiErrorKind::StaggeredSubmissionNotProposer => ErrorCategory::Aborted,
 
             SuiErrorKind::TransactionNotYetValid { .. } => ErrorCategory::Aborted,
+
+            // Not a fault of the validator: the submitter's own transactions conflict.
+            SuiErrorKind::OwnedObjectConflict { .. } => ErrorCategory::Aborted,
 
             // Other variants are assumed to be retriable with new transaction submissions.
             _ => ErrorCategory::Aborted,

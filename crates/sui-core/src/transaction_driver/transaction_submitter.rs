@@ -398,7 +398,7 @@ fn is_validator_error(error: &SuiError) -> bool {
     if is_staggered_rejection(error)
         || matches!(
             error.as_inner(),
-            SuiErrorKind::TransactionNotYetValid { .. }
+            SuiErrorKind::TransactionNotYetValid { .. } | SuiErrorKind::OwnedObjectConflict { .. }
         )
     {
         return false;
