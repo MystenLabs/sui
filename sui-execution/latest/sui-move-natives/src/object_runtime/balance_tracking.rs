@@ -24,8 +24,10 @@ use sui_types::{
 /// Summed `Balance<T>` values, keyed by owning address (or object ID) and then by `T`.
 pub type BalanceTotals = BTreeMap<SuiAddress, BTreeMap<Rc<TypeTag>, u128>>;
 
+/// The UIDs and `Balance<T>` totals found in an object, used to find the addresses and balances a
+/// transaction touches.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ObjectContents {
+pub struct TrackedContents {
     pub uids: BTreeSet<ObjectID>,
     /// Keyed by the innermost object (struct whose first field is a `UID`) enclosing each balance.
     pub balances: BalanceTotals,
@@ -34,14 +36,15 @@ pub struct ObjectContents {
 /// Balances and contained UIDs of the objects a transaction read from storage.
 #[derive(Debug)]
 pub struct BalancesBefore {
-    walked: BTreeMap<ObjectID, ObjectContents>,
+    walked: BTreeMap<ObjectID, TrackedContents>,
 }
 
 /// The `Balance<T>` totals of a user transaction before and after execution, and the addresses
 /// involved in it.
 ///
 /// `before` covers every object read and `after` only the objects written, so the two are not
-/// comparable. Gas charges are not included.
+/// comparable. Both see the gas coin before the gas charge, which is not tracked since SUI cannot
+/// be regulated.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BalanceTracking {
     pub before: BalanceTotals,
@@ -77,7 +80,7 @@ pub fn add_to_totals(
     Ok(())
 }
 
-impl ObjectContents {
+impl TrackedContents {
     pub(crate) fn new() -> Self {
         Self {
             uids: BTreeSet::new(),
@@ -94,7 +97,7 @@ impl BalancesBefore {
     }
 
     /// Records the contents of `id` as read from storage. A repeated read must match the earlier one.
-    pub fn record(&mut self, id: ObjectID, contents: ObjectContents) {
+    pub fn record(&mut self, id: ObjectID, contents: TrackedContents) {
         debug_assert!(
             self.walked.get(&id).is_none_or(|prev| *prev == contents),
             "Object {id} read twice with different contents"
@@ -122,7 +125,7 @@ pub fn object_contents<L: Borrow<MoveTypeLayout>, E>(
     obj: &MoveObject,
     track_balances: bool,
     layout: impl FnOnce() -> Result<Option<L>, E>,
-) -> Result<Result<ObjectContents, /* invariant violation */ String>, E> {
+) -> Result<Result<TrackedContents, /* invariant violation */ String>, E> {
     if obj.type_().is_coin() {
         let id = obj.id();
         let mut balances = BalanceTotals::new();
@@ -131,10 +134,10 @@ pub fn object_contents<L: Borrow<MoveTypeLayout>, E>(
             balances.insert(id.into(), BTreeMap::from([(Rc::new(type_), value)]));
         }
         let uids = BTreeSet::from([id]);
-        return Ok(Ok(ObjectContents { uids, balances }));
+        return Ok(Ok(TrackedContents { uids, balances }));
     }
     let Some(layout) = layout()? else {
-        return Ok(Ok(ObjectContents::new()));
+        return Ok(Ok(TrackedContents::new()));
     };
     Ok(walk_contents(
         layout.borrow(),
@@ -184,9 +187,9 @@ pub fn walk_contents(
     fully_annotated_layout: &MoveTypeLayout,
     bcs_bytes: &[u8],
     track_balances: bool,
-) -> Result<ObjectContents, /* invariant violation */ String> {
+) -> Result<TrackedContents, /* invariant violation */ String> {
     let mut traversal = ContentsTraversal {
-        contents: ObjectContents::new(),
+        contents: TrackedContents::new(),
         types: BTreeSet::new(),
         track_balances,
         enclosing_object: None,
@@ -224,7 +227,7 @@ impl From<AV::Error> for TraversalError {
 }
 
 struct ContentsTraversal {
-    contents: ObjectContents,
+    contents: TrackedContents,
     /// Interns balance types so each distinct `T` is allocated once per walk.
     types: BTreeSet<Rc<TypeTag>>,
     track_balances: bool,

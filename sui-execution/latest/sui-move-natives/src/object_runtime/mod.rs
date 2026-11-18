@@ -50,7 +50,7 @@ use tracing::error;
 
 pub use accumulator::*;
 pub use balance_tracking::{
-    BalanceTotals, BalanceTracking, BalancesBefore, ObjectContents, add_to_totals,
+    BalanceTotals, BalanceTracking, BalancesBefore, TrackedContents, add_to_totals,
     layout_contains_balance, merge_totals, object_contents, walk_contents,
 };
 
@@ -222,7 +222,7 @@ impl<'a> ObjectRuntime<'a> {
             if let Some(before) = &mut balances_before {
                 before.record(
                     id,
-                    ObjectContents {
+                    TrackedContents {
                         uids: contained_uids.clone(),
                         balances,
                     },

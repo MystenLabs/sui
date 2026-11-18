@@ -236,9 +236,7 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
     }
 
     const TRACK_EXECUTION: bool = true;
-    /// With `SKIP_ALL_CHECKS`, arbitrary values can hold UIDs that are missing from the involved
-    /// addresses.
-    const TRACK_BALANCES: bool = true;
+    const TRACK_BALANCES: bool = !SKIP_ALL_CHECKS;
 
     fn add_argument_update(
         acc: &mut Self::ArgumentUpdates,

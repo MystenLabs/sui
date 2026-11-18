@@ -26,7 +26,7 @@ fn store_read_is_needed_only_when_uncached_balance_is_insufficient() {
 
 mod balance_tracking {
     use crate::object_runtime::{
-        BalanceTotals, BalancesBefore, ObjectContents, add_to_totals, layout_contains_balance,
+        BalanceTotals, BalancesBefore, TrackedContents, add_to_totals, layout_contains_balance,
         object_contents, walk_contents,
     };
     use move_core_types::{
@@ -100,7 +100,7 @@ mod balance_tracking {
         totals
     }
 
-    fn contents_of(obj: &MoveObject, layout: &MoveTypeLayout) -> ObjectContents {
+    fn contents_of(obj: &MoveObject, layout: &MoveTypeLayout) -> TrackedContents {
         let Ok(contents) = object_contents(obj, true, || Ok::<_, Infallible>(Some(layout)));
         contents.unwrap()
     }
@@ -127,7 +127,7 @@ mod balance_tracking {
         let contents = walk_contents(&layout, &bytes, true).unwrap();
         assert_eq!(
             contents,
-            ObjectContents {
+            TrackedContents {
                 uids: BTreeSet::from([outer_id, inner_id]),
                 balances: totals(&[(outer_id, &a, 80), (inner_id, &a, 20)]),
             }
@@ -244,7 +244,7 @@ mod balance_tracking {
         let mut before = BalancesBefore::new();
         before.record(
             x,
-            ObjectContents {
+            TrackedContents {
                 uids: BTreeSet::from([x, y]),
                 balances: totals(&[
                     (x, &a, u64::MAX as u128),
@@ -265,7 +265,7 @@ mod balance_tracking {
     fn repeated_read_of_an_object_replaces_it() {
         let a = coin_type("A");
         let x = ObjectID::from_single_byte(1);
-        let contents = ObjectContents {
+        let contents = TrackedContents {
             uids: BTreeSet::from([x]),
             balances: totals(&[(x, &a, 5)]),
         };

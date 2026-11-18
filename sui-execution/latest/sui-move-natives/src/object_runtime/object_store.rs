@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::object_runtime::{
-    BalancesBefore, ObjectContents, fingerprint::ObjectFingerprint, object_contents,
+    BalancesBefore, TrackedContents, fingerprint::ObjectFingerprint, object_contents,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::partial_vm_error;
@@ -182,7 +182,7 @@ macro_rules! fetch_child_object_unbounded {
 
 impl Inner<'_> {
     /// Returns the contained UIDs, keeping the contents if balances are tracked.
-    fn record_contents(&mut self, id: ObjectID, contents: ObjectContents) -> BTreeSet<ObjectID> {
+    fn record_contents(&mut self, id: ObjectID, contents: TrackedContents) -> BTreeSet<ObjectID> {
         match &mut self.balances_before {
             Some(before) => {
                 let uids = contents.uids.clone();
@@ -405,7 +405,7 @@ fn walk_object_contents(
     obj: &MoveObject,
     fully_annotated_layout: &A::MoveTypeLayout,
     track_balances: bool,
-) -> Result<ObjectContents, String> {
+) -> Result<TrackedContents, String> {
     let Ok(contents) = object_contents(obj, track_balances, || {
         Ok::<_, std::convert::Infallible>(Some(fully_annotated_layout))
     });
