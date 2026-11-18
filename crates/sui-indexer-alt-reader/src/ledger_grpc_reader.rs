@@ -15,11 +15,16 @@ use futures::Stream;
 use futures::StreamExt;
 use futures::future::try_join_all;
 use prometheus::Registry;
+use prost::Message as _;
 use prost_types::FieldMask;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::google::rpc::ErrorInfo;
+use sui_rpc::proto::google::rpc::Status as RpcStatus;
 use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::effects::TransactionEffects;
 use sui_types::event::Event;
 use sui_types::messages_checkpoint::CheckpointSummary;
@@ -406,6 +411,52 @@ impl LedgerGrpcReader {
         drain_list_stream("ListCheckpoints", stream).await
     }
 
+    /// The system packages that existed as of the end of checkpoint `at_checkpoint`, as
+    /// `(package ID, version)` pairs ordered by package ID, each at its latest version as of that
+    /// checkpoint. Returns `None` if the ledger service no longer serves `at_checkpoint` because
+    /// it lies below its earliest available checkpoint (`BELOW_EARLIEST_AVAILABLE`). Any other
+    /// failure, including `at_checkpoint` lying above the service's latest checkpoint, is an error.
+    pub async fn list_system_packages(
+        &self,
+        at_checkpoint: u64,
+    ) -> anyhow::Result<Option<Vec<(ObjectID, SequenceNumber)>>> {
+        let request = grpc::ListSystemPackagesRequest::new(at_checkpoint);
+        let response = match self
+            .client
+            .clone()
+            .package_client()
+            .list_system_packages(self.request(request))
+            .await
+        {
+            Ok(response) => response.into_inner(),
+            Err(status) if has_error_reason(&status, grpc::ErrorReason::BelowEarliestAvailable) => {
+                return Ok(None);
+            }
+            Err(status) => {
+                return Err(anyhow::anyhow!(status).context("ListSystemPackages failed"));
+            }
+        };
+
+        let packages = response
+            .system_packages
+            .into_iter()
+            .map(|package| {
+                let id = package
+                    .package_id
+                    .as_deref()
+                    .context("System package missing package_id")?
+                    .parse::<ObjectID>()
+                    .context("Failed to parse system package ID")?;
+                let version = package
+                    .version
+                    .with_context(|| format!("System package {id} missing version"))?;
+                Ok((id, SequenceNumber::from_u64(version)))
+            })
+            .collect::<anyhow::Result<_>>()?;
+
+        Ok(Some(packages))
+    }
+
     /// Create a gRPC request, optionally with the grpc-timeout header if configured.
     fn request<T>(&self, input: T) -> tonic::Request<T> {
         let mut request = tonic::Request::new(input);
@@ -635,6 +686,20 @@ fn classify_frame<T>(
         covered_checkpoint,
         end_reason,
     })
+}
+
+/// Whether `status` carries a `google.rpc.ErrorInfo` detail with `reason` in domain
+/// `ErrorReason::DOMAIN`. `false` when the status details do not decode as a `google.rpc.Status`.
+fn has_error_reason(status: &tonic::Status, reason: grpc::ErrorReason) -> bool {
+    let Ok(rpc_status) = RpcStatus::decode(status.details()) else {
+        return false;
+    };
+
+    rpc_status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .any(|info| info.reason == reason.as_str_name() && info.domain == grpc::ErrorReason::DOMAIN)
 }
 
 async fn drain_list_stream<R, T, S>(
@@ -1304,5 +1369,127 @@ mod list_stream_tests {
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c1".as_ref()));
         assert_eq!(page.end_reason, None);
+    }
+}
+
+#[cfg(test)]
+mod list_system_packages_tests {
+    use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+    use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServiceServer;
+    use sui_types::MOVE_STDLIB_PACKAGE_ID;
+    use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+    use tokio::net::TcpListener;
+    use tokio_stream::wrappers::TcpListenerStream;
+
+    use super::*;
+
+    type Reply =
+        Box<dyn Fn() -> Result<grpc::ListSystemPackagesResponse, tonic::Status> + Send + Sync>;
+
+    /// A `MovePackageService` that answers every `ListSystemPackages` call with `Reply`.
+    struct MockPackageServer(Reply);
+
+    #[tonic::async_trait]
+    impl MovePackageService for MockPackageServer {
+        async fn list_system_packages(
+            &self,
+            _request: tonic::Request<grpc::ListSystemPackagesRequest>,
+        ) -> Result<tonic::Response<grpc::ListSystemPackagesResponse>, tonic::Status> {
+            (self.0)().map(tonic::Response::new)
+        }
+    }
+
+    /// Starts a [`MockPackageServer`] answering with `reply`, and a reader pointed at it.
+    async fn reader_replying(
+        reply: impl Fn() -> Result<grpc::ListSystemPackagesResponse, tonic::Status>
+        + Send
+        + Sync
+        + 'static,
+    ) -> LedgerGrpcReader {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let service = MovePackageServiceServer::new(MockPackageServer(Box::new(reply)));
+        tokio::spawn(async move {
+            tonic::transport::Server::builder()
+                .add_service(service)
+                .serve_with_incoming(TcpListenerStream::new(listener))
+                .await
+                .ok();
+        });
+
+        LedgerGrpcReader::new(
+            format!("http://{addr}").parse().unwrap(),
+            LedgerGrpcArgs::default(),
+            None,
+            &Registry::new(),
+            MAX_BATCH_GET_TRANSACTIONS,
+            MAX_BATCH_GET_OBJECTS,
+            None,
+        )
+        .await
+        .unwrap()
+    }
+
+    fn package_version(package_id: Option<&str>, version: Option<u64>) -> grpc::PackageVersion {
+        let mut package = grpc::PackageVersion::default();
+        package.package_id = package_id.map(str::to_owned);
+        package.version = version;
+        package
+    }
+
+    /// An `OUT_OF_RANGE` status whose details carry an `ErrorInfo` with `reason`, encoded the way
+    /// the ledger service encodes it.
+    fn out_of_range(reason: grpc::ErrorReason) -> tonic::Status {
+        let info = ErrorInfo {
+            reason: reason.as_str_name().to_owned(),
+            domain: grpc::ErrorReason::DOMAIN.to_owned(),
+            metadata: Default::default(),
+        };
+        let details = RpcStatus {
+            code: tonic::Code::OutOfRange as i32,
+            message: "out of range".to_owned(),
+            details: vec![prost_types::Any::from_msg(&info).unwrap()],
+        };
+        tonic::Status::with_details(
+            tonic::Code::OutOfRange,
+            "out of range",
+            Bytes::from(details.encode_to_vec()),
+        )
+    }
+
+    #[tokio::test]
+    async fn returns_packages_in_server_order() {
+        let reader = reader_replying(|| {
+            Ok(grpc::ListSystemPackagesResponse::new(vec![
+                package_version(Some("0x1"), Some(1)),
+                package_version(Some("0x2"), Some(3)),
+            ]))
+        })
+        .await;
+
+        let packages = reader.list_system_packages(5).await.unwrap();
+        assert_eq!(
+            packages,
+            Some(vec![
+                (MOVE_STDLIB_PACKAGE_ID, SequenceNumber::from_u64(1)),
+                (SUI_FRAMEWORK_PACKAGE_ID, SequenceNumber::from_u64(3)),
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn below_earliest_available_is_none() {
+        let reader =
+            reader_replying(|| Err(out_of_range(grpc::ErrorReason::BelowEarliestAvailable))).await;
+
+        assert_eq!(reader.list_system_packages(5).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn above_latest_available_is_error() {
+        let reader =
+            reader_replying(|| Err(out_of_range(grpc::ErrorReason::AboveLatestAvailable))).await;
+
+        assert!(reader.list_system_packages(5).await.is_err());
     }
 }
