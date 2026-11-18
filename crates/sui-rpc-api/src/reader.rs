@@ -7,11 +7,13 @@ use std::sync::Arc;
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_package_resolver::{SyncPackageStore, SyncResolver};
 use sui_sdk_types::{EpochId, ValidatorCommittee};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::storage::ObjectKey;
-use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::{Error as StorageError, Result};
+use sui_types::storage::{RpcIndexes, RpcStateReader};
 use tap::Pipe;
 
 use crate::ErrorDetails;
@@ -287,21 +289,37 @@ impl StateReader {
         Ok(lowest_available_checkpoint.max(lowest_available_checkpoint_objects))
     }
 
-    /// The upper bound for checkpoint-pinned reads (`GetPackage`'s `at_checkpoint`): the highest
-    /// checkpoint every rpc index has committed.
+    /// The upper bound for checkpoint-pinned reads ([`Self::get_object_version_at_checkpoint`]
+    /// and `GetPackage`'s `at_checkpoint`): the highest checkpoint every rpc index has committed.
     ///
     /// Read it before the reads. It only grows, and the indexes only add data above it, so it
     /// stays valid for reads made after it was read. The lower bound is the opposite; see
     /// [`Self::at_checkpoint_lower_bound`].
     ///
-    /// `UNIMPLEMENTED` (`NOT_SERVED_HERE`, cause `no_rpc_indexes`) if the rpc indexes are
-    /// disabled. `UNAVAILABLE` (`NOT_READY`) if they have not committed a checkpoint yet (cause
-    /// `index_empty`), or are still backfilling history after a restore (cause
-    /// `restore_backfill`): until every history index reaches the restore checkpoint, a
-    /// checkpoint-pinned read can be wrong at any checkpoint the indexes cover (restore of a
-    /// pruned node), or the highest indexed checkpoint lies far below the restored live state
-    /// (restore with nothing pruned).
+    /// Fails as [`Self::require_rpc_index_history`] does, or with `UNAVAILABLE` (`NOT_READY`,
+    /// cause `index_empty`) if the rpc indexes have not committed a checkpoint yet.
     pub fn at_checkpoint_upper_bound(&self) -> Result<AtCheckpointUpperBound, crate::RpcError> {
+        let highest_indexed = self
+            .require_rpc_index_history()?
+            .get_highest_indexed_checkpoint_seq_number()
+            .map_err(index_error)?
+            .ok_or_else(index_empty)?;
+        Ok(AtCheckpointUpperBound { highest_indexed })
+    }
+
+    /// The rpc indexes, for reads that need the history they record: checkpoint-pinned reads,
+    /// and `max_version` reads, which on a pruned node check the version they find against the
+    /// indexes (see [`RpcStateReader::get_object_lt_or_eq_version`]).
+    ///
+    /// `UNIMPLEMENTED` (`NOT_SERVED_HERE`, cause `no_rpc_indexes`) if the rpc indexes are
+    /// disabled. `UNAVAILABLE` (`NOT_READY`, cause `restore_backfill`) while they are still
+    /// backfilling history after a restore: until every history index reaches the restore
+    /// checkpoint, a checkpoint-pinned read can be wrong at any checkpoint the indexes cover
+    /// (restore of a pruned node), the highest indexed checkpoint lies far below the restored
+    /// live state (restore with nothing pruned), and the version the indexes record at the end
+    /// of a checkpoint can be a later one, which would refuse `max_version` reads of versions
+    /// this node holds.
+    pub fn require_rpc_index_history(&self) -> Result<&dyn RpcIndexes, crate::RpcError> {
         let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
         if indexes.is_history_backfill_pending().map_err(index_error)? {
             return Err(not_ready(
@@ -309,11 +327,18 @@ impl StateReader {
                 "rpc index history is still backfilling after a restore",
             ));
         }
-        let highest_indexed = indexes
-            .get_highest_indexed_checkpoint_seq_number()
-            .map_err(index_error)?
-            .ok_or_else(index_empty)?;
-        Ok(AtCheckpointUpperBound { highest_indexed })
+        Ok(indexes)
+    }
+
+    /// [`version_not_retained`] if this node does not keep object versions once they are replaced
+    /// (see [`RpcStateReader::retains_object_version_history`]): reads that depend on an object's
+    /// replaced versions would find them gone and answer `NotFound`. The refusal depends only on
+    /// the node's configuration, so check it before anything that depends on the node's state.
+    pub fn require_object_version_history(&self) -> Result<(), crate::RpcError> {
+        if self.inner().retains_object_version_history() {
+            return Ok(());
+        }
+        Err(version_not_retained())
     }
 
     /// [`version_not_retained`] if this node does not keep object versions once they are replaced
@@ -347,6 +372,30 @@ impl StateReader {
         Ok(AtCheckpointLowerBound {
             lowest_available: lowest_available_objects.max(lowest_with_index_history),
         })
+    }
+
+    /// The version the rpc index records for `object_id` at the end of `checkpoint`: its newest
+    /// version written at or before `checkpoint`, or, if that change deleted or wrapped it, the
+    /// version the index records for the removal. For a removal with V1 effects that is
+    /// `TransactionEffectsAPI::lamport_version`, which can be below the tombstone's version in
+    /// the object store, though no version of the object lies between the two. Every live version
+    /// above this one was written after `checkpoint`. `None` if the object did not exist yet, or
+    /// if it was deleted or wrapped in a checkpoint this node pruned, whose pruning removes every
+    /// index row of the object.
+    /// `OutOfRange` (`ABOVE_LATEST_AVAILABLE`) if `checkpoint` is above `upper_bound`; check the
+    /// lower bound after the read with [`Self::at_checkpoint_lower_bound`].
+    pub fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: u64,
+        upper_bound: &AtCheckpointUpperBound,
+    ) -> Result<Option<SequenceNumber>, crate::RpcError> {
+        upper_bound.check(checkpoint)?;
+
+        let indexes = self.inner().indexes().ok_or_else(indexes_disabled)?;
+        indexes
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+            .map_err(index_error)
     }
 }
 
@@ -471,6 +520,8 @@ impl AtCheckpointLowerBound {
 pub enum NotServedHereCause {
     /// The node runs without rpc indexes.
     NoRpcIndexes,
+    /// A kv-rpc `enable-*` flag the request needs is off.
+    DisabledByConfig,
 }
 
 impl NotServedHereCause {
@@ -478,6 +529,7 @@ impl NotServedHereCause {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::NoRpcIndexes => "no_rpc_indexes",
+            Self::DisabledByConfig => "disabled_by_config",
         }
     }
 }
@@ -647,11 +699,100 @@ impl<S: SyncPackageStore + Sync> sui_display::v2::Store for DisplayStore<'_, S> 
     }
 }
 
+/// Asserts `error` is `code` with exactly one [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo):
+/// `reason` in the [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
+#[cfg(test)]
+pub(crate) fn assert_refusal(
+    error: crate::RpcError,
+    code: tonic::Code,
+    reason: ErrorReason,
+    cause: &str,
+) {
+    assert_status_refusal(&error.into_status_proto(), code, reason, cause);
+}
+
+/// [`assert_refusal`] for a status already converted to its proto, such as a per-item error of a
+/// batch response.
+#[cfg(test)]
+pub(crate) fn assert_status_refusal(
+    status: &crate::proto::google::rpc::Status,
+    code: tonic::Code,
+    reason: ErrorReason,
+    cause: &str,
+) {
+    use crate::proto::google::rpc::ErrorInfo;
+
+    assert_eq!(status.code, code as i32, "{status:?}");
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    assert_eq!(
+        error_info.metadata,
+        [("cause".to_owned(), cause.to_owned())].into(),
+        "{status:?}"
+    );
+}
+
+/// [`assert_refusal`] for [`not_served_here`] with `cause`.
+#[cfg(test)]
+pub(crate) fn assert_not_served_here(error: crate::RpcError, cause: NotServedHereCause) {
+    assert_status_not_served_here(&error.into_status_proto(), cause);
+}
+
+/// [`assert_not_served_here`] for a status already converted to its proto.
+#[cfg(test)]
+pub(crate) fn assert_status_not_served_here(
+    status: &crate::proto::google::rpc::Status,
+    cause: NotServedHereCause,
+) {
+    assert_status_refusal(
+        status,
+        tonic::Code::Unimplemented,
+        ErrorReason::NotServedHere,
+        cause.as_str(),
+    );
+}
+
+/// Asserts `error` is [`version_not_retained`]: `OutOfRange` with exactly one
+/// [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo), `VERSION_NOT_RETAINED` in the
+/// [`ErrorReason::DOMAIN`] domain, without metadata.
+#[cfg(test)]
+pub(crate) fn assert_version_not_retained(error: crate::RpcError) {
+    use crate::proto::google::rpc::ErrorInfo;
+
+    let status = error.into_status_proto();
+    assert_eq!(status.code, tonic::Code::OutOfRange as i32, "{status:?}");
+    let error_infos: Vec<ErrorInfo> = status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .collect();
+    let [error_info] = error_infos.as_slice() else {
+        panic!("expected exactly one ErrorInfo in {status:?}");
+    };
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::VersionNotRetained.as_str_name(),
+        "{status:?}"
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
+    assert!(error_info.metadata.is_empty(), "{status:?}");
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::cell::Cell;
 
     use super::*;
+    // Tests in other modules import the helpers from here.
+    pub(crate) use super::assert_refusal;
 
     #[test]
     fn dedup_checkpoint_timestamps_fetches_sorted_unique_checkpoints_once() {
@@ -743,35 +884,6 @@ pub(crate) mod tests {
                 .unwrap();
         }
         batch.commit().unwrap();
-    }
-
-    /// Asserts `error` is `code` with exactly one [`ErrorInfo`]: `reason` in the
-    /// [`ErrorReason::DOMAIN`] domain, whose only metadata is `cause`.
-    pub(crate) fn assert_refusal(
-        error: crate::RpcError,
-        code: tonic::Code,
-        reason: ErrorReason,
-        cause: &str,
-    ) {
-        use crate::proto::google::rpc::ErrorInfo;
-
-        let status = error.into_status_proto();
-        assert_eq!(status.code, code as i32, "{status:?}");
-        let error_infos: Vec<ErrorInfo> = status
-            .details
-            .iter()
-            .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
-            .collect();
-        let [error_info] = error_infos.as_slice() else {
-            panic!("expected exactly one ErrorInfo in {status:?}");
-        };
-        assert_eq!(error_info.reason, reason.as_str_name(), "{status:?}");
-        assert_eq!(error_info.domain, ErrorReason::DOMAIN, "{status:?}");
-        assert_eq!(
-            error_info.metadata,
-            [("cause".to_owned(), cause.to_owned())].into(),
-            "{status:?}"
-        );
     }
 
     /// Checkpoint-pinned reads are refused as not ready while the indexes are empty and while a

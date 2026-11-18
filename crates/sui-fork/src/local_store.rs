@@ -179,6 +179,28 @@ impl LocalStore {
         self.highest_status_at_or_before(id, upper_bound)
     }
 
+    /// Return the checkpoint and version of the object's earliest checkpoint-pinned row.
+    ///
+    /// The object rows are complete from that version upward. The row is either the object's
+    /// version at the fork checkpoint, resolved by a remote query pinned there, or its version at
+    /// the end of its first locally executed checkpoint, and every later version was executed
+    /// locally. That checkpoint may have changed the object more than once, and the rows of its
+    /// earlier versions sit below the pinned one. Below it, the rows are otherwise a sparse cache
+    /// of historical reads.
+    pub(crate) fn earliest_checkpoint_pinned_version(
+        &self,
+        id: ObjectID,
+    ) -> anyhow::Result<Option<(CheckpointSequenceNumber, SequenceNumber)>> {
+        let Some(row) = self.schema.iter_object_versions_by_checkpoint(id)?.next() else {
+            return Ok(None);
+        };
+        let (key, value) = row?;
+        Ok(Some((
+            key.checkpoint,
+            SequenceNumber::from_u64(value.into_inner().version),
+        )))
+    }
+
     /// Save an object version without changing current live state or indexes.
     ///
     /// Use this for exact-version and bounded historical reads, and choose a live-object write
@@ -409,6 +431,59 @@ impl LocalStore {
         }
         batch.commit().context("failed to save live object")?;
         Ok(())
+    }
+
+    /// Save an object fetched from a remote query pinned at the fork checkpoint, recording it as
+    /// the object's version at the fork checkpoint.
+    ///
+    /// Unlike [`Self::save_live_object_if_current`], this writes the fork-checkpoint row even when
+    /// local execution has changed or removed the object since. That row describes only the fork
+    /// checkpoint, and the rows of later checkpoints still outrank it, so it answers the
+    /// checkpoint-pinned reads from the fork checkpoint up to the object's first local change.
+    pub(crate) fn save_object_at_fork_checkpoint(&self, object: &Object) -> anyhow::Result<()> {
+        let mut batch = self.db.batch();
+        self.stage_object_version(&mut batch, object)?;
+        self.stage_package_version(&mut batch, object)?;
+        self.stage_restored_object_version(&mut batch, object)?;
+        batch
+            .commit()
+            .context("failed to save object at the fork checkpoint")
+    }
+
+    /// Record that object `id` was deleted or wrapped at or before the fork checkpoint, as a
+    /// remote query pinned there resolved it: a tombstone row of `kind` at `removed_at`, the
+    /// version the removal's effects give, and the fork-checkpoint row recording
+    /// `version_at_fork_checkpoint`, the removal's lamport version, which an rpc index records for
+    /// it.
+    ///
+    /// As with [`Self::save_object_at_fork_checkpoint`], the rows of later checkpoints outrank
+    /// that row. It is not a restore-floor row: the removal may have come after a checkpoint below
+    /// the fork checkpoint, so it answers nothing below it.
+    pub(crate) fn save_removal_at_fork_checkpoint(
+        &self,
+        id: ObjectID,
+        removed_at: SequenceNumber,
+        kind: TombstoneKind,
+        version_at_fork_checkpoint: SequenceNumber,
+    ) -> anyhow::Result<()> {
+        let mut batch = self.db.batch();
+        batch.put(
+            &self.schema.objects,
+            &objects::Key {
+                id,
+                version: removed_at,
+            },
+            &objects::tombstone(kind),
+        )?;
+        let (key, value) = object_version_by_checkpoint::store(
+            id,
+            self.forked_at_checkpoint,
+            version_at_fork_checkpoint,
+        );
+        batch.put(&self.schema.object_version_by_checkpoint, &key, &value)?;
+        batch
+            .commit()
+            .context("failed to save a removal at the fork checkpoint")
     }
 
     /// Report whether the seed load has already committed.

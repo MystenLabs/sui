@@ -849,10 +849,20 @@ pub(crate) type MarkedKeyedUpstream<I, K, E, P = u64> = MarkedUpstream<(I, Vec<K
 pub(crate) type MarkedKeyedDownstream<I, K, V, E, P = u64> =
     MarkedUpstream<KeyedBatchOutput<I, K, V>, E, P>;
 
+/// What [`pipelined_keyed_batches`] does with a key its read ends without a row for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MissingRow {
+    /// Fail the stream with an `Internal` error naming the key. Keys that come from an index
+    /// always have a row, so a missing one means the index and storage diverged.
+    Error,
+    /// Leave the key out of its item's map. Keys a client asked for may have no row.
+    Omit,
+}
+
 /// Read the keys of `(item, keys)` pairs through one request-scoped
 /// [`RequestCache`] over `fetcher`, and emit each item, in input order, with a
-/// map of only its own keys' rows. A key without a row is an error naming the
-/// key (index/storage divergence).
+/// map of only its own keys' rows. A key without a row is handled as
+/// `missing_row` says.
 ///
 /// Batching follows the same rule as [`pipelined_chunks`]: the stage collects a
 /// **burst** of the items ready before upstream returns `Pending` (closed early
@@ -888,6 +898,7 @@ pub(crate) fn pipelined_keyed_batches<I, K, V, P, E>(
     max_concurrent_reads: usize,
     min_seeks_per_split_read: Option<usize>,
     fetcher: Arc<dyn CacheFetcher<K, V>>,
+    missing_row: MissingRow,
 ) -> MarkedKeyedDownstream<I, K, V, E, P>
 where
     I: Send + 'static,
@@ -926,7 +937,7 @@ where
         move |items: Vec<(I, Vec<K>)>, free_slots| {
             plan_keyed_reads(cache.clone(), items, limits, free_slots)
         },
-        open_keyed_read::<I, K, V, E>,
+        move |read| open_keyed_read::<I, K, V, E>(read, missing_row),
     )
 }
 
@@ -1051,10 +1062,11 @@ where
 
 /// Open one keyed read: start its backend read now, in read order, and return
 /// the stream that emits each of its items, in order, with a map of the item's
-/// own keys once their values have resolved. The stream ends only once the
-/// backend read has ended.
+/// own keys once their values have resolved. A key without a row is handled as
+/// `missing_row` says. The stream ends only once the backend read has ended.
 fn open_keyed_read<I, K, V, E>(
     read: KeyedRead<I, K, V>,
+    missing_row: MissingRow,
 ) -> future::Ready<Result<KeyedRows<I, K, V, E>, E>>
 where
     I: Send + 'static,
@@ -1073,16 +1085,17 @@ where
         for (item, values) in items {
             let mut map: HashMap<K, V> = HashMap::with_capacity(values.len());
             for (key, value) in values {
-                let row = value
-                    .await
-                    .map_err(|e| E::from(anyhow::Error::new(e)))?
-                    .ok_or_else(|| {
-                        E::from(anyhow::anyhow!(
-                            "keyed read missing key {key:?} requested by the read stage \
-                             (indicates index/storage divergence)"
-                        ))
-                    })?;
-                map.insert(key, row);
+                let row = value.await.map_err(|e| E::from(anyhow::Error::new(e)))?;
+                match (row, missing_row) {
+                    (Some(row), _) => {
+                        map.insert(key, row);
+                    }
+                    (None, MissingRow::Omit) => {}
+                    (None, MissingRow::Error) => Err(E::from(anyhow::anyhow!(
+                        "keyed read missing key {key:?} requested by the read stage \
+                         (indicates index/storage divergence)"
+                    )))?,
+                }
             }
             yield (item, Arc::new(map));
         }
@@ -2867,7 +2880,14 @@ mod tests {
     async fn keyed_batches_flush_burst_when_upstream_goes_pending() {
         let (mut tx, rx) = mpsc::channel::<Result<Watermarked<TestItem>, RpcError>>(8);
         let (fetcher, fetches) = stub_fetcher(echo_rows);
-        let mut output = keyed_output(pipelined_keyed_batches(rx.boxed(), 100, 4, None, fetcher));
+        let mut output = keyed_output(pipelined_keyed_batches(
+            rx.boxed(),
+            100,
+            4,
+            None,
+            fetcher,
+            MissingRow::Error,
+        ));
 
         tx.send(Ok(Watermarked::Item((0, vec![1, 2, 3]))))
             .await
@@ -2907,6 +2927,7 @@ mod tests {
             6,
             None,
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect()
         .await
@@ -2931,6 +2952,7 @@ mod tests {
             2,
             None,
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect()
         .await
@@ -2943,8 +2965,8 @@ mod tests {
         assert_eq!(sorted_fetches(&fetches), vec![vec![10, 11, 20, 21, 30]]);
     }
 
-    /// A key the read ends without is index/storage divergence: an `Internal`
-    /// error naming the key, not a quietly partial item.
+    /// With `MissingRow::Error`, a key the read ends without is index/storage
+    /// divergence: an `Internal` error naming the key, not a quietly partial item.
     #[tokio::test]
     async fn keyed_batches_error_on_a_missing_row() {
         let (fetcher, _) = stub_fetcher(|keys: Vec<i32>| {
@@ -2956,6 +2978,7 @@ mod tests {
             1,
             None,
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect::<Vec<_>>()
         .await
@@ -2968,6 +2991,28 @@ mod tests {
             "expected a missing-key error, got: {}",
             status.message()
         );
+    }
+
+    /// With `MissingRow::Omit`, a key the read ends without is left out of the
+    /// map of every item that lists it, and the items are still emitted.
+    #[tokio::test]
+    async fn keyed_batches_omit_a_missing_row_when_asked() {
+        let (fetcher, _) = stub_fetcher(|keys: Vec<i32>| {
+            echo_rows(keys.into_iter().filter(|&key| key != 2).collect())
+        });
+        let out: Vec<(u32, Vec<i32>)> = keyed_output(pipelined_keyed_batches(
+            keyed_upstream(vec![(0, vec![1, 2, 3]), (1, vec![2])]),
+            10,
+            1,
+            None,
+            fetcher,
+            MissingRow::Omit,
+        ))
+        .try_collect()
+        .await
+        .expect("a missing row is omitted, not an error");
+
+        assert_eq!(out, vec![(0, vec![1, 3]), (1, vec![])]);
     }
 
     /// An item whose own keys exceed `max_seeks_per_read` goes out as the
@@ -2993,6 +3038,7 @@ mod tests {
                 4,
                 None,
                 fetcher,
+                MissingRow::Error,
             ))
             .try_collect(),
         )
@@ -3021,6 +3067,7 @@ mod tests {
             4,
             Some(1),
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect()
         .await
@@ -3044,6 +3091,7 @@ mod tests {
             1,
             None,
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect::<Vec<_>>()
         .await
@@ -3068,11 +3116,12 @@ mod tests {
             ])
             .boxed();
         let (fetcher, _) = stub_fetcher(echo_rows);
-        let out: Vec<Watermarked<u32>> = pipelined_keyed_batches(upstream, 10, 2, None, fetcher)
-            .map_ok(|frame| frame.map_item(|(item, _map)| item))
-            .try_collect()
-            .await
-            .expect("ok");
+        let out: Vec<Watermarked<u32>> =
+            pipelined_keyed_batches(upstream, 10, 2, None, fetcher, MissingRow::Error)
+                .map_ok(|frame| frame.map_item(|(item, _map)| item))
+                .try_collect()
+                .await
+                .expect("ok");
 
         assert_eq!(
             out,
@@ -3118,6 +3167,7 @@ mod tests {
             2,
             None,
             fetcher,
+            MissingRow::Error,
         );
 
         timeout(Duration::from_millis(500), barrier.wait())
@@ -3147,8 +3197,14 @@ mod tests {
                 .boxed()
             }
         });
-        let stream =
-            pipelined_keyed_batches(keyed_upstream(vec![(0, vec![10])]), 1, 1, None, fetcher);
+        let stream = pipelined_keyed_batches(
+            keyed_upstream(vec![(0, vec![10])]),
+            1,
+            1,
+            None,
+            fetcher,
+            MissingRow::Error,
+        );
 
         // Eager: the read holds the permit without the consumer polling.
         wait_for_available_permits(&limiter, 0).await;
@@ -3162,7 +3218,14 @@ mod tests {
     async fn keyed_batches_stream_reuse_reads_each_key_once() {
         let (mut tx, rx) = mpsc::channel::<Result<Watermarked<TestItem>, RpcError>>(8);
         let (fetcher, fetches) = stub_fetcher(echo_rows);
-        let mut output = keyed_output(pipelined_keyed_batches(rx.boxed(), 2, 4, None, fetcher));
+        let mut output = keyed_output(pipelined_keyed_batches(
+            rx.boxed(),
+            2,
+            4,
+            None,
+            fetcher,
+            MissingRow::Error,
+        ));
 
         // Burst 1: an item with 4 keys to read goes out as two reads of 2.
         tx.send(Ok(Watermarked::Item((0, vec![1, 2, 3, 4]))))
@@ -3222,6 +3285,7 @@ mod tests {
             4,
             None,
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect()
         .await
@@ -3246,6 +3310,7 @@ mod tests {
             4,
             Some(2),
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect()
         .await
@@ -3270,6 +3335,7 @@ mod tests {
             4,
             None,
             fetcher,
+            MissingRow::Error,
         ))
         .try_collect()
         .await

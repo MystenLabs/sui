@@ -44,7 +44,17 @@ use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::BackingStore;
+use sui_types::storage::BalanceInfo;
+use sui_types::storage::BalanceIterator;
+use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldIteratorItem;
+use sui_types::storage::DynamicFieldKey;
+use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::ObjectOrTombstone;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackageObject;
@@ -59,6 +69,7 @@ use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
+use typed_store_error::TypedStoreError;
 
 use crate::gql::GraphQLClient;
 use crate::gql::TransactionInfo;
@@ -307,81 +318,159 @@ impl ForkStore {
         Ok(object)
     }
 
-    /// Get the latest object version at or below the given root version.
+    /// Get the object's highest version at or below `version_bound`, or `None` if it has none or
+    /// that version is a deletion or wrap.
     ///
-    /// TODO(fork): this trusts the highest local row at or below the bound, which is only the true
-    /// highest when the local history is complete below the bound. A sparse cache polluted by an
-    /// exact-historical-version read (e.g. an RPC client fetching an old dynamic-field version) can
-    /// hold a lower live row than the chain's true highest at the bound, and this read then serves
-    /// that stale row without the remote ever being consulted. Reachable from `read_child_object`
-    /// on both the RPC and the executor paths, so it can skew execution as well as reads. Candidate
-    /// fix (undecided): short-circuit only on an authoritative current version at or below the
-    /// bound, or on a tombstone, and otherwise query the remote `RootVersion(bound)` and take the
-    /// max-version of the remote result and the local candidate. Optionally let executor-driven
-    /// bounds (always the parent's current root version, which Lamport-dominates the child) claim
-    /// currency on fetch so each child pays the remote round-trip once. Tracked in
-    /// design/storage.md § "Known gaps".
+    /// The local rows are complete from the object's version at the fork checkpoint upward,
+    /// because local execution writes a row for every version it produces and remote reads never
+    /// cache a version above that one. Below it they are a sparse cache of historical reads. The
+    /// earliest checkpoint-pinned row holds either that version or, for an object without a row at
+    /// the fork checkpoint, its version at the end of its first locally executed checkpoint, so a
+    /// bound at or above it is answered locally. Below it, the fork resolves the object's version
+    /// at the fork checkpoint from the remote and records it, and the local rows answer if that
+    /// version is within the bound, finding any earlier version the first local checkpoint wrote.
+    /// Otherwise the remote answers, because its newest version within the bound may have been
+    /// created after the fork checkpoint: every version within the bound is older than the one at
+    /// the fork checkpoint, or the object was not live at the fork checkpoint, and a query pinned
+    /// at the fork checkpoint returns the newest of them that existed by then. An object not live
+    /// at the fork checkpoint has no version there to start the local rows from, unless a
+    /// checkpoint-pinned read recorded its removal there (see
+    /// [`Self::fetch_removal_at_fork_checkpoint`]), so a bound between two versions its first
+    /// local checkpoint wrote also goes to the remote, which has neither.
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
         version_bound: SequenceNumber,
     ) -> anyhow::Result<Option<Object>> {
+        Ok(self
+            .object_or_tombstone_lt_or_eq_version(object_id, version_bound)?
+            .and_then(live_object))
+    }
+
+    /// [`Self::get_object_lt_or_eq_version`], with the tombstone of the deletion or wrap at the
+    /// version it finds in place of `None`. The remote serves only live objects, so only the
+    /// staged and local rows give a tombstone.
+    fn object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version_bound: SequenceNumber,
+    ) -> anyhow::Result<Option<ObjectOrTombstone>> {
         let local_store = self.local_store();
         // A staged version always outranks every persisted version of the same
         // object, so a hit within the bound is the answer.
-        match self
+        if let Some((version, status)) = self
             .inner
             .pending
             .object_at_or_before(*object_id, version_bound)?
         {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+            return Ok(Some(object_or_tombstone(*object_id, version, status)));
         }
-        match local_store.get_object_at_or_before(*object_id, version_bound)? {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+
+        let earliest_pinned = local_store.earliest_checkpoint_pinned_version(*object_id)?;
+        if earliest_pinned.is_some_and(|(_, version)| version <= version_bound) {
+            return local_object_or_tombstone_at_or_before(local_store, object_id, version_bound)
+                .map(Some);
+        }
+
+        // A row at the fork checkpoint already records the object's version there, which is
+        // above the bound.
+        let resolved_at_fork = earliest_pinned
+            .is_some_and(|(checkpoint, _)| checkpoint == self.forked_at_checkpoint());
+        if !resolved_at_fork
+            && let Some(object) = self.fetch_object_at_fork_checkpoint(object_id)?
+            && object.version() <= version_bound
+        {
+            return local_object_or_tombstone_at_or_before(local_store, object_id, version_bound)
+                .map(Some);
         }
 
         let object = self
             .inner
             .remote
             .object_at_or_before(object_id, version_bound.value())?;
-        if let Some(ref object) = object {
+        if let Some(object) = &object {
             local_store.save_object_version_only(object)?;
         }
-
-        Ok(object)
+        Ok(object.map(ObjectOrTombstone::Object))
     }
 
     /// Look up the latest known version of an object, overlay first, then the local store, then a
     /// remote `AtCheckpoint(forked_at_checkpoint)` query whose result persists in the RPC store.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
+        Ok(self
+            .latest_object_or_tombstone(object_id)?
+            .and_then(live_object))
+    }
+
+    /// [`Self::get_latest_object`], with the tombstone of the deletion or wrap that is the
+    /// object's latest version in place of `None`.
+    fn latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<ObjectOrTombstone>> {
         // The in-flight checkpoint's writes live only in the pending overlay
         // until seal. A pending tombstone must block the remote fallback,
         // exactly like a persisted tombstone row would.
-        match self.inner.pending.latest_object(*object_id)? {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+        if let Some((version, status)) = self.inner.pending.latest_object(*object_id)? {
+            return Ok(Some(object_or_tombstone(*object_id, version, status)));
         }
 
         info!("Fetching latest object from local store: {object_id}",);
         let local_store = self.local_store();
-        match local_store.get_latest_object_status(*object_id)? {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+        if let Some((version, status)) = local_store.get_latest_object_status(*object_id)? {
+            return Ok(Some(object_or_tombstone(*object_id, version, status)));
         }
 
         info!("Not found in local store, so fetching latest object from remote: {object_id}");
         let object = self.inner.remote.latest_object(object_id)?;
-        if let Some(ref object) = object {
+        if let Some(object) = &object {
             local_store.save_live_object_if_current(object)?;
         }
 
+        Ok(object.map(ObjectOrTombstone::Object))
+    }
+
+    /// Fetch an object's live version at the fork checkpoint from the remote, and record it locally
+    /// as its version at the fork checkpoint whatever local execution has done to it since.
+    fn fetch_object_at_fork_checkpoint(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<Object>> {
+        let object = self.inner.remote.latest_object(object_id)?;
+        if let Some(object) = &object {
+            self.local_store().save_object_at_fork_checkpoint(object)?;
+        }
         Ok(object)
+    }
+
+    /// For an object not live at the fork checkpoint, fetch the version of the remote's last
+    /// change to it by then, which deleted or wrapped it: its `lamport_version`, which an rpc index
+    /// records for a removal. Record the removal locally, a tombstone of the kind its effects
+    /// give at the version its effects give, and the lamport version as the object's version at
+    /// the fork checkpoint, so later reads resolve the object without the remote. The two differ
+    /// for V1 effects, whose lamport version can sit below the removal, as on the chain's stores.
+    /// `None` if the remote holds no change to the object by then. If the change's effects
+    /// removed nothing of the object, the version is returned and nothing is recorded.
+    fn fetch_removal_at_fork_checkpoint(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<SequenceNumber>> {
+        let Some(effects) = self.inner.remote.last_change_at_fork(object_id)? else {
+            return Ok(None);
+        };
+        let version = effects.lamport_version();
+        if let Some(removal) = removed_objects_from_effects(&effects)
+            .into_iter()
+            .find(|removal| removal.object_id == *object_id)
+        {
+            self.local_store().save_removal_at_fork_checkpoint(
+                *object_id,
+                removal.version,
+                removal.kind,
+                version,
+            )?;
+        }
+        Ok(Some(version))
     }
 
     pub(crate) fn read_child_object_fallible(
@@ -658,7 +747,7 @@ impl ForkStore {
     /// Return the stock reader over the fork's local `sui-rpc-store`, for reads the fork has no
     /// policy for.
     ///
-    /// This is also what [`RpcStateReader::indexes`] hands out, which makes every index read
+    /// Every index read except the checkpoint-pinned object version resolves here, which makes them
     /// seed-bounded. Owner, dynamic-field, type, and balance lookups resolve from the local index
     /// alone, which holds the seed set loaded at fork creation plus whatever local execution has
     /// produced since, and an owner, parent, or type outside the seed set reads as empty rather
@@ -955,8 +1044,9 @@ impl SimulatorStore for ForkStore {
 // the stock rpc-store reader: every read the fork has policy for resolves
 // through the local-first, remote-fallback helpers above, while surfaces the
 // fork keeps no policy for -- events, full checkpoint contents, committees,
-// epoch info, struct layouts, and the ledger/bitmap indexes, all written by
-// the embedded indexer -- are served straight from the stock reader.
+// epoch info, struct layouts, and every index except the checkpoint-pinned
+// object version, all written by the embedded indexer -- are served straight
+// from the stock reader.
 //
 // The one read the stock reader could answer but must not is `get_object`
 // without a version: a stock reverse scan over the fork's sparse `objects` CF
@@ -1125,19 +1215,282 @@ impl RpcStateReader for ForkStore {
         })
     }
 
-    /// Index reads go straight to the stock reader.
+    /// Index reads go to the stock reader, except the checkpoint-pinned object version. See the
+    /// `RpcIndexes` impl below.
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
-        Some(self.stock_reader())
+        Some(self)
     }
 
     /// Resolve layouts using packages from committed `sui-rpc-store` data.
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         self.stock_reader().layout_package_store()
     }
+
+    /// Resolve through the overlay, the local store, then the remote, as the inherent
+    /// `ForkStore::get_object_lt_or_eq_version` does for child-object reads.
+    fn get_object_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> StorageResult<Option<Object>> {
+        ForkStore::get_object_lt_or_eq_version(self, object_id, version).map_err(to_storage_error)
+    }
+
+    /// The same lookup as `get_object_lt_or_eq_version`, returning the staged or local tombstone
+    /// of a deletion or wrap where it finds one.
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> StorageResult<Option<ObjectOrTombstone>> {
+        self.object_or_tombstone_lt_or_eq_version(object_id, version)
+            .map_err(to_storage_error)
+    }
+
+    /// The same lookup as `ObjectStore::get_object`, returning the staged or local tombstone of
+    /// a deletion or wrap that is the object's latest version.
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> StorageResult<Option<ObjectOrTombstone>> {
+        self.latest_object_or_tombstone(object_id)
+            .map_err(to_storage_error)
+    }
+}
+
+/// Every index read delegates to the stock reader except
+/// [`RpcIndexes::get_object_version_at_checkpoint`], whose miss at or above the fork checkpoint
+/// means the fork has not resolved the object at the fork checkpoint yet rather than that it did
+/// not exist.
+impl RpcIndexes for ForkStore {
+    fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
+        self.stock_reader().get_epoch_info(epoch)
+    }
+
+    fn owned_objects_iter(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
+    {
+        self.stock_reader()
+            .owned_objects_iter(owner, object_type, cursor)
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<DynamicFieldKey>,
+    ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
+        self.stock_reader().dynamic_field_iter(parent, cursor)
+    }
+
+    fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+        self.stock_reader().get_coin_info(coin_type)
+    }
+
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> StorageResult<Option<BalanceInfo>> {
+        self.stock_reader().get_balance(owner, coin_type)
+    }
+
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> StorageResult<BalanceIterator<'_>> {
+        self.stock_reader().balance_iter(owner, cursor)
+    }
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
+    {
+        self.stock_reader()
+            .package_versions_iter(original_id, cursor)
+    }
+
+    fn get_package_version_storage_id(
+        &self,
+        original_id: ObjectID,
+        version: u64,
+    ) -> StorageResult<Option<ObjectID>> {
+        self.stock_reader()
+            .get_package_version_storage_id(original_id, version)
+    }
+
+    fn get_package_at_checkpoint(
+        &self,
+        original_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> StorageResult<Option<(u64, ObjectID)>> {
+        self.stock_reader()
+            .get_package_at_checkpoint(original_id, checkpoint)
+    }
+
+    /// A row at or below `checkpoint` answers. Without one, the fork has not changed the object
+    /// between the fork checkpoint and `checkpoint`, so at or above the fork checkpoint the version
+    /// is the object's version at the fork checkpoint, which the remote resolves and the fork then
+    /// records, even when local execution has changed the object since: the version the object was
+    /// live at, or, for an object deleted or wrapped by then, the version that removed it (see
+    /// [`ForkStore::fetch_removal_at_fork_checkpoint`]).
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> StorageResult<Option<SequenceNumber>> {
+        let version = self
+            .stock_reader()
+            .get_object_version_at_checkpoint(object_id, checkpoint)?;
+        if version.is_some() || checkpoint < self.forked_at_checkpoint() {
+            return Ok(version);
+        }
+        if let Some(object) = self
+            .fetch_object_at_fork_checkpoint(&object_id)
+            .map_err(to_storage_error)?
+        {
+            return Ok(Some(object.version()));
+        }
+        // Not live at the fork checkpoint, so the last change by then, if any, removed it.
+        self.fetch_removal_at_fork_checkpoint(&object_id)
+            .map_err(to_storage_error)
+    }
+
+    /// The local rows hold every version from the object's version at the fork checkpoint upward:
+    /// the fork records that version when it resolves the object there, and executes every later
+    /// one itself. Below it they are a sparse cache of historical reads, as the trait allows for
+    /// versions below the retained history, whose floor on a fork is the fork checkpoint (see
+    /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]).
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: std::ops::RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> StorageResult<sui_types::storage::ObjectVersionsIterator<'_>> {
+        self.stock_reader()
+            .object_versions_iter(object_id, versions, descending)
+    }
+
+    fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        self.stock_reader()
+            .get_highest_indexed_checkpoint_seq_number()
+    }
+
+    fn is_history_backfill_pending(&self) -> StorageResult<bool> {
+        self.stock_reader().is_history_backfill_pending()
+    }
+
+    fn get_highest_live_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        self.stock_reader()
+            .get_highest_live_indexed_checkpoint_seq_number()
+    }
+
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
+        self.stock_reader().ledger_tx_seq_digest(tx_seq)
+    }
+
+    fn ledger_tx_seq_by_digest(&self, digest: &TransactionDigest) -> StorageResult<Option<u64>> {
+        self.stock_reader().ledger_tx_seq_by_digest(digest)
+    }
+
+    fn ledger_tx_seq_digest_multi_get(
+        &self,
+        tx_seqs: &[u64],
+    ) -> StorageResult<Vec<Option<LedgerTxSeqDigest>>> {
+        self.stock_reader().ledger_tx_seq_digest_multi_get(tx_seqs)
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
+        self.stock_reader()
+            .ledger_tx_seq_digest_iter(start, end_exclusive, descending)
+    }
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        self.stock_reader().transaction_bitmap_bucket_iter(
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        self.stock_reader().event_bitmap_bucket_iter(
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
 }
 
 fn to_storage_error(err: anyhow::Error) -> StorageError {
     StorageError::custom(err.to_string())
+}
+
+/// The object's newest local row at or below `version_bound`, for a bound the caller has checked
+/// is at or above a version the local rows are complete from, so a row must exist there.
+fn local_object_or_tombstone_at_or_before(
+    local_store: &LocalStore,
+    object_id: &ObjectID,
+    version_bound: SequenceNumber,
+) -> anyhow::Result<ObjectOrTombstone> {
+    match local_store.get_object_at_or_before(*object_id, version_bound)? {
+        Some((version, status)) => Ok(object_or_tombstone(*object_id, version, status)),
+        None => Err(anyhow!(
+            "object {object_id} has a complete local version at or below {version_bound} but no \
+             object row there"
+        )),
+    }
+}
+
+/// The row `status` of object `id` at `version`: the live object, or the tombstone of the
+/// deletion or wrap there.
+fn object_or_tombstone(id: ObjectID, version: SequenceNumber, status: Status) -> ObjectOrTombstone {
+    match status {
+        Status::Live(object) => ObjectOrTombstone::Object(object),
+        Status::Tombstone(TombstoneKind::Deleted) => {
+            ObjectOrTombstone::Tombstone((id, version, ObjectDigest::OBJECT_DIGEST_DELETED))
+        }
+        Status::Tombstone(TombstoneKind::Wrapped) => {
+            ObjectOrTombstone::Tombstone((id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
+        }
+    }
+}
+
+/// The live object in `item`, `None` for a tombstone.
+fn live_object(item: ObjectOrTombstone) -> Option<Object> {
+    match item {
+        ObjectOrTombstone::Object(object) => Some(object),
+        ObjectOrTombstone::Tombstone(_) => None,
+    }
 }
 
 /// Validate that a child object loaded for `parent` is actually owned by it.

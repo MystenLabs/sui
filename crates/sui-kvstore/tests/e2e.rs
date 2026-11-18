@@ -43,6 +43,7 @@ use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
 use sui_kvstore::default_committer_config;
+use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -1359,19 +1360,42 @@ async fn test_object_tombstones() -> Result<()> {
                 "{id} at version {version}",
             );
 
+            // The exact-version read, and the row at that version read with and without the
+            // object's contents, which keeps a deletion or wrap there.
+            let expected_exact = live_versions.contains(&version).then_some(version);
             let exact = harness
                 .bigtable_client()
                 .get_objects(&[ObjectKey(id, version)])
                 .await?;
-            let expected_exact = live_versions.contains(&version).then_some(version);
             assert_eq!(
                 exact.first().map(|o| o.version()),
                 expected_exact,
                 "{id} exactly at version {version}",
             );
+            let changed_here = history
+                .iter()
+                .find(|(changed_at, _)| *changed_at == version)
+                .map(|(_, status)| *status);
+            for with_contents in [true, false] {
+                let rows: Vec<(ObjectKey, ObjectVersionRow)> = harness
+                    .bigtable_client()
+                    .get_object_rows_stream(vec![ObjectKey(id, version)], with_contents)
+                    .await?
+                    .try_collect()
+                    .await?;
+                let status = rows.first().map(|(_, row)| match row {
+                    ObjectVersionRow::Live(_) => ObjectStatus::Live,
+                    ObjectVersionRow::Tombstone(tombstone) => tombstone.status,
+                });
+                assert_eq!(
+                    status, changed_here,
+                    "{id} row at version {version}, with contents {with_contents}",
+                );
+            }
         }
 
-        // Both objects end deleted, so neither has a latest version.
+        // Both objects end deleted, so neither has a latest version, even though their older
+        // live versions remain.
         assert!(
             harness
                 .bigtable_client()
