@@ -613,6 +613,10 @@ impl EndOfEpochTransactionKind {
         Self::ForwardingAddressRegistryCreate
     }
 
+    pub fn new_freeze_list_create() -> Self {
+        Self::FreezeListCreate
+    }
+
     pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
         Self::BridgeStateCreate(chain_identifier)
     }
@@ -825,9 +829,11 @@ impl EndOfEpochTransactionKind {
                 }
             }
             Self::FreezeListCreate => {
-                return Err(UserInputError::Unsupported(
-                    "freeze list creation is not supported yet".to_string(),
-                ));
+                if !config.create_freeze_list() {
+                    return Err(UserInputError::Unsupported(
+                        "freeze list not enabled".to_string(),
+                    ));
+                }
             }
         }
         Ok(())

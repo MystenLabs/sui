@@ -4566,6 +4566,25 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_freeze_list_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().create_freeze_list() {
+            info!("freeze list creation not enabled");
+            return None;
+        }
+
+        if epoch_store.freeze_list_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_freeze_list_create();
+        info!("Creating FreezeListCreate tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_execution_time_observations_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -4737,6 +4756,9 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_forwarding_address_registry_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_freeze_list_tx(epoch_store) {
             txns.push(tx);
         }
         if let Some(tx) = self.create_write_accumulator_storage_cost_tx(epoch_store) {

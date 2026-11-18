@@ -26,6 +26,7 @@ Sui object identifiers
 -  [Function `bridge`](#sui_object_bridge)
 -  [Function `address_alias_state`](#sui_object_address_alias_state)
 -  [Function `forwarding_address_registry`](#sui_object_forwarding_address_registry)
+-  [Function `freeze_list`](#sui_object_freeze_list)
 -  [Function `uid_as_inner`](#sui_object_uid_as_inner)
 -  [Function `uid_to_inner`](#sui_object_uid_to_inner)
 -  [Function `uid_to_bytes`](#sui_object_uid_to_bytes)
@@ -231,6 +232,16 @@ The hardcoded ID for the singleton ForwardingAddressRegistry object.
 
 
 <pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID">SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID</a>: <b>address</b> = 0xfa;
+</code></pre>
+
+
+
+<a name="sui_object_SUI_FREEZE_LIST_OBJECT_ID"></a>
+
+The hardcoded ID for the singleton FreezeList object.
+
+
+<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_FREEZE_LIST_OBJECT_ID">SUI_FREEZE_LIST_OBJECT_ID</a>: <b>address</b> = 0xcf;
 </code></pre>
 
 
@@ -716,6 +727,34 @@ This should only be called once from <code><a href="../sui/forwarding_address.md
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_forwarding_address_registry">forwarding_address_registry</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID">SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID</a> },
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_freeze_list"></a>
+
+## Function `freeze_list`
+
+Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>FreezeList</code> object.
+This should only be called once from <code><a href="../sui/coin_regulation.md#sui_coin_regulation">coin_regulation</a></code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_freeze_list">freeze_list</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_freeze_list">freeze_list</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+    <a href="../sui/object.md#sui_object_UID">UID</a> {
+        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_FREEZE_LIST_OBJECT_ID">SUI_FREEZE_LIST_OBJECT_ID</a> },
     }
 }
 </code></pre>

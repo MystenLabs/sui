@@ -298,6 +298,7 @@ public fun create_system_objects(scenario: &mut Scenario) {
     sui::random::create_for_testing(scenario.ctx());
     sui::deny_list::create_for_testing(scenario.ctx());
     sui::display_registry::create_for_testing(scenario.ctx());
+    sui::coin_regulation::create_for_testing(scenario.ctx());
     scenario.next_tx(sender);
 }
 

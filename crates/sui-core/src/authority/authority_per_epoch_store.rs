@@ -1221,6 +1221,12 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
+    pub fn freeze_list_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .freeze_list_obj_initial_shared_version()
+            .is_some()
+    }
+
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
     }

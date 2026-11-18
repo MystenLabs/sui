@@ -1423,6 +1423,10 @@ struct FeatureFlags {
     // `TransactionExpired`.
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
+
+    // If true, create the freeze list object in the change epoch transaction.
+    #[serde(skip_serializing_if = "is_false")]
+    create_freeze_list: bool,
 }
 
 fn is_false(b: &bool) -> bool {

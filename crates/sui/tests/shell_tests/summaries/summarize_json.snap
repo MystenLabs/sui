@@ -49,6 +49,7 @@ borrow.json
 clock.json
 coin.json
 coin_registry.json
+coin_regulation.json
 config.json
 deny_list.json
 derived_object.json
