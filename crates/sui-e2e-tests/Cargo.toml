@@ -5,6 +5,11 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 version.workspace = true
+autotests = false
+
+[[test]]
+name = "e2e"
+path = "tests/e2e.rs"
 
 [lints]
 workspace = true

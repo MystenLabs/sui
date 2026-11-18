@@ -5,7 +5,7 @@ use sui_rpc::proto::sui::rpc::v2::GetDatatypeRequest;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_client::MovePackageServiceClient;
 use test_cluster::TestClusterBuilder;
 
-use crate::v2::move_package_service::system_package_expectations::validate_validator_operation_cap_datatype;
+use crate::rpc::v2::move_package_service::system_package_expectations::validate_validator_operation_cap_datatype;
 
 use sui_macros::sim_test;
 

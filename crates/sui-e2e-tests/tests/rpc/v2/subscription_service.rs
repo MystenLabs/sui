@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transfer_coin;
+use crate::rpc::transfer_coin;
 use prost::bytes::Bytes;
 use std::path::PathBuf;
 use std::time::Duration;
