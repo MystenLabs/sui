@@ -537,7 +537,7 @@ pub(crate) struct CheckpointQueue {
     min_checkpoint_interval_ms: u64,
     // The consensus output quarantine persists only up to commits that end with an empty
     // queue, so push_commit flushes a queue that stays non-empty this long. None below the
-    // protocol version with checkpoint_queue_force_drain.
+    // protocol version with checkpoint_queue_max_undrained_ms.
     undrained_flush_ms: Option<u64>,
     execution_scheduler_sender: ExecutionSchedulerSender,
     // Timestamp of the first commit in the current run of commits that ended non-empty.

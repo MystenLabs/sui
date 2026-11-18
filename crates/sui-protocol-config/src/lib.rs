@@ -1412,12 +1412,6 @@ struct FeatureFlags {
     // `TransactionExpired`.
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
-
-    // If true, the consensus handler flushes a checkpoint queue that has not emptied for
-    // checkpoint_queue_max_undrained_ms of commit time. Sustained load above
-    // max_transactions_per_checkpoint, or randomness on every commit, otherwise keeps it full.
-    #[serde(skip_serializing_if = "is_false")]
-    checkpoint_queue_force_drain: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2319,8 +2313,9 @@ pub struct ProtocolConfig {
     min_checkpoint_interval_ms: Option<u64>,
 
     /// Commit time after which the consensus handler flushes a checkpoint queue that has not
-    /// emptied, raised to min_checkpoint_interval_ms if that is larger. Used only with
-    /// checkpoint_queue_force_drain.
+    /// emptied, raised to min_checkpoint_interval_ms if that is larger. Sustained load above
+    /// max_transactions_per_checkpoint, or randomness on every commit, otherwise keeps the
+    /// queue from emptying. None disables the flush.
     checkpoint_queue_max_undrained_ms: Option<u64>,
 
     /// Version number to use for version_specific_data in `CheckpointSummary`.
@@ -2642,10 +2637,8 @@ impl ProtocolConfig {
     /// Commit time after which the consensus handler flushes a checkpoint queue that has not
     /// emptied, or None if this version has no such limit.
     pub fn checkpoint_queue_force_drain_ms(&self) -> Option<u64> {
-        self.feature_flags.checkpoint_queue_force_drain.then(|| {
-            self.checkpoint_queue_max_undrained_ms()
-                .max(self.min_checkpoint_interval_ms.unwrap_or_default())
-        })
+        self.checkpoint_queue_max_undrained_ms
+            .map(|ms| ms.max(self.min_checkpoint_interval_ms.unwrap_or_default()))
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -5107,7 +5100,6 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_timestamp_transaction_expiration = true;
                     }
                     cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
-                    cfg.feature_flags.checkpoint_queue_force_drain = true;
                     cfg.checkpoint_queue_max_undrained_ms = Some(1_000);
                 }
                 // Use this template when making changes:
@@ -5144,8 +5136,8 @@ impl ProtocolConfig {
         // this draw, and every validator must derive the same limit from the epoch digest.
         let mut max_txns = rng.gen_range(10..=100u64);
         // Caps of 2-3 put simtest load above max_tx per checkpoint interval. Versions without
-        // checkpoint_queue_force_drain never drain at these caps.
-        if self.feature_flags.checkpoint_queue_force_drain
+        // checkpoint_queue_max_undrained_ms never drain at these caps.
+        if self.checkpoint_queue_max_undrained_ms.is_some()
             && SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed)
             && rng.gen_bool(0.25)
         {
@@ -5651,21 +5643,6 @@ mod test {
             v142.binary_format_limits(),
             BinaryFormatLimitsProfile::V1.limits()
         );
-    }
-
-    #[test]
-    fn checkpoint_queue_force_drain_has_limit() {
-        for chain in [Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
-            for version in ProtocolVersion::MIN.as_u64()..=ProtocolVersion::MAX.as_u64() {
-                let config = ProtocolConfig::get_for_version(ProtocolVersion::new(version), chain);
-                if config.feature_flags.checkpoint_queue_force_drain {
-                    assert!(
-                        config.checkpoint_queue_max_undrained_ms.is_some(),
-                        "{version}"
-                    );
-                }
-            }
-        }
     }
 
     #[test]
