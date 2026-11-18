@@ -140,7 +140,8 @@ pub async fn initialize(
     // Seeding is eager and one-shot: the enumerations behind the manifest are
     // pinned at the fork checkpoint and cannot be re-run once the fork has
     // diverged, so the whole seed set is loaded here, before anything executes,
-    // and never again. On a resumed fork the load is a no-op.
+    // and never again. On a resumed fork the load only adds the system packages
+    // if the directory's seed load committed without them.
     load_seed_objects(&store, &seed_manifest)?;
 
     // Resume support: the Simulacrum must build its next checkpoint on the

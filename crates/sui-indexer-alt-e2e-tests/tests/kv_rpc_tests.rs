@@ -38,10 +38,12 @@ use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListSystemPackagesRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
 use sui_rpc::proto::sui::rpc::v2::Ordering;
+use sui_rpc::proto::sui::rpc::v2::PackageVersion;
 use sui_rpc::proto::sui::rpc::v2::PackageWriteFilter;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::QueryOptions;
@@ -61,7 +63,9 @@ use sui_rpc_api::ledger_history::cursor::CursorToken;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::cursor::Position;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -6386,6 +6390,65 @@ fn listed_versions(response: &ListPackageVersionsResponse) -> Vec<(u64, String, 
         .collect()
 }
 
+async fn list_system_packages(
+    client: &mut MovePackageServiceClient<Channel>,
+    at_checkpoint: Option<u64>,
+) -> Result<Vec<PackageVersion>, tonic::Status> {
+    let mut request = ListSystemPackagesRequest::default();
+    request.at_checkpoint = at_checkpoint;
+    client
+        .list_system_packages(request)
+        .await
+        .map(|response| response.into_inner().system_packages)
+}
+
+/// `ListSystemPackages` without `at_checkpoint` answers as of the served height: the same list as
+/// an explicit `at_checkpoint` at the served height.
+#[tokio::test]
+async fn test_list_system_packages_without_at_checkpoint() {
+    let mut cluster = list_api_cluster().await;
+    let checkpoint = cluster.create_checkpoint().await.sequence_number;
+    wait_for_kv_checkpoint(&cluster, checkpoint).await;
+
+    let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // The served height is the checkpoint below the first one a bound above it names.
+    let error = list_system_packages(&mut client, Some(u64::MAX))
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "at_checkpoint", u64::MAX);
+    let first_unavailable: u64 = sui_rpc::proto::google::rpc::Status::decode(error.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .expect("ErrorInfo")
+        .metadata["firstUnavailableCheckpoint"]
+        .parse()
+        .unwrap();
+    let served_height = first_unavailable - 1;
+
+    let latest = list_system_packages(&mut client, None).await.unwrap();
+    assert_eq!(
+        latest,
+        list_system_packages(&mut client, Some(served_height))
+            .await
+            .unwrap()
+    );
+    // Nothing upgrades the system packages, so each is at the version genesis published.
+    for package_id in [
+        MOVE_STDLIB_PACKAGE_ID,
+        SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
+    ] {
+        let expected = PackageVersion::new(&package_id.into(), 1)
+            .with_checkpoint(0)
+            .with_original_id(package_id.to_canonical_string(true));
+        assert!(latest.contains(&expected), "{package_id}: {latest:?}");
+    }
+}
 /// A cursor-mode `ListPackageVersions` request for `package_id`'s lineage.
 fn package_versions_cursor_request(
     package_id: ObjectID,

@@ -790,16 +790,22 @@ async fn test_indexer_e2e() -> Result<()> {
         "published package should appear in checkpoint range scan",
     );
 
-    // get_system_packages: genesis system packages (0x1, 0x2, etc.)
-    let sys_pkgs = harness
-        .bigtable_client()
-        .get_system_packages(max_checkpoint, None, 100)
-        .await?;
-    assert!(
-        !sys_pkgs.is_empty(),
-        "there should be system packages from genesis"
-    );
-    for pkg in &sys_pkgs {
+    // get_system_package_ids: genesis system packages (0x1, 0x2, etc.), in ascending order, each
+    // with a system package version in `packages`.
+    let sys_ids = harness.bigtable_client().get_system_package_ids().await?;
+    for expected in [ObjectID::from_single_byte(1), ObjectID::from_single_byte(2)] {
+        assert!(
+            sys_ids.contains(&expected),
+            "genesis system package {expected} missing from {sys_ids:?}"
+        );
+    }
+    assert!(sys_ids.is_sorted(), "{sys_ids:?}");
+    for id in &sys_ids {
+        let pkg = harness
+            .bigtable_client()
+            .get_package_latest(*id, max_checkpoint)
+            .await?
+            .expect("system package has a version");
         assert!(pkg.is_system_package);
     }
 
