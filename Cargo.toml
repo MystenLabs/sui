@@ -261,6 +261,25 @@ strip = 'none'
 # For convenience.
 strip = 'none'
 
+# Experiment: these crates' test builds run alone at the end of CI builds.
+[profile.test.package.sui-core]
+codegen-units = 256
+
+[profile.test.package.sui-e2e-tests]
+codegen-units = 256
+
+[profile.test.package.sui-indexer-alt-graphql]
+codegen-units = 256
+
+[profile.simulator.package.sui-core]
+codegen-units = 256
+
+[profile.simulator.package.sui-e2e-tests]
+codegen-units = 256
+
+[profile.simulator.package.sui-indexer-alt-graphql]
+codegen-units = 256
+
 [profile.test.package.move-compiler]
 # opt-level 2 for move-compiler reduces the size of some of its
 # (recursive) stack frames by up to 10x, avoiding stack overflows.
