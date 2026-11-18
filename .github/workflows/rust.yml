@@ -139,7 +139,25 @@ jobs:
           # the "cargo test (sui-graphql staging)" step below, not amid the full parallel suite
           # where their fixed stream timeouts flake under contention. sui-fork-e2e-tests runs in the
           # test-sui-fork job, because each of its shell tests starts a full local network and a fork.
-          cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !package(sui-fork-e2e-tests) and !(package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
+          cargo nextest run --profile ci --cargo-quiet --timings -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !package(sui-fork-e2e-tests) and !(package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
+      - name: Record build output sizes
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mkdir -p target/build-report
+          find target/debug/deps -maxdepth 1 -type f -perm -u+x -printf '%s\t%f\n' | sort -rn > target/build-report/test-binary-sizes.tsv
+          find target/debug -maxdepth 1 -type f -perm -u+x -printf '%s\t%f\n' | sort -rn > target/build-report/bin-sizes.tsv
+          awk -F'\t' '{s+=$1; n++} END {printf "test binaries: %d, %.1f GiB\n", n, s/2^30}' target/build-report/test-binary-sizes.tsv
+          awk -F'\t' '{s+=$1; n++} END {printf "bins: %d, %.1f GiB\n", n, s/2^30}' target/build-report/bin-sizes.tsv
+          head -20 target/build-report/test-binary-sizes.tsv
+      - name: Upload build timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: build-timings-test-${{ github.run_attempt }}
+          path: |
+            target/cargo-timings/
+            target/build-report/
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -478,7 +496,13 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast --timings
+      - name: Upload build timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: build-timings-simtest-${{ github.run_attempt }}
+          path: target/**/cargo-timings/
       - name: check determinism
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/check-determinism.sh
