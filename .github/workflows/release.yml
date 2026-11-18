@@ -210,7 +210,14 @@ jobs:
           done
           cargo build --release $sui_bins
           cargo build --release --features tracing --bin sui
-          cargo build --profile=dev --bin sui --features tracing
+          # sui-debug ships to users with full debuginfo on Linux, which the setup-sccache
+          # config otherwise limits. On macOS and Windows the debuginfo is not in the binary.
+          # sccache-warmup.yml runs the same command.
+          debug_flags=""
+          if [ "$RUNNER_OS" = Linux ]; then
+            debug_flags="--config profile.dev.debug=true --config profile.dev.package.librocksdb-sys.debug=true"
+          fi
+          cargo build --profile=dev --bin sui --features tracing $debug_flags
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_existing_archive == '' }}

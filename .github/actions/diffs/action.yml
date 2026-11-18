@@ -50,6 +50,7 @@ runs:
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
           - '.github/workflows/bridge.yml'
+          - '.github/actions/setup-sccache/**'
           - 'Cargo.lock'
           - 'Cargo.toml'
           - 'deny.toml'
