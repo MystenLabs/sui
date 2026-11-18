@@ -111,8 +111,7 @@ mod checked {
         config: &ProtocolConfig,
         transaction: &TransactionData,
         input_objects: InputObjects,
-        // TODO: check ReceivingObjects for dev inspect?
-        _receiving_objects: ReceivingObjects,
+        receiving_objects: ReceivingObjects,
         reference_gas_price: u64,
     ) -> SuiResult<CheckedInputObjects> {
         let kind = transaction.kind();
@@ -149,6 +148,23 @@ mod checked {
             &transaction.gas_data().payment,
             transaction,
         )?;
+
+        let input_object_ids: HashSet<ObjectID> = input_objects
+            .object_kinds()
+            .map(|k| k.object_id())
+            .collect();
+        let mut seen_receiving: HashSet<ObjectID> = HashSet::new();
+        for receiving_object in receiving_objects.iter() {
+            let (receiving_id, version, _) = receiving_object.object_ref;
+            fp_ensure!(
+                version < SequenceNumber::MAX,
+                UserInputError::InvalidSequenceNumber.into()
+            );
+            fp_ensure!(
+                !input_object_ids.contains(&receiving_id) && seen_receiving.insert(receiving_id),
+                UserInputError::DuplicateObjectRefInput.into()
+            );
+        }
 
         Ok(input_objects.into_checked())
     }

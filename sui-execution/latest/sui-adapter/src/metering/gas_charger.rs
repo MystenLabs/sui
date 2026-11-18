@@ -171,8 +171,7 @@ impl GasCharger {
 
     // Payment setup.
 
-    // Smash the signed payments into the first one. Input checks validate the gas coins, so
-    // a bad coin panics.
+    // Smash the signed payments into the first one.
     pub fn smash_gas(
         &mut self,
         temporary_store: &mut TemporaryStore<'_>,
@@ -185,22 +184,26 @@ impl GasCharger {
             return Ok(());
         };
         let mut metadata = SmashMetadata::new(methods)?;
-        metadata.smash_gas(&self.tx_digest, temporary_store);
+        metadata.smash_gas(&self.tx_digest, temporary_store)?;
         self.payment = PaymentMetadata::Smash(metadata);
         Ok(())
     }
 
     // Smash again after the writes were dropped. The charge goes back to the smash target.
-    pub fn resmash(&mut self, temporary_store: &mut TemporaryStore<'_>) {
+    pub fn resmash(
+        &mut self,
+        temporary_store: &mut TemporaryStore<'_>,
+    ) -> Result<(), ExecutionError> {
         match &mut self.payment {
             PaymentMetadata::Smash(metadata) => {
                 metadata.reset_charge_location();
-                metadata.smash_gas(&self.tx_digest, temporary_store);
+                metadata.smash_gas(&self.tx_digest, temporary_store)?;
             }
             PaymentMetadata::Unmetered | PaymentMetadata::Gasless => {}
             // A failed smash leaves through the BumpOnly exit before any reset.
             PaymentMetadata::Unsmashed(_) => debug_assert!(false, "gas is smashed before a reset"),
         }
+        Ok(())
     }
 
     // Phases, in execution order.
@@ -495,7 +498,7 @@ impl SmashMetadata {
         &mut self,
         tx_digest: &TransactionDigest,
         temporary_store: &mut TemporaryStore<'_>,
-    ) {
+    ) -> Result<(), ExecutionError> {
         // sum the value of all gas coins
         let total_smashed = self
             .payment_methods()
@@ -519,17 +522,14 @@ impl SmashMetadata {
                     Ok(move_obj.get_coin_value_unsafe())
                 }
             })
-            .collect::<Result<Vec<u64>, ExecutionError>>()
-            // transaction and certificate input checks must have insured that all gas coins
-            // are valid
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Unable to process gas payments for transaction {}",
-                    tx_digest
-                )
-            })
-            .iter()
-            .sum();
+            .collect::<Result<Vec<u64>, ExecutionError>>()?
+            .into_iter()
+            .try_fold(0u64, u64::checked_add)
+            .ok_or_else(|| {
+                ExecutionError::invariant_violation(format!(
+                    "gas payment total overflows u64 in txn {tx_digest}"
+                ))
+            })?;
         // If it is 0, then we are smashing for the first time (at the beginning of execution).
         // If it is non-zero, then we are re-smashing after a reset (due to some sort of
         // failure in charging for gas), and the total should not change.
@@ -549,10 +549,18 @@ impl SmashMetadata {
                     assert_reachable!("smashed payment is address-balance reservation");
                     let balance_type =
                         sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+                    let net_change = i64::try_from(*reservation)
+                        .ok()
+                        .and_then(|value| value.checked_neg())
+                        .ok_or_else(|| {
+                            ExecutionError::invariant_violation(
+                                "gas reservation too large to represent as a balance change",
+                            )
+                        })?;
                     let event = AccumulatorEvent::from_balance_change(
                         *sui_address,
                         balance_type,
-                        i64::try_from(*reservation).unwrap().checked_neg().unwrap(),
+                        net_change,
                     )
                     .expect("Failed to create accumulator event for gas smashing");
                     temporary_store.add_accumulator_event(event);
@@ -569,16 +577,23 @@ impl SmashMetadata {
                 // The reservation here is only a maximal withdrawal from this address balance
                 // We do not need to withdraw here unless necessary, which will be done during
                 // gas charging
-                let deposit = total_smashed
-                    .checked_sub(*reservation)
-                    .expect("the total smashed includes the target's reservation");
+                let deposit = total_smashed.checked_sub(*reservation).ok_or_else(|| {
+                    ExecutionError::invariant_violation(
+                        "the total smashed does not include the target's reservation",
+                    )
+                })?;
                 if deposit != 0 {
                     let balance_type =
                         sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+                    let net_change = i64::try_from(deposit).map_err(|_| {
+                        ExecutionError::invariant_violation(
+                            "gas deposit too large to represent as a balance change",
+                        )
+                    })?;
                     let event = AccumulatorEvent::from_balance_change(
                         *sui_address,
                         balance_type,
-                        i64::try_from(deposit).unwrap(),
+                        net_change,
                     )
                     .expect("Failed to create accumulator event for gas smashing");
                     temporary_store.add_accumulator_event(event);
@@ -588,28 +603,25 @@ impl SmashMetadata {
                 let mut primary_gas_object = temporary_store
                     .objects()
                     .get(gas_coin_id)
-                    // unwrap should be safe because we checked that this exists in `self.objects()` above
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Invariant violation: gas coin not found in store in txn {}",
-                            tx_digest
-                        )
-                    })
+                    .ok_or_else(|| {
+                        ExecutionError::invariant_violation(format!(
+                            "gas coin not found in store in txn {tx_digest}"
+                        ))
+                    })?
                     .clone();
                 primary_gas_object
                     .data
                     .try_as_move_mut()
-                    // unwrap should be safe because we checked that the primary gas object was a coin object above.
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Invariant violation: invalid coin object in txn {}",
-                            tx_digest
-                        )
-                    })
+                    .ok_or_else(|| {
+                        ExecutionError::invariant_violation(format!(
+                            "invalid coin object in txn {tx_digest}"
+                        ))
+                    })?
                     .set_coin_value_unsafe(total_smashed);
                 temporary_store.mutate_input_object(primary_gas_object);
             }
         }
+        Ok(())
     }
 
     // Apply the net charge or refund to the gas coin, or to the address balance through an

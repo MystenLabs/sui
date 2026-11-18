@@ -2,12 +2,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(clippy::indexing_slicing)]
+#![deny(clippy::cast_possible_wrap)]
+#![deny(clippy::cast_sign_loss)]
+
 pub use checked::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{base_types::ObjectID, gas_model::gas_v2::PerObjectStorage};
 
-#[sui_macros::with_checked_arithmetic]
 pub mod checked {
 
     use crate::gas::GasUsageReport;
@@ -271,7 +276,7 @@ pub mod checked {
         }
 
         pub fn gas_used(&self) -> u64 {
-            self.computation_cost + self.storage_cost
+            self.computation_cost.saturating_add(self.storage_cost)
         }
 
         /// Portion of the storage rebate that gets passed on to the transaction sender. The remainder
@@ -280,14 +285,22 @@ pub mod checked {
             // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
             // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
             const BASIS_POINTS: u128 = 10000;
-            (((self.storage_rebate as u128 * storage_rebate_rate as u128)
-            + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
-            / BASIS_POINTS) as u64
+            let rebate = (self.storage_rebate as u128)
+                .saturating_mul(storage_rebate_rate as u128)
+                .saturating_add(BASIS_POINTS / 2) // integer rounding adds half of the denominator
+                / BASIS_POINTS;
+            u64::try_from(rebate).unwrap_or(u64::MAX)
         }
 
         /// Get net gas usage, positive number means used gas; negative number means refund.
         pub fn net_gas_usage(&self) -> i64 {
-            self.gas_used() as i64 - self.storage_rebate as i64
+            // Never i64::MIN: callers negate this value.
+            const MAX: i128 = i64::MAX as i128;
+            const MIN: i128 = -MAX;
+            let net = (self.computation_cost as i128)
+                .saturating_add(self.storage_cost as i128)
+                .saturating_sub(self.storage_rebate as i128);
+            i64::try_from(net.clamp(MIN, MAX)).unwrap_or(i64::MAX)
         }
 
         pub fn new_from_txn_effects<'a>(
@@ -333,10 +346,12 @@ pub mod checked {
 
     impl std::ops::AddAssign<&Self> for GasCostSummary {
         fn add_assign(&mut self, other: &Self) {
-            self.computation_cost += other.computation_cost;
-            self.storage_cost += other.storage_cost;
-            self.storage_rebate += other.storage_rebate;
-            self.non_refundable_storage_fee += other.non_refundable_storage_fee;
+            self.computation_cost = self.computation_cost.saturating_add(other.computation_cost);
+            self.storage_cost = self.storage_cost.saturating_add(other.storage_cost);
+            self.storage_rebate = self.storage_rebate.saturating_add(other.storage_rebate);
+            self.non_refundable_storage_fee = self
+                .non_refundable_storage_fee
+                .saturating_add(other.non_refundable_storage_fee);
         }
     }
 
@@ -355,10 +370,11 @@ pub mod checked {
         let gas_coin = gas_object.data.try_as_move_mut().unwrap();
         let balance = gas_coin.get_coin_value_unsafe();
         let new_balance = if charge_or_rebate < 0 {
-            balance + (-charge_or_rebate as u64)
+            balance.saturating_add(charge_or_rebate.unsigned_abs())
         } else {
-            assert!(balance >= charge_or_rebate as u64);
-            balance - charge_or_rebate as u64
+            let charge = charge_or_rebate.unsigned_abs();
+            assert!(balance >= charge);
+            balance.saturating_sub(charge)
         };
         gas_coin.set_coin_value_unsafe(new_balance)
     }

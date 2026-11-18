@@ -769,14 +769,14 @@ pub(crate) mod checked {
         gas_charger: &mut GasCharger,
         temporary_store: &mut TemporaryStore<'_>,
     ) -> Result<(), ExecutionError> {
-        reset_to_inputs(gas_charger, temporary_store);
+        reset_to_inputs(gas_charger, temporary_store)?;
         if gas_charger.is_gasless() {
             charge_storage(gas_charger, temporary_store, StorageTier::RebatesOnly)
         } else {
             charge_storage(gas_charger, temporary_store, StorageTier::InputsOnly).or_else(|_| {
                 // The inputs do not fit: the whole budget goes to computation and only the rebates
                 // settle.
-                reset_to_inputs(gas_charger, temporary_store);
+                reset_to_inputs(gas_charger, temporary_store)?;
                 charge_storage(gas_charger, temporary_store, StorageTier::RebatesOnly)
             })
         }
@@ -784,10 +784,14 @@ pub(crate) mod checked {
 
     // Drop the execution writes and re-smash gas. The mutable inputs are touched again so their
     // versions still bump.
-    fn reset_to_inputs(gas_charger: &mut GasCharger, temporary_store: &mut TemporaryStore<'_>) {
+    fn reset_to_inputs(
+        gas_charger: &mut GasCharger,
+        temporary_store: &mut TemporaryStore<'_>,
+    ) -> Result<(), ExecutionError> {
         temporary_store.drop_writes();
-        gas_charger.resmash(temporary_store);
+        gas_charger.resmash(temporary_store)?;
         temporary_store.ensure_active_inputs_mutated();
+        Ok(())
     }
 
     fn check_effects<Mode: ExecutionMode>(
