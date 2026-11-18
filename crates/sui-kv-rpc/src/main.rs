@@ -230,7 +230,6 @@ async fn main() -> Result<()> {
         config.monotonic_read_wait_timeout(),
         config.stages(),
         config.watermark_source(),
-        config.enable_object_at_checkpoint(),
         config.alpha_features(),
     )
     .await?;

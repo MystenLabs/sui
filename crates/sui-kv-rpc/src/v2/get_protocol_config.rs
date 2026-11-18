@@ -11,48 +11,27 @@
 //! last checkpoint of the current epoch, while the current version is still in force, so a
 //! version above the one in force at the served height is not found either.
 
-use std::collections::BTreeMap;
-
-use sui_kvstore::BigTableClient;
-use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::ProtocolConfigV2Data;
 use sui_kvstore::tables::epochs::col;
 use sui_rpc::merge::Merge;
-use sui_rpc::proto::google::rpc::ErrorInfo;
 use sui_rpc::proto::sui::rpc::v2::{
     GetProtocolConfigRequest, GetProtocolConfigResponse, ProtocolConfig,
 };
+use sui_rpc_api::RpcError;
 use sui_rpc_api::grpc::v2::protocol_config_from_parts;
 use sui_rpc_api::read_mask_defaults::validate_read_mask;
-use sui_rpc_api::{ErrorDetails, ErrorReason, RpcError};
 
+use crate::bigtable_client::BigTableClient;
 use crate::served_height::ServedHeight;
 
 pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::PROTOCOL_CONFIG;
 
-/// The refusal of an instance that does not serve protocol configs from the `protocol_configs_v2`
-/// table: `Unimplemented` with a `NOT_SERVED_HERE` [`ErrorInfo`] whose `cause` is
-/// `disabled_by_config`.
-pub(crate) fn not_served_here() -> RpcError {
-    let error_info = ErrorInfo::default()
-        .with_reason(ErrorReason::NotServedHere.as_str_name())
-        .with_domain(ErrorReason::DOMAIN)
-        .with_metadata(BTreeMap::from([(
-            "cause".to_owned(),
-            "disabled_by_config".to_owned(),
-        )]));
-    RpcError::new(
-        tonic::Code::Unimplemented,
-        "GetProtocolConfig is not enabled on this instance",
-    )
-    .with_details(ErrorDetails::new().with_error_info(error_info))
-}
-
 /// Serve the protocol version the request names, or the one in force at `served_height`. A
 /// version the chain has not run by `served_height` is not found. The version in force has a row
-/// by the time it is served, so a missing row for it is `Internal`.
+/// by the time it is served, so a missing row for it is `Internal`. Every read goes through
+/// `client`, the request's limited client.
 pub async fn get_protocol_config(
-    mut client: BigTableClient,
+    client: BigTableClient,
     served_height: ServedHeight,
     request: GetProtocolConfigRequest,
 ) -> sui_rpc_api::Result<GetProtocolConfigResponse> {
@@ -60,16 +39,15 @@ pub async fn get_protocol_config(
 
     let (in_force, version, message) = match request.version {
         Some(version) => {
-            let mut row_client = client.clone();
             let (in_force, message) = tokio::try_join!(
-                protocol_version_in_force(&mut client, served_height),
-                read_protocol_config(&mut row_client, version),
+                protocol_version_in_force(&client, served_height),
+                read_protocol_config(&client, version),
             )?;
             (in_force, version, message)
         }
         None => {
-            let in_force = protocol_version_in_force(&mut client, served_height).await?;
-            let message = read_protocol_config(&mut client, in_force).await?;
+            let in_force = protocol_version_in_force(&client, served_height).await?;
+            let message = read_protocol_config(&client, in_force).await?;
             (in_force, in_force, message)
         }
     };
@@ -96,7 +74,7 @@ pub async fn get_protocol_config(
 /// The protocol config of `version` from its `protocol_configs_v2` row, as both
 /// `GetProtocolConfig` and `GetEpoch` serve it. `None` if the table has no row for `version`.
 pub(crate) async fn read_protocol_config(
-    client: &mut BigTableClient,
+    client: &BigTableClient,
     version: u64,
 ) -> Result<Option<ProtocolConfig>, RpcError> {
     Ok(client.get_protocol_configs_v2(version).await?.map(
@@ -109,7 +87,7 @@ pub(crate) async fn read_protocol_config(
 
 /// The protocol version of the epoch `served_height` is in, from its `epochs` row.
 async fn protocol_version_in_force(
-    client: &mut BigTableClient,
+    client: &BigTableClient,
     served_height: ServedHeight,
 ) -> Result<u64, RpcError> {
     let epoch = served_height.epoch;
@@ -135,12 +113,16 @@ fn protocol_version_not_found(version: u64) -> RpcError {
 
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
+
     use prost_types::value::Kind;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_protocol_config::ProtocolVersion;
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::google::rpc::ErrorInfo;
     use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
+    use sui_rpc_api::ErrorReason;
 
     use super::*;
     use crate::v2::test_utils::{insert_epoch_protocol_version, insert_protocol_configs_v2_row};
@@ -173,6 +155,20 @@ mod tests {
         epoch: 1,
     };
 
+    /// A client of the mock Bigtable at `addr`, limited as a `GetProtocolConfig` request's client
+    /// is.
+    async fn connect(addr: SocketAddr) -> BigTableClient {
+        let client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        BigTableClient::new(
+            client,
+            8,
+            crate::bigtable_client::Metrics::for_testing().0,
+            "GetProtocolConfig",
+        )
+    }
+
     /// A mock Bigtable holding epochs 0 and 1 and the `protocol_configs_v2` rows written up to
     /// epoch 1's last checkpoint: those of epoch 0's, epoch 1's and epoch 2's versions.
     async fn client() -> (BigTableClient, MockBigtableServer) {
@@ -183,10 +179,7 @@ mod tests {
         for version in [min_version(), epoch_1_version(), epoch_2_version()] {
             insert_protocol_configs_v2_row(&mock, version).await;
         }
-        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
-            .await
-            .expect("connect to mock BigTable");
-        (client, mock)
+        (connect(addr).await, mock)
     }
 
     async fn get(
@@ -271,9 +264,7 @@ mod tests {
         let mock = MockBigtableServer::new();
         let (addr, _server) = mock.start().await.expect("start mock BigTable");
         insert_epoch_protocol_version(&mock, 0, min_version()).await;
-        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
-            .await
-            .expect("connect to mock BigTable");
+        let client = connect(addr).await;
         let inside_epoch_0 = ServedHeight {
             checkpoint: 5,
             epoch: 0,
@@ -364,7 +355,6 @@ mod tests {
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             WatermarkSource::IndexerStreams(vec![]),
-            false,
             AlphaFeatures::default(),
         )
         .await

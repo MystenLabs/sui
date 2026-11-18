@@ -92,7 +92,7 @@ pub(crate) async fn get_object(
         found.as_ref(),
         object_id,
         selector.not_found(address),
-        server.object_at_checkpoint_enabled,
+        server.alpha_features.object_at_checkpoint,
         &read_mask,
         &server.package_resolver,
     )
@@ -258,7 +258,7 @@ pub(crate) async fn batch_get_objects(
     let mut rendered = render_ahead(answered, DEFAULT_RENDER_AHEAD, {
         let read_mask = Arc::new(read_mask);
         let resolver = server.package_resolver.clone();
-        let removal_details = server.object_at_checkpoint_enabled;
+        let removal_details = server.alpha_features.object_at_checkpoint;
         move |((index, answer), rows)| {
             let (address, selector) = lookups[index];
             let read_mask = read_mask.clone();
@@ -784,7 +784,7 @@ impl KvRpcServer {
         client: BigTableClient,
         served_height: Result<ServedHeight, RpcError>,
     ) -> Result<AtCheckpointReads, RpcError> {
-        if !self.object_at_checkpoint_enabled {
+        if !self.alpha_features.object_at_checkpoint {
             return Err(not_served_here(
                 NotServedHereCause::DisabledByConfig,
                 "at_checkpoint and max_version object reads, and ListObjectVersions, are not \
@@ -928,8 +928,10 @@ mod tests {
     use sui_types::object::Owner;
 
     use super::*;
+    use crate::AlphaFeatures;
     use crate::StageConfig;
     use crate::StagesConfig;
+    use crate::v2::test_utils::OBJECT_AT_CHECKPOINT;
     use crate::v2::test_utils::insert_history;
     use crate::v2::test_utils::mask;
     use crate::v2::test_utils::start_kv_rpc;
@@ -957,7 +959,7 @@ mod tests {
     async fn test_version_only_masks_skip_object_contents() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // One object, live at version 2 from checkpoint 4 and at version 3 from checkpoint 5.
         let id = ObjectID::random();
@@ -1065,7 +1067,7 @@ mod tests {
     async fn test_version_only_reads_of_deleted_object_are_not_found() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), false).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), AlphaFeatures::default()).await;
 
         // Live at version 1, deleted at version 2.
         let id = ObjectID::random();
@@ -1144,7 +1146,7 @@ mod tests {
     async fn test_at_checkpoint_version_missing_from_objects_is_internal() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // The index has the object live at version 3 from checkpoint 5; `objects` has no row.
         let id = ObjectID::random();
@@ -1227,7 +1229,7 @@ mod tests {
 
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
         let id = ObjectID::random();
         insert_history(&mock, id, &[(5, 3, ObjectStatus::Live)]).await;
         // Every row of a response waits a minute, far longer than the reads are waited for.
@@ -1266,7 +1268,7 @@ mod tests {
 
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // `objects` holds version 8, and at or below 6 version 3, a tombstone at 5, or nothing.
         // The index has the object live at 5 from checkpoint 3, and at 8 from checkpoint 6.
@@ -1383,7 +1385,7 @@ mod tests {
 
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), false).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), AlphaFeatures::default()).await;
 
         let request = |at_checkpoint: Option<u64>| {
             let mut req = GetObjectRequest::default();
@@ -1420,7 +1422,7 @@ mod tests {
     async fn test_at_checkpoint_live_version_with_tombstone_row_is_internal() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // The index has the object live at version 3 from checkpoint 5; `objects` has a
         // tombstone there.
@@ -1484,7 +1486,7 @@ mod tests {
     async fn test_removal_tombstones_are_required_with_object_version_history() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // Each object is created at version 2 in checkpoint 1, deleted at 6 in checkpoint 5, and
         // created again at 8 in checkpoint 7: `at_checkpoint` 5, alone and with `version` 6, reads
@@ -1562,7 +1564,8 @@ mod tests {
             assert_eq!(&batch_outcome(item), expected, "BatchGetObjects {req:?}");
         }
 
-        let without_history = start_kv_rpc(addr, StagesConfig::default(), false).await;
+        let without_history =
+            start_kv_rpc(addr, StagesConfig::default(), AlphaFeatures::default()).await;
         let removed = ObjectID::random();
         insert_history(
             &mock,
@@ -1605,7 +1608,7 @@ mod tests {
     async fn test_failed_version_index_read_fails_the_batch() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // `broken` has its `objects` row at version 3, but its version index row at checkpoint 5
         // cannot be decoded. `healthy` is live at version 1 from checkpoint 1.
@@ -1696,7 +1699,7 @@ mod tests {
     async fn test_max_version_and_checkpoint_bounds_follow_the_history() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // Created at version 2 in checkpoint 1, mutated at 4 in checkpoint 3, wrapped at 6 in
         // checkpoint 5, unwrapped at 8 in checkpoint 7, and deleted at 9 in checkpoint 10.
@@ -1818,7 +1821,7 @@ mod tests {
     async fn test_removed_objects_report_their_removal() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // Created at version 2 in checkpoint 1, mutated at 4 in checkpoint 3, wrapped at 6 in
         // checkpoint 5, unwrapped at 8 in checkpoint 7, and deleted at 9 in checkpoint 10.
@@ -1964,8 +1967,13 @@ mod tests {
         for served in [15, 19, 20, 25] {
             let mock = MockBigtableServer::new();
             let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-            let kv_rpc =
-                start_kv_rpc_at_heights(addr, StagesConfig::default(), true, |_| served).await;
+            let kv_rpc = start_kv_rpc_at_heights(
+                addr,
+                StagesConfig::default(),
+                OBJECT_AT_CHECKPOINT,
+                |_| served,
+            )
+            .await;
             let id = ObjectID::random();
             insert_history(
                 &mock,
@@ -2024,7 +2032,7 @@ mod tests {
     async fn test_max_version_without_checkpoint_is_bounded_by_the_served_height() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // `mutated` is live at version 3 from checkpoint 5 and at version 5 from checkpoint 12;
         // `created` is created at version 2 in checkpoint 12.
@@ -2109,8 +2117,9 @@ mod tests {
             tonic::Code::Unimplemented,
             Some("disabled_by_config".to_owned()),
         ));
-        for enabled in [false, true] {
-            let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), enabled).await;
+        for alpha_features in [AlphaFeatures::default(), OBJECT_AT_CHECKPOINT] {
+            let enabled = alpha_features.object_at_checkpoint;
+            let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), alpha_features).await;
             // The served height is 10.
             for (version, max_version, at_checkpoint, when_enabled) in [
                 (Some(2), None, Some(5), Ok(2)),
@@ -2162,14 +2171,21 @@ mod tests {
             sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
             sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
         ] {
-            for (enabled, served) in [(false, 10), (true, 7)] {
+            for (alpha_features, served) in
+                [(AlphaFeatures::default(), 10), (OBJECT_AT_CHECKPOINT, 7)]
+            {
+                let enabled = alpha_features.object_at_checkpoint;
                 let mock = MockBigtableServer::new();
                 let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-                let kv_rpc =
-                    start_kv_rpc_at_heights(addr, StagesConfig::default(), enabled, |pipeline| {
+                let kv_rpc = start_kv_rpc_at_heights(
+                    addr,
+                    StagesConfig::default(),
+                    alpha_features,
+                    |pipeline| {
                         if pipeline == lagging { 7 } else { 10 }
-                    })
-                    .await;
+                    },
+                )
+                .await;
                 assert_eq!(
                     ServedHeight::of(&kv_rpc.admitted_request(()))
                         .unwrap()
@@ -2196,7 +2212,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let kv_rpc = start_kv_rpc(addr, stages, false).await;
+        let kv_rpc = start_kv_rpc(addr, stages, AlphaFeatures::default()).await;
 
         // Versions 1 to 5 are requested; only the odd ones are stored.
         let id = ObjectID::random();
@@ -2284,7 +2300,8 @@ mod tests {
             ..Default::default()
         };
         // Two permits per request, and 10ms per row read, so the scans finish two at a time.
-        let kv_rpc = start_kv_rpc_with_request_concurrency(addr, stages, true, 2).await;
+        let kv_rpc =
+            start_kv_rpc_with_request_concurrency(addr, stages, OBJECT_AT_CHECKPOINT, 2).await;
         mock.set_read_rows_latency(Duration::from_millis(10)).await;
 
         // Eight objects, each live at version 1 from checkpoint 1.
@@ -2352,7 +2369,7 @@ mod tests {
     async fn test_batch_answers_each_request_and_reads_each_row_once() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
 
         // `pinned` is live at version 3 from checkpoint 5; `latest` has one version, 1.
         let pinned = Object::with_id_owner_version_for_testing(
@@ -2471,7 +2488,8 @@ mod tests {
             }),
             ..Default::default()
         };
-        let kv_rpc = start_kv_rpc_with_request_concurrency(addr, stages, true, 2).await;
+        let kv_rpc =
+            start_kv_rpc_with_request_concurrency(addr, stages, OBJECT_AT_CHECKPOINT, 2).await;
 
         // Eight objects, each live at version 1 from checkpoint 1.
         let stored: Vec<Object> = (0..8)
@@ -2533,7 +2551,7 @@ mod tests {
     async fn test_batch_get_objects_limit_exceeded() {
         let mock = MockBigtableServer::new();
         let (addr, server) = mock.start().await.expect("start mock BigTable");
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), false).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), AlphaFeatures::default()).await;
 
         let requests = (0..MAX_BATCH_REQUESTS + 1)
             .map(|_| {

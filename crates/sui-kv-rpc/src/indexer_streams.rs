@@ -221,7 +221,7 @@ mod tests {
     /// A watermark for every pipeline a replica serving every alpha feature reads, at the
     /// checkpoint `checkpoint` picks for it.
     fn served_watermarks(checkpoint: impl Fn(&str) -> u64) -> HashMap<String, CommitterWatermark> {
-        service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::all())
+        service_info_watermark_pipelines(BitmapSchema::V2, AlphaFeatures::all())
             .iter()
             .map(|&pipeline| (pipeline.to_string(), watermark(checkpoint(pipeline))))
             .collect()
@@ -283,7 +283,6 @@ mod tests {
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             WatermarkSource::IndexerStreams(indexer_urls),
-            false,
             alpha_features,
         )
         .await
@@ -419,7 +418,7 @@ mod tests {
             .await
             .expect("connect to mock Bigtable");
         let pipelines =
-            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::default());
+            service_info_watermark_pipelines(BitmapSchema::V2, AlphaFeatures::default());
         seed_watermarks(&mut client, &pipelines, |_| 50).await;
         mock.clear_read_rows_calls().await;
 

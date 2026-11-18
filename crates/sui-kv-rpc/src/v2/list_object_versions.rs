@@ -263,9 +263,11 @@ mod tests {
     use sui_types::storage::ObjectKey;
 
     use super::*;
+    use crate::AlphaFeatures;
     use crate::LedgerHistoryMethodConfig;
     use crate::StagesConfig;
     use crate::bigtable_client::stage;
+    use crate::v2::test_utils::OBJECT_AT_CHECKPOINT;
     use crate::v2::test_utils::insert_history;
     use crate::v2::test_utils::list_counter;
     use crate::v2::test_utils::list_histogram;
@@ -302,25 +304,25 @@ mod tests {
         (9, 14, ObjectStatus::Deleted),
     ];
 
-    /// A kv-rpc server, with every watermark at checkpoint 10 and `at_checkpoint` reads enabled
-    /// if `enable_object_at_checkpoint`, over a mock BigTable holding `history` for a new object.
+    /// A kv-rpc server serving `alpha_features`, with every watermark at checkpoint 10, over a
+    /// mock BigTable holding `history` for a new object.
     async fn start_fixture_with_history(
-        enable_object_at_checkpoint: bool,
+        alpha_features: AlphaFeatures,
         history: &[(u64, u64, ObjectStatus)],
     ) -> (KvRpcServer, ObjectID, tokio::task::JoinHandle<()>) {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
         let id = ObjectID::random();
         insert_history(&mock, id, history).await;
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), enable_object_at_checkpoint).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), alpha_features).await;
         (kv_rpc, id, mock_server)
     }
 
     /// [`start_fixture_with_history`] for [`HISTORY`].
     async fn start_fixture(
-        enable_object_at_checkpoint: bool,
+        alpha_features: AlphaFeatures,
     ) -> (KvRpcServer, ObjectID, tokio::task::JoinHandle<()>) {
-        start_fixture_with_history(enable_object_at_checkpoint, &HISTORY).await
+        start_fixture_with_history(alpha_features, &HISTORY).await
     }
 
     /// The checkpoint every fixture's watermarks are at (see [`start_kv_rpc`]), which bounds a
@@ -532,7 +534,8 @@ mod tests {
     /// The model check of [`test_list_object_versions_intersects_every_bound`] for a fixture
     /// object with `history`.
     async fn assert_listings_intersect_every_bound(history: &[(u64, u64, ObjectStatus)]) {
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, history).await;
+        let (kv_rpc, id, mock_server) =
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, history).await;
 
         let expected = |start: Option<u64>,
                         end: Option<u64>,
@@ -644,7 +647,7 @@ mod tests {
     /// `LEDGER_TIP`. Cursors from descending pages bound ascending ones.
     #[tokio::test]
     async fn test_list_object_versions_pages_backward_then_forward_from_cursors() {
-        let (kv_rpc, id, mock_server) = start_fixture(true).await;
+        let (kv_rpc, id, mock_server) = start_fixture(OBJECT_AT_CHECKPOINT).await;
         let page = async |ordering, after: Option<&Bytes>, before: Option<&Bytes>| {
             let listing = list(&kv_rpc, request(id, ordering, Some(2), after, before))
                 .await
@@ -711,8 +714,8 @@ mod tests {
     /// `OutOfRange` / `ABOVE_LATEST_AVAILABLE`, naming the bound, as `ListTransactions` is.
     #[tokio::test]
     async fn test_list_object_versions_rejects_invalid_requests() {
-        let (kv_rpc, id, mock_server) = start_fixture(true).await;
-        let (disabled, _, disabled_server) = start_fixture(false).await;
+        let (kv_rpc, id, mock_server) = start_fixture(OBJECT_AT_CHECKPOINT).await;
+        let (disabled, _, disabled_server) = start_fixture(AlphaFeatures::default()).await;
 
         let other_object = cursor(ObjectID::random(), 5);
         let malformed = Bytes::from_static(&[0xFF, 0xFF]);
@@ -866,7 +869,7 @@ mod tests {
     /// height of 10, and even when its version bounds leave nothing to list.
     #[tokio::test]
     async fn test_list_object_versions_needs_the_at_checkpoint_flag() {
-        let (kv_rpc, id, mock_server) = start_fixture(false).await;
+        let (kv_rpc, id, mock_server) = start_fixture(AlphaFeatures::default()).await;
 
         for (start_checkpoint, end_checkpoint) in [
             (None, None),
@@ -917,7 +920,8 @@ mod tests {
         // version from checkpoint 11 is still being written.
         let mut history = HISTORY.to_vec();
         history.push((12, 20, ObjectStatus::Live));
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, &history).await;
+        let (kv_rpc, id, mock_server) =
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, &history).await;
 
         // Version 14 deleted the object in checkpoint 9, so 14 is its version at the served
         // height, listed as a removal, and a cursor at it is served. `None` expects the cursor to
@@ -1055,7 +1059,7 @@ mod tests {
         // for it is past the tip: descending it is `OutOfRange`, and ascending, like a listing
         // without one, finds nothing up to the tip.
         let (kv_rpc, id, mock_server) =
-            start_fixture_with_history(true, &[(12, 20, ObjectStatus::Live)]).await;
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, &[(12, 20, ObjectStatus::Live)]).await;
         let after_20 = cursor(id, 20);
         let before_21 = cursor(id, 21);
         for ordering in [Ascending, Descending] {
@@ -1093,7 +1097,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_object_versions_resumes_descending_from_an_absent_objects_end_cursor() {
         use Ordering::*;
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, &[]).await;
+        let (kv_rpc, id, mock_server) = start_fixture_with_history(OBJECT_AT_CHECKPOINT, &[]).await;
         let minted = boundary_at(id, 0, SERVED_CHECKPOINT);
         for ordering in [Ascending, Descending] {
             let listing = list(&kv_rpc, request(id, ordering, None, None, None))
@@ -1172,7 +1176,7 @@ mod tests {
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
         let id = ObjectID::random();
         insert_history(&mock, id, history).await;
-        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), OBJECT_AT_CHECKPOINT).await;
         (kv_rpc, id, mock, mock_server)
     }
 
@@ -1197,7 +1201,7 @@ mod tests {
     async fn test_list_object_versions_ends_with_the_reason_of_its_bound() {
         use Ordering::*;
         use QueryEndReason::*;
-        let (kv_rpc, id, mock_server) = start_fixture(true).await;
+        let (kv_rpc, id, mock_server) = start_fixture(OBJECT_AT_CHECKPOINT).await;
 
         // The versions each request lists and the reason the stream ends with. The served height
         // is 10, at which the object's newest version is 14, its deletion.
@@ -1371,7 +1375,8 @@ mod tests {
         // An object whose newest version is live: a client following its new versions resumes
         // from that version's cursor and reaches the tip, and a starting cursor at the window's
         // edge ends the listing there, not at the cursor.
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, &HISTORY[..5]).await;
+        let (kv_rpc, id, mock_server) =
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, &HISTORY[..5]).await;
         assert_ends(
             &kv_rpc,
             id,
@@ -1413,7 +1418,8 @@ mod tests {
 
         // An object deleted and later created again: the deletion is an item like any other, so
         // pages run across it, and only the window's own bounds end the listing.
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, &RECREATED_HISTORY).await;
+        let (kv_rpc, id, mock_server) =
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, &RECREATED_HISTORY).await;
         assert_ends(
             &kv_rpc,
             id,
@@ -1472,7 +1478,8 @@ mod tests {
         use Ordering::*;
         use QueryEndReason::*;
         let (kv_rpc, id, mock_server) =
-            start_fixture_with_history(true, &[(4, 7, ObjectStatus::Deleted)]).await;
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, &[(4, 7, ObjectStatus::Deleted)])
+                .await;
 
         for ordering in [Ascending, Descending] {
             let listing = list(&kv_rpc, request(id, ordering, None, None, None))
@@ -1638,7 +1645,8 @@ mod tests {
     async fn test_list_object_versions_ends_with_a_resume_cursor() {
         use Ordering::*;
         use QueryEndReason::*;
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, &SPLIT_HISTORY).await;
+        let (kv_rpc, id, mock_server) =
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, &SPLIT_HISTORY).await;
         let at = |version| cursor(id, version);
         let edge = |version| boundary_at(id, version, SERVED_CHECKPOINT);
         // A cursor from a replica that has indexed checkpoint 15.
@@ -1995,7 +2003,8 @@ mod tests {
     async fn test_list_object_versions_reverses_direction_from_any_cursor() {
         use Ordering::*;
         for history in [&HISTORY[..], &SPLIT_HISTORY[..], &RECREATED_HISTORY[..]] {
-            let (kv_rpc, id, mock_server) = start_fixture_with_history(true, history).await;
+            let (kv_rpc, id, mock_server) =
+                start_fixture_with_history(OBJECT_AT_CHECKPOINT, history).await;
             for minting_end in [None, Some(5), Some(8)] {
                 for minting_ordering in [Ascending, Descending] {
                     // Page through the listing two items at a time, keeping every item's cursor
@@ -2065,7 +2074,8 @@ mod tests {
     #[tokio::test]
     async fn test_list_object_versions_resumes_from_an_empty_window_after_new_versions() {
         use Ordering::*;
-        let (kv_rpc, id, mock_server) = start_fixture_with_history(true, &SPLIT_HISTORY).await;
+        let (kv_rpc, id, mock_server) =
+            start_fixture_with_history(OBJECT_AT_CHECKPOINT, &SPLIT_HISTORY).await;
 
         // From `start_checkpoint` 9 the window lies above version 12, written in checkpoint 8;
         // to `end_checkpoint` 2 it ends before the creation, in checkpoint 2.
@@ -2131,8 +2141,13 @@ mod tests {
         let (caught_up_addr, caught_up_server) =
             caught_up_mock.start().await.expect("start mock BigTable");
         insert_history(&caught_up_mock, id, &history).await;
-        let caught_up =
-            start_kv_rpc_at_heights(caught_up_addr, StagesConfig::default(), true, |_| 11).await;
+        let caught_up = start_kv_rpc_at_heights(
+            caught_up_addr,
+            StagesConfig::default(),
+            OBJECT_AT_CHECKPOINT,
+            |_| 11,
+        )
+        .await;
         assert_resumes(&caught_up, 11, &history).await;
 
         mock_server.abort();
@@ -2196,8 +2211,13 @@ mod tests {
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
         let id = ObjectID::random();
         insert_history(&mock, id, &SPLIT_HISTORY).await;
-        let kv_rpc =
-            start_kv_rpc_with_request_concurrency(addr, StagesConfig::default(), true, 1).await;
+        let kv_rpc = start_kv_rpc_with_request_concurrency(
+            addr,
+            StagesConfig::default(),
+            OBJECT_AT_CHECKPOINT,
+            1,
+        )
+        .await;
         let at = |version| cursor(id, version);
         let mut requests = vec![];
         for ordering in [Ascending, Descending] {
@@ -2401,7 +2421,7 @@ mod tests {
     /// its cursor and end, and one that fills its limit ends on its last item.
     #[tokio::test]
     async fn test_list_object_versions_records_item_and_terminal_frames() {
-        let (kv_rpc, id, mock_server) = start_fixture(true).await;
+        let (kv_rpc, id, mock_server) = start_fixture(OBJECT_AT_CHECKPOINT).await;
         let mut before_creation = request(id, Ordering::Ascending, None, None, None);
         before_creation.end_checkpoint = Some(2);
         // The items each request lists, and the item and terminal-only frames recorded by the
@@ -2444,7 +2464,7 @@ mod tests {
     /// completed, not cancelled, in either order, even with nothing rendered ahead of the client.
     #[tokio::test]
     async fn test_list_object_versions_records_a_full_page_scan_as_completed() {
-        let (mut kv_rpc, id, mock_server) = start_fixture(true).await;
+        let (mut kv_rpc, id, mock_server) = start_fixture(OBJECT_AT_CHECKPOINT).await;
         kv_rpc.ledger_history.list_object_versions = Some(LedgerHistoryMethodConfig {
             render_ahead: Some(1),
             ..Default::default()

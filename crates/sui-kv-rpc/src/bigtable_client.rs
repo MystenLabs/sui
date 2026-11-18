@@ -57,6 +57,7 @@ use sui_kvstore::EpochData;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::ObjectStatus;
 use sui_kvstore::PackageData;
+use sui_kvstore::ProtocolConfigV2Data;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
@@ -88,11 +89,12 @@ pub(crate) mod stage {
     pub const CHECKPOINTS: &str = "checkpoints";
     pub const PACKAGES: &str = "packages";
     pub const EPOCHS: &str = "epochs";
+    pub const PROTOCOL_CONFIGS: &str = "protocol_configs";
 }
 
 /// Metrics for the request-scoped `BigTableClient` limiter and the reads it
-/// gates. Cardinality is bounded: per method, 8 stages for `permit_wait_ms`,
-/// `permit_hold_ms`, and `reads_started`, 8 stages × 3 outcomes for
+/// gates. Cardinality is bounded: per method, 9 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 9 stages × 3 outcomes for
 /// `reads_finished`, and one series each for the request-end `permits_peak`
 /// and `ops_total` histograms.
 #[derive(Clone)]
@@ -542,6 +544,20 @@ impl BigTableClient {
         let mut inner = self.inner.clone();
         self.call_gated(stage::EPOCHS, inner.get_epochs_filtered(epoch_ids, columns))
             .await
+    }
+
+    /// The `protocol_configs_v2` row of `protocol_version`, `None` if the table has none. One
+    /// point read, under one permit.
+    pub(crate) async fn get_protocol_configs_v2(
+        &self,
+        protocol_version: u64,
+    ) -> Result<Option<ProtocolConfigV2Data>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PROTOCOL_CONFIGS,
+            inner.get_protocol_configs_v2(protocol_version),
+        )
+        .await
     }
 
     /// Stream the checkpoint of each of `tx_sequence_numbers`, reading only the

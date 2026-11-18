@@ -13,6 +13,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::BitmapSchema;
+use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
+use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
 use sui_kvstore::PoolConfig;
 use sui_kvstore::ReadRowsRetryConfig;
@@ -563,11 +565,16 @@ const DEFAULT_METRICS_HOST: &str = "127.0.0.1";
 const DEFAULT_METRICS_PORT: u16 = 9184;
 
 /// Features served from alpha kvstore pipelines, which the indexer runs only when asked to.
-/// Operators enable each one with its `enable-*` setting once its pipeline has been backfilled
-/// from genesis. Each enabled feature adds its pipeline to the watermarks that bound the served
+/// Operators enable each one with its `enable-*` setting once its pipelines have been backfilled
+/// from genesis. Each enabled feature adds its pipelines to the watermarks that bound the served
 /// checkpoint (see [`AlphaFeatures::watermark_pipelines`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AlphaFeatures {
+    /// Serve `at_checkpoint` and `max_version` object reads, every `ListObjectVersions` request,
+    /// and the running epoch's `GetEpoch.system_state` from the
+    /// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECT_TOMBSTONES_PIPELINE`] tables (see
+    /// [`KvRpcConfig::enable_object_at_checkpoint`]).
+    pub object_at_checkpoint: bool,
     /// Serve `GetProtocolConfig`, and `GetEpoch`'s `protocol_config`, from the
     /// [`PROTOCOL_CONFIGS_V2_PIPELINE`] table (see [`KvRpcConfig::enable_protocol_configs_v2`]).
     pub protocol_configs_v2: bool,
@@ -577,6 +584,7 @@ impl AlphaFeatures {
     /// Every feature enabled.
     pub fn all() -> Self {
         Self {
+            object_at_checkpoint: true,
             protocol_configs_v2: true,
         }
     }
@@ -585,9 +593,17 @@ impl AlphaFeatures {
     /// missing below it mean the chain has no such data, rather than that the pipeline has not
     /// reached it yet.
     pub fn watermark_pipelines(&self) -> impl Iterator<Item = &'static str> {
-        [(self.protocol_configs_v2, PROTOCOL_CONFIGS_V2_PIPELINE)]
-            .into_iter()
-            .filter_map(|(enabled, pipeline)| enabled.then_some(pipeline))
+        let Self {
+            object_at_checkpoint,
+            protocol_configs_v2,
+        } = *self;
+        [
+            (object_at_checkpoint, OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE),
+            (object_at_checkpoint, OBJECT_TOMBSTONES_PIPELINE),
+            (protocol_configs_v2, PROTOCOL_CONFIGS_V2_PIPELINE),
+        ]
+        .into_iter()
+        .filter_map(|(enabled, pipeline)| enabled.then_some(pipeline))
     }
 }
 
@@ -863,13 +879,10 @@ impl KvRpcConfig {
         self.bigtable_channel_timeout_ms.map(Duration::from_millis)
     }
 
-    pub fn enable_object_at_checkpoint(&self) -> bool {
-        self.enable_object_at_checkpoint.unwrap_or(false)
-    }
-
     /// The alpha-pipeline features the `enable-*` settings turn on.
     pub fn alpha_features(&self) -> AlphaFeatures {
         AlphaFeatures {
+            object_at_checkpoint: self.enable_object_at_checkpoint.unwrap_or(false),
             protocol_configs_v2: self.enable_protocol_configs_v2.unwrap_or(false),
         }
     }
@@ -1297,7 +1310,6 @@ render-ahead = 3
         v1.validate().unwrap();
         let v1_pipelines = service_info_watermark_pipelines(
             v1.ledger_history().bitmap_schema(),
-            false,
             AlphaFeatures::default(),
         );
 
@@ -1306,7 +1318,6 @@ render-ahead = 3
         v2.validate().unwrap();
         let v2_pipelines = service_info_watermark_pipelines(
             v2.ledger_history().bitmap_schema(),
-            false,
             AlphaFeatures::default(),
         );
 
@@ -1331,10 +1342,9 @@ render-ahead = 3
             sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
         ];
         let cfg = KvRpcConfig::default();
-        assert!(!cfg.enable_object_at_checkpoint());
+        assert!(!cfg.alpha_features().object_at_checkpoint);
         let pipelines = service_info_watermark_pipelines(
             cfg.ledger_history().bitmap_schema(),
-            cfg.enable_object_at_checkpoint(),
             cfg.alpha_features(),
         );
         for pipeline in object_pipelines {
@@ -1343,10 +1353,15 @@ render-ahead = 3
 
         let yaml = "enable-object-at-checkpoint: true\n";
         let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
-        assert!(cfg.enable_object_at_checkpoint());
+        assert_eq!(
+            cfg.alpha_features(),
+            AlphaFeatures {
+                object_at_checkpoint: true,
+                ..Default::default()
+            }
+        );
         let pipelines = service_info_watermark_pipelines(
             cfg.ledger_history().bitmap_schema(),
-            cfg.enable_object_at_checkpoint(),
             cfg.alpha_features(),
         );
         for pipeline in object_pipelines {
@@ -1364,18 +1379,22 @@ render-ahead = 3
         assert!(
             !service_info_watermark_pipelines(
                 cfg.ledger_history().bitmap_schema(),
-                cfg.enable_object_at_checkpoint(),
                 cfg.alpha_features()
             )
             .contains(&PROTOCOL_CONFIGS_V2_PIPELINE)
         );
 
         let cfg: KvRpcConfig = toml::from_str("enable-protocol-configs-v2 = true\n").unwrap();
-        assert!(cfg.alpha_features().protocol_configs_v2);
+        assert_eq!(
+            cfg.alpha_features(),
+            AlphaFeatures {
+                protocol_configs_v2: true,
+                ..Default::default()
+            }
+        );
         assert!(
             service_info_watermark_pipelines(
                 cfg.ledger_history().bitmap_schema(),
-                cfg.enable_object_at_checkpoint(),
                 cfg.alpha_features()
             )
             .contains(&PROTOCOL_CONFIGS_V2_PIPELINE),

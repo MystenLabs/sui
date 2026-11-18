@@ -19,8 +19,6 @@ pub use sui_kvstore::ChannelHealthConfig;
 use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
-use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
-use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::OBJECTS_PIPELINE;
 use sui_kvstore::PACKAGES_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::PACKAGES_BY_ID_PIPELINE;
@@ -301,17 +299,12 @@ pub struct KvRpcServer {
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) monotonic_read_wait_timeout: Duration,
     pub(crate) stages: StagesConfig,
-    /// `at_checkpoint` and `max_version` object reads, which also serve the running epoch's
-    /// `GetEpoch.system_state`, and every `ListObjectVersions` request (bounded by
-    /// `end_checkpoint - 1` or the served height), need the alpha
-    /// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECT_TOMBSTONES_PIPELINE`],
-    /// backfilled from genesis (see [`KvRpcConfig::enable_object_at_checkpoint`]).
-    /// Instances without them reject those requests with `Unimplemented` (`NOT_SERVED_HERE`,
-    /// cause `disabled_by_config`).
-    object_at_checkpoint_enabled: bool,
-    /// The alpha-pipeline features this instance serves. Without `protocol_configs_v2`, it rejects
-    /// `GetProtocolConfig` with `Unimplemented` (`NOT_SERVED_HERE`, cause `disabled_by_config`)
-    /// and computes `GetEpoch`'s `protocol_config` from the configs compiled into this binary.
+    /// The alpha-pipeline features this instance serves. Without `object_at_checkpoint`, it
+    /// rejects `at_checkpoint` and `max_version` object reads, every `ListObjectVersions` request
+    /// and the running epoch's `GetEpoch.system_state`; without `protocol_configs_v2`, it rejects
+    /// `GetProtocolConfig` and computes `GetEpoch`'s `protocol_config` from the configs compiled
+    /// into this binary. Each refusal is `Unimplemented` (`NOT_SERVED_HERE`, cause
+    /// `disabled_by_config`).
     alpha_features: AlphaFeatures,
 }
 
@@ -459,7 +452,6 @@ impl KvRpcServer {
         monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         watermark_source: WatermarkSource,
-        enable_object_at_checkpoint: bool,
         alpha_features: AlphaFeatures,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
@@ -490,7 +482,6 @@ impl KvRpcServer {
             client,
             chain_id,
             server_version,
-            enable_object_at_checkpoint,
             alpha_features,
             metrics,
             ledger_history,
@@ -514,7 +505,6 @@ impl KvRpcServer {
         monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         watermark_source: WatermarkSource,
-        enable_object_at_checkpoint: bool,
         alpha_features: AlphaFeatures,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
@@ -525,7 +515,6 @@ impl KvRpcServer {
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
-            enable_object_at_checkpoint,
             alpha_features,
             metrics,
             ledger_history,
@@ -540,7 +529,6 @@ impl KvRpcServer {
         client: BigTableClient,
         chain_id: ChainIdentifier,
         server_version: Option<ServerVersion>,
-        enable_object_at_checkpoint: bool,
         alpha_features: AlphaFeatures,
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
@@ -564,7 +552,6 @@ impl KvRpcServer {
             server_version,
             service_info_watermark_pipelines: service_info_watermark_pipelines(
                 ledger_history.bitmap_schema(),
-                enable_object_at_checkpoint,
                 alpha_features,
             ),
             cache,
@@ -575,7 +562,6 @@ impl KvRpcServer {
             request_bigtable_concurrency,
             monotonic_read_wait_timeout,
             stages,
-            object_at_checkpoint_enabled: enable_object_at_checkpoint,
             alpha_features,
         };
 
@@ -705,13 +691,10 @@ impl KvRpcServer {
 
 /// Pipelines whose watermarks bound the checkpoint height reported by `GetServiceInfo`, so an
 /// instance does not advertise a height it cannot serve. They include the packages pipelines, so
-/// a package lookup bounded by the served height sees every package published by then.
-/// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECT_TOMBSTONES_PIPELINE`] are among them
-/// when `at_checkpoint` and `max_version` object reads are enabled, and so are the pipelines of
-/// the enabled `alpha_features`.
+/// a package lookup bounded by the served height sees every package published by then, and the
+/// pipelines of the enabled `alpha_features`.
 pub fn service_info_watermark_pipelines(
     bitmap_schema: BitmapSchema,
-    enable_object_at_checkpoint: bool,
     alpha_features: AlphaFeatures,
 ) -> Vec<&'static str> {
     let [transaction_bitmap, event_bitmap] = sui_kvstore::bitmap_index_pipelines(bitmap_schema);
@@ -732,10 +715,6 @@ pub fn service_info_watermark_pipelines(
         transaction_bitmap,
         event_bitmap,
     ];
-    if enable_object_at_checkpoint {
-        pipelines.push(OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE);
-        pipelines.push(OBJECT_TOMBSTONES_PIPELINE);
-    }
     pipelines.extend(alpha_features.watermark_pipelines());
     pipelines
 }
@@ -797,7 +776,6 @@ mod tests {
             KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             WatermarkSource::Bigtable,
-            false,
             alpha_features,
         )
         .await
@@ -859,7 +837,7 @@ mod tests {
         assert_eq!(error.code(), tonic::Code::Unavailable);
 
         let pipelines =
-            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::default());
+            service_info_watermark_pipelines(BitmapSchema::V2, AlphaFeatures::default());
         seed_watermarks(&mut client, &pipelines, |_| 20).await;
         timeout(WAIT, server.cache.subscribe().wait_for(Option::is_some))
             .await
@@ -881,7 +859,7 @@ mod tests {
         // The objects pipeline lags, so it bounds the served checkpoint, and the timestamp must
         // come from its watermark rather than from a pipeline that is further ahead.
         let pipelines =
-            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::default());
+            service_info_watermark_pipelines(BitmapSchema::V2, AlphaFeatures::default());
         seed_watermarks(&mut client, &pipelines, |pipeline| {
             if pipeline == OBJECTS_PIPELINE { 20 } else { 25 }
         })
@@ -939,8 +917,7 @@ mod tests {
         let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
             .await
             .expect("connect to mock BigTable");
-        let pipelines =
-            service_info_watermark_pipelines(BitmapSchema::V2, false, AlphaFeatures::all());
+        let pipelines = service_info_watermark_pipelines(BitmapSchema::V2, AlphaFeatures::all());
         seed_watermarks(&mut client, &pipelines, |pipeline| {
             if pipeline == PROTOCOL_CONFIGS_V2_PIPELINE {
                 20

@@ -28,20 +28,12 @@ use sui_types::sui_system_state::{
     sui_system_state_inner_id,
 };
 
+use crate::AlphaFeatures;
 use crate::bigtable_client::BigTableClient;
 use crate::served_height::ServedHeight;
 use crate::v2::get_protocol_config::read_protocol_config;
 
 pub const READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EPOCH;
-
-/// Where an epoch's `protocol_config` comes from.
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum ProtocolConfigSource {
-    /// The `protocol_configs_v2` table, which has a row for every protocol version the chain ran.
-    ProtocolConfigsV2,
-    /// The protocol configs compiled into this binary for the chain.
-    Binary(Chain),
-}
 
 /// Serve the epoch the request names, or the latest one, as of `served_height`: an epoch that
 /// starts above it is not found, and an epoch that ends above it has not ended yet, so its end
@@ -49,22 +41,24 @@ pub(crate) enum ProtocolConfigSource {
 ///
 /// `system_state` is the epoch-start snapshot for an epoch below the served one. For the served
 /// epoch it is the state at the served checkpoint, read from the object versions index when
-/// `object_at_checkpoint_enabled`, or at the checkpoint before it when the served checkpoint is the
-/// epoch's last: the change-epoch transaction there has already turned the state into the next
-/// epoch's. Without `object_at_checkpoint_enabled`, a request for the served epoch's
+/// `alpha_features.object_at_checkpoint`, or at the checkpoint before it when the served checkpoint
+/// is the epoch's last: the change-epoch transaction there has already turned the state into the
+/// next epoch's. Without `alpha_features.object_at_checkpoint`, a request for the served epoch's
 /// `system_state` is `Unimplemented` / `NOT_SERVED_HERE` (cause `disabled_by_config`), refused
 /// before any read. `committee` comes from the same state when `system_state` is read too, and
 /// from the epoch-start snapshot otherwise; the committee does not change within an epoch.
 ///
-/// Every read goes through `client`, the request's limited client, except the
-/// `protocol_configs_v2` row, which `protocol_configs_client` reads.
+/// `protocol_config` comes from the `protocol_configs_v2` table with
+/// `alpha_features.protocol_configs_v2`, and otherwise from the protocol configs compiled into
+/// this binary for `chain`.
+///
+/// Every read goes through `client`, the request's limited client.
 pub async fn get_epoch(
     client: BigTableClient,
-    mut protocol_configs_client: sui_kvstore::BigTableClient,
-    object_at_checkpoint_enabled: bool,
+    alpha_features: AlphaFeatures,
+    chain: Chain,
     served_height: ServedHeight,
     request: GetEpochRequest,
-    protocol_configs: ProtocolConfigSource,
 ) -> sui_rpc_api::Result<GetEpochResponse> {
     let read_mask = {
         let read_mask = request
@@ -89,7 +83,7 @@ pub async fn get_epoch(
     // `committee` without `system_state`.
     let reads_state_at_served_height =
         epoch == served_height.epoch && read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name);
-    if reads_state_at_served_height && !object_at_checkpoint_enabled {
+    if reads_state_at_served_height && !alpha_features.object_at_checkpoint {
         return Err(not_served_here(
             NotServedHereCause::DisabledByConfig,
             "the running epoch's system_state needs at_checkpoint object reads, which are not \
@@ -154,30 +148,24 @@ pub async fn get_epoch(
         ]
         .iter()
         .any(|field| submask.contains(field.name));
-        let protocol_config = match protocol_configs {
-            ProtocolConfigSource::Binary(chain) => {
-                ProtocolConfig::get_for_version_if_supported(version.into(), chain)
-                    .map(protocol_config_to_proto)
-            }
-            ProtocolConfigSource::ProtocolConfigsV2 if !needs_settings => {
-                Some(RpcProtocolConfig::default().with_protocol_version(version))
-            }
-            ProtocolConfigSource::ProtocolConfigsV2 => {
-                // The epoch is served, so its version was decided at or below the served height,
-                // which the `protocol_configs_v2` pipeline's watermark bounds.
-                let protocol_config = read_protocol_config(&mut protocol_configs_client, version)
-                    .await?
-                    .ok_or_else(|| {
-                        RpcError::new(
-                            tonic::Code::Internal,
-                            format!(
-                                "epoch {epoch} ran protocol version {version}, which has no \
-                                 protocol_configs_v2 row"
-                            ),
-                        )
-                    })?;
-                Some(protocol_config)
-            }
+        let protocol_config = if !alpha_features.protocol_configs_v2 {
+            ProtocolConfig::get_for_version_if_supported(version.into(), chain)
+                .map(protocol_config_to_proto)
+        } else if !needs_settings {
+            Some(RpcProtocolConfig::default().with_protocol_version(version))
+        } else {
+            // The epoch is served, so its version was decided at or below the served height,
+            // which the `protocol_configs_v2` pipeline's watermark bounds.
+            let Some(protocol_config) = read_protocol_config(&client, version).await? else {
+                return Err(RpcError::new(
+                    tonic::Code::Internal,
+                    format!(
+                        "epoch {epoch} ran protocol version {version}, which has no \
+                         protocol_configs_v2 row"
+                    ),
+                ));
+            };
+            Some(protocol_config)
         };
         message.protocol_config = protocol_config
             .map(|protocol_config| RpcProtocolConfig::merge_from(protocol_config, &submask));
@@ -370,6 +358,7 @@ mod tests {
     use sui_types::sui_system_state::mock;
 
     use super::*;
+    use crate::v2::test_utils::OBJECT_AT_CHECKPOINT;
 
     fn u64_cell(column: &'static str, value: u64) -> (&'static str, Bytes) {
         (column, Bytes::copy_from_slice(&value.to_be_bytes()))
@@ -387,9 +376,15 @@ mod tests {
         )
     }
 
+    /// What a replica serving `protocol_config` from the `protocol_configs_v2` table runs with.
+    const PROTOCOL_CONFIGS_V2: AlphaFeatures = AlphaFeatures {
+        object_at_checkpoint: false,
+        protocol_configs_v2: true,
+    };
+
     async fn try_get(
         client: &KvStoreClient,
-        object_at_checkpoint_enabled: bool,
+        alpha_features: AlphaFeatures,
         served_height: ServedHeight,
         epoch: Option<u64>,
         paths: &[&str],
@@ -399,11 +394,10 @@ mod tests {
         request.read_mask = Some(FieldMask::from_paths(paths.iter().copied()));
         get_epoch(
             limited(client),
-            client.clone(),
-            object_at_checkpoint_enabled,
+            alpha_features,
+            Chain::Unknown,
             served_height,
             request,
-            ProtocolConfigSource::Binary(Chain::Unknown),
         )
         .await
         .map(|response| response.epoch.unwrap_or_default())
@@ -415,9 +409,15 @@ mod tests {
         epoch: Option<u64>,
         paths: &[&str],
     ) -> Epoch {
-        try_get(client, false, served_height, epoch, paths)
-            .await
-            .expect("get_epoch succeeds")
+        try_get(
+            client,
+            AlphaFeatures::default(),
+            served_height,
+            epoch,
+            paths,
+        )
+        .await
+        .expect("get_epoch succeeds")
     }
 
     fn v1(reference_gas_price: u64) -> SuiSystemState {
@@ -528,9 +528,15 @@ mod tests {
         };
 
         for (checkpoint, expected) in [(10, 100), (12, 200), (14, 200), (15, 200)] {
-            let epoch = try_get(&client, true, at(checkpoint), None, &["system_state"])
-                .await
-                .expect("get_epoch succeeds");
+            let epoch = try_get(
+                &client,
+                OBJECT_AT_CHECKPOINT,
+                at(checkpoint),
+                None,
+                &["system_state"],
+            )
+            .await
+            .expect("get_epoch succeeds");
             assert_eq!(
                 reference_gas_price(epoch),
                 Some(expected),
@@ -545,9 +551,15 @@ mod tests {
             checkpoint: 20,
             epoch: 1,
         };
-        let past = try_get(&client, true, inside_epoch_1, Some(0), &["system_state"])
-            .await
-            .expect("get_epoch succeeds");
+        let past = try_get(
+            &client,
+            OBJECT_AT_CHECKPOINT,
+            inside_epoch_1,
+            Some(0),
+            &["system_state"],
+        )
+        .await
+        .expect("get_epoch succeeds");
         assert_eq!(reference_gas_price(past), Some(1));
         assert!(
             mock.read_rows_calls()
@@ -561,9 +573,15 @@ mod tests {
 
         for checkpoint in [10, 15] {
             mock.clear_read_rows_calls().await;
-            let status = try_get(&client, false, at(checkpoint), None, &["system_state"])
-                .await
-                .expect_err("system_state needs checkpoint-pinned reads");
+            let status = try_get(
+                &client,
+                AlphaFeatures::default(),
+                at(checkpoint),
+                None,
+                &["system_state"],
+            )
+            .await
+            .expect_err("system_state needs checkpoint-pinned reads");
             assert!(
                 mock.read_rows_calls().await.is_empty(),
                 "refused before any read, served at checkpoint {checkpoint}",
@@ -602,10 +620,16 @@ mod tests {
         epoch: Option<u64>,
         expected_epoch: u64,
     ) {
-        let status: tonic::Status = try_get(client, false, served_height, epoch, BOUNDS_MASK)
-            .await
-            .expect_err("epoch is not found")
-            .into();
+        let status: tonic::Status = try_get(
+            client,
+            AlphaFeatures::default(),
+            served_height,
+            epoch,
+            BOUNDS_MASK,
+        )
+        .await
+        .expect_err("epoch is not found")
+        .into();
         assert_eq!(status.code(), tonic::Code::NotFound, "{epoch:?}");
         assert_eq!(
             status.message(),
@@ -826,18 +850,17 @@ mod tests {
     async fn get_protocol_config(
         client: &KvStoreClient,
         epoch: u64,
-        protocol_configs: ProtocolConfigSource,
+        alpha_features: AlphaFeatures,
     ) -> sui_rpc_api::Result<Option<RpcProtocolConfig>> {
         let mut request = GetEpochRequest::default();
         request.epoch = Some(epoch);
         request.read_mask = Some(FieldMask::from_paths(["protocol_config"]));
         let response = get_epoch(
             limited(client),
-            client.clone(),
-            false,
+            alpha_features,
+            Chain::Unknown,
             crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT,
             request,
-            protocol_configs,
         )
         .await?;
         Ok(response.epoch.unwrap_or_default().protocol_config)
@@ -865,23 +888,15 @@ mod tests {
         }
 
         for (epoch, version) in versions.into_iter().enumerate() {
-            let from_binary = get_protocol_config(
-                &client,
-                epoch as u64,
-                ProtocolConfigSource::Binary(Chain::Unknown),
-            )
-            .await
-            .unwrap()
-            .expect("binary supports the version");
+            let from_binary = get_protocol_config(&client, epoch as u64, AlphaFeatures::default())
+                .await
+                .unwrap()
+                .expect("binary supports the version");
             assert_eq!(from_binary.protocol_version, Some(version));
             assert!(!from_binary.configs.is_empty() && !from_binary.feature_flags.is_empty());
-            let from_table = get_protocol_config(
-                &client,
-                epoch as u64,
-                ProtocolConfigSource::ProtocolConfigsV2,
-            )
-            .await
-            .unwrap();
+            let from_table = get_protocol_config(&client, epoch as u64, PROTOCOL_CONFIGS_V2)
+                .await
+                .unwrap();
             assert_eq!(from_table, Some(from_binary), "epoch {epoch}");
         }
     }
@@ -897,7 +912,7 @@ mod tests {
             .expect("connect to mock BigTable");
         crate::v2::test_utils::insert_epoch_protocol_version(&mock, 0, 1).await;
 
-        let error = get_protocol_config(&client, 0, ProtocolConfigSource::ProtocolConfigsV2)
+        let error = get_protocol_config(&client, 0, PROTOCOL_CONFIGS_V2)
             .await
             .unwrap_err();
         assert_eq!(tonic::Status::from(error).code(), tonic::Code::Internal);
@@ -919,11 +934,10 @@ mod tests {
         request.epoch = Some(0);
         let epoch = get_epoch(
             limited(&client),
-            client.clone(),
-            false,
+            PROTOCOL_CONFIGS_V2,
+            Chain::Unknown,
             crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT,
             request,
-            ProtocolConfigSource::ProtocolConfigsV2,
         )
         .await
         .expect("get_epoch succeeds without the protocol_configs_v2 row")
