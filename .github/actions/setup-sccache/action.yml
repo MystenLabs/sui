@@ -137,3 +137,11 @@ runs:
       if: steps.sccache.outcome == 'success'
       shell: bash
       run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+
+    # Experiment: CI debuginfo level.
+    - name: Limit debuginfo
+      shell: bash
+      run: |
+        mkdir -p ../.cargo
+        printf '[profile.dev]\ndebug = "line-tables-only"\n\n[profile.simulator]\ndebug = "line-tables-only"\n\n[profile.dev.package.librocksdb-sys]\ndebug = false\n' > ../.cargo/config.toml
+        cat ../.cargo/config.toml
