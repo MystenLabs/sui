@@ -290,15 +290,15 @@ impl Epoch {
                 return Ok(None);
             };
 
-            Ok(Some(
-                MovePackage::paginate_system_packages(
-                    ctx,
-                    self.scope.clone(),
-                    page,
-                    contents.cp_lo as u64,
-                )
-                .await?,
-            ))
+            // System packages only change in an epoch's last checkpoint, so the packages as of
+            // the end of the checkpoint before this epoch's first are the ones used throughout it.
+            MovePackage::paginate_system_packages(
+                ctx,
+                self.scope.clone(),
+                page,
+                (contents.cp_lo as u64).saturating_sub(1),
+            )
+            .await
         }
         .await
         .transpose()
