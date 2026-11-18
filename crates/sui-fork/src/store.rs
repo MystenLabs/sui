@@ -1217,9 +1217,10 @@ impl RpcStateReader for ForkStore {
 }
 
 /// Every index read delegates to the stock reader except
-/// [`RpcIndexes::get_object_version_at_checkpoint`], whose miss at or above the fork checkpoint
-/// means the fork has not resolved the object at the fork checkpoint yet rather than that it did
-/// not exist.
+/// [`RpcIndexes::get_object_version_at_checkpoint`] and
+/// [`RpcIndexes::first_checkpoint_with_object_version`], whose miss at or above the fork
+/// checkpoint means the fork has not resolved the object at the fork checkpoint yet rather than
+/// that it did not exist.
 impl RpcIndexes for ForkStore {
     fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
         self.stock_reader().get_epoch_info(epoch)
@@ -1345,6 +1346,42 @@ impl RpcIndexes for ForkStore {
             .map_err(to_storage_error)
     }
 
+    /// The stock reader's answer, unless the object has no row at or below the first checkpoint
+    /// in the range at or above the fork checkpoint: there its version is the one
+    /// [`RpcIndexes::get_object_version_at_checkpoint`] resolves at the fork checkpoint, which
+    /// holds at every later checkpoint until the object's first row.
+    fn first_checkpoint_with_object_version(
+        &self,
+        object_id: ObjectID,
+        checkpoints: std::ops::RangeInclusive<CheckpointSequenceNumber>,
+    ) -> StorageResult<Option<(CheckpointSequenceNumber, SequenceNumber)>> {
+        let from_fork = (*checkpoints.start()).max(self.forked_at_checkpoint());
+        let end = *checkpoints.end();
+        let first = self
+            .stock_reader()
+            .first_checkpoint_with_object_version(object_id, checkpoints)?;
+        if from_fork > end || first.is_some_and(|(checkpoint, _)| checkpoint <= from_fork) {
+            return Ok(first);
+        }
+        let at_fork = RpcIndexes::get_object_version_at_checkpoint(self, object_id, from_fork)?;
+        Ok(at_fork.map(|version| (from_fork, version)).or(first))
+    }
+
+    /// The local rows hold every version from the object's version at the fork checkpoint upward:
+    /// the fork records that version when it resolves the object there, and executes every later
+    /// one itself. Below it they are a sparse cache of historical reads, as the trait allows for
+    /// versions below the retained history, whose floor on a fork is the fork checkpoint (see
+    /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]).
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: std::ops::RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> StorageResult<sui_types::storage::ObjectVersionsIterator<'_>> {
+        self.stock_reader()
+            .object_versions_iter(object_id, versions, descending)
+    }
+
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
@@ -1375,6 +1412,10 @@ impl RpcIndexes for ForkStore {
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
         self.stock_reader().ledger_tx_seq_digest(tx_seq)
+    }
+
+    fn ledger_tx_seq_by_digest(&self, digest: &TransactionDigest) -> StorageResult<Option<u64>> {
+        self.stock_reader().ledger_tx_seq_by_digest(digest)
     }
 
     fn ledger_tx_seq_digest_multi_get(

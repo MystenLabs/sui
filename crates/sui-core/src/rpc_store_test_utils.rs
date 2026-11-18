@@ -55,6 +55,10 @@ pub(crate) struct MockReadStore {
     /// this checkpoint even though its summary is present, exercising the
     /// summary-without-contents NotFound path.
     pub(crate) drop_contents_for: Option<CheckpointSequenceNumber>,
+    /// When set, the highest executed checkpoint `get_latest_checkpoint`
+    /// reports, below the newest one held, as when checkpoints are held but
+    /// have not finished executing.
+    pub(crate) highest_executed: Option<CheckpointSequenceNumber>,
 }
 
 /// Build a [`MockReadStore`] holding a full checkpoint for each of
@@ -67,6 +71,7 @@ pub(crate) fn store_with(seqs: impl IntoIterator<Item = u64>) -> MockReadStore {
     MockReadStore {
         checkpoints,
         drop_contents_for: None,
+        highest_executed: None,
     }
 }
 
@@ -110,10 +115,12 @@ impl ReadStore for MockReadStore {
     }
 
     fn get_latest_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
-        self.checkpoints
-            .values()
-            .next_back()
-            .map(|cp| VerifiedCheckpoint::new_unchecked(cp.summary.clone()))
+        let latest = match self.highest_executed {
+            Some(highest_executed) => self.checkpoints.range(..=highest_executed).next_back(),
+            None => self.checkpoints.iter().next_back(),
+        };
+        latest
+            .map(|(_, cp)| VerifiedCheckpoint::new_unchecked(cp.summary.clone()))
             .ok_or_else(|| StorageError::missing("no checkpoints"))
     }
 

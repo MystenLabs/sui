@@ -926,7 +926,8 @@ async fn test_checkpoint_pinned_read_resolves_an_unread_pre_fork_object() {
 
 /// An object the fork read only by exact version and then changed has no row at the fork
 /// checkpoint, only one at the checkpoint that changed it. Reads pinned between the two still
-/// resolve the version it had at the fork checkpoint.
+/// resolve the version it had at the fork checkpoint, and the first checkpoint with a version
+/// from the fork checkpoint on is the fork checkpoint, not the local change.
 #[tokio::test]
 async fn test_checkpoint_pinned_read_before_the_first_local_change_resolves_at_the_fork() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -950,6 +951,14 @@ async fn test_checkpoint_pinned_read_before_the_first_local_change_resolves_at_t
     store.insert_checkpoint(VerifiedCheckpoint::new_unchecked(checkpoint.summary));
     store.insert_checkpoint_contents(checkpoint.contents);
 
+    assert_eq!(
+        store
+            .indexes()
+            .unwrap()
+            .first_checkpoint_with_object_version(id, fork_checkpoint..=fork_checkpoint + 4)
+            .unwrap(),
+        Some((fork_checkpoint, SequenceNumber::from_u64(7))),
+    );
     for (checkpoint, version) in [
         (fork_checkpoint, 7),
         (fork_checkpoint + 2, 7),
@@ -2804,6 +2813,42 @@ async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) 
             requests_containing("affectedObject"),
         ),
         (1, 1),
+    );
+
+    // The fork's object history starts at the removal, which a listing from it shows. A listing
+    // without `end_checkpoint` runs to the indexed tip, whose summary it reads.
+    use sui_rpc_api::proto::sui::rpc::v2::ListObjectVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::object_removal;
+    use tonic::codegen::tokio_stream::StreamExt as _;
+    let tip = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(checkpoint)
+        .build_checkpoint();
+    let mut tip_store = store.clone();
+    tip_store.insert_checkpoint(VerifiedCheckpoint::new_unchecked(tip.summary));
+    tip_store.insert_checkpoint_contents(tip.contents);
+    let mut request = ListObjectVersionsRequest::default();
+    request.object_id = Some(id.to_string());
+    request.start_version = Some(removal_version);
+    let frames: Vec<_> = service
+        .list_object_versions(tonic::Request::new(request))
+        .await
+        .unwrap()
+        .into_inner()
+        .map(Result::unwrap)
+        .collect()
+        .await;
+    let kind = if wrapped {
+        object_removal::Kind::Wrapped
+    } else {
+        object_removal::Kind::Deleted
+    };
+    assert_eq!(
+        frames
+            .iter()
+            .map(|frame| frame
+                .removal_opt()
+                .map(|removal| (removal.version, removal.kind)))
+            .collect::<Vec<_>>(),
+        vec![Some((Some(tombstone_version), Some(kind as i32))), None],
     );
 }
 

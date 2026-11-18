@@ -7,6 +7,7 @@ use crate::AtCheckpointUpperBound;
 use crate::ErrorReason;
 use crate::Result;
 use crate::ledger_history::query_options::above_latest_available;
+use crate::ledger_history::query_options::below_serving_floor;
 use crate::ledger_history::query_options::validate_checkpoint_bounds;
 use crate::read_mask_defaults;
 use bytes::Bytes;
@@ -298,6 +299,62 @@ impl ObjectVersionsQuery {
             .contains(ObjectRemoval::TRANSACTION_FIELD.name)
     }
 
+    /// Whether the request carries an `after` cursor whose client holds history right below the
+    /// versions the listing lists that pruning through `floor_checkpoint` may have cut a gap
+    /// after: an item's cursor, whose item the client holds, or a boundary from a listing bounded
+    /// by a checkpoint K below the floor, so that the lowest `start_checkpoint` the server
+    /// accepts, the floor + 1, is above K + 1. This checkpoint rule is complete only for the
+    /// boundary at version 0, below every version: its client holds what was written by the end
+    /// of K, and pruning keeps every version written after the floor. A boundary above version 0
+    /// can sit at an `end_version` cut and vouches for nothing above it (see
+    /// [`Self::needs_history_retained_from`]); the nothing-retained path and the
+    /// low-`start_checkpoint` gate apply the checkpoint rule to it as ruled. With nothing pruned
+    /// (`floor_checkpoint` unset), no boundary is held.
+    pub fn has_held_after_cursor(&self, floor_checkpoint: Option<u64>) -> bool {
+        self.after.as_ref().is_some_and(|after| {
+            !after.boundary
+                || floor_checkpoint.is_some_and(|floor| floor > after.bounding_checkpoint)
+        })
+    }
+
+    /// Whether the listing's lowest version, `start`, is the one right after its `after` cursor,
+    /// of either kind.
+    pub fn starts_after_cursor(&self, start: SequenceNumber) -> bool {
+        self.after
+            .as_ref()
+            .is_some_and(|after| after.version.checked_add(1) == Some(start.value()))
+    }
+
+    /// Whether a server whose listing floor is `floor_checkpoint` must find the object's history
+    /// retained from `start`, the listing's lowest version, so as not to follow the history its
+    /// client holds with a gap: the listing starts right after its `after` cursor (see
+    /// [`Self::starts_after_cursor`]), which is an item's cursor, a boundary that pruning through
+    /// the floor passed (see [`Self::has_held_after_cursor`]), or a boundary above version 0.
+    /// Such a boundary can sit at an `end_version` cut, below versions written by its checkpoint,
+    /// so it vouches for nothing above it: the history from `start` is retained only when the
+    /// object's version at the floor is at most one above the boundary's version, as it is for a
+    /// boundary minted at the top of its window bounded at or above the floor. The boundary at
+    /// version 0, below every version, keeps the checkpoint rule.
+    pub fn needs_history_retained_from(
+        &self,
+        start: SequenceNumber,
+        floor_checkpoint: Option<u64>,
+    ) -> bool {
+        self.starts_after_cursor(start)
+            && (self.has_held_after_cursor(floor_checkpoint)
+                || self.after.is_some_and(|after| after.version > 0))
+    }
+
+    /// Whether the request's `after` cursor is at or above `version`, the object's version at the
+    /// end of some checkpoint, so that every version the listing lists was written after that
+    /// checkpoint. `false` without an `after` cursor or a `version`.
+    pub fn after_at_or_above(&self, version: Option<SequenceNumber>) -> bool {
+        self.after
+            .as_ref()
+            .zip(version)
+            .is_some_and(|(after, version)| after.version >= version.value())
+    }
+
     /// Fails with `OUT_OF_RANGE` / `ABOVE_LATEST_AVAILABLE` ([`AtCheckpointUpperBound::check_cursor`],
     /// naming the lowest of their checkpoints) when the listing runs to the tip (`end_checkpoint`
     /// unset, or above the checkpoint after the tip) and the request has cursors, all from
@@ -317,6 +374,83 @@ impl ObjectVersionsQuery {
         match lowest {
             Some(lowest) if window.reaches_tip => upper_bound.check_cursor(lowest),
             _ => Ok(()),
+        }
+    }
+
+    /// The error for a request a server whose listing floor is `floor_checkpoint` cannot serve
+    /// because pruning took history it would list: `OUT_OF_RANGE` / `BELOW_EARLIEST_AVAILABLE`
+    /// ([`below_serving_floor`]), reporting `floor_checkpoint + 1`, the lowest `start_checkpoint`
+    /// it accepts, as `lowestAvailableCheckpoint`. A request whose `after` cursor comes from a
+    /// listing bounded above `upper_bound`'s highest indexed checkpoint, by a server that has
+    /// indexed further, gets that cursor's `ABOVE_LATEST_AVAILABLE`
+    /// ([`AtCheckpointUpperBound::check_cursor`]) instead, which it can retry once this server
+    /// catches up: `ListTransactions`' `floor_error_or` puts the tip refusal of a request with
+    /// an `after` cursor before the floor rules.
+    pub fn floor_error(
+        &self,
+        floor_checkpoint: u64,
+        upper_bound: &AtCheckpointUpperBound,
+    ) -> crate::RpcError {
+        self.after
+            .as_ref()
+            .and_then(|after| upper_bound.check_cursor(after.bounding_checkpoint).err())
+            .unwrap_or_else(|| below_serving_floor(floor_checkpoint.saturating_add(1)))
+    }
+
+    /// Fails with [`Self::floor_error`] when a server whose listing floor is `floor_checkpoint`
+    /// cannot serve the request's checkpoint range, as `ListTransactions` refuses one below its
+    /// floor. The lowest `start_checkpoint` it accepts is the checkpoint after the floor, since a
+    /// range starts above the object's version at the end of the checkpoint before it. A lower
+    /// `start_checkpoint` is served only when an `after` cursor bounds the listing at or above
+    /// the floor, as `ListTransactions` checks the start only after the cursors narrow it: the
+    /// cursor is at or above `version_at_floor(floor_checkpoint)`, the object's version at the
+    /// end of the floor checkpoint, so every version after it was written after the floor, or
+    /// the object has no version there. A pruned server cannot tell whether an object without
+    /// one did not exist yet or was removed at or before the floor, so it must also find the
+    /// object's history retained from the listing's lowest version on. An `end_checkpoint` at or
+    /// below that lowest start is refused when the listing has no lower bound of its own
+    /// (neither `start_checkpoint` nor an `after` cursor). An empty range lists nothing,
+    /// whatever the floor. With nothing pruned (`floor_checkpoint` unset), every range is served.
+    pub fn check_checkpoint_floor(
+        &self,
+        floor_checkpoint: Option<u64>,
+        upper_bound: &AtCheckpointUpperBound,
+        version_at_floor: impl FnOnce(u64) -> Result<Option<SequenceNumber>>,
+    ) -> Result<()> {
+        let Some(floor_checkpoint) = floor_checkpoint else {
+            return Ok(());
+        };
+        let start = self.start_checkpoint.unwrap_or(0);
+        if self.end_checkpoint.is_some_and(|end| end <= start) {
+            return Ok(());
+        }
+        let lowest_start = floor_checkpoint.saturating_add(1);
+        let start_below = match self.start_checkpoint {
+            Some(start) if start < lowest_start => match &self.after {
+                Some(after) => version_at_floor(floor_checkpoint)?
+                    .is_some_and(|at_floor| after.version < at_floor.value()),
+                None => true,
+            },
+            _ => false,
+        };
+        let end_below = self.start_checkpoint.is_none()
+            && self.after.is_none()
+            && self.end_checkpoint.is_some_and(|end| end <= lowest_start);
+        if start_below || end_below {
+            return Err(self.floor_error(floor_checkpoint, upper_bound));
+        }
+        Ok(())
+    }
+
+    /// The plan of a listing for an object of which a pruning server retains nothing up to the
+    /// bounding checkpoint: it lists nothing and ends as at the object's first version, with
+    /// `CHECKPOINT_BOUND`.
+    pub fn nothing_retained(&self) -> ObjectVersionsPlan {
+        ObjectVersionsPlan {
+            versions: None,
+            end: QueryEndReason::CheckpointBound,
+            low: 0,
+            high: 0,
         }
     }
 
@@ -593,15 +727,15 @@ impl ObjectVersionsQuery {
     /// `object`, a removal as `removal` with the fields [`Self::removal_read_mask`] selects. The
     /// frame with the [`Self::limit`]th item ends the stream with `ITEM_LIMIT`, whatever `end`
     /// says, and `listed` is not polled again. A `listed` that ends first is followed by a final
-    /// frame ending with `end`, whose cursor is `end_cursor` (see [`Self::end_cursor`]), so a
-    /// listing with no items still returns a resume cursor. An error `listed` yields ends the
-    /// stream with it.
+    /// frame ending with `end`, whose cursor `end_cursor` resolves to once `listed` has ended (see
+    /// [`Self::end_cursor`]), so a listing with no items still returns a resume cursor. An error
+    /// `listed` yields ends the stream with it.
     pub fn frames(
         &self,
         bounding_checkpoint: u64,
         listed: BoxStream<'static, Result<ObjectVersionItem>>,
         end: QueryEndReason,
-        end_cursor: Bytes,
+        end_cursor: impl Future<Output = Bytes> + Send + 'static,
     ) -> ObjectVersionFrames {
         let query = self.clone();
         async_stream::try_stream! {
@@ -641,7 +775,7 @@ impl ObjectVersionsQuery {
                 yield frame;
             }
             yield ListObjectVersionsResponse::default()
-                .with_cursor(end_cursor)
+                .with_cursor(end_cursor.await)
                 .with_end(query_end(end));
         }
         .boxed()

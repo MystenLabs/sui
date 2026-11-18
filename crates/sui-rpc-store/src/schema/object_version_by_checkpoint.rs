@@ -34,6 +34,7 @@
 //! (the floor at the retention boundary, and everything newer).
 
 use std::ops::Bound;
+use std::ops::RangeInclusive;
 
 use bytes::Buf;
 use bytes::BufMut;
@@ -202,6 +203,45 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         }
 
         Ok(None)
+    }
+
+    /// The first checkpoint in `checkpoints` at whose end `id` has a version, as
+    /// [`get_object_version_at_checkpoint`](Self::get_object_version_at_checkpoint) resolves
+    /// it, with that version, or `None` if it has none by the end of the range.
+    ///
+    /// One forward scan of the object's prefix reads its first row. A first row after the
+    /// range's start, not a restore floor, is the first change of an object with no version at
+    /// the start, so it answers alone; so does a first row at the start, the only row at or
+    /// before it. Only for a first row before the start is the version there read too.
+    pub fn first_checkpoint_with_object_version(
+        &self,
+        id: ObjectID,
+        checkpoints: RangeInclusive<u64>,
+    ) -> Result<Option<(u64, SequenceNumber)>, Error> {
+        let (start, end) = (*checkpoints.start(), *checkpoints.end());
+        if start > end {
+            return Ok(None);
+        }
+        let Some(row) = self
+            .object_version_by_checkpoint
+            .iter_prefix(&ObjectIdPrefix(id))?
+            .next()
+        else {
+            return Ok(None);
+        };
+        let (key, value) = row?;
+        let info = value.into_inner();
+        if key.checkpoint < start {
+            return Ok(self
+                .get_object_version_at_checkpoint(id, start)?
+                .map(|version| (start, version)));
+        }
+        let version = SequenceNumber::from_u64(info.version);
+        // A restore floor after the start stands for the object's version at the start too.
+        if key.checkpoint == start || info.from_restore.unwrap_or(false) {
+            return Ok(Some((start, version)));
+        }
+        Ok((key.checkpoint <= end).then_some((key.checkpoint, version)))
     }
 
     /// Resolve the live object as of `checkpoint`, composing
@@ -500,6 +540,49 @@ mod tests {
             .map(|res| res.unwrap().0.checkpoint)
             .collect();
         assert_eq!(checkpoints, vec![10, 20, 30]);
+    }
+
+    /// The first checkpoint with a version is the first in the range at which
+    /// `get_object_version_at_checkpoint` finds one, for every range, including a restore floor
+    /// after the range and a neighbouring object's rows on either side.
+    #[test]
+    fn first_checkpoint_with_object_version_matches_the_point_reads() {
+        let (_dir, db, schema) = fresh_db();
+        let changed = ObjectID::from_single_byte(2);
+        let restored = ObjectID::from_single_byte(3);
+        let unknown = ObjectID::from_single_byte(4);
+        put(&schema, &db, ObjectID::from_single_byte(1), 5, 1);
+        put(&schema, &db, changed, 10, 5);
+        put(&schema, &db, changed, 20, 6);
+        put(&schema, &db, changed, 30, 7);
+        let (k, v) = store_restored(restored, 15, seq(3));
+        let mut batch = db.batch();
+        batch
+            .put(&schema.object_version_by_checkpoint, &k, &v)
+            .unwrap();
+        batch.commit().unwrap();
+        put(&schema, &db, restored, 25, 4);
+        put(&schema, &db, ObjectID::from_single_byte(5), 1, 1);
+
+        for id in [changed, restored, unknown] {
+            for start in 0..=35u64 {
+                for end in start.saturating_sub(1)..=35 {
+                    let expected = (start..=end).find_map(|checkpoint| {
+                        schema
+                            .get_object_version_at_checkpoint(id, checkpoint)
+                            .unwrap()
+                            .map(|version| (checkpoint, version))
+                    });
+                    assert_eq!(
+                        schema
+                            .first_checkpoint_with_object_version(id, start..=end)
+                            .unwrap(),
+                        expected,
+                        "{id} in {start}..={end}",
+                    );
+                }
+            }
+        }
     }
 
     #[test]
