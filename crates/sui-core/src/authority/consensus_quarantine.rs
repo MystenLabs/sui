@@ -6,7 +6,6 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
-use crate::consensus_handler::checkpoint_queue_undrained_flush_ms;
 use crate::epoch::randomness::SINGLETON_KEY;
 use dashmap::DashMap;
 use fastcrypto_threshold::{dkg_v1, nodes::PartyId};
@@ -691,15 +690,19 @@ impl ConsensusOutputQuarantine {
             }
         }
 
-        // CheckpointQueue::end_commit forces a drain within the limit, so outputs whose
-        // checkpoints are built can only be held for less than that much commit time.
-        if let Some(limit_ms) = checkpoint_queue_undrained_flush_ms(epoch_store.protocol_config()) {
+        // CheckpointQueue::push_commit forces a drain within the limit, so outputs whose
+        // checkpoints are executed can only be held for less than that much commit time.
+        if !self.reported_undrained_hold
+            && let Some(limit_ms) = epoch_store
+                .protocol_config()
+                .checkpoint_queue_force_drain_ms()
+        {
             let held_ms = self.undrained_hold_ms(highest_committed_height);
-            if held_ms > 2 * limit_ms && !self.reported_undrained_hold {
+            if held_ms > 2 * limit_ms {
                 self.reported_undrained_hold = true;
                 debug_fatal!(
-                    "consensus outputs with built checkpoints have waited {held_ms} ms of commit \
-                     time for the checkpoint queue to drain (limit {limit_ms} ms)"
+                    "consensus outputs with executed checkpoints have waited {held_ms} ms of \
+                     commit time for the checkpoint queue to drain (limit {limit_ms} ms)"
                 );
             }
         }
@@ -714,7 +717,7 @@ impl ConsensusOutputQuarantine {
 
 impl ConsensusOutputQuarantine {
     // Commit time spanned by queued outputs that are held back only because no later commit
-    // with built checkpoints left the checkpoint queue drained.
+    // with executed checkpoints left the checkpoint queue drained.
     fn undrained_hold_ms(&self, highest_committed_height: u64) -> u64 {
         let mut held = self.output_queue.iter().take_while(|output| {
             output
@@ -1130,7 +1133,7 @@ mod tests {
     }
 
     #[sim_test]
-    async fn test_undrained_hold_counts_only_outputs_with_built_checkpoints() {
+    async fn test_undrained_hold_counts_only_outputs_with_executed_checkpoints() {
         let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing();
         let mut quarantine = ConsensusOutputQuarantine::new(0, epoch_store.metrics.clone());

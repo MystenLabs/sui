@@ -184,7 +184,7 @@ mod test {
 
     // Every commit reserves randomness, as in production when commits are at least
     // random_beacon_min_round_interval_ms apart, so the checkpoint queue drains only through
-    // the forced flush in CheckpointQueue::end_commit. Restarts replay from drained commits.
+    // the forced flush in CheckpointQueue::push_commit. Restarts replay from drained commits.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_randomness_every_commit() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();

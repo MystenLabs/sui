@@ -474,6 +474,13 @@ struct QueuedCheckpointRoots {
     rejected_transactions_digest: Digest,
 }
 
+#[derive(Clone, Copy)]
+struct QueuedCommit {
+    timestamp: CheckpointTimestamp,
+    consensus_commit_ref: CommitRef,
+    rejected_transactions_digest: Digest,
+}
+
 struct Chunk<
     T: crate::authority::shared_object_version_manager::AsTx = VerifiedExecutableTransaction,
 > {
@@ -512,21 +519,9 @@ impl From<Chunk<VerifiedExecutableTransactionWithAliases>> for Chunk {
     }
 }
 
-/// The commit time after which CheckpointQueue::end_commit flushes a queue that has not
-/// emptied, or None if the protocol version has no limit.
-pub(crate) fn checkpoint_queue_undrained_flush_ms(config: &ProtocolConfig) -> Option<u64> {
-    config.checkpoint_queue_drain_fixes().then(|| {
-        config.checkpoint_queue_max_undrained_ms().max(
-            config
-                .min_checkpoint_interval_ms_as_option()
-                .unwrap_or_default(),
-        )
-    })
-}
-
 // Accumulates checkpoint roots from consensus and flushes them into PendingCheckpoints.
 // Roots are buffered in `pending_roots` until a flush is triggered by max_tx overflow, the
-// time interval, or a long undrained run in end_commit. A flush always
+// time interval, or a long undrained run in push_commit. A flush always
 // drains all buffered roots into a single PendingCheckpoint, so the queue only ever holds
 // roots for one pending checkpoint at a time.
 //
@@ -541,8 +536,8 @@ pub(crate) struct CheckpointQueue {
     max_tx: usize,
     min_checkpoint_interval_ms: u64,
     // The consensus output quarantine persists only up to commits that end with an empty
-    // queue, so end_commit flushes a queue that stays non-empty this long. None below the
-    // protocol version with checkpoint_queue_drain_fixes.
+    // queue, so push_commit flushes a queue that stays non-empty this long. None below the
+    // protocol version with checkpoint_queue_force_drain.
     undrained_flush_ms: Option<u64>,
     execution_scheduler_sender: ExecutionSchedulerSender,
     // Timestamp of the first commit in the current run of commits that ended non-empty.
@@ -607,7 +602,11 @@ impl CheckpointQueue {
             next_checkpoint_seq,
             max_tx,
             min_checkpoint_interval_ms,
-            Some(1_000.max(min_checkpoint_interval_ms)),
+            {
+                let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+                config.set_min_checkpoint_interval_ms_for_testing(min_checkpoint_interval_ms);
+                config.checkpoint_queue_force_drain_ms()
+            },
             ExecutionSchedulerSender::new_for_testing(sender),
         )
     }
@@ -616,32 +615,64 @@ impl CheckpointQueue {
         self.last_built_timestamp
     }
 
-    /// Called once at the end of each commit, after its randomness chunks are queued.
-    /// Returns a checkpoint forced by a long undrained run, and whether the queue is drained.
-    /// Randomness chunks queued at the end of a commit wait for a later flush, so when every
-    /// commit carries randomness the time-based flush alone never empties the queue.
+    /// Queues one commit's chunks. Returns the checkpoints this completes, and whether the
+    /// queue is empty afterwards.
+    /// Randomness chunks are queued after the end-of-commit flush, so that regular transactions
+    /// do not wait for the randomness state update. They go into a later checkpoint, so when
+    /// every commit carries randomness the time-based flush alone never empties the queue.
+    /// Once the queue has stayed non-empty for undrained_flush_ms of commit time, the commit
+    /// flushes both parts separately, as the final commit of an epoch does.
     /// The result depends only on consensus output: a run always starts after a drained
     /// commit, and restart replay also starts after a drained commit, so replay rebuilds the
     /// same run and forces the flush at the same commit.
-    pub(crate) fn end_commit(
+    fn push_commit(
         &mut self,
-        commit_timestamp: CheckpointTimestamp,
-    ) -> (Option<PendingCheckpoint>, bool) {
-        let Some(limit_ms) = self.undrained_flush_ms else {
-            return (None, self.pending_roots.is_empty());
-        };
-        let forced = match self.undrained_since {
-            Some(since) if commit_timestamp.saturating_sub(since) >= limit_ms => {
-                self.flush(commit_timestamp, true)
-            }
-            _ => None,
-        };
+        chunks: Vec<Chunk>,
+        randomness_chunks: Vec<Chunk>,
+        assigned_versions: &HashMap<TransactionKey, AssignedVersions>,
+        commit: QueuedCommit,
+        final_round: bool,
+    ) -> (Vec<PendingCheckpoint>, bool) {
+        let mut checkpoints = Vec::new();
+        for chunk in chunks {
+            checkpoints.extend(self.push_chunk(
+                chunk,
+                assigned_versions,
+                commit.timestamp,
+                commit.consensus_commit_ref,
+                commit.rejected_transactions_digest,
+            ));
+        }
+        let force = final_round || self.undrained_run_expired(commit.timestamp);
+        checkpoints.extend(self.flush(commit.timestamp, force));
+        for chunk in randomness_chunks {
+            checkpoints.extend(self.push_chunk(
+                chunk,
+                assigned_versions,
+                commit.timestamp,
+                commit.consensus_commit_ref,
+                commit.rejected_transactions_digest,
+            ));
+        }
+        if force {
+            checkpoints.extend(self.flush(commit.timestamp, true));
+        }
+
         if self.pending_roots.is_empty() {
             self.undrained_since = None;
-            return (forced, true);
+            return (checkpoints, true);
         }
-        self.undrained_since.get_or_insert(commit_timestamp);
-        (forced, false)
+        if self.undrained_flush_ms.is_some() {
+            self.undrained_since.get_or_insert(commit.timestamp);
+        }
+        (checkpoints, false)
+    }
+
+    fn undrained_run_expired(&self, commit_timestamp: CheckpointTimestamp) -> bool {
+        match (self.undrained_flush_ms, self.undrained_since) {
+            (Some(limit_ms), Some(since)) => commit_timestamp.saturating_sub(since) >= limit_ms,
+            _ => false,
+        }
     }
 
     fn next_height(&mut self) -> u64 {
@@ -681,9 +712,8 @@ impl CheckpointQueue {
 
         if self.pending_tx_count > 0
             && self.pending_tx_count + user_tx_count > max_tx
-            && let Some(checkpoint) = self.take_pending_checkpoint()
+            && let Some(checkpoint) = self.flush_forced()
         {
-            self.last_built_timestamp = checkpoint.details.timestamp_ms;
             flushed_checkpoints.push(checkpoint);
         }
 
@@ -725,12 +755,10 @@ impl CheckpointQueue {
         {
             return None;
         }
-        let checkpoint = self.take_pending_checkpoint()?;
-        self.last_built_timestamp = checkpoint.details.timestamp_ms;
-        Some(checkpoint)
+        self.flush_forced()
     }
 
-    fn take_pending_checkpoint(&mut self) -> Option<PendingCheckpoint> {
+    fn flush_forced(&mut self) -> Option<PendingCheckpoint> {
         if self.pending_roots.is_empty() {
             return None;
         }
@@ -750,6 +778,7 @@ impl CheckpointQueue {
             },
         };
 
+        self.last_built_timestamp = last_root.timestamp;
         self.pending_tx_count = 0;
         self.current_checkpoint_seq += 1;
 
@@ -876,7 +905,9 @@ impl<C> ConsensusHandler<C> {
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
-        let undrained_flush_ms = checkpoint_queue_undrained_flush_ms(epoch_store.protocol_config());
+        let undrained_flush_ms = epoch_store
+            .protocol_config()
+            .checkpoint_queue_force_drain_ms();
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         let next_checkpoint_seq = last_consensus_stats.checkpoint_seq + 1;
@@ -941,7 +972,9 @@ impl<C> ConsensusHandler<C> {
             .protocol_config()
             .min_checkpoint_interval_ms_as_option()
             .unwrap_or_default();
-        let undrained_flush_ms = checkpoint_queue_undrained_flush_ms(epoch_store.protocol_config());
+        let undrained_flush_ms = epoch_store
+            .protocol_config()
+            .checkpoint_queue_force_drain_ms();
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         Self {
@@ -1810,39 +1843,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .map(|c| c.height)
             .expect("at least one checkpoint root must be created per commit");
 
-        let mut pending_checkpoints = Vec::new();
-        for chunk in chunked_schedulables {
-            pending_checkpoints.extend(checkpoint_queue.push_chunk(
-                chunk.into(),
-                &assigned_versions,
-                commit_info.timestamp,
-                commit_info.consensus_commit_ref,
-                commit_info.rejected_transactions_digest,
-            ));
-        }
-
-        // We don't want to block checkpoint formation for non-randomness schedulables
-        // on randomness state update. Therefore, we include randomness chunks in the
-        // subsequent checkpoint. First we flush the queue, then enqueue randomness
-        // for merging into the subsequent commit.
-        pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, final_round));
-
-        if should_write_random_checkpoint {
-            for chunk in chunked_randomness_schedulables {
-                pending_checkpoints.extend(checkpoint_queue.push_chunk(
-                    chunk.into(),
-                    &assigned_versions,
-                    commit_info.timestamp,
-                    commit_info.consensus_commit_ref,
-                    commit_info.rejected_transactions_digest,
-                ));
-            }
-            if final_round {
-                pending_checkpoints.extend(checkpoint_queue.flush(commit_info.timestamp, true));
-            }
-        }
-        let (forced, queue_drained) = checkpoint_queue.end_commit(commit_info.timestamp);
-        pending_checkpoints.extend(forced);
+        let (mut pending_checkpoints, queue_drained) = checkpoint_queue.push_commit(
+            chunked_schedulables.into_iter().map(Into::into).collect(),
+            chunked_randomness_schedulables
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            &assigned_versions,
+            QueuedCommit {
+                timestamp: commit_info.timestamp,
+                consensus_commit_ref: commit_info.consensus_commit_ref,
+                rejected_transactions_digest: commit_info.rejected_transactions_digest,
+            },
+            final_round,
+        );
         drop(checkpoint_queue);
 
         if final_round && let Some(last) = pending_checkpoints.last_mut() {
@@ -5532,109 +5546,65 @@ mod tests {
             assert!(queue.pending_roots.is_empty());
         }
 
-        // Commits arrive faster than min_checkpoint_interval_ms and each one splits into two
-        // chunks, so every commit overflow-flushes and restarts the interval timer. Returns the
-        // longest run of commits that ended with roots still queued.
-        fn longest_undrained_run(with_limit: bool) -> u32 {
-            let max_tx = 10;
-            let min_interval = 200;
-            let commit_spacing_ms = 100;
-            let txs_per_commit = 15;
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, max_tx, min_interval);
-            if !with_limit {
-                queue.undrained_flush_ms = None;
-            }
-            let versions = default_versions();
-
-            let mut height = 0;
-            let mut run = 0;
-            let mut longest = 0;
-            for commit in 1..=60u32 {
-                let ts = 1000 + u64::from(commit) * commit_spacing_ms;
-                // Mirrors create_pending_checkpoints: chunk by max_tx, push, time flush,
-                // end_commit.
-                let mut remaining = txs_per_commit;
-                while remaining > 0 {
-                    let n = remaining.min(max_tx);
-                    remaining -= n;
-                    height += 1;
-                    queue.push_chunk(
-                        make_chunk(n, height),
-                        &versions,
-                        ts,
-                        make_commit_ref(commit),
-                        Digest::default(),
-                    );
-                }
-                queue.flush(ts, false);
-                let (_, drained) = queue.end_commit(ts);
-                if drained {
-                    run = 0;
-                } else {
-                    run += 1;
-                }
-                longest = longest.max(run);
-            }
-            longest
-        }
-
-        #[test]
-        fn test_queue_drains_under_sustained_load() {
-            // The forced flush ends each run within 1000 ms, or 10 commits, of commit time.
-            assert_eq!(longest_undrained_run(true), 10);
-            // Without a limit the queue never drains.
-            assert_eq!(longest_undrained_run(false), 60);
-        }
-
         #[derive(Debug, PartialEq)]
         struct CommitResult {
-            // (checkpoint_height, timestamp_ms, num_roots) of each emitted checkpoint.
-            checkpoints: Vec<(u64, u64, usize)>,
+            // Root heights of each emitted checkpoint.
+            checkpoints: Vec<Vec<u64>>,
+            regular_heights: Vec<u64>,
+            randomness_heights: Vec<u64>,
             drained: bool,
         }
 
-        // Mirrors create_pending_checkpoints for a commit with one regular chunk and one
-        // randomness chunk.
-        fn commit_with_randomness(
+        // Runs one commit through push_commit, with one regular chunk per entry of `regular`
+        // and one randomness chunk per entry of `randomness`.
+        fn run_commit(
             queue: &mut CheckpointQueue,
             commit: u32,
             ts: u64,
+            regular: &[usize],
+            randomness: &[usize],
         ) -> CommitResult {
-            let versions = default_versions();
-            let mut emitted = Vec::new();
-            for (i, tx_count) in [3, 1].into_iter().enumerate() {
-                let height = u64::from(commit) * 2 + i as u64;
-                emitted.extend(queue.push_chunk(
-                    make_chunk(tx_count, height),
-                    &versions,
-                    ts,
-                    make_commit_ref(commit),
-                    Digest::default(),
-                ));
-                if i == 0 {
-                    emitted.extend(queue.flush(ts, false));
-                }
-            }
-            let (forced, drained) = queue.end_commit(ts);
-            emitted.extend(forced);
-            CommitResult {
-                checkpoints: emitted
+            let mut chunks = |sizes: &[usize]| -> Vec<Chunk> {
+                sizes
                     .iter()
-                    .map(|c| {
-                        (
-                            c.details.checkpoint_height,
-                            c.details.timestamp_ms,
-                            c.num_roots(),
-                        )
-                    })
+                    .map(|&n| make_chunk(n, queue.next_height()))
+                    .collect()
+            };
+            let regular = chunks(regular);
+            let randomness = chunks(randomness);
+            let regular_heights = regular.iter().map(|c| c.height).collect();
+            let randomness_heights = randomness.iter().map(|c| c.height).collect();
+            let (checkpoints, drained) = queue.push_commit(
+                regular,
+                randomness,
+                &default_versions(),
+                QueuedCommit {
+                    timestamp: ts,
+                    consensus_commit_ref: make_commit_ref(commit),
+                    rejected_transactions_digest: Digest::default(),
+                },
+                false,
+            );
+            CommitResult {
+                checkpoints: checkpoints
+                    .iter()
+                    .map(|c| c.roots.iter().map(|r| r.height).collect())
                     .collect(),
+                regular_heights,
+                randomness_heights,
                 drained,
             }
         }
 
-        // Every commit reserves randomness. Returns the run length at each commit end.
-        fn undrained_runs_with_randomness(with_limit: bool, commit_spacing_ms: u64) -> Vec<u32> {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 200);
+        // Returns the run length at each commit end.
+        fn undrained_runs(
+            with_limit: bool,
+            commit_spacing_ms: u64,
+            max_tx: usize,
+            regular: &[usize],
+            randomness: &[usize],
+        ) -> Vec<u32> {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, max_tx, 200);
             if !with_limit {
                 queue.undrained_flush_ms = None;
             }
@@ -5642,7 +5612,7 @@ mod tests {
             let mut runs = Vec::new();
             for commit in 1..=60u32 {
                 let ts = 1000 + u64::from(commit) * commit_spacing_ms;
-                if commit_with_randomness(&mut queue, commit, ts).drained {
+                if run_commit(&mut queue, commit, ts, regular, randomness).drained {
                     run = 0;
                 } else {
                     run += 1;
@@ -5653,16 +5623,77 @@ mod tests {
         }
 
         #[test]
+        fn test_queue_drains_under_sustained_load() {
+            // Every commit overflows max_tx and restarts the interval timer, so only the forced
+            // flush drains the queue: within 1000 ms, or 10 commits, of commit time.
+            let runs = undrained_runs(true, 100, 10, &[10, 5], &[]);
+            assert_eq!(runs.iter().max(), Some(&10));
+            let runs = undrained_runs(false, 100, 10, &[10, 5], &[]);
+            assert_eq!(runs.last(), Some(&60));
+        }
+
+        #[test]
         fn test_queue_drains_when_every_commit_has_randomness() {
             // Commits at 0, 500 and 1000 ms into a run: the third reaches the limit.
-            let runs = undrained_runs_with_randomness(true, 500);
+            let runs = undrained_runs(true, 500, 1000, &[3], &[1]);
             assert_eq!(runs.iter().max(), Some(&2));
             // Runs at 300 ms spacing reach 1000 ms at the fifth commit.
-            let runs = undrained_runs_with_randomness(true, 300);
+            let runs = undrained_runs(true, 300, 1000, &[3], &[1]);
             assert_eq!(runs.iter().max(), Some(&4));
-            // Without a limit the queue never drains.
-            let runs = undrained_runs_with_randomness(false, 500);
+            let runs = undrained_runs(false, 500, 1000, &[3], &[1]);
             assert_eq!(runs.last(), Some(&60));
+        }
+
+        // A forced flush must not put a commit's regular roots in the same checkpoint as its
+        // randomness roots, or those transactions wait for the randomness state update.
+        #[test]
+        fn test_forced_flush_keeps_randomness_separate() {
+            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 10, 200);
+            let mut drains = 0;
+            for commit in 1..=60u32 {
+                let ts = 1000 + u64::from(commit) * 100;
+                let result = run_commit(&mut queue, commit, ts, &[10, 5], &[1]);
+                for checkpoint in &result.checkpoints {
+                    let has_randomness = checkpoint
+                        .iter()
+                        .any(|h| result.randomness_heights.contains(h));
+                    let has_regular = checkpoint
+                        .iter()
+                        .any(|h| result.regular_heights.contains(h));
+                    assert!(
+                        !(has_randomness && has_regular),
+                        "commit {commit}: {checkpoint:?}"
+                    );
+                }
+                if result.drained {
+                    drains += 1;
+                }
+            }
+            assert!(drains >= 5);
+        }
+
+        #[test]
+        fn test_final_round_flushes_randomness_separately() {
+            let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0, 1000, 200);
+            let mut regular = vec![make_chunk(2, queue.next_height())];
+            let randomness = vec![make_chunk(1, queue.next_height())];
+            let (checkpoints, drained) = queue.push_commit(
+                std::mem::take(&mut regular),
+                randomness,
+                &default_versions(),
+                QueuedCommit {
+                    timestamp: 1000,
+                    consensus_commit_ref: make_commit_ref(1),
+                    rejected_transactions_digest: Digest::default(),
+                },
+                true,
+            );
+            let heights: Vec<Vec<u64>> = checkpoints
+                .iter()
+                .map(|c| c.roots.iter().map(|r| r.height).collect())
+                .collect();
+            assert_eq!(heights, vec![vec![1], vec![2]]);
+            assert!(drained);
         }
 
         // A restarted validator rebuilds its queue at the last drained commit, from the
@@ -5679,7 +5710,7 @@ mod tests {
                 commit += 1;
                 assert!(commit <= 20, "queue stopped draining");
                 let ts = 1000 + u64::from(commit) * spacing;
-                if commit_with_randomness(&mut original, commit, ts).drained {
+                if run_commit(&mut original, commit, ts, &[3], &[1]).drained {
                     drained_count += 1;
                 }
             }
@@ -5695,44 +5726,14 @@ mod tests {
             for _ in 0..30 {
                 commit += 1;
                 let ts = 1000 + u64::from(commit) * spacing;
-                let expected = commit_with_randomness(&mut original, commit, ts);
-                let actual = commit_with_randomness(&mut rebuilt, commit, ts);
+                let expected = run_commit(&mut original, commit, ts, &[3], &[1]);
+                let actual = run_commit(&mut rebuilt, commit, ts, &[3], &[1]);
                 assert_eq!(expected, actual, "commit {commit}");
                 if expected.drained {
                     drains += 1;
                 }
             }
             assert!(drains >= 5);
-        }
-
-        fn push_one(queue: &mut CheckpointQueue, height: u64, ts: u64) {
-            queue.push_chunk(
-                make_chunk(1, height),
-                &default_versions(),
-                ts,
-                make_commit_ref(height as u32),
-                Digest::default(),
-            );
-        }
-
-        #[test]
-        fn test_end_commit_forced_flush() {
-            let mut queue = CheckpointQueue::new_for_testing(0, 0, 0, 1000, 200);
-            push_one(&mut queue, 1, 1000);
-            // The run starts at this commit, so its roots stay queued.
-            let (forced, drained) = queue.end_commit(1000);
-            assert!(forced.is_none() && !drained);
-            let (forced, drained) = queue.end_commit(1999);
-            assert!(forced.is_none() && !drained);
-            let (forced, drained) = queue.end_commit(2000);
-            assert!(forced.is_some() && drained);
-
-            // Without a limit nothing is forced.
-            queue.undrained_flush_ms = None;
-            push_one(&mut queue, 2, 3000);
-            assert!(!queue.end_commit(3000).1);
-            let (forced, drained) = queue.end_commit(100_000);
-            assert!(forced.is_none() && !drained);
         }
 
         #[test]
@@ -5975,7 +5976,7 @@ mod tests {
 
             // Flush the remaining roots and verify the PendingCheckpoint's seq
             // matches the settlement's seq.
-            let pending = queue.flush(0, true).unwrap();
+            let pending = queue.flush_forced().unwrap();
             assert_eq!(pending.details.checkpoint_seq, settlement2.checkpoint_seq);
         }
 
