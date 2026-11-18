@@ -394,7 +394,7 @@ impl Listing {
 
 /// The version in the object store of the item the version index records at `indexed` (see
 /// [`stored_version_at`]).
-fn stored_version_of_indexed(
+pub(super) fn stored_version_of_indexed(
     reader: &StateReader,
     object_id: ObjectID,
     indexed: Option<SequenceNumber>,
@@ -437,7 +437,7 @@ struct IndexedTip {
 }
 
 /// How the object was removed at the tombstone whose digest is `digest`.
-fn removal_kind(digest: &ObjectDigest) -> Result<ObjectRemovalKind> {
+pub(super) fn removal_kind(digest: &ObjectDigest) -> Result<ObjectRemovalKind> {
     if digest.is_deleted() {
         Ok(ObjectRemovalKind::Deleted)
     } else if digest.is_wrapped() {
@@ -449,7 +449,7 @@ fn removal_kind(digest: &ObjectDigest) -> Result<ObjectRemovalKind> {
     }
 }
 
-fn stored_version(item: &ObjectOrTombstone) -> SequenceNumber {
+pub(super) fn stored_version(item: &ObjectOrTombstone) -> SequenceNumber {
     match item {
         ObjectOrTombstone::Object(object) => object.version(),
         ObjectOrTombstone::Tombstone((_, version, _)) => *version,

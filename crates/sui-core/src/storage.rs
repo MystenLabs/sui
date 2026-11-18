@@ -517,6 +517,18 @@ fn retains_object_version_history(state: &AuthorityState) -> bool {
     )
 }
 
+/// [`RpcStateReader::get_latest_object_or_tombstone`] through the execution cache, which also
+/// holds a removal not yet committed to the store.
+fn latest_object_or_tombstone(
+    state: &AuthorityState,
+    object_id: &ObjectID,
+) -> Option<ObjectOrTombstone> {
+    state
+        .get_object_cache_reader()
+        .get_latest_object_or_tombstone(*object_id)
+        .map(|(_, item)| item)
+}
+
 impl ObjectStore for RestReadStore {
     fn get_object(&self, object_id: &sui_types::base_types::ObjectID) -> Option<Object> {
         self.rocks.get_object(object_id)
@@ -725,6 +737,26 @@ impl RpcStateReader for RestReadStore {
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         Box::new(self.state.get_backing_package_store().as_ref())
     }
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(latest_object_or_tombstone(&self.state, object_id))
+    }
+
+    /// Unchecked: without rpc indexes this node cannot tell a pruned entry apart (see the trait
+    /// method). A tombstone at exactly the requested version records a removal there either way.
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(self
+            .rocks
+            .find_object_or_tombstone_lt_or_eq_version_unlocked(*object_id, version)
+            .map(|found| found.entry))
+    }
 }
 
 /// Read store backed by the embedded [`sui_rpc_store`] indexer.
@@ -786,16 +818,48 @@ impl RpcStoreReadStore {
     /// While the rpc indexes backfill history after a restore
     /// ([`RpcIndexes::is_history_backfill_pending`]), the version they record at the end of a
     /// checkpoint can be a later one, so the check can refuse a version this node holds. RPC
-    /// refuses reads that need this method until the backfill finishes.
+    /// refuses `max_version` and `at_checkpoint` reads until the backfill finishes. An exact
+    /// `version` read reaches the check, through [`Self::find_object_or_tombstone_by_key`], only
+    /// to look for a removal after its live read missed, so during the backfill it can answer as
+    /// a version that may have been pruned rather than describe that removal.
     pub fn find_object_or_tombstone_lt_or_eq_version(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Result<Option<ObjectOrTombstone>> {
-        let Some(found) = self
+        let found = self
+            .rocks
+            .find_object_or_tombstone_lt_or_eq_version_unlocked(object_id, version);
+        self.unless_below_objects_lower_bound(object_id, found)
+    }
+
+    /// The entry of `object_id` at exactly `version`, as
+    /// [`Self::find_object_or_tombstone_lt_or_eq_version`] reads it, but an older entry is
+    /// discarded before the check against the object lower bound, which then runs only for an
+    /// entry at `version`.
+    pub fn find_object_or_tombstone_by_key(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        let found = self
             .rocks
             .find_object_or_tombstone_lt_or_eq_version_unlocked(object_id, version)
-        else {
+            .filter(|found| match &found.entry {
+                ObjectOrTombstone::Object(object) => object.version() == version,
+                ObjectOrTombstone::Tombstone((_, removed_at, _)) => *removed_at == version,
+            });
+        self.unless_below_objects_lower_bound(object_id, found)
+    }
+
+    /// The entry `found`, unless it may be a version below this node's object lower bound (see
+    /// [`may_be_below_objects_lower_bound`]).
+    fn unless_below_objects_lower_bound(
+        &self,
+        object_id: ObjectID,
+        found: Option<FoundObjectOrTombstone>,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        let Some(found) = found else {
             return Ok(None);
         };
         if may_be_below_objects_lower_bound(
@@ -1131,6 +1195,29 @@ impl RpcStateReader for RpcStoreReadStore {
         Ok(self
             .find_object_or_tombstone_lt_or_eq_version(*object_id, version)?
             .and_then(live_object))
+    }
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(latest_object_or_tombstone(&self.state, object_id))
+    }
+
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        self.find_object_or_tombstone_lt_or_eq_version(*object_id, version)
+    }
+
+    fn get_object_or_tombstone_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        self.find_object_or_tombstone_by_key(*object_id, version)
     }
 
     fn get_highest_executed_checkpoint_seq_number(&self) -> Result<CheckpointSequenceNumber> {
@@ -1520,6 +1607,32 @@ mod tests {
             TransactionDigest::random(),
         ));
         index(rewritten_after, 7, LAST_PRUNED + 2);
+        // Deleted at version 9 in checkpoint 12, after the last pruned checkpoint, and re-created
+        // at version 11 in checkpoint 13, after version 5 written in checkpoint 8. The deleting
+        // transaction's checkpoint is unknown, as when it is above the indexed tip or its effects
+        // are pruned.
+        let removed_then_recreated = ObjectID::random();
+        let before_removal = object_version(removed_then_recreated, 5, TransactionDigest::random());
+        write(&before_removal);
+        index(removed_then_recreated, 5, LAST_PRUNED - 2);
+        finalize(&before_removal, LAST_PRUNED - 2);
+        write_deletion(removed_then_recreated, 9);
+        index(removed_then_recreated, 9, LAST_PRUNED + 2);
+        let recreated = object_version(removed_then_recreated, 11, TransactionDigest::random());
+        write(&recreated);
+        index(removed_then_recreated, 11, LAST_PRUNED + 3);
+        finalize(&recreated, LAST_PRUNED + 3);
+        // Deleted at version 9 in checkpoint 7, re-created at version 10 in checkpoint 8 and
+        // changed to version 11 in checkpoint 9, all at or before the last pruned checkpoint. The
+        // pruner deleted version 10 and compaction dropped it, while the deletion's tombstone
+        // stayed (as with `killswitch_tombstone_pruning`), and only version 11's index row is
+        // left.
+        let recreated_and_pruned = ObjectID::random();
+        write_deletion(recreated_and_pruned, 9);
+        let replaced = object_version(recreated_and_pruned, 11, TransactionDigest::random());
+        write(&replaced);
+        index(recreated_and_pruned, 11, LAST_PRUNED - 1);
+        finalize(&replaced, LAST_PRUNED - 1);
 
         index_rows.commit().unwrap();
 
@@ -1554,19 +1667,23 @@ mod tests {
         // kept if the object's first index row is after the last pruned checkpoint and records a
         // version at or below it, and refused if the object has no index row, or the first one
         // records a later version.
+        let summary = |entry: Option<ObjectOrTombstone>| {
+            entry.map(|entry| match entry {
+                ObjectOrTombstone::Object(object) => (object.version().value(), None),
+                ObjectOrTombstone::Tombstone((_, version, digest)) => {
+                    (version.value(), Some(digest))
+                }
+            })
+        };
         let entry = |object_id, bound: u64| {
-            with_indexes
-                .find_object_or_tombstone_lt_or_eq_version(
-                    object_id,
-                    SequenceNumber::from_u64(bound),
-                )
-                .unwrap()
-                .map(|entry| match entry {
-                    ObjectOrTombstone::Object(object) => (object.version().value(), None),
-                    ObjectOrTombstone::Tombstone((_, version, digest)) => {
-                        (version.value(), Some(digest))
-                    }
-                })
+            summary(
+                with_indexes
+                    .find_object_or_tombstone_lt_or_eq_version(
+                        object_id,
+                        SequenceNumber::from_u64(bound),
+                    )
+                    .unwrap(),
+            )
         };
         assert_eq!(entry(deleted_after_live.id(), 2), Some((2, None)));
         assert_eq!(
@@ -1581,6 +1698,43 @@ mod tests {
         assert_eq!(entry(deleted_unindexed, 4), None);
         assert_eq!(entry(unwrapped_after, 5), None);
         assert_eq!(entry(unwrapped_after, 7), Some((7, None)));
+
+        // A `max_version` of 10 selects the deletion at 9. After the last pruned checkpoint it is
+        // kept, though its transaction's checkpoint is unknown: no version after it was pruned.
+        // At or before it, with the version that replaced it pruned, it is refused: that version,
+        // not the deletion, is the answer.
+        assert_eq!(
+            entry(removed_then_recreated, 10),
+            Some((9, Some(ObjectDigest::OBJECT_DIGEST_DELETED))),
+        );
+        assert_eq!(entry(removed_then_recreated, 11), Some((11, None)));
+        assert_eq!(entry(recreated_and_pruned, 10), None);
+        assert_eq!(entry(recreated_and_pruned, 11), Some((11, None)));
+
+        // Exactly a version: the entry at it, checked the same way, and nothing for a version the
+        // object has no entry at, though an older entry is at or above its version at the last
+        // pruned checkpoint. A deletion that may have a pruned version after it is refused.
+        let by_key = |object_id, version: u64| {
+            summary(
+                with_indexes
+                    .get_object_or_tombstone_by_key(&object_id, SequenceNumber::from_u64(version))
+                    .unwrap(),
+            )
+        };
+        assert_eq!(by_key(pruned, 1), None);
+        assert_eq!(by_key(pruned, 3), Some((3, None)));
+        assert_eq!(by_key(mutated_after, 2), Some((2, None)));
+        assert_eq!(by_key(mutated_after, 3), None);
+        assert_eq!(
+            by_key(deleted_after_live.id(), 3),
+            Some((3, Some(ObjectDigest::OBJECT_DIGEST_DELETED))),
+        );
+        assert_eq!(
+            by_key(removed_then_recreated, 9),
+            Some((9, Some(ObjectDigest::OBJECT_DIGEST_DELETED))),
+        );
+        assert_eq!(by_key(recreated_and_pruned, 9), None);
+        assert_eq!(by_key(recreated_and_pruned, 10), None);
     }
 
     /// An uncommitted entry is newer than every version below the lower bound, so it is kept

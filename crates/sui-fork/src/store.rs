@@ -54,6 +54,7 @@ use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::ObjectOrTombstone;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackageObject;
@@ -335,28 +336,58 @@ impl ForkStore {
     /// at the fork checkpoint has no version there to start the local rows from, unless a
     /// checkpoint-pinned read recorded its removal there (see
     /// [`Self::fetch_removal_at_fork_checkpoint`]), so a bound between two versions its first
-    /// local checkpoint wrote also goes to the remote, which has neither.
+    /// local checkpoint wrote also goes to the remote, which has neither. A removal by V1 effects
+    /// that such a read recorded has its tombstone above the lamport version the row holds, so
+    /// the local rows start at the tombstone, and a bound between the two goes to the remote just
+    /// below the lamport version, since no version of the object lies between them.
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
         version_bound: SequenceNumber,
     ) -> anyhow::Result<Option<Object>> {
+        Ok(self
+            .object_or_tombstone_lt_or_eq_version(object_id, version_bound)?
+            .and_then(live_object))
+    }
+
+    /// [`Self::get_object_lt_or_eq_version`], with the tombstone of the deletion or wrap at the
+    /// version it finds in place of `None`. The remote serves only live objects, so only the
+    /// staged and local rows give a tombstone.
+    fn object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version_bound: SequenceNumber,
+    ) -> anyhow::Result<Option<ObjectOrTombstone>> {
         let local_store = self.local_store();
         // A staged version always outranks every persisted version of the same
         // object, so a hit within the bound is the answer.
-        match self
+        if let Some((version, status)) = self
             .inner
             .pending
             .object_at_or_before(*object_id, version_bound)?
         {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+            return Ok(Some(object_or_tombstone(*object_id, version, status)));
         }
 
         let earliest_pinned = local_store.earliest_checkpoint_pinned_version(*object_id)?;
-        if earliest_pinned.is_some_and(|(_, version)| version <= version_bound) {
-            return local_object_at_or_before(local_store, object_id, version_bound);
+        if let Some((_, pinned_version)) = earliest_pinned
+            && pinned_version <= version_bound
+        {
+            // The local rows are complete from the item the pinned row records. A pinned row of a
+            // removal by V1 effects holds its lamport version, with the tombstone above it (see
+            // `Self::fetch_removal_at_fork_checkpoint`), so for a bound below the tombstone no row
+            // lies between the pinned version and the bound. No version of the object lies there
+            // either, so the newest version within the bound is the newest below the lamport
+            // version, which existed by the fork checkpoint.
+            return match local_store.get_object_at_or_before(*object_id, version_bound)? {
+                Some((version, status)) if version >= pinned_version => {
+                    Ok(Some(object_or_tombstone(*object_id, version, status)))
+                }
+                _ => match pinned_version.one_before() {
+                    Some(below_pinned) => self.remote_object_at_or_before(object_id, below_pinned),
+                    None => Ok(None),
+                },
+            };
         }
 
         // A row at the fork checkpoint already records the object's version there, which is
@@ -367,46 +398,64 @@ impl ForkStore {
             && let Some(object) = self.fetch_object_at_fork_checkpoint(object_id)?
             && object.version() <= version_bound
         {
-            return local_object_at_or_before(local_store, object_id, version_bound);
+            return local_object_or_tombstone_at_or_before(local_store, object_id, version_bound)
+                .map(Some);
         }
 
+        self.remote_object_at_or_before(object_id, version_bound)
+    }
+
+    /// The object's newest live version at or below `version_bound` from a remote query pinned
+    /// at the fork checkpoint, cached locally as a historical version.
+    fn remote_object_at_or_before(
+        &self,
+        object_id: &ObjectID,
+        version_bound: SequenceNumber,
+    ) -> anyhow::Result<Option<ObjectOrTombstone>> {
         let object = self
             .inner
             .remote
             .object_at_or_before(object_id, version_bound.value())?;
         if let Some(object) = &object {
-            local_store.save_object_version_only(object)?;
+            self.local_store().save_object_version_only(object)?;
         }
-        Ok(object)
+        Ok(object.map(ObjectOrTombstone::Object))
     }
 
     /// Look up the latest known version of an object, overlay first, then the local store, then a
     /// remote `AtCheckpoint(forked_at_checkpoint)` query whose result persists in the RPC store.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
+        Ok(self
+            .latest_object_or_tombstone(object_id)?
+            .and_then(live_object))
+    }
+
+    /// [`Self::get_latest_object`], with the tombstone of the deletion or wrap that is the
+    /// object's latest version in place of `None`.
+    fn latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<ObjectOrTombstone>> {
         // The in-flight checkpoint's writes live only in the pending overlay
         // until seal. A pending tombstone must block the remote fallback,
         // exactly like a persisted tombstone row would.
-        match self.inner.pending.latest_object(*object_id)? {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+        if let Some((version, status)) = self.inner.pending.latest_object(*object_id)? {
+            return Ok(Some(object_or_tombstone(*object_id, version, status)));
         }
 
         info!("Fetching latest object from local store: {object_id}",);
         let local_store = self.local_store();
-        match local_store.get_latest_object_status(*object_id)? {
-            Some((_, Status::Live(object))) => return Ok(Some(object)),
-            Some((_, Status::Tombstone(_))) => return Ok(None),
-            None => {}
+        if let Some((version, status)) = local_store.get_latest_object_status(*object_id)? {
+            return Ok(Some(object_or_tombstone(*object_id, version, status)));
         }
 
         info!("Not found in local store, so fetching latest object from remote: {object_id}");
         let object = self.inner.remote.latest_object(object_id)?;
-        if let Some(ref object) = object {
+        if let Some(object) = &object {
             local_store.save_live_object_if_current(object)?;
         }
 
-        Ok(object)
+        Ok(object.map(ObjectOrTombstone::Object))
     }
 
     /// Fetch an object's live version at the fork checkpoint from the remote, and record it locally
@@ -1214,6 +1263,27 @@ impl RpcStateReader for ForkStore {
     ) -> StorageResult<Option<Object>> {
         ForkStore::get_object_lt_or_eq_version(self, object_id, version).map_err(to_storage_error)
     }
+
+    /// The same lookup as `get_object_lt_or_eq_version`, returning the staged or local tombstone
+    /// of a deletion or wrap where it finds one.
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> StorageResult<Option<ObjectOrTombstone>> {
+        self.object_or_tombstone_lt_or_eq_version(object_id, version)
+            .map_err(to_storage_error)
+    }
+
+    /// The same lookup as `ObjectStore::get_object`, returning the staged or local tombstone of
+    /// a deletion or wrap that is the object's latest version.
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: &ObjectID,
+    ) -> StorageResult<Option<ObjectOrTombstone>> {
+        self.latest_object_or_tombstone(object_id)
+            .map_err(to_storage_error)
+    }
 }
 
 /// Every index read delegates to the stock reader except
@@ -1472,18 +1542,39 @@ fn to_storage_error(err: anyhow::Error) -> StorageError {
 
 /// The object's newest local row at or below `version_bound`, for a bound the caller has checked
 /// is at or above a version the local rows are complete from, so a row must exist there.
-fn local_object_at_or_before(
+fn local_object_or_tombstone_at_or_before(
     local_store: &LocalStore,
     object_id: &ObjectID,
     version_bound: SequenceNumber,
-) -> anyhow::Result<Option<Object>> {
+) -> anyhow::Result<ObjectOrTombstone> {
     match local_store.get_object_at_or_before(*object_id, version_bound)? {
-        Some((_, Status::Live(object))) => Ok(Some(object)),
-        Some((_, Status::Tombstone(_))) => Ok(None),
+        Some((version, status)) => Ok(object_or_tombstone(*object_id, version, status)),
         None => Err(anyhow!(
             "object {object_id} has a complete local version at or below {version_bound} but no \
              object row there"
         )),
+    }
+}
+
+/// The row `status` of object `id` at `version`: the live object, or the tombstone of the
+/// deletion or wrap there.
+fn object_or_tombstone(id: ObjectID, version: SequenceNumber, status: Status) -> ObjectOrTombstone {
+    match status {
+        Status::Live(object) => ObjectOrTombstone::Object(object),
+        Status::Tombstone(TombstoneKind::Deleted) => {
+            ObjectOrTombstone::Tombstone((id, version, ObjectDigest::OBJECT_DIGEST_DELETED))
+        }
+        Status::Tombstone(TombstoneKind::Wrapped) => {
+            ObjectOrTombstone::Tombstone((id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
+        }
+    }
+}
+
+/// The live object in `item`, `None` for a tombstone.
+fn live_object(item: ObjectOrTombstone) -> Option<Object> {
+    match item {
+        ObjectOrTombstone::Object(object) => Some(object),
+        ObjectOrTombstone::Tombstone(_) => None,
     }
 }
 

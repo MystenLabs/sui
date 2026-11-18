@@ -34,7 +34,7 @@ pub use client_protocol_version::{X_SUI_CLIENT_PROTOCOL_VERSION, client_protocol
 pub use config::Config;
 pub use error::{
     CheckpointNotFoundError, EpochNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError,
-    Result, RpcError,
+    ObjectRemoval, Result, RpcError,
 };
 pub use metrics::{
     GrpcMethodAllowlist, RpcMetrics, RpcMetricsMakeCallbackHandler,

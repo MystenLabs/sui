@@ -4,8 +4,10 @@
 use sui_types::error::ErrorCategory;
 use tonic::Code;
 
+use crate::ledger_history::object_versions::ObjectRemovalKind;
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
 use crate::proto::sui::rpc::v2::ExecutionError;
+use crate::proto::sui::rpc::v2::object_removal;
 pub use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
@@ -368,6 +370,18 @@ pub struct ObjectNotFoundError {
     version: Option<sui_sdk_types::Version>,
     max_version: Option<sui_sdk_types::Version>,
     checkpoint: Option<sui_sdk_types::CheckpointSequenceNumber>,
+    removal: Option<ObjectRemoval>,
+}
+
+/// The deletion or wrap a read resolved to: the object is not found because the version the read
+/// selected removed it from the live set. Servers describe a removal only when they find it (see
+/// [`ObjectNotFoundError::removed`]). The removing transaction is not part of it:
+/// `ListObjectVersions` lists it when the request's `removal_read_mask` names `transaction`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectRemoval {
+    /// The version at which the object was deleted or wrapped.
+    pub version: sui_sdk_types::Version,
+    pub kind: ObjectRemovalKind,
 }
 
 impl ObjectNotFoundError {
@@ -377,6 +391,7 @@ impl ObjectNotFoundError {
             version: None,
             max_version: None,
             checkpoint: None,
+            removal: None,
         }
     }
 
@@ -412,6 +427,26 @@ impl ObjectNotFoundError {
             ..self
         }
     }
+
+    /// The read resolved to `removal`. The error keeps code `NotFound` and carries an
+    /// `OBJECT_REMOVED` [`ErrorInfo`] describing the removal.
+    ///
+    /// The detail is best effort: a server attaches it only when it finds the removal, so a
+    /// `NotFound` without it does not prove that the object never existed. A fullnode that has
+    /// pruned the removal's tombstone, or whose tombstone lookup refuses it as possibly below the
+    /// object lower bound, or a store that keeps no tombstones, answers a read that resolves to a
+    /// removal without it: with a plain `NotFound`, or, for an exact `version` or `max_version`
+    /// read on a fullnode that has pruned object versions, with `OUT_OF_RANGE` /
+    /// `BELOW_EARLIEST_AVAILABLE`, since the version may have been pruned. A fullnode that fails
+    /// to read the tombstone also answers without it, except for a `max_version` read without
+    /// `at_checkpoint`: that read selects its version with tombstones, so the failure fails the
+    /// read.
+    pub fn removed(self, removal: ObjectRemoval) -> Self {
+        Self {
+            removal: Some(removal),
+            ..self
+        }
+    }
 }
 
 impl std::fmt::Display for ObjectNotFoundError {
@@ -438,7 +473,27 @@ impl std::error::Error for ObjectNotFoundError {}
 
 impl From<ObjectNotFoundError> for crate::RpcError {
     fn from(value: ObjectNotFoundError) -> Self {
-        Self::new(tonic::Code::NotFound, value.to_string())
+        let message = value.to_string();
+        let Some(removal) = value.removal else {
+            return Self::new(tonic::Code::NotFound, message);
+        };
+        let kind = object_removal::Kind::from(removal.kind).as_str_name();
+        let metadata = [
+            ("removedVersion", removal.version.to_string()),
+            ("removalKind", kind.to_owned()),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value))
+        .collect();
+        let error_info = ErrorInfo::default()
+            .with_reason(ErrorReason::ObjectRemoved.as_str_name())
+            .with_domain(ErrorReason::DOMAIN)
+            .with_metadata(metadata);
+        Self {
+            code: Code::NotFound,
+            message: Some(message),
+            details: Some(Box::new(ErrorDetails::new().with_error_info(error_info))),
+        }
     }
 }
 

@@ -808,6 +808,62 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
         ))
     }
 
+    /// The object's latest state: its newest version, or the tombstone (see
+    /// [`ObjectOrTombstone`]) if it was deleted or wrapped there. `None` if the object has no
+    /// version, and always `None` by default, for stores that cannot tell a removal from absence.
+    /// `GetObject` reads the live object with [`ObjectStore::get_object`] first, and this only
+    /// when there is none.
+    fn get_latest_object_or_tombstone(
+        &self,
+        _object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(None)
+    }
+
+    /// [`Self::get_object_lt_or_eq_version`], but the newest version at or below `version` is
+    /// returned as a tombstone if the object was deleted or wrapped there, rather than as
+    /// `None`. It must see the same versions that method does, including those not yet committed
+    /// to a store behind a cache, so that both select the same version, and it answers `None`
+    /// for the same entries that may have been pruned. In particular, it never returns a
+    /// tombstone that may have a pruned version after it: `GetObject` answers a read that
+    /// resolves to the returned tombstone with that removal. A store without rpc indexes cannot
+    /// tell those apart and may return them: `GetObject` reads it there only for exact `version`
+    /// reads (see [`Self::get_object_or_tombstone_by_key`]), keeping only an entry at the
+    /// requested version.
+    ///
+    /// Defaults to [`Self::get_object_lt_or_eq_version`], for stores that cannot tell a removal
+    /// from absence: a removal reads as `None`, and a store that serves neither method fails.
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(self
+            .get_object_lt_or_eq_version(object_id, version)?
+            .map(ObjectOrTombstone::Object))
+    }
+
+    /// Exactly `version` of the object: the object, or the tombstone if it was deleted or
+    /// wrapped at `version`. `None` if the object has no entry at `version`, or if
+    /// [`Self::get_object_or_tombstone_lt_or_eq_version`] would answer `None` for the entry at
+    /// `version` as one that may have been pruned.
+    ///
+    /// Defaults to that method's entry, kept only if it is at `version`. Stores that check the
+    /// entry against their object lower bound override it, so that they check only an entry at
+    /// `version`, never an older one this read discards.
+    fn get_object_or_tombstone_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(self
+            .get_object_or_tombstone_lt_or_eq_version(object_id, version)?
+            .filter(|item| match item {
+                ObjectOrTombstone::Object(object) => object.version() == version,
+                ObjectOrTombstone::Tombstone((_, removed_at, _)) => *removed_at == version,
+            }))
+    }
+
     /// The sequence number of the highest executed checkpoint, independent of
     /// how far any embedded index has caught up.
     ///

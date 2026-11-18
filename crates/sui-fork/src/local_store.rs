@@ -181,12 +181,14 @@ impl LocalStore {
 
     /// Return the checkpoint and version of the object's earliest checkpoint-pinned row.
     ///
-    /// The object rows are complete from that version upward. The row is either the object's
-    /// version at the fork checkpoint, resolved by a remote query pinned there, or its version at
-    /// the end of its first locally executed checkpoint, and every later version was executed
-    /// locally. That checkpoint may have changed the object more than once, and the rows of its
-    /// earlier versions sit below the pinned one. Below it, the rows are otherwise a sparse cache
-    /// of historical reads.
+    /// The object rows are complete from the item that row records upward: the row at its version,
+    /// or, for a removal by V1 effects recorded at its lamport version, the tombstone above it (see
+    /// [`Self::save_removal_at_fork_checkpoint`]). The row is either the object's version at the
+    /// fork checkpoint, resolved by a remote query pinned there, or its version at the end of its
+    /// first locally executed checkpoint, and every later version was executed locally. That
+    /// checkpoint may have changed the object more than once, and the rows of its earlier versions
+    /// sit below the pinned one. Below it, the rows are otherwise a sparse cache of historical
+    /// reads.
     pub(crate) fn earliest_checkpoint_pinned_version(
         &self,
         id: ObjectID,

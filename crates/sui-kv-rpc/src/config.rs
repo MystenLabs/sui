@@ -678,14 +678,20 @@ pub struct KvRpcConfig {
     ///
     /// Enable this only after both pipelines have been backfilled from genesis. The versions
     /// index has no restore floor, so an object unchanged since before the pipeline's first
-    /// checkpoint would wrongly read as `NotFound`. A `max_version` read stops at the tombstone
-    /// written where the object was deleted or wrapped; without it, the read resolves to the
-    /// object's last live version before the removal instead of `NotFound`. The tombstones must
-    /// also come from a build that records each removal's transaction (column `t`), since
-    /// `ListObjectVersions` fails with `Internal` on a tombstone without one when the request
-    /// asks for it. The server cannot check this: a backfill run as a separate task writes its
-    /// own watermark row, so a main pipeline's `reader_lo` does not say whether history is
-    /// complete. Setting this flag is the operator's statement that it is.
+    /// checkpoint would wrongly read as `NotFound`. The tombstones must also come from a build
+    /// that records each removal's transaction (column `t`), since `ListObjectVersions` fails
+    /// with `Internal` on a tombstone without one when the request asks for it. `GetObject` and
+    /// `BatchGetObjects` describe removals with `OBJECT_REMOVED` only
+    /// while this is on. A read that resolves to the object's version at its checkpoint (for
+    /// `max_version` alone, the served height) reads it from the versions index, so when that
+    /// version is a removal its tombstone is required: the read answers `Internal` when the
+    /// tombstone is missing or records another removal than the index.
+    /// Other reads find tombstones by reading `objects` alone and cannot tell a missing one:
+    /// latest and `max_version` reads resolve to the version before it, and exact-version reads
+    /// answer `NotFound` without the detail. While this is off, reads answer `NotFound` without
+    /// the detail. The server cannot check this: a backfill run as a separate task writes its own
+    /// watermark row, so a main pipeline's `reader_lo` does not say whether history is complete.
+    /// Setting this flag is the operator's statement that it is.
     ///
     /// If this is on but either pipeline is not running, that pipeline has no watermark and the
     /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and

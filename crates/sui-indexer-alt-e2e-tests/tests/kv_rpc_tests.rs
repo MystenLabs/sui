@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -78,6 +79,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::move_package::UpgradePolicy;
@@ -1441,9 +1443,8 @@ struct ObjectLifecycle {
     /// `(checkpoint, object, version, live)` for every change, in checkpoint order. `live` is
     /// false for a change that deleted or wrapped the object.
     changes: Vec<(u64, ObjectID, u64, bool)>,
-    /// `(object, version, transaction)` for every change that deleted or wrapped an object, in
-    /// checkpoint order.
-    removed_by: Vec<(ObjectID, u64, sui_types::digests::TransactionDigest)>,
+    /// The kind and transaction of each removal, by `(object, version)`.
+    removals: HashMap<(ObjectID, u64), (object_removal::Kind, TransactionDigest)>,
     /// The checkpoint sealed after publishing, just before the object is created.
     publish_checkpoint: u64,
     set_value_checkpoint: u64,
@@ -1463,6 +1464,7 @@ impl ObjectLifecycle {
         let publish_checkpoint = cluster.create_checkpoint().await.sequence_number;
 
         let mut changes = Vec::new();
+        let mut removals = HashMap::new();
         let (create, create_checkpoint, gas) = call_object_basics(
             cluster,
             sender,
@@ -1515,7 +1517,10 @@ impl ObjectLifecycle {
         let wrap_version = wrap.lamport_version().value();
         changes.push((wrap_checkpoint, object, wrap_version, false));
         changes.push((wrap_checkpoint, wrapper, wrap_version, true));
-        let mut removed_by = vec![(object, wrap_version, *wrap.transaction_digest())];
+        removals.insert(
+            (object, wrap_version),
+            (object_removal::Kind::Wrapped, *wrap.transaction_digest()),
+        );
 
         let (unwrap, unwrap_checkpoint, gas) = call_object_basics(
             cluster,
@@ -1530,7 +1535,10 @@ impl ObjectLifecycle {
         let unwrap_version = unwrap.lamport_version().value();
         changes.push((unwrap_checkpoint, object, unwrap_version, true));
         changes.push((unwrap_checkpoint, wrapper, unwrap_version, false));
-        removed_by.push((wrapper, unwrap_version, *unwrap.transaction_digest()));
+        removals.insert(
+            (wrapper, unwrap_version),
+            (object_removal::Kind::Deleted, *unwrap.transaction_digest()),
+        );
 
         let (delete, delete_checkpoint, gas) = call_object_basics(
             cluster,
@@ -1544,13 +1552,16 @@ impl ObjectLifecycle {
         .await;
         let delete_version = delete.lamport_version().value();
         changes.push((delete_checkpoint, object, delete_version, false));
-        removed_by.push((object, delete_version, *delete.transaction_digest()));
+        removals.insert(
+            (object, delete_version),
+            (object_removal::Kind::Deleted, *delete.transaction_digest()),
+        );
 
         Self {
             object,
             wrapper,
             changes,
-            removed_by,
+            removals,
             publish_checkpoint,
             set_value_checkpoint,
             delete_checkpoint,
@@ -1911,14 +1922,42 @@ fn assert_not_found(read: &ObjectRead, message: &str, context: &str) {
     }
 }
 
-/// `max_version` reads resolve an object to its newest version at or below the bound, through
-/// creation, mutation, wrapping, unwrapping, and deletion, and are `NotFound` from a deletion or
-/// wrap until the object is unwrapped. `at_checkpoint` bounds a `version` read to a version
-/// written by the end of the checkpoint, and fails a `max_version` read whose selected version
-/// was written after the checkpoint, as Postgres does. `GetObject` and `BatchGetObjects` agree
-/// item by item.
+/// What an object read answered: the version it found, or `NotFound` with the message and the
+/// removal its `OBJECT_REMOVED` detail describes, if it has one, as `(removedVersion,
+/// removalKind)`.
+type RemovalRead = Result<u64, (String, Option<(u64, String)>)>;
+
+/// The [`RemovalRead`] of a read that failed with `status`.
+fn removal_read(status: &sui_rpc::proto::google::rpc::Status) -> RemovalRead {
+    assert_eq!(status.code, tonic::Code::NotFound as i32, "{status:?}");
+    let removal = status
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .map(|info| {
+            assert_eq!(
+                info.reason,
+                ErrorReason::ObjectRemoved.as_str_name(),
+                "{info:?}"
+            );
+            assert_eq!(info.domain, ErrorReason::DOMAIN, "{info:?}");
+            (
+                info.metadata["removedVersion"].parse().unwrap(),
+                info.metadata["removalKind"].clone(),
+            )
+        });
+    Err((status.message.clone(), removal))
+}
+
+/// Reads that resolve to a deletion or wrap of an object driven through creation, mutation,
+/// wrapping, unwrapping, and deletion answer `NotFound` with an `OBJECT_REMOVED` detail naming
+/// the removal's version and kind: latest, exact-version, `max_version` and `at_checkpoint`
+/// reads, alone and combined, through `GetObject` and `BatchGetObjects`. A read bounded by
+/// `at_checkpoint` whose resolved version was written after the checkpoint answers plain
+/// `NotFound`, as does a read of an object that never existed. Setting both `version` and
+/// `max_version` is `InvalidArgument`.
 #[tokio::test]
-async fn test_get_object_max_version_and_checkpoint_bounds() {
+async fn test_get_object_reports_removals() {
     let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
@@ -1938,92 +1977,112 @@ async fn test_get_object_max_version_and_checkpoint_bounds() {
         .expect("served height should be set");
     assert!(served_height >= lifecycle.delete_checkpoint);
 
-    // The expected outcome of each read, from the lifecycle's `(checkpoint, object, version,
-    // live)` changes: the version it returns, or `None` if it is `NotFound`.
     let changes = |id: ObjectID| {
         lifecycle
             .changes
             .iter()
             .filter(move |(_, changed, _, _)| *changed == id)
     };
-    // An exact version, kept only if it was made by the end of `at_checkpoint`.
-    let exact = |id: ObjectID, version: u64, at_checkpoint: Option<u64>| {
-        changes(id)
-            .find(|&&(_, _, changed, live)| live && changed == version)
+    // The expected answer to a read that selects the change `selected`, kept only if it was made
+    // by the end of `at_checkpoint`: its version if live, else its removal.
+    let expected =
+        |selected: Option<&(u64, ObjectID, u64, bool)>, at_checkpoint: Option<u64>| match selected
             .filter(|&&(changed_at, ..)| at_checkpoint.is_none_or(|bound| changed_at <= bound))
-            .map(|&(_, _, version, _)| version)
-    };
-    // The newest version at or below `version` (every change is within the served height), if it
-    // was made by the end of `at_checkpoint` and the object is live at it.
-    let at_most = |id: ObjectID, version: u64, at_checkpoint: Option<u64>| {
-        changes(id)
-            .rfind(|&&(_, _, changed, _)| changed <= version)
-            .filter(|&&(changed_at, ..)| at_checkpoint.is_none_or(|bound| changed_at <= bound))
-            .filter(|&&(_, _, _, live)| live)
-            .map(|&(_, _, version, _)| version)
-    };
+        {
+            Some(&(_, _, version, true)) => Ok(version),
+            Some(&(_, id, version, false)) => {
+                let (kind, _) = lifecycle.removals[&(id, version)];
+                Err(Some((version, kind.as_str_name().to_owned())))
+            }
+            None => Err(None),
+        };
 
-    // Every version from just before creation to just after deletion, each read exactly and as a
-    // `max_version`, unbounded and bounded by every checkpoint from just before creation through
-    // deletion, for both objects.
-    let versions: Vec<u64> = lifecycle
-        .changes
-        .iter()
-        .map(|&(_, _, version, _)| version)
-        .collect();
-    let first_version = versions.iter().min().unwrap() - 1;
-    let last_version = versions.iter().max().unwrap() + 1;
+    let never_existed = ObjectID::random();
+    let mut cases = vec![(object_request(never_existed, None, None), Err(None))];
+    for id in [object, wrapper] {
+        cases.push((
+            object_request(id, None, None),
+            expected(changes(id).next_back(), None),
+        ));
+    }
     let bounds: Vec<Option<u64>> = std::iter::once(None)
         .chain((lifecycle.publish_checkpoint..=lifecycle.delete_checkpoint).map(Some))
         .collect();
-    let mut cases: Vec<(GetObjectRequest, Option<u64>, String)> = Vec::new();
+    let versions = lifecycle.changes.iter().map(|&(_, _, version, _)| version);
+    let first_version = versions.clone().min().unwrap() - 1;
+    let last_version = versions.max().unwrap() + 1;
     for id in [object, wrapper] {
-        let id_string = id.to_canonical_string(true);
-        for version in first_version..=last_version {
-            for &at_checkpoint in &bounds {
-                let at = at_checkpoint
-                    .map(|checkpoint| format!(" at checkpoint {checkpoint}"))
-                    .unwrap_or_default();
+        for &at_checkpoint in &bounds {
+            if let Some(checkpoint) = at_checkpoint {
+                let at = changes(id).rfind(|&&(changed_at, ..)| changed_at <= checkpoint);
+                cases.push((
+                    object_request(id, None, Some(checkpoint)),
+                    expected(at, None),
+                ));
+            }
+            for version in first_version..=last_version {
+                let exact = changes(id).find(|&&(_, _, changed, _)| changed == version);
                 cases.push((
                     object_request(id, Some(version), at_checkpoint),
-                    exact(id, version, at_checkpoint),
-                    format!("Object {id_string} with version {version}{at} not found"),
+                    expected(exact, at_checkpoint),
                 ));
+                let at_most = changes(id).rfind(|&&(_, _, changed, _)| changed <= version);
                 cases.push((
                     max_version_request(id, version, at_checkpoint),
-                    at_most(id, version, at_checkpoint),
-                    format!("Object {id_string} with version at most {version}{at} not found"),
+                    expected(at_most, at_checkpoint),
                 ));
             }
         }
     }
-
-    let assert_case = |read: &ObjectRead,
-                       req: &GetObjectRequest,
-                       expected: Option<u64>,
-                       message: &str,
-                       how: &str| {
-        let id: ObjectID = req.object_id.as_deref().unwrap().parse().unwrap();
-        let context = format!(
-            "{how}: version {:?}, max_version {:?}, at_checkpoint {:?}",
-            req.version, req.max_version, req.at_checkpoint,
+    for (id, version) in lifecycle.removals.keys() {
+        assert!(
+            cases
+                .iter()
+                .any(|(_, expected)| matches!(expected, Err(Some((v, _))) if v == version)),
+            "no read selects the removal of {id} at {version}"
         );
-        match expected {
-            Some(version) => assert_object_found(read, id, version, &context),
-            None => assert_not_found(read, message, &context),
+    }
+
+    let assert_read = |read: RemovalRead,
+                       req: &GetObjectRequest,
+                       expected: &Result<u64, Option<(u64, String)>>,
+                       how: &str| {
+        let context = format!(
+            "{how}: {:?} version {:?}, max_version {:?}, at_checkpoint {:?}",
+            req.object_id, req.version, req.max_version, req.at_checkpoint,
+        );
+        match (read, expected) {
+            (Ok(found), Ok(version)) => assert_eq!(found, *version, "{context}"),
+            (Err((_, None)), Err(None)) => {}
+            (Err((message, Some(removal))), Err(Some(expected))) => {
+                assert_eq!(&removal, expected, "{context}: {message}");
+            }
+            (read, expected) => panic!("{context}: expected {expected:?}, got {read:?}"),
         }
     };
-    for (req, expected, message) in &cases {
-        let read = get_object_read(&mut client, req.clone()).await;
-        assert_case(&read, req, *expected, message, "GetObject");
+    let mask = || Some(FieldMask::from_paths(["object_id", "version"]));
+    for (req, expected) in &cases {
+        let mut req = req.clone();
+        req.read_mask = mask();
+        let read = match client.get_object(req.clone()).await {
+            Ok(response) => Ok(response.into_inner().object.unwrap().version.unwrap()),
+            Err(status) => removal_read(
+                &sui_rpc::proto::google::rpc::Status::decode(status.details()).unwrap(),
+            ),
+        };
+        assert_read(read, &req, expected, "GetObject");
     }
-    let batch = batch_get_object_reads(
-        &mut client,
-        cases.iter().map(|(req, _, _)| req.clone()).collect(),
-    )
-    .await;
-    for (read, (req, expected, message)) in batch.iter().zip_eq(&cases) {
-        assert_case(read, req, *expected, message, "BatchGetObjects");
+    let mut batch = BatchGetObjectsRequest::default();
+    batch.requests = cases.iter().map(|(req, _)| req.clone()).collect();
+    batch.read_mask = mask();
+    let response = client.batch_get_objects(batch).await.unwrap().into_inner();
+    for (item, (req, expected)) in response.objects.iter().zip_eq(&cases) {
+        let read = match item.result.as_ref().unwrap() {
+            get_object_result::Result::Object(object) => Ok(object.version.unwrap()),
+            get_object_result::Result::Error(status) => removal_read(status),
+            other => panic!("unexpected batch result {other:?}"),
+        };
+        assert_read(read, req, expected, "BatchGetObjects");
     }
 
     // The object skips a version between creation and the mutation, so the cases above include
@@ -2251,25 +2310,36 @@ async fn test_list_object_versions_lifecycle() {
         assert_eq!(listed_items(&full, "full listing"), all);
         assert_eq!(ended_with(&full), QueryEndReason::LedgerTip);
 
-        // Each removal names the transaction that deleted or wrapped the object, when
-        // `removal_read_mask` asks for it.
-        let mut req = list_versions_request(id, Ordering::Ascending, None, None, None);
-        req.removal_read_mask = Some(FieldMask::from_paths(["version", "transaction"]));
-        let mut stream = client.list_object_versions(req).await.unwrap().into_inner();
-        let mut removed_by = vec![];
-        while let Some(frame) = stream.message().await.unwrap() {
-            if let Some(removal) = frame.removal_opt() {
-                let transaction = removal.transaction.clone();
-                removed_by.push((removal.version(), transaction));
+        // Each removal names the transaction that deleted or wrapped the object when
+        // `removal_read_mask` selects it, and no transaction under the default mask.
+        for with_transactions in [true, false] {
+            let mut req = list_versions_request(id, Ordering::Ascending, None, None, None);
+            if with_transactions {
+                req.removal_read_mask =
+                    Some(FieldMask::from_paths(["version", "kind", "transaction"]));
             }
+            let mut stream = client.list_object_versions(req).await.unwrap().into_inner();
+            let mut removed_by = vec![];
+            while let Some(frame) = stream.message().await.unwrap() {
+                if let Some(removal) = frame.removal_opt() {
+                    let transaction = removal.transaction.clone();
+                    removed_by.push((removal.version(), removal.kind(), transaction));
+                }
+            }
+            let mut expected: Vec<(u64, object_removal::Kind, Option<String>)> = lifecycle
+                .removals
+                .iter()
+                .filter(|&(&(removed, _), _)| removed == id)
+                .map(|(&(_, version), &(kind, digest))| {
+                    (version, kind, with_transactions.then(|| digest.to_string()))
+                })
+                .collect();
+            expected.sort();
+            assert_eq!(
+                removed_by, expected,
+                "removals of {id}, with transactions {with_transactions}"
+            );
         }
-        let expected: Vec<(u64, Option<String>)> = lifecycle
-            .removed_by
-            .iter()
-            .filter(|&&(removed, _, _)| removed == id)
-            .map(|&(_, version, digest)| (version, Some(digest.to_string())))
-            .collect();
-        assert_eq!(removed_by, expected, "removing transactions of {id}");
         let cursors: Vec<Option<(u64, prost::bytes::Bytes)>> = std::iter::once(None)
             .chain(
                 full.unwrap()
