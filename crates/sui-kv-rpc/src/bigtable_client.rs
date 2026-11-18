@@ -27,6 +27,7 @@
 use std::collections::HashMap;
 use std::ops::Bound;
 use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -60,6 +61,7 @@ use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
+use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
@@ -300,6 +302,32 @@ impl BigTableClient {
         self.call_gated(
             stage::OBJECTS,
             inner.get_object_lt_or_eq_version(object_id, version),
+        )
+        .await
+    }
+
+    /// Stream up to `limit` versions of `object_id` in `versions`, live or
+    /// removed, in ascending version order or descending if `descending`,
+    /// each with its row, read without live objects' contents unless
+    /// `with_contents`. One range scan of the `objects` table, holding its
+    /// permit until the stream is dropped. BigTable sends at most `limit`
+    /// rows, so the read is complete once the `limit`th arrives.
+    pub(crate) async fn object_versions_stream(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+        with_contents: bool,
+    ) -> Result<
+        BoxStream<'static, Result<(SequenceNumber, ObjectVersionRow), anyhow::Error>>,
+        RpcError,
+    > {
+        let mut inner = self.inner.clone();
+        self.open_gated_stream_with_rows_limit(
+            stage::OBJECTS,
+            inner.object_versions_stream(object_id, versions, limit, descending, with_contents),
+            Some(limit),
         )
         .await
     }
@@ -617,9 +645,25 @@ impl BigTableClient {
         T: Send + 'static,
         S: Stream<Item = anyhow::Result<T>> + Send + 'static,
     {
+        self.open_gated_stream_with_rows_limit(stage, open, None)
+            .await
+    }
+
+    /// [`Self::open_gated_stream`] for a read that BigTable ends after
+    /// `rows_limit` rows, when set (see [`gate_stream`]).
+    async fn open_gated_stream_with_rows_limit<T, S>(
+        &self,
+        stage: &'static str,
+        open: impl Future<Output = anyhow::Result<S>>,
+        rows_limit: Option<usize>,
+    ) -> Result<BoxStream<'static, Result<T, anyhow::Error>>, RpcError>
+    where
+        T: Send + 'static,
+        S: Stream<Item = anyhow::Result<T>> + Send + 'static,
+    {
         let mut permit = self.acquire(stage).await?;
         match open.await {
-            Ok(inner) => Ok(gate_stream(permit, inner.boxed())),
+            Ok(inner) => Ok(gate_stream(permit, inner.boxed(), rows_limit)),
             Err(error) => {
                 permit.finish(ReadOutcome::Failed);
                 Err(RpcError::from(error))
@@ -815,21 +859,32 @@ fn record_release(context: &BigTableClientContext) {
 /// by full drain, early termination by the consumer, or cancellation
 /// propagating through `Drop`). Items and errors pass through unchanged; the
 /// permit records the read as completed when the inner stream ends, failed
-/// when it yields an error, and cancelled if dropped before either.
+/// when it yields an error, and cancelled if dropped before either. A read
+/// that BigTable ends after `rows_limit` rows also records completed when the
+/// `rows_limit`th row arrives, before the consumer takes it: BigTable sends
+/// nothing after it, so a consumer that stops there has read the whole
+/// response.
 fn gate_stream<T>(
     mut permit: LimitedPermit,
     inner: BoxStream<'static, Result<T, anyhow::Error>>,
+    rows_limit: Option<usize>,
 ) -> BoxStream<'static, Result<T, anyhow::Error>>
 where
     T: Send + 'static,
 {
     async_stream::try_stream! {
         futures::pin_mut!(inner);
+        let mut rows = 0;
         while let Some(row) = inner.next().await {
             if row.is_err() {
                 permit.finish(ReadOutcome::Failed);
             }
-            yield row?;
+            let row = row?;
+            rows += 1;
+            if rows_limit == Some(rows) {
+                permit.finish(ReadOutcome::Completed);
+            }
+            yield row;
         }
         permit.finish(ReadOutcome::Completed);
     }
@@ -888,7 +943,7 @@ mod tests {
 
         let inner: BoxStream<'static, Result<u64, anyhow::Error>> =
             stream::iter(vec![Ok(1u64), Ok(2), Ok(3)]).boxed();
-        let mut wrapped = gate_stream(permit, inner);
+        let mut wrapped = gate_stream(permit, inner, None);
 
         for expected in 1u64..=3 {
             let item = wrapped.try_next().await.unwrap().unwrap();
@@ -925,7 +980,7 @@ mod tests {
                 Ok(n as u64)
             })
             .boxed();
-        let mut wrapped = gate_stream(permit, inner);
+        let mut wrapped = gate_stream(permit, inner, None);
 
         let _ = wrapped.try_next().await.unwrap().unwrap();
         let _ = wrapped.try_next().await.unwrap().unwrap();
@@ -951,7 +1006,7 @@ mod tests {
 
         let inner: BoxStream<'static, Result<u64, anyhow::Error>> =
             stream::iter(vec![Ok::<u64, anyhow::Error>(1u64), Err(anyhow!("boom"))]).boxed();
-        let mut wrapped = gate_stream(permit, inner);
+        let mut wrapped = gate_stream(permit, inner, None);
 
         assert_eq!(wrapped.try_next().await.unwrap().unwrap(), 1);
         let err = wrapped.try_next().await.unwrap_err();

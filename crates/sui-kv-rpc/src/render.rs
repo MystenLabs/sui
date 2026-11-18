@@ -76,12 +76,14 @@ pub(crate) async fn object_to_response(
 }
 
 /// Whether `mask` asks for no `Object` field beyond `object_id` and `version`, which is all an
-/// `object_versions_by_checkpoint` row or an `objects` row key provides. Every other field,
-/// including `digest` (a hash of the object's contents), needs the object itself.
+/// `object_versions_by_checkpoint` row or an `objects` row key provides, and `display`, which
+/// kv-rpc does not render. Every other field, including `digest` (a hash of the object's
+/// contents), needs the object itself.
 pub(crate) fn needs_only_object_id_and_version(mask: &FieldMaskTree) -> bool {
     ProtoObject::FIELDS.iter().all(|field| {
         field.name == ProtoObject::OBJECT_ID_FIELD.name
             || field.name == ProtoObject::VERSION_FIELD.name
+            || field.name == ProtoObject::DISPLAY_FIELD.name
             || !mask.contains(field.name)
     })
 }
