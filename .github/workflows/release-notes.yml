@@ -53,7 +53,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin@v6.2.0
         with:
-          python-version: 3.10.10
+          python-version: '3.10'
       - name: Install pytest
         run: pip install pytest
       - name: Run release_notes.py tests
@@ -72,7 +72,7 @@ jobs:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin@v6.2.0
         with:
-          python-version: 3.10.10
+          python-version: '3.10'
       - name: Validate PR's release notes
         shell: bash
         run: |
