@@ -673,7 +673,8 @@ impl KvRpcServer {
 }
 
 /// Pipelines whose watermarks bound the checkpoint height reported by `GetServiceInfo`, so an
-/// instance does not advertise a height it cannot serve.
+/// instance does not advertise a height it cannot serve. They include the packages pipelines, so
+/// a package lookup bounded by the served height sees every package published by then.
 pub fn service_info_watermark_pipelines(bitmap_schema: BitmapSchema) -> Vec<&'static str> {
     let [transaction_bitmap, event_bitmap] = sui_kvstore::bitmap_index_pipelines(bitmap_schema);
     vec![

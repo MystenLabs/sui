@@ -224,6 +224,41 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+/// System package objects at `(id, version)`, each with the modules genesis publishes at `id`: a
+/// package past its first version names its original id through its modules' address.
+fn system_package_objects(versions: &[(ObjectID, u64)]) -> Vec<Object> {
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut OsRng)
+        .deterministic_committee_size(NonZeroUsize::MIN)
+        .build();
+    versions
+        .iter()
+        .map(|&(id, version)| {
+            let genesis_package = config
+                .genesis
+                .objects()
+                .iter()
+                .find(|object| object.id() == id)
+                .and_then(|object| object.data.try_as_package())
+                .expect("genesis publishes every system package");
+            Object::new_package_from_data(
+                sui_types::object::Data::Package(
+                    sui_types::move_package::MovePackage::new(
+                        id,
+                        SequenceNumber::from_u64(version),
+                        genesis_package.serialized_module_map().clone(),
+                        u64::MAX,
+                        vec![],
+                        BTreeMap::new(),
+                    )
+                    .unwrap(),
+                ),
+                TransactionDigest::genesis_marker(),
+            )
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn test_current_object_read_saves_into_rpc_store_when_attached() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -595,11 +630,15 @@ async fn test_availability_floor_below_the_fork_passes_through() {
 
 /// The fork's indexes record only the fork's own checkpoints and load pre-fork packages as of the
 /// fork checkpoint, without the history before it, so checkpoint-pinned reads below the fork
-/// checkpoint are rejected even when the remote's retention reaches further back.
+/// checkpoint are rejected even when the remote's retention reaches further back; at the fork
+/// checkpoint they are served. A listing's checkpoint range starts from the version as of the
+/// checkpoint before `start_checkpoint`, so the lowest one it accepts is the checkpoint after the
+/// fork, and a range ending at or below that checkpoint is refused too.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
     use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
     use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
@@ -635,6 +674,45 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         .restore_seed_objects(&[package])
         .unwrap();
     let service = RpcService::new(Arc::new(store));
+
+    let list = |range: [Option<u64>; 2]| {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        [request.start_checkpoint, request.end_checkpoint] = range;
+        tonic::Request::new(request)
+    };
+    let below_range_floor =
+        "requested data below earliest available; lowest available checkpoint is 101";
+    for range in [
+        [Some(fork_checkpoint), None],
+        [None, Some(fork_checkpoint)],
+        [None, Some(fork_checkpoint + 1)],
+    ] {
+        let error = service
+            .list_package_versions(list(range))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::OutOfRange, "{range:?}");
+        assert_eq!(error.message(), below_range_floor, "{range:?}");
+    }
+    // The version loaded at the fork was published by its end, before the lowest accepted
+    // `start_checkpoint`, so a range from there holds none of it.
+    for (range, expected) in [
+        ([Some(fork_checkpoint + 1), None], vec![]),
+        ([None, Some(fork_checkpoint + 2)], vec![(Some(1), None)]),
+    ] {
+        let versions = service
+            .list_package_versions(list(range))
+            .await
+            .unwrap()
+            .into_inner()
+            .versions;
+        let listed: Vec<_> = versions
+            .iter()
+            .map(|version| (version.version, version.checkpoint))
+            .collect();
+        assert_eq!(listed, expected, "{range:?}");
+    }
     let below_floor = "requested data below earliest available; lowest available checkpoint is 100";
 
     let mut request = GetPackageRequest::default();
@@ -729,14 +807,22 @@ async fn test_system_package_versions_replaced_before_the_fork_are_pruned() {
     }
 }
 
-/// The fork has no rows for the system-package versions replaced before it, so every listing
-/// starts at the lowest version it stores, loaded at the fork with no recorded publish
-/// checkpoint.
+/// The fork has no rows for the system-package versions replaced before it, so a listing that
+/// starts below the lowest version it stores starts at that version, with or without a
+/// checkpoint range. A page token continuing a listing whose client holds a version below it is
+/// refused as below the fork's history, naming only the lowest `start_checkpoint` it accepts,
+/// rather than skip the versions in between; one whose client holds the version just below it is
+/// served. A range ending at version 1 holds no version on any node, so it is an empty answer.
 #[tokio::test]
 async fn test_system_package_listing_below_the_lowest_stored_version_starts_there() {
+    use prost::Message;
     use sui_rpc_api::RpcService;
-    use sui_rpc_api::grpc::v2::move_package_service::PageToken;
+    use sui_rpc_api::proto::google::rpc::ErrorInfo;
+    use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
     use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsResponse;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -763,25 +849,1165 @@ async fn test_system_package_listing_below_the_lowest_stored_version_starts_ther
         .unwrap();
     let service = RpcService::new(Arc::new(store));
 
-    for from_version in [None, Some(1), Some(2), Some(3)] {
+    // The page token naming `version` as the first version of the next page.
+    let page_token = |version: u64| -> prost::bytes::Bytes {
+        bcs::to_bytes(&(package_id, version)).unwrap().into()
+    };
+    let list = |end_checkpoint, from_version: Option<u64>, token: Option<u64>| {
         let mut request = ListPackageVersionsRequest::default();
         request.package_id = Some(package_id.to_string());
-        request.page_token = from_version.map(|version| {
-            PageToken {
-                original_package_id: package_id,
-                version,
-            }
-            .encode()
+        request.end_checkpoint = end_checkpoint;
+        request.start_version = from_version;
+        request.page_token = token.map(page_token);
+        service.list_package_versions(tonic::Request::new(request))
+    };
+    let listed = |response: tonic::Response<ListPackageVersionsResponse>| {
+        response
+            .into_inner()
+            .versions
+            .iter()
+            .map(|version| version.version.unwrap())
+            .collect::<Vec<_>>()
+    };
+
+    for end_checkpoint in [None, Some(fork_checkpoint + 2)] {
+        for from_version in [None, Some(1), Some(2), Some(3)] {
+            let response = list(end_checkpoint, from_version, None).await.unwrap();
+            assert_eq!(
+                listed(response),
+                vec![3],
+                "end {end_checkpoint:?} from {from_version:?}"
+            );
+        }
+    }
+
+    // A page token at version 2: the client holds version 1, and version 2 is gone.
+    let error = list(None, None, Some(2)).await.unwrap_err();
+    assert_eq!(
+        (error.code(), error.message()),
+        (
+            tonic::Code::OutOfRange,
+            "requested data below earliest available; lowest available checkpoint is 101"
+        ),
+    );
+    let status = RpcStatus::decode(error.details()).unwrap();
+    let error_info = status
+        .details
+        .iter()
+        .find(|detail| detail.type_url.ends_with("google.rpc.ErrorInfo"))
+        .map(|detail| ErrorInfo::decode(detail.value.as_slice()).unwrap())
+        .unwrap();
+    assert_eq!(error_info.reason, "BELOW_EARLIEST_AVAILABLE");
+    assert_eq!(
+        error_info.metadata,
+        [("lowestAvailableCheckpoint".to_owned(), "101".to_owned())]
+            .into_iter()
+            .collect()
+    );
+
+    // A page token at version 3 skips nothing.
+    let response = list(None, None, Some(3)).await.unwrap();
+    assert_eq!(listed(response), vec![3]);
+
+    // A range below `OBJECT_START_VERSION`, ascending (`end_version` alone selects cursor paging)
+    // and descending.
+    for options in [None, Some(Ordering::Descending)] {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.end_version = Some(1);
+        request.options = options.map(|ordering| {
+            let mut options = QueryOptions::default();
+            options.ordering = Some(ordering as i32);
+            options
         });
-        let versions = service
+        let response = service
             .list_package_versions(tonic::Request::new(request))
             .await
-            .unwrap()
+            .unwrap();
+        assert_eq!(listed(response), Vec::<u64>::new(), "{options:?}");
+    }
+}
+
+/// The fork loads a system package at its version at the fork checkpoint, without the versions
+/// below it, and a listing covers only the versions it has: one reaching below the loaded version
+/// starts there, so a descending listing ends there with a short last page. A cursor naming a
+/// version below it comes from a view holding them, such as kv-rpc's. A `before` cursor there
+/// leaves nothing to list. An `after` cursor names a version the client holds, and when versions
+/// lie between it and the loaded version, the listing is refused in either order as below where
+/// the fork's history begins, naming only the lowest `start_checkpoint` it accepts, rather than
+/// skip them. A cursor above every version the fork has lies past its tip: a descending listing
+/// refuses it, and an ascending one lists what the fork has. All of this holds with or without an
+/// `end_checkpoint`.
+#[tokio::test]
+async fn test_list_package_versions_by_cursor_from_below_the_fork() {
+    use prost::Message;
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
+    use sui_rpc_api::proto::google::rpc::ErrorInfo;
+    use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsResponse;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+    let framework = ObjectID::from_single_byte(2);
+    store
+        .local_store()
+        .restore_seed_objects(&system_package_objects(&[(framework, 3)]))
+        .unwrap();
+    let highest_indexed = sui_types::storage::RpcStateReader::indexes(&store)
+        .unwrap()
+        .get_highest_indexed_checkpoint_seq_number()
+        .unwrap()
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    let list = |ordering: Ordering,
+                after: Option<u64>,
+                before: Option<u64>,
+                end_checkpoint,
+                limit: Option<u32>| {
+        let cursor = |version| {
+            PackageVersionCursor::Lineage {
+                original_package_id: framework,
+                version,
+                minted_at: highest_indexed,
+            }
+            .encode()
+        };
+        let mut options = QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(cursor);
+        options.before = before.map(cursor);
+        options.limit = limit;
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(framework.to_string());
+        request.options = Some(options);
+        request.end_checkpoint = end_checkpoint;
+        service.list_package_versions(tonic::Request::new(request))
+    };
+    let listed = |response: tonic::Response<ListPackageVersionsResponse>| {
+        response
             .into_inner()
-            .versions;
-        assert_eq!(versions.len(), 1, "from {from_version:?}");
-        assert_eq!(versions[0].version, Some(3), "from {from_version:?}");
-        assert_eq!(versions[0].checkpoint, None, "from {from_version:?}");
+            .versions
+            .iter()
+            .map(|version| version.version.unwrap())
+            .collect::<Vec<_>>()
+    };
+    let assert_below_fork = |error: tonic::Status, case: &str| {
+        assert_eq!(
+            (error.code(), error.message()),
+            (
+                tonic::Code::OutOfRange,
+                "requested data below earliest available; lowest available checkpoint is 101"
+            ),
+            "{case}"
+        );
+        let metadata = RpcStatus::decode(error.details())
+            .unwrap()
+            .details
+            .iter()
+            .find(|detail| detail.type_url.ends_with("google.rpc.ErrorInfo"))
+            .map(|detail| ErrorInfo::decode(detail.value.as_slice()).unwrap())
+            .unwrap()
+            .metadata;
+        assert_eq!(
+            metadata,
+            [("lowestAvailableCheckpoint".to_owned(), "101".to_owned())]
+                .into_iter()
+                .collect(),
+            "{case}"
+        );
+    };
+
+    let past_tip = format!(
+        "requested data above latest available; cursor is at checkpoint {0}, and only \
+         checkpoints below {0} are available",
+        highest_indexed + 1
+    );
+    // A descending `end_checkpoint` must be indexed, and the fork has indexed nothing above the
+    // fork checkpoint, below the lowest `end_checkpoint` it accepts; so only ascending listings
+    // set one here.
+    for (ordering, end_checkpoint) in [
+        (Ordering::Ascending, None),
+        (Ordering::Descending, None),
+        (Ordering::Ascending, Some(fork_checkpoint + 2)),
+    ] {
+        let case = |cursors: &str| format!("{ordering:?} {cursors} end {end_checkpoint:?}");
+
+        for (after, before, expected) in [(Some(4), None, vec![]), (None, Some(4), vec![3])] {
+            let result = list(ordering, after, before, end_checkpoint, None).await;
+            let case = case(&format!("after {after:?} before {before:?}"));
+            if ordering == Ordering::Descending {
+                let error = result.unwrap_err();
+                assert_eq!(
+                    (error.code(), error.message()),
+                    (tonic::Code::OutOfRange, past_tip.as_str()),
+                    "{case}"
+                );
+            } else {
+                assert_eq!(listed(result.unwrap()), expected, "{case}");
+            }
+        }
+
+        // The listing starts at the loaded version.
+        let response = list(ordering, None, None, end_checkpoint, Some(2))
+            .await
+            .unwrap();
+        assert_eq!(listed(response), vec![3], "{}", case("no cursor"));
+
+        // No lineage has a version below 1, so a `before` cursor at version 0 skips nothing,
+        // and one below the loaded version leaves nothing to list.
+        for before in [0, 1, 2, 3] {
+            let response = list(ordering, None, Some(before), end_checkpoint, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                listed(response),
+                Vec::<u64>::new(),
+                "{}",
+                case(&format!("before {before}"))
+            );
+        }
+
+        // The client holds version 2, just below the loaded version, so nothing is skipped;
+        // past the loaded version, nothing is left.
+        for (after, expected) in [(2, vec![3]), (3, vec![])] {
+            let response = list(ordering, Some(after), None, end_checkpoint, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                listed(response),
+                expected,
+                "{}",
+                case(&format!("after {after}"))
+            );
+        }
+
+        // The client holds version 1, and version 2 is gone: a listing in either order would
+        // skip it.
+        let error = list(ordering, Some(1), None, end_checkpoint, None)
+            .await
+            .unwrap_err();
+        assert_below_fork(error, &case("after 1"));
+    }
+}
+
+/// A version's key: its publish checkpoint, original id and version. Within one lineage, key order
+/// is version order.
+type PublishKey = (u64, ObjectID, u64);
+
+/// A version one `ListPackageVersions` page listed: its key, and the cursor naming it.
+struct ListedVersion {
+    key: PublishKey,
+    cursor: prost::bytes::Bytes,
+}
+
+/// The keys of `listed`, in listing order.
+fn listed_keys(listed: &[ListedVersion]) -> Vec<PublishKey> {
+    listed.iter().map(|version| version.key).collect()
+}
+
+/// The keys among `published`, given in key order, that a listing of the checkpoint range
+/// `[start, end)` holds strictly after `after` and strictly before `before`, in `ordering`.
+fn expected_keys(
+    published: &[PublishKey],
+    [start, end]: [Option<u64>; 2],
+    ordering: sui_rpc_api::proto::sui::rpc::v2::Ordering,
+    after: Option<PublishKey>,
+    before: Option<PublishKey>,
+) -> Vec<PublishKey> {
+    let mut keys: Vec<_> = published
+        .iter()
+        .copied()
+        .filter(|key| {
+            let (checkpoint, ..) = *key;
+            start.is_none_or(|start| checkpoint >= start)
+                && end.is_none_or(|end| checkpoint < end)
+                && after.is_none_or(|after| *key > after)
+                && before.is_none_or(|before| *key < before)
+        })
+        .collect();
+    if ordering == sui_rpc_api::proto::sui::rpc::v2::Ordering::Descending {
+        keys.reverse();
+    }
+    keys
+}
+
+/// A fork whose own checkpoints publish packages, read through `RpcService` as the fork's RPC
+/// server reads it. The first checkpoint after the fork publishes the package whose lineage the
+/// tests list, the second publishes three packages together, and each of the next four upgrades
+/// the first package once: its versions 1 to 5 are published in `checkpoints[0]` and
+/// `checkpoints[2..]`.
+struct ForkWithPublishes {
+    service: sui_rpc_api::RpcService,
+    /// The original id of the upgraded package.
+    lineage: ObjectID,
+    /// Every published version, in key order.
+    published: Vec<PublishKey>,
+    /// The checkpoints the fork created after the fork checkpoint, in order. The last one is the
+    /// highest indexed checkpoint.
+    checkpoints: Vec<CheckpointSequenceNumber>,
+    _context: Arc<crate::context::Context>,
+    _checkpoint_receiver:
+        tokio::sync::broadcast::Receiver<Arc<sui_types::full_checkpoint_content::Checkpoint>>,
+    _temp: tempfile::TempDir,
+    _gql_server: MockServer,
+}
+
+/// Build a [`ForkWithPublishes`]: a fork at genesis whose publishes and upgrades execute in
+/// Simulacrum, each batch sealed into its own checkpoint, which the embedded indexer indexes
+/// before the next batch runs.
+async fn fork_with_publishes() -> ForkWithPublishes {
+    use prometheus::Registry;
+    use sui_types::MOVE_STDLIB_PACKAGE_ID;
+    use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+    use sui_types::move_package::MovePackage;
+    use sui_types::move_package::UpgradePolicy;
+
+    /// Signs and executes publishes and upgrades of one module from one genesis account.
+    struct Publisher {
+        sender: SuiAddress,
+        key: sui_types::crypto::AccountKeyPair,
+        gas: ObjectID,
+        modules: Vec<Vec<u8>>,
+        deps: Vec<ObjectID>,
+    }
+
+    impl Publisher {
+        const GAS_BUDGET: u64 = 50_000_000_000;
+
+        fn object_ref(
+            sim: &Simulacrum<OsRng, ForkStore>,
+            id: ObjectID,
+        ) -> sui_types::base_types::ObjectRef {
+            sim.store()
+                .get_object(&id)
+                .expect("object lookup failed")
+                .expect("object should exist")
+                .compute_object_reference()
+        }
+
+        /// Execute `data`, which must succeed, and return the ids of the objects it created with
+        /// each of `owners`, one per owner.
+        fn execute(
+            &self,
+            sim: &mut Simulacrum<OsRng, ForkStore>,
+            data: TransactionData,
+            owners: &[Owner],
+        ) -> Vec<ObjectID> {
+            let tx = Transaction::from_data_and_signer(data, vec![&self.key]);
+            let (effects, error) = sim.execute_transaction(tx).unwrap();
+            assert!(
+                effects.status().is_ok(),
+                "status={:?} error={error:?}",
+                effects.status()
+            );
+            owners
+                .iter()
+                .map(|owner| {
+                    effects
+                        .created()
+                        .into_iter()
+                        .find_map(|((id, _, _), created_owner)| {
+                            (created_owner == *owner).then_some(id)
+                        })
+                        .unwrap_or_else(|| panic!("no object created with owner {owner:?}"))
+                })
+                .collect()
+        }
+
+        /// Publish the module as a new package, returning the package's id and the id of its
+        /// upgrade cap.
+        fn publish(&self, sim: &mut Simulacrum<OsRng, ForkStore>) -> (ObjectID, ObjectID) {
+            let data = TransactionData::new_module(
+                self.sender,
+                Self::object_ref(sim, self.gas),
+                self.modules.clone(),
+                self.deps.clone(),
+                Self::GAS_BUDGET,
+                sim.reference_gas_price(),
+            );
+            let created = self.execute(
+                sim,
+                data,
+                &[Owner::Immutable, Owner::AddressOwner(self.sender)],
+            );
+            (created[0], created[1])
+        }
+
+        /// Upgrade the package whose latest version is stored at `package` with the upgrade cap
+        /// `cap`, returning the id of the new version.
+        fn upgrade(
+            &self,
+            sim: &mut Simulacrum<OsRng, ForkStore>,
+            package: ObjectID,
+            cap: ObjectID,
+        ) -> ObjectID {
+            let digest =
+                MovePackage::compute_digest_for_modules_and_deps(&self.modules, &self.deps, true);
+            let data = TransactionData::new_upgrade(
+                self.sender,
+                Self::object_ref(sim, self.gas),
+                package,
+                self.modules.clone(),
+                self.deps.clone(),
+                (Self::object_ref(sim, cap), Owner::AddressOwner(self.sender)),
+                UpgradePolicy::COMPATIBLE,
+                digest.to_vec(),
+                Self::GAS_BUDGET,
+                sim.reference_gas_price(),
+            )
+            .unwrap();
+            self.execute(sim, data, &[Owner::Immutable])[0]
+        }
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let mut rng = OsRng;
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut rng)
+        .deterministic_committee_size(NonZeroUsize::MIN)
+        .build();
+    let genesis_checkpoint = config.genesis.checkpoint();
+    let genesis_contents = config.genesis.checkpoint_contents().clone();
+    let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
+    let chain_identifier = (*genesis_checkpoint.digest()).into();
+    let services = ServiceManager::open(
+        temp.path(),
+        "localnet".to_owned(),
+        forked_at_checkpoint,
+        chain_identifier,
+    )
+    .expect("service manager should open");
+    let gql_server = crate::test_support::absent_objects_gql_server().await;
+    // Package listings read the remote's object floor, which the fork clamps at the fork
+    // checkpoint.
+    mock_available_range(&gql_server, 0).await;
+    let mut store = ForkStore::new_for_testing_with_remote(
+        temp.path().to_path_buf(),
+        gql_server.uri(),
+        forked_at_checkpoint,
+        services.local_store(),
+    );
+    store
+        .save_checkpoint(&genesis_checkpoint, &genesis_contents)
+        .expect("genesis checkpoint should be saved");
+    store.update_objects(
+        config
+            .genesis
+            .objects()
+            .iter()
+            .map(|object| (object.id(), object.clone()))
+            .collect(),
+        vec![],
+    );
+    let service = sui_rpc_api::RpcService::new(Arc::new(store.clone()));
+    let sim = Simulacrum::new_from_custom_state(
+        KeyStore::from_network_config(&config),
+        genesis_checkpoint,
+        config.genesis.sui_system_object(),
+        chain_identifier,
+        &config,
+        store,
+        rng,
+    );
+
+    let (sender, key) = {
+        let (sender, key) = sim
+            .keystore()
+            .accounts()
+            .next()
+            .expect("at least one account");
+        (*sender, key.copy())
+    };
+    let mut module = vec![];
+    move_binary_format::file_format::empty_module()
+        .serialize_with_version(
+            sim.protocol_config().move_binary_format_version(),
+            &mut module,
+        )
+        .unwrap();
+    let publisher = Publisher {
+        sender,
+        key,
+        gas: find_gas_coin(&config, sender).id(),
+        modules: vec![module],
+        deps: vec![MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID],
+    };
+
+    let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(16);
+    let context = Arc::new(
+        crate::context::Context::new(sim, services, checkpoint_sender, &Registry::new())
+            .await
+            .expect("service-backed context should initialize"),
+    );
+
+    let ((lineage, cap), first) = context
+        .run_with_new_checkpoint(|sim| publisher.publish(sim))
+        .await;
+    let (together, second) = context
+        .run_with_new_checkpoint(|sim| [(); 3].map(|()| publisher.publish(sim).0))
+        .await;
+    let mut checkpoints = vec![first.sequence_number, second.sequence_number];
+    let mut published = vec![(first.sequence_number, lineage, 1)];
+    published.extend(together.map(|id| (second.sequence_number, id, 1)));
+    let mut latest = lineage;
+    for version in 2..=5 {
+        let (upgraded, created) = context
+            .run_with_new_checkpoint(|sim| publisher.upgrade(sim, latest, cap))
+            .await;
+        latest = upgraded;
+        checkpoints.push(created.sequence_number);
+        published.push((created.sequence_number, lineage, version));
+    }
+    published.sort();
+
+    ForkWithPublishes {
+        service,
+        lineage,
+        published,
+        checkpoints,
+        _context: context,
+        _checkpoint_receiver: checkpoint_receiver,
+        _temp: temp,
+        _gql_server: gql_server,
+    }
+}
+
+impl ForkWithPublishes {
+    /// The highest indexed checkpoint.
+    fn tip(&self) -> u64 {
+        *self.checkpoints.last().unwrap()
+    }
+
+    /// The keys of the versions of `lineage`, in version order.
+    fn lineage_versions(&self) -> Vec<PublishKey> {
+        self.published
+            .iter()
+            .copied()
+            .filter(|(_, original_id, _)| *original_id == self.lineage)
+            .collect()
+    }
+
+    /// A `ListPackageVersions` request for one page with `package_id` as given, over the
+    /// checkpoint range `[start, end)`, `limit` at a time in `ordering`, after `after` and before
+    /// `before`.
+    fn request(
+        &self,
+        package_id: Option<ObjectID>,
+        [start, end]: [Option<u64>; 2],
+        ordering: sui_rpc_api::proto::sui::rpc::v2::Ordering,
+        limit: u32,
+        after: Option<&ListedVersion>,
+        before: Option<&ListedVersion>,
+    ) -> sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest {
+        let mut options = sui_rpc_api::proto::sui::rpc::v2::QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.limit = Some(limit);
+        options.after = after.map(|version| version.cursor.clone());
+        options.before = before.map(|version| version.cursor.clone());
+        let mut request = sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest::default();
+        request.package_id = package_id.map(|id| id.to_string());
+        request.start_checkpoint = start;
+        request.end_checkpoint = end;
+        request.options = Some(options);
+        request
+    }
+
+    /// The page `request` lists, and how it ends.
+    async fn page(
+        &self,
+        request: sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest,
+    ) -> (
+        Vec<ListedVersion>,
+        sui_rpc_api::proto::sui::rpc::v2::QueryEndReason,
+    ) {
+        use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+        let response = self
+            .service
+            .list_package_versions(tonic::Request::new(request.clone()))
+            .await
+            .unwrap_or_else(|error| panic!("{request:?}: {error:?}"))
+            .into_inner();
+        let listed = response
+            .versions
+            .into_iter()
+            .map(|version| ListedVersion {
+                key: (
+                    version.checkpoint.unwrap(),
+                    // A lineage listing names no original id on its versions: they all share the
+                    // fixture lineage's.
+                    self.lineage,
+                    version.version.unwrap(),
+                ),
+                cursor: version.cursor.unwrap(),
+            })
+            .collect();
+        (listed, response.end.unwrap().reason())
+    }
+
+    /// Page through the listing `request` starts to its end: each next page continues after the
+    /// last version of the one before it (before it, descending), keeping the request's range and
+    /// its other cursor. Every full page ends with `ITEM_LIMIT`. Returns every listed version and
+    /// how the last page ends.
+    async fn walk(
+        &self,
+        mut request: sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest,
+    ) -> (
+        Vec<ListedVersion>,
+        sui_rpc_api::proto::sui::rpc::v2::QueryEndReason,
+    ) {
+        use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+        use sui_rpc_api::proto::sui::rpc::v2::QueryEndReason;
+
+        let options = request.options.as_ref().unwrap();
+        let limit = options.limit.unwrap() as usize;
+        let descending = options.ordering == Some(Ordering::Descending as i32);
+        let mut listed = vec![];
+        loop {
+            let (page, end) = self.page(request.clone()).await;
+            if page.len() < limit {
+                listed.extend(page);
+                return (listed, end);
+            }
+            assert_eq!(end, QueryEndReason::ItemLimit, "{request:?}");
+            let next = Some(page.last().unwrap().cursor.clone());
+            let options = request.options.as_mut().unwrap();
+            if descending {
+                options.before = next;
+            } else {
+                options.after = next;
+            }
+            listed.extend(page);
+            assert!(
+                listed.len() <= self.published.len(),
+                "{request:?} lists more versions than were published"
+            );
+        }
+    }
+
+    /// How an ascending listing of `range` that reads to its end stops: at the ledger tip when the
+    /// range reaches past the highest indexed checkpoint, else at the range's end.
+    fn ascending_end(
+        &self,
+        [_, end]: [Option<u64>; 2],
+    ) -> sui_rpc_api::proto::sui::rpc::v2::QueryEndReason {
+        use sui_rpc_api::proto::sui::rpc::v2::QueryEndReason;
+
+        if end.is_none_or(|end| end > self.tip() + 1) {
+            QueryEndReason::LedgerTip
+        } else {
+            QueryEndReason::CheckpointBound
+        }
+    }
+
+    /// List `range` ascending, one page from after each version, `limit` 1 and 2, and reverse at
+    /// the page's first version: a descending listing before it holds exactly the versions below
+    /// the page, newest first, and with the page and the versions after it makes the whole
+    /// listing, each version once. `published` is every version the listing can hold, in key
+    /// order.
+    async fn check_reversal_of_ascending_pages(
+        &self,
+        package_id: Option<ObjectID>,
+        published: &[PublishKey],
+        range: [Option<u64>; 2],
+    ) {
+        use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+        use sui_rpc_api::proto::sui::rpc::v2::QueryEndReason;
+
+        let whole = expected_keys(published, range, Ordering::Ascending, None, None);
+        for limit in [1, 2] {
+            let request =
+                |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+                    self.request(package_id, range, ordering, limit, after, before)
+                };
+            let (all, end) = self.walk(request(Ordering::Ascending, None, None)).await;
+            assert_eq!(listed_keys(&all), whole, "{range:?} limit {limit}");
+            assert_eq!(end, self.ascending_end(range), "{range:?} limit {limit}");
+
+            for held in &all {
+                let case = format!("{range:?} limit {limit} after {:?}", held.key);
+                let (page, page_end) = self
+                    .page(request(Ordering::Ascending, Some(held), None))
+                    .await;
+                let expected_page: Vec<_> =
+                    expected_keys(published, range, Ordering::Ascending, Some(held.key), None)
+                        .into_iter()
+                        .take(limit as usize)
+                        .collect();
+                assert_eq!(listed_keys(&page), expected_page, "{case}");
+                let expected_end = if page.len() == limit as usize {
+                    QueryEndReason::ItemLimit
+                } else {
+                    self.ascending_end(range)
+                };
+                assert_eq!(page_end, expected_end, "{case}");
+                let (Some(first), Some(last)) = (page.first(), page.last()) else {
+                    continue;
+                };
+
+                let (below, below_end) = self
+                    .walk(request(Ordering::Descending, None, Some(first)))
+                    .await;
+                assert_eq!(
+                    listed_keys(&below),
+                    expected_keys(
+                        published,
+                        range,
+                        Ordering::Descending,
+                        None,
+                        Some(first.key)
+                    ),
+                    "{case}"
+                );
+                assert_eq!(below_end, QueryEndReason::CheckpointBound, "{case}");
+
+                let (above, _) = self
+                    .walk(request(Ordering::Ascending, Some(last), None))
+                    .await;
+                let mut listing: Vec<_> = listed_keys(&below).into_iter().rev().collect();
+                listing.extend(listed_keys(&page));
+                listing.extend(listed_keys(&above));
+                assert_eq!(listing, whole, "{case}");
+            }
+        }
+    }
+
+    /// List `range` descending, one page from before each version, `limit` 1 and 2, and reverse
+    /// at the page's first version, its highest: an ascending listing after it holds exactly the
+    /// versions above the page, oldest first, and with the page and the versions below it makes
+    /// the whole listing, each version once. An ascending listing after the page's last version,
+    /// its lowest, lists the rest of the page again: a cursor names a position, not a direction.
+    /// `published` is as for [`Self::check_reversal_of_ascending_pages`].
+    async fn check_reversal_of_descending_pages(
+        &self,
+        package_id: Option<ObjectID>,
+        published: &[PublishKey],
+        range: [Option<u64>; 2],
+    ) {
+        use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+        use sui_rpc_api::proto::sui::rpc::v2::QueryEndReason;
+
+        let whole = expected_keys(published, range, Ordering::Ascending, None, None);
+        for limit in [1, 2] {
+            let request =
+                |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+                    self.request(package_id, range, ordering, limit, after, before)
+                };
+            let (all, end) = self.walk(request(Ordering::Descending, None, None)).await;
+            assert_eq!(
+                listed_keys(&all),
+                expected_keys(published, range, Ordering::Descending, None, None),
+                "{range:?} limit {limit}"
+            );
+            assert_eq!(
+                end,
+                QueryEndReason::CheckpointBound,
+                "{range:?} limit {limit}"
+            );
+
+            for held in &all {
+                let case = format!("{range:?} limit {limit} before {:?}", held.key);
+                let (page, page_end) = self
+                    .page(request(Ordering::Descending, None, Some(held)))
+                    .await;
+                let expected_page: Vec<_> =
+                    expected_keys(published, range, Ordering::Descending, None, Some(held.key))
+                        .into_iter()
+                        .take(limit as usize)
+                        .collect();
+                assert_eq!(listed_keys(&page), expected_page, "{case}");
+                let expected_end = if page.len() == limit as usize {
+                    QueryEndReason::ItemLimit
+                } else {
+                    QueryEndReason::CheckpointBound
+                };
+                assert_eq!(page_end, expected_end, "{case}");
+                let (Some(first), Some(last)) = (page.first(), page.last()) else {
+                    continue;
+                };
+
+                let (above, above_end) = self
+                    .walk(request(Ordering::Ascending, Some(first), None))
+                    .await;
+                assert_eq!(
+                    listed_keys(&above),
+                    expected_keys(published, range, Ordering::Ascending, Some(first.key), None),
+                    "{case}"
+                );
+                assert_eq!(above_end, self.ascending_end(range), "{case}");
+
+                let (from_last, _) = self
+                    .walk(request(Ordering::Ascending, Some(last), None))
+                    .await;
+                let mut rest: Vec<_> = listed_keys(&page[..page.len() - 1])
+                    .into_iter()
+                    .rev()
+                    .collect();
+                rest.extend(listed_keys(&above));
+                assert_eq!(listed_keys(&from_last), rest, "{case}");
+
+                let (below, _) = self
+                    .walk(request(Ordering::Descending, None, Some(last)))
+                    .await;
+                let mut listing: Vec<_> = listed_keys(&below).into_iter().rev().collect();
+                listing.extend(listed_keys(&page).into_iter().rev());
+                listing.extend(listed_keys(&above));
+                assert_eq!(listing, whole, "{case}");
+            }
+        }
+    }
+
+    /// Take cursors from pages of `mint_range`, `limit` 1 and 2, and reverse at each page's first
+    /// version under `reverse_range`: descending before the first version of each ascending
+    /// page, and ascending after the first version of each descending page. The reversed listing
+    /// holds the versions of `reverse_range` beyond that version, whether the cursor lies inside
+    /// `reverse_range` or outside it. `published` is as for
+    /// [`Self::check_reversal_of_ascending_pages`].
+    async fn check_reversal_under_another_range(
+        &self,
+        package_id: Option<ObjectID>,
+        published: &[PublishKey],
+        mint_range: [Option<u64>; 2],
+        reverse_range: [Option<u64>; 2],
+    ) {
+        use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+
+        for limit in [1, 2] {
+            let case = format!("minted under {mint_range:?}, reversed under {reverse_range:?}");
+            let case = format!("{case}, limit {limit}");
+            let mint = |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+                self.request(package_id, mint_range, ordering, limit, after, before)
+            };
+            let reverse =
+                |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+                    self.request(package_id, reverse_range, ordering, limit, after, before)
+                };
+            let (minted, _) = self.walk(mint(Ordering::Ascending, None, None)).await;
+            assert_eq!(
+                listed_keys(&minted),
+                expected_keys(published, mint_range, Ordering::Ascending, None, None),
+                "{case}"
+            );
+
+            for held in &minted {
+                let (page, _) = self.page(mint(Ordering::Ascending, Some(held), None)).await;
+                if let Some(first) = page.first() {
+                    let (reversed, _) = self
+                        .walk(reverse(Ordering::Descending, None, Some(first)))
+                        .await;
+                    assert_eq!(
+                        listed_keys(&reversed),
+                        expected_keys(
+                            published,
+                            reverse_range,
+                            Ordering::Descending,
+                            None,
+                            Some(first.key)
+                        ),
+                        "{case}: descending before {:?}",
+                        first.key
+                    );
+                }
+
+                let (page, _) = self
+                    .page(mint(Ordering::Descending, None, Some(held)))
+                    .await;
+                if let Some(first) = page.first() {
+                    let (reversed, _) = self
+                        .walk(reverse(Ordering::Ascending, Some(first), None))
+                        .await;
+                    assert_eq!(
+                        listed_keys(&reversed),
+                        expected_keys(
+                            published,
+                            reverse_range,
+                            Ordering::Ascending,
+                            Some(first.key),
+                            None
+                        ),
+                        "{case}: ascending after {:?}",
+                        first.key
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// The lineage of a package published and upgraded in the fork, reversed after an ascending page
+/// that starts after a cursor: a descending listing before the page's first version lists exactly
+/// the versions below the page, newest first, with or without a checkpoint range.
+#[tokio::test]
+async fn test_list_package_versions_reversed_from_an_ascending_page_lists_the_versions_below_it() {
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+
+    let fork = fork_with_publishes().await;
+    let lineage = fork.lineage_versions();
+    let versions = |listed: &[ListedVersion]| {
+        listed
+            .iter()
+            .map(|version| version.key.2)
+            .collect::<Vec<_>>()
+    };
+
+    // The page after version 2 holds versions 3 and 4, and the listing before version 3 holds
+    // versions 2 and 1.
+    let request = |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+        fork.request(Some(fork.lineage), [None, None], ordering, 2, after, before)
+    };
+    let (first_page, _) = fork.page(request(Ordering::Ascending, None, None)).await;
+    assert_eq!(versions(&first_page), [1, 2]);
+    let (page, _) = fork
+        .page(request(Ordering::Ascending, Some(&first_page[1]), None))
+        .await;
+    assert_eq!(versions(&page), [3, 4]);
+    let (below, _) = fork
+        .walk(request(Ordering::Descending, None, Some(&page[0])))
+        .await;
+    assert_eq!(versions(&below), [2, 1]);
+
+    let c = &fork.checkpoints;
+    // Every version; versions 2 to 5; versions 1 to 4; and versions 2 to 5 again, from a
+    // checkpoint that publishes no version of the lineage to the checkpoint after the tip.
+    for range in [
+        [None, None],
+        [Some(c[2]), None],
+        [None, Some(c[5])],
+        [Some(c[1]), Some(c[5] + 1)],
+    ] {
+        fork.check_reversal_of_ascending_pages(Some(fork.lineage), &lineage, range)
+            .await;
+    }
+}
+
+/// The lineage of a package published and upgraded in the fork, reversed after a descending page
+/// that starts before a cursor: an ascending listing after the page's first version lists exactly
+/// the versions above the page, oldest first, and one after the page's last version lists the
+/// rest of the page again, with or without a checkpoint range.
+#[tokio::test]
+async fn test_list_package_versions_reversed_from_a_descending_page_lists_the_versions_above_it() {
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+
+    let fork = fork_with_publishes().await;
+    let lineage = fork.lineage_versions();
+    let versions = |listed: &[ListedVersion]| {
+        listed
+            .iter()
+            .map(|version| version.key.2)
+            .collect::<Vec<_>>()
+    };
+
+    // The page before version 5 holds versions 4 and 3. The listing after version 4 holds
+    // version 5, and the one after version 3 holds versions 4 and 5.
+    let request = |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+        fork.request(Some(fork.lineage), [None, None], ordering, 2, after, before)
+    };
+    let (first_page, _) = fork.page(request(Ordering::Descending, None, None)).await;
+    assert_eq!(versions(&first_page), [5, 4]);
+    let (page, _) = fork
+        .page(request(Ordering::Descending, None, Some(&first_page[0])))
+        .await;
+    assert_eq!(versions(&page), [4, 3]);
+    let (above, _) = fork
+        .walk(request(Ordering::Ascending, Some(&page[0]), None))
+        .await;
+    assert_eq!(versions(&above), [5]);
+    let (from_last, _) = fork
+        .walk(request(Ordering::Ascending, Some(&page[1]), None))
+        .await;
+    assert_eq!(versions(&from_last), [4, 5]);
+
+    let c = &fork.checkpoints;
+    for range in [
+        [None, None],
+        [Some(c[2]), None],
+        [None, Some(c[5])],
+        [Some(c[1]), Some(c[5] + 1)],
+    ] {
+        fork.check_reversal_of_descending_pages(Some(fork.lineage), &lineage, range)
+            .await;
+    }
+}
+
+/// The lineage of a package published and upgraded in the fork, reversed from a cursor taken
+/// under a different checkpoint range than the reversed request's: the reversed listing holds the
+/// versions of the new range beyond the cursor, whether the cursor lies inside that range or
+/// outside it.
+#[tokio::test]
+async fn test_list_package_versions_reversed_under_another_checkpoint_range_lists_the_intersection()
+{
+    let fork = fork_with_publishes().await;
+    let lineage = fork.lineage_versions();
+    let c = &fork.checkpoints;
+    // Every version; versions 1 and 2; versions 1 to 3; versions 2 to 5; versions 3 and 4;
+    // versions 2 to 5 again, to the checkpoint after the tip; and an empty range.
+    let ranges = [
+        [None, None],
+        [None, Some(c[3])],
+        [None, Some(c[4])],
+        [Some(c[2]), None],
+        [Some(c[3]), Some(c[5])],
+        [Some(c[1]), Some(c[5] + 1)],
+        [Some(c[4]), Some(c[4])],
+    ];
+    for mint_range in ranges {
+        for reverse_range in ranges {
+            fork.check_reversal_under_another_range(
+                Some(fork.lineage),
+                &lineage,
+                mint_range,
+                reverse_range,
+            )
+            .await;
+        }
+    }
+}
+
+/// The fork reads a listing's package as of its highest indexed checkpoint, as a fullnode does. A
+/// first page for a package it does not know, such as one a replica ahead of it published, is
+/// `NotFound`. With a cursor, the cursor's `minted_at` decides: minted above the fork's tip, by
+/// that replica, it is a cursor past the tip (ascending, an empty page ending with `LEDGER_TIP`;
+/// descending, `ABOVE_LATEST_AVAILABLE` for the cursor at its minting height); minted at or below
+/// the tip, it is stale or forged, and the request is `NotFound`. A package the fork knows lists
+/// the same whatever its cursors' `minted_at`.
+#[tokio::test]
+async fn test_list_package_versions_of_an_unknown_package_is_decided_by_the_cursors_minting_height()
+{
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryEndReason;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let fork = fork_with_publishes().await;
+    let tip = fork.tip();
+    let ahead = tip + 5;
+    let unknown = ObjectID::random();
+    let cursor = |original_package_id, version, minted_at| ListedVersion {
+        key: (0, original_package_id, version),
+        cursor: PackageVersionCursor::Lineage {
+            original_package_id,
+            version,
+            minted_at,
+        }
+        .encode(),
+    };
+    let service = &fork.service;
+    let error = move |request: sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest| async move {
+        service
+            .list_package_versions(tonic::Request::new(request))
+            .await
+            .unwrap_err()
+    };
+
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        let request = fork.request(Some(unknown), [None, None], ordering, 10, None, None);
+        assert_eq!(
+            error(request).await.code(),
+            tonic::Code::NotFound,
+            "{ordering:?}"
+        );
+    }
+
+    // The lagging replica, in either order.
+    let minted_ahead = cursor(unknown, 1, ahead);
+    for (after, before) in [(Some(&minted_ahead), None), (None, Some(&minted_ahead))] {
+        let (page, end) = fork
+            .page(fork.request(
+                Some(unknown),
+                [None, None],
+                Ordering::Ascending,
+                10,
+                after,
+                before,
+            ))
+            .await;
+        assert!(page.is_empty());
+        assert_eq!(end, QueryEndReason::LedgerTip);
+
+        let status = error(fork.request(
+            Some(unknown),
+            [None, None],
+            Ordering::Descending,
+            10,
+            after,
+            before,
+        ))
+        .await;
+        assert_eq!(
+            (status.code(), status.message()),
+            (
+                tonic::Code::OutOfRange,
+                format!(
+                    "requested data above latest available; cursor is at checkpoint {ahead}, \
+                     and only checkpoints below {} are available",
+                    tip + 1
+                )
+                .as_str()
+            )
+        );
+    }
+
+    // A stale or forged cursor.
+    for minted_at in [0, tip] {
+        let stale = cursor(unknown, 1, minted_at);
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for (after, before) in [(Some(&stale), None), (None, Some(&stale))] {
+                let request =
+                    fork.request(Some(unknown), [None, None], ordering, 10, after, before);
+                assert_eq!(
+                    error(request).await.code(),
+                    tonic::Code::NotFound,
+                    "{ordering:?} minted at {minted_at}"
+                );
+            }
+        }
+    }
+
+    // A package published within the fork's height.
+    let lineage = fork.lineage_versions();
+    for minted_at in [0, tip, ahead] {
+        for (ordering, after, before, expected, expected_end) in [
+            (
+                Ordering::Ascending,
+                Some(cursor(fork.lineage, 2, minted_at)),
+                None,
+                lineage[2..].to_vec(),
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                Ordering::Descending,
+                None,
+                Some(cursor(fork.lineage, 4, minted_at)),
+                lineage[..3].iter().rev().copied().collect(),
+                QueryEndReason::CheckpointBound,
+            ),
+        ] {
+            let (page, end) = fork
+                .page(fork.request(
+                    Some(fork.lineage),
+                    [None, None],
+                    ordering,
+                    10,
+                    after.as_ref(),
+                    before.as_ref(),
+                ))
+                .await;
+            assert_eq!(
+                listed_keys(&page),
+                expected,
+                "{ordering:?} minted at {minted_at}"
+            );
+            assert_eq!(end, expected_end, "{ordering:?} minted at {minted_at}");
+        }
     }
 }
 
