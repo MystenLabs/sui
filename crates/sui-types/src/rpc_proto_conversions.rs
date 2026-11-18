@@ -3700,6 +3700,25 @@ impl TryFrom<&ObjectSet> for crate::full_checkpoint_content::ObjectSet {
 mod tests {
 
     #[test]
+    fn freeze_list_create_conversions() {
+        use crate::transaction::EndOfEpochTransactionKind as K;
+        use sui_rpc::proto::sui::rpc::v2::end_of_epoch_transaction_kind::Kind;
+
+        let proto = super::EndOfEpochTransactionKind::from(K::FreezeListCreate);
+        assert_eq!(proto.kind(), Kind::FreezeListCreate);
+
+        let sdk = sui_sdk_types::EndOfEpochTransactionKind::from(K::FreezeListCreate);
+        assert_eq!(
+            sdk,
+            sui_sdk_types::EndOfEpochTransactionKind::FreezeListCreate
+        );
+        assert_eq!(
+            bcs::to_bytes(&sdk).unwrap(),
+            bcs::to_bytes(&K::FreezeListCreate).unwrap()
+        );
+    }
+
+    #[test]
     fn test_expiration_timestamp_conversions() {
         assert_eq!(
             seconds_to_timestamp(1_700_000_000),
