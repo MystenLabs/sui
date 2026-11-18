@@ -690,19 +690,20 @@ impl ConsensusOutputQuarantine {
             }
         }
 
-        // CheckpointQueue::push_commit forces a drain within the limit, so outputs whose
-        // checkpoints are executed can only be held for less than that much commit time.
+        // The held outputs belong to one run of undrained commits, and CheckpointQueue::
+        // push_commit drains the queue once a run spans the limit of commit time, so their
+        // commit timestamps span less than the limit. This bounds the span, not the wait.
         if !self.reported_undrained_hold
             && let Some(limit_ms) = epoch_store
                 .protocol_config()
                 .checkpoint_queue_force_drain_ms()
         {
             let held_ms = self.undrained_hold_ms(highest_committed_height);
-            if held_ms > 2 * limit_ms {
+            if held_ms > limit_ms.saturating_mul(2) {
                 self.reported_undrained_hold = true;
                 debug_fatal!(
-                    "consensus outputs with executed checkpoints have waited {held_ms} ms of \
-                     commit time for the checkpoint queue to drain (limit {limit_ms} ms)"
+                    "consensus outputs with executed checkpoints span {held_ms} ms of commit \
+                     time without a drained checkpoint queue (limit {limit_ms} ms)"
                 );
             }
         }
@@ -716,8 +717,8 @@ impl ConsensusOutputQuarantine {
 }
 
 impl ConsensusOutputQuarantine {
-    // Commit time spanned by queued outputs that are held back only because no later commit
-    // with executed checkpoints left the checkpoint queue drained.
+    // Returns the commit time spanned by queued outputs that are held back only because no
+    // later commit with executed checkpoints left the checkpoint queue drained.
     fn undrained_hold_ms(&self, highest_committed_height: u64) -> u64 {
         let mut held = self.output_queue.iter().take_while(|output| {
             output
@@ -1174,6 +1175,37 @@ mod tests {
             summary,
             checkpoint_height: Some(height),
             position_in_commit: 0,
+        }
+    }
+
+    // debug_fatal panics only when crash_on_debug() is true (debug_assertions, msim, or
+    // SUI_ENABLE_DEBUG_ASSERTIONS).
+    #[cfg(debug_assertions)]
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(expected = "without a drained checkpoint queue")]
+    async fn test_undrained_hold_reported() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, epoch_store.metrics.clone());
+        let limit_ms = epoch_store
+            .protocol_config()
+            .checkpoint_queue_force_drain_ms()
+            .unwrap();
+        let pc = epoch_store.protocol_config();
+        // The first execution stays under the threshold, so the report must not be latched yet.
+        for (seq, ts) in [(1, 1000), (2, 1000 + limit_ms), (3, 1001 + 2 * limit_ms)] {
+            let mut output = make_output(seq, seq, false);
+            output.set_commit_timestamp(ts);
+            quarantine
+                .push_consensus_output(output, &epoch_store)
+                .unwrap();
+            quarantine.insert_builder_summary(seq, make_builder_summary(seq, seq, pc));
+            if seq >= 2 {
+                let mut batch = epoch_store.db_batch_for_test();
+                quarantine
+                    .update_highest_executed_checkpoint(seq, &epoch_store, &mut batch)
+                    .unwrap();
+            }
         }
     }
 

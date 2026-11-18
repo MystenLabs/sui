@@ -2698,6 +2698,7 @@ impl ProtocolConfig {
 }
 
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "testing")]
 static SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS: AtomicBool = AtomicBool::new(false);
 
 // Instantiations for each protocol version.
@@ -5136,11 +5137,12 @@ impl ProtocolConfig {
         // this draw, and every validator must derive the same limit from the epoch digest.
         let mut max_txns = rng.gen_range(10..=100u64);
         // Caps of 2-3 put simtest load above max_tx per checkpoint interval. Versions without
-        // checkpoint_queue_max_undrained_ms never drain at these caps.
-        if self.checkpoint_queue_max_undrained_ms.is_some()
-            && SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed)
-            && rng.gen_bool(0.25)
-        {
+        // checkpoint_queue_force_drain_ms never drain at these caps.
+        #[cfg(feature = "testing")]
+        let small_limits = SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed);
+        #[cfg(not(feature = "testing"))]
+        let small_limits = false;
+        if self.checkpoint_queue_force_drain_ms().is_some() && small_limits && rng.gen_bool(0.25) {
             max_txns = rng.gen_range(2..=3u64);
         }
         info!("seeded test override: max_transactions_per_checkpoint = {max_txns}");
@@ -5643,6 +5645,18 @@ mod test {
             v142.binary_format_limits(),
             BinaryFormatLimitsProfile::V1.limits()
         );
+    }
+
+    #[test]
+    fn checkpoint_queue_force_drain_ms_raises_to_interval() {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.checkpoint_queue_max_undrained_ms = None;
+        assert_eq!(config.checkpoint_queue_force_drain_ms(), None);
+        config.checkpoint_queue_max_undrained_ms = Some(1000);
+        config.min_checkpoint_interval_ms = Some(200);
+        assert_eq!(config.checkpoint_queue_force_drain_ms(), Some(1000));
+        config.min_checkpoint_interval_ms = Some(1500);
+        assert_eq!(config.checkpoint_queue_force_drain_ms(), Some(1500));
     }
 
     #[test]
