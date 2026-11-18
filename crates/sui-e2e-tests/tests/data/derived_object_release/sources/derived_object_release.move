@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Each claim of the derived object checks and bumps a counter kept in a dynamic field of the
-/// object, which survives every release.
+/// Each claim of the derived object under a `Parent` checks and bumps a counter kept in a dynamic
+/// field of the object, which survives every release.
 module derived_object_release::m;
 
 use sui::derived_object;
@@ -17,8 +17,15 @@ public struct Obj has key, store { id: UID }
 
 public struct Wrapper has key { id: UID, inner: Obj }
 
+/// A shared parent that holds its derived object wrapped from a claim to the next release.
+public struct SharedParent has key { id: UID, held: Option<Obj> }
+
 public fun create_parent(ctx: &mut TxContext) {
     transfer::transfer(Parent { id: object::new(ctx) }, ctx.sender())
+}
+
+public fun create_shared_parent(ctx: &mut TxContext) {
+    transfer::share_object(SharedParent { id: object::new(ctx), held: option::none() })
 }
 
 public fun claim_owned(parent: &mut Parent, expected: u64, ctx: &TxContext) {
@@ -43,6 +50,17 @@ public fun release_wrapped(parent: &mut Parent, wrapper: Wrapper) {
     let Wrapper { id, inner } = wrapper;
     id.delete();
     release(parent, inner)
+}
+
+/// Release the derived object `parent` holds, or claim it straight into `parent` when it holds
+/// none, so that transactions calling this alternate between the two in whatever order they run.
+public fun toggle(parent: &mut SharedParent) {
+    if (parent.held.is_some()) {
+        let Obj { id } = parent.held.extract();
+        derived_object::release(&mut parent.id, id)
+    } else {
+        parent.held.fill(Obj { id: derived_object::claim(&mut parent.id, 0u64) })
+    }
 }
 
 fun claim(parent: &mut Parent, expected: u64): Obj {

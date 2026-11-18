@@ -1040,6 +1040,42 @@ async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) 
         ),
         (1, 1),
     );
+
+    // The fork's object history starts at the removal, which a listing from it shows. A listing
+    // without `end_checkpoint` runs to the indexed tip, whose summary it reads.
+    use sui_rpc_api::proto::sui::rpc::v2::ListObjectVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::object_removal;
+    use tonic::codegen::tokio_stream::StreamExt as _;
+    let tip = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(checkpoint)
+        .build_checkpoint();
+    let mut tip_store = store.clone();
+    tip_store.insert_checkpoint(VerifiedCheckpoint::new_unchecked(tip.summary));
+    tip_store.insert_checkpoint_contents(tip.contents);
+    let mut request = ListObjectVersionsRequest::default();
+    request.object_id = Some(id.to_string());
+    request.start_version = Some(removal_version);
+    let frames: Vec<_> = service
+        .list_object_versions(tonic::Request::new(request))
+        .await
+        .unwrap()
+        .into_inner()
+        .map(Result::unwrap)
+        .collect()
+        .await;
+    let kind = if wrapped {
+        object_removal::Kind::Wrapped
+    } else {
+        object_removal::Kind::Deleted
+    };
+    assert_eq!(
+        frames
+            .iter()
+            .map(|frame| frame
+                .removal_opt()
+                .map(|removal| (removal.version, removal.kind)))
+            .collect::<Vec<_>>(),
+        vec![Some((Some(tombstone_version), Some(kind as i32))), None],
+    );
 }
 
 #[tokio::test]

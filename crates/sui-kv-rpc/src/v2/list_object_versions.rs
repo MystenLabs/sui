@@ -96,7 +96,7 @@ pub(crate) async fn list_object_versions(
             bounding_checkpoint,
             stream::empty().boxed(),
             plan.end,
-            end_cursor,
+            std::future::ready(end_cursor),
         )));
     };
 
@@ -153,7 +153,7 @@ pub(crate) async fn list_object_versions(
         bounding_checkpoint,
         listed,
         plan.end,
-        end_cursor,
+        std::future::ready(end_cursor),
     )))
 }
 
