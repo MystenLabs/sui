@@ -49,7 +49,7 @@ async fn test_get_datatype_not_found() {
     request.name = Some("NonExistentType".to_string());
 
     let error = service.get_datatype(request).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::Internal);
+    assert_eq!(error.code(), tonic::Code::NotFound);
     assert!(
         error
             .message()
@@ -97,7 +97,7 @@ async fn test_get_datatype_module_not_found() {
     request.name = Some("SomeType".to_string());
 
     let error = service.get_datatype(request).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::Internal);
+    assert_eq!(error.code(), tonic::Code::NotFound);
     assert!(error.message().contains("Module not found"));
 }
 

@@ -58,7 +58,7 @@ pub fn get_function_response(
         .map_err(convert_error)?
         .ok_or_else(|| {
             crate::RpcError::new(
-                tonic::Code::Internal,
+                tonic::Code::NotFound,
                 format!("Function not found: {}", function_name),
             )
         })?;
