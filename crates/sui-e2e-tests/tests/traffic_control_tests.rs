@@ -418,47 +418,6 @@ async fn test_traffic_sketch_no_blocks() {
     assert!(metrics.total_time_blocked < Duration::from_secs(10));
 }
 
-#[ignore]
-#[sim_test]
-async fn test_traffic_sketch_with_slow_blocks() {
-    telemetry_subscribers::init_for_testing();
-    let sketch_config = FreqThresholdConfig {
-        client_threshold: 9_900,
-        proxied_client_threshold: 9_900,
-        window_size_secs: 4,
-        update_interval_secs: 1,
-        ..Default::default()
-    };
-    let policy = PolicyConfig {
-        connection_blocklist_ttl_sec: 1,
-        proxy_blocklist_ttl_sec: 1,
-        spam_policy_type: PolicyType::NoOp,
-        error_policy_type: PolicyType::FreqThreshold(sketch_config),
-        channel_capacity: 100,
-        dry_run: false,
-        ..Default::default()
-    };
-    let metrics = TrafficSim::run(
-        policy,
-        10,     // num_clients
-        10_000, // per_client_tps
-        Duration::from_secs(20),
-        true, // report
-    )
-    .await;
-
-    let expected_requests = 10_000 * 10 * 20;
-    assert!(metrics.num_requests > expected_requests - 1_000);
-    assert!(metrics.num_requests < expected_requests + 200);
-    // due to averaging, we will take 4 seconds to start blocking, then
-    // will be in blocklist for 1 second (roughly)
-    assert!(metrics.num_blocked as f64 > (expected_requests as f64 / 4.0) * 0.90);
-    // 10 clients, blocked at least every 5 seconds, over 20 seconds
-    assert!(metrics.num_blocklist_adds >= 40);
-    assert!(metrics.abs_time_to_first_block.unwrap() < Duration::from_secs(5));
-    assert!(metrics.total_time_blocked > Duration::from_millis(3500));
-}
-
 #[sim_test]
 async fn test_traffic_sketch_with_sampled_spam() {
     telemetry_subscribers::init_for_testing();

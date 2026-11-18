@@ -26,7 +26,6 @@ mod object_balance_tests;
 mod observer_checkpoint_tests;
 mod party_objects_tests;
 mod protocol_version_tests;
-mod readme;
 mod shared_objects_version_tests;
 mod traffic_control_tests;
 mod transaction_orchestrator_tests;
