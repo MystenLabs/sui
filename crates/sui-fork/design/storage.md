@@ -384,12 +384,15 @@ network reports no change, or no longer holds it, the read can go to the live ne
 does now. A removal a checkpoint-pinned read has already recorded starts the stored rows at
 the fork point, so the gap is closed for that object.
 
-`GetObject` reads that resolve to a deletion or wrap are refused with `OUT_OF_RANGE`
-(`BELOW_EARLIEST_AVAILABLE`) rather than answered with `NOT_FOUND`: an exact `version` read
-without `at_checkpoint` of an object that is deleted or wrapped now, and a `max_version` read at
-or above a removal, with or without `at_checkpoint`. The fork's RPC reads of objects see live
-versions only, and its object lower bound is above 0, so the handler cannot tell a removal from
-a version the fork does not hold. Serving the fork's tombstones to the handler closes this.
+`GetObject` reads that resolve to a deletion or wrap the fork executed, or to one from before
+the fork point that it has recorded, answer `NOT_FOUND` describing the removal, from its
+tombstone in the stored rows. The fork records a pre-fork removal only when a
+checkpoint-pinned read resolves the object at the fork point (see above), since the live
+network serves live versions only. Until then, a read without `at_checkpoint` that resolves to
+that removal (an exact `version` of it, or a `max_version` at or above it) is refused with
+`OUT_OF_RANGE` (`BELOW_EARLIEST_AVAILABLE`) rather than answered with `NOT_FOUND`: the fork's
+object lower bound is above 0, so the handler cannot tell the removal from a version the fork
+does not hold.
 
 The fork's ledger index begins at the fork point, and the range below it is permanently
 empty. Positions are inherited rather than restarted: Simulacrum is seeded with the real

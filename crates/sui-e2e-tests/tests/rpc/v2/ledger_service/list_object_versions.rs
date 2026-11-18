@@ -2001,7 +2001,7 @@ async fn assert_listed_from(
 }
 
 /// Whether the fullnode's object store holds `object_id` at `version`.
-fn is_stored(cluster: &TestCluster, object_id: ObjectID, version: u64) -> bool {
+pub(super) fn is_stored(cluster: &TestCluster, object_id: ObjectID, version: u64) -> bool {
     cluster.fullnode_handle.sui_node.with(|node| {
         node.state()
             .get_object_cache_reader()
@@ -2011,7 +2011,11 @@ fn is_stored(cluster: &TestCluster, object_id: ObjectID, version: u64) -> bool {
 }
 
 /// Whether the fullnode's object store holds a tombstone of `object_id` at `version`.
-fn is_tombstone_stored(cluster: &TestCluster, object_id: ObjectID, version: u64) -> bool {
+pub(super) fn is_tombstone_stored(
+    cluster: &TestCluster,
+    object_id: ObjectID,
+    version: u64,
+) -> bool {
     let version = SequenceNumber::from_u64(version);
     cluster.fullnode_handle.sui_node.with(|node| {
         node.state()
@@ -2026,7 +2030,7 @@ fn is_tombstone_stored(cluster: &TestCluster, object_id: ObjectID, version: u64)
 /// object tombstones if `keep_tombstones`, then compact the object table, once the fullnode has
 /// executed a later checkpoint and its rpc indexes have committed it. The fullnode must run with
 /// background pruning off, so that the floor stays at `checkpoint`.
-async fn prune_through(cluster: &TestCluster, checkpoint: u64, keep_tombstones: bool) {
+pub(super) async fn prune_through(cluster: &TestCluster, checkpoint: u64, keep_tombstones: bool) {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
     while fullnode_highest_executed(cluster) <= checkpoint {
         assert!(

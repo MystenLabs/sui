@@ -16,6 +16,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::ObjectDigest;
+use sui_types::digests::TransactionDigest;
 use sui_types::storage::ObjectOrTombstone;
 use tokio_util::sync::CancellationToken;
 
@@ -384,7 +385,7 @@ impl Listing {
 
 /// The version in the object store of the item the version index records at `indexed` (see
 /// [`stored_version_at`]).
-fn stored_version_of_indexed(
+pub(super) fn stored_version_of_indexed(
     reader: &StateReader,
     object_id: ObjectID,
     indexed: Option<SequenceNumber>,
@@ -426,8 +427,46 @@ struct IndexedTip {
     upper_bound: AtCheckpointUpperBound,
 }
 
+/// The transaction that deleted or wrapped `object_id` at `version`, found as a listing finds it
+/// ([`removal_transaction`]), bounded by `upper_bound`'s highest indexed checkpoint, which the
+/// caller reads once per request (see `StateReader::at_checkpoint_upper_bound`), and by the floor
+/// a listing of removal transactions reads ([`read_floor`]). Best effort: `None` if the indexes
+/// have not indexed the removal by then, if this node no longer has what
+/// [`removal_transaction`] needs, or if a read fails.
+pub(super) fn find_removal_transaction(
+    reader: &StateReader,
+    object_id: ObjectID,
+    version: SequenceNumber,
+    upper_bound: &AtCheckpointUpperBound,
+) -> Option<TransactionDigest> {
+    let indexed = reader
+        .get_object_version_at_checkpoint(object_id, upper_bound.highest_indexed(), upper_bound)
+        .ok()?;
+    let newest_version = stored_version_of_indexed(reader, object_id, indexed).ok()??;
+    if newest_version < version {
+        return None;
+    }
+    let tip = IndexedTip {
+        newest_version,
+        upper_bound: *upper_bound,
+    };
+    let floor_checkpoint = read_floor(reader, true).ok()?;
+    removal_transaction(
+        reader,
+        object_id,
+        version,
+        None,
+        floor_checkpoint,
+        &tip,
+        &CancellationToken::new(),
+    )
+    .ok()
+    .flatten()
+    .map(|transaction| transaction.digest)
+}
+
 /// How the object was removed at the tombstone whose digest is `digest`.
-fn removal_kind(digest: &ObjectDigest) -> Result<ObjectRemovalKind> {
+pub(super) fn removal_kind(digest: &ObjectDigest) -> Result<ObjectRemovalKind> {
     if digest.is_deleted() {
         Ok(ObjectRemovalKind::Deleted)
     } else if digest.is_wrapped() {
@@ -439,7 +478,7 @@ fn removal_kind(digest: &ObjectDigest) -> Result<ObjectRemovalKind> {
     }
 }
 
-fn stored_version(item: &ObjectOrTombstone) -> SequenceNumber {
+pub(super) fn stored_version(item: &ObjectOrTombstone) -> SequenceNumber {
     match item {
         ObjectOrTombstone::Object(object) => object.version(),
         ObjectOrTombstone::Tombstone((_, version, _)) => *version,

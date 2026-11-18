@@ -269,32 +269,20 @@ impl BigTableClient {
             .await
     }
 
-    /// The keys in `object_keys` at which the object is live, read without the
-    /// objects' contents, as their rows arrive.
-    pub(crate) async fn get_existing_object_keys_stream(
+    /// Multi-get `object_keys` from the `objects` table, live or removed, each
+    /// with its row, read without live objects' contents unless
+    /// `with_contents`. One multi-get, holding its permit until the stream is
+    /// dropped.
+    pub(crate) async fn get_object_rows_stream(
         &self,
         object_keys: Vec<ObjectKey>,
-    ) -> Result<BoxStream<'static, Result<ObjectKey, anyhow::Error>>, RpcError> {
+        with_contents: bool,
+    ) -> Result<BoxStream<'static, Result<(ObjectKey, ObjectVersionRow), anyhow::Error>>, RpcError>
+    {
         let mut inner = self.inner.clone();
         self.open_gated_stream(
             stage::OBJECTS,
-            inner.get_existing_object_keys_stream(object_keys),
-        )
-        .await
-    }
-
-    /// The newest version of `object_id` at or below `version`, unless the
-    /// object was deleted or wrapped at that version. One reverse range scan of
-    /// the `objects` table, under one permit.
-    pub(crate) async fn get_object_lt_or_eq_version(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> Result<Option<Object>, RpcError> {
-        let mut inner = self.inner.clone();
-        self.call_gated(
-            stage::OBJECTS,
-            inner.get_object_lt_or_eq_version(object_id, version),
+            inner.get_object_rows_stream(object_keys, with_contents),
         )
         .await
     }
@@ -429,28 +417,6 @@ impl BigTableClient {
             inner.get_object_version_at_checkpoint(object_id, checkpoint),
         )
         .await
-    }
-
-    /// The newest version of `object_id`, unless the object was deleted or wrapped at it. One
-    /// reverse range scan of the `objects` table, under one permit.
-    pub(crate) async fn get_latest_object(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<Option<Object>, RpcError> {
-        let mut inner = self.inner.clone();
-        self.call_gated(stage::OBJECTS, inner.get_latest_object(&object_id))
-            .await
-    }
-
-    /// The version [`Self::get_latest_object`] would return, read without the object's
-    /// contents, under one permit.
-    pub(crate) async fn get_latest_object_version(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<Option<SequenceNumber>, RpcError> {
-        let mut inner = self.inner.clone();
-        self.call_gated(stage::OBJECTS, inner.get_latest_object_version(&object_id))
-            .await
     }
 
     /// Stream the checkpoint of each of `tx_sequence_numbers`, reading only the

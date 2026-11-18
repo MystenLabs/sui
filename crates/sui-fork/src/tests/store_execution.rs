@@ -877,7 +877,8 @@ async fn mock_removal_as_last_change_at_checkpoint(
 /// its version at a later checkpoint the fork has not changed it in is the version that removed
 /// it, which the remote resolves and the fork records, with the removal's tombstone at the version
 /// its effects give. The versions below it were written by then, so `version` and `max_version`
-/// reads pinned at that checkpoint find them, and the removal version itself is not found.
+/// reads pinned at that checkpoint find them, and reads that resolve to the removal are
+/// `NOT_FOUND` describing it at its tombstone's version.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_find_versions_before_a_pre_fork_removal() {
     check_checkpoint_pinned_reads_before_a_pre_fork_removal(false).await;
@@ -885,9 +886,14 @@ async fn test_checkpoint_pinned_reads_find_versions_before_a_pre_fork_removal() 
 }
 
 async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) {
+    use prost::Message as _;
     use sui_rpc_api::RpcService;
+    use sui_rpc_api::proto::google::rpc::ErrorInfo;
+    use sui_rpc_api::proto::google::rpc::Status as RpcStatus;
+    use sui_rpc_api::proto::sui::rpc::v2::ErrorReason;
     use sui_rpc_api::proto::sui::rpc::v2::GetObjectRequest;
     use sui_rpc_api::proto::sui::rpc::v2::ledger_service_server::LedgerService;
+    use sui_rpc_api::proto::sui::rpc::v2::object_removal;
 
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let server = MockServer::start().await;
@@ -955,6 +961,13 @@ async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) 
     let service = RpcService::new(Arc::new(store.clone()));
     let requests_before_reads = server.received_requests().await.unwrap().len();
 
+    let removal_kind = if wrapped {
+        object_removal::Kind::Wrapped
+    } else {
+        object_removal::Kind::Deleted
+    };
+    // A read's version, or its error code and, for `OBJECT_REMOVED`, the removal's version and
+    // kind.
     let read = |version: Option<u64>, max_version: Option<u64>| {
         let mut request = GetObjectRequest::default();
         request.object_id = Some(id.to_string());
@@ -972,34 +985,57 @@ async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) 
                         .object
                         .and_then(|object| object.version)
                 })
-                .map_err(|error| error.code())
+                .map_err(|error| {
+                    let status = RpcStatus::decode(error.details()).unwrap();
+                    let removal = status
+                        .details
+                        .iter()
+                        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+                        .find(|info| info.reason == ErrorReason::ObjectRemoved.as_str_name())
+                        .map(|info| {
+                            (
+                                info.metadata["removedVersion"].parse::<u64>().unwrap(),
+                                info.metadata["removalKind"].clone(),
+                            )
+                        });
+                    (error.code(), removal)
+                })
         }
     };
+    // V1 effects record the removal at the lamport version, while its tombstone sits at the
+    // version the transaction executed at, one above here. The tombstone's version is the one
+    // reads that resolve to the removal describe; the lamport version is no version of the object.
+    let tombstone_version = removal_version + 1;
+    let removed = Err((
+        tonic::Code::NotFound,
+        Some((tombstone_version, removal_kind.as_str_name().to_owned())),
+    ));
     assert_eq!(
         (
             read(Some(3), None).await,
             read(None, Some(4)).await,
             read(Some(removal_version), None).await,
+            read(Some(tombstone_version), None).await,
         ),
-        (Ok(Some(3)), Ok(Some(3)), Err(tonic::Code::NotFound)),
-        "version 3, max_version 4, and the removal version, pinned at checkpoint {checkpoint}",
+        (
+            Ok(Some(3)),
+            Ok(Some(3)),
+            Err((tonic::Code::NotFound, None)),
+            removed.clone()
+        ),
+        "version 3, max_version 4, and the lamport and tombstone versions, pinned at checkpoint \
+         {checkpoint}",
     );
     // A `max_version` between the lamport version and the removal's tombstone selects the version
     // before the removal, as on the chain's stores. At or above the tombstone, `max_version`
-    // selects the removal, which the live reads the handler makes do not tell from a version the
-    // fork does not hold, so the read is refused (see "Known gaps" in `design/storage.md`).
-    let tombstone_version = removal_version + 1;
+    // selects the removal, from the tombstone the fork recorded.
     assert_eq!(
         (
             read(None, Some(removal_version)).await,
             read(None, Some(tombstone_version)).await,
             read(None, Some(10)).await,
         ),
-        (
-            Ok(Some(3)),
-            Err(tonic::Code::OutOfRange),
-            Err(tonic::Code::OutOfRange)
-        ),
+        (Ok(Some(3)), removed.clone(), removed),
         "max_version in, at and above the removal, pinned at checkpoint {checkpoint}",
     );
     assert_eq!(
@@ -1044,7 +1080,6 @@ async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) 
     // The fork's object history starts at the removal, which a listing from it shows. A listing
     // without `end_checkpoint` runs to the indexed tip, whose summary it reads.
     use sui_rpc_api::proto::sui::rpc::v2::ListObjectVersionsRequest;
-    use sui_rpc_api::proto::sui::rpc::v2::object_removal;
     use tonic::codegen::tokio_stream::StreamExt as _;
     let tip = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(checkpoint)
         .build_checkpoint();
@@ -1062,11 +1097,6 @@ async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) 
         .map(Result::unwrap)
         .collect()
         .await;
-    let kind = if wrapped {
-        object_removal::Kind::Wrapped
-    } else {
-        object_removal::Kind::Deleted
-    };
     assert_eq!(
         frames
             .iter()
@@ -1074,7 +1104,10 @@ async fn check_checkpoint_pinned_reads_before_a_pre_fork_removal(wrapped: bool) 
                 .removal_opt()
                 .map(|removal| (removal.version, removal.kind)))
             .collect::<Vec<_>>(),
-        vec![Some((Some(tombstone_version), Some(kind as i32))), None],
+        vec![
+            Some((Some(tombstone_version), Some(removal_kind as i32))),
+            None
+        ],
     );
 }
 
