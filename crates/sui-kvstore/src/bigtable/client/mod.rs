@@ -24,6 +24,7 @@ use anyhow::bail;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use gcp_auth::TokenProvider;
 use prometheus::Registry;
 use sui_futures::task::TaskGuard;
@@ -85,12 +86,14 @@ use crate::bigtable::proto::bigtable::v2::request_stats::StatsView;
 use crate::bigtable::proto::bigtable::v2::row_filter::Chain;
 use crate::bigtable::proto::bigtable::v2::row_filter::Condition;
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
+use crate::bigtable::proto::bigtable::v2::row_filter::Interleave;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
 use crate::bigtable::proto::bigtable::v2::value_range;
 use crate::object_status::ObjectStatus;
 use crate::tables;
 use crate::tables::objects::ObjectRow;
+use crate::tables::objects::ObjectVersionRow;
 use crate::tables::tx_seq_digest;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
@@ -1154,6 +1157,80 @@ impl BigTableClient {
         RowFilter {
             filter: Some(Filter::StripValueTransformer(true)),
         }
+    }
+
+    /// Keeps the `objects` columns, emptying the values of live-object cells only, so live rows
+    /// come back as keys and tombstone rows whole.
+    fn object_contents_stripped_filter() -> RowFilter {
+        let live_keys = RowFilter {
+            filter: Some(Filter::Chain(Chain {
+                filters: vec![
+                    Self::column_filter(&[tables::objects::col::OBJECT]),
+                    Self::keys_only_filter(),
+                ],
+            })),
+        };
+        let tombstones = Self::column_filter(&[
+            tables::objects::col::STATUS,
+            tables::objects::col::TRANSACTION,
+        ]);
+        RowFilter {
+            filter: Some(Filter::Interleave(Interleave {
+                filters: vec![live_keys, tombstones],
+            })),
+        }
+    }
+
+    /// Stream up to `limit` versions of `object_id` whose version is in `versions`, live or
+    /// removed, in ascending version order or descending if `descending`, each with its row: the
+    /// object, or how it was removed. Without `with_contents`, live rows are read as keys alone
+    /// and list no object. Deletions and wraps are only recorded where the alpha
+    /// [`crate::OBJECT_TOMBSTONES_PIPELINE`] has run.
+    pub async fn object_versions_stream(
+        &mut self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+        with_contents: bool,
+    ) -> Result<BoxStream<'static, Result<(SequenceNumber, ObjectVersionRow)>>> {
+        // A zero `rows_limit` means no limit to BigTable, so an empty scan is answered locally.
+        if versions.is_empty() || limit == 0 {
+            return Ok(futures::stream::empty().boxed());
+        }
+        let rows_limit = i64::try_from(limit).context("object versions limit exceeds i64")?;
+        let start_key = Bytes::from(Self::raw_object_key(&ObjectKey(
+            object_id,
+            *versions.start(),
+        )));
+        let end_key = Bytes::from(Self::raw_object_key(&ObjectKey(object_id, *versions.end())));
+        let filter = (!with_contents).then(Self::object_contents_stripped_filter);
+        let rows = self
+            .range_scan_stream(
+                tables::objects::NAME,
+                Some(start_key),
+                Some(end_key),
+                rows_limit,
+                descending,
+                filter,
+            )
+            .await?;
+        Ok(rows
+            .map(move |row| {
+                let (row_key, row) = row?;
+                let version = tables::objects::decode_key(&row_key)?.1;
+                let row = if with_contents {
+                    match tables::objects::decode(&row)? {
+                        ObjectRow::Live(object) => ObjectVersionRow::Live(Some(object)),
+                        ObjectRow::Tombstone(tombstone) => ObjectVersionRow::Tombstone(tombstone),
+                    }
+                } else {
+                    tables::objects::decode_tombstone(&row)?
+                        .map_or(ObjectVersionRow::Live(None), ObjectVersionRow::Tombstone)
+                };
+                Ok((version, row))
+            })
+            .boxed())
     }
 }
 
@@ -2679,6 +2756,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
+    use crate::tables::objects::ObjectTombstone;
 
     fn row(sequence: u64) -> Result<(Bytes, Vec<(Bytes, Bytes)>)> {
         Ok((Bytes::from(sequence.to_be_bytes().to_vec()), Vec::new()))
@@ -3447,6 +3525,143 @@ mod tests {
                 .map(|o| o.version().value());
             assert_eq!(found, expected, "at version {version}");
         }
+    }
+
+    /// Reads of every version list tombstones alongside live versions, each taking a slot in a
+    /// page, in either direction, with the removing transaction when the tombstone has one. The
+    /// read without contents returns the same versions and tombstones, emptying live objects'
+    /// values alone.
+    #[tokio::test]
+    async fn object_version_reads_list_tombstones() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        // Live at 1, 2 and 4, wrapped at 3 by a tombstone without its transaction, and deleted at
+        // 5 by one with it; a neighbouring object at 1.
+        let id = ObjectID::from_single_byte(0x42);
+        let other = ObjectID::from_single_byte(0x43);
+        let v = SequenceNumber::from_u64;
+        let deletion = TransactionDigest::random();
+        let tombstone = |status, transaction| {
+            Some(ObjectTombstone {
+                status,
+                transaction,
+            })
+        };
+        let history = [
+            (1, None),
+            (2, None),
+            (3, tombstone(ObjectStatus::Wrapped, None)),
+            (4, None),
+            (5, tombstone(ObjectStatus::Deleted, Some(deletion))),
+        ];
+        let rows = history
+            .iter()
+            .map(|&(version, removed)| (id, version, removed));
+        for (object_id, version, removed) in rows.chain([(other, 1, None)]) {
+            let key = tables::objects::encode_key(&ObjectKey(object_id, v(version)));
+            let cells: Vec<(&str, Bytes)> = match removed {
+                None => {
+                    let object = Object::with_id_owner_version_for_testing(
+                        object_id,
+                        v(version),
+                        sui_types::object::Owner::AddressOwner(Default::default()),
+                    );
+                    tables::objects::encode(&object).unwrap().into()
+                }
+                Some(ObjectTombstone {
+                    status,
+                    transaction,
+                }) => {
+                    // The status cell alone, so `transaction: None` writes a tombstone without `t`.
+                    let mut cells = vec![(
+                        tables::objects::col::STATUS,
+                        Bytes::copy_from_slice(&[status.to_byte()]),
+                    )];
+                    cells.extend(transaction.map(|digest| {
+                        (
+                            tables::objects::col::TRANSACTION,
+                            Bytes::copy_from_slice(digest.inner()),
+                        )
+                    }));
+                    cells
+                }
+            };
+            mock.insert_row(tables::objects::NAME, key, cells).await;
+        }
+
+        let mut page = async |versions: RangeInclusive<u64>, limit, descending| {
+            let versions = v(*versions.start())..=v(*versions.end());
+            mock.clear_read_rows_calls().await;
+            let rows: Vec<_> = client
+                .object_versions_stream(id, versions.clone(), limit, descending, true)
+                .await
+                .unwrap()
+                .try_collect()
+                .await
+                .unwrap();
+            let calls = mock.read_rows_calls().await;
+            assert_eq!(calls.len(), 1);
+            assert!(!calls[0].values_stripped && calls[0].values_stripped_in.is_empty());
+            let listed: Vec<(u64, Option<ObjectTombstone>)> = rows
+                .into_iter()
+                .map(|(version, row)| {
+                    let removed = match row {
+                        ObjectVersionRow::Live(object) => {
+                            let object = object.expect("read with contents");
+                            assert_eq!((object.id(), object.version()), (id, version));
+                            None
+                        }
+                        ObjectVersionRow::Tombstone(tombstone) => Some(tombstone),
+                    };
+                    (version.value(), removed)
+                })
+                .collect();
+
+            mock.clear_read_rows_calls().await;
+            let without_contents: Vec<_> = client
+                .object_versions_stream(id, versions, limit, descending, false)
+                .await
+                .unwrap()
+                .try_collect()
+                .await
+                .unwrap();
+            let calls = mock.read_rows_calls().await;
+            assert_eq!(calls.len(), 1);
+            assert!(!calls[0].values_stripped);
+            assert_eq!(
+                calls[0].values_stripped_in,
+                [Bytes::from_static(tables::objects::col::OBJECT.as_bytes())],
+            );
+            let without_contents: Vec<(u64, Option<ObjectTombstone>)> = without_contents
+                .into_iter()
+                .map(|(version, row)| {
+                    let removed = match row {
+                        ObjectVersionRow::Live(object) => {
+                            assert_eq!(object, None, "read without contents");
+                            None
+                        }
+                        ObjectVersionRow::Tombstone(tombstone) => Some(tombstone),
+                    };
+                    (version.value(), removed)
+                })
+                .collect();
+            assert_eq!(without_contents, listed, "read without contents");
+            listed
+        };
+        let versions = |page: Vec<(u64, Option<ObjectTombstone>)>| -> Vec<u64> {
+            page.into_iter().map(|(version, _)| version).collect()
+        };
+        assert_eq!(versions(page(0..=u64::MAX, 3, false).await), [1, 2, 3]);
+        assert_eq!(versions(page(3..=u64::MAX, 2, false).await), [3, 4]);
+        assert_eq!(versions(page(0..=u64::MAX, 2, true).await), [5, 4]);
+        assert_eq!(versions(page(0..=3, 10, true).await), [3, 2, 1]);
+        assert!(page(6..=u64::MAX, 10, false).await.is_empty());
+        assert_eq!(page(0..=u64::MAX, 10, false).await, history);
     }
 
     /// The state at checkpoint `C` is the first index row from `(id, C)` to `(id, 0)`, read in one
