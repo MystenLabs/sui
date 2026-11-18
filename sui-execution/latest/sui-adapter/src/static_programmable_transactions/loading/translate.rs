@@ -224,6 +224,9 @@ fn input<Mode: ExecutionMode>(
                         id: allowance,
                     }
                 }
+                P::WithdrawFrom::FrozenAddress { .. } => {
+                    invariant_violation!("WithdrawFrom::FrozenAddress is not yet supported");
+                }
             };
             let ty = env.withdrawal_type_for_source(&source, funds_ty)?;
             (

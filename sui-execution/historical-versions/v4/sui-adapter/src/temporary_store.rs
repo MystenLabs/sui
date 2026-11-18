@@ -1332,6 +1332,11 @@ fn compute_input_reservations(
                     .push(allowance);
                 funder
             }
+            WithdrawFrom::FrozenAddress { .. } => {
+                unreachable!(
+                    "WithdrawFrom::FrozenAddress is not supported by this execution version"
+                )
+            }
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
         let entry = reservations.entry((owner, ty)).or_insert(0);

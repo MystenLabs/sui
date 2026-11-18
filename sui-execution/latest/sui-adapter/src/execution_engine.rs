@@ -1134,6 +1134,11 @@ pub(crate) mod checked {
                             assert!(protocol_config.create_forwarding_address_registry());
                             builder = setup_forwarding_address_registry_create(builder);
                         }
+                        EndOfEpochTransactionKind::FreezeListCreate => {
+                            unreachable!(
+                                "EndOfEpochTransactionKind::FreezeListCreate is not yet supported"
+                            )
+                        }
                     }
                 }
                 unreachable!(

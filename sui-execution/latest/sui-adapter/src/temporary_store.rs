@@ -1301,6 +1301,7 @@ fn compute_input_reservations(
                     .push(allowance);
                 funder
             }
+            WithdrawFrom::FrozenAddress { seized_from, .. } => seized_from,
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
         let entry = reservations.entry((owner, ty)).or_insert(0);

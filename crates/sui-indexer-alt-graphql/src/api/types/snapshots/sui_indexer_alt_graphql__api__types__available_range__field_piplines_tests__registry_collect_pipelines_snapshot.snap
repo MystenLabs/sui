@@ -153,6 +153,12 @@ BalanceWithdraw.funder
 BalanceWithdraw.allowance
   => {}
 
+BalanceWithdraw.seizeAuth
+  => {}
+
+BalanceWithdraw.seizedFrom
+  => {}
+
 BridgeCommitteeInitTransaction.bridgeObjectVersion
   => {}
 
@@ -655,6 +661,9 @@ FeatureFlag.value
   => {}
 
 ForwardingAddressRegistryCreateTransaction._
+  => {}
+
+FreezeListCreateTransaction._
   => {}
 
 GasCoin._

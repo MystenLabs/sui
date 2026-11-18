@@ -214,6 +214,11 @@ pub enum WithdrawFrom {
         funder: SuiAddress,
         allowance: ObjectID,
     },
+    /// Seize from frozen `seized_from`'s balance under a `SeizeAuth` owned by the sender.
+    FrozenAddress {
+        seized_from: SuiAddress,
+        seize_auth: ObjectID,
+    },
     // TODO(address-balances): Add more options here, such as multi-party withdraws.
 }
 
@@ -257,6 +262,7 @@ impl FundsWithdrawalArg {
             WithdrawFrom::Sender => tx.sender(),
             WithdrawFrom::Sponsor => tx.gas_owner(),
             WithdrawFrom::SenderAllowance { funder, .. } => *funder,
+            WithdrawFrom::FrozenAddress { seized_from, .. } => *seized_from,
         }
     }
 }
@@ -539,6 +545,7 @@ pub enum EndOfEpochTransactionKind {
     AddressAliasStateCreate,
     WriteAccumulatorStorageCost(WriteAccumulatorStorageCost),
     ForwardingAddressRegistryCreate,
+    FreezeListCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -675,6 +682,7 @@ impl EndOfEpochTransactionKind {
                 }]
             }
             Self::ForwardingAddressRegistryCreate => vec![],
+            Self::FreezeListCreate => vec![],
         }
     }
 
@@ -717,6 +725,7 @@ impl EndOfEpochTransactionKind {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
             Self::ForwardingAddressRegistryCreate => Either::Right(iter::empty()),
+            Self::FreezeListCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -814,6 +823,11 @@ impl EndOfEpochTransactionKind {
                         "forwarding address registry not enabled".to_string(),
                     ));
                 }
+            }
+            Self::FreezeListCreate => {
+                return Err(UserInputError::Unsupported(
+                    "freeze list creation is not supported yet".to_string(),
+                ));
             }
         }
         Ok(())
@@ -3692,6 +3706,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     WithdrawFrom::Sponsor => {
                         return Err(UserInputError::InvalidWithdrawReservation {
                             error: "Explicit sponsor withdrawals are not yet supported".to_string(),
+                        }
+                        .into());
+                    }
+                    WithdrawFrom::FrozenAddress { .. } => {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Frozen address withdrawals are not yet supported".to_string(),
                         }
                         .into());
                     }

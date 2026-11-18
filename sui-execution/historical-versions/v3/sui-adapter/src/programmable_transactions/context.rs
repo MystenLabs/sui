@@ -1929,6 +1929,11 @@ mod checked {
                             version, should have been checked at signing"
                         );
                     }
+                    WithdrawFrom::FrozenAddress { .. } => {
+                        unreachable!(
+                            "WithdrawFrom::FrozenAddress is not supported by this execution version"
+                        )
+                    }
                 };
                 // After this point, we can treat this like any other returned/loaded value, e.g.
                 // from a Move call. As such, sanity check Withdrawal should have only drop.

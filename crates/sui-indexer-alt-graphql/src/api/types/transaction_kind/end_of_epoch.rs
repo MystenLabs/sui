@@ -43,6 +43,7 @@ pub enum EndOfEpochTransactionKind {
     AddressAliasStateCreate(AddressAliasStateCreateTransaction),
     WriteAccumulatorStorageCost(WriteAccumulatorStorageCostTransaction),
     ForwardingAddressRegistryCreate(ForwardingAddressRegistryCreateTransaction),
+    FreezeListCreate(FreezeListCreateTransaction),
     // TODO: Add more complex transaction types incrementally
 }
 
@@ -173,6 +174,14 @@ pub struct ForwardingAddressRegistryCreateTransaction {
     dummy: Option<bool>,
 }
 
+/// System transaction for creating the coin regulation freeze list.
+#[derive(SimpleObject, Clone)]
+pub struct FreezeListCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
@@ -260,6 +269,7 @@ impl EndOfEpochTransactionKind {
                     dummy: None,
                 })
             }
+            N::FreezeListCreate => K::FreezeListCreate(FreezeListCreateTransaction { dummy: None }),
         }
     }
 }

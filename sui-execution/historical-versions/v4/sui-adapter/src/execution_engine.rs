@@ -1383,6 +1383,11 @@ pub(crate) mod checked {
                         tx_ctx.sponsor().unwrap_or(sender)
                     }
                     WithdrawFrom::SenderAllowance { funder, .. } => funder,
+                    WithdrawFrom::FrozenAddress { .. } => {
+                        unreachable!(
+                            "WithdrawFrom::FrozenAddress is not supported by this execution version"
+                        )
+                    }
                 };
                 let Reservation::MaxAmountU64(amount) = fw.reservation;
                 let entry = reservations.entry((owner, coin_type)).or_insert(0);
@@ -1791,6 +1796,11 @@ pub(crate) mod checked {
                         EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
                             assert!(protocol_config.create_forwarding_address_registry());
                             builder = setup_forwarding_address_registry_create(builder);
+                        }
+                        EndOfEpochTransactionKind::FreezeListCreate => {
+                            unreachable!(
+                                "EndOfEpochTransactionKind::FreezeListCreate is not supported by this execution version"
+                            )
                         }
                     }
                 }

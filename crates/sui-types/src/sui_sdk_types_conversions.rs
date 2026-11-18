@@ -1359,6 +1359,9 @@ impl From<crate::transaction::CallArg> for Input {
                             allowance: allowance.into(),
                         }
                     }
+                    crate::transaction::WithdrawFrom::FrozenAddress { .. } => {
+                        todo!("sui-sdk-types does not support WithdrawFrom::FrozenAddress yet")
+                    }
                 };
 
                 Self::FundsWithdrawal(FundsWithdrawal::new(
@@ -1710,6 +1713,11 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             },
             crate::transaction::EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
                 Self::ForwardingAddressRegistryCreate
+            }
+            crate::transaction::EndOfEpochTransactionKind::FreezeListCreate => {
+                todo!(
+                    "sui-sdk-types does not support EndOfEpochTransactionKind::FreezeListCreate yet"
+                )
             }
         }
     }
