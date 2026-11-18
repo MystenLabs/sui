@@ -36,6 +36,8 @@ use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsRequest;
+use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
@@ -52,19 +54,23 @@ use sui_rpc::proto::sui::rpc::v2::event_literal;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::get_object_result;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_client::MovePackageServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_rpc_api::ledger_history::cursor::CursorKind;
 use sui_rpc_api::ledger_history::cursor::CursorToken;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::cursor::Position;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::move_package::UpgradePolicy;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
@@ -6267,4 +6273,174 @@ async fn test_list_events_between_checkpoint_positions() {
     request.end_checkpoint = Some(high + 1);
     request.start_event_index = Some(1);
     expect_invalid_list_events(client, request).await;
+}
+
+/// Execute a package publish or upgrade PTB and seal it into its own checkpoint. Returns the new
+/// package's id, the lineage's upgrade cap, the updated gas ref, and the checkpoint.
+async fn execute_package_write(
+    cluster: &mut FullCluster,
+    sender: SuiAddress,
+    kp: &AccountKeyPair,
+    gas: ObjectRef,
+    builder: ProgrammableTransactionBuilder,
+) -> (ObjectID, ObjectRef, ObjectRef, u64) {
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+    let (fx, err) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![kp]))
+        .expect("package write failed");
+    assert!(err.is_none(), "package write failed: {err:?}");
+
+    let changed: Vec<_> = fx.created().into_iter().chain(fx.mutated()).collect();
+    let package_id = changed
+        .iter()
+        .find_map(|((id, _, _), owner)| matches!(owner, Owner::Immutable).then_some(*id))
+        .expect("package created");
+    let upgrade_cap = changed
+        .iter()
+        .find(|((id, _, _), owner)| *id != gas.0 && *owner == Owner::AddressOwner(sender))
+        .map(|(object_ref, _)| *object_ref)
+        .expect("upgrade cap");
+    let new_gas = changed
+        .iter()
+        .find(|((id, _, _), _)| *id == gas.0)
+        .map(|(object_ref, _)| *object_ref)
+        .expect("gas mutated");
+    let checkpoint = *cluster.create_checkpoint().await.sequence_number();
+    (package_id, upgrade_cap, new_gas, checkpoint)
+}
+
+/// A PTB upgrading `package_id` by republishing the code at `path`.
+fn upgrade_ptb(
+    path: &std::path::Path,
+    package_id: ObjectID,
+    upgrade_cap: ObjectRef,
+) -> ProgrammableTransactionBuilder {
+    let package = sui_move_build::BuildConfig::new_for_testing()
+        .build(path)
+        .expect("build package");
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let cap = builder
+        .obj(ObjectArg::ImmOrOwnedObject(upgrade_cap))
+        .unwrap();
+    let policy = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
+    let digest = builder
+        .pure(package.get_package_digest(false).to_vec())
+        .unwrap();
+    let ticket = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("package").to_owned(),
+        ident_str!("authorize_upgrade").to_owned(),
+        vec![],
+        vec![cap, policy, digest],
+    );
+    let receipt = builder.upgrade(
+        package_id,
+        ticket,
+        package.get_dependency_storage_package_ids(),
+        package.get_package_bytes(false),
+    );
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("package").to_owned(),
+        ident_str!("commit_upgrade").to_owned(),
+        vec![],
+        vec![cap, receipt],
+    );
+    builder
+}
+
+async fn list_package_versions(
+    client: &mut MovePackageServiceClient<Channel>,
+    package_id: ObjectID,
+    page_size: Option<u32>,
+    page_token: Option<prost::bytes::Bytes>,
+) -> Result<ListPackageVersionsResponse, tonic::Status> {
+    let mut request = ListPackageVersionsRequest::default();
+    request.package_id = Some(package_id.to_string());
+    request.page_size = page_size;
+    request.page_token = page_token;
+    client
+        .list_package_versions(request)
+        .await
+        .map(tonic::Response::into_inner)
+}
+
+/// `(version, storage id, publish checkpoint)` of each listed version.
+fn listed_versions(response: &ListPackageVersionsResponse) -> Vec<(u64, String, Option<u64>)> {
+    response
+        .versions
+        .iter()
+        .map(|v| {
+            (
+                v.version.expect("version"),
+                v.package_id.clone().expect("package_id"),
+                v.checkpoint,
+            )
+        })
+        .collect()
+}
+
+/// `ListPackageVersions` reports each version's publish checkpoint.
+#[tokio::test]
+async fn test_list_package_versions_reports_publish_checkpoints() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let path = emit_test_event_pkg_path();
+
+    let mut publish = ProgrammableTransactionBuilder::new();
+    let package = sui_move_build::BuildConfig::new_for_testing()
+        .build(&path)
+        .expect("build package");
+    let cap = publish.publish_upgradeable(
+        package.get_package_bytes(false),
+        package.get_dependency_storage_package_ids(),
+    );
+    publish.transfer_arg(sender, cap);
+    let (v1, cap, gas, cp1) = execute_package_write(&mut cluster, sender, &kp, gas, publish).await;
+    let (v2, cap, gas, cp2) =
+        execute_package_write(&mut cluster, sender, &kp, gas, upgrade_ptb(&path, v1, cap)).await;
+    let (v3, _, _, cp3) =
+        execute_package_write(&mut cluster, sender, &kp, gas, upgrade_ptb(&path, v2, cap)).await;
+    assert!(cp1 < cp2 && cp2 < cp3, "{cp1} {cp2} {cp3}");
+    wait_for_kv_checkpoint(&cluster, cp3).await;
+
+    let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let entry_1 = (1, v1.to_string(), Some(cp1));
+    let entry_2 = (2, v2.to_string(), Some(cp2));
+    let entry_3 = (3, v3.to_string(), Some(cp3));
+
+    // Every version reports its publish checkpoint, through any lineage member.
+    for package_id in [v1, v3] {
+        let response = list_package_versions(&mut client, package_id, None, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            listed_versions(&response),
+            vec![entry_1.clone(), entry_2.clone(), entry_3.clone()],
+            "{package_id}"
+        );
+    }
+
+    // So does every page.
+    let first = list_package_versions(&mut client, v1, Some(2), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed_versions(&first),
+        vec![entry_1.clone(), entry_2.clone()]
+    );
+    let second = list_package_versions(&mut client, v1, Some(2), first.next_page_token)
+        .await
+        .unwrap();
+    assert_eq!(listed_versions(&second), vec![entry_3.clone()]);
+    assert!(second.next_page_token.is_none());
 }
