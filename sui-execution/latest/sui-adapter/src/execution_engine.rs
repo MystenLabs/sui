@@ -1139,9 +1139,8 @@ pub(crate) mod checked {
                             builder = setup_forwarding_address_registry_create(builder);
                         }
                         EndOfEpochTransactionKind::FreezeListCreate => {
-                            unreachable!(
-                                "EndOfEpochTransactionKind::FreezeListCreate is not yet supported"
-                            )
+                            assert!(protocol_config.create_freeze_list());
+                            builder = setup_freeze_list_create(builder);
                         }
                     }
                 }
@@ -1856,6 +1855,21 @@ pub(crate) mod checked {
                 vec![],
             )
             .expect("Unable to generate forwarding_address_registry_create transaction!");
+        builder
+    }
+
+    fn setup_freeze_list_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("coin_regulation").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate freeze_list_create transaction!");
         builder
     }
 }

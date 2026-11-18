@@ -86,7 +86,10 @@ use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
-use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID};
+use sui_types::{
+    BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
+    SUI_FREEZE_LIST_OBJECT_ID,
+};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
@@ -141,6 +144,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_COIN_REGISTRY_OBJECT_ID,
     SUI_DISPLAY_REGISTRY_OBJECT_ID,
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_FREEZE_LIST_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
