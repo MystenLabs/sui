@@ -2323,32 +2323,21 @@ impl KeyValueStoreReader for BigTableClient {
         &mut self,
         original_id: ObjectID,
         cp_bound: u64,
-        after_version: Option<u64>,
-        before_version: Option<u64>,
+        versions: Range<u64>,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>> {
-        let start_version = match after_version {
-            Some(u64::MAX) => return Ok(vec![]),
-            Some(v) => v + 1,
-            None => 0,
-        };
-        let end_version = match before_version {
-            Some(0) => return Ok(vec![]),
-            Some(v) => v - 1,
-            None => u64::MAX,
-        };
-        if start_version > end_version || limit == 0 {
+        if versions.is_empty() || limit == 0 {
             return Ok(vec![]);
         }
 
         let start_key = Bytes::from(tables::packages::encode_key(
             original_id.as_ref(),
-            start_version,
+            versions.start,
         ));
         let end_key = Bytes::from(tables::packages::encode_key(
             original_id.as_ref(),
-            end_version,
+            versions.end - 1,
         ));
 
         // Versions along one lineage are published in non-decreasing checkpoint order. An
@@ -3224,7 +3213,7 @@ mod tests {
         }
 
         let versions = client
-            .get_package_versions(original_id, u64::MAX, None, None, 250, false)
+            .get_package_versions(original_id, u64::MAX, 0..u64::MAX, 250, false)
             .await
             .unwrap();
         assert_eq!(versions.len(), 250);
@@ -3235,7 +3224,7 @@ mod tests {
         // An ascending scan passes a prefix of the lineage's rows, so the server-side cap makes
         // the scan stop at exactly `limit` rows, with or without a checkpoint bound.
         let rows = client
-            .get_package_versions(original_id, u64::MAX, None, None, 100, false)
+            .get_package_versions(original_id, u64::MAX, 0..u64::MAX, 100, false)
             .await
             .unwrap();
         assert_eq!(rows.len(), 100);
@@ -3249,7 +3238,7 @@ mod tests {
 
         // A bound every row satisfies (cp 100 <= 100) still lets the server cap the scan.
         let rows = client
-            .get_package_versions(original_id, 100, None, None, 100, false)
+            .get_package_versions(original_id, 100, 0..u64::MAX, 100, false)
             .await
             .unwrap();
         assert_eq!(rows.len(), 100);
@@ -3261,7 +3250,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(packages_calls.last().unwrap().row_keys.len(), 100);
         let next_page = client
-            .get_package_versions(original_id, u64::MAX, Some(150), None, 100, false)
+            .get_package_versions(original_id, u64::MAX, 151..u64::MAX, 100, false)
             .await
             .unwrap();
         assert_eq!(next_page.len(), 100);
@@ -3287,13 +3276,12 @@ mod tests {
                 .await;
         }
 
-        let mut versions = async |cp_bound, after_version, limit, descending| -> Vec<u64> {
+        let mut versions = async |cp_bound, start_version, limit, descending| -> Vec<u64> {
             client
                 .get_package_versions(
                     original_id,
                     cp_bound,
-                    after_version,
-                    None,
+                    start_version..u64::MAX,
                     limit,
                     descending,
                 )
@@ -3305,10 +3293,10 @@ mod tests {
         };
 
         // Ascending scans stop at the first version published after the bound.
-        assert_eq!(versions(35, None, 10, false).await, vec![1, 2, 3]);
-        assert_eq!(versions(30, None, 10, false).await, vec![1, 2, 3]);
-        assert_eq!(versions(35, Some(1), 10, false).await, vec![2, 3]);
-        assert_eq!(versions(35, None, 2, false).await, vec![1, 2]);
+        assert_eq!(versions(35, 0, 10, false).await, vec![1, 2, 3]);
+        assert_eq!(versions(30, 0, 10, false).await, vec![1, 2, 3]);
+        assert_eq!(versions(35, 2, 10, false).await, vec![2, 3]);
+        assert_eq!(versions(35, 0, 2, false).await, vec![1, 2]);
         // With rows above the bound present, the server still caps the ascending scan at `limit`.
         let packages_calls = mock
             .read_rows_calls()
@@ -3317,11 +3305,11 @@ mod tests {
             .filter(|c| c.table == tables::packages::NAME)
             .collect::<Vec<_>>();
         assert_eq!(packages_calls.last().unwrap().row_keys.len(), 2);
-        assert_eq!(versions(9, None, 10, false).await, Vec::<u64>::new());
+        assert_eq!(versions(9, 0, 10, false).await, Vec::<u64>::new());
 
         // Descending scans skip the versions published after the bound. The server drops them
         // and caps the scan at `limit`, so it reads only the rows returned.
-        assert_eq!(versions(35, None, 2, true).await, vec![3, 2]);
+        assert_eq!(versions(35, 0, 2, true).await, vec![3, 2]);
         let packages_calls = mock
             .read_rows_calls()
             .await
@@ -3329,7 +3317,7 @@ mod tests {
             .filter(|c| c.table == tables::packages::NAME)
             .collect::<Vec<_>>();
         assert_eq!(packages_calls.last().unwrap().row_keys.len(), 2);
-        assert_eq!(versions(9, None, 10, true).await, Vec::<u64>::new());
+        assert_eq!(versions(9, 0, 10, true).await, Vec::<u64>::new());
     }
 
     #[tokio::test]

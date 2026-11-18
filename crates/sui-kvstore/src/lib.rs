@@ -14,6 +14,7 @@ pub mod streamed_watermarks;
 pub mod tables;
 pub mod testing;
 
+use std::ops::Range;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -459,15 +460,14 @@ pub trait KeyValueStoreReader {
         cp_bound: u64,
     ) -> Result<Option<PackageData>>;
 
-    /// Paginate package versions for an original_id, keeping those published at or before
-    /// `cp_bound`. Versions along one lineage are published in non-decreasing checkpoint order,
-    /// so an ascending scan ends at the first version published after `cp_bound`.
+    /// Paginate the versions in `versions` of an original_id, keeping those published at or
+    /// before `cp_bound`. Versions along one lineage are published in non-decreasing checkpoint
+    /// order, so an ascending scan ends at the first version published after `cp_bound`.
     async fn get_package_versions(
         &mut self,
         original_id: ObjectID,
         cp_bound: u64,
-        after_version: Option<u64>,
-        before_version: Option<u64>,
+        versions: Range<u64>,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>>;

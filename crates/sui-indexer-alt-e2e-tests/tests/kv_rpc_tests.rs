@@ -6386,9 +6386,237 @@ fn listed_versions(response: &ListPackageVersionsResponse) -> Vec<(u64, String, 
         .collect()
 }
 
-/// `ListPackageVersions` reports each version's publish checkpoint.
+/// A cursor-mode `ListPackageVersions` request for `package_id`'s lineage.
+fn package_versions_cursor_request(
+    package_id: ObjectID,
+    limit: Option<u32>,
+    ordering: Ordering,
+    after: Option<&prost::bytes::Bytes>,
+    before: Option<&prost::bytes::Bytes>,
+) -> ListPackageVersionsRequest {
+    let mut options = QueryOptions::default();
+    options.limit = limit;
+    options.ordering = Some(ordering as i32);
+    options.after = after.cloned();
+    options.before = before.cloned();
+    let mut request = ListPackageVersionsRequest::default();
+    request.package_id = Some(package_id.to_string());
+    request.options = Some(options);
+    request
+}
+
+async fn list_package_versions_request(
+    client: &mut MovePackageServiceClient<Channel>,
+    request: ListPackageVersionsRequest,
+) -> ListPackageVersionsResponse {
+    client
+        .list_package_versions(request)
+        .await
+        .unwrap()
+        .into_inner()
+}
+
+/// The versions a response lists, in order, checking that each carries a cursor.
+fn listed_versions_with_cursors(response: &ListPackageVersionsResponse) -> Vec<u64> {
+    response
+        .versions
+        .iter()
+        .map(|v| {
+            assert!(v.cursor.is_some(), "version {:?} has no cursor", v.version);
+            v.version.expect("version")
+        })
+        .collect()
+}
+
+/// The cursor of the last version a response lists.
+fn last_package_version_cursor(response: &ListPackageVersionsResponse) -> prost::bytes::Bytes {
+    response
+        .versions
+        .last()
+        .and_then(|v| v.cursor.clone())
+        .expect("last version has a cursor")
+}
+
+/// `ListPackageVersions` pages by cursor in either ordering, intersecting cursors with version
+/// filters and the checkpoint range, and page-token listings carry the same cursors.
 #[tokio::test]
-async fn test_list_package_versions_reports_publish_checkpoints() {
+async fn test_list_package_versions_cursor_paging() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    let path = emit_test_event_pkg_path();
+
+    let mut publish = ProgrammableTransactionBuilder::new();
+    let package = sui_move_build::BuildConfig::new_for_testing()
+        .build(&path)
+        .expect("build package");
+    let cap = publish.publish_upgradeable(
+        package.get_package_bytes(false),
+        package.get_dependency_storage_package_ids(),
+    );
+    publish.transfer_arg(sender, cap);
+    let (v1, cap, gas, cp1) = execute_package_write(&mut cluster, sender, &kp, gas, publish).await;
+    let (v2, cap, gas, cp2) =
+        execute_package_write(&mut cluster, sender, &kp, gas, upgrade_ptb(&path, v1, cap)).await;
+    let (_, _, _, cp3) =
+        execute_package_write(&mut cluster, sender, &kp, gas, upgrade_ptb(&path, v2, cap)).await;
+    assert!(cp1 < cp2 && cp2 < cp3, "{cp1} {cp2} {cp3}");
+    wait_for_kv_checkpoint(&cluster, cp3).await;
+
+    let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // Every version's cursor, through a later lineage member.
+    let all = list_package_versions_request(
+        &mut client,
+        package_versions_cursor_request(v2, None, Ordering::Ascending, None, None),
+    )
+    .await;
+    assert_eq!(listed_versions_with_cursors(&all), vec![1, 2, 3]);
+    assert!(all.next_page_token.is_none());
+    let cursor = |version: usize| all.versions[version - 1].cursor.clone().unwrap();
+    let (c1, c2, c3) = (cursor(1), cursor(2), cursor(3));
+
+    let response = list_package_versions_request(
+        &mut client,
+        package_versions_cursor_request(v1, None, Ordering::Descending, None, None),
+    )
+    .await;
+    assert_eq!(listed_versions_with_cursors(&response), vec![3, 2, 1]);
+    assert!(response.next_page_token.is_none());
+
+    // A backward page from the end, then the page before it, which is short because it reaches
+    // the first version.
+    let last = list_package_versions_request(
+        &mut client,
+        package_versions_cursor_request(v1, Some(2), Ordering::Descending, None, None),
+    )
+    .await;
+    assert_eq!(listed_versions_with_cursors(&last), vec![3, 2]);
+    let earlier = list_package_versions_request(
+        &mut client,
+        package_versions_cursor_request(
+            v1,
+            Some(2),
+            Ordering::Descending,
+            None,
+            Some(&last_package_version_cursor(&last)),
+        ),
+    )
+    .await;
+    assert_eq!(listed_versions_with_cursors(&earlier), vec![1]);
+
+    // Forward pages from the backward page's lowest cursor, until a short page reaches the end.
+    let next = list_package_versions_request(
+        &mut client,
+        package_versions_cursor_request(
+            v1,
+            Some(1),
+            Ordering::Ascending,
+            Some(&last_package_version_cursor(&last)),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(listed_versions_with_cursors(&next), vec![3]);
+    let end = list_package_versions_request(
+        &mut client,
+        package_versions_cursor_request(
+            v1,
+            Some(1),
+            Ordering::Ascending,
+            Some(&last_package_version_cursor(&next)),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(listed_versions_with_cursors(&end), Vec::<u64>::new());
+    assert!(end.next_page_token.is_none());
+
+    // Both cursors bound the listing in either ordering.
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        let response = list_package_versions_request(
+            &mut client,
+            package_versions_cursor_request(v1, None, ordering, Some(&c1), Some(&c3)),
+        )
+        .await;
+        assert_eq!(
+            listed_versions_with_cursors(&response),
+            vec![2],
+            "{ordering:?}"
+        );
+    }
+
+    // Version filters, cursors and the checkpoint range intersect. Each case lists the matching
+    // versions in ascending order; descending lists them in reverse.
+    for (start_version, end_version, after, range, ascending) in [
+        (Some(2), None, None, [None, None], vec![2, 3]),
+        (None, Some(3), None, [None, None], vec![1, 2]),
+        (Some(1), Some(4), Some(&c1), [None, Some(cp2 + 1)], vec![2]),
+        (None, None, None, [None, Some(cp3)], vec![1, 2]),
+        (None, None, None, [Some(cp1 + 1), Some(cp3)], vec![2]),
+        (Some(3), None, None, [None, Some(cp2 + 1)], vec![]),
+    ] {
+        for (ordering, expected) in [
+            (Ordering::Ascending, ascending.clone()),
+            (
+                Ordering::Descending,
+                ascending.iter().rev().copied().collect(),
+            ),
+        ] {
+            let mut request = package_versions_cursor_request(v1, None, ordering, after, None);
+            request.start_version = start_version;
+            request.end_version = end_version;
+            [request.start_checkpoint, request.end_checkpoint] = range;
+            let response = list_package_versions_request(&mut client, request).await;
+            assert_eq!(
+                listed_versions_with_cursors(&response),
+                expected,
+                "versions [{start_version:?}, {end_version:?}) after {after:?} checkpoints \
+                 {range:?} {ordering:?}"
+            );
+        }
+    }
+
+    // With `end_checkpoint`, a descending page skips the versions published at or after it.
+    let mut request =
+        package_versions_cursor_request(v1, Some(1), Ordering::Descending, None, None);
+    request.end_checkpoint = Some(cp2 + 1);
+    let first = list_package_versions_request(&mut client, request).await;
+    assert_eq!(listed_versions_with_cursors(&first), vec![2]);
+    let mut request = package_versions_cursor_request(
+        v1,
+        Some(1),
+        Ordering::Descending,
+        None,
+        Some(&last_package_version_cursor(&first)),
+    );
+    request.end_checkpoint = Some(cp2 + 1);
+    let second = list_package_versions_request(&mut client, request).await;
+    assert_eq!(listed_versions_with_cursors(&second), vec![1]);
+
+    // Page tokens resume after the last listed version, and their versions carry the same
+    // cursors.
+    let first = list_package_versions(&mut client, v1, Some(2), None)
+        .await
+        .unwrap();
+    assert_eq!(listed_versions_with_cursors(&first), vec![1, 2]);
+    assert_eq!(first.versions[0].cursor, Some(c1));
+    assert_eq!(first.versions[1].cursor, Some(c2));
+    let second = list_package_versions(&mut client, v1, Some(2), first.next_page_token)
+        .await
+        .unwrap();
+    assert_eq!(listed_versions_with_cursors(&second), vec![3]);
+    assert_eq!(second.versions[0].cursor, Some(c3));
+    assert!(second.next_page_token.is_none());
+}
+
+/// A `ListPackageVersions` checkpoint range lists the versions published in it and pages by
+/// cursor. Above the served height, an ascending listing ends there with `LEDGER_TIP`, and a
+/// descending one is refused, as `ListTransactions` handles them. Every listed version carries
+/// its publish checkpoint, in a legacy page-token listing too.
+#[tokio::test]
+async fn test_list_package_versions_checkpoint_range() {
     let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let path = emit_test_event_pkg_path();
@@ -6413,12 +6641,133 @@ async fn test_list_package_versions_reports_publish_checkpoints() {
     let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
         .unwrap();
-
     let entry_1 = (1, v1.to_string(), Some(cp1));
     let entry_2 = (2, v2.to_string(), Some(cp2));
     let entry_3 = (3, v3.to_string(), Some(cp3));
+    let range_request = |package_id, ordering, [start, end]: [Option<u64>; 2]| {
+        let mut request = package_versions_cursor_request(package_id, None, ordering, None, None);
+        request.start_checkpoint = start;
+        request.end_checkpoint = end;
+        request
+    };
+    let end_reason =
+        |response: &ListPackageVersionsResponse| response.end.as_ref().map(|end| end.reason());
 
-    // Every version reports its publish checkpoint, through any lineage member.
+    // A range lists the versions published in it, through any lineage member, and ends with
+    // `CHECKPOINT_BOUND` once the server has indexed its end, else with `LEDGER_TIP`.
+    for (package_id, range, expected, end) in [
+        (
+            v1,
+            [None, Some(cp1 + 1)],
+            vec![entry_1.clone()],
+            QueryEndReason::CheckpointBound,
+        ),
+        (
+            v3,
+            [None, Some(cp2)],
+            vec![entry_1.clone()],
+            QueryEndReason::CheckpointBound,
+        ),
+        (
+            v1,
+            [None, Some(cp2 + 1)],
+            vec![entry_1.clone(), entry_2.clone()],
+            QueryEndReason::CheckpointBound,
+        ),
+        (
+            v1,
+            [None, Some(cp1)],
+            vec![],
+            QueryEndReason::CheckpointBound,
+        ),
+        (
+            v2,
+            [Some(cp1 + 1), None],
+            vec![entry_2.clone(), entry_3.clone()],
+            QueryEndReason::LedgerTip,
+        ),
+        (
+            v1,
+            [Some(cp2), Some(cp3)],
+            vec![entry_2.clone()],
+            QueryEndReason::CheckpointBound,
+        ),
+        (
+            v1,
+            [None, Some(u64::MAX)],
+            vec![entry_1.clone(), entry_2.clone(), entry_3.clone()],
+            QueryEndReason::LedgerTip,
+        ),
+        (
+            v1,
+            [Some(u64::MAX), None],
+            vec![],
+            QueryEndReason::LedgerTip,
+        ),
+    ] {
+        let response = list_package_versions_request(
+            &mut client,
+            range_request(package_id, Ordering::Ascending, range),
+        )
+        .await;
+        assert_eq!(listed_versions(&response), expected, "{range:?}");
+        assert_eq!(end_reason(&response), Some(end), "{range:?}");
+        assert!(response.next_page_token.is_none());
+    }
+
+    // A descending range past the served height is refused, also for a package with no rows;
+    // one ending just above the served height is served.
+    let never_published = ObjectID::from_single_byte(0x99);
+    for package_id in [v1, never_published] {
+        let error = client
+            .list_package_versions(range_request(
+                package_id,
+                Ordering::Descending,
+                [None, Some(u64::MAX)],
+            ))
+            .await
+            .unwrap_err();
+        assert_above_latest_available(&error, "end_checkpoint", u64::MAX);
+    }
+    let error = client
+        .list_package_versions(range_request(
+            v1,
+            Ordering::Descending,
+            [None, Some(u64::MAX)],
+        ))
+        .await
+        .unwrap_err();
+    let first_unavailable: u64 = sui_rpc::proto::google::rpc::Status::decode(error.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .expect("ErrorInfo")
+        .metadata["firstUnavailableCheckpoint"]
+        .parse()
+        .unwrap();
+    let error = client
+        .list_package_versions(range_request(
+            v1,
+            Ordering::Descending,
+            [Some(first_unavailable), None],
+        ))
+        .await
+        .unwrap_err();
+    assert_above_latest_available(&error, "start_checkpoint", first_unavailable);
+    let response = list_package_versions_request(
+        &mut client,
+        range_request(v1, Ordering::Descending, [None, Some(first_unavailable)]),
+    )
+    .await;
+    assert_eq!(
+        listed_versions(&response),
+        vec![entry_3.clone(), entry_2.clone(), entry_1.clone()]
+    );
+    assert_eq!(end_reason(&response), Some(QueryEndReason::CheckpointBound));
+
+    // A legacy page-token listing reports each version's publish checkpoint too, through any
+    // lineage member and on every page.
     for package_id in [v1, v3] {
         let response = list_package_versions(&mut client, package_id, None, None)
             .await
@@ -6429,18 +6778,45 @@ async fn test_list_package_versions_reports_publish_checkpoints() {
             "{package_id}"
         );
     }
-
-    // So does every page.
-    let first = list_package_versions(&mut client, v1, Some(2), None)
+    let legacy_first = list_package_versions(&mut client, v1, Some(2), None)
         .await
         .unwrap();
+    assert_eq!(
+        listed_versions(&legacy_first),
+        vec![entry_1.clone(), entry_2.clone()]
+    );
+    let legacy_second =
+        list_package_versions(&mut client, v1, Some(2), legacy_first.next_page_token)
+            .await
+            .unwrap();
+    assert_eq!(listed_versions(&legacy_second), vec![entry_3.clone()]);
+    assert!(legacy_second.next_page_token.is_none());
+
+    // A range pages by cursor, never by page token.
+    let mut request = range_request(v1, Ordering::Ascending, [None, Some(cp3 + 1)]);
+    request.options.as_mut().unwrap().limit = Some(2);
+    let first = list_package_versions_request(&mut client, request.clone()).await;
     assert_eq!(
         listed_versions(&first),
         vec![entry_1.clone(), entry_2.clone()]
     );
-    let second = list_package_versions(&mut client, v1, Some(2), first.next_page_token)
-        .await
-        .unwrap();
+    assert_eq!(end_reason(&first), Some(QueryEndReason::ItemLimit));
+    assert!(first.next_page_token.is_none());
+    request.options.as_mut().unwrap().after = Some(last_package_version_cursor(&first));
+    let second = list_package_versions_request(&mut client, request).await;
     assert_eq!(listed_versions(&second), vec![entry_3.clone()]);
-    assert!(second.next_page_token.is_none());
+    assert_eq!(end_reason(&second), Some(QueryEndReason::CheckpointBound));
+
+    let mut with_page_size = ListPackageVersionsRequest::default();
+    with_page_size.package_id = Some(v1.to_string());
+    with_page_size.page_size = Some(2);
+    with_page_size.end_checkpoint = Some(cp3 + 1);
+    let backwards = range_request(v1, Ordering::Ascending, [Some(cp2), Some(cp1)]);
+    for request in [with_page_size, backwards] {
+        let error = client
+            .list_package_versions(request.clone())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::InvalidArgument, "{request:?}");
+    }
 }

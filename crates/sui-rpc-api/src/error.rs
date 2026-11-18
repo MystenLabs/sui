@@ -39,6 +39,18 @@ impl RpcError {
         }
     }
 
+    pub fn code(&self) -> Code {
+        self.code
+    }
+
+    /// Whether this error carries an [`ErrorInfo`] with `reason`.
+    pub(crate) fn has_reason(&self, reason: ErrorReason) -> bool {
+        self.details
+            .as_ref()
+            .and_then(|details| details.error_info())
+            .is_some_and(|info| info.reason == reason.as_str_name())
+    }
+
     pub fn with_details(mut self, details: ErrorDetails) -> Self {
         self.details = Some(Box::new(details));
         self
