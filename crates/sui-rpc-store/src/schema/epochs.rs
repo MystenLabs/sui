@@ -16,6 +16,7 @@ use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
+use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::storage::EpochInfo;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -78,9 +79,8 @@ pub struct EpochEnd {
     /// `network_total_transactions` at the epoch's final checkpoint.
     pub tx_hi: u64,
     pub safe_mode: bool,
-    /// BCS-encoded `Vec<CheckpointCommitment>` from the checkpoint's
-    /// end-of-epoch data.
-    pub epoch_commitments: Vec<u8>,
+    /// The checkpoint's end-of-epoch commitments, stored BCS-encoded.
+    pub epoch_commitments: Vec<CheckpointCommitment>,
     pub total_stake: Option<u64>,
     pub storage_fund_balance: Option<u64>,
     pub storage_fund_reinvestment: Option<u64>,
@@ -101,7 +101,11 @@ pub fn end(end: EpochEnd) -> Value {
         end_checkpoint: Some(end.end_checkpoint),
         tx_hi: Some(end.tx_hi),
         safe_mode: Some(end.safe_mode),
-        epoch_commitments: Some(end.epoch_commitments.into()),
+        epoch_commitments: Some(
+            bcs::to_bytes(&end.epoch_commitments)
+                .expect("bcs encode epoch commitments")
+                .into(),
+        ),
         total_stake: end.total_stake,
         storage_fund_balance: end.storage_fund_balance,
         storage_fund_reinvestment: end.storage_fund_reinvestment,
@@ -151,7 +155,12 @@ fn merge(
         if next.end_checkpoint.is_some() {
             merged.end_checkpoint = next.end_checkpoint;
         }
-        if next.system_state_bcs.is_some() {
+        // A record without `start_checkpoint` was seeded from the state at a mid-epoch restore
+        // point, so it never replaces the state of a record that knows the epoch's first
+        // checkpoint: that one is the epoch-start state.
+        if next.system_state_bcs.is_some()
+            && (next.start_checkpoint.is_some() || merged.start_checkpoint.is_none())
+        {
             merged.system_state_bcs = next.system_state_bcs;
         }
         if next.tx_hi.is_some() {
@@ -196,7 +205,7 @@ fn merge(
 
 impl<R: Reader> super::RpcStoreSchema<R> {
     /// Look up the metadata for an epoch, decoding the embedded
-    /// BCS `SuiSystemState` into the canonical
+    /// BCS `SuiSystemState` and epoch commitments into the canonical
     /// [`sui_types::storage::EpochInfo`].
     pub fn get_epoch(&self, epoch: EpochId) -> Result<Option<EpochInfo>, Error> {
         let Some(stored) = self.epochs.get(&U64Be(epoch))? else {
@@ -211,6 +220,14 @@ impl<R: Reader> super::RpcStoreSchema<R> {
                     .map_err(|e| DecodeError::with_source("bcs decode SuiSystemState", e))
             })
             .transpose()?;
+        let epoch_commitments = stored
+            .epoch_commitments
+            .as_ref()
+            .map(|bytes| {
+                bcs::from_bytes::<Vec<CheckpointCommitment>>(bytes)
+                    .map_err(|e| DecodeError::with_source("bcs decode epoch commitments", e))
+            })
+            .transpose()?;
         Ok(Some(EpochInfo {
             epoch,
             protocol_version: stored.protocol_version,
@@ -220,6 +237,18 @@ impl<R: Reader> super::RpcStoreSchema<R> {
             end_checkpoint: stored.end_checkpoint,
             reference_gas_price: stored.reference_gas_price,
             system_state,
+            tx_hi: stored.tx_hi,
+            safe_mode: stored.safe_mode,
+            epoch_commitments,
+            total_stake: stored.total_stake,
+            storage_fund_balance: stored.storage_fund_balance,
+            storage_fund_reinvestment: stored.storage_fund_reinvestment,
+            storage_charge: stored.storage_charge,
+            storage_rebate: stored.storage_rebate,
+            stake_subsidy_amount: stored.stake_subsidy_amount,
+            total_gas_fees: stored.total_gas_fees,
+            total_stake_rewards_distributed: stored.total_stake_rewards_distributed,
+            leftover_storage_fund_inflow: stored.leftover_storage_fund_inflow,
         }))
     }
 
@@ -416,25 +445,31 @@ mod tests {
     }
 
     #[test]
-    fn partial_seed_then_backfill_fills_start_checkpoint() {
+    fn partial_seed_then_backfill_fills_start_record() {
         // The embedded restore seeds a partial start record from the
         // mid-epoch system state with no `start_checkpoint`; a later
-        // full start record from the upward backfill supplies it. The
-        // merge must combine them rather than clobber.
+        // full start record from the upward backfill supplies it, and
+        // its epoch-start state replaces the seeded one.
+        let state = |reference_gas_price| {
+            let mut inner = sui_types::sui_system_state::mock::sui_system_state_inner_v1();
+            inner.reference_gas_price = reference_gas_price;
+            SuiSystemState::V1(inner)
+        };
+        let bytes = |state: &SuiSystemState| bcs::to_bytes(state).unwrap();
         let (_dir, db, schema) = fresh_db();
         let mut batch = db.batch();
         batch
             .merge(
                 &schema.epochs,
                 &U64Be(42),
-                &start(73, 1000, 111, None, None),
+                &start(73, 1000, 111, None, Some(bytes(&state(2)))),
             )
             .unwrap();
         batch
             .merge(
                 &schema.epochs,
                 &U64Be(42),
-                &start(73, 1000, 111, Some(500), None),
+                &start(73, 1000, 111, Some(500), Some(bytes(&state(1)))),
             )
             .unwrap();
         batch.commit().unwrap();
@@ -442,39 +477,49 @@ mod tests {
         let info = schema.get_epoch(42).unwrap().expect("epoch present");
         assert_eq!(info.start_checkpoint, Some(500));
         assert_eq!(info.protocol_version, Some(73));
+        assert_eq!(info.system_state, Some(state(1)));
     }
 
     #[test]
-    fn partial_seed_does_not_clobber_known_start_checkpoint() {
+    fn partial_seed_does_not_clobber_known_start_record() {
         // Reverse order: a full start record then a partial re-seed
-        // (no `start_checkpoint`) must NOT erase the known value. This
-        // is the crux of the presence-tracked merge — a `None` operand
-        // leaves the field untouched.
+        // (no `start_checkpoint`) from a mid-epoch state must NOT erase
+        // the known start checkpoint, nor replace the epoch-start state.
+        let state = |reference_gas_price| {
+            let mut inner = sui_types::sui_system_state::mock::sui_system_state_inner_v1();
+            inner.reference_gas_price = reference_gas_price;
+            SuiSystemState::V1(inner)
+        };
+        let bytes = |state: &SuiSystemState| bcs::to_bytes(state).unwrap();
         let (_dir, db, schema) = fresh_db();
         let mut batch = db.batch();
         batch
             .merge(
                 &schema.epochs,
                 &U64Be(42),
-                &start(73, 1000, 111, Some(500), None),
+                &start(73, 1000, 111, Some(500), Some(bytes(&state(1)))),
             )
             .unwrap();
         batch
             .merge(
                 &schema.epochs,
                 &U64Be(42),
-                &start(73, 1000, 111, None, None),
+                &start(73, 1000, 111, None, Some(bytes(&state(2)))),
             )
             .unwrap();
         batch.commit().unwrap();
 
         let info = schema.get_epoch(42).unwrap().expect("epoch present");
         assert_eq!(info.start_checkpoint, Some(500));
+        assert_eq!(info.system_state, Some(state(1)));
     }
 
     #[test]
-    fn end_record_stores_system_epoch_info_fields() {
+    fn end_record_surfaces_system_epoch_info_fields() {
         let (_dir, db, schema) = fresh_db();
+        let commitments = vec![CheckpointCommitment::CheckpointArtifactsDigest(
+            sui_types::digests::CheckpointArtifactsDigest::new([7; 32]),
+        )];
         let mut batch = db.batch();
         batch
             .merge(
@@ -485,7 +530,7 @@ mod tests {
                     end_checkpoint: 600,
                     tx_hi: 12_345,
                     safe_mode: false,
-                    epoch_commitments: vec![1, 2, 3],
+                    epoch_commitments: commitments.clone(),
                     total_stake: Some(1_000),
                     storage_fund_balance: Some(2_000),
                     storage_fund_reinvestment: Some(3_000),
@@ -500,26 +545,19 @@ mod tests {
             .unwrap();
         batch.commit().unwrap();
 
-        // `get_epoch` deliberately does not surface these fields yet,
-        // so read the raw stored record to confirm they were written.
-        let stored = schema
-            .epochs
-            .get(&U64Be(42))
-            .unwrap()
-            .expect("epoch present")
-            .into_inner();
-        assert_eq!(stored.tx_hi, Some(12_345));
-        assert_eq!(stored.safe_mode, Some(false));
-        assert_eq!(stored.epoch_commitments.as_deref(), Some(&[1, 2, 3][..]));
-        assert_eq!(stored.total_stake, Some(1_000));
-        assert_eq!(stored.storage_fund_balance, Some(2_000));
-        assert_eq!(stored.storage_fund_reinvestment, Some(3_000));
-        assert_eq!(stored.storage_charge, Some(4_000));
-        assert_eq!(stored.storage_rebate, Some(5_000));
-        assert_eq!(stored.stake_subsidy_amount, Some(6_000));
-        assert_eq!(stored.total_gas_fees, Some(7_000));
-        assert_eq!(stored.total_stake_rewards_distributed, Some(8_000));
-        assert_eq!(stored.leftover_storage_fund_inflow, Some(9_000));
+        let info = schema.get_epoch(42).unwrap().expect("epoch present");
+        assert_eq!(info.tx_hi, Some(12_345));
+        assert_eq!(info.safe_mode, Some(false));
+        assert_eq!(info.epoch_commitments, Some(commitments));
+        assert_eq!(info.total_stake, Some(1_000));
+        assert_eq!(info.storage_fund_balance, Some(2_000));
+        assert_eq!(info.storage_fund_reinvestment, Some(3_000));
+        assert_eq!(info.storage_charge, Some(4_000));
+        assert_eq!(info.storage_rebate, Some(5_000));
+        assert_eq!(info.stake_subsidy_amount, Some(6_000));
+        assert_eq!(info.total_gas_fees, Some(7_000));
+        assert_eq!(info.total_stake_rewards_distributed, Some(8_000));
+        assert_eq!(info.leftover_storage_fund_inflow, Some(9_000));
     }
 
     #[test]
@@ -538,23 +576,19 @@ mod tests {
                     end_checkpoint: 600,
                     tx_hi: 7,
                     safe_mode: true,
-                    epoch_commitments: vec![0],
+                    epoch_commitments: vec![],
                     ..Default::default()
                 }),
             )
             .unwrap();
         batch.commit().unwrap();
 
-        let stored = schema
-            .epochs
-            .get(&U64Be(42))
-            .unwrap()
-            .expect("epoch present")
-            .into_inner();
-        assert_eq!(stored.safe_mode, Some(true));
-        assert_eq!(stored.tx_hi, Some(7));
-        assert_eq!(stored.total_stake, None);
-        assert_eq!(stored.total_gas_fees, None);
-        assert_eq!(stored.storage_charge, None);
+        let info = schema.get_epoch(42).unwrap().expect("epoch present");
+        assert_eq!(info.safe_mode, Some(true));
+        assert_eq!(info.tx_hi, Some(7));
+        assert_eq!(info.epoch_commitments, Some(vec![]));
+        assert_eq!(info.total_stake, None);
+        assert_eq!(info.total_gas_fees, None);
+        assert_eq!(info.storage_charge, None);
     }
 }

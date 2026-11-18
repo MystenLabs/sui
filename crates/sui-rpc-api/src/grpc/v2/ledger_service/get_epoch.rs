@@ -15,12 +15,20 @@ use sui_rpc::proto::sui::rpc::v2::Epoch;
 use sui_rpc::proto::sui::rpc::v2::GetEpochRequest;
 use sui_rpc::proto::sui::rpc::v2::GetEpochResponse;
 use sui_rpc::proto::sui::rpc::v2::ProtocolConfig;
+use sui_rpc::proto::sui::rpc::v2::SystemEpochInfo;
 use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::EpochId;
+use sui_types::storage::EpochInfo;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
 pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::EPOCH;
 
+/// The latest epoch is the live system state's. The live epoch's `protocol_config`, `start`,
+/// `reference_gas_price` and `system_state` come from the live state; any other epoch's come from
+/// its rpc-store row, with `system_state` the epoch-start snapshot. The end-of-epoch fields are
+/// set exactly when `last_checkpoint` is, from the same rpc-store row, as soon as the row has
+/// them.
 #[tracing::instrument(skip(service))]
 pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEpochResponse> {
     let read_mask = {
@@ -38,22 +46,24 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
     let mut message = Epoch::default();
 
     let current_system_state = service.reader.get_system_state()?;
-    let current_epoch = current_system_state.epoch();
+    let live_epoch = current_system_state.epoch();
 
-    let epoch = request.epoch.unwrap_or(current_epoch);
-
-    // A past epoch's data lives only in the rpc indexes; the live system state is the current
-    // epoch's. An epoch after the current one does not exist yet, which needs no index to tell.
     let indexes = service.reader.inner().indexes();
-    if epoch < current_epoch && indexes.is_none() {
+    let epoch = request.epoch.unwrap_or(live_epoch);
+
+    // A past epoch's data lives only in the rpc indexes; the live system state is the live
+    // epoch's. An epoch after the live one does not exist yet, which needs no index to tell.
+    if epoch < live_epoch && indexes.is_none() {
         return Err(indexes_disabled());
     }
-    let mut epoch_info = indexes
+
+    // Fetch epoch info, if indexing is available.
+    let epoch_info = indexes
         .map(|indexes| indexes.get_epoch_info(epoch))
         .transpose()?
         .flatten();
 
-    if epoch != current_epoch && epoch_info.is_none() {
+    if epoch != live_epoch && epoch_info.is_none() {
         return Err(EpochNotFoundError::new(epoch).into());
     }
 
@@ -61,15 +71,10 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
         message.set_epoch(epoch);
     }
 
-    let system_state = if epoch == current_epoch {
-        Some(current_system_state)
-    } else {
-        epoch_info
-            .as_mut()
-            .and_then(|info| info.system_state.take())
-    };
-
-    if let Some(system_state) = system_state {
+    // The live epoch's protocol config, start and reference gas price come from the live state;
+    // any other epoch's come from its rpc-store row below.
+    if epoch == live_epoch {
+        let system_state = &current_system_state;
         if let Some(submask) = read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD) {
             let chain = service.reader.inner().get_chain_identifier()?.chain();
             let config = get_protocol_config(system_state.protocol_version(), chain)?;
@@ -86,13 +91,9 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
         if read_mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD) {
             message.set_reference_gas_price(system_state.reference_gas_price());
         }
-
-        if read_mask.contains(Epoch::SYSTEM_STATE_FIELD) {
-            message.system_state = Some(Box::new(system_state.into()));
-        }
     }
 
-    if let Some(epoch_info) = epoch_info {
+    if let Some(epoch_info) = &epoch_info {
         if read_mask.contains(Epoch::FIRST_CHECKPOINT_FIELD) {
             message.first_checkpoint = epoch_info.start_checkpoint;
         }
@@ -127,6 +128,21 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
             message.protocol_config =
                 protocol_config.map(|config| ProtocolConfig::merge_from(config, &submask));
         }
+
+        if epoch_info.end_checkpoint.is_some() {
+            set_epoch_end_fields(&mut message, &read_mask, epoch_info);
+        }
+    }
+
+    if read_mask.contains(Epoch::TRANSACTION_START_INCLUSIVE_FIELD) {
+        message.transaction_start_inclusive = match epoch.checked_sub(1) {
+            None => Some(0),
+            Some(previous) => indexes
+                .map(|indexes| indexes.get_epoch_info(previous))
+                .transpose()?
+                .flatten()
+                .and_then(|info| info.tx_hi),
+        };
     }
 
     if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {
@@ -139,7 +155,63 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
         );
     }
 
+    if read_mask.contains(Epoch::SYSTEM_STATE_FIELD) {
+        let system_state = if epoch == live_epoch {
+            Some(current_system_state)
+        } else {
+            epoch_info.and_then(epoch_start_system_state)
+        };
+        message.system_state = system_state.map(|system_state| Box::new(system_state.into()));
+    }
+
     Ok(GetEpochResponse::new(message))
+}
+
+/// The rpc-store row's epoch-start snapshot. A restore that lands mid-epoch seeds the row from
+/// the state at the restore point and leaves `start_checkpoint` unset until the epoch's first
+/// checkpoint is indexed, so that state is not served as the start state.
+fn epoch_start_system_state(epoch_info: EpochInfo) -> Option<SuiSystemState> {
+    epoch_info.start_checkpoint?;
+    epoch_info.system_state
+}
+
+/// Set the end-of-epoch fields `read_mask` selects from `epoch_info`. Call it exactly when the
+/// response serves the epoch's `last_checkpoint`, so the end fields appear together with it.
+pub fn set_epoch_end_fields(
+    message: &mut Epoch,
+    read_mask: &FieldMaskTree,
+    epoch_info: &EpochInfo,
+) {
+    if read_mask.contains(Epoch::TRANSACTION_END_EXCLUSIVE_FIELD) {
+        message.transaction_end_exclusive = epoch_info.tx_hi;
+    }
+    if read_mask.contains(Epoch::ENDED_IN_SAFE_MODE_FIELD) {
+        message.ended_in_safe_mode = epoch_info.safe_mode;
+    }
+    if read_mask.contains(Epoch::SYSTEM_EPOCH_INFO_FIELD) {
+        let mut info = SystemEpochInfo::default();
+        info.total_stake = epoch_info.total_stake;
+        info.storage_fund_reinvestment = epoch_info.storage_fund_reinvestment;
+        info.storage_charge = epoch_info.storage_charge;
+        info.storage_rebate = epoch_info.storage_rebate;
+        info.storage_fund_balance = epoch_info.storage_fund_balance;
+        info.stake_subsidy_amount = epoch_info.stake_subsidy_amount;
+        info.total_gas_fees = epoch_info.total_gas_fees;
+        info.total_stake_rewards_distributed = epoch_info.total_stake_rewards_distributed;
+        info.leftover_storage_fund_inflow = epoch_info.leftover_storage_fund_inflow;
+        // An epoch that ended in safe mode emitted no `SystemEpochInfoEvent`, so every counter
+        // is unset and so is the message.
+        message.system_epoch_info = (info != SystemEpochInfo::default()).then_some(info);
+    }
+    if read_mask.contains(Epoch::EPOCH_COMMITMENTS_FIELD) {
+        message.epoch_commitments = epoch_info
+            .epoch_commitments
+            .iter()
+            .flatten()
+            .cloned()
+            .map(Into::into)
+            .collect();
+    }
 }
 
 #[derive(Debug)]

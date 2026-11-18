@@ -118,10 +118,14 @@ fn epoch_end(checkpoint: &Checkpoint) -> anyhow::Result<epochs::EpochEnd> {
     let epoch_commitments = summary
         .end_of_epoch_data
         .as_ref()
-        .map(|data| bcs::to_bytes(&data.epoch_commitments))
-        .transpose()
-        .map_err(|e| anyhow::anyhow!("bcs encode epoch_commitments: {e}"))?
-        .unwrap_or_default();
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "end-of-epoch checkpoint {} has no end_of_epoch_data",
+                summary.sequence_number
+            )
+        })?
+        .epoch_commitments
+        .clone();
 
     // The `SystemEpochInfoEvent` is emitted only by the change-epoch
     // transaction, so scanning every transaction's events finds it
@@ -214,9 +218,6 @@ mod tests {
         assert_eq!(end.total_gas_fees, Some(0));
         assert_eq!(end.total_stake, Some(0));
         assert_eq!(end.storage_charge, Some(0));
-        // Commitments are always recorded (BCS of the vec, never
-        // empty bytes even for an empty vec).
-        assert!(!end.epoch_commitments.is_empty());
     }
 
     #[test]
