@@ -11,6 +11,18 @@ autotests = false
 name = "e2e"
 path = "tests/e2e.rs"
 
+[[test]]
+name = "e2e_sim_a"
+path = "tests/e2e_sim_a.rs"
+
+[[test]]
+name = "e2e_sim_b"
+path = "tests/e2e_sim_b.rs"
+
+[[test]]
+name = "e2e_sim_c"
+path = "tests/e2e_sim_c.rs"
+
 [lints]
 workspace = true
 
