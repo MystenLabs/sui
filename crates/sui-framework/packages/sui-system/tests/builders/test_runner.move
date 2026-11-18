@@ -504,13 +504,13 @@ public fun unstake(runner: &mut TestRunner, staked_sui_idx: u64) {
     });
 }
 
-/// Assert that `calculate_rewards` and `calculate_rewards_mut` return `expected` for the sender's StakedSui at
-/// `staked_sui_idx`.
+/// Assert that `calculate_rewards` and `calculate_rewards_mut` return `expected` for the sender's
+/// StakedSui at `staked_sui_idx`. `calculate_rewards` runs first, so it sees the system state
+/// before `calculate_rewards_mut` upgrades it.
 public fun assert_staking_rewards(runner: &mut TestRunner, staked_sui_idx: u64, expected: u64) {
-    let sender = runner.sender;
-    runner.set_sender(sender);
     let stake_sui_ids = runner.scenario.ids_for_sender<StakedSui>();
-    let staked_sui = runner.scenario.take_from_sender_by_id<StakedSui>(stake_sui_ids[staked_sui_idx]);
+    let staked_sui_id = stake_sui_ids[staked_sui_idx];
+    let staked_sui: StakedSui = runner.scenario.take_from_sender_by_id(staked_sui_id);
     let mut system = runner.scenario.take_shared<SuiSystemState>();
     assert_eq!(system.calculate_rewards(&staked_sui, runner.scenario.ctx()), expected);
     assert_eq!(system.calculate_rewards_mut(&staked_sui, runner.scenario.ctx()), expected);

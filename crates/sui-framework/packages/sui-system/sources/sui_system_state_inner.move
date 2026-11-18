@@ -1194,6 +1194,11 @@ public(package) fun store_execution_time_estimates_v2(
     };
 }
 
+/// Return the validator set of a version 1 system state.
+public(package) fun v1_validators(self: &SuiSystemStateInner): &ValidatorSet {
+    &self.validators
+}
+
 /// Return the current validator set
 public(package) fun validators(self: &SuiSystemStateInnerV2): &ValidatorSet {
     &self.validators

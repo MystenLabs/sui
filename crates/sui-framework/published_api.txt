@@ -556,6 +556,9 @@ store_execution_time_estimates
 store_execution_time_estimates_v2
 	public(package) fun
 	0x3::sui_system_state_inner
+v1_validators
+	public(package) fun
+	0x3::sui_system_state_inner
 validators
 	public(package) fun
 	0x3::sui_system_state_inner

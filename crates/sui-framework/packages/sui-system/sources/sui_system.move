@@ -17,6 +17,8 @@
 ///    with the exception of the `sui_system_state_inner::create` function, which should always return the genesis type.
 /// 4. Inside `load_inner_maybe_upgrade` function, check the current version in the wrapper, and if it's not the latest version,
 ///   call the data migration function to upgrade the inner object. Make sure to also update the version in the wrapper.
+/// 5. Extend `calculate_rewards` to read the validator set from every older version, because it
+///   takes `&SuiSystemState` and cannot upgrade the inner object.
 /// A detailed example can be found in sui/tests/framework_upgrades/mock_sui_systems/shallow_upgrade.
 /// Along with the Move change, we also need to update the Rust code to support the new type. This includes:
 /// 1. Define a new `SuiSystemStateInner` struct type that matches the new Move type, and implement the SuiSystemStateTrait.
@@ -565,8 +567,8 @@ public fun active_validator_stake_amount(wrapper: &SuiSystemState, validator_add
     wrapper.load_system_state_ref().validator_stake_amount(validator_addr)
 }
 
-/// Calculate the rewards for a given staked SUI object.
-/// Used in the package, and can be dev-inspected.
+/// Calculate the rewards for a given staked SUI object, upgrading the system state and the
+/// validator if needed.
 public(package) fun calculate_rewards_mut(
     self: &mut SuiSystemState,
     staked_sui: &StakedSui,
@@ -581,11 +583,17 @@ public(package) fun calculate_rewards_mut(
         .calculate_rewards(staked_sui, ctx.epoch())
 }
 
-/// Calculate the rewards for a given staked SUI object without upgrading any validator.
+/// Calculate the rewards for a given staked SUI object without upgrading the system state or any
+/// validator.
 public fun calculate_rewards(self: &SuiSystemState, staked_sui: &StakedSui, ctx: &TxContext): u64 {
-    self
-        .load_system_state_ref()
-        .validators()
+    // Genesis creates a version 1 system state, which only a mutable load upgrades.
+    let validators = if (self.version == 1) {
+        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, self.version);
+        inner.v1_validators()
+    } else {
+        self.load_system_state_ref().validators()
+    };
+    validators
         .staking_pool_by_pool_id(staked_sui.pool_id())
         .calculate_rewards(staked_sui, ctx.epoch())
 }
