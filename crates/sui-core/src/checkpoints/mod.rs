@@ -3664,6 +3664,10 @@ mod tests {
         fn transaction_executed_in_last_epoch(&self, _: &TransactionDigest, _: EpochId) -> bool {
             unimplemented!()
         }
+
+        fn get_highest_pruned_effects_checkpoint(&self) -> Option<CheckpointSequenceNumber> {
+            unimplemented!()
+        }
     }
 
     #[async_trait::async_trait]

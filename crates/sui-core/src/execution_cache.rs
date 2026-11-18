@@ -545,6 +545,10 @@ pub trait TransactionCacheRead: Send + Sync {
 
     fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>>;
 
+    /// Return the watermark for the highest checkpoint whose transactions,
+    /// effects and events the checkpoint pruner has deleted.
+    fn get_highest_pruned_effects_checkpoint(&self) -> Option<CheckpointSequenceNumber>;
+
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
         task_name: &'static str,

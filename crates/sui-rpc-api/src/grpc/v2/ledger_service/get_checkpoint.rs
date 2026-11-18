@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::ledger_read::pruned_or_else;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
@@ -100,10 +101,19 @@ pub fn get_checkpoint(
         if read_mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
             || read_mask.contains(Checkpoint::OBJECTS_FIELD.name)
         {
+            // Report a checkpoint pruned since the floor check above as that check does.
             let checkpoint_data = service
                 .reader
                 .inner()
-                .get_checkpoint_data(verified_summary, core_contents)?;
+                .get_checkpoint_data(verified_summary, core_contents)
+                .map_err(|error| {
+                    pruned_or_else(
+                        service,
+                        sequence_number,
+                        |_| CheckpointNotFoundError::sequence_number(sequence_number).into(),
+                        error.into(),
+                    )
+                })?;
 
             if let Some(submask) = read_mask
                 .subtree(Checkpoint::OBJECTS_FIELD)

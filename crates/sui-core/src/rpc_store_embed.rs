@@ -662,8 +662,8 @@ async fn build_indexer(
 }
 
 /// The lowest checkpoint the perpetual store can still serve: one past
-/// the higher of the object-store and checkpoint-store pruned
-/// watermarks (both inclusive). `0` when nothing has been pruned.
+/// the highest of the object-store, pruned-effects and checkpoint-store
+/// pruned watermarks (all inclusive). `0` when nothing has been pruned.
 fn lowest_available_checkpoint(
     perpetual: &AuthorityPerpetualTables,
     checkpoint_store: &CheckpointStore,
@@ -671,11 +671,15 @@ fn lowest_available_checkpoint(
     let object_pruned = perpetual
         .get_highest_pruned_checkpoint()
         .context("reading object store pruned watermark")?;
+    let effects_pruned = perpetual
+        .get_highest_pruned_effects_checkpoint()
+        .context("reading pruned effects watermark")?;
     let checkpoint_pruned = checkpoint_store
         .get_highest_pruned_checkpoint_seq_number()
         .context("reading checkpoint store pruned watermark")?;
     Ok(object_pruned
         .into_iter()
+        .chain(effects_pruned)
         .chain(checkpoint_pruned)
         .max()
         .map(|pruned| pruned + 1)

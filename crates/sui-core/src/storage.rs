@@ -136,16 +136,25 @@ impl ReadStore for RocksDbStore {
             .map_err(Into::into)
     }
 
+    /// One past the higher of the checkpoint store's `HighestPruned` and the
+    /// perpetual store's pruned-effects watermark. The checkpoint pruner deletes
+    /// a checkpoint's transaction data (and advances the pruned-effects
+    /// watermark) before it advances `HighestPruned` in a separate write, so
+    /// `HighestPruned` alone can claim checkpoints whose effects are gone.
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, StorageError> {
-        if let Some(highest_pruned_cp) = self
+        let checkpoints_pruned = self
             .checkpoint_store
             .get_highest_pruned_checkpoint_seq_number()
-            .map_err(Into::<StorageError>::into)?
-        {
-            Ok(highest_pruned_cp + 1)
-        } else {
-            Ok(0)
-        }
+            .map_err(Into::<StorageError>::into)?;
+        let effects_pruned = self
+            .cache_traits
+            .transaction_cache_reader
+            .get_highest_pruned_effects_checkpoint();
+        Ok(checkpoints_pruned
+            .into_iter()
+            .chain(effects_pruned)
+            .max()
+            .map_or(0, |pruned| pruned + 1))
     }
 
     fn get_full_checkpoint_contents(

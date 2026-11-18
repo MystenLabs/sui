@@ -2366,6 +2366,13 @@ impl TransactionCacheRead for WritebackCache {
         )
     }
 
+    fn get_highest_pruned_effects_checkpoint(&self) -> Option<CheckpointSequenceNumber> {
+        self.store
+            .perpetual_tables
+            .get_highest_pruned_effects_checkpoint()
+            .expect("db error")
+    }
+
     fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
         self.dirty
             .pending_transaction_writes

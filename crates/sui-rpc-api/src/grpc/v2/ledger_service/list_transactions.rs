@@ -58,6 +58,7 @@ use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::place_frontier;
+use super::ledger_read::pruned_or;
 use super::ledger_read::reject_window_below_serving_floor;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::serving_floor_error_or;
@@ -525,8 +526,19 @@ fn render_transaction_rows(
             .iter()
             .map(|row| (row.digest.into(), row.checkpoint_number))
             .collect::<Vec<(Digest, u64)>>();
-        let reads = service.reader.multi_get_transaction_reads(&items)?;
-        let object_sets = fetch_object_sets_for_chunk(&service.reader, &reads, read_mask)?;
+        // The pruners delete oldest checkpoints first, so a chunk that lost
+        // data to pruning has lost its lowest checkpoint.
+        let lowest_checkpoint = rows
+            .iter()
+            .map(|row| row.checkpoint_number)
+            .min()
+            .expect("rows is non-empty");
+        let reads = service
+            .reader
+            .multi_get_transaction_reads(&items)
+            .map_err(|error| pruned_or(service, lowest_checkpoint, error))?;
+        let object_sets = fetch_object_sets_for_chunk(&service.reader, &reads, read_mask)
+            .map_err(|error| pruned_or(service, lowest_checkpoint, error))?;
         reads.into_iter().zip_debug_eq(object_sets)
     } else {
         Vec::new().into_iter().zip_debug_eq(Vec::new())

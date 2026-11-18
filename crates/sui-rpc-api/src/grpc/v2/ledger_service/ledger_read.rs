@@ -56,15 +56,60 @@ fn missing_checkpoint_error(
     service: &RpcService,
     checkpoint: CheckpointSequenceNumber,
 ) -> RpcError {
-    match service.reader.get_lowest_available_checkpoint() {
-        Ok(floor) if checkpoint < floor => below_serving_floor(floor),
-        _ => RpcError::new(
+    pruned_or(
+        service,
+        checkpoint,
+        RpcError::new(
             tonic::Code::Internal,
             format!(
                 "missing checkpoint {} while resolving tx boundary",
                 checkpoint - 1
             ),
         ),
+    )
+}
+
+/// Classify a read that found no data for `checkpoint` after the serving floor
+/// admitted it, reporting a checkpoint now below the floor with
+/// [`below_serving_floor`]. See [`classify_miss`].
+pub(super) fn pruned_or(
+    service: &RpcService,
+    checkpoint: CheckpointSequenceNumber,
+    error: RpcError,
+) -> RpcError {
+    pruned_or_else(service, checkpoint, below_serving_floor, error)
+}
+
+/// [`classify_miss`] against this server's serving floor.
+pub(super) fn pruned_or_else(
+    service: &RpcService,
+    checkpoint: CheckpointSequenceNumber,
+    pruned_error: impl FnOnce(u64) -> RpcError,
+    error: RpcError,
+) -> RpcError {
+    classify_miss(
+        checkpoint,
+        || service.reader.get_lowest_available_checkpoint(),
+        pruned_error,
+        error,
+    )
+}
+
+/// Classify a read that found no data for `checkpoint` after the serving floor
+/// admitted it. The pruners advance the floor in the same write that deletes a
+/// checkpoint's data, so the floor may have risen past `checkpoint` between
+/// the request's floor check and its read. Re-read the floor: a checkpoint now
+/// below it was pruned, reported as `pruned_error(floor)`; otherwise, or if the
+/// floor cannot be read, the miss is `error`.
+fn classify_miss(
+    checkpoint: CheckpointSequenceNumber,
+    floor: impl FnOnce() -> Result<u64, RpcError>,
+    pruned_error: impl FnOnce(u64) -> RpcError,
+    error: RpcError,
+) -> RpcError {
+    match floor() {
+        Ok(floor) if checkpoint < floor => pruned_error(floor),
+        _ => error,
     }
 }
 
@@ -532,5 +577,36 @@ mod tests {
                 floor_error_or(start_checkpoint, has_after_cursor, unread_floor, past_tip());
             assert_eq!(error.to_string(), past_tip().to_string());
         }
+    }
+
+    /// Stands in for the `Internal` error a read reports for missing data.
+    fn missing_data() -> RpcError {
+        RpcError::new(tonic::Code::Internal, "missing effects")
+    }
+
+    #[test]
+    fn miss_below_the_reread_floor_is_pruned() {
+        for checkpoint in [0, 9] {
+            let error = classify_miss(checkpoint, || Ok(10), below_serving_floor, missing_data());
+            assert_below_serving_floor_error(error, 10);
+        }
+    }
+
+    #[test]
+    fn miss_at_or_above_the_reread_floor_keeps_its_error() {
+        // The floor still covers the checkpoint, so its data should be present.
+        for checkpoint in [10, 11] {
+            let error = classify_miss(checkpoint, || Ok(10), below_serving_floor, missing_data());
+            assert_eq!(error.to_string(), missing_data().to_string());
+        }
+
+        // A failed floor read cannot show the data was pruned.
+        let error = classify_miss(
+            0,
+            || Err(RpcError::new(tonic::Code::Internal, "floor unavailable")),
+            below_serving_floor,
+            missing_data(),
+        );
+        assert_eq!(error.to_string(), missing_data().to_string());
     }
 }

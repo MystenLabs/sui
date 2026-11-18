@@ -175,6 +175,21 @@ pub struct AuthorityPerpetualTables {
     /// Singleton: the highest generation this node has ever broadcast in an
     /// `UpdateTransactionDenyConfig` message.
     pub(crate) last_broadcast_deny_generation: DBMap<(), u64>,
+
+    /// A singleton table recording the highest checkpoint whose transactions,
+    /// effects, events and unchanged loaded runtime objects the checkpoint
+    /// pruner (`prune_checkpoints`) has deleted. It is written in the same
+    /// atomic batch as those deletes, so it never lags them. Tidehunter
+    /// relocation filters remove these rows by epoch separately and do not
+    /// advance it.
+    ///
+    /// The checkpoint store's `HighestPruned` watermark is written in a later,
+    /// separate batch (it lives in another database), so it can briefly, or
+    /// after an unclean stop, trail the deletes. Readers that judge whether a
+    /// checkpoint's transaction data is still available take the maximum of
+    /// both. The pruner itself resumes from `HighestPruned`, so a crash
+    /// between the two writes re-runs the deletes, which are idempotent.
+    pub(crate) pruned_effects_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 }
 
 impl AuthorityPerpetualTables {
@@ -438,6 +453,10 @@ impl AuthorityPerpetualTables {
                 "last_broadcast_deny_generation".to_string(),
                 ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
+            (
+                "pruned_effects_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
         ];
         Self::open_tables_read_write(
             Self::path(parent_path),
@@ -658,6 +677,23 @@ impl AuthorityPerpetualTables {
             &self.highest_committed_checkpoint,
             [((), checkpoint_number)],
         )?;
+        Ok(())
+    }
+
+    pub fn get_highest_pruned_effects_checkpoint(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.pruned_effects_checkpoint.get(&())
+    }
+
+    /// Stage the pruned-effects watermark into `wb`. Must be called on the
+    /// same batch that deletes the checkpoints' transaction data.
+    pub fn set_highest_pruned_effects_checkpoint(
+        &self,
+        wb: &mut DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        wb.insert_batch(&self.pruned_effects_checkpoint, [((), checkpoint_number)])?;
         Ok(())
     }
 

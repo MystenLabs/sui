@@ -59,6 +59,7 @@ use super::ledger_read::clamp_checkpoints_to_serving_floor;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
 use super::ledger_read::place_frontier;
+use super::ledger_read::pruned_or;
 use super::ledger_read::reject_window_below_serving_floor;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::serving_floor_error_or;
@@ -831,7 +832,8 @@ fn render_checkpoint_seq(
     let mut request = GetCheckpointRequest::default();
     request.checkpoint_id = Some(CheckpointId::SequenceNumber(cp_seq));
     request.read_mask = Some(read_mask);
-    let checkpoint = get_checkpoint(service, request)?
+    let checkpoint = get_checkpoint(service, request)
+        .map_err(|error| pruned_or(service, cp_seq, error))?
         .checkpoint
         .ok_or_else(|| {
             RpcError::new(
