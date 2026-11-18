@@ -1,0 +1,28 @@
+name: Cargo Deny Autofix Tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/cargo-deny-autofix.sh'
+      - 'scripts/cargo-deny-autofix_test.py'
+      - '.github/workflows/cargo-deny-autofix-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/cargo-deny-autofix.sh'
+      - 'scripts/cargo-deny-autofix_test.py'
+      - '.github/workflows/cargo-deny-autofix-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+      - name: Check shell syntax
+        run: bash -n scripts/cargo-deny-autofix.sh
+      - name: Test advisory reporting
+        run: python3 scripts/cargo-deny-autofix_test.py -v
