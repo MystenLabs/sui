@@ -657,6 +657,22 @@ fn row_key_in_range(row_key: &Bytes, range: &RowRange) -> bool {
     }
 }
 
+/// Whether `range` starts past its end, which BigTable rejects with `INVALID_ARGUMENT`. An empty
+/// end key leaves the range unbounded above, as in BigTable.
+fn row_range_is_inverted(range: &RowRange) -> bool {
+    let start = match &range.start_key {
+        Some(row_range::StartKey::StartKeyClosed(start))
+        | Some(row_range::StartKey::StartKeyOpen(start)) => start,
+        None => return false,
+    };
+    match &range.end_key {
+        Some(row_range::EndKey::EndKeyClosed(end)) | Some(row_range::EndKey::EndKeyOpen(end)) => {
+            !end.is_empty() && start > end
+        }
+        None => false,
+    }
+}
+
 /// Evaluate a ValueRangeFilter against a raw cell value. Unbounded sides are treated
 /// as open-ended. Handles both closed and open range endpoints.
 fn value_in_range(value: &Bytes, vr: &crate::bigtable::proto::bigtable::v2::ValueRange) -> bool {
@@ -919,6 +935,11 @@ impl Bigtable for MockBigtableServer {
         if req.reversed && !row_set.row_keys.is_empty() {
             return Err(Status::unimplemented(
                 "mock ReadRows supports reversed scans only for row ranges",
+            ));
+        }
+        if row_set.row_ranges.iter().any(row_range_is_inverted) {
+            return Err(Status::invalid_argument(
+                "row range start key must not be past its end key",
             ));
         }
 

@@ -20,8 +20,8 @@ pub use get_datatype::get_datatype_response;
 pub use get_function::get_function_response;
 pub use get_package::get_package_response;
 pub use list_package_versions::{
-    PackageVersionCursor, PackageVersionsQuery, check_checkpoint_range, pages_by_token,
-    unknown_package_response, validate_request,
+    AllPackageVersionsQuery, PackageVersionCursor, PackageVersionsQuery, check_checkpoint_range,
+    pages_by_token, unknown_package_response, validate_request,
 };
 
 #[tonic::async_trait]

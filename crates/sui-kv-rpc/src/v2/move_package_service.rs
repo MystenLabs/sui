@@ -16,6 +16,7 @@ use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServic
 use sui_rpc_api::AtCheckpointUpperBound;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::grpc::v2::move_package_service::AllPackageVersionsQuery;
 use sui_rpc_api::grpc::v2::move_package_service::PackageVersionsQuery;
 use sui_rpc_api::grpc::v2::move_package_service::check_checkpoint_range;
 use sui_rpc_api::grpc::v2::move_package_service::get_datatype_response;
@@ -29,6 +30,7 @@ use sui_types::move_package::MovePackage;
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 
 use crate::KvRpcServer;
 use crate::bigtable_client::BigTableClient as LimitedBigTableClient;
@@ -82,14 +84,24 @@ impl MovePackageService for KvRpcServer {
         &self,
         request: tonic::Request<ListPackageVersionsRequest>,
     ) -> Result<tonic::Response<ListPackageVersionsResponse>, tonic::Status> {
-        list_package_versions(
-            self.limited_client("ListPackageVersions"),
-            ServedHeight::of(&request)?,
-            request.into_inner(),
-        )
-        .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
+        let served_height = ServedHeight::of(&request)?;
+        let request = request.into_inner();
+        let response = if request.package_id.is_none() {
+            list_all_package_versions(
+                self.limited_client("ListPackageVersions"),
+                served_height,
+                &request,
+            )
+            .await
+        } else {
+            list_package_versions(
+                self.limited_client("ListPackageVersions"),
+                served_height,
+                request,
+            )
+            .await
+        };
+        response.map(tonic::Response::new).map_err(Into::into)
     }
 }
 
@@ -384,6 +396,45 @@ async fn resolve_package_at_served_height(
         loaded => loaded?.version().value(),
     };
     Ok((newest.package_version >= version).then_some(original_id))
+}
+
+/// List the versions of every package published in the request's checkpoint range
+/// `[start_checkpoint, end_checkpoint)`, through at most `served_height`, in publish order,
+/// reading under the request limiter.
+async fn list_all_package_versions(
+    client: LimitedBigTableClient,
+    served_height: ServedHeight,
+    request: &ListPackageVersionsRequest,
+) -> Result<ListPackageVersionsResponse, RpcError> {
+    // BigTable holds full history, so a listing can start anywhere from genesis.
+    let query = AllPackageVersionsQuery::new(
+        request,
+        0,
+        AtCheckpointUpperBound::new(served_height.checkpoint),
+    )?;
+    if query.reads_nothing() {
+        return Ok(query.response(vec![]));
+    }
+
+    let versions = client
+        .get_packages_by_checkpoint_range(query.lower, query.upper, query.limit(), query.descending)
+        .await?
+        .into_iter()
+        .map(|package| {
+            let storage_id = ObjectID::from_bytes(&package.package_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let original_id = ObjectID::from_bytes(&package.original_id)
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            let key = PackagePublishKey {
+                checkpoint: package.cp_sequence_number,
+                original_id,
+                version: package.package_version,
+            };
+            Ok(query.listed_version(key, storage_id))
+        })
+        .collect::<Result<_, RpcError>>()?;
+
+    Ok(query.response(versions))
 }
 
 /// Load the package a bare storage ID names as of `served_height`: a package published above it
@@ -2684,6 +2735,13 @@ mod tests {
             minted_at: VERSIONS_FIXTURE_SERVED_HEIGHT.checkpoint,
         }
         .encode();
+        let every_package = PackageVersionCursor::AllPackages {
+            checkpoint: 10,
+            original_package_id: fixture.original_id,
+            version: 1,
+            minted_at: VERSIONS_FIXTURE_SERVED_HEIGHT.checkpoint,
+        }
+        .encode();
         let malformed = Bytes::from_static(&[0xFF, 0xFF]);
         let ascending = || query_options(None, Ordering::Ascending, None, None);
 
@@ -2705,6 +2763,11 @@ mod tests {
             query_options(None, Ordering::Descending, None, Some(&other_package)),
         );
         other_package_past_the_tip.end_checkpoint = Some(u64::MAX);
+        let mut every_package_past_the_tip = cursor_req(
+            fixture.original_id,
+            query_options(None, Ordering::Descending, Some(&every_package), None),
+        );
+        every_package_past_the_tip.end_checkpoint = Some(u64::MAX);
 
         for (req, expected) in [
             (
@@ -2728,11 +2791,22 @@ mod tests {
                 "cursor package ID does not match request package ID",
             ),
             (
+                every_package_past_the_tip,
+                "cursor is from the listing of every package",
+            ),
+            (
                 cursor_req(
                     fixture.original_id,
                     query_options(None, Ordering::Descending, None, Some(&other_package)),
                 ),
                 "cursor package ID does not match request package ID",
+            ),
+            (
+                cursor_req(
+                    fixture.original_id,
+                    query_options(None, Ordering::Ascending, Some(&every_package), None),
+                ),
+                "cursor is from the listing of every package",
             ),
             (
                 cursor_req(fixture.original_id, invalid_ordering),
@@ -2767,6 +2841,13 @@ mod tests {
                 req.end_version = end_version;
                 let page = list_versions_fixture(&fixture, req).await.unwrap();
                 assert_eq!(&listed_versions(&page), expected, "page {index}");
+                // Every version names its lineage.
+                for version in &page.versions {
+                    assert_eq!(
+                        version.original_id,
+                        Some(fixture.original_id.to_canonical_string(true))
+                    );
+                }
                 // Page-token items carry the same cursors as cursor mode.
                 for version in &page.versions {
                     assert_eq!(
@@ -2781,6 +2862,1374 @@ mod tests {
                     "page {index}"
                 );
             }
+        }
+    }
+
+    /// A mock seeded with the versions of three packages, published (as `(checkpoint, package,
+    /// version)`) at (10, A, 1), (10, B, 1), (20, A, 2), (30, C, 1), (30, C, 2), and (70, B, 2),
+    /// above the served height. `mock` records the reads listings make.
+    struct AllPackagesFixture {
+        client: BigTableClient,
+        mock: MockBigtableServer,
+        _server: tokio::task::JoinHandle<()>,
+    }
+
+    const PACKAGE_A: ObjectID = ObjectID::from_single_byte(0x0A);
+    const PACKAGE_B: ObjectID = ObjectID::from_single_byte(0x0B);
+    const PACKAGE_C: ObjectID = ObjectID::from_single_byte(0x0C);
+
+    /// The versions [`AllPackagesFixture`] lists at its served height, in publish order.
+    const ALL_PACKAGES: [(u64, ObjectID, u64); 5] = [
+        (10, PACKAGE_A, 1),
+        (10, PACKAGE_B, 1),
+        (20, PACKAGE_A, 2),
+        (30, PACKAGE_C, 1),
+        (30, PACKAGE_C, 2),
+    ];
+
+    async fn setup_all_packages_fixture() -> AllPackagesFixture {
+        let mock = MockBigtableServer::new();
+        let (addr, server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        for (checkpoint, original_id, version) in
+            ALL_PACKAGES.into_iter().chain([(70, PACKAGE_B, 2)])
+        {
+            let storage_id = storage_id_of(original_id, version);
+            mock.insert_row(
+                tables::packages::NAME,
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(checkpoint, storage_id.as_ref(), false),
+            )
+            .await;
+            mock.insert_row(
+                tables::packages_by_checkpoint::NAME,
+                tables::packages_by_checkpoint::encode_key(
+                    checkpoint,
+                    original_id.as_ref(),
+                    version,
+                ),
+                tables::packages_by_checkpoint::encode(),
+            )
+            .await;
+        }
+
+        AllPackagesFixture {
+            client,
+            mock,
+            _server: server,
+        }
+    }
+
+    /// The storage id the fixture gives `version` of the package originally published at
+    /// `original_id`.
+    fn storage_id_of(original_id: ObjectID, version: u64) -> ObjectID {
+        let mut bytes = original_id.into_bytes();
+        bytes[0] = version as u8;
+        ObjectID::new(bytes)
+    }
+
+    fn all_packages_req(options: Option<QueryOptions>) -> ListPackageVersionsRequest {
+        let mut req = ListPackageVersionsRequest::default();
+        req.options = options;
+        req
+    }
+
+    async fn list_all_packages_fixture(
+        fixture: &AllPackagesFixture,
+        req: ListPackageVersionsRequest,
+    ) -> Result<ListPackageVersionsResponse, tonic::Status> {
+        let client =
+            LimitedBigTableClient::new(fixture.client.clone(), 2, Metrics::for_testing().0, "test");
+        list_all_package_versions(client, VERSIONS_FIXTURE_SERVED_HEIGHT, &req)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// The `(checkpoint, package, version)` of each version a response lists, in order,
+    /// checking that each version carries its storage id, original id and cursor. Every listing
+    /// reads at `VERSIONS_FIXTURE_SERVED_HEIGHT` (see `list_all_packages_fixture`), so every
+    /// cursor records that served height as its `minted_at`.
+    fn listed_publishes(response: &ListPackageVersionsResponse) -> Vec<(u64, ObjectID, u64)> {
+        assert!(response.next_page_token.is_none());
+        response
+            .versions
+            .iter()
+            .map(|listed| {
+                let checkpoint = listed.checkpoint.expect("checkpoint is set");
+                let original_id: ObjectID = listed
+                    .original_id
+                    .as_deref()
+                    .expect("original_id is set")
+                    .parse()
+                    .unwrap();
+                let version = listed.version.expect("version is set");
+                let storage_id: ObjectID = listed
+                    .package_id
+                    .as_deref()
+                    .expect("package_id is set")
+                    .parse()
+                    .unwrap();
+                assert_eq!(storage_id, storage_id_of(original_id, version));
+                assert_eq!(
+                    listed.cursor,
+                    Some(
+                        PackageVersionCursor::AllPackages {
+                            checkpoint,
+                            original_package_id: original_id,
+                            version,
+                            minted_at: VERSIONS_FIXTURE_SERVED_HEIGHT.checkpoint,
+                        }
+                        .encode()
+                    )
+                );
+                (checkpoint, original_id, version)
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_pages_in_publish_order_in_either_direction() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |options| list_all_packages_fixture(&fixture, all_packages_req(Some(options)));
+        let last_cursor = |response: &ListPackageVersionsResponse| {
+            response.versions.last().and_then(|v| v.cursor.clone())
+        };
+
+        // Without options, every version at or below the served height, in publish order,
+        // ending at the served height.
+        let everything = list_all_packages_fixture(&fixture, all_packages_req(None))
+            .await
+            .unwrap();
+        assert_eq!(listed_publishes(&everything), ALL_PACKAGES.to_vec());
+        assert_eq!(end_reason(&everything), Some(QueryEndReason::LedgerTip));
+
+        // Forward in pages of two, each after the last version received, until a short page
+        // that ends at the served height.
+        let mut after = None;
+        let mut forward = vec![];
+        for (expected, end) in [
+            (&ALL_PACKAGES[0..2], QueryEndReason::ItemLimit),
+            (&ALL_PACKAGES[2..4], QueryEndReason::ItemLimit),
+            (&ALL_PACKAGES[4..], QueryEndReason::LedgerTip),
+        ] {
+            let page = list(query_options(
+                Some(2),
+                Ordering::Ascending,
+                after.as_ref(),
+                None,
+            ))
+            .await
+            .unwrap();
+            assert_eq!(listed_publishes(&page), expected.to_vec());
+            assert_eq!(end_reason(&page), Some(end));
+            after = last_cursor(&page);
+            forward.push(page);
+        }
+
+        // Backward from the end in pages of two, each before the lowest version received, until
+        // a short page that ends at the start of the range.
+        let mut before = None;
+        for (expected, end) in [
+            (vec![4, 3], QueryEndReason::ItemLimit),
+            (vec![2, 1], QueryEndReason::ItemLimit),
+            (vec![0], QueryEndReason::CheckpointBound),
+        ] {
+            let page = list(query_options(
+                Some(2),
+                Ordering::Descending,
+                None,
+                before.as_ref(),
+            ))
+            .await
+            .unwrap();
+            let expected: Vec<_> = expected.iter().map(|&i| ALL_PACKAGES[i]).collect();
+            assert_eq!(listed_publishes(&page), expected);
+            assert_eq!(end_reason(&page), Some(end));
+            before = last_cursor(&page);
+        }
+
+        // A cursor from an ascending page bounds a descending one, inside checkpoint 10 and 30.
+        let between = list(query_options(
+            None,
+            Ordering::Descending,
+            forward[0].versions.first().and_then(|v| v.cursor.as_ref()),
+            forward[2].versions.first().and_then(|v| v.cursor.as_ref()),
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            listed_publishes(&between),
+            vec![ALL_PACKAGES[3], ALL_PACKAGES[2], ALL_PACKAGES[1]],
+        );
+        assert_eq!(end_reason(&between), Some(QueryEndReason::CursorBound));
+    }
+
+    /// The cursor of `ALL_PACKAGES[index]`.
+    fn all_packages_cursor(index: usize) -> Bytes {
+        let (checkpoint, original_package_id, version) = ALL_PACKAGES[index];
+        PackageVersionCursor::AllPackages {
+            checkpoint,
+            original_package_id,
+            version,
+            minted_at: VERSIONS_FIXTURE_SERVED_HEIGHT.checkpoint,
+        }
+        .encode()
+    }
+
+    /// The index into `ALL_PACKAGES` of each version a response lists, in order.
+    fn listed_indexes(response: &ListPackageVersionsResponse) -> Vec<usize> {
+        listed_publishes(response)
+            .iter()
+            .map(|publish| {
+                ALL_PACKAGES
+                    .iter()
+                    .position(|p| p == publish)
+                    .expect("listed version is in ALL_PACKAGES")
+            })
+            .collect()
+    }
+
+    /// Page through the all-packages fixture from `req`, each page after (ascending) or before
+    /// (descending) the last version received, until a page comes back shorter than the
+    /// request's limit. Returns each page's versions, as indexes into `ALL_PACKAGES`, and how it
+    /// ends.
+    async fn page_through_all_packages(
+        fixture: &AllPackagesFixture,
+        mut req: ListPackageVersionsRequest,
+    ) -> Vec<(Vec<usize>, QueryEndReason)> {
+        let mut pages = vec![];
+        loop {
+            let response = list_all_packages_fixture(fixture, req.clone())
+                .await
+                .unwrap();
+            pages.push((
+                listed_indexes(&response),
+                end_reason(&response).expect("a cursor-mode page sets end"),
+            ));
+            let options = req.options.as_mut().expect("paging needs options");
+            if response.versions.len() < options.limit.expect("paging needs a limit") as usize {
+                return pages;
+            }
+            let last_cursor = response.versions.last().and_then(|v| v.cursor.clone());
+            if options.ordering == Some(Ordering::Ascending as i32) {
+                options.after = last_cursor;
+            } else {
+                options.before = last_cursor;
+            }
+        }
+    }
+
+    /// The `ALL_PACKAGES` indexes of `pages`, in order.
+    fn paged_indexes(pages: &[(Vec<usize>, QueryEndReason)]) -> Vec<usize> {
+        pages
+            .iter()
+            .flat_map(|(indexes, _)| indexes.clone())
+            .collect()
+    }
+
+    /// An all-packages request over `[start_checkpoint, end_checkpoint)`.
+    fn all_packages_range_req(
+        [start_checkpoint, end_checkpoint]: [Option<u64>; 2],
+        limit: Option<u32>,
+        ordering: Ordering,
+        after: Option<&Bytes>,
+        before: Option<&Bytes>,
+    ) -> ListPackageVersionsRequest {
+        let mut req = all_packages_req(Some(query_options(limit, ordering, after, before)));
+        req.start_checkpoint = start_checkpoint;
+        req.end_checkpoint = end_checkpoint;
+        req
+    }
+
+    /// An ascending page that starts mid-listing, then descending pages before its first
+    /// version: they list the versions below the page, newest first, and with the ascending
+    /// pages cover the range's listing exactly once. Publishes are at checkpoints 10 (two), 20
+    /// and 30 (two); the served height is 60.
+    #[tokio::test]
+    async fn list_all_package_versions_reverses_from_ascending_to_descending() {
+        use QueryEndReason::{CheckpointBound, ItemLimit, LedgerTip};
+        let fixture = setup_all_packages_fixture().await;
+
+        // Each case lists an ascending page after `after` under `range`, then descending pages
+        // of `backward_limit` before the page's first version and ascending pages after its
+        // last, all under `range`. Versions are indexes into `ALL_PACKAGES`.
+        for (range, after, limit, page, backward_limit, backward, forward, listing) in [
+            // The pivot is the first publish of checkpoint 20; the descending pages cross into
+            // checkpoint 10.
+            (
+                [None, None],
+                1,
+                2,
+                vec![2, 3],
+                1,
+                vec![
+                    (vec![1], ItemLimit),
+                    (vec![0], ItemLimit),
+                    (vec![], CheckpointBound),
+                ],
+                vec![(vec![4], LedgerTip)],
+                vec![0, 1, 2, 3, 4],
+            ),
+            // The pivot is the first publish of checkpoint 30; the descending pages cross into
+            // checkpoint 20 and stop at the range's start.
+            (
+                [Some(20), None],
+                2,
+                1,
+                vec![3],
+                1,
+                vec![(vec![2], ItemLimit), (vec![], CheckpointBound)],
+                vec![(vec![4], ItemLimit), (vec![], LedgerTip)],
+                vec![2, 3, 4],
+            ),
+            // The pivot is the second publish of checkpoint 10; the descending page stays
+            // inside checkpoint 10.
+            (
+                [Some(10), Some(21)],
+                0,
+                1,
+                vec![1],
+                2,
+                vec![(vec![0], CheckpointBound)],
+                vec![(vec![2], ItemLimit), (vec![], CheckpointBound)],
+                vec![0, 1, 2],
+            ),
+        ] {
+            let first_page = list_all_packages_fixture(
+                &fixture,
+                all_packages_range_req(
+                    range,
+                    Some(limit),
+                    Ordering::Ascending,
+                    Some(&all_packages_cursor(after)),
+                    None,
+                ),
+            )
+            .await
+            .unwrap();
+            assert_eq!(listed_indexes(&first_page), page, "{range:?}");
+            assert_eq!(end_reason(&first_page), Some(ItemLimit), "{range:?}");
+            let first = first_page.versions.first().and_then(|v| v.cursor.as_ref());
+            let last = first_page.versions.last().and_then(|v| v.cursor.as_ref());
+
+            let backward_pages = page_through_all_packages(
+                &fixture,
+                all_packages_range_req(
+                    range,
+                    Some(backward_limit),
+                    Ordering::Descending,
+                    None,
+                    first,
+                ),
+            )
+            .await;
+            assert_eq!(backward_pages, backward, "{range:?}");
+            let forward_pages = page_through_all_packages(
+                &fixture,
+                all_packages_range_req(range, Some(limit), Ordering::Ascending, last, None),
+            )
+            .await;
+            assert_eq!(forward_pages, forward, "{range:?}");
+
+            let mut listed = paged_indexes(&backward_pages);
+            listed.reverse();
+            listed.extend(listed_indexes(&first_page));
+            listed.extend(paged_indexes(&forward_pages));
+            assert_eq!(listed, listing, "{range:?}");
+
+            // A cursor carries no direction: descending before the page's last version lists
+            // the rest of the page again, ending as the descending pages do.
+            let relisted = list_all_packages_fixture(
+                &fixture,
+                all_packages_range_req(range, None, Ordering::Descending, None, last),
+            )
+            .await
+            .unwrap();
+            let last_position = listing.iter().position(|i| Some(i) == page.last()).unwrap();
+            let expected: Vec<_> = listing[..last_position].iter().rev().copied().collect();
+            assert_eq!(listed_indexes(&relisted), expected, "{range:?}");
+            assert_eq!(
+                end_reason(&relisted),
+                backward.last().map(|(_, end)| *end),
+                "{range:?}"
+            );
+        }
+    }
+
+    /// A descending page that starts mid-listing, then ascending pages after its first
+    /// (highest) version: they list the versions above the page, oldest first, and with the
+    /// descending pages cover the range's listing exactly once. Publishes are at checkpoints 10
+    /// (two), 20 and 30 (two); the served height is 60.
+    #[tokio::test]
+    async fn list_all_package_versions_reverses_from_descending_to_ascending() {
+        use QueryEndReason::{CheckpointBound, ItemLimit, LedgerTip};
+        let fixture = setup_all_packages_fixture().await;
+
+        // Each case lists a descending page before `before` under `range`, then ascending
+        // pages of `forward_limit` after the page's first version and descending pages before
+        // its last, all under `range`. Versions are indexes into `ALL_PACKAGES`.
+        for (range, before, limit, page, forward_limit, forward, backward, listing) in [
+            // The pivot is the only publish of checkpoint 20; the ascending pages cross into
+            // checkpoint 30.
+            (
+                [None, None],
+                3,
+                2,
+                vec![2, 1],
+                1,
+                vec![
+                    (vec![3], ItemLimit),
+                    (vec![4], ItemLimit),
+                    (vec![], LedgerTip),
+                ],
+                vec![(vec![0], CheckpointBound)],
+                vec![0, 1, 2, 3, 4],
+            ),
+            // The pivot is the first publish of checkpoint 30; the ascending page stays inside
+            // checkpoint 30.
+            (
+                [Some(20), Some(31)],
+                4,
+                2,
+                vec![3, 2],
+                2,
+                vec![(vec![4], CheckpointBound)],
+                vec![(vec![], CheckpointBound)],
+                vec![2, 3, 4],
+            ),
+            // The pivot is the last publish of checkpoint 10; the ascending pages cross into
+            // checkpoint 20 and stop at the range's end.
+            (
+                [Some(10), Some(21)],
+                2,
+                1,
+                vec![1],
+                1,
+                vec![(vec![2], ItemLimit), (vec![], CheckpointBound)],
+                vec![(vec![0], ItemLimit), (vec![], CheckpointBound)],
+                vec![0, 1, 2],
+            ),
+        ] {
+            let first_page = list_all_packages_fixture(
+                &fixture,
+                all_packages_range_req(
+                    range,
+                    Some(limit),
+                    Ordering::Descending,
+                    None,
+                    Some(&all_packages_cursor(before)),
+                ),
+            )
+            .await
+            .unwrap();
+            assert_eq!(listed_indexes(&first_page), page, "{range:?}");
+            assert_eq!(end_reason(&first_page), Some(ItemLimit), "{range:?}");
+            let first = first_page.versions.first().and_then(|v| v.cursor.as_ref());
+            let last = first_page.versions.last().and_then(|v| v.cursor.as_ref());
+
+            let forward_pages = page_through_all_packages(
+                &fixture,
+                all_packages_range_req(
+                    range,
+                    Some(forward_limit),
+                    Ordering::Ascending,
+                    first,
+                    None,
+                ),
+            )
+            .await;
+            assert_eq!(forward_pages, forward, "{range:?}");
+            let backward_pages = page_through_all_packages(
+                &fixture,
+                all_packages_range_req(range, Some(limit), Ordering::Descending, None, last),
+            )
+            .await;
+            assert_eq!(backward_pages, backward, "{range:?}");
+
+            let mut listed = listed_indexes(&first_page);
+            listed.extend(paged_indexes(&backward_pages));
+            listed.reverse();
+            listed.extend(paged_indexes(&forward_pages));
+            assert_eq!(listed, listing, "{range:?}");
+
+            // A cursor carries no direction: ascending after the page's last (lowest) version
+            // lists the rest of the page again, ending as the ascending pages do.
+            let relisted = list_all_packages_fixture(
+                &fixture,
+                all_packages_range_req(range, None, Ordering::Ascending, last, None),
+            )
+            .await
+            .unwrap();
+            let last_position = listing.iter().position(|i| Some(i) == page.last()).unwrap();
+            let expected = listing[last_position + 1..].to_vec();
+            assert_eq!(listed_indexes(&relisted), expected, "{range:?}");
+            assert_eq!(
+                end_reason(&relisted),
+                forward.last().map(|(_, end)| *end),
+                "{range:?}"
+            );
+        }
+    }
+
+    /// Reversing from the first version of a page listed under one checkpoint range, under
+    /// another range: the reversed page lists what both the new range and the cursor admit.
+    /// Publishes are at checkpoints 10 (two), 20 and 30 (two); the served height is 60.
+    #[tokio::test]
+    async fn list_all_package_versions_reverses_from_cursors_minted_under_another_checkpoint_range()
+    {
+        use QueryEndReason::{CheckpointBound, ItemLimit, LedgerTip};
+        let fixture = setup_all_packages_fixture().await;
+
+        // Each case mints a page of two in one order (from the cursor of `from`, if set, on its
+        // paging side), then lists in the other order from the minted page's first version
+        // under each range, with the expected versions and end. Versions are indexes into
+        // `ALL_PACKAGES`.
+        for (ordering, mint_range, from, minted, reversals) in [
+            // The pivot is the first publish of checkpoint 20.
+            (
+                Ordering::Ascending,
+                [None, None],
+                Some(1),
+                vec![2, 3],
+                vec![
+                    // The cursor is above the new range.
+                    ([None, Some(11)], None, vec![1, 0], CheckpointBound),
+                    ([None, Some(11)], Some(1), vec![1], ItemLimit),
+                    // The cursor is inside the new range.
+                    ([None, Some(21)], None, vec![1, 0], CheckpointBound),
+                    ([Some(10), None], None, vec![1, 0], CheckpointBound),
+                    // The cursor is inside the new range, which holds nothing before it.
+                    ([Some(15), Some(61)], None, vec![], CheckpointBound),
+                ],
+            ),
+            // The pivot is the second publish of checkpoint 10.
+            (
+                Ordering::Ascending,
+                [None, None],
+                Some(0),
+                vec![1, 2],
+                vec![
+                    ([None, Some(21)], None, vec![0], CheckpointBound),
+                    ([Some(10), Some(11)], None, vec![0], CheckpointBound),
+                    // The cursor is below the new range.
+                    ([Some(11), None], None, vec![], CheckpointBound),
+                ],
+            ),
+            // The pivot is the first publish of checkpoint 30.
+            (
+                Ordering::Descending,
+                [None, None],
+                Some(4),
+                vec![3, 2],
+                vec![
+                    ([None, Some(31)], None, vec![4], CheckpointBound),
+                    ([Some(25), None], None, vec![4], LedgerTip),
+                    // The cursor is above the new range.
+                    ([None, Some(21)], None, vec![], CheckpointBound),
+                    // The cursor is below the new range.
+                    ([Some(40), None], None, vec![], LedgerTip),
+                ],
+            ),
+            // The pivot is the only publish of checkpoint 20.
+            (
+                Ordering::Descending,
+                [Some(10), Some(21)],
+                None,
+                vec![2, 1],
+                vec![
+                    ([None, None], None, vec![3, 4], LedgerTip),
+                    ([None, Some(61)], Some(1), vec![3], ItemLimit),
+                    ([Some(10), Some(21)], None, vec![], CheckpointBound),
+                    // The cursor is below the new range.
+                    ([Some(30), Some(31)], None, vec![3, 4], CheckpointBound),
+                ],
+            ),
+            // The pivot is the only publish of checkpoint 20, and the minting range starts there.
+            (
+                Ordering::Ascending,
+                [Some(20), Some(31)],
+                None,
+                vec![2, 3],
+                vec![
+                    ([None, None], None, vec![1, 0], CheckpointBound),
+                    ([Some(20), Some(31)], None, vec![], CheckpointBound),
+                ],
+            ),
+        ] {
+            let from = from.map(all_packages_cursor);
+            let (after, before) = match ordering {
+                Ordering::Ascending => (from.as_ref(), None),
+                _ => (None, from.as_ref()),
+            };
+            let page = list_all_packages_fixture(
+                &fixture,
+                all_packages_range_req(mint_range, Some(2), ordering, after, before),
+            )
+            .await
+            .unwrap();
+            assert_eq!(listed_indexes(&page), minted, "{ordering:?} {mint_range:?}");
+            assert_eq!(end_reason(&page), Some(ItemLimit));
+            let pivot = page.versions[0].cursor.as_ref();
+
+            for (range, limit, expected, end) in reversals {
+                let req = match ordering {
+                    Ordering::Ascending => {
+                        all_packages_range_req(range, limit, Ordering::Descending, None, pivot)
+                    }
+                    _ => all_packages_range_req(range, limit, Ordering::Ascending, pivot, None),
+                };
+                let response = list_all_packages_fixture(&fixture, req).await.unwrap();
+                let case =
+                    format!("minted {ordering:?} under {mint_range:?}, reversed under {range:?}");
+                assert_eq!(listed_indexes(&response), expected, "{case}");
+                assert_eq!(end_reason(&response), Some(end), "{case}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_bounds_by_start_and_end_checkpoint() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |start_checkpoint,
+                    end_checkpoint,
+                    after: Option<usize>,
+                    before: Option<usize>,
+                    ordering| {
+            let (after, before) = (
+                after.map(all_packages_cursor),
+                before.map(all_packages_cursor),
+            );
+            let mut req = all_packages_req(Some(query_options(
+                None,
+                ordering,
+                after.as_ref(),
+                before.as_ref(),
+            )));
+            req.start_checkpoint = start_checkpoint;
+            req.end_checkpoint = end_checkpoint;
+            list_all_packages_fixture(&fixture, req)
+        };
+
+        // Each case's cursors are indexes into `ALL_PACKAGES`, followed by the versions listed
+        // and how an ascending and a descending listing end.
+        for (
+            start_checkpoint,
+            end_checkpoint,
+            after,
+            before,
+            expected,
+            ascending_end,
+            descending_end,
+        ) in [
+            (
+                Some(20),
+                None,
+                None,
+                None,
+                &ALL_PACKAGES[2..],
+                QueryEndReason::LedgerTip,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                None,
+                Some(21),
+                None,
+                None,
+                &ALL_PACKAGES[..3],
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Some(20),
+                Some(21),
+                None,
+                None,
+                &ALL_PACKAGES[2..3],
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Some(11),
+                Some(30),
+                None,
+                None,
+                &ALL_PACKAGES[2..3],
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Some(25),
+                Some(30),
+                None,
+                None,
+                &ALL_PACKAGES[..0],
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Some(30),
+                Some(61),
+                None,
+                None,
+                &ALL_PACKAGES[3..],
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            // Cursors inside the checkpoint bounds narrow them.
+            (
+                Some(10),
+                None,
+                Some(0),
+                None,
+                &ALL_PACKAGES[1..],
+                QueryEndReason::LedgerTip,
+                QueryEndReason::CursorBound,
+            ),
+            (
+                None,
+                Some(31),
+                None,
+                Some(4),
+                &ALL_PACKAGES[..4],
+                QueryEndReason::CursorBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            // Cursors outside them leave them as they are.
+            (
+                Some(20),
+                None,
+                Some(0),
+                None,
+                &ALL_PACKAGES[2..],
+                QueryEndReason::LedgerTip,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                None,
+                Some(21),
+                None,
+                Some(4),
+                &ALL_PACKAGES[..3],
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Some(11),
+                Some(30),
+                Some(1),
+                Some(3),
+                &ALL_PACKAGES[2..3],
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ),
+        ] {
+            let ascending = list(
+                start_checkpoint,
+                end_checkpoint,
+                after,
+                before,
+                Ordering::Ascending,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                listed_publishes(&ascending),
+                expected.to_vec(),
+                "[{start_checkpoint:?}, {end_checkpoint:?}) after {after:?} before {before:?}"
+            );
+            assert_eq!(
+                end_reason(&ascending),
+                Some(ascending_end),
+                "[{start_checkpoint:?}, {end_checkpoint:?}) after {after:?} before {before:?}"
+            );
+            let descending = list(
+                start_checkpoint,
+                end_checkpoint,
+                after,
+                before,
+                Ordering::Descending,
+            )
+            .await
+            .unwrap();
+            let mut reversed = expected.to_vec();
+            reversed.reverse();
+            assert_eq!(
+                listed_publishes(&descending),
+                reversed,
+                "[{start_checkpoint:?}, {end_checkpoint:?}) after {after:?} before {before:?} \
+                 descending"
+            );
+            assert_eq!(
+                end_reason(&descending),
+                Some(descending_end),
+                "[{start_checkpoint:?}, {end_checkpoint:?}) after {after:?} before {before:?} \
+                 descending"
+            );
+        }
+
+        // An `end_checkpoint` below `start_checkpoint` is invalid in either order, also above
+        // the served height.
+        for (start_checkpoint, end_checkpoint) in [(25, 20), (1, 0), (80, 70)] {
+            for ordering in [Ordering::Ascending, Ordering::Descending] {
+                let status = list(
+                    Some(start_checkpoint),
+                    Some(end_checkpoint),
+                    None,
+                    None,
+                    ordering,
+                )
+                .await
+                .unwrap_err();
+                assert_eq!(
+                    status.code(),
+                    tonic::Code::InvalidArgument,
+                    "[{start_checkpoint}, {end_checkpoint}) {ordering:?}"
+                );
+                assert!(
+                    status.message().contains(
+                        "end_checkpoint must be greater than or equal to start_checkpoint"
+                    ),
+                    "{status:?}"
+                );
+            }
+        }
+    }
+
+    /// An empty checkpoint range, whose `end_checkpoint` equals `start_checkpoint` (or 0 without
+    /// it), holds no version, so in either order it lists nothing without reading BigTable and
+    /// ends at its bound.
+    #[tokio::test]
+    async fn list_all_package_versions_empty_range_lists_nothing_without_reading() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |[start_checkpoint, end_checkpoint]: [Option<u64>; 2], ordering| {
+            let mut req = all_packages_req(Some(query_options(None, ordering, None, None)));
+            req.start_checkpoint = start_checkpoint;
+            req.end_checkpoint = end_checkpoint;
+            list_all_packages_fixture(&fixture, req)
+        };
+
+        for range in [
+            [Some(20), Some(20)],
+            [Some(60), Some(60)],
+            [Some(0), Some(0)],
+            [None, Some(0)],
+        ] {
+            for ordering in [Ordering::Ascending, Ordering::Descending] {
+                fixture.mock.clear_read_rows_calls().await;
+                let response = list(range, ordering).await.unwrap();
+                assert_eq!(
+                    listed_publishes(&response),
+                    vec![],
+                    "{range:?} {ordering:?}"
+                );
+                assert_eq!(
+                    end_reason(&response),
+                    Some(QueryEndReason::CheckpointBound),
+                    "{range:?} {ordering:?}"
+                );
+                assert_eq!(
+                    fixture.mock.read_rows_calls().await.len(),
+                    0,
+                    "{range:?} {ordering:?}"
+                );
+            }
+        }
+
+        // A range holding a version reads it, so the reads above would have been recorded.
+        fixture.mock.clear_read_rows_calls().await;
+        let response = list([Some(20), Some(21)], Ordering::Ascending)
+            .await
+            .unwrap();
+        assert_eq!(listed_publishes(&response), vec![ALL_PACKAGES[2]]);
+        assert!(!fixture.mock.read_rows_calls().await.is_empty());
+    }
+
+    /// A descending listing starts at its range's high end, so one whose range reaches past the
+    /// served height would skip the versions published above it without saying so: an
+    /// `end_checkpoint` above the checkpoint after the served height, or, without one, a
+    /// `start_checkpoint` at or above that checkpoint, is rejected. A range ending at that
+    /// checkpoint, or starting at or below the served height, is served.
+    #[tokio::test]
+    async fn list_all_package_versions_rejects_descending_range_above_the_served_height() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |[start_checkpoint, end_checkpoint]: [Option<u64>; 2]| {
+            let mut req =
+                all_packages_req(Some(query_options(None, Ordering::Descending, None, None)));
+            req.start_checkpoint = start_checkpoint;
+            req.end_checkpoint = end_checkpoint;
+            list_all_packages_fixture(&fixture, req)
+        };
+
+        for (range, bound, requested) in [
+            ([None, Some(62)], "end_checkpoint", 62),
+            ([None, Some(u64::MAX)], "end_checkpoint", u64::MAX),
+            ([Some(3), Some(u64::MAX)], "end_checkpoint", u64::MAX),
+            ([Some(61), Some(62)], "end_checkpoint", 62),
+            ([Some(61), None], "start_checkpoint", 61),
+            ([Some(u64::MAX), None], "start_checkpoint", u64::MAX),
+        ] {
+            let status = list(range).await.unwrap_err();
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{range:?}");
+            assert_eq!(error_reason(&status), "ABOVE_LATEST_AVAILABLE");
+            assert_eq!(
+                status.message(),
+                format!(
+                    "requested data above latest available; {bound} is {requested}, and only \
+                     checkpoints below 61 are available"
+                ),
+            );
+        }
+
+        // Version 2 of package B, published at checkpoint 70, is above the served height.
+        let mut reversed = ALL_PACKAGES.to_vec();
+        reversed.reverse();
+        for (range, expected) in [
+            ([None, Some(61)], reversed.clone()),
+            ([Some(30), Some(61)], reversed[..2].to_vec()),
+            ([Some(60), Some(61)], vec![]),
+            ([Some(60), None], vec![]),
+        ] {
+            let response = list(range).await.unwrap();
+            assert_eq!(listed_publishes(&response), expected, "{range:?}");
+            assert_eq!(
+                end_reason(&response),
+                Some(QueryEndReason::CheckpointBound),
+                "{range:?}"
+            );
+        }
+    }
+
+    /// An ascending listing is never rejected for reaching past the served height: it lists
+    /// through the served height and ends with `LEDGER_TIP`, so a client knows to retry for the
+    /// rest of the range. One starting past the served height is empty. The version published
+    /// at checkpoint 70, above the served height, is never listed.
+    #[tokio::test]
+    async fn list_all_package_versions_ascending_past_the_served_height_ends_at_the_ledger_tip() {
+        let fixture = setup_all_packages_fixture().await;
+        let list = |[start_checkpoint, end_checkpoint]: [Option<u64>; 2]| {
+            let mut req =
+                all_packages_req(Some(query_options(None, Ordering::Ascending, None, None)));
+            req.start_checkpoint = start_checkpoint;
+            req.end_checkpoint = end_checkpoint;
+            list_all_packages_fixture(&fixture, req)
+        };
+
+        for (range, expected) in [
+            ([Some(61), None], vec![]),
+            ([Some(61), Some(62)], vec![]),
+            ([Some(70), Some(71)], vec![]),
+            ([Some(u64::MAX), None], vec![]),
+            ([None, None], ALL_PACKAGES.to_vec()),
+            ([None, Some(62)], ALL_PACKAGES.to_vec()),
+            ([None, Some(71)], ALL_PACKAGES.to_vec()),
+            ([Some(20), Some(u64::MAX)], ALL_PACKAGES[2..].to_vec()),
+        ] {
+            let response = list(range).await.unwrap();
+            assert_eq!(listed_publishes(&response), expected, "{range:?}");
+            assert_eq!(
+                end_reason(&response),
+                Some(QueryEndReason::LedgerTip),
+                "{range:?}"
+            );
+        }
+
+        // A range ending at the checkpoint after the served height ends at its bound.
+        let response = list([None, Some(61)]).await.unwrap();
+        assert_eq!(listed_publishes(&response), ALL_PACKAGES.to_vec());
+        assert_eq!(end_reason(&response), Some(QueryEndReason::CheckpointBound));
+    }
+
+    /// A cursor past the served height continues a listing from a newer view, such as another
+    /// replica's. A descending page from it whose range reaches past the served height would
+    /// list down from the served height and skip the versions in between, so it is rejected.
+    /// A descending range ending at the checkpoint after the served height holds nothing above
+    /// the cursor, and an ascending page lists through the served height and ends with
+    /// `LEDGER_TIP`, so both are served. A cursor at the served height is not past it.
+    #[tokio::test]
+    async fn list_all_package_versions_cursors_past_the_served_height() {
+        let fixture = setup_all_packages_fixture().await;
+        // Version 2 of package B is published at checkpoint 70, above the served height of 60.
+        let above = PackageVersionCursor::AllPackages {
+            checkpoint: 70,
+            original_package_id: PACKAGE_B,
+            version: 2,
+            minted_at: 70,
+        }
+        .encode();
+        let at_served_height = PackageVersionCursor::AllPackages {
+            checkpoint: 60,
+            original_package_id: PACKAGE_B,
+            version: 2,
+            minted_at: 70,
+        }
+        .encode();
+        let first = all_packages_cursor(0);
+        let list =
+            |ordering, after, before, [start_checkpoint, end_checkpoint]: [Option<u64>; 2]| {
+                let mut req = all_packages_req(Some(query_options(None, ordering, after, before)));
+                req.start_checkpoint = start_checkpoint;
+                req.end_checkpoint = end_checkpoint;
+                list_all_packages_fixture(&fixture, req)
+            };
+
+        for range in [[None, None], [Some(10), None]] {
+            for (after, before) in [
+                (Some(&above), None),
+                (None, Some(&above)),
+                (Some(&first), Some(&above)),
+            ] {
+                let status = list(Ordering::Descending, after, before, range)
+                    .await
+                    .unwrap_err();
+                assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+                assert_eq!(error_reason(&status), "ABOVE_LATEST_AVAILABLE");
+                assert_eq!(
+                    status.message(),
+                    "requested data above latest available; cursor is at checkpoint 70, and \
+                     only checkpoints below 61 are available",
+                    "{range:?} after {after:?} before {before:?}"
+                );
+            }
+        }
+
+        let mut reversed = ALL_PACKAGES.to_vec();
+        reversed.reverse();
+        for (ordering, after, before, range, expected, end) in [
+            (
+                Ordering::Descending,
+                None,
+                Some(&above),
+                [None, Some(61)],
+                reversed.clone(),
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Ordering::Descending,
+                Some(&above),
+                None,
+                [None, Some(61)],
+                vec![],
+                QueryEndReason::CursorBound,
+            ),
+            (
+                Ordering::Ascending,
+                Some(&above),
+                None,
+                [None, None],
+                vec![],
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                Ordering::Ascending,
+                Some(&above),
+                None,
+                [Some(10), Some(u64::MAX)],
+                vec![],
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                Ordering::Ascending,
+                Some(&above),
+                None,
+                [None, Some(61)],
+                vec![],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Ordering::Ascending,
+                None,
+                Some(&above),
+                [None, None],
+                ALL_PACKAGES.to_vec(),
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                Ordering::Ascending,
+                Some(&first),
+                Some(&above),
+                [None, Some(71)],
+                ALL_PACKAGES[1..].to_vec(),
+                QueryEndReason::LedgerTip,
+            ),
+            // A cursor at the served height bounds a listing like any cursor inside its range.
+            (
+                Ordering::Ascending,
+                None,
+                Some(&at_served_height),
+                [None, None],
+                ALL_PACKAGES.to_vec(),
+                QueryEndReason::CursorBound,
+            ),
+            (
+                Ordering::Ascending,
+                Some(&at_served_height),
+                None,
+                [None, None],
+                vec![],
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                Ordering::Descending,
+                None,
+                Some(&at_served_height),
+                [None, None],
+                reversed,
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Ordering::Descending,
+                Some(&at_served_height),
+                None,
+                [None, None],
+                vec![],
+                QueryEndReason::CursorBound,
+            ),
+        ] {
+            let response = list(ordering, after, before, range).await.unwrap();
+            assert_eq!(
+                listed_publishes(&response),
+                expected,
+                "{ordering:?} {range:?} after {after:?} before {before:?}"
+            );
+            assert_eq!(
+                end_reason(&response),
+                Some(end),
+                "{ordering:?} {range:?} after {after:?} before {before:?}"
+            );
+        }
+    }
+
+    /// Each response ends with why its listing stopped: a full page with `ITEM_LIMIT`, and a
+    /// shorter one with the bound it reached. The served height is 60.
+    #[tokio::test]
+    async fn list_all_package_versions_ends_with_the_reason_of_its_bound() {
+        let fixture = setup_all_packages_fixture().await;
+        // Cursors are indexes into `ALL_PACKAGES`.
+        let request = |limit,
+                       ordering,
+                       after: Option<usize>,
+                       before: Option<usize>,
+                       range: [Option<u64>; 2]| {
+            let (after, before) = (
+                after.map(all_packages_cursor),
+                before.map(all_packages_cursor),
+            );
+            let mut req = all_packages_req(Some(query_options(
+                limit,
+                ordering,
+                after.as_ref(),
+                before.as_ref(),
+            )));
+            [req.start_checkpoint, req.end_checkpoint] = range;
+            req
+        };
+        let publishes =
+            |indexes: &[usize]| -> Vec<_> { indexes.iter().map(|&i| ALL_PACKAGES[i]).collect() };
+
+        for (req, expected, end) in [
+            (
+                request(Some(2), Ordering::Ascending, None, None, [None, None]),
+                vec![0, 1],
+                QueryEndReason::ItemLimit,
+            ),
+            (
+                request(Some(2), Ordering::Descending, None, None, [None, None]),
+                vec![4, 3],
+                QueryEndReason::ItemLimit,
+            ),
+            (
+                request(None, Ordering::Descending, None, None, [None, None]),
+                vec![4, 3, 2, 1, 0],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                request(None, Ordering::Descending, None, None, [Some(20), None]),
+                vec![4, 3, 2],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                request(None, Ordering::Ascending, None, None, [None, Some(21)]),
+                vec![0, 1, 2],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                request(None, Ordering::Ascending, None, None, [None, Some(61)]),
+                vec![0, 1, 2, 3, 4],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                request(None, Ordering::Descending, Some(1), None, [None, None]),
+                vec![4, 3, 2],
+                QueryEndReason::CursorBound,
+            ),
+            (
+                request(None, Ordering::Ascending, None, Some(3), [None, None]),
+                vec![0, 1, 2],
+                QueryEndReason::CursorBound,
+            ),
+            (
+                request(None, Ordering::Ascending, Some(3), Some(1), [None, None]),
+                vec![],
+                QueryEndReason::CursorBound,
+            ),
+            (
+                request(None, Ordering::Ascending, None, None, [None, None]),
+                vec![0, 1, 2, 3, 4],
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                request(None, Ordering::Ascending, None, None, [None, Some(62)]),
+                vec![0, 1, 2, 3, 4],
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                request(None, Ordering::Ascending, None, None, [Some(61), None]),
+                vec![],
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                request(None, Ordering::Ascending, Some(4), None, [None, None]),
+                vec![],
+                QueryEndReason::LedgerTip,
+            ),
+        ] {
+            let response = list_all_packages_fixture(&fixture, req.clone())
+                .await
+                .unwrap();
+            assert_eq!(listed_publishes(&response), publishes(&expected), "{req:?}");
+            assert_eq!(end_reason(&response), Some(end), "{req:?}");
+        }
+
+        // A page ending exactly at the last version of its range is full, so it ends with
+        // `ITEM_LIMIT`. The page after it is empty and ends with the bound of the range.
+        for (ordering, range, limit, expected, edge) in [
+            (
+                Ordering::Ascending,
+                [None, None],
+                5,
+                vec![0, 1, 2, 3, 4],
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                Ordering::Descending,
+                [None, None],
+                5,
+                vec![4, 3, 2, 1, 0],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Ordering::Ascending,
+                [None, Some(21)],
+                3,
+                vec![0, 1, 2],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                Ordering::Descending,
+                [Some(20), None],
+                3,
+                vec![4, 3, 2],
+                QueryEndReason::CheckpointBound,
+            ),
+        ] {
+            let full = list_all_packages_fixture(
+                &fixture,
+                request(Some(limit), ordering, None, None, range),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                listed_publishes(&full),
+                publishes(&expected),
+                "{ordering:?} {range:?}"
+            );
+            assert_eq!(
+                end_reason(&full),
+                Some(QueryEndReason::ItemLimit),
+                "{ordering:?} {range:?}"
+            );
+
+            let last = expected.last().copied();
+            let (after, before) = match ordering {
+                Ordering::Descending => (None, last),
+                _ => (last, None),
+            };
+            let next = list_all_packages_fixture(
+                &fixture,
+                request(Some(limit), ordering, after, before, range),
+            )
+            .await
+            .unwrap();
+            assert_eq!(listed_publishes(&next), vec![], "{ordering:?} {range:?}");
+            assert_eq!(end_reason(&next), Some(edge), "{ordering:?} {range:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn list_all_package_versions_rejects_lineage_paging_and_cursors() {
+        let fixture = setup_all_packages_fixture().await;
+        let lineage_cursor = PackageVersionCursor::Lineage {
+            original_package_id: PACKAGE_A,
+            version: 1,
+            minted_at: VERSIONS_FIXTURE_SERVED_HEIGHT.checkpoint,
+        }
+        .encode();
+
+        let mut with_page_size = all_packages_req(None);
+        with_page_size.page_size = Some(1);
+        let mut with_page_token = all_packages_req(None);
+        with_page_token.page_token = Some(Bytes::from_static(&[0]));
+        let mut with_start_version = all_packages_req(None);
+        with_start_version.start_version = Some(1);
+        let mut with_end_version = all_packages_req(None);
+        with_end_version.end_version = Some(2);
+        // A descending range up to `u64::MAX` reaches past the served height, and is refused for
+        // its cursor or ordering first.
+        let past_the_tip = |after: Option<&Bytes>| {
+            let mut req =
+                all_packages_req(Some(query_options(None, Ordering::Descending, after, None)));
+            req.end_checkpoint = Some(u64::MAX);
+            req
+        };
+        let malformed = Bytes::from_static(&[0xFF, 0xFF]);
+        let mut invalid_ordering_past_the_tip = past_the_tip(None);
+        invalid_ordering_past_the_tip
+            .options
+            .as_mut()
+            .unwrap()
+            .ordering = Some(7);
+
+        for (req, expected) in [
+            (with_page_size, "page_size requires package_id"),
+            (with_page_token, "page_token requires package_id"),
+            (with_start_version, "start_version requires package_id"),
+            (with_end_version, "end_version requires package_id"),
+            (
+                all_packages_req(Some(query_options(
+                    None,
+                    Ordering::Ascending,
+                    None,
+                    Some(&lineage_cursor),
+                ))),
+                "cursor is from the listing of one package",
+            ),
+            (past_the_tip(Some(&malformed)), "invalid cursor encoding"),
+            (
+                past_the_tip(Some(&lineage_cursor)),
+                "cursor is from the listing of one package",
+            ),
+            (invalid_ordering_past_the_tip, "invalid ordering"),
+        ] {
+            let status = list_all_packages_fixture(&fixture, req).await.unwrap_err();
+            assert_eq!(status.code(), tonic::Code::InvalidArgument, "{expected}");
+            assert!(
+                status.message().contains(expected),
+                "expected {expected:?}, got {:?}",
+                status.message()
+            );
         }
     }
 }

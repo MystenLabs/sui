@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Range;
+use std::ops::{Bound, Range};
 
 use super::{load_package_by_id, parse_package_id};
 use crate::ledger_history::query_options::{
-    above_latest_available, below_serving_floor, validate_checkpoint_bounds,
+    ScanBounds, above_latest_available, below_serving_floor, validate_checkpoint_bounds,
 };
 use crate::reader::{AtCheckpointLowerBound, indexes_disabled};
 use crate::{AtCheckpointUpperBound, ErrorReason, Result, RpcError, RpcService};
@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::{
 use sui_types::base_types::ObjectID;
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::storage::IndexedPackageVersion;
+use sui_types::storage::PackagePublishKey;
 
 /// Versions per page when the request sets neither `page_size` nor `options.limit`.
 const DEFAULT_PAGE_SIZE: u32 = 1000;
@@ -33,19 +34,29 @@ struct PageToken {
 
 /// The position of one listed version, set as `PackageVersion.cursor` and accepted back as
 /// `options.after` and `options.before`. Public so other implementors of `MovePackageService`
-/// mint and accept the same cursors. BCS-encoded as an enum so that a listing in another order
-/// can add a variant without changing the encoding of existing cursors.
+/// mint and accept the same cursors. BCS-encoded as an enum with one variant per listing, so a
+/// listing can be added without changing the encoding of existing cursors.
 ///
 /// Every cursor records `minted_at`, the highest checkpoint the server that minted it had
-/// indexed (kv-rpc: its served height). A server that does not know the cursor's package as of
-/// its own highest indexed checkpoint uses it to tell a cursor from a replica ahead of it, which
-/// it answers as a cursor past its tip, from one for a package that does not exist (see
-/// [`unknown_package_response`]).
+/// indexed (kv-rpc: its served height). A server that does not know a lineage cursor's package
+/// as of its own highest indexed checkpoint uses it to tell a cursor from a replica ahead of it,
+/// which it answers as a cursor past its tip, from one for a package that does not exist (see
+/// [`unknown_package_response`]). The listing of every package loads no package: it checks its
+/// cursors against the tip by the checkpoint that published their version.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum PackageVersionCursor {
     /// A version in the upgrade lineage of the package originally published at
     /// `original_package_id`, listed in ascending version order.
     Lineage {
+        original_package_id: ObjectID,
+        version: u64,
+        minted_at: u64,
+    },
+    /// A version in the listing of every package's versions, in [`PackagePublishKey`] order:
+    /// `version` of the package originally published at `original_package_id`, published in
+    /// `checkpoint`. `minted_at` is not part of the position.
+    AllPackages {
+        checkpoint: u64,
         original_package_id: ObjectID,
         version: u64,
         minted_at: u64,
@@ -60,51 +71,72 @@ impl PackageVersionCursor {
     /// The highest checkpoint the server that minted the cursor had indexed.
     fn minted_at(&self) -> u64 {
         match self {
-            Self::Lineage { minted_at, .. } => *minted_at,
+            Self::Lineage { minted_at, .. } | Self::AllPackages { minted_at, .. } => *minted_at,
         }
     }
 }
 
 /// Validate a `ListPackageVersions` request before any range, tip or floor rule applies to it,
 /// as the other `List` methods validate theirs, so a malformed request is `INVALID_ARGUMENT`
-/// whatever its range: an `end_checkpoint` below `start_checkpoint`, an `end_version` below
-/// `start_version`, `page_size` or `page_token` combined with `options` or a checkpoint bound,
-/// an invalid `options.ordering`, or a page token or cursor that does not decode. Reads nothing,
-/// so it runs before the package is loaded; whether a page token or cursor names the requested
-/// lineage is checked once the package is loaded, by [`PackageVersionsQuery::new`]. Public so
-/// other implementors of `MovePackageService` refuse the same requests.
+/// whatever its range: an `end_checkpoint` below `start_checkpoint`, an invalid
+/// `options.ordering`, or a page token or cursor that does not decode, or that the other
+/// listing minted (a lineage cursor with `package_id` unset, or one of the listing of every
+/// package with it set). A lineage listing also refuses an `end_version` below
+/// `start_version`, and `page_size` or `page_token` combined with `options` or a checkpoint
+/// bound; the listing of every package refuses `page_size`, `page_token`, `start_version` and
+/// `end_version`. Reads nothing, so it runs before the package is loaded; whether a page token
+/// or cursor names the requested lineage is checked once the package is loaded, by
+/// [`PackageVersionsQuery::new`]. Public so other implementors of `MovePackageService` refuse
+/// the same requests.
 pub fn validate_request(request: &ListPackageVersionsRequest) -> Result<()> {
     validate_checkpoint_bounds(request.start_checkpoint, request.end_checkpoint)?;
-    if let (Some(start), Some(end)) = (request.start_version, request.end_version)
-        && end < start
-    {
-        return Err(FieldViolation::new("end_version")
-            .with_description("end_version must be greater than or equal to start_version")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
-    }
-
-    if pages_by_token(request) {
-        if let Some(page_token) = request.page_token.as_deref() {
-            decode_page_token(page_token)?;
-        }
-        return Ok(());
-    }
-
-    for (field, set) in [
-        ("page_size", request.page_size.is_some()),
-        ("page_token", request.page_token.is_some()),
-    ] {
-        if set {
-            let description = if request.options.is_some() {
-                format!("{field} and options are mutually exclusive")
-            } else {
-                format!("{field} cannot be combined with start_checkpoint or end_checkpoint")
-            };
-            return Err(FieldViolation::new(field)
-                .with_description(description)
+    let lists_lineage = request.package_id.is_some();
+    if lists_lineage {
+        if let (Some(start), Some(end)) = (request.start_version, request.end_version)
+            && end < start
+        {
+            return Err(FieldViolation::new("end_version")
+                .with_description("end_version must be greater than or equal to start_version")
                 .with_reason(ErrorReason::FieldInvalid)
                 .into());
+        }
+
+        if pages_by_token(request) {
+            if let Some(page_token) = request.page_token.as_deref() {
+                decode_page_token(page_token)?;
+            }
+            return Ok(());
+        }
+
+        for (field, set) in [
+            ("page_size", request.page_size.is_some()),
+            ("page_token", request.page_token.is_some()),
+        ] {
+            if set {
+                let description = if request.options.is_some() {
+                    format!("{field} and options are mutually exclusive")
+                } else {
+                    format!("{field} cannot be combined with start_checkpoint or end_checkpoint")
+                };
+                return Err(FieldViolation::new(field)
+                    .with_description(description)
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into());
+            }
+        }
+    } else {
+        for (field, set) in [
+            ("page_size", request.page_size.is_some()),
+            ("page_token", request.page_token.is_some()),
+            ("start_version", request.start_version.is_some()),
+            ("end_version", request.end_version.is_some()),
+        ] {
+            if set {
+                return Err(FieldViolation::new(field)
+                    .with_description(format!("{field} requires package_id"))
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into());
+            }
         }
     }
 
@@ -115,7 +147,13 @@ pub fn validate_request(request: &ListPackageVersionsRequest) -> Result<()> {
             ("options.before", &options.before),
         ] {
             if let Some(cursor) = cursor {
-                decode_cursor(field, cursor)?;
+                let from_lineage = matches!(
+                    decode_cursor(field, cursor)?,
+                    PackageVersionCursor::Lineage { .. }
+                );
+                if from_lineage != lists_lineage {
+                    return Err(cursor_from_other_listing(field, lists_lineage));
+                }
             }
         }
     }
@@ -408,8 +446,9 @@ impl PackageVersionsQuery {
             version,
             minted_at: self.highest_indexed,
         };
-        let mut listed =
-            PackageVersion::new(&storage_id.into(), version).with_cursor(cursor.encode());
+        let mut listed = PackageVersion::new(&storage_id.into(), version)
+            .with_cursor(cursor.encode())
+            .with_original_id(self.original_package_id.to_canonical_string(true));
         listed.checkpoint = checkpoint;
         listed
     }
@@ -546,10 +585,17 @@ pub fn unknown_package_response(
     let Some(first) = cursors.first() else {
         return Err(RpcError::not_found());
     };
-    let PackageVersionCursor::Lineage {
-        original_package_id,
-        ..
-    } = *first;
+    // `PackageVersionsQuery::new` refuses a cursor of the listing of every package.
+    let original_package_id = match *first {
+        PackageVersionCursor::Lineage {
+            original_package_id,
+            ..
+        }
+        | PackageVersionCursor::AllPackages {
+            original_package_id,
+            ..
+        } => original_package_id,
+    };
     let query = PackageVersionsQuery::new(request, original_package_id, highest_indexed)?;
     let minted_at = cursors
         .iter()
@@ -569,8 +615,249 @@ pub fn unknown_package_response(
     Ok(query.response(vec![], Some(query.end_reason(0))))
 }
 
+/// The versions a `ListPackageVersions` request with `package_id` unset lists, across every
+/// package in [`PackagePublishKey`] order, and how its response pages: the request's checkpoint
+/// range and cursors intersected into one range of keys. Public so other implementors of
+/// `MovePackageService` parse requests and page responses the same way.
+#[derive(Clone, Debug)]
+pub struct AllPackageVersionsQuery {
+    /// The lower end of the keys to list.
+    pub lower: Bound<PackagePublishKey>,
+    /// The upper end of the keys to list.
+    pub upper: Bound<PackagePublishKey>,
+    /// Whether to list from the highest key to the lowest.
+    pub descending: bool,
+    /// The number of versions in a full page.
+    page_size: usize,
+    /// Whether `lower` and `upper` admit no key, so the listing reads nothing.
+    reads_nothing: bool,
+    /// How a page with fewer than `page_size` versions ends.
+    short_page_end: QueryEndReason,
+    /// The highest checkpoint the server has indexed, which the listing's cursors record as
+    /// `minted_at`.
+    highest_indexed: u64,
+}
+
+impl AllPackageVersionsQuery {
+    /// Parse a request with `package_id` unset that lists the versions published in its
+    /// checkpoint range `[start_checkpoint, end_checkpoint)`, through at most the highest
+    /// checkpoint `upper_bound` admits, checked with [`check_checkpoint_range`]. An unset
+    /// `start_checkpoint` starts the listing at `lowest_checkpoint`, the lowest checkpoint the
+    /// server can list every publish from (0 on a server that keeps full history), so a
+    /// descending listing without an `after` cursor ends there with a short last page. The
+    /// request is validated with [`validate_request`] first, so a malformed one is
+    /// `INVALID_ARGUMENT` whatever its range.
+    ///
+    /// With no `after` cursor, on a server whose `lowest_checkpoint` is above genesis, a
+    /// `start_checkpoint` below it in a non-empty range is `OUT_OF_RANGE`
+    /// (`BELOW_EARLIEST_AVAILABLE`, reporting `lowest_checkpoint`) first, as `ListTransactions`
+    /// refuses it: no cursor can bound the listing at or above the floor. Otherwise a cursor past
+    /// the highest indexed checkpoint is `OUT_OF_RANGE` (`ABOVE_LATEST_AVAILABLE`) in a
+    /// descending listing whose range reaches past it, before the floor is checked; an
+    /// ascending listing lists through the highest indexed checkpoint and ends with
+    /// `LEDGER_TIP`. An empty range lists nothing, whatever the floor. Otherwise, on a server
+    /// whose `lowest_checkpoint` is above genesis, a `start_checkpoint` below it is
+    /// `OUT_OF_RANGE` (`BELOW_EARLIEST_AVAILABLE`, reporting `lowest_checkpoint`) unless an
+    /// `after` cursor at or above it bounds the listing, and so, in a listing with no lower bound
+    /// of its own (neither `start_checkpoint` nor an `after` cursor), is an `end_checkpoint` at or
+    /// below it. Without a `start_checkpoint` at or above it, a listing after a cursor below it is
+    /// refused the same way, in either order; a cursor in a checkpoint below it is refused even
+    /// when it was that checkpoint's last publish, since the server can't tell.
+    pub fn new(
+        request: &ListPackageVersionsRequest,
+        lowest_checkpoint: u64,
+        upper_bound: AtCheckpointUpperBound,
+    ) -> Result<Self> {
+        validate_request(request)?;
+        let default_options = QueryOptions::default();
+        let options = request.options.as_ref().unwrap_or(&default_options);
+        let descending = descending(options)?;
+        let after = options
+            .after
+            .as_deref()
+            .map(|cursor| cursor_key("options.after", cursor))
+            .transpose()?;
+        let before = options
+            .before
+            .as_deref()
+            .map(|cursor| cursor_key("options.before", cursor))
+            .transpose()?;
+
+        let highest_indexed = upper_bound.highest_indexed();
+        check_checkpoint_range(request, highest_indexed)?;
+
+        let empty_range = request.end_checkpoint == Some(request.start_checkpoint.unwrap_or(0));
+        // Without an `after` cursor, nothing can bound the listing at or above the floor, so a
+        // `start_checkpoint` below it can never be served, and is refused before a `before`
+        // cursor's tip refusal, as `ListTransactions`' `floor_error_or` refuses it. With an
+        // `after` cursor, the cursor's tip refusal comes first.
+        if !empty_range
+            && lowest_checkpoint > 0
+            && after.is_none()
+            && request
+                .start_checkpoint
+                .is_some_and(|start| start < lowest_checkpoint)
+        {
+            return Err(below_serving_floor(lowest_checkpoint));
+        }
+
+        // Whether the range reaches past the highest indexed checkpoint, as `ListTransactions`
+        // decides it.
+        let range_reaches_tip = request
+            .end_checkpoint
+            .is_none_or(|end| end > highest_indexed.saturating_add(1));
+        // A cursor above the highest indexed checkpoint comes from a newer view of the ledger,
+        // such as another replica's. A descending page from this server's view would start below
+        // it and skip the versions published in between, so it is refused when the range
+        // reaches past the tip, before the floor refusals that depend on an `after` cursor, as
+        // `ListTransactions` and the listing of one package refuse it. An ascending page lists
+        // through the tip, which `LEDGER_TIP` marks, and a range ending at an indexed checkpoint
+        // holds no key above the cursor.
+        if descending && range_reaches_tip {
+            for cursor in after.iter().chain(&before) {
+                upper_bound.check_cursor(cursor.checkpoint)?;
+            }
+        }
+
+        if !empty_range && lowest_checkpoint > 0 {
+            let below = match request.start_checkpoint {
+                // A `start_checkpoint` below the floor is checked after the cursors narrow the
+                // range, as `ListTransactions` checks it: an `after` cursor at or above the floor
+                // leaves nothing below it to list.
+                Some(start) => {
+                    start < lowest_checkpoint
+                        && after.is_none_or(|after| after.checkpoint < lowest_checkpoint)
+                }
+                // Without `start_checkpoint`, the listing covers what this server can list, from
+                // `lowest_checkpoint` up. An `after` cursor below it names a version the client
+                // holds, from a listing that reached below where this server can list every
+                // publish, such as one another server answered, or one this server answered
+                // before its floor rose. The versions published between the cursor and the floor
+                // may be gone, and a listing that reaches the floor would skip them without
+                // saying so, in either order. A `before` cursor below the floor leaves nothing to
+                // list.
+                None => match after {
+                    Some(after) => after.checkpoint < lowest_checkpoint,
+                    None => request
+                        .end_checkpoint
+                        .is_some_and(|end| end <= lowest_checkpoint),
+                },
+            };
+            if below {
+                return Err(below_serving_floor(lowest_checkpoint));
+            }
+        }
+
+        let start_checkpoint = request.start_checkpoint.unwrap_or(lowest_checkpoint);
+        let highest_checkpoint = match request.end_checkpoint {
+            Some(end) => end.saturating_sub(1).min(highest_indexed),
+            None => highest_indexed,
+        };
+
+        // The lowest and highest keys any version published in the checkpoint range can have.
+        // A cursor inside the range narrows it; one outside leaves that end as it is.
+        let first = PackagePublishKey {
+            checkpoint: start_checkpoint,
+            original_id: ObjectID::ZERO,
+            version: 0,
+        };
+        let last = PackagePublishKey {
+            checkpoint: highest_checkpoint,
+            original_id: ObjectID::MAX,
+            version: u64::MAX,
+        };
+        let lower = match after {
+            Some(after) if after >= first => Bound::Excluded(after),
+            _ => Bound::Included(first),
+        };
+        let upper = match before {
+            Some(before) if before <= last => Bound::Excluded(before),
+            _ => Bound::Included(last),
+        };
+
+        // How a short page ends, as `ListTransactions` and the listing of one package name it.
+        let ascending_past_tip = !descending
+            && request
+                .start_checkpoint
+                .is_some_and(|start| start > highest_indexed);
+        let window_has_keys = !empty_range && first <= last;
+        let cursor_bound = (window_has_keys
+            && if descending {
+                after.is_some_and(|after| after >= first)
+            } else {
+                before.is_some_and(|before| before <= last)
+            })
+            || (!descending
+                && before.is_some_and(|before| after.is_some_and(|after| before <= after)));
+        let short_page_end = if ascending_past_tip {
+            QueryEndReason::LedgerTip
+        } else if empty_range {
+            QueryEndReason::CheckpointBound
+        } else if cursor_bound {
+            QueryEndReason::CursorBound
+        } else if !descending && range_reaches_tip {
+            QueryEndReason::LedgerTip
+        } else {
+            QueryEndReason::CheckpointBound
+        };
+        let reads_nothing = empty_range
+            || ScanBounds {
+                lo: lower,
+                hi: upper,
+            }
+            .is_empty();
+
+        Ok(Self {
+            lower,
+            upper,
+            descending,
+            page_size: page_size(options.limit),
+            reads_nothing,
+            short_page_end,
+            highest_indexed,
+        })
+    }
+
+    /// The most versions to read for one response.
+    pub fn limit(&self) -> usize {
+        self.page_size
+    }
+
+    /// Whether the listing's range admits no key, so the server reads nothing.
+    pub fn reads_nothing(&self) -> bool {
+        self.reads_nothing
+    }
+
+    /// One listed version, carrying its cursor, minted at the highest indexed checkpoint.
+    pub fn listed_version(&self, key: PackagePublishKey, storage_id: ObjectID) -> PackageVersion {
+        let cursor = PackageVersionCursor::AllPackages {
+            checkpoint: key.checkpoint,
+            original_package_id: key.original_id,
+            version: key.version,
+            minted_at: self.highest_indexed,
+        };
+        PackageVersion::new(&storage_id.into(), key.version)
+            .with_checkpoint(key.checkpoint)
+            .with_cursor(cursor.encode())
+            .with_original_id(key.original_id.to_canonical_string(true))
+    }
+
+    /// The response listing `versions`, at most [`Self::limit`] of them: a full page ends with
+    /// `ITEM_LIMIT`, a shorter one at the edge of its range.
+    pub fn response(&self, versions: Vec<PackageVersion>) -> ListPackageVersionsResponse {
+        let reason = if versions.len() >= self.page_size {
+            QueryEndReason::ItemLimit
+        } else {
+            self.short_page_end
+        };
+        ListPackageVersionsResponse::new(versions, None)
+            .with_end(QueryEnd::default().with_reason(reason))
+    }
+}
+
 /// List the versions of a package's upgrade lineage published at or before the highest
-/// checkpoint every rpc index has committed.
+/// checkpoint every rpc index has committed, or, with `package_id` unset, the versions of every
+/// package.
 ///
 /// Versions with no recorded publish checkpoint are listed with `checkpoint` unset: they were
 /// published before the history the index holds begins, so they belong to any checkpoint range
@@ -590,9 +877,9 @@ pub fn unknown_package_response(
 /// for the versions replaced before its history begins, and every listing starts at its lowest
 /// row.
 ///
-/// A malformed request is `INVALID_ARGUMENT` before any range rule applies to it (see
-/// [`validate_request`]); so is a page token or cursor naming another lineage than the package's,
-/// whatever the range.
+/// A malformed request is `INVALID_ARGUMENT` before any range rule applies to it, in either
+/// listing (see [`validate_request`]); so is a page token or cursor naming another lineage than
+/// the package's, whatever the range.
 ///
 /// A checkpoint range covers the versions published in it, not the lineage's state at one
 /// checkpoint. An empty range lists nothing. Past the highest indexed checkpoint it is handled as
@@ -621,14 +908,12 @@ pub fn list_package_versions(
     service: &RpcService,
     request: ListPackageVersionsRequest,
 ) -> Result<ListPackageVersionsResponse> {
-    let package_id_str = request.package_id.as_ref().ok_or_else(|| {
-        FieldViolation::new("package_id")
-            .with_description("missing package_id")
-            .with_reason(ErrorReason::FieldMissing)
-    })?;
+    validate_request(&request)?;
+    let Some(package_id_str) = request.package_id.as_deref() else {
+        return list_all_package_versions(service, &request);
+    };
 
     let package_id = parse_package_id(package_id_str)?;
-    validate_request(&request)?;
 
     // While a restore is still backfilling history, a lineage upgraded inside the backfill window,
     // such as a system package's, lacks the versions published in the part of the window the
@@ -998,6 +1283,58 @@ pub fn pages_by_token(request: &ListPackageVersionsRequest) -> bool {
         && request.end_checkpoint.is_none()
 }
 
+/// List the versions of every package published in the request's checkpoint range
+/// `[start_checkpoint, end_checkpoint)`, through at most the highest indexed checkpoint, in
+/// [`PackagePublishKey`] order.
+fn list_all_package_versions(
+    service: &RpcService,
+    request: &ListPackageVersionsRequest,
+) -> Result<ListPackageVersionsResponse> {
+    let inner = service.reader.inner();
+    let indexes = inner.indexes().ok_or_else(indexes_disabled)?;
+
+    // The index holds only versions with a recorded publish checkpoint. Once any post-restore
+    // backfill has finished (checked below), the versions a store loaded from a live-object
+    // snapshot (or a fork's seed) were published before the first checkpoint with index history,
+    // so a listing reaching below it could miss them. On a node that backfilled after restoring
+    // from a snapshot, the objects floor is at or above that point; a store that never backfills
+    // reports its own through `get_lowest_checkpoint_with_index_history`. Pruning never deletes
+    // these rows and the floor only rises, so the floor can be read before the rows.
+    let lowest_available = inner
+        .get_lowest_available_checkpoint_objects()?
+        .max(inner.get_lowest_checkpoint_with_index_history()?);
+
+    // While a restore is still backfilling history, the index ends at the checkpoint the
+    // backfill has reached, below the checkpoints the node serves elsewhere, and the versions
+    // published after it appear only as restored rows with no publish checkpoint. Every listing
+    // waits for the backfill, as checkpoint-pinned reads do. Otherwise the listing ends before
+    // `end_checkpoint`, or at the highest checkpoint every rpc index has committed if that is
+    // lower: the pipeline writing the index can run ahead of it, and stopping there matches the
+    // height the other reads serve. The bound only grows, so reading it before the rows keeps it
+    // valid for them.
+    let query = AllPackageVersionsQuery::new(
+        request,
+        lowest_available,
+        service.reader.at_checkpoint_upper_bound()?,
+    )?;
+    if query.reads_nothing() {
+        return Ok(query.response(vec![]));
+    }
+
+    let versions = indexes
+        .packages_by_checkpoint_iter(query.lower, query.upper, query.descending)
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .take(query.limit())
+        .map(|row| {
+            let (key, storage_id) =
+                row.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+            Ok(query.listed_version(key, storage_id))
+        })
+        .collect::<Result<_>>()?;
+
+    Ok(query.response(versions))
+}
+
 /// The cursor in request field `field`.
 fn decode_cursor(field: &str, cursor: &[u8]) -> Result<PackageVersionCursor> {
     bcs::from_bytes(cursor).map_err(|e| {
@@ -1021,7 +1358,39 @@ fn cursor_version(field: &str, cursor: &[u8], original_package_id: ObjectID) -> 
             .with_description("cursor package ID does not match request package ID")
             .with_reason(ErrorReason::FieldInvalid)
             .into()),
+        PackageVersionCursor::AllPackages { .. } => Err(cursor_from_other_listing(field, true)),
     }
+}
+
+/// The key that the cursor in request field `field` names in the listing of every package.
+fn cursor_key(field: &str, cursor: &[u8]) -> Result<PackagePublishKey> {
+    match decode_cursor(field, cursor)? {
+        PackageVersionCursor::AllPackages {
+            checkpoint,
+            original_package_id,
+            version,
+            ..
+        } => Ok(PackagePublishKey {
+            checkpoint,
+            original_id: original_package_id,
+            version,
+        }),
+        PackageVersionCursor::Lineage { .. } => Err(cursor_from_other_listing(field, false)),
+    }
+}
+
+/// The refusal of a cursor in request field `field` that the other listing minted, given
+/// whether the request lists one package's lineage (`package_id` set).
+fn cursor_from_other_listing(field: &str, lists_lineage: bool) -> RpcError {
+    let description = if lists_lineage {
+        "cursor is from the listing of every package, which sets no package_id"
+    } else {
+        "cursor is from the listing of one package, which sets package_id"
+    };
+    FieldViolation::new(field)
+        .with_description(description)
+        .with_reason(ErrorReason::FieldInvalid)
+        .into()
 }
 
 fn page_size(requested: Option<u32>) -> usize {
@@ -1134,7 +1503,610 @@ fn encode_page_token(page_token: PageToken) -> Bytes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ledger_history::query_options::{
+        assert_above_latest_available_error, assert_below_serving_floor_error,
+    };
     use std::cell::Cell;
+
+    /// The highest checkpoint the tests' server has indexed.
+    const HIGHEST_INDEXED: u64 = 60;
+
+    /// A request listing every package's versions published in `[start_checkpoint,
+    /// end_checkpoint)`, `limit` at a time in `ordering`, after `after` and before `before`.
+    fn all_packages_request(
+        start_checkpoint: Option<u64>,
+        end_checkpoint: Option<u64>,
+        limit: u32,
+        ordering: Ordering,
+        after: Option<PackageVersionCursor>,
+        before: Option<PackageVersionCursor>,
+    ) -> ListPackageVersionsRequest {
+        let mut options = QueryOptions::default();
+        options.limit = Some(limit);
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(|cursor| cursor.encode());
+        options.before = before.map(|cursor| cursor.encode());
+        let mut request = ListPackageVersionsRequest::default();
+        request.start_checkpoint = start_checkpoint;
+        request.end_checkpoint = end_checkpoint;
+        request.options = Some(options);
+        request
+    }
+
+    /// Parse `request` on a server that can list every publish from `lowest_checkpoint` and has
+    /// indexed through [`HIGHEST_INDEXED`].
+    fn parse(
+        request: &ListPackageVersionsRequest,
+        lowest_checkpoint: u64,
+    ) -> Result<AllPackageVersionsQuery> {
+        AllPackageVersionsQuery::new(
+            request,
+            lowest_checkpoint,
+            AtCheckpointUpperBound::new(HIGHEST_INDEXED),
+        )
+    }
+
+    /// The cursor of version 1 of package `0x0`, published at checkpoint `checkpoint`.
+    fn cursor_at(checkpoint: u64) -> PackageVersionCursor {
+        PackageVersionCursor::AllPackages {
+            checkpoint,
+            original_package_id: ObjectID::ZERO,
+            version: 1,
+            minted_at: HIGHEST_INDEXED,
+        }
+    }
+
+    /// The key at which a listing starting at checkpoint `checkpoint` starts.
+    fn first_key(checkpoint: u64) -> Bound<PackagePublishKey> {
+        Bound::Included(PackagePublishKey {
+            checkpoint,
+            original_id: ObjectID::ZERO,
+            version: 0,
+        })
+    }
+
+    /// The key at which a listing through checkpoint `checkpoint` ends.
+    fn last_key(checkpoint: u64) -> Bound<PackagePublishKey> {
+        Bound::Included(PackagePublishKey {
+            checkpoint,
+            original_id: ObjectID::MAX,
+            version: u64::MAX,
+        })
+    }
+
+    /// How the response of `query` listing `listed` versions ends.
+    fn end_reason(query: &AllPackageVersionsQuery, listed: u64) -> QueryEndReason {
+        let versions = (1..=listed)
+            .map(|version| {
+                let key = PackagePublishKey {
+                    checkpoint: 20,
+                    original_id: ObjectID::ZERO,
+                    version,
+                };
+                query.listed_version(key, ObjectID::ZERO)
+            })
+            .collect();
+        let response = query.response(versions);
+        assert_eq!(response.next_page_token, None);
+        response.end.unwrap().reason()
+    }
+
+    /// A descending listing starts at its range's high end, so a range reaching past the
+    /// checkpoint after the highest indexed one is refused, naming the bound that reaches past it:
+    /// `end_checkpoint`, or with `end_checkpoint` unset, `start_checkpoint`. A range ending at that
+    /// checkpoint, or starting at the highest indexed one, is served.
+    #[test]
+    fn descending_range_past_the_tip_is_refused() {
+        let first_unavailable = HIGHEST_INDEXED + 1;
+        for start_checkpoint in [None, Some(20), Some(first_unavailable)] {
+            for end_checkpoint in [first_unavailable + 1, u64::MAX] {
+                let request = all_packages_request(
+                    start_checkpoint,
+                    Some(end_checkpoint),
+                    10,
+                    Ordering::Descending,
+                    None,
+                    None,
+                );
+                assert_above_latest_available_error(
+                    parse(&request, 0).unwrap_err(),
+                    "end_checkpoint",
+                    end_checkpoint,
+                    first_unavailable,
+                );
+            }
+            let request = all_packages_request(
+                start_checkpoint,
+                Some(first_unavailable),
+                10,
+                Ordering::Descending,
+                None,
+                None,
+            );
+            parse(&request, 0).unwrap();
+        }
+
+        for start_checkpoint in [first_unavailable, u64::MAX] {
+            let request = all_packages_request(
+                Some(start_checkpoint),
+                None,
+                10,
+                Ordering::Descending,
+                None,
+                None,
+            );
+            assert_above_latest_available_error(
+                parse(&request, 0).unwrap_err(),
+                "start_checkpoint",
+                start_checkpoint,
+                first_unavailable,
+            );
+        }
+
+        let request = all_packages_request(
+            Some(HIGHEST_INDEXED),
+            None,
+            10,
+            Ordering::Descending,
+            None,
+            None,
+        );
+        let query = parse(&request, 0).unwrap();
+        assert_eq!(
+            [query.lower, query.upper],
+            [first_key(HIGHEST_INDEXED), last_key(HIGHEST_INDEXED)]
+        );
+    }
+
+    /// An ascending listing is never refused for reaching past the highest indexed checkpoint: it
+    /// lists through that checkpoint and ends with `LEDGER_TIP`. A range starting past it, or a
+    /// listing after a cursor past it, reads nothing.
+    #[test]
+    fn ascending_listing_past_the_tip_ends_at_the_ledger_tip() {
+        for (start_checkpoint, end_checkpoint) in [
+            (HIGHEST_INDEXED + 1, None),
+            (HIGHEST_INDEXED + 1, Some(HIGHEST_INDEXED + 5)),
+            (u64::MAX, None),
+        ] {
+            let request = all_packages_request(
+                Some(start_checkpoint),
+                end_checkpoint,
+                10,
+                Ordering::Ascending,
+                None,
+                None,
+            );
+            let query = parse(&request, 0).unwrap();
+            assert!(query.reads_nothing(), "{request:?}");
+            assert_eq!(
+                end_reason(&query, 0),
+                QueryEndReason::LedgerTip,
+                "{request:?}"
+            );
+        }
+
+        for start_checkpoint in [None, Some(20)] {
+            for end_checkpoint in [HIGHEST_INDEXED + 2, u64::MAX] {
+                let request = all_packages_request(
+                    start_checkpoint,
+                    Some(end_checkpoint),
+                    10,
+                    Ordering::Ascending,
+                    None,
+                    None,
+                );
+                let query = parse(&request, 0).unwrap();
+                assert!(!query.reads_nothing(), "{request:?}");
+                assert_eq!(query.upper, last_key(HIGHEST_INDEXED), "{request:?}");
+                assert_eq!(
+                    end_reason(&query, 3),
+                    QueryEndReason::LedgerTip,
+                    "{request:?}"
+                );
+            }
+        }
+
+        for after in [HIGHEST_INDEXED + 1, u64::MAX] {
+            let request = all_packages_request(
+                None,
+                None,
+                10,
+                Ordering::Ascending,
+                Some(cursor_at(after)),
+                None,
+            );
+            let query = parse(&request, 0).unwrap();
+            assert!(query.reads_nothing(), "after {after}");
+            assert_eq!(
+                end_reason(&query, 0),
+                QueryEndReason::LedgerTip,
+                "after {after}"
+            );
+        }
+    }
+
+    /// A cursor past the highest indexed checkpoint comes from a newer view of the ledger. A
+    /// descending listing whose range reaches past the tip is refused after or before it, naming
+    /// the cursor: a page from this server's view would skip the versions published in between.
+    /// One whose range ends at or below the checkpoint after the tip holds no key above the cursor
+    /// and is served, as is an ascending listing, which ends with `LEDGER_TIP`.
+    #[test]
+    fn descending_cursor_past_the_tip_is_refused_when_the_range_reaches_it() {
+        let past_tip = HIGHEST_INDEXED + 1;
+        for [after, before] in [
+            [Some(cursor_at(past_tip)), None],
+            [None, Some(cursor_at(past_tip))],
+        ] {
+            let request = all_packages_request(None, None, 10, Ordering::Descending, after, before);
+            assert_above_latest_available_error(
+                parse(&request, 0).unwrap_err(),
+                "cursor",
+                past_tip,
+                past_tip,
+            );
+
+            for end_checkpoint in [20, HIGHEST_INDEXED + 1] {
+                let request = all_packages_request(
+                    None,
+                    Some(end_checkpoint),
+                    10,
+                    Ordering::Descending,
+                    after,
+                    before,
+                );
+                parse(&request, 0).unwrap();
+            }
+
+            let request = all_packages_request(None, None, 10, Ordering::Ascending, after, before);
+            let query = parse(&request, 0).unwrap();
+            assert_eq!(
+                end_reason(&query, 0),
+                QueryEndReason::LedgerTip,
+                "{request:?}"
+            );
+        }
+    }
+
+    /// On a server that can list every publish from checkpoint 10, a listing with no lower bound
+    /// of its own (neither `start_checkpoint` nor an `after` cursor) covers the publishes from 10
+    /// on, so one with an `end_checkpoint` at or below 10 would cover none of them: it is refused,
+    /// in either order. A `start_checkpoint` at the floor, or an `after` cursor at or above it,
+    /// bounds the listing, which then reads nothing. An `end_checkpoint` of 11 covers checkpoint
+    /// 10.
+    #[test]
+    fn end_checkpoint_at_or_below_the_floor_is_refused_without_a_lower_bound() {
+        const FLOOR: u64 = 10;
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for end_checkpoint in [1, 5, FLOOR] {
+                let request =
+                    all_packages_request(None, Some(end_checkpoint), 10, ordering, None, None);
+                assert_below_serving_floor_error(parse(&request, FLOOR).unwrap_err(), FLOOR);
+
+                for after in [FLOOR, FLOOR + 5] {
+                    let request = all_packages_request(
+                        None,
+                        Some(end_checkpoint),
+                        10,
+                        ordering,
+                        Some(cursor_at(after)),
+                        None,
+                    );
+                    assert!(
+                        parse(&request, FLOOR).unwrap().reads_nothing(),
+                        "{request:?}"
+                    );
+                }
+            }
+
+            let request = all_packages_request(Some(FLOOR), Some(FLOOR), 10, ordering, None, None);
+            assert!(
+                parse(&request, FLOOR).unwrap().reads_nothing(),
+                "{ordering:?}"
+            );
+
+            let request = all_packages_request(None, Some(FLOOR + 1), 10, ordering, None, None);
+            let query = parse(&request, FLOOR).unwrap();
+            assert_eq!(
+                [query.lower, query.upper],
+                [first_key(FLOOR), last_key(FLOOR)],
+                "{ordering:?}"
+            );
+        }
+    }
+
+    /// An empty range lists nothing and ends with `CHECKPOINT_BOUND`, in either order, even below
+    /// the floor: it holds no publish to miss.
+    #[test]
+    fn empty_range_reads_nothing_even_below_the_floor() {
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for (start_checkpoint, end_checkpoint) in
+                [(None, 0), (Some(0), 0), (Some(3), 3), (Some(30), 30)]
+            {
+                for lowest_checkpoint in [0, 10] {
+                    let request = all_packages_request(
+                        start_checkpoint,
+                        Some(end_checkpoint),
+                        10,
+                        ordering,
+                        None,
+                        None,
+                    );
+                    let query = parse(&request, lowest_checkpoint).unwrap();
+                    assert!(query.reads_nothing(), "{request:?}");
+                    assert_eq!(
+                        end_reason(&query, 0),
+                        QueryEndReason::CheckpointBound,
+                        "{request:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// An `end_checkpoint` below `start_checkpoint` is `INVALID_ARGUMENT`, in either order.
+    #[test]
+    fn end_checkpoint_below_start_checkpoint_is_invalid() {
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            let request = all_packages_request(Some(20), Some(19), 10, ordering, None, None);
+            let status = parse(&request, 0).unwrap_err().into_status_proto();
+            assert_eq!(
+                status.code,
+                tonic::Code::InvalidArgument as i32,
+                "{status:?}"
+            );
+        }
+    }
+
+    /// A malformed request is `INVALID_ARGUMENT` before any range rule applies, even when its
+    /// range reaches past the tip or below the floor: an undecodable cursor, a cursor from the
+    /// listing of one package, an invalid ordering, or a lineage paging field.
+    #[test]
+    fn malformed_requests_are_invalid_whatever_their_range() {
+        const FLOOR: u64 = 10;
+        let lineage_cursor = PackageVersionCursor::Lineage {
+            original_package_id: ObjectID::ZERO,
+            version: 1,
+            minted_at: HIGHEST_INDEXED,
+        };
+        let undecodable = |mut request: ListPackageVersionsRequest| {
+            request.options.as_mut().unwrap().after = Some(Bytes::from_static(&[0xFF; 2]));
+            request
+        };
+        let invalid_ordering = |mut request: ListPackageVersionsRequest| {
+            request.options.as_mut().unwrap().ordering = Some(7);
+            request
+        };
+        let with_page_size = |mut request: ListPackageVersionsRequest| {
+            request.page_size = Some(1);
+            request
+        };
+        // A descending range up to `u64::MAX` reaches past the tip, and one from checkpoint 3
+        // reaches below the floor.
+        let past_tip = |after| {
+            all_packages_request(None, Some(u64::MAX), 10, Ordering::Descending, after, None)
+        };
+        let below_floor =
+            |after| all_packages_request(Some(3), None, 10, Ordering::Ascending, after, None);
+        for request in [
+            undecodable(past_tip(None)),
+            past_tip(Some(lineage_cursor)),
+            invalid_ordering(past_tip(None)),
+            with_page_size(past_tip(None)),
+            undecodable(below_floor(None)),
+            below_floor(Some(lineage_cursor)),
+            invalid_ordering(below_floor(None)),
+            with_page_size(below_floor(None)),
+        ] {
+            let status = parse(&request, FLOOR).unwrap_err().into_status_proto();
+            assert_eq!(
+                status.code,
+                tonic::Code::InvalidArgument as i32,
+                "{request:?}: {status:?}"
+            );
+        }
+    }
+
+    /// A descending listing after a cursor below the floor and before one past the tip is refused
+    /// for the cursor past the tip, as `ListTransactions` and the listing of one package refuse
+    /// it: the tip is checked before the floor. An ascending listing is not refused for that
+    /// cursor, so it is refused for the floor.
+    #[test]
+    fn descending_cursor_past_the_tip_is_refused_before_the_floor() {
+        const FLOOR: u64 = 10;
+        let past_tip = HIGHEST_INDEXED + 1;
+        let request = |ordering| {
+            all_packages_request(
+                None,
+                None,
+                10,
+                ordering,
+                Some(cursor_at(FLOOR - 1)),
+                Some(cursor_at(past_tip)),
+            )
+        };
+        assert_above_latest_available_error(
+            parse(&request(Ordering::Descending), FLOOR).unwrap_err(),
+            "cursor",
+            past_tip,
+            past_tip,
+        );
+        assert_below_serving_floor_error(
+            parse(&request(Ordering::Ascending), FLOOR).unwrap_err(),
+            FLOOR,
+        );
+    }
+
+    /// The order of the floor and tip refusals follows `ListTransactions`' `floor_error_or`. A
+    /// descending listing from a `start_checkpoint` below the floor with no `after` cursor can
+    /// never be served, so it is refused for the floor even when its `before` cursor is past the
+    /// tip. With an `after` cursor below the floor too, the cursor past the tip is refused first.
+    /// An empty range below the floor is refused for neither: it lists nothing.
+    #[test]
+    fn start_below_the_floor_is_refused_before_a_cursor_past_the_tip_without_an_after_cursor() {
+        const FLOOR: u64 = 10;
+        let past_tip = HIGHEST_INDEXED + 1;
+        let request = |after: Option<PackageVersionCursor>| {
+            all_packages_request(
+                Some(FLOOR - 5),
+                None,
+                10,
+                Ordering::Descending,
+                after,
+                Some(cursor_at(past_tip)),
+            )
+        };
+        assert_below_serving_floor_error(parse(&request(None), FLOOR).unwrap_err(), FLOOR);
+        assert_above_latest_available_error(
+            parse(&request(Some(cursor_at(FLOOR - 2))), FLOOR).unwrap_err(),
+            "cursor",
+            past_tip,
+            past_tip,
+        );
+
+        // On a server that keeps full history the cursor past the tip is refused.
+        assert_above_latest_available_error(
+            parse(&request(None), 0).unwrap_err(),
+            "cursor",
+            past_tip,
+            past_tip,
+        );
+        let mut empty = request(None);
+        empty.end_checkpoint = empty.start_checkpoint;
+        assert!(parse(&empty, FLOOR).unwrap().reads_nothing());
+    }
+
+    /// A full page ends with `ITEM_LIMIT`, a shorter one with the reason of the bound it reached:
+    /// `CURSOR_BOUND` at a cursor inside the range on the far side in scan order (a descending
+    /// listing's `after`, an ascending one's `before`), `LEDGER_TIP` where an ascending range
+    /// reaches past the checkpoint after the highest indexed one, and `CHECKPOINT_BOUND` at the
+    /// range's edge otherwise.
+    #[test]
+    fn pages_end_with_the_reason_of_their_bound() {
+        let inside = Some(cursor_at(20));
+        for (request, reason) in [
+            (
+                all_packages_request(None, None, 2, Ordering::Descending, None, None),
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                all_packages_request(None, None, 2, Ordering::Descending, None, inside),
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                all_packages_request(
+                    Some(10),
+                    None,
+                    2,
+                    Ordering::Descending,
+                    Some(cursor_at(5)),
+                    None,
+                ),
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                all_packages_request(None, Some(30), 2, Ordering::Ascending, None, None),
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                all_packages_request(
+                    None,
+                    Some(HIGHEST_INDEXED + 1),
+                    2,
+                    Ordering::Ascending,
+                    None,
+                    None,
+                ),
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                all_packages_request(None, None, 2, Ordering::Descending, inside, None),
+                QueryEndReason::CursorBound,
+            ),
+            (
+                all_packages_request(None, None, 2, Ordering::Ascending, None, inside),
+                QueryEndReason::CursorBound,
+            ),
+            (
+                all_packages_request(None, None, 2, Ordering::Ascending, None, None),
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                all_packages_request(None, None, 2, Ordering::Ascending, inside, None),
+                QueryEndReason::LedgerTip,
+            ),
+            (
+                all_packages_request(
+                    None,
+                    Some(HIGHEST_INDEXED + 2),
+                    2,
+                    Ordering::Ascending,
+                    None,
+                    None,
+                ),
+                QueryEndReason::LedgerTip,
+            ),
+        ] {
+            let query = parse(&request, 0).unwrap();
+            assert_eq!(
+                end_reason(&query, 2),
+                QueryEndReason::ItemLimit,
+                "{request:?}"
+            );
+            assert_eq!(end_reason(&query, 1), reason, "{request:?}");
+        }
+    }
+
+    /// An `after` cursor below the floor, with no `start_checkpoint`, names a version the client
+    /// holds, and the versions published between it and the floor may be gone: a listing after
+    /// it is refused, in either order, rather than reach the floor. With `start_checkpoint` at
+    /// the floor, the cursor only bounds the listing.
+    #[test]
+    fn listing_after_a_cursor_below_the_floor_is_refused() {
+        const FLOOR: u64 = 10;
+        let after = Some(cursor_at(FLOOR - 1));
+
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            let request = all_packages_request(None, None, 2, ordering, after, None);
+            assert_below_serving_floor_error(parse(&request, FLOOR).unwrap_err(), FLOOR);
+        }
+
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            let request = all_packages_request(Some(FLOOR), None, 2, ordering, after, None);
+            let query = parse(&request, FLOOR).unwrap();
+            assert_eq!(query.lower, first_key(FLOOR), "{ordering:?}");
+        }
+    }
+
+    /// A `start_checkpoint` below the floor is refused, in either order, unless an `after` cursor
+    /// at or above the floor bounds the listing: the range then holds nothing below the floor,
+    /// and the listing starts after the cursor. An `after` cursor below the floor bounds nothing
+    /// the floor admits.
+    #[test]
+    fn start_checkpoint_below_the_floor_is_served_after_a_cursor_at_or_above_it() {
+        const FLOOR: u64 = 10;
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for checkpoint in [FLOOR, FLOOR + 5] {
+                let after = Some(cursor_at(checkpoint));
+                let request = all_packages_request(Some(3), None, 2, ordering, after, None);
+                let query = parse(&request, FLOOR).unwrap();
+                let after = PackagePublishKey {
+                    checkpoint,
+                    original_id: ObjectID::ZERO,
+                    version: 1,
+                };
+                assert_eq!(
+                    query.lower,
+                    Bound::Excluded(after),
+                    "{ordering:?} after {checkpoint}"
+                );
+            }
+
+            for after in [None, Some(cursor_at(FLOOR - 1))] {
+                let request = all_packages_request(Some(3), None, 2, ordering, after, None);
+                assert_below_serving_floor_error(parse(&request, FLOOR).unwrap_err(), FLOOR);
+            }
+        }
+    }
 
     /// `package_versions` rows for `versions` of a system package, upgraded in place, so every
     /// version lives under the package's own ID.
@@ -1270,6 +2242,7 @@ mod tests {
             .encode()
         };
         let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package.to_string());
         request.start_version = start_version;
         request.page_token = token.map(|version| {
             encode_page_token(PageToken {
@@ -1693,9 +2666,10 @@ mod store_tests {
     /// An `end_checkpoint` below `start_checkpoint` is `INVALID_ARGUMENT`, and equal bounds list
     /// nothing, including an `end_checkpoint` of 0, which needs no lookup at the checkpoint before
     /// it; likewise an `end_version` below `start_version`. So is a page token or page size with a
-    /// checkpoint bound, which pages by cursor, and a cursor that does not decode or names another
-    /// lineage. A malformed request is refused as such before any range rule applies, even when
-    /// its range reaches past the tip or below the floor.
+    /// checkpoint bound, which pages by cursor, and a cursor that does not decode, names another
+    /// lineage, or comes from the listing of every package. A malformed request is refused as
+    /// such before any range rule applies, even when its range reaches past the tip or below the
+    /// floor.
     #[test]
     fn invalid_checkpoint_ranges_are_refused() {
         let store = Store::with_system_package();
@@ -1760,6 +2734,22 @@ mod store_tests {
             None,
         );
         other_lineage_past_the_tip.options.as_mut().unwrap().before = Some(other_lineage);
+        let mut every_package_after = cursor_lineage(
+            [Some(3), Some(u64::MAX)],
+            Ordering::Descending,
+            10,
+            None,
+            None,
+        );
+        every_package_after.options.as_mut().unwrap().after = Some(
+            PackageVersionCursor::AllPackages {
+                checkpoint: 5,
+                original_package_id: system(),
+                version: 2,
+                minted_at: HIGHEST_INDEXED,
+            }
+            .encode(),
+        );
         for request in [
             page_size,
             page_token,
@@ -1769,6 +2759,7 @@ mod store_tests {
             other_lineage_after,
             other_lineage_before,
             other_lineage_past_the_tip,
+            every_package_after,
         ] {
             assert_invalid_argument(store.list(request.clone()).unwrap_err());
             assert_invalid_argument(pruned.list(request).unwrap_err());
@@ -3017,6 +4008,367 @@ mod store_tests {
 
         fn indexes(&self) -> Option<&dyn RpcIndexes> {
             self.inner.indexes()
+        }
+    }
+
+    /// A store whose `packages_by_checkpoint` index holds version 1 of the package with original
+    /// ID `id`, published at `checkpoint`, for each `(checkpoint, id)` in `published`, on a node
+    /// whose lowest available checkpoint is `lowest_available`.
+    fn store_with_publishes(published: &[(u64, u8)], lowest_available: u64) -> Store {
+        let store = Store::new();
+        let mut batch = store.db.batch();
+        for &(checkpoint, id) in published {
+            let id = ObjectID::from_single_byte(id);
+            let (key, value) =
+                sui_rpc_store::schema::packages_by_checkpoint::store(checkpoint, id, 1, id);
+            batch
+                .put(&store.schema.packages_by_checkpoint, &key, &value)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+        store.prune(lowest_available, &[]);
+        store
+    }
+
+    /// A request listing every package's versions in `ordering`, after and before the
+    /// publishes at `(checkpoint, original ID)`.
+    fn all_packages(
+        ordering: Ordering,
+        after: Option<(u64, u8)>,
+        before: Option<(u64, u8)>,
+    ) -> ListPackageVersionsRequest {
+        let cursor = |(checkpoint, id): (u64, u8)| {
+            PackageVersionCursor::AllPackages {
+                checkpoint,
+                original_package_id: ObjectID::from_single_byte(id),
+                version: 1,
+                minted_at: HIGHEST_INDEXED,
+            }
+            .encode()
+        };
+        let mut options = QueryOptions::default();
+        options.ordering = Some(ordering as i32);
+        options.after = after.map(cursor);
+        options.before = before.map(cursor);
+        let mut request = ListPackageVersionsRequest::default();
+        request.options = Some(options);
+        request
+    }
+
+    /// The publish checkpoints `request` lists.
+    fn publish_checkpoints(store: &Store, request: ListPackageVersionsRequest) -> Result<Vec<u64>> {
+        let service = RpcService::new(Arc::new(store.reader()));
+        Ok(list_package_versions(&service, request)?
+            .versions
+            .iter()
+            .map(|version| version.checkpoint.unwrap())
+            .collect())
+    }
+
+    /// On a node whose floor is checkpoint 10, the listing of every package covers the
+    /// publishes from checkpoint 10 on, in either order: a descending listing ends there with a
+    /// short last page. An `after` cursor at the floor bounds the listing; a listing after one
+    /// below it is refused in either order, rather than skip the publishes in between.
+    #[test]
+    fn listing_of_every_package_covers_the_publishes_from_the_floor() {
+        let store = store_with_publishes(&[(5, 0xA), (10, 0xB), (12, 0xC)], 10);
+        for (request, expected) in [
+            (all_packages(Ordering::Ascending, None, None), vec![10, 12]),
+            (all_packages(Ordering::Descending, None, None), vec![12, 10]),
+            (
+                all_packages(Ordering::Ascending, Some((10, 0xB)), None),
+                vec![12],
+            ),
+            (
+                all_packages(Ordering::Descending, Some((10, 0xB)), None),
+                vec![12],
+            ),
+        ] {
+            assert_eq!(
+                publish_checkpoints(&store, request.clone()).unwrap(),
+                expected,
+                "{request:?}"
+            );
+        }
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            assert_below_serving_floor_error(
+                publish_checkpoints(&store, all_packages(ordering, Some((5, 0xA)), None))
+                    .unwrap_err(),
+                10,
+            );
+        }
+    }
+
+    /// On a node whose floor is checkpoint 10, a `before` cursor below the floor leaves nothing to
+    /// list in either order, although publishes below the floor remain in the index. A `before`
+    /// cursor above the floor bounds the listing.
+    #[test]
+    fn before_cursor_below_the_floor_lists_nothing() {
+        let store = store_with_publishes(&[(5, 0xA), (10, 0xB), (12, 0xC)], 10);
+        for ordering in [Ordering::Ascending, Ordering::Descending] {
+            for (before, expected) in [
+                ((5, 0xA), vec![]),
+                ((9, 0xF), vec![]),
+                ((12, 0xC), vec![10]),
+            ] {
+                assert_eq!(
+                    publish_checkpoints(&store, all_packages(ordering, None, Some(before)))
+                        .unwrap(),
+                    expected,
+                    "{ordering:?} before {before:?}"
+                );
+            }
+        }
+    }
+
+    /// Publishes as `(checkpoint, original ID)`, in listing order: one at checkpoint 3, three at
+    /// 5, one at 8, two at 12 and one at 15.
+    const REVERSAL_PUBLISHES: [(u64, u8); 8] = [
+        (3, 0xA),
+        (5, 0x1),
+        (5, 0x2),
+        (5, 0x3),
+        (8, 0xB),
+        (12, 0x4),
+        (12, 0x5),
+        (15, 0xC),
+    ];
+
+    /// Checkpoint ranges over [`REVERSAL_PUBLISHES`]: every publish, reaching past the tip and
+    /// ending at the checkpoint after it; from checkpoint 5; before checkpoint 13; `[5, 13)`;
+    /// checkpoint 5 alone; and `[4, 12)`.
+    const ALL_PACKAGES_REVERSAL_RANGES: [[Option<u64>; 2]; 7] = [
+        [None, None],
+        [None, Some(HIGHEST_INDEXED + 1)],
+        [Some(5), None],
+        [None, Some(13)],
+        [Some(5), Some(13)],
+        [Some(5), Some(6)],
+        [Some(4), Some(12)],
+    ];
+
+    /// [`REVERSAL_PUBLISHES`], each with the checkpoint it was published in.
+    fn reversal_publishes() -> Vec<((u64, u8), u64)> {
+        REVERSAL_PUBLISHES
+            .iter()
+            .map(|&publish| (publish, publish.0))
+            .collect()
+    }
+
+    /// A request listing every package's versions over the checkpoint range
+    /// `[start_checkpoint, end_checkpoint)`, `limit` at a time in `ordering`, after and before the
+    /// publishes at `(checkpoint, original ID)`.
+    fn ranged_all_packages(
+        [start_checkpoint, end_checkpoint]: [Option<u64>; 2],
+        ordering: Ordering,
+        limit: u32,
+        after: Option<(u64, u8)>,
+        before: Option<(u64, u8)>,
+    ) -> ListPackageVersionsRequest {
+        let mut request = all_packages(ordering, after, before);
+        request.start_checkpoint = start_checkpoint;
+        request.end_checkpoint = end_checkpoint;
+        request.options.as_mut().unwrap().limit = Some(limit);
+        request
+    }
+
+    /// The publishes `(checkpoint, original ID)` that `request` lists, read from the cursors it
+    /// returns, and how the listing ends.
+    fn list_publishes(
+        store: &Store,
+        request: ListPackageVersionsRequest,
+    ) -> (Vec<(u64, u8)>, Option<QueryEndReason>) {
+        let response = store.respond(request).unwrap();
+        let publishes = response
+            .versions
+            .iter()
+            .map(|listed| {
+                let cursor = decode_cursor("cursor", listed.cursor.as_deref().unwrap()).unwrap();
+                // Every cursor records the highest indexed checkpoint as its `minted_at`.
+                let PackageVersionCursor::AllPackages {
+                    checkpoint,
+                    original_package_id,
+                    version: 1,
+                    minted_at: HIGHEST_INDEXED,
+                } = cursor
+                else {
+                    panic!("unexpected cursor {cursor:?}");
+                };
+                let id = original_package_id.into_bytes()[ObjectID::LENGTH - 1];
+                assert_eq!(ObjectID::from_single_byte(id), original_package_id);
+                (checkpoint, id)
+            })
+            .collect();
+        (publishes, response.end.map(|end| end.reason()))
+    }
+
+    /// Reversing an ascending page of every package from mid-listing to descending, with
+    /// `before` = the page's first publish, lists exactly the publishes before the page, newest
+    /// first, and the two walks list every publish once: under each checkpoint range, with the
+    /// pivot inside checkpoint 5's three publishes or across a checkpoint.
+    #[test]
+    fn reversing_an_ascending_page_of_every_package_lists_the_publishes_before_it_once() {
+        let store = store_with_publishes(&REVERSAL_PUBLISHES, 0);
+        let list = |range, ordering, limit, after, before| {
+            list_publishes(
+                &store,
+                ranged_all_packages(range, ordering, limit, after, before),
+            )
+        };
+        let published = reversal_publishes();
+        for range in ALL_PACKAGES_REVERSAL_RANGES {
+            check_reversing_ascending_pages(&list, &published, range, range);
+        }
+
+        // The pivot is the first publish of checkpoint 5 (crossing back into checkpoint 3), the
+        // middle publish of checkpoint 5, and, within `[5, 13)`, the only publish of checkpoint
+        // 8 (crossing back into checkpoint 5).
+        for (range, limit, after, page, before_page, before_end) in [
+            (
+                [None, None],
+                2,
+                (3, 0xA),
+                vec![(5, 0x1), (5, 0x2)],
+                vec![(3, 0xA)],
+                QueryEndReason::CheckpointBound,
+            ),
+            (
+                [None, None],
+                1,
+                (5, 0x1),
+                vec![(5, 0x2)],
+                vec![(5, 0x1)],
+                QueryEndReason::ItemLimit,
+            ),
+            (
+                [Some(5), Some(13)],
+                2,
+                (5, 0x3),
+                vec![(8, 0xB), (12, 0x4)],
+                vec![(5, 0x3), (5, 0x2)],
+                QueryEndReason::ItemLimit,
+            ),
+        ] {
+            assert_eq!(
+                list(range, Ordering::Ascending, limit, Some(after), None),
+                (page.clone(), Some(QueryEndReason::ItemLimit)),
+                "{range:?} after {after:?}"
+            );
+            assert_eq!(
+                list(range, Ordering::Descending, limit, None, Some(page[0])),
+                (before_page, Some(before_end)),
+                "{range:?} before {:?}",
+                page[0]
+            );
+        }
+    }
+
+    /// Reversing a descending page of every package from mid-listing to ascending, with `after` =
+    /// the page's first (highest) publish, lists exactly the publishes above the page, oldest
+    /// first, and the two walks list every publish once; `after` = the page's last publish lists
+    /// the rest of the page again, since a cursor carries no direction. Under each checkpoint
+    /// range, with the pivot inside checkpoint 5's three publishes or across a checkpoint.
+    #[test]
+    fn reversing_a_descending_page_of_every_package_lists_the_publishes_above_it_once() {
+        let store = store_with_publishes(&REVERSAL_PUBLISHES, 0);
+        let list = |range, ordering, limit, after, before| {
+            list_publishes(
+                &store,
+                ranged_all_packages(range, ordering, limit, after, before),
+            )
+        };
+        let published = reversal_publishes();
+        for range in ALL_PACKAGES_REVERSAL_RANGES {
+            check_reversing_descending_pages(&list, &published, range, range);
+        }
+
+        // A descending page of checkpoint 5's last two publishes, then ascending from its first
+        // publish (crossing into checkpoint 8) and from its last (inside checkpoint 5).
+        assert_eq!(
+            list([None, None], Ordering::Descending, 2, None, Some((8, 0xB))),
+            (vec![(5, 0x3), (5, 0x2)], Some(QueryEndReason::ItemLimit))
+        );
+        for (after, expected) in [
+            ((5, 0x3), vec![(8, 0xB), (12, 0x4), (12, 0x5), (15, 0xC)]),
+            (
+                (5, 0x2),
+                vec![(5, 0x3), (8, 0xB), (12, 0x4), (12, 0x5), (15, 0xC)],
+            ),
+        ] {
+            assert_eq!(
+                list([None, None], Ordering::Ascending, 10, Some(after), None),
+                (expected, Some(QueryEndReason::LedgerTip)),
+                "after {after:?}"
+            );
+        }
+    }
+
+    /// A page of every package's cursors, reversed under another checkpoint range than the one
+    /// they were listed under, list the publishes on the far side of the cursor that the new
+    /// range holds, whether the cursor is inside the new range or outside it: for every pair of
+    /// distinct ranges, in both directions.
+    #[test]
+    fn reversing_a_page_of_every_package_under_another_checkpoint_range_lists_the_intersection() {
+        let store = store_with_publishes(&REVERSAL_PUBLISHES, 0);
+        let list = |range, ordering, limit, after, before| {
+            list_publishes(
+                &store,
+                ranged_all_packages(range, ordering, limit, after, before),
+            )
+        };
+        let published = reversal_publishes();
+        for mint_range in ALL_PACKAGES_REVERSAL_RANGES {
+            for reverse_range in ALL_PACKAGES_REVERSAL_RANGES {
+                if mint_range != reverse_range {
+                    check_reversing_ascending_pages(&list, &published, mint_range, reverse_range);
+                    check_reversing_descending_pages(&list, &published, mint_range, reverse_range);
+                }
+            }
+        }
+
+        // Cursors listed with no range, reversed under one that holds them or not.
+        for (range, ordering, after, before, expected) in [
+            (
+                [None, Some(10)],
+                Ordering::Descending,
+                None,
+                Some((12, 0x4)),
+                vec![(8, 0xB), (5, 0x3), (5, 0x2), (5, 0x1), (3, 0xA)],
+            ),
+            (
+                [Some(5), Some(10)],
+                Ordering::Ascending,
+                Some((12, 0x4)),
+                None,
+                vec![],
+            ),
+            (
+                [Some(5), Some(6)],
+                Ordering::Ascending,
+                Some((3, 0xA)),
+                None,
+                vec![(5, 0x1), (5, 0x2), (5, 0x3)],
+            ),
+            (
+                [Some(5), Some(6)],
+                Ordering::Descending,
+                None,
+                Some((5, 0x3)),
+                vec![(5, 0x2), (5, 0x1)],
+            ),
+            (
+                [Some(13), None],
+                Ordering::Descending,
+                None,
+                Some((12, 0x4)),
+                vec![],
+            ),
+        ] {
+            assert_eq!(
+                list(range, ordering, 10, after, before),
+                (expected, Some(QueryEndReason::CheckpointBound)),
+                "{range:?} {ordering:?} after {after:?} before {before:?}"
+            );
         }
     }
 }

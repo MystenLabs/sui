@@ -25,6 +25,7 @@
 //! acquisition count are recorded once on `BigTableClientContext` drop.
 
 use std::collections::HashMap;
+use std::ops::Bound;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -66,6 +67,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
@@ -431,6 +433,25 @@ impl BigTableClient {
         self.call_gated(
             stage::PACKAGES,
             inner.get_package_versions(original_id, cp_bound, versions, limit, descending),
+        )
+        .await
+    }
+
+    /// Read the versions of every package whose `packages_by_checkpoint` keys
+    /// lie between `lower` and `upper` under one `packages` permit, held
+    /// through both the index scan and the `packages` multi-get behind it (see
+    /// [`KeyValueStoreReader::get_packages_by_checkpoint_range`]).
+    pub(crate) async fn get_packages_by_checkpoint_range(
+        &self,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PACKAGES,
+            inner.get_packages_by_checkpoint_range(lower, upper, limit, descending),
         )
         .await
     }

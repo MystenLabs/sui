@@ -633,12 +633,16 @@ async fn test_availability_floor_below_the_fork_passes_through() {
 /// checkpoint are rejected even when the remote's retention reaches further back; at the fork
 /// checkpoint they are served. A listing's checkpoint range starts from the version as of the
 /// checkpoint before `start_checkpoint`, so the lowest one it accepts is the checkpoint after the
-/// fork, and a range ending at or below that checkpoint is refused too.
+/// fork, and a range ending at or below that checkpoint is refused too. The listing of every
+/// package, which needs each version's publish checkpoint, starts after it.
 #[tokio::test]
 async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
     use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PackageVersionCursor;
     use sui_rpc_api::proto::sui::rpc::v2::GetPackageRequest;
     use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryEndReason;
+    use sui_rpc_api::proto::sui::rpc::v2::QueryOptions;
     use sui_rpc_api::proto::sui::rpc::v2::get_package_request::Selector;
     use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 
@@ -714,6 +718,53 @@ async fn test_checkpoint_pinned_reads_below_the_fork_checkpoint_are_rejected() {
         assert_eq!(listed, expected, "{range:?}");
     }
     let below_floor = "requested data below earliest available; lowest available checkpoint is 100";
+
+    // The seeded package has no publish checkpoint, so the listing of every package covers only
+    // the checkpoints after the fork: a range starting at or before the fork checkpoint is
+    // refused, unless an `after` cursor past the fork bounds it, and so is one with no lower
+    // bound that ends at or before the checkpoint after the fork. The fork indexes nothing past
+    // its checkpoint, so every range accepted here lists nothing and ends at the ledger tip.
+    let list_all = |range: [Option<u64>; 2], after: Option<u64>| {
+        let mut options = QueryOptions::default();
+        options.after = after.map(|checkpoint| {
+            PackageVersionCursor::AllPackages {
+                checkpoint,
+                original_package_id: package_id,
+                version: 1,
+                minted_at: checkpoint,
+            }
+            .encode()
+        });
+        let mut request = ListPackageVersionsRequest::default();
+        [request.start_checkpoint, request.end_checkpoint] = range;
+        request.options = Some(options);
+        service.list_package_versions(tonic::Request::new(request))
+    };
+    for (range, after) in [
+        ([Some(fork_checkpoint), None], None),
+        ([Some(fork_checkpoint), None], Some(fork_checkpoint)),
+        ([None, Some(fork_checkpoint)], None),
+        ([None, Some(fork_checkpoint + 1)], None),
+    ] {
+        let error = list_all(range, after).await.unwrap_err();
+        assert_eq!(error.code(), tonic::Code::OutOfRange, "{range:?} {after:?}");
+        assert_eq!(error.message(), below_range_floor, "{range:?} {after:?}");
+    }
+    for (range, after) in [
+        ([Some(fork_checkpoint + 1), None], None),
+        ([None, Some(fork_checkpoint + 2)], None),
+        ([Some(fork_checkpoint), None], Some(fork_checkpoint + 1)),
+    ] {
+        let response = list_all(range, after).await.unwrap().into_inner();
+        assert_eq!(
+            (
+                response.versions.len(),
+                response.end.map(|end| end.reason())
+            ),
+            (0, Some(QueryEndReason::LedgerTip)),
+            "{range:?} {after:?}"
+        );
+    }
 
     let mut request = GetPackageRequest::default();
     request.package_id = Some(package_id.to_string());
@@ -1449,9 +1500,7 @@ impl ForkWithPublishes {
             .map(|version| ListedVersion {
                 key: (
                     version.checkpoint.unwrap(),
-                    // A lineage listing names no original id on its versions: they all share the
-                    // fixture lineage's.
-                    self.lineage,
+                    version.original_id.unwrap().parse().unwrap(),
                     version.version.unwrap(),
                 ),
                 cursor: version.cursor.unwrap(),
@@ -2013,6 +2062,147 @@ async fn test_list_package_versions_of_an_unknown_package_is_decided_by_the_curs
                 "{ordering:?} minted at {minted_at}"
             );
             assert_eq!(end, expected_end, "{ordering:?} minted at {minted_at}");
+        }
+    }
+}
+
+/// The listing of every package published in the fork, reversed after an ascending page that
+/// starts after a cursor: a descending listing before the page's first version lists exactly the
+/// versions below the page, newest first, with or without a checkpoint range. One reversal crosses
+/// a checkpoint boundary, and one stays within the checkpoint that publishes three packages.
+#[tokio::test]
+async fn test_list_all_package_versions_reversed_from_an_ascending_page_lists_the_versions_below_it()
+ {
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+
+    let fork = fork_with_publishes().await;
+    let c = &fork.checkpoints;
+    let p = &fork.published;
+    assert_eq!([p[1].0, p[2].0, p[3].0], [c[1]; 3]);
+    let request = |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+        fork.request(None, [None, None], ordering, 1, after, before)
+    };
+    let (all, _) = fork.walk(request(Ordering::Ascending, None, None)).await;
+    assert_eq!(listed_keys(&all), *p);
+
+    // The page after the first checkpoint's only publish starts the second checkpoint, and the
+    // listing before it is that publish.
+    let (page, _) = fork
+        .page(request(Ordering::Ascending, Some(&all[0]), None))
+        .await;
+    assert_eq!(listed_keys(&page), [p[1]]);
+    let (below, _) = fork
+        .walk(request(Ordering::Descending, None, Some(&page[0])))
+        .await;
+    assert_eq!(listed_keys(&below), [p[0]]);
+
+    // The page after the second checkpoint's first publish is its middle one, and the listing
+    // before it starts with the second checkpoint's first publish.
+    let (page, _) = fork
+        .page(request(Ordering::Ascending, Some(&all[1]), None))
+        .await;
+    assert_eq!(listed_keys(&page), [p[2]]);
+    let (below, _) = fork
+        .walk(request(Ordering::Descending, None, Some(&page[0])))
+        .await;
+    assert_eq!(listed_keys(&below), [p[1], p[0]]);
+
+    // Every publish; from the second checkpoint; through the second checkpoint; and the second
+    // checkpoint's publishes with the first two upgrades.
+    for range in [
+        [None, None],
+        [Some(c[1]), None],
+        [None, Some(c[2])],
+        [Some(c[1]), Some(c[4])],
+    ] {
+        fork.check_reversal_of_ascending_pages(None, &fork.published, range)
+            .await;
+    }
+}
+
+/// The listing of every package published in the fork, reversed after a descending page that
+/// starts before a cursor: an ascending listing after the page's first version lists exactly the
+/// versions above the page, oldest first, and one after the page's last version lists the rest of
+/// the page again, with or without a checkpoint range. One reversal crosses a checkpoint boundary,
+/// and one stays within the checkpoint that publishes three packages.
+#[tokio::test]
+async fn test_list_all_package_versions_reversed_from_a_descending_page_lists_the_versions_above_it()
+ {
+    use sui_rpc_api::proto::sui::rpc::v2::Ordering;
+
+    let fork = fork_with_publishes().await;
+    let c = &fork.checkpoints;
+    let p = &fork.published;
+    assert_eq!([p[1].0, p[2].0, p[3].0], [c[1]; 3]);
+    let request = |ordering, after: Option<&ListedVersion>, before: Option<&ListedVersion>| {
+        fork.request(None, [None, None], ordering, 1, after, before)
+    };
+    let (all, _) = fork.walk(request(Ordering::Ascending, None, None)).await;
+    assert_eq!(listed_keys(&all), *p);
+
+    // The page before the third checkpoint's publish is the second checkpoint's last one, and
+    // the listing after it starts at the third checkpoint.
+    let (page, _) = fork
+        .page(request(Ordering::Descending, None, Some(&all[4])))
+        .await;
+    assert_eq!(listed_keys(&page), [p[3]]);
+    let (above, _) = fork
+        .walk(request(Ordering::Ascending, Some(&page[0]), None))
+        .await;
+    assert_eq!(listed_keys(&above), p[4..]);
+
+    // The page before the second checkpoint's last publish is its middle one, and the listing
+    // after it starts with the second checkpoint's last publish.
+    let (page, _) = fork
+        .page(request(Ordering::Descending, None, Some(&all[3])))
+        .await;
+    assert_eq!(listed_keys(&page), [p[2]]);
+    let (above, _) = fork
+        .walk(request(Ordering::Ascending, Some(&page[0]), None))
+        .await;
+    assert_eq!(listed_keys(&above), p[3..]);
+
+    for range in [
+        [None, None],
+        [Some(c[1]), None],
+        [None, Some(c[2])],
+        [Some(c[1]), Some(c[4])],
+    ] {
+        fork.check_reversal_of_descending_pages(None, &fork.published, range)
+            .await;
+    }
+}
+
+/// The listing of every package published in the fork, reversed from a cursor taken under a
+/// different checkpoint range than the reversed request's: the reversed listing holds the
+/// versions of the new range beyond the cursor, whether the cursor lies inside that range or
+/// outside it.
+#[tokio::test]
+async fn test_list_all_package_versions_reversed_under_another_checkpoint_range_lists_the_intersection()
+ {
+    let fork = fork_with_publishes().await;
+    let c = &fork.checkpoints;
+    // Every publish; from the second checkpoint; through the second checkpoint; the second
+    // checkpoint alone; the second checkpoint with the first two upgrades; the upgrades, to the
+    // checkpoint after the tip; and an empty range.
+    let ranges = [
+        [None, None],
+        [Some(c[1]), None],
+        [None, Some(c[2])],
+        [Some(c[1]), Some(c[2])],
+        [Some(c[1]), Some(c[4])],
+        [Some(c[2]), Some(c[5] + 1)],
+        [Some(c[3]), Some(c[3])],
+    ];
+    for mint_range in ranges {
+        for reverse_range in ranges {
+            fork.check_reversal_under_another_range(
+                None,
+                &fork.published,
+                mint_range,
+                reverse_range,
+            )
+            .await;
         }
     }
 }

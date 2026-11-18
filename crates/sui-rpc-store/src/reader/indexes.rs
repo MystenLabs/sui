@@ -31,7 +31,9 @@ use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::OwnedObjectInfo;
+use sui_types::storage::PackagePublishKey;
 use sui_types::storage::PackageVersionsIterator;
+use sui_types::storage::PackagesByCheckpointIterator;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::error::Result as StorageResult;
 use typed_store_error::TypedStoreError;
@@ -376,6 +378,40 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         Ok(Box::new(mapped))
     }
 
+    fn packages_by_checkpoint_iter(
+        &self,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
+        descending: bool,
+    ) -> StorageResult<PackagesByCheckpointIterator<'_>> {
+        use crate::schema::packages_by_checkpoint::{Key, StorageId};
+        let empty = match (&lower, &upper) {
+            (Bound::Included(lower), Bound::Included(upper)) => lower > upper,
+            (
+                Bound::Included(lower) | Bound::Excluded(lower),
+                Bound::Included(upper) | Bound::Excluded(upper),
+            ) => lower >= upper,
+            _ => false,
+        };
+        if empty {
+            return Ok(Box::new(std::iter::empty()));
+        }
+        // Keys encode `(checkpoint, original_id, version)` big-endian, so key order is
+        // `PackagePublishKey` order and the typed bounds carry over unchanged.
+        let range = (lower.map(Key::from), upper.map(Key::from));
+        let map = &self.schema().packages_by_checkpoint;
+        let to_storage_err = sui_types::storage::error::Error::custom;
+        let rows: Box<dyn Iterator<Item = _>> = if descending {
+            Box::new(map.iter_rev(range).map_err(to_storage_err)?)
+        } else {
+            Box::new(map.iter(range).map_err(to_storage_err)?)
+        };
+        Ok(Box::new(rows.map(|row| {
+            let (key, StorageId(storage_id)) = row.map_err(to_typed_store_err)?;
+            Ok((PackagePublishKey::from(key), storage_id))
+        })))
+    }
+
     fn get_package_version_storage_id(
         &self,
         original_id: ObjectID,
@@ -606,8 +642,10 @@ mod tests {
 
     use sui_consistent_store::Db;
     use sui_consistent_store::DbOptions;
+    use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use sui_types::base_types::ObjectID;
     use sui_types::storage::IndexedPackageVersion;
+    use sui_types::storage::PackagePublishKey;
     use sui_types::storage::RpcIndexes;
 
     use crate::RpcStoreSchema;
@@ -1229,6 +1267,96 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn packages_by_checkpoint_iter_lists_key_range_in_either_direction() {
+        use std::ops::Bound::{Excluded, Included, Unbounded};
+
+        let (_dir, db, reader) = setup();
+        let key = |checkpoint, original_id, version| PackagePublishKey {
+            checkpoint,
+            original_id,
+            version,
+        };
+        let a = ObjectID::from_single_byte(0x0A);
+        let b = ObjectID::from_single_byte(0x0B);
+        let c = ObjectID::from_single_byte(0x0C);
+        let system = SUI_FRAMEWORK_PACKAGE_ID;
+        // In key order: two packages in checkpoint 5, two in-place upgrades of a system package
+        // (one storage id) in checkpoints 7 and 9, an upgrade of `a` sharing checkpoint 9, and a
+        // last package in checkpoint 12.
+        let publishes = vec![
+            (key(5, a, 1), a),
+            (key(5, b, 1), b),
+            (key(7, system, 2), system),
+            (key(9, system, 3), system),
+            (key(9, a, 2), ObjectID::from_single_byte(0xA2)),
+            (key(12, c, 1), c),
+        ];
+        let mut batch = db.batch();
+        for (key, storage_id) in &publishes {
+            let (k, v) = crate::schema::packages_by_checkpoint::store(
+                key.checkpoint,
+                key.original_id,
+                key.version,
+                *storage_id,
+            );
+            batch
+                .put(&reader.schema().packages_by_checkpoint, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let list = |lower, upper, descending| -> Vec<(PackagePublishKey, ObjectID)> {
+            reader
+                .packages_by_checkpoint_iter(lower, upper, descending)
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        let reversed = |items: &[(PackagePublishKey, ObjectID)]| {
+            items.iter().rev().copied().collect::<Vec<_>>()
+        };
+
+        assert_eq!(list(Unbounded, Unbounded, false), publishes);
+        assert_eq!(list(Unbounded, Unbounded, true), reversed(&publishes));
+
+        // Checkpoints 7 through 9, from the lowest possible key at 7 to the highest at 9.
+        let checkpoints = (
+            Included(key(7, ObjectID::ZERO, 0)),
+            Included(key(9, ObjectID::MAX, u64::MAX)),
+        );
+        assert_eq!(
+            list(checkpoints.0, checkpoints.1, false),
+            publishes[2..5].to_vec()
+        );
+        assert_eq!(
+            list(checkpoints.0, checkpoints.1, true),
+            reversed(&publishes[2..5])
+        );
+
+        // Bounds at keys inside checkpoints 5 and 9, as cursors set them, list the same versions
+        // in either direction.
+        let (after, before) = (publishes[1].0, publishes[4].0);
+        assert_eq!(
+            list(Excluded(after), Excluded(before), false),
+            publishes[2..4].to_vec()
+        );
+        assert_eq!(
+            list(Excluded(after), Excluded(before), true),
+            reversed(&publishes[2..4])
+        );
+        assert_eq!(
+            list(Included(after), Included(before), true),
+            reversed(&publishes[1..5])
+        );
+
+        // Empty and inverted ranges list nothing.
+        assert!(list(Excluded(after), Included(after), false).is_empty());
+        assert!(list(Included(before), Excluded(after), true).is_empty());
+        assert!(list(Included(before), Included(after), false).is_empty());
+        assert!(list(Excluded(publishes[5].0), Unbounded, false).is_empty());
     }
 
     #[test]

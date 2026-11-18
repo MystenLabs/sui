@@ -14,6 +14,7 @@ pub mod streamed_watermarks;
 pub mod tables;
 pub mod testing;
 
+use std::ops::Bound;
 use std::ops::Range;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
@@ -58,6 +59,7 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::Transaction;
 
@@ -472,11 +474,14 @@ pub trait KeyValueStoreReader {
         descending: bool,
     ) -> Result<Vec<PackageData>>;
 
-    /// Get packages created in a checkpoint range, ordered by checkpoint.
+    /// Get the versions of every package whose `packages_by_checkpoint` keys lie between `lower`
+    /// and `upper`, in key order (publish checkpoint, then original id, then version), or in
+    /// reverse when `descending` is set, at most `limit` of them. A listed version with no
+    /// `packages` row is an error rather than skipped.
     async fn get_packages_by_checkpoint_range(
         &mut self,
-        cp_after: Option<u64>,
-        cp_before: Option<u64>,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>>;
