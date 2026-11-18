@@ -223,13 +223,43 @@ pub fn below_serving_floor(floor_checkpoint: u64) -> RpcError {
     .with_details(ErrorDetails::new().with_error_info(error_info))
 }
 
+/// The error for a request that needs versions of an object (a package, for one) below
+/// `oldest_retained_version`, the oldest one this server keeps: the object's version at the end of
+/// `floor_checkpoint`, the lowest checkpoint whose object state it keeps. Older versions are
+/// pruned and permanently gone. It is [`below_serving_floor`] for `floor_checkpoint`, with the
+/// version as `lowestAvailableVersion` too, so a client can list from it instead.
+pub fn below_oldest_retained_version(
+    floor_checkpoint: u64,
+    oldest_retained_version: u64,
+) -> RpcError {
+    let error_info = ledger_error_info(
+        ErrorReason::BelowEarliestAvailable,
+        [
+            ("lowestAvailableCheckpoint", floor_checkpoint.to_string()),
+            (
+                "lowestAvailableVersion",
+                oldest_retained_version.to_string(),
+            ),
+        ],
+    );
+    RpcError::new(
+        tonic::Code::OutOfRange,
+        format!(
+            "requested object versions below earliest available; lowest available checkpoint is \
+             {floor_checkpoint}, and lowest available version is {oldest_retained_version}"
+        ),
+    )
+    .with_details(ErrorDetails::new().with_error_info(error_info))
+}
+
 /// The error for a request that reads above the data this server has indexed, all of which lies
 /// below `checkpoint_hi_exclusive`. `bound` names what reads past it: "cursor" for an `after` or
-/// `before` cursor, or the request field, "start_checkpoint" or "end_checkpoint";
-/// `requested_checkpoint` is the checkpoint of the cursor's public position or the field's
-/// value. It is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`] carrying all three,
-/// by which clients recognize a request that becomes servable once this server catches up.
-fn above_latest_available(
+/// `before` cursor, or the request field, such as "start_checkpoint", "end_checkpoint" or
+/// "at_checkpoint"; `requested_checkpoint` is the checkpoint of the cursor's public position or
+/// the field's value. It is `OutOfRange` with an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`] carrying
+/// all three, by which clients recognize a request that becomes servable once this server
+/// catches up.
+pub(crate) fn above_latest_available(
     bound: &str,
     requested_checkpoint: u64,
     checkpoint_hi_exclusive: u64,
@@ -262,7 +292,7 @@ fn above_latest_available(
 }
 
 /// An [`ErrorInfo`] in the [`ErrorReason::DOMAIN`] domain with `reason` and `metadata`.
-fn ledger_error_info<const N: usize>(
+pub(crate) fn ledger_error_info<const N: usize>(
     reason: ErrorReason,
     metadata: [(&str, String); N],
 ) -> ErrorInfo {
@@ -1348,11 +1378,36 @@ pub(crate) fn assert_below_serving_floor_error(error: RpcError, floor_checkpoint
     );
 }
 
+/// Asserts `error` is [`below_oldest_retained_version`] for `floor_checkpoint` and
+/// `oldest_retained_version`.
+#[cfg(test)]
+pub(crate) fn assert_below_oldest_retained_version_error(
+    error: RpcError,
+    floor_checkpoint: u64,
+    oldest_retained_version: u64,
+) {
+    assert_out_of_range_error_info(
+        error,
+        &format!(
+            "requested object versions below earliest available; lowest available checkpoint is \
+             {floor_checkpoint}, and lowest available version is {oldest_retained_version}"
+        ),
+        ErrorReason::BelowEarliestAvailable,
+        &[
+            ("lowestAvailableCheckpoint", &floor_checkpoint.to_string()),
+            (
+                "lowestAvailableVersion",
+                &oldest_retained_version.to_string(),
+            ),
+        ],
+    );
+}
+
 /// Asserts `error` is [`above_latest_available`] for `bound` at `requested_checkpoint` on a
 /// server that has indexed the checkpoints below `checkpoint_hi_exclusive`: its message and its
 /// `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`].
 #[cfg(test)]
-fn assert_above_latest_available_error(
+pub(crate) fn assert_above_latest_available_error(
     error: RpcError,
     bound: &str,
     requested_checkpoint: u64,
@@ -1383,6 +1438,13 @@ fn assert_above_latest_available_error(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The version floor names the checkpoint floor and the oldest retained version, each in its
+    /// own metadata entry and in the message, without swapping them.
+    #[test]
+    fn below_oldest_retained_version_names_checkpoint_and_version() {
+        assert_below_oldest_retained_version_error(below_oldest_retained_version(9, 3), 9, 3);
+    }
 
     /// The event-coordinate window spanning whole transactions `[start, end)`.
     fn tx_window(range: Range<u64>) -> Range<IntraTxCoordinate> {

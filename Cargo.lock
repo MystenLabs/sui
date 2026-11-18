@@ -14308,7 +14308,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=29875df47ef764044e33a008b1c338cda1c7ecb7#29875df47ef764044e33a008b1c338cda1c7ecb7"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14639,6 +14639,7 @@ dependencies = [
  "cynic-codegen",
  "fastcrypto",
  "itertools 0.13.0",
+ "move-binary-format",
  "move-core-types",
  "prometheus",
  "prost 0.14.1",
@@ -15159,6 +15160,7 @@ dependencies = [
  "move-core-types",
  "mysten-common",
  "prometheus",
+ "prost 0.14.1",
  "prost-types 0.14.1",
  "sui-futures",
  "sui-indexer-alt-consistent-api",
@@ -16141,7 +16143,7 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=29875df47ef764044e33a008b1c338cda1c7ecb7#29875df47ef764044e33a008b1c338cda1c7ecb7"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16194,6 +16196,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-config",
+ "sui-consistent-store",
  "sui-crypto",
  "sui-display",
  "sui-http",
@@ -16203,11 +16206,13 @@ dependencies = [
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rpc",
+ "sui-rpc-store",
  "sui-sdk-types",
  "sui-transaction-builder",
  "sui-transaction-checks",
  "sui-types",
  "tap",
+ "tempfile",
  "tokio",
  "tokio-util 0.7.18",
  "tonic 0.14.6",
@@ -16276,6 +16281,7 @@ dependencies = [
  "fdlimit",
  "futures",
  "lru 0.18.2",
+ "move-binary-format",
  "move-core-types",
  "prometheus",
  "prost 0.14.1",
@@ -16323,7 +16329,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.4.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c356d65b1c324590a3fd25990c382af308ea545#8c356d65b1c324590a3fd25990c382af308ea545"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=29875df47ef764044e33a008b1c338cda1c7ecb7#29875df47ef764044e33a008b1c338cda1c7ecb7"
 dependencies = [
  "base64ct",
  "bcs",
