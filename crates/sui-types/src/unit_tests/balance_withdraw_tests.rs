@@ -587,7 +587,11 @@ fn test_frozen_address_withdrawal_rejected() {
 #[test]
 fn test_frozen_address_withdrawal_round_trip() {
     let withdrawal = frozen_address_withdrawal();
-    let WithdrawFrom::FrozenAddress { seized_from, .. } = withdrawal.withdraw_from else {
+    let WithdrawFrom::FrozenAddress {
+        seized_from,
+        seize_auth,
+    } = withdrawal.withdraw_from
+    else {
         unreachable!()
     };
     assert_eq!(withdrawal.owner_for_withdrawal(&dummy_tx()), seized_from);
@@ -595,6 +599,43 @@ fn test_frozen_address_withdrawal_round_trip() {
     let arg = CallArg::FundsWithdrawal(withdrawal);
     let bytes = bcs::to_bytes(&arg).unwrap();
     assert_eq!(bcs::from_bytes::<CallArg>(&bytes).unwrap(), arg);
+
+    let sdk = sui_sdk_types::Input::from(arg.clone());
+    let sui_sdk_types::Input::FundsWithdrawal(sdk_withdrawal) = &sdk else {
+        panic!("expected a funds withdrawal input");
+    };
+    assert_eq!(
+        sdk_withdrawal.source(),
+        sui_sdk_types::WithdrawFrom::FrozenAddress {
+            seized_from: seized_from.into(),
+            seize_auth: seize_auth.into(),
+        }
+    );
+    assert_eq!(bcs::to_bytes(&sdk).unwrap(), bytes);
+    assert_eq!(CallArg::from(sdk), arg);
+
+    let CallArg::FundsWithdrawal(withdrawal) = arg.clone() else {
+        unreachable!()
+    };
+    let proto = sui_rpc::proto::sui::rpc::v2::FundsWithdrawal::from(withdrawal);
+    assert_eq!(
+        proto.source(),
+        sui_rpc::proto::sui::rpc::v2::funds_withdrawal::Source::FrozenAddress
+    );
+    assert_eq!(
+        proto.seized_from_opt(),
+        Some(seized_from.to_string().as_str())
+    );
+    assert_eq!(
+        proto.seize_auth_opt(),
+        Some(seize_auth.to_string().as_str())
+    );
+    assert!(proto.funder_opt().is_none());
+    let from_proto = sui_sdk_types::FundsWithdrawal::try_from(&proto).unwrap();
+    assert_eq!(
+        CallArg::from(sui_sdk_types::Input::FundsWithdrawal(from_proto)),
+        arg
+    );
 }
 
 fn dummy_tx() -> TransactionData {

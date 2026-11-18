@@ -2769,11 +2769,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::ForwardingAddressRegistryCreate => {
                 message.with_kind(Kind::ForwardingAddressRegistryCreate)
             }
-            K::FreezeListCreate => {
-                todo!(
-                    "the rpc proto does not support EndOfEpochTransactionKind::FreezeListCreate yet"
-                )
-            }
+            K::FreezeListCreate => message.with_kind(Kind::FreezeListCreate),
             K::WriteAccumulatorStorageCost(storage_cost) => message
                 .with_kind(Kind::WriteAccumulatorStorageCost)
                 .with_storage_cost(storage_cost.storage_cost),
@@ -2957,8 +2953,13 @@ impl From<crate::transaction::FundsWithdrawalArg> for FundsWithdrawal {
                 message.allowance = Some(allowance.to_string());
                 Source::SenderAllowance
             }
-            crate::transaction::WithdrawFrom::FrozenAddress { .. } => {
-                todo!("the rpc proto does not support WithdrawFrom::FrozenAddress yet")
+            crate::transaction::WithdrawFrom::FrozenAddress {
+                seized_from,
+                seize_auth,
+            } => {
+                message.seized_from = Some(seized_from.to_string());
+                message.seize_auth = Some(seize_auth.to_string());
+                Source::FrozenAddress
             }
         };
         message.set_source(source);

@@ -1025,6 +1025,20 @@ impl<'a> UnresolvedInput<'a> {
                                     })?,
                                 }
                             }
+                            sui_rpc::proto::sui::rpc::v2::funds_withdrawal::Source::FrozenAddress => {
+                                WithdrawFrom::FrozenAddress {
+                                    seized_from: w.seized_from().parse().map_err(|e| {
+                                        FieldViolation::new("seized_from")
+                                            .with_description(format!("invalid seized_from: {e}"))
+                                            .with_reason(ErrorReason::FieldInvalid)
+                                    })?,
+                                    seize_auth: w.seize_auth().parse().map_err(|e| {
+                                        FieldViolation::new("seize_auth")
+                                            .with_description(format!("invalid seize_auth: {e}"))
+                                            .with_reason(ErrorReason::FieldInvalid)
+                                    })?,
+                                }
+                            }
                             _ => WithdrawFrom::Sender,
                         },
                     })

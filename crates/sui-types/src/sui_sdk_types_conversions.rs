@@ -1359,9 +1359,13 @@ impl From<crate::transaction::CallArg> for Input {
                             allowance: allowance.into(),
                         }
                     }
-                    crate::transaction::WithdrawFrom::FrozenAddress { .. } => {
-                        todo!("sui-sdk-types does not support WithdrawFrom::FrozenAddress yet")
-                    }
+                    crate::transaction::WithdrawFrom::FrozenAddress {
+                        seized_from,
+                        seize_auth,
+                    } => sui_sdk_types::WithdrawFrom::FrozenAddress {
+                        seized_from: seized_from.into(),
+                        seize_auth: seize_auth.into(),
+                    },
                 };
 
                 Self::FundsWithdrawal(FundsWithdrawal::new(
@@ -1429,6 +1433,13 @@ impl From<Input> for crate::transaction::CallArg {
                                 allowance: allowance.into(),
                             }
                         }
+                        sui_sdk_types::WithdrawFrom::FrozenAddress {
+                            seized_from,
+                            seize_auth,
+                        } => crate::transaction::WithdrawFrom::FrozenAddress {
+                            seized_from: seized_from.into(),
+                            seize_auth: seize_auth.into(),
+                        },
                         _ => {
                             unreachable!("sdk shouldn't have a variant that the mono repo doesn't")
                         }
@@ -1715,9 +1726,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 Self::ForwardingAddressRegistryCreate
             }
             crate::transaction::EndOfEpochTransactionKind::FreezeListCreate => {
-                todo!(
-                    "sui-sdk-types does not support EndOfEpochTransactionKind::FreezeListCreate yet"
-                )
+                Self::FreezeListCreate
             }
         }
     }
