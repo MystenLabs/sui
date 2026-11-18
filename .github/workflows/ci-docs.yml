@@ -13,7 +13,8 @@ on:
 jobs:
   docs:
     name: Generate crate documentation
-    runs-on: ubuntu-latest
+    # ubuntu-26.04 (amd64v3) gcc defaults to -march=x86-64-v3; mysten-mldsa-native-rs 0.2.0 rejects AVX2.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout sources
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
