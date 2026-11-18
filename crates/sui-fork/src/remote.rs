@@ -111,6 +111,27 @@ impl RemoteSource {
         )
     }
 
+    /// Fetch objects at their latest versions at the fork checkpoint, in one request: `None` for
+    /// an id with no object there.
+    pub(crate) fn latest_objects(
+        &self,
+        object_ids: &[ObjectID],
+    ) -> anyhow::Result<Vec<Option<Object>>> {
+        let keys: Vec<_> = object_ids
+            .iter()
+            .map(|object_id| ObjectKey {
+                object_id: *object_id,
+                version_query: VersionQuery::AtCheckpoint(self.forked_at_checkpoint),
+            })
+            .collect();
+        Ok(self
+            .gql
+            .get_objects(&keys)?
+            .into_iter()
+            .map(|object| object.map(|(object, _)| object))
+            .collect())
+    }
+
     /// Fetch an object by version, only if it existed by the fork checkpoint.
     pub(crate) fn object_at_version(
         &self,

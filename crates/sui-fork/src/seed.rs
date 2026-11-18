@@ -158,31 +158,49 @@ pub(crate) async fn prepare_seed_manifest(
 }
 
 /// Load every manifest entry into the rpc-store with its full derived-index surface, once, before
-/// the fork executes anything.
+/// the fork executes anything, followed by every system package live at the fork checkpoint.
 ///
 /// The manifest holds object references rather than objects, so each entry is fetched by id and
 /// version and handed to the restore pipelines, which rebuild the owned-object index and the rest
-/// of the derived surface. The load runs at most once per fork directory, because `Balance`
+/// of the derived surface. The seed load runs at most once per fork directory, because `Balance`
 /// accumulates through a merge operator and a second pass would double-count every seeded coin, and
 /// it commits its own completion marker atomically with the rows to make that unrepeatable rather
 /// than merely unlikely.
+///
+/// The system packages are loaded so the indexes hold each one's version at the fork checkpoint,
+/// which `ListSystemPackages` reads from the indexes alone rather than fetching on demand. They
+/// carry their own completion marker, so a fork directory whose seed load committed without them
+/// gets them on its next start. Both are fetched before either commits, so a failed fetch leaves
+/// the directory as it was.
 pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> Result<(), Error> {
-    if store.local_store().seed_load_complete()? {
-        return Ok(());
+    let local = store.local_store();
+    let seed_objects = if local.seed_load_complete()? {
+        None
+    } else {
+        let object_refs: Vec<_> = manifest
+            .entries
+            .iter()
+            .map(|entry| entry.object_ref)
+            .collect();
+        let mut objects = Vec::with_capacity(object_refs.len());
+        for chunk in object_refs.chunks(OBJECTS_PER_QUERY) {
+            objects.extend(store.fetch_seed_objects(chunk)?);
+        }
+        Some(objects)
+    };
+    let system_packages = if local.system_packages_loaded()? {
+        None
+    } else {
+        Some(store.fetch_system_packages()?)
+    };
+
+    if let Some(objects) = seed_objects {
+        local.restore_seed_objects(&objects)?;
     }
-
-    let object_refs: Vec<_> = manifest
-        .entries
-        .iter()
-        .map(|entry| entry.object_ref)
-        .collect();
-
-    let mut objects = Vec::with_capacity(object_refs.len());
-    for chunk in object_refs.chunks(OBJECTS_PER_QUERY) {
-        objects.extend(store.fetch_seed_objects(chunk)?);
+    if let Some(packages) = system_packages {
+        local.restore_system_packages(&packages)?;
     }
-
-    store.local_store().restore_seed_objects(&objects)
+    Ok(())
 }
 
 /// Resolve the owned objects and balances belonging to `address`.
