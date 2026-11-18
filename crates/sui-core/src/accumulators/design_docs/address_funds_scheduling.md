@@ -116,9 +116,10 @@ Once the scheduler returns a result for a transaction:
   picks it up, it sees this flag and immediately returns
   `ExecutionErrorKind::InsufficientFundsForWithdraw` — the transaction never runs. The transaction
   still produces effects (a failed execution) so it can be included in checkpoints.
-- **SkipSchedule** — the transaction is dropped from the scheduler's perspective. This
-  typically means a checkpoint executor has already executed the corresponding settlement (and
-  barrier) on this node, so the on-chain state is already past the requested version.
+- **SkipSchedule** — the transaction gets no scheduling verdict. This typically means a
+  checkpoint executor has already executed the corresponding settlement (and barrier) on this
+  node, so the on-chain state is already past the requested version. The scheduler may still
+  hold reservations for the transaction's withdraws from accounts it tracks (§3.1).
 
 ### The channel-based wrapper
 
@@ -225,10 +226,19 @@ request:
   checkpoint-executor case from [`write_path.md`](./write_path.md) §5: the settlement and
   barrier transactions ran out of a downloaded checkpoint, advancing the per-account version,
   but `settle_address_funds` was never called. The whole batch returns `SkipSchedule`.
+  Accounts the scheduler already tracks still reserve this batch's withdraws, including
+  withdraws in transactions that also touch the untracked account, and the batch's version is
+  recorded in `pending_settlements` for those accounts. A validator's consensus path calls
+  `settle_address_funds` for this version later, and that call releases the reservations, even
+  for an account whose withdraw produced no funds change. Without the reservations, a later
+  batch would see the tracked account's in-memory balance without this batch's withdraws and
+  could approve a withdraw that the rest of the committee rejects. Untracked accounts are not
+  added; a later first read of them reflects this batch.
 
-Together these two checks guarantee that the eager scheduler never schedules withdraws against
-a version that some component (in-memory or on-disk) has already moved past, regardless of
-which path delivered the settlement.
+Together these two checks guarantee that the eager scheduler never returns a verdict for a
+version that some component (in-memory or on-disk) has already moved past, regardless of which
+path delivered the settlement. Tracked accounts still record the skipped batch's reservations,
+because their in-memory state applies the batch only when `settle_address_funds` arrives.
 
 ### 3.1.1 Why a root-consistent read is sufficient here
 
@@ -249,9 +259,11 @@ uses that pair for two purposes only:
 What the scheduler does **not** need here is an exact historical snapshot for version V. If the
 version has already passed, some other part of the system has already carried the transaction
 family forward: either this node processed settlement in-process and updated the scheduler via
-`settle_address_funds`, or storage was advanced by the checkpoint executor and the scheduler can
-stand down. In either case, the correct action is "do not schedule this batch again", not "replay
-the old balance check at version V".
+`settle_address_funds`, or storage was advanced by the checkpoint executor and the scheduler
+returns `SkipSchedule`. In either case, the correct verdict is "do not schedule this batch again",
+not "replay the old balance check at version V". In the second case the scheduler still records
+the batch's reservations for tracked accounts (§3.1), because its in-memory state has not yet
+applied the batch.
 
 This is why latest-state plus version monotonicity is enough for address funds, while object
 funds need MVCC-bounded reads.
@@ -305,10 +317,11 @@ answerable.
     restart). `settle_funds` ignores deltas at versions less than or equal to
     `last_updated_version`, so each delta applies exactly once.
 
-- **`reserved_funds`** — the running total of withdrawals the scheduler has *already approved*
-  but that have not yet settled on chain. The scheduler approves before execution, so until
-  each approved withdrawal actually deducts itself, that money has been promised and must be
-  held back from the next sufficiency check. Reservations are stored as a deque of
+- **`reserved_funds`** — the running total of withdrawals the scheduler has reserved but whose
+  settlement the scheduler has not yet applied. Most are withdrawals it approved; the rest come
+  from batches it skipped because storage settled them first (§3.1). The scheduler approves
+  before execution, so until each reserved withdrawal's settlement is applied, that money must
+  be held back from the next sufficiency check. Reservations are stored as a deque of
   `(version, amount)`: when settlement crosses a version, that version's reservation is
   released and replaced by the *actual* deduction from the settlement delta (which may be
   smaller than the reserved maximum). The running total keeps sufficiency checks O(1).
@@ -435,9 +448,11 @@ in memory and then the same version is later observed via storage (or vice versa
 double-application occurs.
 
 Note that on the **checkpoint-executor path** ([`write_path.md`](./write_path.md) §5),
-`settle_address_funds` is never called — there is simply nothing to do in memory, because
-§3.1's storage-version check already prevents the scheduler from ever building up reservations
-or pending entries against a version that storage has moved past.
+`settle_address_funds` is not called for the checkpoint's settlement. For untracked accounts
+there is nothing to do in memory, because §3.1's storage-version check prevents the scheduler
+from tracking them against a version that storage has moved past. On a validator, the consensus
+path later builds the same settlement and calls `settle_address_funds`, which releases the
+reservations that tracked accounts kept for the skipped batch (§3.1).
 
 ## 5. Worked examples
 
