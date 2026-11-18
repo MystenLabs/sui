@@ -729,6 +729,62 @@ async fn test_system_package_versions_replaced_before_the_fork_are_pruned() {
     }
 }
 
+/// The fork has no rows for the system-package versions replaced before it, so every listing
+/// starts at the lowest version it stores, loaded at the fork with no recorded publish
+/// checkpoint.
+#[tokio::test]
+async fn test_system_package_listing_below_the_lowest_stored_version_starts_there() {
+    use sui_rpc_api::RpcService;
+    use sui_rpc_api::grpc::v2::move_package_service::PageToken;
+    use sui_rpc_api::proto::sui::rpc::v2::ListPackageVersionsRequest;
+    use sui_rpc_api::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    let fork_checkpoint = 100;
+    mock_available_range(&server, 10).await;
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), fork_checkpoint);
+
+    // A system package at version 3, upgraded in place twice before the fork.
+    let package_id = ObjectID::random();
+    let mut module = move_binary_format::file_format::empty_module();
+    module.address_identifiers[0] = package_id.into();
+    let package = sui_types::object::Object::new_package_from_data(
+        sui_types::object::Data::Package(sui_types::move_package::MovePackage::new_system(
+            SequenceNumber::from_u64(3),
+            &[module],
+            [],
+        )),
+        TransactionDigest::genesis_marker(),
+    );
+    store
+        .local_store()
+        .restore_seed_objects(&[package])
+        .unwrap();
+    let service = RpcService::new(Arc::new(store));
+
+    for from_version in [None, Some(1), Some(2), Some(3)] {
+        let mut request = ListPackageVersionsRequest::default();
+        request.package_id = Some(package_id.to_string());
+        request.page_token = from_version.map(|version| {
+            PageToken {
+                original_package_id: package_id,
+                version,
+            }
+            .encode()
+        });
+        let versions = service
+            .list_package_versions(tonic::Request::new(request))
+            .await
+            .unwrap()
+            .into_inner()
+            .versions;
+        assert_eq!(versions.len(), 1, "from {from_version:?}");
+        assert_eq!(versions[0].version, Some(3), "from {from_version:?}");
+        assert_eq!(versions[0].checkpoint, None, "from {from_version:?}");
+    }
+}
+
 #[tokio::test]
 async fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp, _gql_server) = test_simulacrum().await;
