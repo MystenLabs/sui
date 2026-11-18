@@ -397,7 +397,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 }
 
 /// Test a validator node does not have transaction orchestrator
-#[tokio::test]
+#[sim_test]
 async fn test_validator_node_has_no_transaction_orchestrator() {
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)

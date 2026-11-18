@@ -3510,9 +3510,7 @@ async fn test_simulate_object_funds_insufficient() {
     );
 }
 
-// TODO(address-balances): Re-enable this once input checks land
 #[sim_test]
-#[ignore = "address balance transactions still require an object"]
 async fn test_address_balance_gas_pay_all_sui() {
     let mut test_env = TestEnvBuilder::new().build().await;
 
