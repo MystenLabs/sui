@@ -26,9 +26,9 @@ set -euo pipefail
 # nothing at this log level (the runtime canaries print only a debug! rng line that
 # init_for_testing suppresses), so log-comparison can't check them; running them here would
 # just add minutes of CI for no signal.
-BINARY_NAME="${BINARY_NAME:-simulator_tests}"
+BINARY_NAME="${BINARY_NAME:-e2e}"
 TESTS=(
-  test_net_determinism
+  simulator_tests::test_net_determinism
 )
 SEED="${MSIM_TEST_SEED:-1}"
 

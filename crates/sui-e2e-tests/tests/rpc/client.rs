@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transfer_coin;
+use crate::rpc::transfer_coin;
 use sui_macros::sim_test;
 use sui_rpc_api::Client;
 use sui_sdk_types::Address;

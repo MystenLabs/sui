@@ -17,7 +17,7 @@ use sui_types::{
 };
 use test_cluster::TestClusterBuilder;
 
-use crate::v2::move_package_service::system_package_expectations::validate_system_package;
+use crate::rpc::v2::move_package_service::system_package_expectations::validate_system_package;
 
 #[sim_test]
 async fn test_get_package_system() {
