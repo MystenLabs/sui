@@ -107,6 +107,15 @@ ignore = [
     # of snowflake-api (0.14, arrow 57); remove once snowflake-api moves to an
     # arrow version whose parquet no longer depends on thrift.
     "RUSTSEC-2026-0435",
+    # `humantime` is unmaintained, no patched release. Used directly by
+    # sui-node, sui-checkpoint-blob-indexer and sui-metric-checker, and
+    # transitively by object_store, env_logger and console-subscriber; remove
+    # once those move to a maintained replacement.
+    "RUSTSEC-2026-0542",
+    # `chrono` is unmaintained, no patched release. Used widely across the
+    # workspace and its dependencies; migrating off it is a large, separate
+    # effort.
+    "RUSTSEC-2026-0543",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
