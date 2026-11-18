@@ -239,7 +239,7 @@ def find_binary_by_name(name, repo_root):
     direct = os.path.join(repo_root, "target/simulator/deps", name)
     if os.path.isfile(direct) and os.access(direct, os.X_OK):
         return direct
-    pattern = os.path.join(repo_root, "target/simulator/deps", name + "*")
+    pattern = os.path.join(repo_root, "target/simulator/deps", name + "-*")
     matches = [p for p in glob.glob(pattern)
                if os.path.isfile(p) and os.access(p, os.X_OK) and not p.endswith(".d")]
     if matches:

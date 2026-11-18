@@ -5,11 +5,13 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 version.workspace = true
+# Test files build into a few binaries instead of one per file, because each test binary
+# recompiles the generic code it uses from its dependencies. tests/e2e_tokio.rs explains the split.
 autotests = false
 
 [[test]]
-name = "e2e"
-path = "tests/e2e.rs"
+name = "e2e_tokio"
+path = "tests/e2e_tokio.rs"
 
 [[test]]
 name = "e2e_sim_a"
