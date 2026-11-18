@@ -5,6 +5,8 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveStructLayout, MoveTypeLayout, MoveValue},
     annotated_visitor as AV,
+    u256::U256,
+    visitor_default,
 };
 use std::{
     borrow::Borrow,
@@ -37,6 +39,9 @@ pub struct BalancesBefore {
 
 /// The `Balance<T>` totals of a user transaction before and after execution, and the addresses
 /// involved in it.
+///
+/// `before` covers every object read and `after` only the objects written, so the two are not
+/// comparable. Gas charges are not included.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BalanceTracking {
     pub before: BalanceTotals,
@@ -88,8 +93,12 @@ impl BalancesBefore {
         }
     }
 
-    /// Records the contents of `id` as read from storage. A repeated read replaces the earlier one.
+    /// Records the contents of `id` as read from storage. A repeated read must match the earlier one.
     pub fn record(&mut self, id: ObjectID, contents: ObjectContents) {
+        debug_assert!(
+            self.walked.get(&id).is_none_or(|prev| *prev == contents),
+            "Object {id} read twice with different contents"
+        );
         self.walked.insert(id, contents);
     }
 
@@ -181,7 +190,6 @@ pub fn walk_contents(
         types: BTreeSet::new(),
         track_balances,
         enclosing_object: None,
-        last_uid: None,
     };
     MoveValue::visit_deserialize(bcs_bytes, fully_annotated_layout, &mut traversal)
         .map_err(|e| e.to_string())?;
@@ -221,15 +229,13 @@ struct ContentsTraversal {
     types: BTreeSet<Rc<TypeTag>>,
     track_balances: bool,
     enclosing_object: Option<ObjectID>,
-    last_uid: Option<ObjectID>,
 }
 
-struct UIDCollector<'i> {
-    uids: &'i mut BTreeSet<ObjectID>,
-    last_uid: &'i mut Option<ObjectID>,
-}
+/// Reads the address in a `UID` or `ID`.
+struct UIDValue;
 
-struct BalanceValue(Option<u64>);
+/// Reads the `u64` in a `Balance<T>`.
+struct BalanceValue;
 
 fn is_object_layout(layout: &MoveStructLayout) -> bool {
     layout
@@ -247,16 +253,16 @@ impl ContentsTraversal {
         Ok(())
     }
 
-    fn visit_uid(
+    /// Records the `UID` in the next field of `driver`, which may be the `UID` itself or an object.
+    fn read_uid(
         &mut self,
         driver: &mut AV::StructDriver<'_, '_, '_>,
-    ) -> Result<(), TraversalError> {
-        let mut collector = UIDCollector {
-            uids: &mut self.contents.uids,
-            last_uid: &mut self.last_uid,
+    ) -> Result<ObjectID, TraversalError> {
+        let Some((_, id)) = driver.next_field(&mut UIDValue)? else {
+            return Err(TraversalError::Invariant("UID has no address".to_string()));
         };
-        while driver.next_field(&mut collector)?.is_some() {}
-        Ok(())
+        self.contents.uids.insert(id);
+        Ok(id)
     }
 
     fn visit_balance(
@@ -264,9 +270,12 @@ impl ContentsTraversal {
         driver: &mut AV::StructDriver<'_, '_, '_>,
         type_: &TypeTag,
     ) -> Result<(), TraversalError> {
-        let mut value = BalanceValue(None);
-        while driver.next_field(&mut value)?.is_some() {}
-        let (Some(object), Some(value)) = (self.enclosing_object, value.0) else {
+        let Some((_, value)) = driver.next_field(&mut BalanceValue)? else {
+            return Err(TraversalError::Invariant(
+                "Balance has no value".to_string(),
+            ));
+        };
+        let Some(object) = self.enclosing_object else {
             return Err(TraversalError::Invariant(
                 "Balance found outside of an object".to_string(),
             ));
@@ -286,13 +295,7 @@ impl ContentsTraversal {
         &mut self,
         driver: &mut AV::StructDriver<'_, '_, '_>,
     ) -> Result<(), TraversalError> {
-        self.last_uid = None;
-        driver.next_field(self)?;
-        let Some(id) = self.last_uid.take() else {
-            return Err(TraversalError::Invariant(
-                "Object has no UID value".to_string(),
-            ));
-        };
+        let id = self.read_uid(driver)?;
         let outer = self.enclosing_object.replace(id);
         let result = self.visit_fields(driver);
         self.enclosing_object = outer;
@@ -318,7 +321,8 @@ impl<'b, 'l> AV::Traversal<'b, 'l> for ContentsTraversal {
     ) -> Result<(), Self::Error> {
         let layout = driver.struct_layout();
         if UID::is_uid(&layout.type_) {
-            return self.visit_uid(driver);
+            self.read_uid(driver)?;
+            return Ok(());
         }
         if !self.track_balances {
             return self.visit_fields(driver);
@@ -338,30 +342,48 @@ impl<'b, 'l> AV::Traversal<'b, 'l> for ContentsTraversal {
     }
 }
 
-impl<'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'_> {
-    type Error = AV::Error;
+impl<'b, 'l> AV::Visitor<'b, 'l> for UIDValue {
+    type Value = ObjectID;
+    type Error = TraversalError;
 
-    fn traverse_address(
+    visitor_default! {
+        <'b, 'l> u8, u16, u32, u64, u128, u256, bool, signer, vector, variant =
+            Err(TraversalError::Invariant("Expected a UID address".to_string()))
+    }
+
+    fn visit_address(
         &mut self,
         _driver: &AV::ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
-    ) -> Result<(), Self::Error> {
-        let id = value.into();
-        self.uids.insert(id);
-        *self.last_uid = Some(id);
-        Ok(())
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(value.into())
+    }
+
+    fn visit_struct(
+        &mut self,
+        driver: &mut AV::StructDriver<'_, 'b, 'l>,
+    ) -> Result<Self::Value, Self::Error> {
+        driver
+            .next_field(self)?
+            .map(|(_, id)| id)
+            .ok_or_else(|| TraversalError::Invariant("UID has no address".to_string()))
     }
 }
 
-impl<'b, 'l> AV::Traversal<'b, 'l> for BalanceValue {
-    type Error = AV::Error;
+impl<'b, 'l> AV::Visitor<'b, 'l> for BalanceValue {
+    type Value = u64;
+    type Error = TraversalError;
 
-    fn traverse_u64(
+    visitor_default! {
+        <'b, 'l> u8, u16, u32, u128, u256, bool, address, signer, vector, struct, variant =
+            Err(TraversalError::Invariant("Expected a u64 balance value".to_string()))
+    }
+
+    fn visit_u64(
         &mut self,
         _driver: &AV::ValueDriver<'_, 'b, 'l>,
         value: u64,
-    ) -> Result<(), Self::Error> {
-        self.0 = Some(value);
-        Ok(())
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(value)
     }
 }

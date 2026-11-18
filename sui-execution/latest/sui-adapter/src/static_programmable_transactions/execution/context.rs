@@ -733,6 +733,8 @@ where
 
     /// Adds the balances in a written object to `totals`. Its UIDs are not needed: each was walked
     /// when loaded or is a generated ID.
+    ///
+    /// `vm` must be the writeout VM, since only it can load types from newly published packages.
     fn add_written_balances(
         env: &Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
         vm: &MoveVM,
