@@ -102,7 +102,7 @@ pub(crate) struct ConsensusCommitOutput {
     // Used by quarantine to determine safe commit boundaries on restart.
     checkpoint_queue_drained: bool,
 
-    // Not persisted.
+    // The undrained-hold check in commit_with_batch reads this. It is kept in memory only.
     commit_timestamp_ms: TimestampMs,
 }
 

@@ -605,6 +605,7 @@ impl CheckpointQueue {
             {
                 let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
                 config.set_min_checkpoint_interval_ms_for_testing(min_checkpoint_interval_ms);
+                config.set_checkpoint_queue_max_undrained_ms_for_testing(1_000);
                 config.checkpoint_queue_force_drain_ms()
             },
             ExecutionSchedulerSender::new_for_testing(sender),
@@ -627,8 +628,8 @@ impl CheckpointQueue {
     /// same run and forces the flush at the same commit.
     fn push_commit(
         &mut self,
-        chunks: Vec<Chunk>,
-        randomness_chunks: Vec<Chunk>,
+        chunks: impl IntoIterator<Item = Chunk>,
+        randomness_chunks: impl IntoIterator<Item = Chunk>,
         assigned_versions: &HashMap<TransactionKey, AssignedVersions>,
         commit: QueuedCommit,
         final_round: bool,
@@ -662,9 +663,7 @@ impl CheckpointQueue {
             self.undrained_since = None;
             return (checkpoints, true);
         }
-        if self.undrained_flush_ms.is_some() {
-            self.undrained_since.get_or_insert(commit.timestamp);
-        }
+        self.undrained_since.get_or_insert(commit.timestamp);
         (checkpoints, false)
     }
 
@@ -1844,11 +1843,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .expect("at least one checkpoint root must be created per commit");
 
         let (mut pending_checkpoints, queue_drained) = checkpoint_queue.push_commit(
-            chunked_schedulables.into_iter().map(Into::into).collect(),
-            chunked_randomness_schedulables
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            chunked_schedulables.into_iter().map(Into::into),
+            chunked_randomness_schedulables.into_iter().map(Into::into),
             &assigned_versions,
             QueuedCommit {
                 timestamp: commit_info.timestamp,
@@ -5548,7 +5544,7 @@ mod tests {
 
         #[derive(Debug, PartialEq)]
         struct CommitResult {
-            // Root heights of each emitted checkpoint.
+            // Each entry lists the root heights of one emitted checkpoint.
             checkpoints: Vec<Vec<u64>>,
             regular_heights: Vec<u64>,
             randomness_heights: Vec<u64>,
@@ -5675,10 +5671,10 @@ mod tests {
         #[test]
         fn test_final_round_flushes_randomness_separately() {
             let mut queue = CheckpointQueue::new_for_testing(1000, 0, 0, 1000, 200);
-            let mut regular = vec![make_chunk(2, queue.next_height())];
+            let regular = vec![make_chunk(2, queue.next_height())];
             let randomness = vec![make_chunk(1, queue.next_height())];
             let (checkpoints, drained) = queue.push_commit(
-                std::mem::take(&mut regular),
+                regular,
                 randomness,
                 &default_versions(),
                 QueuedCommit {
