@@ -372,27 +372,6 @@ async fn test_list_package_versions_invalid_package_id() {
 }
 
 #[sim_test]
-async fn test_list_package_versions_missing_package_id() {
-    let cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
-
-    let request = ListPackageVersionsRequest::default();
-
-    let error = service.list_package_versions(request).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::InvalidArgument);
-    assert!(
-        error.message().contains("missing package_id"),
-        "Error message: {}",
-        error.message()
-    );
-}
-
-#[sim_test]
 async fn test_list_package_versions_invalid_pagination() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
@@ -620,6 +599,20 @@ fn page_token(original_package_id: ObjectID, version: u64) -> Bytes {
     .into()
 }
 
+fn query_options(
+    limit: Option<u32>,
+    ordering: Ordering,
+    after: Option<&Bytes>,
+    before: Option<&Bytes>,
+) -> QueryOptions {
+    let mut options = QueryOptions::default();
+    options.limit = limit;
+    options.ordering = Some(ordering as i32);
+    options.after = after.cloned();
+    options.before = before.cloned();
+    options
+}
+
 /// A cursor-mode request listing the versions of `package_id`'s lineage.
 fn cursor_request(
     package_id: ObjectID,
@@ -628,14 +621,21 @@ fn cursor_request(
     after: Option<&Bytes>,
     before: Option<&Bytes>,
 ) -> ListPackageVersionsRequest {
-    let mut options = QueryOptions::default();
-    options.limit = limit;
-    options.ordering = Some(ordering as i32);
-    options.after = after.cloned();
-    options.before = before.cloned();
     let mut request = ListPackageVersionsRequest::default();
     request.package_id = Some(package_id.to_string());
-    request.options = Some(options);
+    request.options = Some(query_options(limit, ordering, after, before));
+    request
+}
+
+/// A request listing the versions of every package.
+fn all_packages_request(
+    limit: Option<u32>,
+    ordering: Ordering,
+    after: Option<&Bytes>,
+    before: Option<&Bytes>,
+) -> ListPackageVersionsRequest {
+    let mut request = ListPackageVersionsRequest::default();
+    request.options = Some(query_options(limit, ordering, after, before));
     request
 }
 
@@ -665,6 +665,68 @@ fn listed_with_cursors(response: &ListPackageVersionsResponse) -> Vec<u64> {
 /// The cursor of the last version a response lists.
 fn last_cursor(response: &ListPackageVersionsResponse) -> Bytes {
     response.versions.last().unwrap().cursor.clone().unwrap()
+}
+
+/// `(publish checkpoint, original id, version, storage id)` of each version a listing of every
+/// package returns, in order, checking that each carries a cursor.
+fn listed_publishes(response: &ListPackageVersionsResponse) -> Vec<(u64, ObjectID, u64, ObjectID)> {
+    assert!(response.next_page_token.is_none());
+    response
+        .versions
+        .iter()
+        .map(|v| {
+            assert!(v.cursor.is_some(), "version {v:?} has no cursor");
+            (
+                v.checkpoint.unwrap(),
+                v.original_id.as_deref().unwrap().parse().unwrap(),
+                v.version.unwrap(),
+                v.package_id.as_deref().unwrap().parse().unwrap(),
+            )
+        })
+        .collect()
+}
+
+/// Every version a listing of every package returns, read in pages of `limit` in `ordering`, each
+/// page bounded by the cursor of the last version of the page before it. Full pages end with
+/// `ITEM_LIMIT`; the last page ends at the tip ascending and at the start of the listing
+/// descending.
+async fn page_through_all_packages(
+    service: &mut MovePackageServiceClient<Channel>,
+    limit: u32,
+    ordering: Ordering,
+    expected_len: usize,
+) -> Vec<(u64, ObjectID, u64, ObjectID)> {
+    let mut listed = vec![];
+    let mut cursor = None;
+    // Bounded so a cursor that fails to advance fails the test instead of looping forever.
+    for _ in 0..=expected_len {
+        let (after, before) = match ordering {
+            Ordering::Descending => (None, cursor.as_ref()),
+            _ => (cursor.as_ref(), None),
+        };
+        let page = list_request(
+            service,
+            all_packages_request(Some(limit), ordering, after, before),
+        )
+        .await;
+        let publishes = listed_publishes(&page);
+        listed.extend(publishes.iter().copied());
+        if publishes.len() < limit as usize {
+            let last_page_end = match ordering {
+                Ordering::Descending => QueryEndReason::CheckpointBound,
+                _ => QueryEndReason::LedgerTip,
+            };
+            assert_eq!(end_reason(&page), Some(last_page_end), "{ordering:?}");
+            return listed;
+        }
+        assert_eq!(
+            end_reason(&page),
+            Some(QueryEndReason::ItemLimit),
+            "{ordering:?}"
+        );
+        cursor = Some(last_cursor(&page));
+    }
+    panic!("paging did not reach a short page");
 }
 
 #[sim_test]
@@ -1167,6 +1229,224 @@ async fn test_list_package_versions_cursor_paging() {
     assert!(second.next_page_token.is_none());
 }
 
+#[sim_test]
+async fn test_list_all_package_versions() {
+    // Background pruning stays off so genesis stays above the floor.
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mut test_package_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    test_package_path.push("tests/move_test_code");
+    let package = BuildConfig::new_for_testing()
+        .build_async(&test_package_path)
+        .await
+        .unwrap();
+
+    let (v1, cap, cp1) = publish_upgradeable(&cluster, &package).await;
+    let (v2, _, cp2) = upgrade(&cluster, &package, v1, cap).await;
+    let (other, _, cp3) = publish_upgradeable(&cluster, &package).await;
+    assert!(0 < cp1 && cp1 < cp2 && cp2 < cp3, "{cp1} {cp2} {cp3}");
+    cluster.wait_for_rpc_index_ready().await;
+
+    // Every version in publish order: the system packages from genesis, then the publishes above.
+    let everything = list_request(&mut service, ListPackageVersionsRequest::default()).await;
+    let all = listed_publishes(&everything);
+    let (genesis, published) = all.split_at(all.len() - 3);
+    assert_eq!(
+        published,
+        [(cp1, v1, 1, v1), (cp2, v1, 2, v2), (cp3, other, 1, other)]
+    );
+    assert!(
+        genesis.iter().all(
+            |&(checkpoint, original_id, version, storage_id)| checkpoint == 0
+                && version == 1
+                && original_id == storage_id
+        ),
+        "{genesis:?}"
+    );
+    assert!(genesis.contains(&(0, SUI_FRAMEWORK_PACKAGE_ID, 1, SUI_FRAMEWORK_PACKAGE_ID)));
+    assert!(all.windows(2).all(|pair| pair[0] < pair[1]), "{all:?}");
+    // More versions share the genesis checkpoint than fit in the pages below.
+    assert!(genesis.len() > 2, "{genesis:?}");
+
+    // Pages of two cover the listing exactly in either direction, splitting checkpoints.
+    assert_eq!(
+        page_through_all_packages(&mut service, 2, Ordering::Ascending, all.len()).await,
+        all
+    );
+    let mut reversed = all.clone();
+    reversed.reverse();
+    assert_eq!(
+        page_through_all_packages(&mut service, 2, Ordering::Descending, all.len()).await,
+        reversed
+    );
+
+    // A cursor from a descending page bounds an ascending one: the four newest versions end with
+    // the last genesis package, and everything after it is the publishes above.
+    let newest = list_request(
+        &mut service,
+        all_packages_request(Some(4), Ordering::Descending, None, None),
+    )
+    .await;
+    let after_genesis = list_request(
+        &mut service,
+        all_packages_request(None, Ordering::Ascending, Some(&last_cursor(&newest)), None),
+    )
+    .await;
+    assert_eq!(listed_publishes(&after_genesis), published);
+
+    // `start_checkpoint`, `end_checkpoint` and cursors intersect. Each case lists the matching
+    // versions in ascending order; descending lists them in reverse. Each order ends at the
+    // bound that stops it: the tip, an indexed checkpoint, or the `after` cursor.
+    let c1 = everything.versions[genesis.len()].cursor.clone().unwrap();
+    for ([start_checkpoint, end_checkpoint], after, ascending, [ascending_end, descending_end]) in [
+        (
+            [Some(cp1), None],
+            None,
+            published.to_vec(),
+            [QueryEndReason::LedgerTip, QueryEndReason::CheckpointBound],
+        ),
+        (
+            [Some(cp1), Some(cp2 + 1)],
+            None,
+            published[..2].to_vec(),
+            [
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ],
+        ),
+        (
+            [None, Some(cp2 + 1)],
+            None,
+            all[..all.len() - 1].to_vec(),
+            [
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ],
+        ),
+        (
+            [Some(1), Some(cp3 + 1)],
+            Some(&c1),
+            published[1..].to_vec(),
+            [QueryEndReason::CheckpointBound, QueryEndReason::CursorBound],
+        ),
+        (
+            [Some(cp2), Some(cp2)],
+            None,
+            vec![],
+            [
+                QueryEndReason::CheckpointBound,
+                QueryEndReason::CheckpointBound,
+            ],
+        ),
+    ] {
+        for (ordering, expected, end) in [
+            (Ordering::Ascending, ascending.clone(), ascending_end),
+            (
+                Ordering::Descending,
+                ascending.iter().rev().copied().collect(),
+                descending_end,
+            ),
+        ] {
+            let mut request = all_packages_request(None, ordering, after, None);
+            request.start_checkpoint = start_checkpoint;
+            request.end_checkpoint = end_checkpoint;
+            let response = list_request(&mut service, request).await;
+            let case =
+                format!("[{start_checkpoint:?}, {end_checkpoint:?}) after {after:?} {ordering:?}");
+            assert_eq!(listed_publishes(&response), expected, "{case}");
+            assert_eq!(end_reason(&response), Some(end), "{case}");
+        }
+    }
+
+    // A descending listing starts from its upper bound, so one above the indexed tip is
+    // rejected, rather than listing from the tip and skipping the versions published in between.
+    let mut request = all_packages_request(None, Ordering::Descending, None, None);
+    request.end_checkpoint = Some(u64::MAX);
+    let error = service.list_package_versions(request).await.unwrap_err();
+    assert_above_latest_available(&error, "end_checkpoint", u64::MAX);
+    let mut request = all_packages_request(None, Ordering::Descending, None, None);
+    request.start_checkpoint = Some(u64::MAX);
+    let error = service.list_package_versions(request).await.unwrap_err();
+    assert_above_latest_available(&error, "start_checkpoint", u64::MAX);
+
+    // An ascending listing lists through the tip and ends there with `LEDGER_TIP`, so a client
+    // knows to ask again from its last cursor once more checkpoints are indexed.
+    let mut request = all_packages_request(None, Ordering::Ascending, None, None);
+    request.end_checkpoint = Some(u64::MAX);
+    let response = list_request(&mut service, request).await;
+    assert_eq!(listed_publishes(&response), all);
+    assert_eq!(end_reason(&response), Some(QueryEndReason::LedgerTip));
+    let mut request = all_packages_request(None, Ordering::Ascending, None, None);
+    request.start_checkpoint = Some(u64::MAX);
+    let response = list_request(&mut service, request).await;
+    assert_eq!(listed_publishes(&response), vec![]);
+    assert_eq!(end_reason(&response), Some(QueryEndReason::LedgerTip));
+
+    // A cursor above the indexed tip continues a listing from a newer view of the ledger, such as
+    // another server's. A descending page from it is rejected rather than listing from the tip
+    // and skipping the versions in between.
+    let above_tip = PackageVersionCursor::AllPackages {
+        checkpoint: u64::MAX,
+        original_package_id: v1,
+        version: 1,
+        minted_at: u64::MAX,
+    }
+    .encode();
+    for (after, before) in [(Some(&above_tip), None), (None, Some(&above_tip))] {
+        let error = service
+            .list_package_versions(all_packages_request(
+                None,
+                Ordering::Descending,
+                after,
+                before,
+            ))
+            .await
+            .unwrap_err();
+        assert_above_latest_available(&error, "cursor", u64::MAX);
+    }
+
+    // An ascending page lists through the tip and ends with `LEDGER_TIP`: after such a cursor
+    // nothing is indexed yet, and before it is everything.
+    for (after, before, expected) in [
+        (Some(&above_tip), None, vec![]),
+        (None, Some(&above_tip), all.clone()),
+    ] {
+        let response = list_request(
+            &mut service,
+            all_packages_request(None, Ordering::Ascending, after, before),
+        )
+        .await;
+        assert_eq!(
+            listed_publishes(&response),
+            expected,
+            "{after:?} {before:?}"
+        );
+        assert_eq!(
+            end_reason(&response),
+            Some(QueryEndReason::LedgerTip),
+            "{after:?} {before:?}"
+        );
+    }
+
+    // One package's listing names its lineage on every version.
+    let lineage = list_request(
+        &mut service,
+        cursor_request(v2, None, Ordering::Ascending, None, None),
+    )
+    .await;
+    assert_eq!(listed_with_cursors(&lineage), vec![1, 2]);
+    for version in &lineage.versions {
+        assert_eq!(version.original_id, Some(v1.to_string()));
+    }
+}
+
 /// On a pruned node, a checkpoint range starts from the version as of the checkpoint before
 /// `start_checkpoint`, so the lowest `start_checkpoint` it accepts is the checkpoint after the
 /// last pruned one, the floor `at_checkpoint` reads use, and a range ending at or below that
@@ -1196,6 +1476,15 @@ async fn test_list_package_versions_checkpoint_range_below_object_pruning_floor(
             "{range:?}"
         );
     }
+
+    // A position in the listing of every package, at genesis, taken before the floor rises.
+    let genesis_cursor = last_cursor(
+        &list_request(
+            &mut service,
+            all_packages_request(Some(1), Ordering::Ascending, None, None),
+        )
+        .await,
+    );
 
     // Prune object versions, which raises the `at_checkpoint` floor above genesis to the last
     // pruned checkpoint: the state at its end survives the prune.
@@ -1252,4 +1541,82 @@ async fn test_list_package_versions_checkpoint_range_below_object_pruning_floor(
         .await
         .unwrap();
     assert_eq!(listed(&response).first(), Some(&genesis_framework));
+
+    // The listing of every package covers the publishes this node can list, from the lowest
+    // available checkpoint, one above the last pruned one: a store restored from a snapshot
+    // records no publish below there. A start below that floor fails, and so does an end at or
+    // below it in a listing with no lower bound of its own. When `start_checkpoint` is unset, so
+    // does a listing in either order after a cursor below it: the client holds the version at
+    // the cursor, and reaching the floor would skip the versions published between them without
+    // saying so.
+    let mut below_floor = vec![];
+    for (start_checkpoint, end_checkpoint) in [(Some(floor), None), (None, Some(lowest_start))] {
+        let mut request = ListPackageVersionsRequest::default();
+        request.start_checkpoint = start_checkpoint;
+        request.end_checkpoint = end_checkpoint;
+        below_floor.push(request);
+    }
+    for ordering in [Ordering::Ascending, Ordering::Descending] {
+        below_floor.push(all_packages_request(
+            None,
+            ordering,
+            Some(&genesis_cursor),
+            None,
+        ));
+    }
+    for request in below_floor {
+        let error = service.list_package_versions(request).await.unwrap_err();
+        assert_below_earliest_available(&error, lowest_start);
+    }
+
+    // Otherwise the listing starts at that floor, past genesis, in either order: a descending
+    // listing ends there with a short last page. A `before` cursor below the floor leaves nothing
+    // to list, and with `start_checkpoint` at the floor, the genesis cursor only bounds the
+    // listing. Every package was published at genesis, so each listing is empty. An ascending
+    // listing whose range reaches the tip ends there; an ascending `before` cursor ends the
+    // listing at the cursor.
+    let mut requests = vec![(
+        ListPackageVersionsRequest::default(),
+        QueryEndReason::LedgerTip,
+    )];
+    for (ordering, reaches_tip, before_genesis) in [
+        (
+            Ordering::Ascending,
+            QueryEndReason::LedgerTip,
+            QueryEndReason::CursorBound,
+        ),
+        (
+            Ordering::Descending,
+            QueryEndReason::CheckpointBound,
+            QueryEndReason::CheckpointBound,
+        ),
+    ] {
+        requests.push((
+            all_packages_request(None, ordering, None, None),
+            reaches_tip,
+        ));
+        requests.push((
+            all_packages_request(None, ordering, None, Some(&genesis_cursor)),
+            before_genesis,
+        ));
+        let mut after_genesis = all_packages_request(None, ordering, Some(&genesis_cursor), None);
+        after_genesis.start_checkpoint = Some(lowest_start);
+        requests.push((after_genesis, reaches_tip));
+        let mut from_floor = all_packages_request(None, ordering, None, None);
+        from_floor.start_checkpoint = Some(lowest_start);
+        requests.push((from_floor, reaches_tip));
+        let mut above_floor = all_packages_request(None, ordering, None, None);
+        above_floor.end_checkpoint = Some(lowest_start + 1);
+        requests.push((above_floor, QueryEndReason::CheckpointBound));
+    }
+    // An empty range lists nothing wherever it lies, below the floor included.
+    let mut empty_range = all_packages_request(None, Ordering::Descending, None, None);
+    empty_range.start_checkpoint = Some(1);
+    empty_range.end_checkpoint = Some(1);
+    requests.push((empty_range, QueryEndReason::CheckpointBound));
+    for (request, end) in requests {
+        let response = list_request(&mut service, request.clone()).await;
+        assert_eq!(listed_publishes(&response), vec![], "{request:?}");
+        assert_eq!(end_reason(&response), Some(end), "{request:?}");
+    }
 }

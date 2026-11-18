@@ -131,7 +131,7 @@ impl Encode for OriginalIdPrefix {
 
 /// Decode a `storage_id` field (the 32 raw `ObjectID` bytes) from a
 /// stored `PackageVersionInfo`.
-fn decode_storage_id(bytes: &[u8]) -> Result<ObjectID, DecodeError> {
+pub(super) fn decode_storage_id(bytes: &[u8]) -> Result<ObjectID, DecodeError> {
     let array: [u8; ObjectID::LENGTH] = bytes.try_into().map_err(|_| {
         DecodeError::msg(format!(
             "expected {} bytes for storage_id, got {}",
