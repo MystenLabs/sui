@@ -35,6 +35,9 @@ pub trait ExecutionMode {
 
     const TRACK_EXECUTION: bool;
 
+    /// Track `Balance<T>` totals and involved addresses. Set for user transactions only.
+    const TRACK_BALANCES: bool;
+
     fn add_argument_update(
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
@@ -79,6 +82,7 @@ where
     fn empty_results() -> Self::ExecutionResults {}
 
     const TRACK_EXECUTION: bool = false;
+    const TRACK_BALANCES: bool = true;
 
     fn add_argument_update(
         _acc: &mut Self::ArgumentUpdates,
@@ -125,6 +129,7 @@ impl ExecutionMode for Genesis {
     fn empty_results() -> Self::ExecutionResults {}
 
     const TRACK_EXECUTION: bool = false;
+    const TRACK_BALANCES: bool = false;
 
     fn add_argument_update(
         _acc: &mut Self::ArgumentUpdates,
@@ -180,6 +185,7 @@ where
     fn empty_results() -> Self::ExecutionResults {}
 
     const TRACK_EXECUTION: bool = false;
+    const TRACK_BALANCES: bool = false;
 
     fn add_argument_update(
         _acc: &mut Self::ArgumentUpdates,
@@ -230,6 +236,7 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
     }
 
     const TRACK_EXECUTION: bool = true;
+    const TRACK_BALANCES: bool = !SKIP_ALL_CHECKS;
 
     fn add_argument_update(
         acc: &mut Self::ArgumentUpdates,

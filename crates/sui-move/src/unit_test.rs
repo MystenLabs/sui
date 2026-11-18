@@ -229,6 +229,7 @@ impl VMTestSetup for SuiVMTestSetup {
             protocol_config,
             metrics,
             0, // epoch id
+            false,
         ));
         ext.add(NativesCostTable::from_protocol_config(protocol_config));
         ext.add(ScratchRuntime::new(protocol_config));

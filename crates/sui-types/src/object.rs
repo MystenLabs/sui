@@ -846,6 +846,10 @@ impl Party {
             && members.values().next() == Some(&ObjectPermissions::ALL)
     }
 
+    pub fn members(&self) -> impl Iterator<Item = &SuiAddress> {
+        self.members.keys()
+    }
+
     pub fn permissions_for(&self, address: &SuiAddress) -> ObjectPermissions {
         self.members
             .get(address)

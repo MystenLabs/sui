@@ -13,7 +13,9 @@ use crate::{
     static_programmable_transactions::{
         env::Env,
         execution::{
-            self, trace_utils,
+            self,
+            balance_tracking::{self, ObjectData},
+            trace_utils,
             values::{Local, Locals, Value},
         },
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
@@ -58,8 +60,9 @@ use std::{
     sync::Arc,
 };
 use sui_move_natives::object_runtime::{
-    self, LoadedRuntimeObject, MoveAccumulatorAction, MoveAccumulatorEvent, MoveAccumulatorValue,
-    ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+    self, BalanceTotals, LoadedRuntimeObject, MoveAccumulatorAction, MoveAccumulatorEvent,
+    MoveAccumulatorValue, ObjectRuntime, RuntimeResults, layout_contains_balance, max_event_error,
+    merge_totals, object_contents,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -413,6 +416,7 @@ where
             env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
+            Mode::TRACK_BALANCES,
         )?;
         if let Some(new_gas_coin_id) = new_gas_coin_id {
             // If we created a new gas coin for the transaction,
@@ -485,6 +489,14 @@ where
         let mut by_value_shared_objects = BTreeSet::new();
         let mut consensus_owner_objects = BTreeMap::new();
         let mut gas_payment_location = None;
+        let mut input_owners = vec![];
+        let mut withdrawal_addresses = vec![];
+        for withdrawal in &self.locations.input_withdrawal_metadata {
+            withdrawal_addresses.push(withdrawal.source.source_account().into());
+            if let T::WithdrawalSource::Allowance { id, .. } = &withdrawal.source {
+                withdrawal_addresses.push((*id).into());
+            }
+        }
         let gas = gas
             .map(|(payment_location, m, mut g)| {
                 gas_payment_location = Some(payment_location);
@@ -516,6 +528,9 @@ where
                 version,
                 type_,
             } = metadata;
+            if !newly_created {
+                input_owners.push((id, owner.clone()));
+            }
             if !refined_permissions.can_use_mutably() {
                 continue;
             }
@@ -566,6 +581,7 @@ where
             })?
             .remove()
             .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))?;
+        let generated_ids = object_runtime.generated_object_ids();
 
         let RuntimeResults {
             mut writes,
@@ -576,6 +592,7 @@ where
             mut accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
+            balances_before,
         } = object_runtime.finish()?;
         assert_invariant!(
             loaded_runtime_objects
@@ -618,6 +635,7 @@ where
         loaded_runtime_objects.extend(loaded_child_objects);
 
         let mut written_objects = BTreeMap::new();
+        let mut balances_after = BalanceTotals::new();
 
         let (writeout_vm, ty_linkage) =
             Self::make_writeout_vm(env, writes.values().map(|(_, ty, _)| ty.clone()))?;
@@ -645,6 +663,15 @@ where
                     bytes,
                 )?
             };
+            if Mode::TRACK_BALANCES {
+                Self::add_written_balances(
+                    env,
+                    &writeout_vm,
+                    &ty_linkage,
+                    &mut balances_after,
+                    &move_object,
+                )?;
+            }
             let object = Object::new_move(move_object, recipient, tx_digest);
             written_objects.insert(id, object);
         }
@@ -662,7 +689,8 @@ where
             written_objects.insert(id, package_obj);
         }
 
-        Ok(execution::context::finish(
+        let loaded_runtime_object_ids = loaded_runtime_objects.keys().copied().collect();
+        let results = execution::context::finish(
             env.protocol_config,
             env.state_view,
             gas_meter,
@@ -677,7 +705,55 @@ where
             accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
-        )?)
+        )?;
+        let Some(balances_before) = balances_before else {
+            return Ok(results);
+        };
+        let (before, contained_uids) = balances_before
+            .finish()
+            .map_err(|e| make_invariant_violation!("{e}"))?;
+        let ExecutionResults::V2(results_v2) = &results else {
+            invariant_violation!("Expected V2 execution results");
+        };
+        let objects = ObjectData {
+            transaction_addresses: [tx_context.sender()]
+                .into_iter()
+                .chain(tx_context.sponsor())
+                .chain(withdrawal_addresses)
+                .collect(),
+            inputs: input_owners,
+            loaded_runtime_objects: loaded_runtime_object_ids,
+            contained_uids,
+            generated_ids,
+            results: results_v2,
+        };
+        let _balance_tracking = balance_tracking::finish(before, balances_after, objects)?;
+        Ok(results)
+    }
+
+    /// Adds the balances in a written object to `totals`. Its UIDs are not needed: each was walked
+    /// when loaded or is a generated ID.
+    ///
+    /// `vm` must be the writeout VM, since only it can load types from newly published packages.
+    fn add_written_balances(
+        env: &Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
+        vm: &MoveVM,
+        linkage: &ExecutableLinkage,
+        totals: &mut BalanceTotals,
+        object: &MoveObject,
+    ) -> Result<(), Mode::Error> {
+        let contents = object_contents(object, true, || {
+            let tag = TypeTag::Struct(Box::new(object.type_().clone().into()));
+            let layout = vm
+                .annotated_type_layout(&tag)
+                .map_err(|e| env.convert_linked_vm_error(e, linkage))?;
+            Ok::<_, Mode::Error>(layout_contains_balance(&layout).then_some(layout))
+        })?
+        .map_err(|e| {
+            make_invariant_violation!("Unable to retrieve balances for object. Got error: {e}")
+        })?;
+        merge_totals(totals, &contents.balances).map_err(|e| make_invariant_violation!("{e}"))?;
+        Ok(())
     }
 
     pub fn take_user_events(
@@ -1642,16 +1718,15 @@ fn load_object_arg_impl<Mode: ExecutionMode>(
         invariant_violation!("Expected a Move object");
     };
     assert_expected_move_object_type(&object_metadata.type_, move_obj.type_())?;
-    let contained_uids = {
-        let fully_annotated_layout = env.fully_annotated_layout(&ty)?;
-        get_all_uids(&fully_annotated_layout, move_obj.contents()).map_err(|e| {
-            make_invariant_violation!("Unable to retrieve UIDs for object. Got error: {e}")
-        })?
-    };
+    let contents = object_contents(move_obj, Mode::TRACK_BALANCES, || {
+        env.fully_annotated_layout(&ty).map(Some)
+    })?
+    .map_err(|e| make_invariant_violation!("Unable to retrieve UIDs for object. Got error: {e}"))?;
     input_object_map.insert(
         id,
         object_runtime::InputObject {
-            contained_uids,
+            contained_uids: contents.uids,
+            balances: contents.balances,
             version,
             owner,
         },

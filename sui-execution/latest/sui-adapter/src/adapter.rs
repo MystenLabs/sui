@@ -87,6 +87,7 @@ mod checked {
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
+        track_balances: bool,
     ) -> Result<NativeExtensions<'r>, ExecutionError> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
         let extensions = NativeExtensions::default();
@@ -103,6 +104,7 @@ mod checked {
             protocol_config,
             metrics,
             current_epoch_id,
+            track_balances,
         ));
         exts.add(NativesCostTable::from_protocol_config(protocol_config));
         exts.add(ScratchRuntime::new(protocol_config));

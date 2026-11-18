@@ -295,6 +295,7 @@ pub fn end_transaction(
         accumulator_events,
         settlement_input_sui: _,
         settlement_output_sui: _,
+        balances_before: _,
     } = match results {
         Ok(res) => res,
         Err(_) => {
