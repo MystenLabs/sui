@@ -15,7 +15,7 @@ use sui_types::{
 use tracing::{debug, info};
 
 use crate::execution_scheduler::funds_withdraw_scheduler::{
-    ScheduleStatus, TxFundsWithdraw,
+    FundsSettlement, ScheduleStatus, TxFundsWithdraw,
     address_funds::{
         ScheduleResult,
         test_scheduler::{TestScheduler, expect_schedule_results},
@@ -114,6 +114,126 @@ async fn test_withdraw_one_account_already_settled() {
         results,
         BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SkipSchedule)]),
     );
+}
+
+#[tokio::test]
+async fn test_settled_in_storage_batch_keeps_tracked_reservations() {
+    // Storage runs ahead of the scheduler, as on a node whose checkpoint executor applies
+    // settlements before `settle_funds` is called. A batch that is skipped because an untracked
+    // account is already past it must still reserve for tracked accounts, including in
+    // transactions that also withdraw from the untracked account.
+    let v0 = SequenceNumber::from_u64(0);
+    let v1 = v0.next();
+    let v2 = v1.next();
+    let a = ObjectID::random();
+    let b = ObjectID::random();
+    let a_id = AccumulatorObjId::new_unchecked(a);
+    let b_id = AccumulatorObjId::new_unchecked(b);
+    let test = TestScheduler::new_eager(v0, BTreeMap::from([(a, 1100), (b, 1000)]));
+
+    let withdraw = |reservations: &[(AccumulatorObjId, u64)]| TxFundsWithdraw {
+        tx_digest: TransactionDigest::random(),
+        reservations: reservations.iter().cloned().collect(),
+    };
+    let tx1 = withdraw(&[(a_id, 100)]);
+    let tx2 = withdraw(&[(a_id, 900), (b_id, 1)]);
+    let tx3 = withdraw(&[(b_id, 1)]);
+    let tx4 = withdraw(&[(a_id, 500)]);
+
+    let results = test.schedule_withdraws(v0, vec![tx1.clone()]);
+    expect_schedule_results(
+        results,
+        BTreeMap::from([(tx1.tx_digest, ScheduleStatus::SufficientFunds)]),
+    );
+
+    let v1_changes = BTreeMap::from([(a_id, -100)]);
+    let v2_changes = BTreeMap::from([(a_id, -900), (b_id, -2)]);
+    test.mock_read
+        .settle_funds_changes(v1_changes.clone(), v1)
+        .await;
+    test.mock_read
+        .settle_funds_changes(v2_changes.clone(), v2)
+        .await;
+
+    let results = test.schedule_withdraws(v1, vec![tx2.clone(), tx3.clone()]);
+    expect_schedule_results(
+        results,
+        BTreeMap::from([
+            (tx2.tx_digest, ScheduleStatus::SkipSchedule),
+            (tx3.tx_digest, ScheduleStatus::SkipSchedule),
+        ]),
+    );
+
+    // A has 100 left after tx1 and tx2, so tx4 cannot be approved before v2 settles.
+    let mut results = test.schedule_withdraws(v2, vec![tx4.clone()]);
+    let ScheduleResult::Pending(receiver) = results.remove(&tx4.tx_digest).unwrap() else {
+        panic!("tx4 must wait for settlement");
+    };
+
+    test.scheduler.settle_funds(FundsSettlement {
+        next_accumulator_version: v1,
+        funds_changes: v1_changes,
+    });
+    test.scheduler.settle_funds(FundsSettlement {
+        next_accumulator_version: v2,
+        funds_changes: v2_changes,
+    });
+    assert_eq!(receiver.await.unwrap(), ScheduleStatus::InsufficientFunds);
+}
+
+#[tokio::test]
+async fn test_settled_in_storage_batch_reservation_released_without_funds_change() {
+    // The skipped batch's only withdraw from tracked account A has no funds change at
+    // settlement (the committee rejected it because B was short), and no later batch touches
+    // A. Settling the batch's version must still release A's reservation.
+    let v0 = SequenceNumber::from_u64(0);
+    let v1 = v0.next();
+    let v2 = v1.next();
+    let a = ObjectID::random();
+    let b = ObjectID::random();
+    let a_id = AccumulatorObjId::new_unchecked(a);
+    let b_id = AccumulatorObjId::new_unchecked(b);
+    let test = TestScheduler::new_eager(v0, BTreeMap::from([(a, 1000), (b, 10)]));
+
+    let tx1 = TxFundsWithdraw {
+        tx_digest: TransactionDigest::random(),
+        reservations: BTreeMap::from([(a_id, 100)]),
+    };
+    let tx2 = TxFundsWithdraw {
+        tx_digest: TransactionDigest::random(),
+        reservations: BTreeMap::from([(a_id, 50), (b_id, 20)]),
+    };
+
+    let results = test.schedule_withdraws(v0, vec![tx1.clone()]);
+    expect_schedule_results(
+        results,
+        BTreeMap::from([(tx1.tx_digest, ScheduleStatus::SufficientFunds)]),
+    );
+
+    let v1_changes = BTreeMap::from([(a_id, -100)]);
+    test.mock_read
+        .settle_funds_changes(v1_changes.clone(), v1)
+        .await;
+    test.mock_read
+        .settle_funds_changes(BTreeMap::new(), v2)
+        .await;
+
+    let results = test.schedule_withdraws(v1, vec![tx2.clone()]);
+    expect_schedule_results(
+        results,
+        BTreeMap::from([(tx2.tx_digest, ScheduleStatus::SkipSchedule)]),
+    );
+    assert_eq!(test.scheduler.num_tracked_accounts(), 1);
+
+    test.scheduler.settle_funds(FundsSettlement {
+        next_accumulator_version: v1,
+        funds_changes: v1_changes,
+    });
+    test.scheduler.settle_funds(FundsSettlement {
+        next_accumulator_version: v2,
+        funds_changes: BTreeMap::new(),
+    });
+    assert_eq!(test.scheduler.num_tracked_accounts(), 0);
 }
 
 #[tokio::test]
