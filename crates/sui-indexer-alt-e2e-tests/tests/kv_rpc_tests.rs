@@ -7760,7 +7760,9 @@ async fn list_package_versions(
 }
 
 /// `(version, storage id, publish checkpoint)` of each listed version.
-fn listed_versions(response: &ListPackageVersionsResponse) -> Vec<(u64, String, Option<u64>)> {
+fn listed_package_versions(
+    response: &ListPackageVersionsResponse,
+) -> Vec<(u64, String, Option<u64>)> {
     response
         .versions
         .iter()
@@ -8383,7 +8385,7 @@ async fn test_list_package_versions_checkpoint_range() {
             range_request(package_id, Ordering::Ascending, range),
         )
         .await;
-        assert_eq!(listed_versions(&response), expected, "{range:?}");
+        assert_eq!(listed_package_versions(&response), expected, "{range:?}");
         assert_eq!(end_reason(&response), Some(end), "{range:?}");
         assert!(response.next_page_token.is_none());
     }
@@ -8434,7 +8436,7 @@ async fn test_list_package_versions_checkpoint_range() {
     )
     .await;
     assert_eq!(
-        listed_versions(&response),
+        listed_package_versions(&response),
         vec![entry_3.clone(), entry_2.clone(), entry_1.clone()]
     );
     assert_eq!(end_reason(&response), Some(QueryEndReason::CheckpointBound));
@@ -8446,7 +8448,7 @@ async fn test_list_package_versions_checkpoint_range() {
             .await
             .unwrap();
         assert_eq!(
-            listed_versions(&response),
+            listed_package_versions(&response),
             vec![entry_1.clone(), entry_2.clone(), entry_3.clone()],
             "{package_id}"
         );
@@ -8455,14 +8457,17 @@ async fn test_list_package_versions_checkpoint_range() {
         .await
         .unwrap();
     assert_eq!(
-        listed_versions(&legacy_first),
+        listed_package_versions(&legacy_first),
         vec![entry_1.clone(), entry_2.clone()]
     );
     let legacy_second =
         list_package_versions(&mut client, v1, Some(2), legacy_first.next_page_token)
             .await
             .unwrap();
-    assert_eq!(listed_versions(&legacy_second), vec![entry_3.clone()]);
+    assert_eq!(
+        listed_package_versions(&legacy_second),
+        vec![entry_3.clone()]
+    );
     assert!(legacy_second.next_page_token.is_none());
 
     // A range pages by cursor, never by page token.
@@ -8470,14 +8475,14 @@ async fn test_list_package_versions_checkpoint_range() {
     request.options.as_mut().unwrap().limit = Some(2);
     let first = list_package_versions_request(&mut client, request.clone()).await;
     assert_eq!(
-        listed_versions(&first),
+        listed_package_versions(&first),
         vec![entry_1.clone(), entry_2.clone()]
     );
     assert_eq!(end_reason(&first), Some(QueryEndReason::ItemLimit));
     assert!(first.next_page_token.is_none());
     request.options.as_mut().unwrap().after = Some(last_package_version_cursor(&first));
     let second = list_package_versions_request(&mut client, request).await;
-    assert_eq!(listed_versions(&second), vec![entry_3.clone()]);
+    assert_eq!(listed_package_versions(&second), vec![entry_3.clone()]);
     assert_eq!(end_reason(&second), Some(QueryEndReason::CheckpointBound));
 
     let mut with_page_size = ListPackageVersionsRequest::default();

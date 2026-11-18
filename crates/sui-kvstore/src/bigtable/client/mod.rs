@@ -1212,8 +1212,8 @@ impl BigTableClient {
         let rows = self
             .range_scan_stream(
                 tables::objects::NAME,
-                Some(start_key),
-                Some(end_key),
+                Bound::Included(start_key),
+                Bound::Included(end_key),
                 rows_limit,
                 descending,
                 filter,

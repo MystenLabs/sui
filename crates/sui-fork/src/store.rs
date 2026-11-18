@@ -1309,11 +1309,26 @@ impl RpcIndexes for ForkStore {
     fn package_versions_iter(
         &self,
         original_id: ObjectID,
-        cursor: Option<u64>,
-    ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
-    {
+        start_version: u64,
+        end_version_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<sui_types::storage::PackageVersionsIterator<'_>> {
+        self.stock_reader().package_versions_iter(
+            original_id,
+            start_version,
+            end_version_exclusive,
+            descending,
+        )
+    }
+
+    fn packages_by_checkpoint_iter(
+        &self,
+        lower: std::ops::Bound<sui_types::storage::PackagePublishKey>,
+        upper: std::ops::Bound<sui_types::storage::PackagePublishKey>,
+        descending: bool,
+    ) -> StorageResult<sui_types::storage::PackagesByCheckpointIterator<'_>> {
         self.stock_reader()
-            .package_versions_iter(original_id, cursor)
+            .packages_by_checkpoint_iter(lower, upper, descending)
     }
 
     fn get_package_version_storage_id(
@@ -1339,7 +1354,9 @@ impl RpcIndexes for ForkStore {
     /// is the object's version at the fork checkpoint, which the remote resolves and the fork then
     /// records, even when local execution has changed the object since: the version the object was
     /// live at, or, for an object deleted or wrapped by then, the version that removed it (see
-    /// [`ForkStore::fetch_removal_at_fork_checkpoint`]).
+    /// [`ForkStore::fetch_removal_at_fork_checkpoint`]). The system-package load records every
+    /// system package live at the fork checkpoint, so once it is complete a system package without
+    /// a row did not exist there, and the remote is not asked.
     fn get_object_version_at_checkpoint(
         &self,
         object_id: ObjectID,
@@ -1350,6 +1367,14 @@ impl RpcIndexes for ForkStore {
             .get_object_version_at_checkpoint(object_id, checkpoint)?;
         if version.is_some() || checkpoint < self.forked_at_checkpoint() {
             return Ok(version);
+        }
+        if SYSTEM_PACKAGE_ADDRESSES.contains(&object_id.into())
+            && self
+                .local_store()
+                .system_packages_loaded()
+                .map_err(to_storage_error)?
+        {
+            return Ok(None);
         }
         if let Some(object) = self
             .fetch_object_at_fork_checkpoint(&object_id)

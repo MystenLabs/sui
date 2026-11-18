@@ -341,17 +341,6 @@ impl StateReader {
         Err(version_not_retained())
     }
 
-    /// [`version_not_retained`] if this node does not keep object versions once they are replaced
-    /// (see [`RpcStateReader::retains_object_version_history`]): reads that depend on an object's
-    /// replaced versions would find them gone and answer `NotFound`. The refusal depends only on
-    /// the node's configuration, so check it before anything that depends on the node's state.
-    pub fn require_object_version_history(&self) -> Result<(), crate::RpcError> {
-        if self.inner().retains_object_version_history() {
-            return Ok(());
-        }
-        Err(version_not_retained())
-    }
-
     /// The lower bound for checkpoint-pinned reads: the checkpoint just below the higher of
     /// [`RpcStateReader::get_lowest_available_checkpoint_objects`] and
     /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]. The lowest available
