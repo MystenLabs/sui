@@ -57,7 +57,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{
         Arc, RwLock,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -76,7 +76,7 @@ use sui_types::{
 use tap::Pipe;
 use tokio::sync::oneshot;
 use tokio::{
-    sync::{broadcast, mpsc, watch},
+    sync::{Notify, broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
 use tracing::{debug, info, instrument, trace, warn};
@@ -1933,7 +1933,7 @@ async fn sync_checkpoint_contents<S>(
     let mut highest_started_network_total_transactions = highest_synced.network_total_transactions;
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
-    let mut tx_in_flight: u64 = 0;
+    let running = Arc::new(RunningDownloads::default());
 
     let hedge = checkpoint_content_hedge_delay.map(|delay| ContentHedge {
         delay,
@@ -1942,6 +1942,8 @@ async fn sync_checkpoint_contents<S>(
 
     loop {
         tokio::select! {
+            // A download that finished out of order frees its slot, so start the next one.
+            () = running.finished.notified() => {},
             result = target_sequence_channel.changed() => {
                 match result {
                     Ok(()) => {
@@ -1963,7 +1965,6 @@ async fn sync_checkpoint_contents<S>(
                             .expect("store operation should not fail");
                         // We don't care if no one is listening as this is a broadcast channel
                         let _ = checkpoint_event_sender.send(checkpoint.clone());
-                        tx_in_flight -= checkpoint.network_total_transactions - highest_synced.network_total_transactions;
                         highest_synced = checkpoint;
                         if let Some(hedge) = &hedge {
                             hedge
@@ -1994,15 +1995,18 @@ async fn sync_checkpoint_contents<S>(
                             checkpoint.network_total_transactions - prev
                         };
                         // Retry contents sync on failure.
-                        checkpoint_contents_tasks.push_front(sync_one_checkpoint_contents(
-                            network.clone(),
-                            &store,
-                            peer_heights.clone(),
-                            use_get_checkpoint_contents_v2,
-                            hedge.clone(),
-                            metrics.clone(),
+                        checkpoint_contents_tasks.push_front(running.track(
                             retry_tx_count,
-                            checkpoint,
+                            sync_one_checkpoint_contents(
+                                network.clone(),
+                                &store,
+                                peer_heights.clone(),
+                                use_get_checkpoint_contents_v2,
+                                hedge.clone(),
+                                metrics.clone(),
+                                retry_tx_count,
+                                checkpoint,
+                            ),
                         ));
                     }
                 }
@@ -2010,6 +2014,10 @@ async fn sync_checkpoint_contents<S>(
         }
 
         // Start new tasks up to configured concurrency limits.
+        // `checkpoint_content_download_concurrency` bounds how far ahead of the highest synced
+        // checkpoint downloads may start. Only downloads still running count against the
+        // transaction limit: one that finished has stored its contents and only waits to be
+        // released in order.
         while current_sequence < target_sequence_cursor
             && checkpoint_contents_tasks.len() < checkpoint_content_download_concurrency
         {
@@ -2025,26 +2033,29 @@ async fn sync_checkpoint_contents<S>(
             // downloaded.
             let tx_count = next_checkpoint.network_total_transactions
                 - highest_started_network_total_transactions;
-            if !checkpoint_contents_tasks.is_empty()
-                && tx_in_flight + tx_count > checkpoint_content_download_tx_concurrency
+            if running.count() > 0
+                && running.tx_count() + tx_count > checkpoint_content_download_tx_concurrency
             {
                 break;
             }
-            tx_in_flight += tx_count;
 
             highest_started_network_total_transactions = next_checkpoint.network_total_transactions;
             current_sequence += 1;
-            checkpoint_contents_tasks.push_back(sync_one_checkpoint_contents(
-                network.clone(),
-                &store,
-                peer_heights.clone(),
-                use_get_checkpoint_contents_v2,
-                hedge.clone(),
-                metrics.clone(),
+            checkpoint_contents_tasks.push_back(running.track(
                 tx_count,
-                next_checkpoint,
+                sync_one_checkpoint_contents(
+                    network.clone(),
+                    &store,
+                    peer_heights.clone(),
+                    use_get_checkpoint_contents_v2,
+                    hedge.clone(),
+                    metrics.clone(),
+                    tx_count,
+                    next_checkpoint,
+                ),
             ));
         }
+        metrics.set_checkpoint_content_downloads_running(running.count());
 
         if highest_synced
             .sequence_number()
@@ -2106,6 +2117,8 @@ where
     let now = tokio::time::Instant::now();
     let fetch = ContentFetch {
         network: &network,
+        max_timeout: timeout_max,
+        failed_requests: AtomicU32::new(0),
         peer_heights: &peer_heights,
         checkpoint: &checkpoint,
         use_get_checkpoint_contents_v2,
@@ -2217,6 +2230,42 @@ struct UnaskedPeer {
     slow: bool,
 }
 
+/// Checkpoint contents downloads that are still running. A download stops counting when it
+/// finishes, even if earlier checkpoints are still downloading.
+#[derive(Default)]
+struct RunningDownloads {
+    count: AtomicUsize,
+    tx_count: AtomicU64,
+    finished: Notify,
+}
+
+impl RunningDownloads {
+    fn count(&self) -> usize {
+        self.count.load(Ordering::Relaxed)
+    }
+
+    fn tx_count(&self) -> u64 {
+        self.tx_count.load(Ordering::Relaxed)
+    }
+
+    fn track<F: Future>(
+        self: &Arc<Self>,
+        tx_count: u64,
+        download: F,
+    ) -> impl Future<Output = F::Output> + use<F> {
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.tx_count.fetch_add(tx_count, Ordering::Relaxed);
+        let running = self.clone();
+        async move {
+            let result = download.await;
+            running.count.fetch_sub(1, Ordering::Relaxed);
+            running.tx_count.fetch_sub(tx_count, Ordering::Relaxed);
+            running.finished.notify_one();
+            result
+        }
+    }
+}
+
 /// A finished request for one checkpoint's contents to one peer.
 struct ContentResponse {
     peer_id: PeerId,
@@ -2238,6 +2287,10 @@ enum FullContentsDownload {
 /// Downloads the contents of one checkpoint from peers.
 struct ContentFetch<'a> {
     network: &'a anemo::Network,
+    /// Upper bound for the timeout of a request, which doubles after each failed request.
+    max_timeout: Duration,
+    /// Requests for this checkpoint that failed so far.
+    failed_requests: AtomicU32,
     peer_heights: &'a Arc<RwLock<PeerHeights>>,
     checkpoint: &'a VerifiedCheckpoint,
     use_get_checkpoint_contents_v2: bool,
@@ -2434,7 +2487,13 @@ impl ContentFetch<'_> {
     ) -> impl Future<Output = ContentResponse> {
         let peer_id = peer.inner().peer_id();
         let digest = self.checkpoint.content_digest;
-        let timeout = self.timeout;
+        // A checkpoint that timed out with one peer is likely too large for the current timeout,
+        // so each failed request doubles the timeout of the next one, up to `max_timeout`.
+        let failed = self.failed_requests.load(Ordering::Relaxed).min(6);
+        let timeout = self
+            .timeout
+            .saturating_mul(1 << failed)
+            .min(self.max_timeout.max(self.timeout));
         let use_get_checkpoint_contents_v2 = self.use_get_checkpoint_contents_v2;
         debug!(
             ?timeout,
@@ -2487,6 +2546,7 @@ impl ContentFetch<'_> {
         } = response;
         let peer_label = content_metrics_peer_label(self.network, peer_id);
         let Some(contents) = contents else {
+            self.failed_requests.fetch_add(1, Ordering::Relaxed);
             self.peer_heights.write().unwrap().record_failure(peer_id);
             self.metrics.record_checkpoint_content_peer_request(
                 &peer_label,
