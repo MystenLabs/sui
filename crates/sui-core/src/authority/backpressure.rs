@@ -16,6 +16,7 @@ struct Watermarks {
     executed: CheckpointSequenceNumber,
     certified: CheckpointSequenceNumber,
     verified: CheckpointSequenceNumber,
+    checkpoint_rebuild_pending: bool,
 }
 
 impl Watermarks {
@@ -27,8 +28,11 @@ impl Watermarks {
     // the committee has already certified it, so state sync can download its contents and the
     // checkpoint executor can execute it without this node processing more consensus commits.
     // While backpressure holds on this basis, the node makes progress only through state sync.
+    //
+    // While checkpoints built before a restart are being rebuilt, backpressure is suppressed:
+    // the checkpoint executor waits for the rebuild, and the rebuild needs the consensus handler.
     fn should_suppress_backpressure(&self) -> bool {
-        self.certified.max(self.verified) <= self.executed
+        self.checkpoint_rebuild_pending || self.certified.max(self.verified) <= self.executed
     }
 }
 
@@ -85,6 +89,7 @@ impl BackpressureManager {
             executed,
             certified,
             verified,
+            checkpoint_rebuild_pending: false,
         });
         match tokio::runtime::Handle::try_current() {
             Ok(handle) => {
@@ -127,6 +132,18 @@ impl BackpressureManager {
             if seq > watermarks.verified {
                 watermarks.verified = seq;
                 debug!(?watermarks, "updating highest verified checkpoint");
+                true
+            } else {
+                false
+            }
+        });
+    }
+
+    pub fn set_checkpoint_rebuild_pending(&self, pending: bool) {
+        self.watermarks_sender.send_if_modified(|watermarks| {
+            if watermarks.checkpoint_rebuild_pending != pending {
+                watermarks.checkpoint_rebuild_pending = pending;
+                info!(?watermarks, "setting checkpoint rebuild pending");
                 true
             } else {
                 false
@@ -288,6 +305,34 @@ mod tests {
         })
         .await
         .expect("verified checkpoint did not reach the backpressure manager");
+    }
+
+    #[tokio::test]
+    async fn test_backpressure_suppressed_during_checkpoint_rebuild() {
+        let manager = Arc::new(BackpressureManager::new_for_tests());
+        manager.update_highest_verified_checkpoint(5);
+        manager.set_backpressure(true);
+        manager.set_checkpoint_rebuild_pending(true);
+
+        let subscriber = manager.subscribe();
+        subscriber.await_no_backpressure().now_or_never().unwrap();
+
+        manager.set_checkpoint_rebuild_pending(false);
+        assert!(subscriber.await_no_backpressure().now_or_never().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_rebuild_pending_releases_paused_waiter() {
+        let manager = Arc::new(BackpressureManager::new_for_tests());
+        manager.update_highest_verified_checkpoint(5);
+        manager.set_backpressure(true);
+
+        let subscriber = manager.subscribe();
+        let waiter = tokio::spawn(async move { subscriber.await_no_backpressure().await });
+        tokio::task::yield_now().await;
+
+        manager.set_checkpoint_rebuild_pending(true);
+        await_with_timeout(waiter).await;
     }
 
     async fn await_with_timeout<R>(f: impl std::future::Future<Output = R>) {
