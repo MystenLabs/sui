@@ -34,14 +34,14 @@ use bytes::Bytes;
 use consensus_types::block::{BlockRef, TransactionIndex};
 use futures::{StreamExt as _, stream::FuturesOrdered};
 use itertools::Itertools as _;
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, backoff::ExponentialBackoff};
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use tokio::{
     sync::oneshot,
     task::{JoinHandle, JoinSet},
-    time::{MissedTickBehavior, sleep},
+    time::{Instant, MissedTickBehavior, sleep},
 };
 use tracing::{debug, info, warn};
 
@@ -65,6 +65,36 @@ use crate::{
     task::{join_and_propagate_panic, shutdown_join_set, spawn_blocking},
     transaction_vote_tracker::TransactionVoteTracker,
 };
+
+/// First delay before a throttled block-fetch chunk is retried. The delay doubles on each retry,
+/// up to THROTTLED_CHUNK_MAX_RETRY_DELAY. A random jitter of up to the first delay is added to
+/// each later delay, so clients throttled at the same time spread out their retries.
+const THROTTLED_CHUNK_INITIAL_RETRY_DELAY: Duration = Duration::from_millis(100);
+const THROTTLED_CHUNK_MAX_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+/// Runs `request` and retries it with backoff while the peer rejects it with
+/// FetchBlocksThrottled. A retry starts only before `deadline`. When the next retry would
+/// start after `deadline`, the throttle error is returned.
+async fn retry_throttled<T, F, Fut>(deadline: Instant, mut request: F) -> ConsensusResult<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = ConsensusResult<T>>,
+{
+    let mut backoff = ExponentialBackoff::new(
+        THROTTLED_CHUNK_INITIAL_RETRY_DELAY,
+        THROTTLED_CHUNK_MAX_RETRY_DELAY,
+    )
+    .factor(2.0);
+    loop {
+        let delay = backoff.next().expect("backoff never terminates");
+        match request().await {
+            Err(ConsensusError::FetchBlocksThrottled(_)) if Instant::now() + delay < deadline => {
+                sleep(delay).await;
+            }
+            result => return result,
+        }
+    }
+}
 
 // Handle to stop the CommitSyncer loop.
 pub(crate) struct CommitSyncerHandle {
@@ -487,13 +517,15 @@ where
             let fetch_timeout = request_timeout * 4;
             // Try fetching from selected target peers.
             for peer in target_peers {
-                match tokio::time::timeout(
-                    fetch_timeout,
+                let fetch_deadline = Instant::now() + fetch_timeout;
+                match tokio::time::timeout_at(
+                    fetch_deadline,
                     Self::fetch_once(
                         inner.clone(),
                         peer.clone(),
                         commit_range.clone(),
                         request_timeout,
+                        fetch_deadline,
                     ),
                 )
                 .await
@@ -547,6 +579,7 @@ where
         target_peer: PeerId,
         commit_range: CommitRange,
         timeout: Duration,
+        fetch_deadline: Instant,
     ) -> ConsensusResult<CertifiedCommits> {
         let _timer = inner
             .context
@@ -617,17 +650,25 @@ where
                 async move {
                     // 4. Send out pipelined fetch requests to avoid overloading the target authority.
                     sleep(timeout * i as u32 / num_chunks).await;
-                    // TODO: add some retries.
-                    let serialized_blocks = inner
-                        .network_client
-                        .fetch_blocks(
+                    // Chunks of one fetch overlap when the target reads slowly, so the target can
+                    // throttle some of them. Retrying a throttled chunk keeps the chunks that
+                    // already finished.
+                    // A retry starts only if a full request plus one more `timeout` of headroom
+                    // fit before fetch_deadline. The headroom lets fetch_once verify the last
+                    // response and return its own error before the outer timeout cancels it.
+                    let retry_deadline = fetch_deadline
+                        .checked_sub(timeout * 2)
+                        .unwrap_or_else(Instant::now);
+                    let serialized_blocks = retry_throttled(retry_deadline, || {
+                        inner.network_client.fetch_blocks(
                             peer.clone(),
                             request_block_refs.to_vec(),
                             vec![],
                             false,
                             timeout,
                         )
-                        .await?;
+                    })
+                    .await?;
                     // 5. Verify the same number of blocks are returned as requested.
                     if request_block_refs.len() != serialized_blocks.len() {
                         return Err(ConsensusError::UnexpectedNumberOfBlocksFetched {
@@ -922,12 +963,12 @@ mod tests {
         block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
-        commit_syncer::CommitSyncer,
+        commit_syncer::{CommitSyncer, retry_throttled},
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::MockCoreThreadDispatcher,
         dag_state::DagState,
-        error::ConsensusResult,
+        error::{ConsensusError, ConsensusResult},
         network::{BlockStream, CommitSyncerClient, ObserverNetworkClient, ValidatorNetworkClient},
         peers_pool::{PeerService, PeersPool},
         round_tracker::RoundTracker,
@@ -1233,6 +1274,60 @@ mod tests {
                 "Observer should be able to use more parallelism than validator's 2/3 limit"
             );
         }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn retry_throttled_retries_until_admitted() {
+        let attempts = std::cell::Cell::new(0);
+        let start = tokio::time::Instant::now();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let result = retry_throttled(deadline, || {
+            attempts.set(attempts.get() + 1);
+            let attempt = attempts.get();
+            async move {
+                if attempt <= 3 {
+                    Err(ConsensusError::FetchBlocksThrottled("peer".to_string()))
+                } else {
+                    Ok(attempt)
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), 4);
+        // Backoff of 100ms, 200ms and 400ms before the fourth attempt, plus up to 100ms of jitter
+        // added to each delay after the first and carried into the next ones.
+        let elapsed = start.elapsed();
+        assert!(elapsed >= Duration::from_millis(700) && elapsed <= Duration::from_millis(1100));
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn retry_throttled_gives_up_at_deadline() {
+        let start = tokio::time::Instant::now();
+        let deadline = start + Duration::from_secs(2);
+        let result: ConsensusResult<()> = retry_throttled(deadline, || async {
+            Err(ConsensusError::FetchBlocksThrottled("peer".to_string()))
+        })
+        .await;
+        assert!(matches!(
+            result,
+            Err(ConsensusError::FetchBlocksThrottled(_))
+        ));
+        // tokio rounds timer deadlines up to whole milliseconds, so the last retry can wake at
+        // the deadline itself.
+        assert!(start.elapsed() <= Duration::from_secs(2));
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn retry_throttled_does_not_retry_other_errors() {
+        let attempts = std::cell::Cell::new(0);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let result: ConsensusResult<()> = retry_throttled(deadline, || {
+            attempts.set(attempts.get() + 1);
+            async { Err(ConsensusError::NetworkRequest("failed".to_string())) }
+        })
+        .await;
+        assert!(matches!(result, Err(ConsensusError::NetworkRequest(_))));
+        assert_eq!(attempts.get(), 1);
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

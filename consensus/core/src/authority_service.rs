@@ -427,7 +427,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     //    - response returns max_blocks_per_fetch blocks.
     async fn handle_fetch_blocks(
         &self,
-        _peer: AuthorityIndex,
+        peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
         fetch_after_rounds: Vec<Round>,
         fetch_missing_ancestors: bool,
@@ -436,7 +436,12 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
         // Delegate to BlockSyncService
         self.block_sync_service
-            .fetch_blocks(block_refs, fetch_after_rounds, fetch_missing_ancestors)
+            .fetch_blocks(
+                PeerId::Validator(peer),
+                block_refs,
+                fetch_after_rounds,
+                fetch_missing_ancestors,
+            )
             .await
     }
 

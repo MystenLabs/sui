@@ -30,6 +30,7 @@ use crate::{
         to_host_port_str,
         tonic_network::{
             Channel, MAX_FETCH_RESPONSE_BYTES, ReboxRequestFn, chunk_blocks,
+            fetch_blocks_error_to_status, fetch_blocks_status_to_error,
             max_fetch_blocks_response_bytes, rebox_request,
         },
         tonic_tls::certificate_server_name,
@@ -341,13 +342,7 @@ impl ObserverNetworkClient for TonicObserverClient {
         let mut stream = client
             .fetch_blocks(request)
             .await
-            .map_err(|e| {
-                if e.code() == tonic::Code::DeadlineExceeded {
-                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
-                } else {
-                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
-                }
-            })?
+            .map_err(|e| fetch_blocks_status_to_error(e, ""))?
             .into_inner();
 
         let mut blocks = vec![];
@@ -372,14 +367,7 @@ impl ObserverNetworkClient for TonicObserverClient {
                 }
                 Err(e) => {
                     if blocks.is_empty() {
-                        if e.code() == tonic::Code::DeadlineExceeded {
-                            return Err(ConsensusError::NetworkRequestTimeout(format!(
-                                "fetch_blocks failed mid-stream: {e:?}"
-                            )));
-                        }
-                        return Err(ConsensusError::NetworkRequest(format!(
-                            "fetch_blocks failed mid-stream: {e:?}"
-                        )));
+                        return Err(fetch_blocks_status_to_error(e, " mid-stream"));
                     } else {
                         warn!("fetch_blocks failed mid-stream: {e:?}");
                         break;
@@ -541,7 +529,7 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
                 fetch_missing_ancestors,
             )
             .await
-            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+            .map_err(fetch_blocks_error_to_status)?;
         let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
             chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
                 .into_iter()

@@ -105,6 +105,12 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_probe_timeout")]
     pub commit_sync_probe_timeout: Duration,
 
+    // When true, the node serves store-backed FetchBlocks requests on the blocking pool, under
+    // per-peer and global admission caps, and rejects requests over the caps. When false, the
+    // node serves them inline on the async runtime without caps.
+    #[serde(default = "Parameters::default_fetch_blocks_admission_control")]
+    pub fetch_blocks_admission_control: bool,
+
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
@@ -217,6 +223,10 @@ impl Parameters {
         Duration::from_secs(2)
     }
 
+    pub(crate) fn default_fetch_blocks_admission_control() -> bool {
+        true
+    }
+
     pub(crate) fn default_commit_sync_batches_ahead() -> usize {
         // This is set to be a multiple of default commit_sync_parallel_fetches to allow fetching ahead,
         // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
@@ -245,6 +255,7 @@ impl Default for Parameters {
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             commit_sync_request_timeout: Parameters::default_commit_sync_request_timeout(),
             commit_sync_probe_timeout: Parameters::default_commit_sync_probe_timeout(),
+            fetch_blocks_admission_control: Parameters::default_fetch_blocks_admission_control(),
             tonic: TonicParameters::default(),
             observer: ObserverParameters::default(),
             internal: InternalParameters::default(),

@@ -64,7 +64,8 @@ pub(crate) fn max_fetch_blocks_response_bytes(
     block_refs: &[BlockRef],
     fetch_after_rounds: &[Round],
 ) -> usize {
-    // Mirror the server-side limit selection in `block_sync_service::fetch_blocks`:
+    // Mirror the server-side limit selection in
+    // `BlockSyncCore::validate_fetch_blocks_request` (block_sync_service.rs):
     // live sync (both inputs non-empty) is capped by `max_blocks_per_sync`,
     // every other mode by `max_blocks_per_fetch`.
     let max_response_num_blocks = if !fetch_after_rounds.is_empty() && !block_refs.is_empty() {
@@ -76,6 +77,40 @@ pub(crate) fn max_fetch_blocks_response_bytes(
     max_response_num_blocks
         .saturating_mul(context.protocol_config.max_transactions_in_block_bytes() as usize)
         .saturating_mul(2)
+}
+
+/// Metadata key that marks a RESOURCE_EXHAUSTED status as a FetchBlocks admission-control
+/// rejection. tonic and h2 also produce RESOURCE_EXHAUSTED, for example on GOAWAY
+/// ENHANCE_YOUR_CALM, and clients must not treat those as a cheap rejection.
+const FETCH_BLOCKS_THROTTLED_KEY: &str = "consensus-fetch-blocks-throttled";
+
+/// Maps a server-side FetchBlocks error to a gRPC status. Admission-control rejections use
+/// RESOURCE_EXHAUSTED with FETCH_BLOCKS_THROTTLED_KEY, so the client can retry right away
+/// instead of treating the peer as failed.
+pub(crate) fn fetch_blocks_error_to_status(e: ConsensusError) -> tonic::Status {
+    match e {
+        ConsensusError::FetchBlocksThrottled(_) => {
+            let mut status = tonic::Status::resource_exhausted(format!("{e:?}"));
+            status.metadata_mut().insert(
+                FETCH_BLOCKS_THROTTLED_KEY,
+                tonic::metadata::MetadataValue::from_static("true"),
+            );
+            status
+        }
+        e => tonic::Status::internal(format!("{e:?}")),
+    }
+}
+
+/// Maps a FetchBlocks gRPC status from the server to a client-side error.
+pub(crate) fn fetch_blocks_status_to_error(e: tonic::Status, stage: &str) -> ConsensusError {
+    let message = format!("fetch_blocks failed{stage}: {e:?}");
+    match e.code() {
+        tonic::Code::DeadlineExceeded => ConsensusError::NetworkRequestTimeout(message),
+        tonic::Code::ResourceExhausted if e.metadata().contains_key(FETCH_BLOCKS_THROTTLED_KEY) => {
+            ConsensusError::FetchBlocksThrottled(message)
+        }
+        _ => ConsensusError::NetworkRequest(message),
+    }
 }
 
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
@@ -219,13 +254,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         let mut stream = client
             .fetch_blocks(request)
             .await
-            .map_err(|e| {
-                if e.code() == tonic::Code::DeadlineExceeded {
-                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
-                } else {
-                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
-                }
-            })?
+            .map_err(|e| fetch_blocks_status_to_error(e, ""))?
             .into_inner();
 
         let mut blocks = vec![];
@@ -250,14 +279,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                 }
                 Err(e) => {
                     if blocks.is_empty() {
-                        if e.code() == tonic::Code::DeadlineExceeded {
-                            return Err(ConsensusError::NetworkRequestTimeout(format!(
-                                "fetch_blocks failed mid-stream: {e:?}"
-                            )));
-                        }
-                        return Err(ConsensusError::NetworkRequest(format!(
-                            "fetch_blocks failed mid-stream: {e:?}"
-                        )));
+                        return Err(fetch_blocks_status_to_error(e, " mid-stream"));
                     } else {
                         warn!("fetch_blocks failed mid-stream: {e:?}");
                         break;
@@ -717,7 +739,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                 fetch_missing_ancestors,
             )
             .await
-            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+            .map_err(fetch_blocks_error_to_status)?;
         let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
             chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
                 .into_iter()
@@ -1635,6 +1657,34 @@ mod tests {
                 .unwrap(),
             SerializedBlockForm::Full(raw)
         );
+    }
+
+    #[test]
+    fn fetch_blocks_throttle_maps_to_resource_exhausted_and_back() {
+        let status =
+            fetch_blocks_error_to_status(ConsensusError::FetchBlocksThrottled("peer".to_string()));
+        assert_eq!(status.code(), tonic::Code::ResourceExhausted);
+        assert!(matches!(
+            fetch_blocks_status_to_error(status, ""),
+            ConsensusError::FetchBlocksThrottled(_)
+        ));
+
+        // RESOURCE_EXHAUSTED without the marker, for example from h2, is not a throttle.
+        let status = tonic::Status::resource_exhausted("too many resets");
+        assert!(matches!(
+            fetch_blocks_status_to_error(status, ""),
+            ConsensusError::NetworkRequest(_)
+        ));
+
+        // Other server errors still reach the client as generic network errors.
+        let status = fetch_blocks_error_to_status(ConsensusError::InvalidFetchBlocksRequest(
+            "bad".to_string(),
+        ));
+        assert_eq!(status.code(), tonic::Code::Internal);
+        assert!(matches!(
+            fetch_blocks_status_to_error(status, ""),
+            ConsensusError::NetworkRequest(_)
+        ));
     }
 
     /// Envelope decode failures a receiver must survive: garbage, an empty envelope,

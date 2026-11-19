@@ -100,6 +100,9 @@ pub enum ConsensusError {
     #[error("Invalid fetch blocks request: {0}")]
     InvalidFetchBlocksRequest(String),
 
+    #[error("Fetch blocks request throttled, the server is at its store-read capacity: {0}")]
+    FetchBlocksThrottled(String),
+
     #[error("Invalid authority index at {loc}: {index} > {max}")]
     InvalidAuthorityIndex {
         loc: String,
