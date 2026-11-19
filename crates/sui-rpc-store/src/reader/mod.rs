@@ -141,21 +141,28 @@ impl<R: Reader> RpcStoreReader<R> {
     ) -> sui_types::storage::error::Result<
         Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
     > {
-        self.min_committed(crate::LIVE_COHORT.iter().copied())
+        self.min_watermark(crate::LIVE_COHORT.iter().copied(), |w| {
+            w.checkpoint_hi_inclusive
+        })
     }
 
-    /// The highest checkpoint every pipeline in `pipelines` has
-    /// committed (`min(checkpoint_hi_inclusive)`), or `None` if any of
-    /// them has no watermark yet. Private, but reachable from the
-    /// sibling trait-impl modules (children of this module).
-    fn min_committed(
+    /// The lowest value of `field` across the watermarks of every
+    /// pipeline in `pipelines`, or `None` if any of them has no
+    /// watermark yet. Projecting `checkpoint_hi_inclusive` gives the
+    /// highest checkpoint they have all committed. Projecting
+    /// `timestamp_ms_hi_inclusive` gives that checkpoint's chain
+    /// timestamp only if every watermark recorded one: watermarks
+    /// written with just a checkpoint (e.g. the embedded restore's
+    /// anchor) carry 0, which this minimum then returns.
+    /// Private, but reachable from the sibling trait-impl modules
+    /// (children of this module).
+    fn min_watermark(
         &self,
         pipelines: impl IntoIterator<Item = &'static str>,
-    ) -> sui_types::storage::error::Result<
-        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
-    > {
+        field: fn(&sui_consistent_store::Watermark) -> u64,
+    ) -> sui_types::storage::error::Result<Option<u64>> {
         let framework = self.db().framework();
-        let mut min_hi: Option<u64> = None;
+        let mut min: Option<u64> = None;
         for name in pipelines {
             let key = sui_consistent_store::PipelineTaskKey::new(name);
             let Some(watermark) = framework
@@ -165,10 +172,10 @@ impl<R: Reader> RpcStoreReader<R> {
             else {
                 return Ok(None);
             };
-            let hi = watermark.checkpoint_hi_inclusive;
-            min_hi = Some(min_hi.map_or(hi, |m| m.min(hi)));
+            let value = field(&watermark);
+            min = Some(min.map_or(value, |m| m.min(value)));
         }
-        Ok(min_hi)
+        Ok(min)
     }
 }
 
