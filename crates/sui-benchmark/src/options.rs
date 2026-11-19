@@ -6,6 +6,7 @@ use clap::*;
 use strum_macros::EnumString;
 
 use crate::drivers::{Interval, SubmissionAmplification, ValidatorSelection};
+use crate::workloads::composite::CompositeProfile;
 use std::str::FromStr;
 
 #[derive(Parser)]
@@ -47,6 +48,10 @@ pub struct Opts {
     /// Multiple fullnodes can be specified.
     #[clap(long, num_args(1..), value_delimiter = ',', global = true)]
     pub fullnode_rpc_addresses: Vec<String>,
+    /// How long to keep retrying the first connection to each fullnode, e.g. "300s".
+    /// By default the first failure is fatal.
+    #[clap(long, value_parser = duration_str::parse, global = true)]
+    pub wait_for_fullnode: Option<std::time::Duration>,
     /// Whether to submit transactions to a fullnode.
     /// If true, use FullNodeProxy.
     /// Otherwise, use LocalValidatorAggregatorProxy.
@@ -207,6 +212,9 @@ pub enum RunSpec {
         // relative weight of composite transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         composite: Vec<u32>,
+        // composite workload configuration: "full" enables every lifecycle at higher rates
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [CompositeProfile::Balanced])]
+        composite_profile: Vec<CompositeProfile>,
         // relative weight of transactions that race distinct transactions over the same gas object
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         gas_double_spend: Vec<u32>,
@@ -346,6 +354,37 @@ mod tests {
             Opts::try_parse_from(["stress", "--setup-gas-price-multiplier", "0.5", "bench"])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn wait_for_fullnode_parses_a_duration() {
+        let opts = Opts::try_parse_from(["stress", "bench"]).unwrap();
+        assert_eq!(opts.wait_for_fullnode, None);
+        let opts =
+            Opts::try_parse_from(["stress", "--wait-for-fullnode", "300s", "bench"]).unwrap();
+        assert_eq!(
+            opts.wait_for_fullnode,
+            Some(std::time::Duration::from_secs(300))
+        );
+    }
+
+    #[test]
+    fn composite_profile_defaults_to_balanced() {
+        let profile = |args: &[&str]| {
+            let RunSpec::Bench {
+                composite_profile, ..
+            } = Opts::try_parse_from(args).unwrap().run_spec;
+            composite_profile
+        };
+        assert_eq!(
+            profile(&["stress", "bench"]),
+            vec![CompositeProfile::Balanced]
+        );
+        assert_eq!(
+            profile(&["stress", "bench", "--composite-profile", "full"]),
+            vec![CompositeProfile::Full]
+        );
+        assert!(Opts::try_parse_from(["stress", "bench", "--composite-profile", "ful"]).is_err());
     }
 
     #[test]

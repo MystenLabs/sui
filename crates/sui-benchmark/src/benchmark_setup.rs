@@ -62,9 +62,22 @@ impl BenchmarkSetup {
         let mut fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = vec![];
         for fullnode_rpc_url in fullnode_rpc_urls.iter() {
             info!("Creating FullNodeProxy: {:?}", fullnode_rpc_url);
-            fullnode_proxies.push(Arc::new(
-                FullNodeProxy::from_url(fullnode_rpc_url, &genesis.committee(), &metrics).await?,
-            ));
+            let wait_deadline = opts
+                .wait_for_fullnode
+                .map(|wait| std::time::Instant::now() + wait);
+            let proxy = loop {
+                match FullNodeProxy::from_url(fullnode_rpc_url, &genesis.committee(), &metrics)
+                    .await
+                {
+                    Ok(proxy) => break proxy,
+                    Err(e) if wait_deadline.is_some_and(|d| std::time::Instant::now() < d) => {
+                        info!("Waiting for fullnode {fullnode_rpc_url}: {e}");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
+                    Err(e) => return Err(e),
+                }
+            };
+            fullnode_proxies.push(Arc::new(proxy));
         }
 
         // Create execution proxies - either fullnode proxies or validator proxies
