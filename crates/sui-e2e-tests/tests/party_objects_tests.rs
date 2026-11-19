@@ -705,6 +705,35 @@ async fn party_object_grpc() {
     assert!(objects.iter().any(|o| o.object_id() == object_id_str))
 }
 
+fn add_party_transfer_of_coin(
+    builder: &mut sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder,
+    coin: sui_types::base_types::ObjectRef,
+    owner: SuiAddress,
+) {
+    use sui_types::Identifier;
+
+    let owner_arg = builder
+        .input(CallArg::Pure(bcs::to_bytes(&owner).unwrap()))
+        .unwrap();
+    let party_owner = builder.programmable_move_call(
+        "0x2".parse().unwrap(),
+        Identifier::new("party").unwrap(),
+        Identifier::new("single_owner").unwrap(),
+        vec![],
+        vec![owner_arg],
+    );
+    let coin_arg = builder
+        .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)))
+        .unwrap();
+    builder.programmable_move_call(
+        "0x2".parse().unwrap(),
+        Identifier::new("transfer").unwrap(),
+        Identifier::new("public_party_transfer").unwrap(),
+        vec!["0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap()],
+        vec![coin_arg, party_owner],
+    );
+}
+
 /// Ensure that party coin objects show up in the owner index and then resolve ignored them for gas
 /// selection
 #[sim_test]
@@ -725,9 +754,8 @@ async fn party_coin_grpc() {
     use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
     use sui_rpc::proto::sui::rpc::v2::state_service_client::StateServiceClient;
     use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
-    use sui_types::Identifier;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
+    use sui_types::transaction::TransactionData;
 
     let cluster = TestClusterBuilder::new().build().await;
     let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
@@ -749,26 +777,7 @@ async fn party_coin_grpc() {
     let owned_coin = gas[2];
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    let recipient_arg = builder
-        .input(CallArg::Pure(bcs::to_bytes(&recipient).unwrap()))
-        .unwrap();
-    let party_owner = builder.programmable_move_call(
-        "0x2".parse().unwrap(),
-        Identifier::new("party").unwrap(),
-        Identifier::new("single_owner").unwrap(),
-        vec![],
-        vec![recipient_arg],
-    );
-    let party_coin_arg = builder
-        .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(party_coin)))
-        .unwrap();
-    builder.programmable_move_call(
-        "0x2".parse().unwrap(),
-        Identifier::new("transfer").unwrap(),
-        Identifier::new("public_party_transfer").unwrap(),
-        vec!["0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap()],
-        vec![party_coin_arg, party_owner],
-    );
+    add_party_transfer_of_coin(&mut builder, party_coin, recipient);
     builder
         .transfer_object(recipient, FullObjectRef::from_fastpath_ref(owned_coin))
         .unwrap();
@@ -893,6 +902,141 @@ async fn party_coin_grpc() {
             .success
             .unwrap()
     );
+}
+
+/// Simulate resolves a party object transferred by value as mutable.
+#[sim_test]
+async fn party_object_transfer_objects_simulate_grpc() {
+    use sui_rpc::field::FieldMask;
+    use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::sui::rpc::v2::Argument;
+    use sui_rpc::proto::sui::rpc::v2::Command;
+    use sui_rpc::proto::sui::rpc::v2::Input;
+    use sui_rpc::proto::sui::rpc::v2::ProgrammableTransaction;
+    use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
+    use sui_rpc::proto::sui::rpc::v2::Transaction;
+    use sui_rpc::proto::sui::rpc::v2::TransactionKind;
+    use sui_rpc::proto::sui::rpc::v2::TransferObjects;
+    use sui_rpc::proto::sui::rpc::v2::input::InputKind;
+    use sui_rpc::proto::sui::rpc::v2::input::Mutability;
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::transaction_kind::Data;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{GasData, TransactionData};
+
+    let cluster = TestClusterBuilder::new().build().await;
+    let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+    let mut execution_client = TransactionExecutionServiceClient::new(channel);
+
+    let (sender, gas) = cluster.wallet.get_one_account().await.unwrap();
+    let gas_coin = gas[0];
+    let party_coin = gas[1];
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    add_party_transfer_of_coin(&mut builder, party_coin, sender);
+    let gas_data = GasData {
+        payment: vec![gas_coin],
+        owner: sender,
+        price: 1000,
+        budget: 100_000_000,
+    };
+    let kind = sui_types::transaction::TransactionKind::ProgrammableTransaction(builder.finish());
+    let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
+    let effects = cluster.sign_and_execute_transaction(&tx_data).await.effects;
+    let start_version = effects
+        .mutated()
+        .iter()
+        .find(|(obj, _)| obj.0 == party_coin.0)
+        .map(|(obj, _)| obj.1)
+        .unwrap();
+
+    let shared_input = |mutable: bool| {
+        let mut message = Input::default();
+        message.set_kind(InputKind::Shared);
+        message.object_id = Some(party_coin.0.to_canonical_string(true));
+        message.version = Some(start_version.value());
+        message.mutable = Some(mutable);
+        message
+    };
+    let untyped_input = {
+        let mut message = Input::default();
+        message.object_id = Some(party_coin.0.to_canonical_string(true));
+        message
+    };
+
+    let cases = [
+        (shared_input(true), Mutability::Mutable),
+        (shared_input(false), Mutability::Immutable),
+        (untyped_input, Mutability::Mutable),
+    ];
+    for (coin_input, expected_mutability) in cases {
+        let mut unresolved_transaction = Transaction::default();
+        unresolved_transaction.kind = Some(TransactionKind::from({
+            let mut ptb = ProgrammableTransaction::default();
+            ptb.inputs = vec![coin_input.clone(), {
+                let mut message = Input::default();
+                message.set_kind(InputKind::Pure);
+                message.pure = Some(bcs::to_bytes(&sender).unwrap().into());
+                message
+            }];
+            ptb.commands = vec![Command::from({
+                let mut message = TransferObjects::default();
+                message.objects = vec![Argument::new_input(0)];
+                message.address = Some(Argument::new_input(1));
+                message
+            })];
+            ptb
+        }));
+        unresolved_transaction.sender = Some(sender.to_string());
+
+        let response = execution_client
+            .simulate_transaction(
+                SimulateTransactionRequest::new(unresolved_transaction)
+                    .with_do_gas_selection(true)
+                    .with_read_mask(FieldMask::from_paths([
+                        "transaction.transaction.kind",
+                        "transaction.effects.status",
+                    ])),
+            )
+            .await
+            .unwrap()
+            .into_inner();
+
+        let executed = response.transaction.unwrap();
+        let status = executed.effects.unwrap().status.unwrap();
+        if expected_mutability == Mutability::Mutable {
+            assert!(
+                status.success.unwrap(),
+                "simulation failed for {coin_input:?}: {status:?}"
+            );
+        } else {
+            assert!(
+                !status.success.unwrap(),
+                "simulation succeeded for {coin_input:?}"
+            );
+            assert!(
+                status
+                    .error
+                    .as_ref()
+                    .unwrap()
+                    .description()
+                    .contains("InvalidObjectByValue"),
+                "unexpected error for {coin_input:?}: {status:?}"
+            );
+        }
+
+        let Some(Data::ProgrammableTransaction(ptb)) =
+            executed.transaction.unwrap().kind.unwrap().data
+        else {
+            panic!("expected a programmable transaction");
+        };
+        assert_eq!(ptb.inputs[0].kind(), InputKind::Shared);
+        assert_eq!(ptb.inputs[0].mutability(), expected_mutability);
+    }
 }
 
 /// After a party object's consensus stream ends, transactions already sequenced on the old stream

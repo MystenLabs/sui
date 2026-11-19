@@ -15,6 +15,7 @@ use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
+use sui_rpc::proto::sui::rpc::v2::input::Mutability;
 use sui_sdk_types::Address;
 use sui_sdk_types::Argument;
 use sui_sdk_types::Command;
@@ -27,6 +28,7 @@ use sui_types::transaction::GasData;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::transaction::Reservation;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::WithdrawFrom;
 use sui_types::transaction::WithdrawalTypeArg;
@@ -514,6 +516,7 @@ fn resolve_arg(
             arg_uses,
             arg_idx,
             object_id,
+            stated_shared_mutability(arg),
         )?),
 
         // Receiving
@@ -666,12 +669,31 @@ fn resolve_object(
         sui_types::object::Owner::Shared { .. }
         | sui_types::object::Owner::ConsensusAddressOwner { .. }
         | sui_types::object::Owner::Party { .. } => {
-            resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object)
+            resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object, None)
         }
         sui_types::object::Owner::ObjectOwner(_) => Err(RpcError::new(
             tonic::Code::InvalidArgument,
             format!("object {object_id} is object owned and cannot be used as an input"),
         )),
+    }
+}
+
+fn stated_shared_mutability(
+    input: &sui_rpc::proto::sui::rpc::v2::Input,
+) -> Option<SharedObjectMutability> {
+    match input.mutability() {
+        Mutability::Immutable => Some(SharedObjectMutability::Immutable),
+        Mutability::Mutable => Some(SharedObjectMutability::Mutable),
+        Mutability::NonExclusiveWrite => Some(SharedObjectMutability::NonExclusiveWrite),
+        _ => input.mutable.map(mutability_from_bool),
+    }
+}
+
+fn mutability_from_bool(mutable: bool) -> SharedObjectMutability {
+    if mutable {
+        SharedObjectMutability::Mutable
+    } else {
+        SharedObjectMutability::Immutable
     }
 }
 
@@ -681,6 +703,7 @@ fn resolve_shared_input(
     arg_uses: &ArgUses,
     arg_idx: usize,
     object_id: Address,
+    stated_mutability: Option<SharedObjectMutability>,
 ) -> Result<ObjectArg> {
     let id = object_id.into();
     let object = service
@@ -688,7 +711,13 @@ fn resolve_shared_input(
         .inner()
         .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
-    resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object)
+    resolve_shared_input_with_object(
+        called_packages,
+        arg_uses,
+        arg_idx,
+        object,
+        stated_mutability,
+    )
 }
 
 // Checks if the provided input argument is used as a receiving object
@@ -768,6 +797,7 @@ fn resolve_shared_input_with_object(
     arg_uses: &ArgUses,
     arg_idx: usize,
     object: sui_types::object::Object,
+    stated_mutability: Option<SharedObjectMutability>,
 ) -> Result<ObjectArg> {
     let object_id = object.id();
     let initial_shared_version = if let sui_types::object::Owner::Shared {
@@ -785,6 +815,24 @@ fn resolve_shared_input_with_object(
             format!("object {object_id} is not a shared or consensus object"),
         ));
     };
+
+    let mutability = match stated_mutability {
+        Some(mutability) => mutability,
+        None => infer_shared_mutability(called_packages, arg_uses, arg_idx)?,
+    };
+
+    Ok(ObjectArg::SharedObject {
+        id: object_id,
+        initial_shared_version,
+        mutability,
+    })
+}
+
+fn infer_shared_mutability(
+    called_packages: &NormalizedPackages,
+    arg_uses: &ArgUses,
+    arg_idx: usize,
+) -> Result<SharedObjectMutability> {
     let mut mutable = false;
     for (command, idx) in arg_uses.uses_of(arg_idx) {
         match (command, idx) {
@@ -802,6 +850,10 @@ fn resolve_shared_input_with_object(
             (Command::SplitCoins(_) | Command::MergeCoins(_) | Command::MakeMoveVector(_), _) => {
                 mutable = true;
             }
+            // `None` is the recipient address.
+            (Command::TransferObjects(_), Some(_)) => {
+                mutable = true;
+            }
             _ => {}
         }
         // Early break out of the loop if we've already determined that the shared object
@@ -811,15 +863,7 @@ fn resolve_shared_input_with_object(
         }
     }
 
-    Ok(ObjectArg::SharedObject {
-        id: object_id,
-        initial_shared_version,
-        mutability: if mutable {
-            sui_types::transaction::SharedObjectMutability::Mutable
-        } else {
-            sui_types::transaction::SharedObjectMutability::Immutable
-        },
-    })
+    Ok(mutability_from_bool(mutable))
 }
 
 /// Precomputed map from input argument index to the commands that consume it.
@@ -1053,7 +1097,10 @@ impl<'a> UnresolvedInput<'a> {
 mod tests {
     use super::*;
     use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::base_types::SuiAddress;
     use sui_types::object::Object;
+    use sui_types::object::Owner;
 
     #[test]
     fn version_mismatch_error_includes_object_id() {
@@ -1096,6 +1143,119 @@ mod tests {
         assert!(
             message.contains(&id.to_string()),
             "digest mismatch error should include the object id, got: {message}"
+        );
+    }
+
+    fn input_with_mutability(
+        mutable: Option<bool>,
+        mutability: Option<Mutability>,
+    ) -> sui_rpc::proto::sui::rpc::v2::Input {
+        let mut input = sui_rpc::proto::sui::rpc::v2::Input::default();
+        input.mutable = mutable;
+        if let Some(mutability) = mutability {
+            input.set_mutability(mutability);
+        }
+        input
+    }
+
+    #[test]
+    fn stated_shared_mutability_precedence() {
+        use Mutability as Proto;
+        use SharedObjectMutability as Resolved;
+        let cases = [
+            (None, None, None),
+            (Some(true), None, Some(Resolved::Mutable)),
+            (Some(false), None, Some(Resolved::Immutable)),
+            (None, Some(Proto::Immutable), Some(Resolved::Immutable)),
+            (None, Some(Proto::Mutable), Some(Resolved::Mutable)),
+            (
+                None,
+                Some(Proto::NonExclusiveWrite),
+                Some(Resolved::NonExclusiveWrite),
+            ),
+            (
+                Some(true),
+                Some(Proto::Immutable),
+                Some(Resolved::Immutable),
+            ),
+            (Some(false), Some(Proto::Mutable), Some(Resolved::Mutable)),
+        ];
+        for (mutable, mutability, expected) in cases {
+            assert_eq!(
+                stated_shared_mutability(&input_with_mutability(mutable, mutability)),
+                expected,
+                "mutable: {mutable:?}, mutability: {mutability:?}"
+            );
+        }
+    }
+
+    fn transfer_objects(object: u16, address: u16) -> Command {
+        Command::TransferObjects(sui_sdk_types::TransferObjects {
+            objects: vec![Argument::Input(object)],
+            address: Argument::Input(address),
+        })
+    }
+
+    fn resolve_mutability(
+        owner: Owner,
+        commands: &[Command],
+        stated_mutability: Option<SharedObjectMutability>,
+    ) -> SharedObjectMutability {
+        let packages = NormalizedPackages {
+            pool: normalized::RcPool::new(),
+            packages: HashMap::new(),
+        };
+        let arg_uses = ArgUses::build(2, commands);
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from(1),
+            owner,
+        );
+        let ObjectArg::SharedObject { mutability, .. } =
+            resolve_shared_input_with_object(&packages, &arg_uses, 0, object, stated_mutability)
+                .unwrap()
+        else {
+            panic!("expected a shared object argument");
+        };
+        mutability
+    }
+
+    #[test]
+    fn transfer_objects_mutability_by_position() {
+        let owner = Owner::ConsensusAddressOwner {
+            start_version: SequenceNumber::from(1),
+            owner: SuiAddress::ZERO,
+        };
+        let transfer = [transfer_objects(0, 1)];
+        assert_eq!(
+            resolve_mutability(owner.clone(), &transfer, None),
+            SharedObjectMutability::Mutable
+        );
+
+        let as_address = [transfer_objects(1, 0)];
+        assert_eq!(
+            resolve_mutability(owner, &as_address, None),
+            SharedObjectMutability::Immutable
+        );
+    }
+
+    #[test]
+    fn stated_mutability_overrides_inference() {
+        let owner = Owner::Shared {
+            initial_shared_version: SequenceNumber::from(1),
+        };
+        let transfer = [transfer_objects(0, 1)];
+        assert_eq!(
+            resolve_mutability(
+                owner.clone(),
+                &transfer,
+                Some(SharedObjectMutability::Immutable)
+            ),
+            SharedObjectMutability::Immutable
+        );
+        assert_eq!(
+            resolve_mutability(owner, &[], Some(SharedObjectMutability::Mutable)),
+            SharedObjectMutability::Mutable
         );
     }
 }
