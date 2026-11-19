@@ -10,11 +10,11 @@ Debugs a simtest failure using logging and the scientific method.
 ## Usage
 
 ```
-/debug-simtest <repro command or test>
+/simtest-debug <repro command or test>
 ```
 
-Example: `/debug-simtest MSIM_TEST_SEED=1768248386016 RUST_LOG=sui=debug,info cargo simtest --test address_balance_tests test_deposit_and_withdraw`
-Example: `/debug-simtest test_deposit_and_withdraw
+Example: `/simtest-debug MSIM_TEST_SEED=1768248386016 RUST_LOG=sui=debug,info cargo simtest --test e2e_sim_b -E 'test(=address_balance_tests::test_deposit_and_withdraw)'`
+Example: `/simtest-debug test_deposit_and_withdraw`
 
 ## Arguments
 
@@ -69,8 +69,12 @@ If a full command was provided, this command is the repro.
 If only a test name was provided, find a repro as follows:
 
 - determine the test target in which the test is defined. Usually it will be in an integration test target, not a unittest.
-- run `./scripts/simtest/seed-search.py --test <test_target_name> <test_name> --exact`. This program will search for a seed that fails.
-- Once you have a seed that fails, the repro will be `MSIM_TEST_SEED=<seed> cargo simtest --test <test_target> -E 'test(=<test_name>)'`
+  sui-e2e-tests builds its test files as modules of the `e2e_sim_*` targets (see the `mod` lines in
+  `crates/sui-e2e-tests/tests/e2e_sim_*.rs`), so test names there include the module path.
+- get the full test name from the built binary rather than from the source, because names include any module path:
+  `target/simulator/deps/<test_target_name>-<hash> --list | grep <test_name>`.
+- run `./scripts/simtest/seed-search.py --test <test_target_name> <full_test_name> --exact`. This program will search for a seed that fails.
+- Once you have a seed that fails, the repro will be `MSIM_TEST_SEED=<seed> cargo simtest --test <test_target> -E 'test(=<full_test_name>)'`
 
 **IMPORTANT**: Do NOT use `-p <package>` in the repro command. The seed-search script runs the test binary directly without `-p`, and adding `-p` changes the execution context in a way that breaks determinism and may cause the failure to not reproduce.
 
