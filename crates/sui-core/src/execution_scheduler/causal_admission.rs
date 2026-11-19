@@ -48,6 +48,8 @@ pub struct CausalAdmission {
     inner: Mutex<AdmissionInner>,
     /// Wakes the driver loop when the watermark or in-flight count changes.
     notify: Notify,
+    /// The epoch-boundary waiter must not consume the driver's wakeup permit.
+    quiescent_notify: Notify,
     /// Max transactions admitted for execution concurrently via the capacity branch (K).
     concurrency_limit: usize,
     metrics: Option<CausalAdmissionMetrics>,
@@ -157,6 +159,7 @@ impl CausalAdmission {
                 next_admitted: false,
             }),
             notify: Notify::new(),
+            quiescent_notify: Notify::new(),
             concurrency_limit,
             metrics,
         });
@@ -165,6 +168,9 @@ impl CausalAdmission {
     }
 
     fn publish(&self, inner: &AdmissionInner) {
+        if Self::is_quiescent_locked(inner) {
+            self.quiescent_notify.notify_waiters();
+        }
         if let Some(metrics) = &self.metrics {
             metrics.watermark.set(inner.watermark as i64);
             metrics.next_index.set(inner.next_index as i64);
@@ -300,6 +306,44 @@ impl CausalAdmission {
             && !inner.next_admitted
             && inner.done_above.is_empty()
             && inner.watermark + 1 == inner.next_index
+    }
+
+    async fn wait_for_quiescence(&self) {
+        loop {
+            // Register before inspecting the state so the last retirement cannot
+            // race between the inspection and registration.
+            let notified = self.quiescent_notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.is_quiescent() {
+                return;
+            }
+            notified.await;
+        }
+    }
+
+    /// Allows replay-enqueued duplicates to reach the driver before checking the
+    /// epoch-boundary invariant. These scheduling tasks do not hold alive-epoch
+    /// guards, so terminating the epoch does not itself drain them.
+    ///
+    /// This is an Antithesis diagnostic grace period, not a reset of admission
+    /// state. A persistent gap still emits the original invariant violation.
+    pub async fn drain_before_epoch_boundary_in_antithesis(&self) {
+        if !mysten_common::in_antithesis() || self.is_quiescent() {
+            return;
+        }
+        tracing::info!("Waiting for late causal admission retirement before epoch boundary");
+        if tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            self.wait_for_quiescence(),
+        )
+        .await
+        .is_err()
+        {
+            self.check_quiescent_at_epoch_boundary();
+        } else {
+            tracing::info!("Late causal admission retirement drained before epoch boundary");
+        }
     }
 
     /// Checks quiescence at an epoch boundary: every unit enqueued in an epoch executes
@@ -507,5 +551,43 @@ mod tests {
         assert!(!admission.is_quiescent());
         admission.mark_done(4);
         assert!(admission.is_quiescent());
+    }
+
+    #[tokio::test]
+    async fn quiescence_waits_for_a_queued_duplicate_without_stealing_driver_wakeups() {
+        let admission = CausalAdmission::new(1);
+        assign(&admission, 1);
+        // An already-executed replay copy can still be queued without an alive-epoch
+        // guard or an in-flight slot when reconfiguration starts.
+        let waiting = admission.wait_for_quiescence();
+        tokio::pin!(waiting);
+        assert!(futures::poll!(waiting.as_mut()).is_pending());
+
+        let slot = admission.try_admit(1).unwrap();
+        assert!(futures::poll!(waiting.as_mut()).is_pending());
+        drop(slot);
+        assert!(futures::poll!(waiting.as_mut()).is_ready());
+        // The independent epoch waiter must leave the driver's notification intact.
+        let driver_wakeup = admission.changed();
+        tokio::pin!(driver_wakeup);
+        assert!(futures::poll!(driver_wakeup.as_mut()).is_ready());
+        assert_eq!(admission.watermark_for_testing(), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn quiescence_wait_does_not_reset_a_leaked_index() {
+        let admission = CausalAdmission::new(1);
+        assign(&admission, 1);
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(60),
+                admission.wait_for_quiescence(),
+            )
+            .await
+            .is_err()
+        );
+        assert!(!admission.is_quiescent());
+        assert_eq!(admission.watermark_for_testing(), 0);
+        assert_eq!(admission.inner.lock().next_index, 2);
     }
 }

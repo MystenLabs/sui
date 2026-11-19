@@ -2990,6 +2990,15 @@ impl AuthorityState {
         // Terminate all epoch-specific tasks (those started with within_alive_epoch).
         cur_epoch_store.epoch_terminated().await;
 
+        // Restart replay may have queued already-executed copies whose scheduling
+        // tasks are not protected by alive-epoch guards. Drain them while their
+        // executed-effects markers are still visible, before clearing epoch state.
+        // The helper is a no-op outside Antithesis and retains the invariant check.
+        self.execution_scheduler
+            .causal_admission()
+            .drain_before_epoch_boundary_in_antithesis()
+            .await;
+
         // Record metrics in case the node has not observed epoch close in consensus.
         cur_epoch_store.record_epoch_close_time_once();
 
