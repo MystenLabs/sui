@@ -600,19 +600,17 @@ fn not_found_describing(
 
 /// Read object `id` by `selector`: select through `live`, and if that finds no live object,
 /// look for the deletion or wrap the read resolved to with [`find_removal`] over
-/// `with_tombstones`.
+/// `with_tombstones`, or, where it found the version it needs missing, answer with
+/// [`resolve_missing`].
 ///
-/// The selection over live objects answers the read; the one with tombstones only describes a
-/// removal, and is skipped where the version index records no version of the object as of the
-/// read's `at_checkpoint` ([`VersionRead::NoVersionYet`]), so an object that never existed costs
-/// that one index read: `NOT_FOUND` for `at_checkpoint` alone, and missing data
-/// ([`ObjectRead::Missing`]) for a `version` or `max_version` read. A `max_version` read without
-/// `at_checkpoint` selects once, with tombstones: the store's live and tombstone lookups at or
-/// below a version select the same entry, so the one with tombstones answers the read whether
-/// that entry is live or a removal.
-///
-/// A removal found where the live objects had none to select ([`VersionRead::Missing`]) is the
-/// answer too: the store's tombstone lookup refuses one that may have a pruned version after it.
+/// The selection over live objects answers the read unless it finds the version missing;
+/// otherwise the one with tombstones only describes a removal. It is skipped where the version
+/// index records no version of the object as of the read's `at_checkpoint`
+/// ([`VersionRead::NoVersionYet`]), so an object that never existed costs that one index read:
+/// `NOT_FOUND` for `at_checkpoint` alone, and missing data ([`ObjectRead::Missing`]) for a
+/// `version` or `max_version` read. A `max_version` read without `at_checkpoint` selects once,
+/// with tombstones: the store's live and tombstone lookups at or below a version select the same
+/// entry, so the one with tombstones answers the read whether that entry is live or a removal.
 fn read_object(
     live: &impl ObjectReads<Item = StoredObject>,
     with_tombstones: &impl ObjectReads<Item = ObjectOrTombstone>,
@@ -646,11 +644,35 @@ fn read_object(
             _ => ObjectRead::Missing,
         },
         VersionRead::NotFound => ObjectRead::NotFound(removal()),
-        VersionRead::Missing => match removal() {
-            Some(removal) => ObjectRead::NotFound(Some(removal)),
-            None => ObjectRead::Missing,
-        },
+        VersionRead::Missing => resolve_missing(with_tombstones, id, selector, upper_bound),
     })
+}
+
+/// The answer to a read whose selection over live objects found the version it needs missing
+/// ([`VersionRead::Missing`]), from the same selection over the object store's tombstones as well
+/// as its live objects (`reads`). The live selection cannot tell a deletion or wrap from a pruned
+/// version; this one can. A removal it selects answers `NOT_FOUND`, described. So does its
+/// [`VersionRead::NotFound`], as for a `max_version` read with `at_checkpoint` K whose newest
+/// version at or below `max_version` is a removal written after K. The store's tombstone lookup
+/// refuses an entry that may have a pruned version after it. [`ObjectRead::Missing`] if the
+/// selection resolves to nothing, to a live object (written after the live read), or a read
+/// fails.
+fn resolve_missing(
+    reads: &impl ObjectReads<Item = ObjectOrTombstone>,
+    id: ObjectID,
+    selector: ObjectSelector,
+    upper_bound: Option<&AtCheckpointUpperBound>,
+) -> ObjectRead {
+    match select(reads, id, selector, upper_bound) {
+        Ok(VersionRead::Selected(ObjectOrTombstone::Tombstone(tombstone))) => {
+            match tombstone_removal(tombstone) {
+                Some(removal) => ObjectRead::NotFound(Some(removal)),
+                None => ObjectRead::Missing,
+            }
+        }
+        Ok(VersionRead::NotFound) => ObjectRead::NotFound(None),
+        _ => ObjectRead::Missing,
+    }
 }
 
 /// The deletion or wrap `selector` resolved to, for a read that found no live object: the same
@@ -1983,6 +2005,45 @@ mod tests {
         assert_eq!(read(u64::MAX, 4), deleted);
         // The unwrap is selected but was written after checkpoint 2.
         assert_eq!(read(5, 2), Answer::NotFound);
+    }
+
+    /// A `max_version` read with `at_checkpoint` K of an object removed at K answers `NOT_FOUND`,
+    /// with no removal described, when the newest version at or below `max_version` is a later
+    /// removal: that removal was written after K. The live selection finds no live version there,
+    /// and the selection with tombstones decides the answer.
+    #[test]
+    fn removed_at_the_checkpoint_and_removed_again_after_it_is_not_found() {
+        use Change::*;
+        // Created at 3, deleted at 4 (checkpoint 2), re-created at 5, deleted at 6 and re-created
+        // at 7, at checkpoints 1 to 5.
+        let history = [
+            (3, 1, Live),
+            (4, 2, Deleted),
+            (5, 3, Live),
+            (6, 4, Deleted),
+            (7, 5, Live),
+        ];
+        let read = |history: &[(u64, u64, Change)], max_version, highest_indexed| {
+            read_history(
+                history,
+                ObjectSelector::MaxVersion {
+                    max_version,
+                    at_checkpoint: Some(2),
+                },
+                Some(&AtCheckpointUpperBound::new(highest_indexed)),
+            )
+            .0
+        };
+        // The deletion at 6 is the newest version at or below 6, below the version at the height.
+        assert_eq!(read(&history, 6, 5), Answer::NotFound);
+        // The deletion at 6 is the object's version at the height.
+        assert_eq!(read(&history[..4], 6, 4), Answer::NotFound);
+        assert_eq!(read(&history[..4], u64::MAX, 4), Answer::NotFound);
+        // The deletion at K itself still answers, described.
+        assert_eq!(
+            read(&history, 4, 5),
+            Answer::Removed(4, ObjectRemovalKind::Deleted)
+        );
     }
 }
 
