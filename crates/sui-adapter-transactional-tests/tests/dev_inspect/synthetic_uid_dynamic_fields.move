@@ -37,6 +37,10 @@ public fun bump_field(s: &mut S) {
     *f = *f + 1;
 }
 
+public fun remove_field(s: &mut S) {
+    let _: u64 = df::remove(&mut s.id, 0u64);
+}
+
 //# run test::m::create --sender A
 
 //# set-address s object(2,0)
@@ -59,6 +63,9 @@ public fun bump_field(s: &mut S) {
 //# programmable --sender A --inputs struct(@s,0) --dev-inspect
 //> 0: test::m::assert_no_field(Input(0));
 
+//# programmable --sender A --inputs struct(@s,0) --dev-inspect
+//> 0: test::m::remove_field(Input(0));
+
 // With the newer object as an input, the field is visible and can be written.
 
 //# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
@@ -66,3 +73,6 @@ public fun bump_field(s: &mut S) {
 
 //# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
 //> 0: test::m::bump_field(Input(0));
+
+//# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
+//> 0: test::m::remove_field(Input(0));

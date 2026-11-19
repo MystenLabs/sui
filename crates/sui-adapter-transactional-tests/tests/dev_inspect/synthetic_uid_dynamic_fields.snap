@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 13 tasks
 
 // A dev-inspect value built from bytes reads its dynamic fields at the version before the
 // transaction's lamport version, so it sees only fields no newer than the transaction's inputs.
@@ -9,31 +9,31 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 9-38:
+task 1, lines 9-42:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1031000000, storage_cost: 7691200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 8154800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 40:
+task 2, line 44:
 //# run test::m::create --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, line 44:
+task 4, line 48:
 //# run test::m::add_field --sender A --args object(2,0)
 created: object(4,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 3724000,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
-task 5, lines 46-47:
+task 5, lines 50-51:
 //# programmable --sender A --inputs object(2,0)@2 --dev-inspect
 //> 0: test::m::assert_no_field(Input(0));
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
 
-task 6, lines 49-50:
+task 6, lines 53-54:
 //# programmable --sender A --inputs object(2,0) --dev-inspect
 //> 0: test::m::assert_has_field(Input(0));
 mutated: object(_), object(2,0)
@@ -41,30 +41,44 @@ gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1
 
 // A newer object, to raise the lamport version of the dev inspects below
 
-task 7, line 54:
+task 7, line 58:
 //# run test::m::create --sender A
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-// The same object built from bytes. The lamport version comes from the mock gas coin.
+// The same object built from bytes. The lamport version comes the inputs, and the only
+// one is the mock gas coin.
 
-task 8, lines 58-59:
+task 8, lines 63-64:
 //# programmable --sender A --inputs struct(@s,0) --dev-inspect
 //> 0: test::m::assert_no_field(Input(0));
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
+task 9, lines 66-67:
+//# programmable --sender A --inputs struct(@s,0) --dev-inspect
+//> 0: test::m::remove_field(Input(0));
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 16, instruction: 0, function_name: Some("remove_child_object") }, 1) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 16, instruction: 0, function_name: Some("remove_child_object") }, 1) in command 0
+
 // With the newer object as an input, the field is visible and can be written.
 
-task 9, lines 63-64:
+task 10, lines 71-72:
 //# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
 //> 0: test::m::assert_has_field(Input(0));
 mutated: object(_), object(7,0)
 gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
 
-task 10, lines 66-67:
+task 11, lines 74-75:
 //# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
 //> 0: test::m::bump_field(Input(0));
 mutated: object(_), object(4,0), object(7,0)
 gas summary: computation_cost: 500000, storage_cost: 3724000,  storage_rebate: 2735726, non_refundable_storage_fee: 274
+
+task 12, lines 77-78:
+//# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
+//> 0: test::m::remove_field(Input(0));
+mutated: object(_), object(7,0)
+deleted: object(4,0)
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 2735726, non_refundable_storage_fee: 274
