@@ -62,3 +62,5 @@ async fn test_checkpoint_rate() {
         "Checkpoint rate should be <= 5/sec, got {rate}"
     );
 }
+
+// Measurement-only change for a CI timing check; not for merge.
