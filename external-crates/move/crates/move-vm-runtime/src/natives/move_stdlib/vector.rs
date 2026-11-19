@@ -341,8 +341,8 @@ pub fn native_reverse(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
@@ -401,8 +401,8 @@ pub fn native_keep_range(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
@@ -452,8 +452,8 @@ pub fn native_copy_range(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
@@ -505,8 +505,8 @@ pub fn native_replace_range(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 4);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 4);
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
