@@ -242,18 +242,20 @@ mod balance_tracking {
         let x = ObjectID::from_single_byte(1);
         let y = ObjectID::from_single_byte(2);
         let mut before = BalancesBefore::new();
-        before.record(
-            x,
-            TrackedContents {
-                uids: BTreeSet::from([x, y]),
-                balances: totals(&[
-                    (x, &a, u64::MAX as u128),
-                    (x, &a, u64::MAX as u128),
-                    (y, &a, 1),
-                    (x, &b, 2),
-                ]),
-            },
-        );
+        before
+            .record(
+                x,
+                TrackedContents {
+                    uids: BTreeSet::from([x, y]),
+                    balances: totals(&[
+                        (x, &a, u64::MAX as u128),
+                        (x, &a, u64::MAX as u128),
+                        (y, &a, 1),
+                        (x, &b, 2),
+                    ]),
+                },
+            )
+            .unwrap();
         let (totals, uids) = before.finish().unwrap();
         assert_eq!(uids, BTreeSet::from([x, y]));
         assert_eq!(totals[&SuiAddress::from(x)][&a], 2 * (u64::MAX as u128));
@@ -262,7 +264,7 @@ mod balance_tracking {
     }
 
     #[test]
-    fn repeated_read_of_an_object_replaces_it() {
+    fn repeated_read_of_an_object_is_an_error() {
         let a = coin_type("A");
         let x = ObjectID::from_single_byte(1);
         let contents = TrackedContents {
@@ -270,10 +272,8 @@ mod balance_tracking {
             balances: totals(&[(x, &a, 5)]),
         };
         let mut before = BalancesBefore::new();
-        before.record(x, contents.clone());
-        before.record(x, contents);
-        let (totals, _) = before.finish().unwrap();
-        assert_eq!(totals[&SuiAddress::from(x)][&a], 5);
+        before.record(x, contents.clone()).unwrap();
+        assert!(before.record(x, contents).is_err());
     }
 
     #[test]
@@ -457,7 +457,7 @@ mod parent_checks {
     #[test]
     fn untracked_parent_is_allowed_after_a_test_scenario_transaction() {
         assert!(parent_allowed(vec![], random_id(), |rt| {
-            rt.test_scenario_reset = true
+            rt.mark_test_scenario_reset()
         }));
     }
 }

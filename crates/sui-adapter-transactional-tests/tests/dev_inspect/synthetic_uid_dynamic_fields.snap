@@ -1,0 +1,48 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+// A dev-inspect value built from bytes reads its dynamic fields at the latest version, whereas an
+// old version of the same object cannot see fields added after it.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-33:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1031000000, storage_cost: 6999600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 35:
+//# run test::m::create --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 39:
+//# run test::m::add_field --sender A --args object(2,0)
+created: object(4,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 3724000,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 5, lines 41-42:
+//# programmable --sender A --inputs object(2,0)@2 --dev-inspect
+//> 0: test::m::assert_no_field(Input(0));
+mutated: object(_), object(2,0)
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
+
+task 6, lines 44-45:
+//# programmable --sender A --inputs object(2,0) --dev-inspect
+//> 0: test::m::assert_has_field(Input(0));
+mutated: object(_), object(2,0)
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
+
+// The same object built from bytes
+
+task 7, lines 49-50:
+//# programmable --sender A --inputs struct(@s,0) --dev-inspect
+//> 0: test::m::assert_has_field(Input(0));
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

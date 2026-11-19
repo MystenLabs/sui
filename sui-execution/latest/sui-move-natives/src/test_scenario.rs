@@ -281,7 +281,7 @@ pub fn end_transaction(
         }
     }
 
-    object_runtime_ref.test_scenario_reset = true;
+    object_runtime_ref.mark_test_scenario_reset();
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
     // We pass the received objects since they should be viewed as "loaded" for the purposes of

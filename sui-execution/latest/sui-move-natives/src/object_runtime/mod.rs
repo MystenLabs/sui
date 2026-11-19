@@ -151,8 +151,8 @@ pub struct ObjectRuntime<'a> {
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     /// Set once a test scenario ends a transaction, which clears `new_ids` but keeps the child
-    /// objects.
-    pub(crate) test_scenario_reset: bool,
+    /// objects and root versions.
+    test_scenario_reset: bool,
     // the internal state
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
@@ -234,7 +234,7 @@ impl<'a> ObjectRuntime<'a> {
                         uids: contained_uids.clone(),
                         balances,
                     },
-                );
+                )?;
             }
             for contained_uid in contained_uids {
                 let prev = root_version.insert(contained_uid, version);
@@ -684,6 +684,11 @@ impl<'a> ObjectRuntime<'a> {
         };
         self.state.accumulator_events.push(event);
         Ok(())
+    }
+
+    pub(crate) fn mark_test_scenario_reset(&mut self) {
+        self.test_scenario_reset = true;
+        self.child_object_store.mark_test_scenario_reset();
     }
 
     /// WARNING! Only for values built from bytes, which only dev inspect with checks disabled

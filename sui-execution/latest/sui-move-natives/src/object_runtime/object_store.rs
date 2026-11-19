@@ -97,6 +97,8 @@ struct Inner<'a> {
     current_epoch_id: EpochId,
     // Set only when balances are tracked.
     balances_before: Option<BalancesBefore>,
+    // Set once a test scenario ends a transaction, after which an object can be received again.
+    test_scenario_reset: bool,
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
@@ -177,14 +179,18 @@ macro_rules! fetch_child_object_unbounded {
 
 impl Inner<'_> {
     /// Returns the contained UIDs, keeping the contents if balances are tracked.
-    fn record_contents(&mut self, id: ObjectID, contents: TrackedContents) -> BTreeSet<ObjectID> {
+    fn record_contents(
+        &mut self,
+        id: ObjectID,
+        contents: TrackedContents,
+    ) -> PartialVMResult<BTreeSet<ObjectID>> {
         match &mut self.balances_before {
             Some(before) => {
                 let uids = contents.uids.clone();
-                before.record(id, contents);
-                uids
+                before.record(id, contents)?;
+                Ok(uids)
             }
-            None => contents.uids,
+            None => Ok(contents.uids),
         }
     }
 
@@ -203,7 +209,15 @@ impl Inner<'_> {
             ));
         }
         for id in contained_uids {
-            self.root_version.insert(id, version);
+            let prev = self.root_version.insert(id, version);
+            if let Some(prev) = prev
+                && !self.test_scenario_reset
+            {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "UID {id} in {object} already has root version {prev}"
+                ));
+            }
             if id == object {
                 continue;
             }
@@ -431,7 +445,7 @@ impl Inner<'_> {
                 "Failed to find UIDs. ERROR: {e}"
             )
         })?;
-        let contained_uids = self.record_contents(child, contents);
+        let contained_uids = self.record_contents(child, contents)?;
         self.loaded_child_value_size = loaded_size;
         let parents_root_version = self.root_version.get(&parent).copied();
         if let Some(v) = parents_root_version {
@@ -500,6 +514,7 @@ impl<'a> ChildObjectStore<'a> {
                 metrics,
                 current_epoch_id,
                 balances_before,
+                test_scenario_reset: false,
             },
             store: BTreeMap::new(),
             config_setting_cache: BTreeMap::new(),
@@ -533,6 +548,10 @@ impl<'a> ChildObjectStore<'a> {
                 .entry(id)
                 .or_insert(SequenceNumber::MAX);
         }
+    }
+
+    pub(super) fn mark_test_scenario_reset(&mut self) {
+        self.inner.test_scenario_reset = true;
     }
 
     pub(super) fn has_root_version(&self, id: &ObjectID) -> bool {
@@ -571,7 +590,7 @@ impl<'a> ChildObjectStore<'a> {
                                     "Failed to find UIDs for receiving object. ERROR: {e}"
                                 )
                             })?;
-                    let contained_uids = self.inner.record_contents(child, contents);
+                    let contained_uids = self.inner.record_contents(child, contents)?;
                     self.inner
                         .record_root_version(child, contained_uids, child_version)?;
                     (ObjectResult::Loaded((cache_info, v)), obj_meta)
