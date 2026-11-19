@@ -62,6 +62,7 @@ use crate::ledger_history::watermark::merge_covered_checkpoint_bound;
 use crate::metrics::SubscriptionFrameKind;
 use crate::metrics::SubscriptionStreamMetrics;
 use crate::read_mask_defaults;
+use crate::subscription::SubscriptionCheckpoint;
 use crate::subscription::SubscriptionKind;
 use crate::subscription::SubscriptionSpec;
 use crate::subscription::SubscriptionUpdate;
@@ -93,7 +94,7 @@ impl SubscriptionService for RpcService {
                 let mut response = SubscribeCheckpointsResponse::default();
                 let frame_kind = match update {
                     SubscriptionUpdate::Matched(matched) => {
-                        let cp = matched.checkpoint.summary.sequence_number;
+                        let cp = matched.checkpoint.summary().sequence_number;
                         response.cursor = Some(cp);
                         response.checkpoint = Some(render_checkpoint_message(
                             &service,
@@ -147,14 +148,14 @@ impl SubscriptionService for RpcService {
                         let checkpoint = &matched.checkpoint;
                         let Some(indices) = matched
                             .matches
-                            .transaction_indices(checkpoint.transactions.len() as u32)
+                            .transaction_indices(checkpoint.transactions().len() as u32)
                         else {
                             continue;
                         };
-                        let cp = checkpoint.summary.sequence_number;
+                        let cp = checkpoint.summary().sequence_number;
                         let entry_checkpoint = *entry_checkpoint.get_or_insert(cp);
-                        let tx_hi = checkpoint.summary.data().network_total_transactions;
-                        let tx_lo = tx_hi - checkpoint.transactions.len() as u64;
+                        let tx_hi = checkpoint.summary().network_total_transactions;
+                        let tx_lo = tx_hi - checkpoint.transactions().len() as u64;
                         for i in indices {
                             // An item never proves its own checkpoint
                             // complete (list_transactions semantics).
@@ -241,12 +242,12 @@ impl SubscriptionService for RpcService {
                         let Some(pairs) = matched.matches.event_indices(checkpoint) else {
                             continue;
                         };
-                        let cp = checkpoint.summary.sequence_number;
+                        let cp = checkpoint.summary().sequence_number;
                         let entry_checkpoint = *entry_checkpoint.get_or_insert(cp);
-                        let tx_hi = checkpoint.summary.data().network_total_transactions;
-                        let tx_lo = tx_hi - checkpoint.transactions.len() as u64;
+                        let tx_hi = checkpoint.summary().network_total_transactions;
+                        let tx_lo = tx_hi - checkpoint.transactions().len() as u64;
                         for (tx_idx, ev) in pairs {
-                            let tx = &checkpoint.transactions[tx_idx as usize];
+                            let tx = &checkpoint.transactions()[tx_idx as usize];
                             boundary = advance_covered_bound_before_checkpoint(
                                 boundary,
                                 cp,
@@ -260,7 +261,7 @@ impl SubscriptionService for RpcService {
                                 .data[ev as usize];
                             let render_context = RenderContext::new(
                                 service.reader.inner(),
-                                Some(&checkpoint.object_set),
+                                Some(checkpoint.object_set()),
                             );
                             let mut proto_event =
                                 service.render_event_to_proto(event, &read_mask, &render_context);
@@ -383,30 +384,38 @@ fn event_tick_watermark(cp: u64, tx_hi: u64, boundary: Option<u64>) -> Watermark
     )
 }
 
-/// Render a full `Checkpoint` message from live executed-checkpoint data,
-/// filling what `merge_from` cannot (effects object types, clever errors,
-/// event JSON, and `transactions.balance_changes`) as `GetCheckpoint` does.
+/// Render a full `Checkpoint` message from live checkpoint data, filling what
+/// `merge_from` cannot (effects object types, clever errors, event JSON, and
+/// `transactions.balance_changes`) as `GetCheckpoint` does. A locally built
+/// checkpoint has no quorum signature, so its message never carries one.
 fn render_checkpoint_message(
     service: &RpcService,
-    checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
+    checkpoint: &SubscriptionCheckpoint,
     read_mask: &FieldMaskTree,
 ) -> Checkpoint {
-    let mut checkpoint_message = Checkpoint::merge_from(checkpoint, read_mask);
+    let mut checkpoint_message = match checkpoint {
+        SubscriptionCheckpoint::Certified(checkpoint) => {
+            Checkpoint::merge_from(checkpoint.as_ref(), read_mask)
+        }
+        SubscriptionCheckpoint::LocallyBuilt(checkpoint) => {
+            Checkpoint::merge_from(checkpoint.as_ref(), read_mask)
+        }
+    };
+    let object_set = checkpoint.object_set();
 
     if let Some(tx_mask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD) {
         // One JSON budget for the whole checkpoint, as in `GetCheckpoint`.
         let mut json_budget = service.config.max_json_move_value_response_size();
-        let render_context =
-            RenderContext::new(service.reader.inner(), Some(&checkpoint.object_set));
+        let render_context = RenderContext::new(service.reader.inner(), Some(object_set));
         for (message, tx) in checkpoint_message
             .transactions_mut()
             .iter_mut()
-            .zip_debug_eq(checkpoint.transactions.iter())
+            .zip_debug_eq(checkpoint.transactions().iter())
         {
             service.annotate_checkpoint_transaction(
                 message,
                 tx,
-                &checkpoint.object_set,
+                object_set,
                 &tx_mask,
                 &mut json_budget,
                 &render_context,
@@ -418,9 +427,9 @@ fn render_checkpoint_message(
         for (txn, effects) in checkpoint_message
             .transactions_mut()
             .iter_mut()
-            .zip_debug_eq(checkpoint.transactions.iter().map(|t| &t.effects))
+            .zip_debug_eq(checkpoint.transactions().iter().map(|t| &t.effects))
         {
-            *txn.balance_changes_mut() = derive_balance_changes_2(effects, &checkpoint.object_set)
+            *txn.balance_changes_mut() = derive_balance_changes_2(effects, object_set)
                 .into_iter()
                 .map(Into::into)
                 .collect();
@@ -443,17 +452,18 @@ fn transaction_objects<'a>(
     .filter_map(move |key| checkpoint_objects.get(&key))
 }
 
-/// Render one `ExecutedTransaction` message from live executed-checkpoint
-/// data. The nested-transaction `merge_from` does not set `checkpoint` /
-/// `timestamp` (the checkpoint-level merge does), so set them here, along
-/// with `balance_changes` which needs the checkpoint's `ObjectSet`.
+/// Render one `ExecutedTransaction` message from live checkpoint data. The
+/// nested-transaction `merge_from` does not set `checkpoint` / `timestamp`
+/// (the checkpoint-level merge does), so set them here, along with
+/// `balance_changes` which needs the checkpoint's `ObjectSet`.
 fn render_transaction_message(
     service: &RpcService,
-    checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
+    checkpoint: &SubscriptionCheckpoint,
     index: usize,
     read_mask: &FieldMaskTree,
 ) -> ExecutedTransaction {
-    let tx = &checkpoint.transactions[index];
+    let object_set = checkpoint.object_set();
+    let tx = &checkpoint.transactions()[index];
     let mut message = ExecutedTransaction::merge_from(tx, read_mask);
     // Every event in the frame draws its JSON from one per-response budget,
     // as `GetCheckpoint` does across a checkpoint. `GetTransaction` and
@@ -463,11 +473,11 @@ fn render_transaction_message(
     // a transaction's events exhaust `max_json_move_value_response_size`, the
     // remaining events have `json` there but not here.
     let mut json_budget = service.config.max_json_move_value_response_size();
-    let render_context = RenderContext::new(service.reader.inner(), Some(&checkpoint.object_set));
+    let render_context = RenderContext::new(service.reader.inner(), Some(object_set));
     service.annotate_checkpoint_transaction(
         &mut message,
         tx,
-        &checkpoint.object_set,
+        object_set,
         read_mask,
         &mut json_budget,
         &render_context,
@@ -479,7 +489,7 @@ fn render_transaction_message(
     {
         message.objects = Some(
             ProtoObjectSet::default().with_objects(
-                transaction_objects(tx, &checkpoint.object_set)
+                transaction_objects(tx, object_set)
                     .map(|object| {
                         service.render_object_to_proto(object, &object_mask, &render_context)
                     })
@@ -489,15 +499,15 @@ fn render_transaction_message(
     }
 
     if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD) {
-        message.checkpoint = Some(checkpoint.summary.sequence_number);
+        message.checkpoint = Some(checkpoint.summary().sequence_number);
     }
     if read_mask.contains(ExecutedTransaction::TIMESTAMP_FIELD) {
         message.timestamp = Some(sui_rpc::proto::timestamp_ms_to_proto(
-            checkpoint.summary.timestamp_ms,
+            checkpoint.summary().timestamp_ms,
         ));
     }
     if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
-        message.balance_changes = derive_balance_changes_2(&tx.effects, &checkpoint.object_set)
+        message.balance_changes = derive_balance_changes_2(&tx.effects, object_set)
             .into_iter()
             .map(Into::into)
             .collect();

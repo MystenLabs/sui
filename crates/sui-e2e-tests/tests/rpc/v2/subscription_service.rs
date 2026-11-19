@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::rpc::transfer_coin;
+use crate::rpc::v2::RpcStatusExt;
 use prost::bytes::Bytes;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
+use sui_config::local_ip_utils;
 use sui_macros::sim_test;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMask;
@@ -1568,4 +1571,253 @@ async fn subscription_cursor_positions() {
             "the stream sends progress frames"
         );
     }
+}
+
+/// A validator with `enable-validator-rpc` streams checkpoints to requests
+/// that accept `executed` data as soon as it builds them, before it
+/// has a certified copy: frames have no quorum signature, carry the
+/// checkpoint's transactions, match the checkpoint the network certifies, feed
+/// filtered transaction subscriptions, and continue without a gap across an
+/// epoch change, which rebuilds the validator's checkpoint service and delays
+/// the epoch's last checkpoint until it executes. Other requests get what the
+/// validator can serve at their finality level.
+#[sim_test]
+async fn validator_streams_locally_built_checkpoints() {
+    // Enabling the server takes a restart; the other validators keep
+    // certifying checkpoints, and serving them to the fullnode, meanwhile.
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .build()
+        .await;
+    let sender = cluster.get_address_0();
+
+    // Restart one validator with the server enabled.
+    let validator = cluster.swarm.validator_nodes().next().unwrap();
+    let address = {
+        let ip = validator
+            .config()
+            .network_address
+            .to_socket_addr()
+            .unwrap()
+            .ip();
+        SocketAddr::new(ip, local_ip_utils::get_available_port(&ip.to_string()))
+    };
+    validator.stop();
+    validator.config().rpc = Some(sui_config::RpcConfig {
+        enable_validator_rpc: Some(true),
+        validator_rpc_address: Some(address),
+        ..Default::default()
+    });
+    if cfg!(msim) {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    validator.start().await.unwrap();
+
+    // Right after the restart the validator's checkpoint builder is still
+    // catching up: it builds checkpoints after they are certified and may skip
+    // some, which closes the stream. Reconnect, as a client would, until a
+    // checkpoint arrives before the validator has certified it.
+    let mut checkpoints = tokio::time::timeout(Duration::from_secs(120), async {
+        loop {
+            let mut checkpoints = subscribe_locally_built_checkpoints(address).await;
+            while let Some(Ok(frame)) = checkpoints.next().await {
+                let sequence_number = frame
+                    .checkpoint
+                    .expect("unfiltered frames carry a checkpoint")
+                    .sequence_number();
+                let certified = validator.get_node_handle().unwrap().with(|node| {
+                    node.state()
+                        .get_checkpoint_store()
+                        .get_checkpoint_by_sequence_number(sequence_number)
+                        .unwrap()
+                        .is_some()
+                });
+                if !certified {
+                    return checkpoints;
+                }
+            }
+        }
+    })
+    .await
+    .expect("a checkpoint arrives before the validator certifies it");
+
+    let mut client = SubscriptionServiceClient::connect(format!("http://{address}"))
+        .await
+        .unwrap();
+    let mut transaction_request = v2::SubscribeTransactionsRequest::default();
+    transaction_request.read_mask = Some(FieldMask::from_paths(["digest", "checkpoint"]));
+    transaction_request.filter = Some(sender_tx_filter(sender, false));
+    let mut transactions = client
+        .subscribe_transactions(at_finality_level(transaction_request, "executed"))
+        .await
+        .unwrap()
+        .into_inner();
+
+    let transaction_digest = transfer_self(&cluster, sender).await.digest().to_owned();
+
+    // Stream checkpoints through the one that includes the transfer.
+    let mut streamed = Vec::new();
+    let transfer_checkpoint = loop {
+        let checkpoint = next_locally_built_checkpoint(&mut checkpoints, &mut streamed).await;
+        if checkpoint
+            .transactions
+            .iter()
+            .any(|transaction| transaction.digest() == transaction_digest)
+        {
+            break checkpoint.sequence_number();
+        }
+    };
+
+    let transaction = loop {
+        let frame = tokio::time::timeout(Duration::from_secs(60), transactions.next())
+            .await
+            .expect("validator streams transactions")
+            .expect("stream open")
+            .unwrap();
+        if let Some(transaction) = frame.transaction {
+            break transaction;
+        }
+    };
+    assert_eq!(transaction.digest(), transaction_digest);
+    assert_eq!(transaction.checkpoint, Some(transfer_checkpoint));
+    drop(transactions);
+
+    assert_validator_finality_levels(address).await;
+
+    // Every checkpoint up to the fullnode's tip after the epoch change is
+    // buffered in the stream; read past it into the new epoch.
+    cluster.trigger_reconfiguration().await;
+    let tip_after_reconfiguration = super::fullnode_highest_executed(&cluster);
+    while streamed.last().unwrap().0 <= tip_after_reconfiguration {
+        next_locally_built_checkpoint(&mut checkpoints, &mut streamed).await;
+    }
+
+    // Every streamed checkpoint is the one the network certifies.
+    let mut ledger = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+    for (sequence_number, digest) in streamed {
+        let certified = loop {
+            match ledger
+                .get_checkpoint(
+                    v2::GetCheckpointRequest::by_sequence_number(sequence_number)
+                        .with_read_mask(FieldMask::from_paths(["digest"])),
+                )
+                .await
+            {
+                Ok(response) => break response.into_inner().checkpoint.unwrap(),
+                Err(status) if status.code() == tonic::Code::NotFound => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(status) => panic!("get_checkpoint({sequence_number}) failed: {status}"),
+            }
+        };
+        assert_eq!(certified.digest(), digest);
+    }
+}
+
+/// Subscribes to the locally built checkpoints of the validator serving
+/// `address`.
+async fn subscribe_locally_built_checkpoints(
+    address: SocketAddr,
+) -> tonic::Streaming<v2::SubscribeCheckpointsResponse> {
+    let mut client = SubscriptionServiceClient::connect(format!("http://{address}"))
+        .await
+        .unwrap();
+    let mut request = SubscribeCheckpointsRequest::default();
+    request.read_mask = Some(FieldMask::from_paths([
+        "sequence_number",
+        "digest",
+        "signature",
+        "transactions.digest",
+    ]));
+    client
+        .subscribe_checkpoints(at_finality_level(request, "executed"))
+        .await
+        .unwrap()
+        .into_inner()
+}
+
+/// `message` sent with `x-sui-finality-level: level`.
+fn at_finality_level<T>(message: T, level: &str) -> tonic::Request<T> {
+    let mut request = tonic::Request::new(message);
+    request
+        .metadata_mut()
+        .insert(sui_rpc_api::X_SUI_FINALITY_LEVEL, level.parse().unwrap());
+    request
+}
+
+/// Checks what the validator serving `address` answers: live state only to
+/// requests that accept `executed` data, without a checkpoint height, and
+/// certified checkpoints by default.
+async fn assert_validator_finality_levels(address: SocketAddr) {
+    let mut ledger = LedgerServiceClient::connect(format!("http://{address}"))
+        .await
+        .unwrap();
+    let height = sui_rpc::headers::X_SUI_CHECKPOINT_HEIGHT;
+
+    let service_info = ledger
+        .get_service_info(v2::GetServiceInfoRequest::default())
+        .await
+        .unwrap();
+    assert!(service_info.metadata().contains_key(height));
+
+    let system_state = || {
+        let mut request = v2::GetObjectRequest::default();
+        request.object_id = Some("0x5".to_owned());
+        request
+    };
+    let refusal = ledger
+        .get_object(system_state())
+        .await
+        .expect_err("live state is refused at certified");
+    assert_eq!(refusal.code(), tonic::Code::Unimplemented);
+    let error_info = super::error_info(&refusal.rpc_status());
+    assert_eq!(
+        error_info.reason,
+        v2::ErrorReason::NotServedHere.as_str_name()
+    );
+    assert_eq!(error_info.metadata["cause"], "uncertified_live_state");
+    let live = ledger
+        .get_object(at_finality_level(system_state(), "executed"))
+        .await
+        .unwrap();
+    assert!(!live.metadata().contains_key(height));
+
+    let mut checkpoint = v2::GetCheckpointRequest::default();
+    checkpoint.read_mask = Some(FieldMask::from_paths(["sequence_number", "contents"]));
+    let contents = ledger
+        .get_checkpoint(checkpoint)
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .unwrap();
+    assert!(contents.contents.is_some());
+}
+
+/// Receives the next checkpoint of a validator's locally built checkpoint
+/// stream. Checks that it has no quorum signature and directly follows the last
+/// checkpoint in `streamed`, to which it appends `(sequence number, digest)`.
+async fn next_locally_built_checkpoint(
+    checkpoints: &mut tonic::Streaming<v2::SubscribeCheckpointsResponse>,
+    streamed: &mut Vec<(u64, String)>,
+) -> v2::Checkpoint {
+    let checkpoint = tokio::time::timeout(Duration::from_secs(60), checkpoints.next())
+        .await
+        .expect("validator streams checkpoints")
+        .expect("stream open")
+        .unwrap()
+        .checkpoint
+        .expect("unfiltered frames carry a checkpoint");
+    let sequence_number = checkpoint.sequence_number();
+    if let Some((last, _)) = streamed.last() {
+        assert_eq!(sequence_number, last + 1);
+    }
+    assert!(
+        checkpoint.signature.is_none(),
+        "a locally built checkpoint has no quorum signature"
+    );
+    streamed.push((sequence_number, checkpoint.digest().to_owned()));
+    checkpoint
 }

@@ -18,6 +18,7 @@ pub mod client;
 mod client_protocol_version;
 mod config;
 mod error;
+mod finality;
 pub mod grpc;
 pub mod ledger_history;
 mod metrics;
@@ -36,6 +37,7 @@ pub use error::{
     CheckpointNotFoundError, EpochNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError,
     ObjectRemoval, Result, RpcError,
 };
+pub use finality::X_SUI_FINALITY_LEVEL;
 pub use metrics::{
     GrpcMethodAllowlist, RpcMetrics, RpcMetricsMakeCallbackHandler,
     grpc_method_paths_from_file_descriptor_sets,
@@ -83,6 +85,8 @@ pub struct RpcService {
     extra_routes: axum::Router,
     extra_service_names: Vec<&'static str>,
     extra_file_descriptor_sets: Vec<&'static [u8]>,
+    /// Set by [`RpcService::with_validator_role`].
+    validator_role: bool,
 }
 
 impl RpcService {
@@ -101,6 +105,7 @@ impl RpcService {
             extra_routes: axum::Router::new(),
             extra_service_names: Vec::new(),
             extra_file_descriptor_sets: Vec::new(),
+            validator_role: false,
         }
     }
 
@@ -126,6 +131,14 @@ impl RpcService {
         subscription_service_handle: SubscriptionServiceHandle,
     ) {
         self.subscription_service_handle = Some(subscription_service_handle);
+    }
+
+    /// Serves from a validator. Its live state includes checkpoints whose
+    /// transactions are still executing, and it keeps no rpc indexes and no
+    /// replaced object versions, so each request is served only at the
+    /// finality levels and for the methods the `finality` module describes.
+    pub fn with_validator_role(&mut self) {
+        self.validator_role = true;
     }
 
     pub fn with_metrics(&mut self, registry: &prometheus::Registry) {
@@ -257,7 +270,6 @@ impl RpcService {
 
             for service_name in [
                 service_name(&ledger_service),
-                service_name(&transaction_execution_service),
                 service_name(&signature_verification_service),
                 service_name(&move_package_service),
                 service_name(&name_service),
@@ -266,6 +278,16 @@ impl RpcService {
             ] {
                 health_reporter
                     .set_service_status(service_name, tonic_health::ServingStatus::Serving)
+                    .await;
+            }
+
+            // Validators execute no client transactions, so they do not mount
+            // `TransactionExecutionService`.
+            let transaction_execution_service =
+                (!self.validator_role).then_some(transaction_execution_service);
+            if let Some(service) = &transaction_execution_service {
+                health_reporter
+                    .set_service_status(service_name(service), tonic_health::ServingStatus::Serving)
                     .await;
             }
 
@@ -291,7 +313,6 @@ impl RpcService {
                 .timeout(self.config.grpc_timeout())
                 // V2
                 .add_service(ledger_service)
-                .add_service(transaction_execution_service)
                 .add_service(state_service)
                 .add_service(signature_verification_service)
                 .add_service(move_package_service)
@@ -301,6 +322,10 @@ impl RpcService {
                 // Reflection
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha);
+
+            if let Some(service) = transaction_execution_service {
+                services = services.add_service(service);
+            }
 
             if self.subscription_service_handle.is_some() {
                 let subscription_service =
@@ -331,12 +356,24 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
             .route("/health", axum::routing::get(service::health::health))
             .with_state(self.clone());
 
+        let validator_requests = self
+            .validator_role
+            .then(|| finality::ValidatorRequestLayer::new(grpc_method_allowlist.clone()));
         router
             .merge(health_endpoint)
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
             ))
+            .pipe(|router| {
+                // Outside `append_info_headers`, so it can drop the checkpoint
+                // height that layer adds.
+                if let Some(layer) = validator_requests {
+                    router.layer(layer)
+                } else {
+                    router
+                }
+            })
             .pipe(|router| {
                 if let Some(metrics) = metrics {
                     router.layer(CallbackLayer::new(

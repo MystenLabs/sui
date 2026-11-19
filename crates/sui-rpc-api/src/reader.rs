@@ -492,7 +492,7 @@ impl AtCheckpointLowerBound {
     }
 }
 
-/// The `cause` of a `NOT_SERVED_HERE` refusal: why this node is not set up for a request. The
+/// The `cause` of a `NOT_SERVED_HERE` refusal: why this node does not serve a request. The
 /// same request to the same node always fails the same way, so clients do not retry it there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NotServedHereCause {
@@ -500,6 +500,9 @@ pub enum NotServedHereCause {
     NoRpcIndexes,
     /// A kv-rpc `enable-*` flag the request needs is off.
     DisabledByConfig,
+    /// The node's live state includes data the network has not certified yet, and the request
+    /// asks for certified data: a validator's live-state read at the `certified` finality level.
+    UncertifiedLiveState,
 }
 
 impl NotServedHereCause {
@@ -508,6 +511,7 @@ impl NotServedHereCause {
         match self {
             Self::NoRpcIndexes => "no_rpc_indexes",
             Self::DisabledByConfig => "disabled_by_config",
+            Self::UncertifiedLiveState => "uncertified_live_state",
         }
     }
 }

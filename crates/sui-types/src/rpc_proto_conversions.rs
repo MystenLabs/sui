@@ -37,47 +37,79 @@ use sui_rpc::proto::sui::rpc::v2::*;
 
 impl Merge<&crate::full_checkpoint_content::Checkpoint> for Checkpoint {
     fn merge(&mut self, source: &crate::full_checkpoint_content::Checkpoint, mask: &FieldMaskTree) {
-        let sequence_number = source.summary.sequence_number;
-        let timestamp_ms = source.summary.timestamp_ms;
+        self.merge(source.summary.auth_sig().clone(), mask);
+        merge_checkpoint_data(
+            self,
+            source.summary.data(),
+            &source.contents,
+            &source.transactions,
+            &source.object_set,
+            mask,
+        );
+    }
+}
 
-        let summary = source.summary.data();
-        let signature = source.summary.auth_sig();
+/// Merges a checkpoint that has no quorum signature, so `signature` stays unset whatever the mask.
+impl Merge<&crate::full_checkpoint_content::LocallyBuiltCheckpoint> for Checkpoint {
+    fn merge(
+        &mut self,
+        source: &crate::full_checkpoint_content::LocallyBuiltCheckpoint,
+        mask: &FieldMaskTree,
+    ) {
+        merge_checkpoint_data(
+            self,
+            &source.summary,
+            &source.contents,
+            &source.transactions,
+            &source.object_set,
+            mask,
+        );
+    }
+}
 
-        self.merge(summary, mask);
-        self.merge(signature.clone(), mask);
+/// Merges everything a checkpoint message carries except its signature.
+fn merge_checkpoint_data(
+    message: &mut Checkpoint,
+    summary: &crate::messages_checkpoint::CheckpointSummary,
+    contents: &crate::messages_checkpoint::CheckpointContents,
+    transactions: &[crate::full_checkpoint_content::ExecutedTransaction],
+    object_set: &crate::full_checkpoint_content::ObjectSet,
+    mask: &FieldMaskTree,
+) {
+    let sequence_number = summary.sequence_number;
+    let timestamp_ms = summary.timestamp_ms;
 
-        if mask.contains(Checkpoint::CONTENTS_FIELD.name) {
-            self.merge(&source.contents, mask);
-        }
+    message.merge(summary, mask);
 
-        if let Some(submask) = mask
-            .subtree(Checkpoint::OBJECTS_FIELD)
-            .and_then(|submask| submask.subtree(ObjectSet::OBJECTS_FIELD))
-        {
-            let set = source
-                .object_set
-                .iter()
-                .map(|o| sui_rpc::proto::sui::rpc::v2::Object::merge_from(o, &submask))
-                .collect();
-            self.objects = Some(ObjectSet::default().with_objects(set));
-        }
+    if mask.contains(Checkpoint::CONTENTS_FIELD.name) {
+        message.merge(contents, mask);
+    }
 
-        if let Some(submask) = mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
-            self.transactions = source
-                .transactions
-                .iter()
-                .map(|t| {
-                    let mut transaction = ExecutedTransaction::merge_from(t, &submask);
-                    transaction.checkpoint = submask
-                        .contains(ExecutedTransaction::CHECKPOINT_FIELD)
-                        .then_some(sequence_number);
-                    transaction.timestamp = submask
-                        .contains(ExecutedTransaction::TIMESTAMP_FIELD)
-                        .then(|| sui_rpc::proto::timestamp_ms_to_proto(timestamp_ms));
-                    transaction
-                })
-                .collect();
-        }
+    if let Some(submask) = mask
+        .subtree(Checkpoint::OBJECTS_FIELD)
+        .and_then(|submask| submask.subtree(ObjectSet::OBJECTS_FIELD))
+    {
+        let set = object_set
+            .iter()
+            .map(|o| sui_rpc::proto::sui::rpc::v2::Object::merge_from(o, &submask))
+            .collect();
+        message.objects = Some(ObjectSet::default().with_objects(set));
+    }
+
+    if let Some(submask) = mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
+        message.transactions = transactions
+            .iter()
+            .map(|t| {
+                let mut transaction = ExecutedTransaction::merge_from(t, &submask);
+                transaction.checkpoint = submask
+                    .contains(ExecutedTransaction::CHECKPOINT_FIELD)
+                    .then_some(sequence_number);
+                transaction.timestamp = submask
+                    .contains(ExecutedTransaction::TIMESTAMP_FIELD)
+                    .then(|| sui_rpc::proto::timestamp_ms_to_proto(timestamp_ms));
+                transaction
+            })
+            .collect();
     }
 }
 

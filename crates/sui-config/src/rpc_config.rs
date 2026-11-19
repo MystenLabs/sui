@@ -124,6 +124,40 @@ pub struct RpcConfig {
     /// Defaults to 60 seconds. Set to `0` to disable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grpc_timeout_ms: Option<u64>,
+
+    /// Serve RPC from a validator, without rpc indexes, on
+    /// `validator-rpc-address` over plain HTTP (`tls` and `https-address` do
+    /// not apply).
+    ///
+    /// A request names the least settled data it accepts in the
+    /// `x-sui-finality-level` header. Served today:
+    ///
+    /// - `certified` (the default): `GetServiceInfo`, and `GetCheckpoint` for
+    ///   checkpoints above the object pruning watermark.
+    /// - `executed`: also the subscription APIs, which stream each checkpoint
+    ///   once this validator has executed it, usually before certification,
+    ///   and reads of live state (`GetObject`, `BatchGetObjects`, `GetEpoch`,
+    ///   `GetProtocolConfig`, `GetPackage`, `GetDatatype`, `GetFunction`,
+    ///   `LookupName`, `ReverseLookupName`, `VerifySignature`).
+    ///
+    /// A method requested at a level it is not served at is refused with
+    /// `UNIMPLEMENTED` / `NOT_SERVED_HERE` (`uncertified_live_state`), and
+    /// every other method with `UNIMPLEMENTED`, with `NOT_SERVED_HERE`
+    /// (`no_rpc_indexes`) if the method needs rpc indexes.
+    ///
+    /// The full design adds `ordered` streams of transactions as soon as
+    /// consensus assigns them a checkpoint, before execution; `executed`
+    /// transaction streams that emit each transaction as it runs; and
+    /// certified streams from validators.
+    ///
+    /// Valid only on validators. Defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_validator_rpc: Option<bool>,
+
+    /// Address the validator RPC server listens on. Required when
+    /// `enable-validator-rpc` is set, and not allowed otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validator_rpc_address: Option<SocketAddr>,
 }
 
 const DEFAULT_MAX_CONNECTION_AGE: Duration = Duration::from_secs(4 * 60 * 60);
@@ -203,7 +237,15 @@ impl RpcConfig {
     /// Validate cross-field invariants. Call once at startup to fail fast on a
     /// misconfiguration rather than surfacing it per-request.
     pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.enable_validator_rpc() == self.validator_rpc_address.is_some(),
+            "rpc.validator-rpc-address must be set if and only if rpc.enable-validator-rpc is true"
+        );
         self.ledger_history().validate()
+    }
+
+    pub fn enable_validator_rpc(&self) -> bool {
+        self.enable_validator_rpc.unwrap_or(false)
     }
 
     pub fn display(&self) -> &DisplayConfig {
@@ -385,6 +427,29 @@ mod connection_lifecycle_tests {
         assert_eq!(config.max_connection_age(), Some(Duration::from_secs(60)));
         assert_eq!(config.max_connection_age_grace(), Duration::from_secs(5));
         assert_eq!(config.grpc_timeout(), Some(Duration::from_millis(1_500)));
+    }
+}
+
+#[cfg(test)]
+mod validator_rpc_tests {
+    use super::*;
+
+    #[test]
+    fn flag_and_address_must_be_set_together() {
+        let address = SocketAddr::from(([127, 0, 0, 1], 9000));
+        let config = |enable, address| RpcConfig {
+            enable_validator_rpc: enable,
+            validator_rpc_address: address,
+            ..Default::default()
+        };
+
+        assert!(config(None, None).validate().is_ok());
+        assert!(config(Some(false), None).validate().is_ok());
+        assert!(config(Some(true), None).validate().is_err());
+        assert!(config(None, Some(address)).validate().is_err());
+        assert!(config(Some(false), Some(address)).validate().is_err());
+
+        assert!(config(Some(true), Some(address)).validate().is_ok());
     }
 }
 
