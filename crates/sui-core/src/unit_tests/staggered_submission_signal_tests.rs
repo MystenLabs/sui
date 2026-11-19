@@ -193,13 +193,40 @@ async fn copies_floor_delays_activation_until_the_window_has_enough_copies() {
 
     // The first copy and the two free duplicates count towards the copies floor.
     let window_copies = config.min_excess_copies + 3;
+    assert_eq!(
+        setup.metrics.staggered_submission_window_copies.get(),
+        window_copies as i64
+    );
     assert!(window_copies < config.min_copies);
     let missing = (config.min_copies - window_copies) as usize;
     commit_copies(&mut setup, &transaction, 3, missing - 1).await;
+    assert_eq!(
+        setup.metrics.staggered_submission_window_copies.get(),
+        config.min_copies as i64 - 1
+    );
     assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 0);
     commit_copies(&mut setup, &transaction, 4, 1).await;
+    assert_eq!(
+        setup.metrics.staggered_submission_window_copies.get(),
+        config.min_copies as i64
+    );
     assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 2);
     assert_eq!(setup.metrics.staggered_submission_active.get(), 1);
+}
+
+#[tokio::test]
+async fn restricted_copies_count_towards_the_copies_floor() {
+    let (_state, mut setup, transaction) =
+        setup_with_min_copies_per_commit(1, Some(0), false, 1).await;
+    commit_copies(&mut setup, &transaction, 1, 4).await;
+    commit_copies(&mut setup, &transaction, 2, 2).await;
+    // The ratio ignores restricted duplicates, but the window total counts all six
+    // copies.
+    assert_eq!(
+        setup.metrics.staggered_submission_duplication_ratio.get(),
+        0.0
+    );
+    assert_eq!(setup.metrics.staggered_submission_window_copies.get(), 6);
 }
 
 #[tokio::test]

@@ -2354,7 +2354,10 @@ pub struct ProtocolConfig {
     /// Number of recent commits the staggered-submission signal looks at. It compares
     /// excess copies of transactions without allowed proposers to unique user transactions.
     staggered_submission_signal_window_commits: Option<u64>,
-    /// Average excess copies per commit in the window needed before the signal turns on.
+    /// Excess copies per commit that the signal requires before it turns on. The signal
+    /// compares the window's total with this value times
+    /// `staggered_submission_signal_window_commits`, so a window that is not full yet
+    /// must reach the same total.
     staggered_submission_signal_min_excess_copies_per_commit: Option<u64>,
     /// User transaction copies per commit, duplicates included, that the signal
     /// requires. The signal compares the window's total with this value times
@@ -2362,10 +2365,10 @@ pub struct ProtocolConfig {
     /// must reach the same total. Below that total the signal does not escalate, and a
     /// commit counts towards the exit dwell.
     staggered_submission_signal_min_copies_per_commit: Option<u64>,
-    /// Number of commits the ratio must stay below a band's exit ratio, or the window
-    /// total below `staggered_submission_signal_min_copies_per_commit` times
-    /// `staggered_submission_signal_window_commits`, before the signal drops to a lower
-    /// band.
+    /// Number of consecutive commits before the signal drops to a lower band. Each of
+    /// these commits must have a ratio below the band's exit ratio, or a window total
+    /// below `staggered_submission_signal_min_copies_per_commit` times
+    /// `staggered_submission_signal_window_commits`. The two conditions can alternate.
     staggered_submission_signal_exit_dwell_commits: Option<u64>,
     /// Ratios to enter and exit each band, in basis points (bps) of the window's unique
     /// user transactions. Band 1 delays submissions up to 1.6s and band 2 up to 4.8s.

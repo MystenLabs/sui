@@ -168,9 +168,9 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
 ///
 /// Staggering suppresses the duplication that the window measures. The ratio therefore
 /// drops soon after activation even when the attack continues, and an exit ratio alone
-/// cannot keep the band active. The signal de-escalates only after the ratio stays
-/// below the active band's exit ratio, or the window stays low-volume, for
-/// `exit_dwell_commits` consecutive commits. This wait is the exit dwell. The signal
+/// cannot keep the band active. The signal de-escalates only after
+/// `exit_dwell_commits` consecutive commits, each with a ratio below the active band's
+/// exit ratio or a low-volume window. This wait is the exit dwell. The signal
 /// then drops to the highest band whose exit ratio the ratio still meets, or to off. A
 /// dwell that ends on a low-volume window drops it to off.
 ///
@@ -336,7 +336,9 @@ pub struct StaggerParams {
     /// Upper bound on the delay before jitter: slots wrap around the `max_delay/step`
     /// firing steps (see `compute_delay`), so a submitter never waits longer than this
     /// plus half a step, regardless of committee size. Each signal transition sets it to
-    /// the active band's cap. It starts at band 1's cap, which `set_active(true)` uses.
+    /// the active band's cap, and a transition to off sets it back to band 1's cap. It
+    /// starts at band 1's cap, which `set_active(true)` and the inactive shadow
+    /// decisions use.
     pub max_delay: Duration,
 }
 
@@ -543,8 +545,13 @@ impl StaggeredSubmission {
                     // Set the cap before activating so that no submission uses the
                     // previous band's cap.
                     self.params.write().max_delay = config.bands[band - 1].max_delay;
+                    self.set_active(true);
+                } else {
+                    // Deactivate before resetting the cap so that no active submission
+                    // uses band 1's cap.
+                    self.set_active(false);
+                    self.params.write().max_delay = config.bands[0].max_delay;
                 }
-                self.set_active(band > 0);
             }
             info!(
                 "Duplication signal moved to {} (from {}): window duplication ratio \
@@ -1553,6 +1560,25 @@ mod tests {
             }
             assert_eq!(transitions, vec![1]);
             assert!(staggered.is_active());
+            assert_eq!(
+                staggered.params.read().max_delay,
+                TEST_SIGNAL_BANDS[0].max_delay
+            );
+        }
+
+        #[test]
+        fn transition_to_off_resets_the_max_delay_to_band_one() {
+            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            assert_eq!(staggered.record(1000, 2000).transition, Some(2));
+            let mut transitions = Vec::new();
+            for _ in 0..TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record(0, 100).transition);
+                if !transitions.is_empty() {
+                    break;
+                }
+            }
+            assert_eq!(transitions, vec![0]);
+            assert!(!staggered.is_active());
             assert_eq!(
                 staggered.params.read().max_delay,
                 TEST_SIGNAL_BANDS[0].max_delay

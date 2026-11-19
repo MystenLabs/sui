@@ -972,10 +972,7 @@ impl StaggeringCommitCounts {
     /// Returns the number of user transaction copies in the commit, first copies and
     /// all duplicates.
     fn copies(&self) -> u64 {
-        self.unique_user_txns
-            + self.excess_copies
-            + self.paid_duplicate_copies
-            + self.restricted_duplicate_copies
+        self.by_kind().iter().map(|(_, copies)| copies).sum()
     }
 }
 

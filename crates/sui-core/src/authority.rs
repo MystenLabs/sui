@@ -651,13 +651,15 @@ impl AuthorityMetrics {
                 "staggered_submission_band_duration_commits",
                 "Commits the duplication signal spent in a band before leaving it, by band left",
                 &["band"],
-                prometheus::exponential_buckets(1.0, 2.0, 18).unwrap(),
+                // The largest bucket is 2^21 commits, about 39 hours at 15 commits per
+                // second, so that hours spent off between activations stay measurable.
+                prometheus::exponential_buckets(1.0, 2.0, 22).unwrap(),
                 registry,
             )
             .unwrap(),
             staggered_submission_duplication_ratio: register_gauge_with_registry!(
                 "staggered_submission_duplication_ratio",
-                "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window, compared against the band enter/exit ratios",
+                "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window. The signal compares it against the band enter/exit ratios only when staggered_submission_window_copies reaches the copies floor. Below the floor the signal treats the ratio as zero.",
                 registry,
             )
             .unwrap(),
