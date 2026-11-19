@@ -38,6 +38,13 @@ const DEFAULT_REQUEST_BIGTABLE_CONCURRENCY: usize = 50;
 // Largest `tx_seq_digest` read size measured: reads of up to 100 keys within
 // one or two buckets cost about one seek.
 const DEFAULT_MAX_KEYS_PER_READ: usize = 100;
+// BigTable channels kv-rpc opens at startup and keeps however idle it gets. Each channel is one
+// HTTP/2 connection, which BigTable's frontend limits to about 100 concurrent streams, and the pool
+// grows by only 2 channels a minute, so a burst larger than the open channels queues reads on the
+// client for minutes. Measured with the full read mix on a 16-core host at CPU saturation (about
+// 1,400 req/s): up to ~950 reads in flight; 40 channels served it as fast as 64, 20 added ~15%
+// latency, and 10 cut throughput 7% with kv's CPU still at 80% busy.
+const DEFAULT_BIGTABLE_CHANNEL_FLOOR: usize = 40;
 
 /// Built-in per-endpoint defaults. These differ per endpoint (e.g. checkpoints
 /// page smaller than transactions).
@@ -665,12 +672,17 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plaintext_address: Option<String>,
 
+    /// BigTable channels opened at startup. Defaults to the larger of 40 and
+    /// `bigtable-min-pool-size`, but at most `bigtable-max-pool-size`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_initial_pool_size: Option<usize>,
 
+    /// Fewest BigTable channels the pool keeps when load is low. Defaults to 40, or
+    /// `bigtable-initial-pool-size` or `bigtable-max-pool-size` if either is lower.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_min_pool_size: Option<usize>,
 
+    /// Most BigTable channels the pool grows to. Defaults to 200.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_max_pool_size: Option<usize>,
 
@@ -903,12 +915,18 @@ impl KvRpcConfig {
 
     pub fn pool_config(&self) -> PoolConfig {
         let base = PoolConfig::default();
+        let max_pool_size = self.bigtable_max_pool_size.unwrap_or(base.max_pool_size);
+        let channel_floor = DEFAULT_BIGTABLE_CHANNEL_FLOOR.min(max_pool_size);
+        let min_pool_size = self.bigtable_min_pool_size.unwrap_or_else(|| {
+            self.bigtable_initial_pool_size
+                .map_or(channel_floor, |initial| initial.min(channel_floor))
+        });
         PoolConfig {
             initial_pool_size: self
                 .bigtable_initial_pool_size
-                .unwrap_or(base.initial_pool_size),
-            min_pool_size: self.bigtable_min_pool_size.unwrap_or(base.min_pool_size),
-            max_pool_size: self.bigtable_max_pool_size.unwrap_or(base.max_pool_size),
+                .unwrap_or(channel_floor.max(min_pool_size).min(max_pool_size)),
+            min_pool_size,
+            max_pool_size,
             health_check: base
                 .health_check
                 .filter(|_| self.bigtable_channel_health_check.unwrap_or(true)),
@@ -1273,6 +1291,52 @@ plaintext-address = "127.0.0.1:8001"
             .validate()
             .expect_err("plaintext_address == address must fail");
         assert!(err.to_string().contains("plaintext_address"), "{err}");
+    }
+
+    #[test]
+    fn bigtable_channel_floor_defaults_yield_to_configured_sizes() {
+        let pool = KvRpcConfig::default().pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (40, 40));
+        assert_eq!(pool.max_pool_size, 200);
+
+        let config_toml = r#"
+bigtable-initial-pool-size = 8
+bigtable-min-pool-size = 4
+"#;
+        let pool = toml::from_str::<KvRpcConfig>(config_toml)
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (8, 4));
+
+        // A minimum above the default floor also sets where the pool starts.
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-min-pool-size = 60")
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (60, 60));
+
+        // A smaller starting size also sets the minimum, and a smaller minimum leaves the start
+        // at the floor.
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-initial-pool-size = 8")
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (8, 8));
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-min-pool-size = 4")
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (40, 4));
+
+        // A pool capped below the default floor starts and stays at its cap.
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-max-pool-size = 16")
+            .unwrap()
+            .pool_config();
+        assert_eq!(
+            (
+                pool.initial_pool_size,
+                pool.min_pool_size,
+                pool.max_pool_size
+            ),
+            (16, 16, 16)
+        );
     }
 
     #[test]
