@@ -2980,30 +2980,15 @@ async fn build_http_servers(
 )> {
     if !node_role.is_fullnode() {
         // Validators only serve RPC when they opt in.
-        let Some(rpc_config) = config
-            .rpc()
-            .filter(|rpc| rpc.enable_validator_rpc() || rpc.validator_rpc_address.is_some())
-        else {
+        let Some(rpc_config) = config.rpc().filter(|rpc| rpc.enable_validator_rpc()) else {
             return Ok((HttpServers::default(), None, None));
         };
         rpc_config.validate()?;
-        let address = rpc_config
-            .validator_rpc_address
-            .expect("validated config enables the server and sets its address");
-        let (http, locally_built_checkpoint_sender) = build_validator_rpc_server(
-            state,
-            store,
-            config,
-            prometheus_registry,
-            server_version,
-            address,
-        )
-        .await?;
+        let (rpc_router, locally_built_checkpoint_sender) =
+            build_validator_rpc_router(state, store, config, prometheus_registry, server_version)
+                .await;
         return Ok((
-            HttpServers {
-                http: Some(http),
-                https: None,
-            },
+            serve_rpc_router(config, rpc_router)?,
             None,
             Some(locally_built_checkpoint_sender),
         ));
@@ -3076,6 +3061,16 @@ async fn build_http_servers(
         rpc_service.into_router().await
     };
 
+    Ok((
+        serve_rpc_router(config, rpc_router)?,
+        Some(subscription_service_checkpoint_sender),
+        None,
+    ))
+}
+
+/// Serves `rpc_router` over plain HTTP on `json-rpc-address`, and over TLS on
+/// `rpc.https-address` when `rpc.tls` is set.
+fn serve_rpc_router(config: &NodeConfig, rpc_router: axum::Router) -> Result<HttpServers> {
     let router = with_rpc_http_layers(rpc_router);
     let server_config = rpc_server_config(config);
 
@@ -3112,37 +3107,28 @@ async fn build_http_servers(
         http.local_addr()
     );
 
-    Ok((
-        HttpServers {
-            http: Some(http),
-            https,
-        },
-        Some(subscription_service_checkpoint_sender),
-        None,
-    ))
+    Ok(HttpServers {
+        http: Some(http),
+        https,
+    })
 }
 
-/// Serves RPC from this validator, streaming each checkpoint as soon as it
-/// builds it; see `RpcConfig::enable_validator_rpc` for what it serves. The
-/// server speaks TLS when `rpc.tls` is set. Returns the server and the sender
-/// that feeds it locally built checkpoints.
-async fn build_validator_rpc_server(
+/// Builds the RPC router a validator serves, which streams each checkpoint as
+/// soon as the validator builds it; see `RpcConfig::enable_validator_rpc` for
+/// what it serves. Returns the router and the sender that feeds it locally
+/// built checkpoints.
+async fn build_validator_rpc_router(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
     config: &NodeConfig,
     prometheus_registry: &Registry,
     server_version: ServerVersion,
-    address: std::net::SocketAddr,
-) -> Result<(
-    sui_http::ServerHandle,
+) -> (
+    axum::Router,
     tokio::sync::broadcast::Sender<Arc<LocallyBuiltCheckpoint>>,
-)> {
+) {
     let rpc_config = config.rpc().cloned().unwrap_or_default();
     info!("starting validator rpc service with config: {rpc_config:?}");
-    let tls_server_config = rpc_config
-        .tls_config()
-        .map(|tls| https_rustls_config(tls.cert(), tls.key()))
-        .transpose()?;
 
     let (locally_built_checkpoint_sender, subscription_service_handle) =
         SubscriptionService::build_for_locally_built_checkpoints(
@@ -3158,25 +3144,11 @@ async fn build_validator_rpc_server(
     rpc_service.with_metrics(prometheus_registry);
     rpc_service.with_subscription_service(subscription_service_handle);
     rpc_service.with_validator_role();
-    let router = with_rpc_http_layers(rpc_service.into_router().await);
 
-    let tls = tls_server_config.is_some();
-    let mut builder = sui_http::Builder::new().config(rpc_server_config(config));
-    if let Some(tls_server_config) = tls_server_config {
-        builder = builder.tls_config(tls_server_config);
-    }
-    let server = builder
-        .serve(address, router)
-        .map_err(|e| anyhow::anyhow!(e))?;
-
-    info!(
-        address =? server.local_addr(),
-        tls,
-        "validator rpc server listening on {}",
-        server.local_addr()
-    );
-
-    Ok((server, locally_built_checkpoint_sender))
+    (
+        rpc_service.into_router().await,
+        locally_built_checkpoint_sender,
+    )
 }
 
 fn with_rpc_http_layers(router: axum::Router) -> axum::Router {

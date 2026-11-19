@@ -1603,9 +1603,9 @@ async fn validator_streams_locally_built_checkpoints() {
         SocketAddr::new(ip, local_ip_utils::get_available_port(&ip.to_string()))
     };
     validator.stop();
+    validator.config().json_rpc_address = address;
     validator.config().rpc = Some(sui_config::RpcConfig {
         enable_validator_rpc: Some(true),
-        validator_rpc_address: Some(address),
         ..Default::default()
     });
     if cfg!(msim) {
