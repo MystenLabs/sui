@@ -1,48 +1,70 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 8 tasks
+processed 11 tasks
 
-// A dev-inspect value built from bytes reads its dynamic fields at the latest version, whereas an
-// old version of the same object cannot see fields added after it.
+// A dev-inspect value built from bytes reads its dynamic fields at the version before the
+// transaction's lamport version, so it sees only fields no newer than the transaction's inputs.
 
 init:
 A: object(0,0)
 
-task 1, lines 9-33:
+task 1, lines 9-38:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1031000000, storage_cost: 6999600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 7691200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 35:
+task 2, line 40:
 //# run test::m::create --sender A
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 4, line 39:
+task 4, line 44:
 //# run test::m::add_field --sender A --args object(2,0)
 created: object(4,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 3724000,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
-task 5, lines 41-42:
+task 5, lines 46-47:
 //# programmable --sender A --inputs object(2,0)@2 --dev-inspect
 //> 0: test::m::assert_no_field(Input(0));
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
 
-task 6, lines 44-45:
+task 6, lines 49-50:
 //# programmable --sender A --inputs object(2,0) --dev-inspect
 //> 0: test::m::assert_has_field(Input(0));
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
 
-// The same object built from bytes
+// A newer object, to raise the lamport version of the dev inspects below
 
-task 7, lines 49-50:
+task 7, line 54:
+//# run test::m::create --sender A
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+// The same object built from bytes. The lamport version comes from the mock gas coin.
+
+task 8, lines 58-59:
 //# programmable --sender A --inputs struct(@s,0) --dev-inspect
-//> 0: test::m::assert_has_field(Input(0));
+//> 0: test::m::assert_no_field(Input(0));
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// With the newer object as an input, the field is visible and can be written.
+
+task 9, lines 63-64:
+//# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
+//> 0: test::m::assert_has_field(Input(0));
+mutated: object(_), object(7,0)
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
+
+task 10, lines 66-67:
+//# programmable --sender A --inputs struct(@s,0) object(7,0) --dev-inspect
+//> 0: test::m::bump_field(Input(0));
+mutated: object(_), object(4,0), object(7,0)
+gas summary: computation_cost: 500000, storage_cost: 3724000,  storage_rebate: 2735726, non_refundable_storage_fee: 274

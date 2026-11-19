@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_mode::ExecutionMode;
+use crate::execution_value::ExecutionState;
 use crate::metering::gas_charger::ChargedGas;
 use crate::metering::gas_state::{StorageCharge, StorageRates};
 use move_vm_runtime::runtime::MoveRuntime;
@@ -1185,6 +1186,12 @@ impl TemporaryStore<'_> {
         let (old_object, new_object) =
             wrapper.advance_epoch_safe_mode(params, self.store, protocol_config);
         self.mutate_child_object(old_object, new_object);
+    }
+}
+
+impl ExecutionState for TemporaryStore<'_> {
+    fn lamport_timestamp(&self) -> SequenceNumber {
+        self.lamport_timestamp
     }
 }
 

@@ -537,16 +537,14 @@ impl<'a> ChildObjectStore<'a> {
     }
 
     /// WARNING! Only for values built from bytes. Recording a UID exempts it from the parent check,
-    /// and its dynamic fields are read at the latest version in storage.
+    /// and its dynamic fields are read at `version`.
     pub(super) fn record_synthetic_uids_for_arbitrary_values(
         &mut self,
         ids: impl IntoIterator<Item = ObjectID>,
+        version: SequenceNumber,
     ) {
         for id in ids {
-            self.inner
-                .root_version
-                .entry(id)
-                .or_insert(SequenceNumber::MAX);
+            self.inner.root_version.entry(id).or_insert(version);
         }
     }
 

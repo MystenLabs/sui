@@ -693,13 +693,14 @@ impl<'a> ObjectRuntime<'a> {
 
     /// WARNING! Only for values built from bytes, which only dev inspect with checks disabled
     /// allows. Recording a UID exempts it from the parent check, and its dynamic fields are read at
-    /// the latest version in storage.
+    /// `version`, which must be below the transaction's lamport version.
     pub fn record_synthetic_uids_for_arbitrary_values(
         &mut self,
         ids: impl IntoIterator<Item = ObjectID>,
+        version: SequenceNumber,
     ) {
         self.child_object_store
-            .record_synthetic_uids_for_arbitrary_values(ids)
+            .record_synthetic_uids_for_arbitrary_values(ids, version)
     }
 
     /// Fails if `parent` has no root version and is not new, meaning a UID was missed when walking

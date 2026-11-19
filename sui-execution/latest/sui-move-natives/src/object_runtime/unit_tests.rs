@@ -442,7 +442,10 @@ mod parent_checks {
     fn synthetic_uid_parent_is_allowed() {
         let p = random_id();
         assert!(parent_allowed(vec![], p, |rt| rt
-            .record_synthetic_uids_for_arbitrary_values([p])));
+            .record_synthetic_uids_for_arbitrary_values(
+                [p],
+                SequenceNumber::from_u64(1)
+            )));
     }
 
     #[test]

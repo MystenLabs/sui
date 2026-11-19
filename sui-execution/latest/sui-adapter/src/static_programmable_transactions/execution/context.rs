@@ -875,7 +875,16 @@ where
                                 )
                             })?
                             .uids;
-                        object_runtime_mut!(self)?.record_synthetic_uids_for_arbitrary_values(uids);
+                        let version = self
+                            .env
+                            .state_view
+                            .lamport_timestamp()
+                            .one_before()
+                            .ok_or_else(|| {
+                                make_invariant_violation!("Lamport version must be positive")
+                            })?;
+                        object_runtime_mut!(self)?
+                            .record_synthetic_uids_for_arbitrary_values(uids, version);
                     }
                     local.store(v)?;
                 }
