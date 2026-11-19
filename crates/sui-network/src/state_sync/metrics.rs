@@ -183,6 +183,14 @@ impl Metrics {
         }
     }
 
+    pub fn set_checkpoint_content_downloads_running(&self, running: usize) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_content_downloads_running
+                .set(running as i64);
+        }
+    }
+
     pub fn inc_checkpoint_content_fallback_requests(&self) {
         if let Some(inner) = &self.0 {
             inner.checkpoint_content_fallback_requests.inc();
@@ -348,6 +356,7 @@ struct Inner {
     checkpoint_content_download_latency: Histogram,
     checkpoint_content_hedges: IntCounterVec,
     checkpoint_content_fallback_requests: IntCounter,
+    checkpoint_content_downloads_running: IntGauge,
     checkpoint_content_slow_peer_hedge_delay: HistogramVec,
     checkpoint_content_slow_peer_probes: IntCounterVec,
     checkpoint_content_peer_announce_delay: HistogramVec,
@@ -417,6 +426,12 @@ impl Inner {
                  cancelled).",
                 &["peer_id", "outcome"],
                 registry,
+            )
+            .unwrap(),
+            checkpoint_content_downloads_running: register_int_gauge_with_registry!(
+                "state_sync_checkpoint_content_downloads_running",
+                "Checkpoint contents downloads that are still running.",
+                registry
             )
             .unwrap(),
             checkpoint_content_download_latency: register_histogram_with_registry!(

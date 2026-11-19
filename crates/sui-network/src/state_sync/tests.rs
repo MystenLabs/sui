@@ -1910,6 +1910,8 @@ impl HedgeTestClient {
     ) -> super::ContentFetch<'a> {
         super::ContentFetch {
             network: &self.network,
+            max_timeout: Duration::from_secs(20),
+            failed_requests: std::sync::atomic::AtomicU32::new(0),
             peer_heights: &self.peer_heights,
             checkpoint,
             use_get_checkpoint_contents_v2: true,

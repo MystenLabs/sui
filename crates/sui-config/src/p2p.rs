@@ -238,7 +238,7 @@ pub struct StateSyncConfig {
 
     /// Maximum timeout for checkpoint content downloads (adaptive timeout upper bound).
     ///
-    /// If unspecified, this will default to `30,000` milliseconds.
+    /// If unspecified, this will default to `60,000` milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_timeout_max_ms: Option<u64>,
 
@@ -390,14 +390,14 @@ impl StateSyncConfig {
     }
 
     pub fn checkpoint_content_timeout_min(&self) -> Duration {
-        const DEFAULT: Duration = Duration::from_secs(5);
+        const DEFAULT: Duration = Duration::from_secs(10);
         self.checkpoint_content_timeout_min_ms
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT)
     }
 
     pub fn checkpoint_content_timeout_max(&self) -> Duration {
-        const DEFAULT: Duration = Duration::from_secs(30);
+        const DEFAULT: Duration = Duration::from_secs(60);
         self.checkpoint_content_timeout_max_ms
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT)
