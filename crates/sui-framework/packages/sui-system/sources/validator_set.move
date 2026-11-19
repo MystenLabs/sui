@@ -676,19 +676,6 @@ public(package) fun pool_exchange_rates(
     validator.get_staking_pool_ref().exchange_rates()
 }
 
-public(package) fun validator_by_pool_id(self: &mut ValidatorSet, pool_id: ID): &Validator {
-    // If the pool id is recorded in the mapping, then it must be either candidate or active.
-    let validator = if (self.staking_pool_mappings.contains(pool_id)) {
-        let validator_address = self.staking_pool_mappings[pool_id];
-        self.any_validator(validator_address)
-    } else {
-        // otherwise it's inactive
-        self.inactive_validators[pool_id].load_validator_maybe_upgrade()
-    };
-
-    validator
-}
-
 /// Borrow the staking pool of a validator in any state without upgrading any validator.
 public(package) fun staking_pool_by_pool_id(self: &ValidatorSet, pool_id: ID): &StakingPool {
     // If the pool id is not recorded in the mapping, then it must be inactive.

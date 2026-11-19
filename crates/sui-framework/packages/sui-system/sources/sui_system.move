@@ -567,22 +567,6 @@ public fun active_validator_stake_amount(wrapper: &SuiSystemState, validator_add
     wrapper.load_system_state_ref().validator_stake_amount(validator_addr)
 }
 
-/// Calculate the rewards for a given staked SUI object, upgrading the system state and the
-/// validator if needed.
-public(package) fun calculate_rewards_mut(
-    self: &mut SuiSystemState,
-    staked_sui: &StakedSui,
-    ctx: &TxContext,
-): u64 {
-    let system_state = self.load_system_state_mut();
-
-    system_state
-        .validators_mut()
-        .validator_by_pool_id(staked_sui.pool_id())
-        .get_staking_pool_ref()
-        .calculate_rewards(staked_sui, ctx.epoch())
-}
-
 /// Calculate the rewards for a given staked SUI object without upgrading the system state or any
 /// validator.
 public fun calculate_rewards(self: &SuiSystemState, staked_sui: &StakedSui, ctx: &TxContext): u64 {

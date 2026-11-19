@@ -91,7 +91,6 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `active_validator_addresses_ref`](#sui_system_sui_system_active_validator_addresses_ref)
 -  [Function `active_validator_voting_powers`](#sui_system_sui_system_active_validator_voting_powers)
 -  [Function `active_validator_stake_amount`](#sui_system_sui_system_active_validator_stake_amount)
--  [Function `calculate_rewards_mut`](#sui_system_sui_system_calculate_rewards_mut)
 -  [Function `calculate_rewards`](#sui_system_sui_system_calculate_rewards)
 -  [Function `advance_epoch`](#sui_system_sui_system_advance_epoch)
 -  [Function `load_system_state`](#sui_system_sui_system_load_system_state)
@@ -1538,41 +1537,6 @@ Getter returns the total stake amount of a given validator.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_stake_amount">active_validator_stake_amount</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
     wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>().validator_stake_amount(validator_addr)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_sui_system_calculate_rewards_mut"></a>
-
-## Function `calculate_rewards_mut`
-
-Calculate the rewards for a given staked SUI object, upgrading the system state and the
-validator if needed.
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards_mut">calculate_rewards_mut</a>(self: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards_mut">calculate_rewards_mut</a>(
-    self: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
-    staked_sui: &StakedSui,
-    ctx: &TxContext,
-): u64 {
-    <b>let</b> system_state = self.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>();
-    system_state
-        .validators_mut()
-        .validator_by_pool_id(staked_sui.pool_id())
-        .get_staking_pool_ref()
-        .<a href="../sui_system/sui_system.md#sui_system_sui_system_calculate_rewards">calculate_rewards</a>(staked_sui, ctx.epoch())
 }
 </code></pre>
 

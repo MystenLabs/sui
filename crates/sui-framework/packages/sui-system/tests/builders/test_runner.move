@@ -504,16 +504,14 @@ public fun unstake(runner: &mut TestRunner, staked_sui_idx: u64) {
     });
 }
 
-/// Assert that `calculate_rewards` and `calculate_rewards_mut` return `expected` for the sender's
-/// StakedSui at `staked_sui_idx`. `calculate_rewards` runs first, so it sees the system state
-/// before `calculate_rewards_mut` upgrades it.
+/// Assert that `calculate_rewards` returns `expected` for the sender's StakedSui at
+/// `staked_sui_idx`.
 public fun assert_staking_rewards(runner: &mut TestRunner, staked_sui_idx: u64, expected: u64) {
     let stake_sui_ids = runner.scenario.ids_for_sender<StakedSui>();
     let staked_sui_id = stake_sui_ids[staked_sui_idx];
     let staked_sui: StakedSui = runner.scenario.take_from_sender_by_id(staked_sui_id);
-    let mut system = runner.scenario.take_shared<SuiSystemState>();
+    let system = runner.scenario.take_shared<SuiSystemState>();
     assert_eq!(system.calculate_rewards(&staked_sui, runner.scenario.ctx()), expected);
-    assert_eq!(system.calculate_rewards_mut(&staked_sui, runner.scenario.ctx()), expected);
     test_scenario::return_shared(system);
     runner.keep(staked_sui);
 }
@@ -599,12 +597,12 @@ public fun sui_balance(runner: &mut TestRunner): u64 {
 public fun staking_rewards_balance(runner: &mut TestRunner): u64 {
     let sender = runner.sender;
     let scenario = runner.scenario_mut();
-    let mut system = scenario.take_shared<SuiSystemState>();
+    let system = scenario.take_shared<SuiSystemState>();
 
     scenario.next_tx(sender);
     let total_balance = scenario.ids_for_sender<StakedSui>().fold!(0, |mut sum, staked_sui_id| {
         let staked_sui = scenario.take_from_sender_by_id<StakedSui>(staked_sui_id);
-        let rewards = system.calculate_rewards_mut(&staked_sui, scenario.ctx());
+        let rewards = system.calculate_rewards(&staked_sui, scenario.ctx());
 
         sum = sum + rewards + staked_sui.amount();
         scenario.return_to_sender(staked_sui);
