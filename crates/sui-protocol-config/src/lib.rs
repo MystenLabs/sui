@@ -441,6 +441,8 @@ const MAINNET_USDB: &str =
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 //              Enable ML-DSA-65 account signatures on testnet.
 // Version 144: Enable timestamp-based transaction expiration on devnet.
+//              Flush a consensus handler checkpoint queue that has not emptied for one
+//              second of commit time.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2310,6 +2312,12 @@ pub struct ProtocolConfig {
     /// Minimum interval of commit timestamps between consecutive checkpoints.
     min_checkpoint_interval_ms: Option<u64>,
 
+    /// Commit time after which the consensus handler flushes a checkpoint queue that has not
+    /// emptied, raised to min_checkpoint_interval_ms if that is larger. Sustained load above
+    /// max_transactions_per_checkpoint, or randomness on every commit, otherwise keeps the
+    /// queue from emptying. None disables the flush.
+    checkpoint_queue_max_undrained_ms: Option<u64>,
+
     /// Version number to use for version_specific_data in `CheckpointSummary`.
     checkpoint_summary_version_specific_data: Option<u64>,
 
@@ -2626,6 +2634,13 @@ impl ProtocolConfig {
         res
     }
 
+    /// Commit time after which the consensus handler flushes a checkpoint queue that has not
+    /// emptied, or None if this version has no such limit.
+    pub fn checkpoint_queue_force_drain_ms(&self) -> Option<u64> {
+        self.checkpoint_queue_max_undrained_ms
+            .map(|ms| ms.max(self.min_checkpoint_interval_ms.unwrap_or_default()))
+    }
+
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
         self.consensus_commit_rate_estimation_window_size
             .unwrap_or(0)
@@ -2683,6 +2698,8 @@ impl ProtocolConfig {
 }
 
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "testing")]
+static SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS: AtomicBool = AtomicBool::new(false);
 
 // Instantiations for each protocol version.
 impl ProtocolConfig {
@@ -2737,6 +2754,13 @@ impl ProtocolConfig {
 
     pub fn poison_get_for_min_version() {
         POISON_VERSION_METHODS.store(true, Ordering::Relaxed);
+    }
+
+    /// Lets apply_seeded_test_overrides pick checkpoint transaction limits of 2-3. Tests that
+    /// assume a commit lands in one checkpoint must not call this.
+    #[cfg(feature = "testing")]
+    pub fn enable_small_checkpoint_tx_limits_in_tests() {
+        SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.store(true, Ordering::Relaxed);
     }
 
     fn load_poison_get_for_min_version() -> bool {
@@ -3264,6 +3288,7 @@ impl ProtocolConfig {
             allowed_txn_cost_overage_burst_per_object_in_commit: None,
 
             min_checkpoint_interval_ms: None,
+            checkpoint_queue_max_undrained_ms: None,
 
             checkpoint_summary_version_specific_data: None,
 
@@ -5076,6 +5101,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_timestamp_transaction_expiration = true;
                     }
                     cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
+                    cfg.checkpoint_queue_max_undrained_ms = Some(1_000);
                 }
                 // Use this template when making changes:
                 //
@@ -5107,7 +5133,18 @@ impl ProtocolConfig {
 
         use rand::{Rng, SeedableRng, rngs::StdRng};
         let mut rng = StdRng::from_seed(*seed);
-        let max_txns = rng.gen_range(10..=100u64);
+        // This draw must stay first: in upgrade tests, binaries from older releases make only
+        // this draw, and every validator must derive the same limit from the epoch digest.
+        let mut max_txns = rng.gen_range(10..=100u64);
+        // Caps of 2-3 put simtest load above max_tx per checkpoint interval. Versions without
+        // checkpoint_queue_force_drain_ms never drain at these caps.
+        #[cfg(feature = "testing")]
+        let small_limits = SMALL_CHECKPOINT_TX_LIMITS_IN_TESTS.load(Ordering::Relaxed);
+        #[cfg(not(feature = "testing"))]
+        let small_limits = false;
+        if self.checkpoint_queue_force_drain_ms().is_some() && small_limits && rng.gen_bool(0.25) {
+            max_txns = rng.gen_range(2..=3u64);
+        }
         info!("seeded test override: max_transactions_per_checkpoint = {max_txns}");
         self.max_transactions_per_checkpoint = Some(max_txns);
     }
@@ -5608,6 +5645,18 @@ mod test {
             v142.binary_format_limits(),
             BinaryFormatLimitsProfile::V1.limits()
         );
+    }
+
+    #[test]
+    fn checkpoint_queue_force_drain_ms_raises_to_interval() {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.checkpoint_queue_max_undrained_ms = None;
+        assert_eq!(config.checkpoint_queue_force_drain_ms(), None);
+        config.checkpoint_queue_max_undrained_ms = Some(1000);
+        config.min_checkpoint_interval_ms = Some(200);
+        assert_eq!(config.checkpoint_queue_force_drain_ms(), Some(1000));
+        config.min_checkpoint_interval_ms = Some(1500);
+        assert_eq!(config.checkpoint_queue_force_drain_ms(), Some(1500));
     }
 
     #[test]

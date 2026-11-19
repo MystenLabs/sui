@@ -182,6 +182,25 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
+    // Every commit reserves randomness, as in production when commits are at least
+    // random_beacon_min_round_interval_ms apart, so the checkpoint queue drains only through
+    // the forced flush in CheckpointQueue::push_commit. Restarts replay from drained commits.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_randomness_every_commit() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_random_beacon_min_round_interval_ms_for_testing(1);
+            config
+        });
+        let test_cluster = build_test_cluster(4, 20_000, 1).await;
+        let node_restarter = test_cluster
+            .random_node_restarter()
+            .with_kill_interval_secs(5, 15)
+            .with_restart_delay_secs(1, 10);
+        node_restarter.run();
+        test_simulated_load(test_cluster, 60).await;
+    }
+
     /// Runs the large-transaction workload in isolation and asserts it generates load.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_large_transaction() {
@@ -725,6 +744,7 @@ mod test {
             dry_run: false,
             ..Default::default()
         };
+        ProtocolConfig::enable_small_checkpoint_tx_limits_in_tests();
         let network_config = ConfigBuilder::new_with_temp_dir()
             .committee_size(NonZeroUsize::new(4).unwrap())
             .with_policy_config(Some(policy_config))
@@ -1245,6 +1265,7 @@ mod test {
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
     ) -> TestClusterBuilder {
+        ProtocolConfig::enable_small_checkpoint_tx_limits_in_tests();
         let mut builder = TestClusterBuilder::new()
             .with_num_validators(get_var(
                 "SIM_STRESS_TEST_NUM_VALIDATORS",

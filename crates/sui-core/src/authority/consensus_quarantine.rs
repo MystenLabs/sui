@@ -13,8 +13,8 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::ZipDebugEqIteratorExt;
-use mysten_common::fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
+use mysten_common::{debug_fatal, fatal};
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
@@ -101,6 +101,9 @@ pub(crate) struct ConsensusCommitOutput {
     // True when the checkpoint queue had no pending roots after this commit's flush.
     // Used by quarantine to determine safe commit boundaries on restart.
     checkpoint_queue_drained: bool,
+
+    // The undrained-hold check in commit_with_batch reads this. It is kept in memory only.
+    commit_timestamp_ms: TimestampMs,
 }
 
 impl ConsensusCommitOutput {
@@ -271,6 +274,10 @@ impl ConsensusCommitOutput {
 
     pub fn set_checkpoint_queue_drained(&mut self, drained: bool) {
         self.checkpoint_queue_drained = drained;
+    }
+
+    pub fn set_commit_timestamp(&mut self, timestamp_ms: TimestampMs) {
+        self.commit_timestamp_ms = timestamp_ms;
     }
 
     pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
@@ -523,6 +530,8 @@ pub(crate) struct ConsensusOutputQuarantine {
     // Owned object locks acquired post-consensus.
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
 
+    reported_undrained_hold: bool,
+
     metrics: Arc<EpochMetrics>,
 }
 
@@ -541,6 +550,7 @@ impl ConsensusOutputQuarantine {
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
             owned_object_locks: HashMap::new(),
+            reported_undrained_hold: false,
             metrics: authority_metrics,
         }
     }
@@ -680,6 +690,24 @@ impl ConsensusOutputQuarantine {
             }
         }
 
+        // The held outputs belong to one run of undrained commits, and CheckpointQueue::
+        // push_commit drains the queue once a run spans the limit of commit time, so their
+        // commit timestamps span less than the limit. This bounds the span, not the wait.
+        if !self.reported_undrained_hold
+            && let Some(limit_ms) = epoch_store
+                .protocol_config()
+                .checkpoint_queue_force_drain_ms()
+        {
+            let held_ms = self.undrained_hold_ms(highest_committed_height);
+            if held_ms > limit_ms.saturating_mul(2) {
+                self.reported_undrained_hold = true;
+                debug_fatal!(
+                    "consensus outputs with executed checkpoints span {held_ms} ms of commit \
+                     time without a drained checkpoint queue (limit {limit_ms} ms)"
+                );
+            }
+        }
+
         self.metrics
             .consensus_quarantine_queue_size
             .set(self.output_queue.len() as i64);
@@ -689,6 +717,25 @@ impl ConsensusOutputQuarantine {
 }
 
 impl ConsensusOutputQuarantine {
+    // Returns the commit time spanned by queued outputs that are held back only because no
+    // later commit with executed checkpoints left the checkpoint queue drained.
+    fn undrained_hold_ms(&self, highest_committed_height: u64) -> u64 {
+        let mut held = self.output_queue.iter().take_while(|output| {
+            output
+                .consensus_commit_stats
+                .as_ref()
+                .expect("consensus_commit_stats must be set")
+                .height
+                <= highest_committed_height
+        });
+        let Some(first) = held.next() else {
+            return 0;
+        };
+        let last = held.last().unwrap_or(first);
+        last.commit_timestamp_ms
+            .saturating_sub(first.commit_timestamp_ms)
+    }
+
     fn insert_shared_object_next_versions(&mut self, output: &ConsensusCommitOutput) {
         if let Some(next_versions) = output.next_shared_object_versions.as_ref() {
             for (object_id, next_version) in next_versions {
@@ -1086,6 +1133,24 @@ mod tests {
         output
     }
 
+    #[sim_test]
+    async fn test_undrained_hold_counts_only_outputs_with_executed_checkpoints() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, epoch_store.metrics.clone());
+        for (height, ts) in [(1, 1000), (2, 1500), (3, 2600), (4, 9000)] {
+            let mut output = make_output(height, height, false);
+            output.set_commit_timestamp(ts);
+            quarantine
+                .push_consensus_output(output, &epoch_store)
+                .unwrap();
+        }
+        assert_eq!(quarantine.undrained_hold_ms(0), 0);
+        assert_eq!(quarantine.undrained_hold_ms(1), 0);
+        assert_eq!(quarantine.undrained_hold_ms(3), 1600);
+        assert_eq!(quarantine.undrained_hold_ms(10), 8000);
+    }
+
     fn make_builder_summary(
         seq: CheckpointSequenceNumber,
         height: CheckpointHeight,
@@ -1110,6 +1175,37 @@ mod tests {
             summary,
             checkpoint_height: Some(height),
             position_in_commit: 0,
+        }
+    }
+
+    // debug_fatal panics only when crash_on_debug() is true (debug_assertions, msim, or
+    // SUI_ENABLE_DEBUG_ASSERTIONS).
+    #[cfg(debug_assertions)]
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(expected = "without a drained checkpoint queue")]
+    async fn test_undrained_hold_reported() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let mut quarantine = ConsensusOutputQuarantine::new(0, epoch_store.metrics.clone());
+        let limit_ms = epoch_store
+            .protocol_config()
+            .checkpoint_queue_force_drain_ms()
+            .unwrap();
+        let pc = epoch_store.protocol_config();
+        // The first execution stays under the threshold, so the report must not be latched yet.
+        for (seq, ts) in [(1, 1000), (2, 1000 + limit_ms), (3, 1001 + 2 * limit_ms)] {
+            let mut output = make_output(seq, seq, false);
+            output.set_commit_timestamp(ts);
+            quarantine
+                .push_consensus_output(output, &epoch_store)
+                .unwrap();
+            quarantine.insert_builder_summary(seq, make_builder_summary(seq, seq, pc));
+            if seq >= 2 {
+                let mut batch = epoch_store.db_batch_for_test();
+                quarantine
+                    .update_highest_executed_checkpoint(seq, &epoch_store, &mut batch)
+                    .unwrap();
+            }
         }
     }
 

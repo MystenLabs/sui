@@ -317,6 +317,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_double_spend_deferrals: IntCounter,
+    pub consensus_handler_checkpoint_queue_forced_flushes: IntCounter,
     pub consensus_handler_double_spend_conflict_count: HistogramVec,
     pub consensus_handler_double_spend_conflicting_authority: IntCounterVec,
     pub consensus_handler_cancelled_transactions: IntCounter,
@@ -703,6 +704,11 @@ impl AuthorityMetrics {
             consensus_handler_double_spend_deferrals: register_int_counter_with_registry!(
                 "consensus_handler_double_spend_deferrals",
                 "Number of transactions deferred due to owned object double-spend contention",
+                registry,
+            ).unwrap(),
+            consensus_handler_checkpoint_queue_forced_flushes: register_int_counter_with_registry!(
+                "consensus_handler_checkpoint_queue_forced_flushes",
+                "Number of commits that flushed the checkpoint queue because it had not emptied for checkpoint_queue_max_undrained_ms",
                 registry,
             ).unwrap(),
             consensus_handler_double_spend_conflict_count: register_histogram_vec_with_registry!(
