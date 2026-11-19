@@ -301,7 +301,7 @@ pub struct AuthorityMetrics {
     pub(crate) staggered_submission_commit_copies: IntCounterVec,
     pub(crate) staggered_submission_band_duration_commits: HistogramVec,
     pub(crate) staggered_submission_duplication_ratio: Gauge,
-    pub(crate) staggered_submission_window_copies: IntGauge,
+    pub(crate) staggered_submission_window_consensus_user_transactions: IntGauge,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -659,13 +659,13 @@ impl AuthorityMetrics {
             .unwrap(),
             staggered_submission_duplication_ratio: register_gauge_with_registry!(
                 "staggered_submission_duplication_ratio",
-                "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window. The signal compares it against the band enter/exit ratios only when staggered_submission_window_copies reaches the copies floor. Below the floor the signal treats the ratio as zero.",
+                "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window. The signal compares it against the band enter/exit ratios only when staggered_submission_window_consensus_user_transactions reaches the volume floor. Below the floor the signal treats the ratio as zero.",
                 registry,
             )
             .unwrap(),
-            staggered_submission_window_copies: register_int_gauge_with_registry!(
-                "staggered_submission_window_copies",
-                "User transaction copies in the duplication signal's window, duplicates included. The signal does not escalate while this is below the copies floor, which is the protocol's min copies per commit times the window commits.",
+            staggered_submission_window_consensus_user_transactions: register_int_gauge_with_registry!(
+                "staggered_submission_window_consensus_user_transactions",
+                "User transactions in the duplication signal's window, duplicates included. The signal does not escalate while this is below the volume floor, which is the protocol's min consensus user transactions per commit times the window commits.",
                 registry,
             )
             .unwrap(),

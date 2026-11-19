@@ -159,12 +159,12 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
 /// requires at least `min_excess_copies` in the window. On a quiet network the ratio
 /// has a small denominator, and this floor keeps that noise from turning staggering on.
 ///
-/// A window that holds fewer than `min_copies` user transaction copies, duplicates
-/// included, is a low-volume window. The signal does not escalate on a low-volume
+/// A window whose consensus commits hold fewer than `min_consensus_user_txns` user
+/// transactions, duplicates included, is a low-volume window. The signal does not escalate on a low-volume
 /// window, whatever its ratio, and it counts the window towards the exit dwell. This
 /// limits staggering to periods of high consensus load. Both floors are sums over the
 /// window, so one large commit passes them only if it carries a full window's worth of
-/// copies.
+/// transactions.
 ///
 /// Staggering suppresses the duplication that the window measures. The ratio therefore
 /// drops soon after activation even when the attack continues, and an exit ratio alone
@@ -182,9 +182,9 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
 pub struct SignalConfig {
     pub window_commits: usize,
     pub min_excess_copies: u64,
-    /// The window must hold this many user transaction copies. Like
+    /// The window must hold this many user transactions, duplicates included. Like
     /// `min_excess_copies`, it is a total over the window. Zero disables the check.
-    pub min_copies: u64,
+    pub min_consensus_user_txns: u64,
     pub exit_dwell_commits: usize,
     /// The bands, weakest first. `assert_valid` checks the order.
     pub bands: [SignalBand; NUM_SIGNAL_BANDS],
@@ -196,7 +196,7 @@ impl Default for SignalConfig {
             window_commits: DEFAULT_SIGNAL_WINDOW_COMMITS,
             min_excess_copies: DEFAULT_SIGNAL_MIN_EXCESS_COPIES_PER_COMMIT
                 * DEFAULT_SIGNAL_WINDOW_COMMITS as u64,
-            min_copies: 0,
+            min_consensus_user_txns: 0,
             exit_dwell_commits: DEFAULT_SIGNAL_EXIT_DWELL_COMMITS,
             bands: DEFAULT_SIGNAL_BANDS,
         }
@@ -217,9 +217,9 @@ impl SignalConfig {
             .map_or(defaults.min_excess_copies, |per_commit| {
                 per_commit.saturating_mul(window_commits as u64)
             });
-        let min_copies = config
-            .staggered_submission_signal_min_copies_per_commit_as_option()
-            .map_or(defaults.min_copies, |per_commit| {
+        let min_consensus_user_txns = config
+            .staggered_submission_signal_min_consensus_user_transactions_per_commit_as_option()
+            .map_or(defaults.min_consensus_user_txns, |per_commit| {
                 per_commit.saturating_mul(window_commits as u64)
             });
         let exit_dwell_commits = config
@@ -254,7 +254,7 @@ impl SignalConfig {
         let signal_config = Self {
             window_commits,
             min_excess_copies,
-            min_copies,
+            min_consensus_user_txns,
             exit_dwell_commits,
             bands,
         };
@@ -311,8 +311,9 @@ pub struct CommitSignal {
     /// Commits spent at `previous_band`, including this one.
     pub commits_in_previous_band: u64,
     pub duplication_ratio: f64,
-    /// User transaction copies in the window, compared against `min_copies`.
-    pub window_copies: u64,
+    /// User transactions in the window, duplicates included, compared against
+    /// `min_consensus_user_txns`.
+    pub window_consensus_user_txns: u64,
 }
 
 impl CommitSignal {
@@ -367,26 +368,26 @@ pub struct StaggeredSubmission {
     signal: Mutex<SignalState>,
 }
 
-/// Copy counts of one commit, or their sum over the signal window.
+/// Transaction counts of one commit, or their sum over the signal window.
 #[derive(Debug, Clone, Copy, Default)]
 struct WindowCounts {
     excess: u64,
     unique: u64,
-    copies: u64,
+    consensus_user_txns: u64,
 }
 
 impl WindowCounts {
     fn add(&mut self, other: &Self) {
         self.excess += other.excess;
         self.unique += other.unique;
-        self.copies += other.copies;
+        self.consensus_user_txns += other.consensus_user_txns;
     }
 
     /// Removes counts that `add` added earlier, so the fields cannot underflow.
     fn sub(&mut self, other: &Self) {
         self.excess -= other.excess;
         self.unique -= other.unique;
-        self.copies -= other.copies;
+        self.consensus_user_txns -= other.consensus_user_txns;
     }
 }
 
@@ -446,26 +447,26 @@ impl StaggeredSubmission {
     /// Adds one commit to the signal window and updates the signal level.
     /// `excess_copies` counts the copies of unrestricted transactions beyond their paid
     /// allowance, `unique_user_txns` counts the unique user transactions in the commit,
-    /// and `copies` counts every user transaction copy in the commit, first copies and
-    /// duplicates of any kind. When the signal is enabled, a transition also sets
+    /// and `consensus_user_txns` counts every user transaction in the commit, unique
+    /// transactions and duplicates of any kind. When the signal is enabled, a transition also sets
     /// staggering on or off and sets the hold cap to the new band's.
     ///
     /// Under a sustained attack the signal still cycles, because staggering suppresses
     /// the duplication it measures. The ratio falls, the dwell runs out, and the signal
     /// drops, usually to off. The copies that then get through escalate it again. The
-    /// dwell sets how often this happens. The copy count behaves the same way:
+    /// dwell sets how often this happens. The volume floor behaves the same way:
     /// staggering keeps duplicates out of commits, so a peak made of duplicates turns
     /// into a low-volume window once staggering is on.
     ///
-    /// Without `min_copies` the signal escalates again within a few commits. With it,
-    /// the window total must first climb back over `min_copies`, which takes a share of
+    /// Without `min_consensus_user_txns` the signal escalates again within a few commits. With it,
+    /// the window total must first climb back over `min_consensus_user_txns`, which takes a share of
     /// a window that depends on how far the attack exceeds the floor. The copies in
     /// those commits are not staggered.
     pub fn record_commit(
         &self,
         excess_copies: u64,
         unique_user_txns: u64,
-        copies: u64,
+        consensus_user_txns: u64,
     ) -> CommitSignal {
         let config = &self.config;
         let mut guard = self.signal.lock();
@@ -474,7 +475,7 @@ impl StaggeredSubmission {
         let commit = WindowCounts {
             excess: excess_copies,
             unique: unique_user_txns,
-            copies,
+            consensus_user_txns,
         };
         signal.window.push_back(commit);
         signal.window_sum.add(&commit);
@@ -485,9 +486,9 @@ impl StaggeredSubmission {
         let WindowCounts {
             excess,
             unique: total,
-            copies: window_copies,
+            consensus_user_txns: window_consensus_user_txns,
         } = signal.window_sum;
-        let low_volume = window_copies < config.min_copies;
+        let low_volume = window_consensus_user_txns < config.min_consensus_user_txns;
         // First copies can leave the window while late copies keep arriving. A window
         // with no unique transactions uses a denominator of one so that the late copies
         // still count.
@@ -556,11 +557,11 @@ impl StaggeredSubmission {
             info!(
                 "Duplication signal moved to {} (from {}): window duplication ratio \
                  {duplication_ratio:.4} ({excess} excess copies over {total} unique user \
-                 transactions), {window_copies} copies in the window against a floor of \
-                 {}{}",
+                 transactions), {window_consensus_user_txns} user transactions in the window \
+                 against a floor of {}{}",
                 signal_band_label(band),
                 signal_band_label(current_band),
-                config.min_copies,
+                config.min_consensus_user_txns,
                 if self.enabled {
                     ""
                 } else {
@@ -573,7 +574,7 @@ impl StaggeredSubmission {
             previous_band: current_band,
             commits_in_previous_band,
             duplication_ratio,
-            window_copies,
+            window_consensus_user_txns,
         }
     }
 
@@ -582,7 +583,7 @@ impl StaggeredSubmission {
         *self.params.write() = params;
     }
 
-    /// Calls `record_commit` for a commit whose only copies are its unique
+    /// Calls `record_commit` for a commit whose only transactions are its unique
     /// transactions and its excess copies.
     #[cfg(test)]
     fn record(&self, excess_copies: u64, unique_user_txns: u64) -> CommitSignal {
@@ -1053,18 +1054,18 @@ mod tests {
         SignalConfig {
             window_commits: TEST_SIGNAL_WINDOW_COMMITS,
             min_excess_copies: TEST_SIGNAL_MIN_EXCESS_COPIES,
-            min_copies: 0,
+            min_consensus_user_txns: 0,
             exit_dwell_commits: TEST_SIGNAL_EXIT_DWELL_COMMITS,
             bands: TEST_SIGNAL_BANDS,
         }
     }
 
-    /// The copies floor is 100 copies per window commit.
-    const TEST_SIGNAL_MIN_COPIES: u64 = 100 * TEST_SIGNAL_WINDOW_COMMITS as u64;
+    /// The volume floor is 100 user transactions per window commit.
+    const TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS: u64 = 100 * TEST_SIGNAL_WINDOW_COMMITS as u64;
 
-    fn test_signal_config_with_min_copies() -> SignalConfig {
+    fn test_signal_config_with_volume_floor() -> SignalConfig {
         SignalConfig {
-            min_copies: TEST_SIGNAL_MIN_COPIES,
+            min_consensus_user_txns: TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
             ..test_signal_config()
         }
     }
@@ -1139,8 +1140,8 @@ mod tests {
                 * latest.staggered_submission_signal_window_commits()
         );
         assert_eq!(
-            config.min_copies,
-            latest.staggered_submission_signal_min_copies_per_commit()
+            config.min_consensus_user_txns,
+            latest.staggered_submission_signal_min_consensus_user_transactions_per_commit()
                 * latest.staggered_submission_signal_window_commits()
         );
         assert_eq!(
@@ -1167,7 +1168,7 @@ mod tests {
         assert_eq!(config.bands[1].max_delay, DEFAULT_SIGNAL_BANDS[1].max_delay);
 
         // Version 143 has the thresholds of version 140, which equal the defaults, and
-        // no copies floor.
+        // no volume floor.
         let no_floor = ProtocolConfig::get_for_version(ProtocolVersion::new(143), Chain::Mainnet);
         assert!(
             no_floor
@@ -1178,7 +1179,7 @@ mod tests {
             SignalConfig::from_protocol_config(&no_floor),
             SignalConfig::default()
         );
-        assert_eq!(SignalConfig::default().min_copies, 0);
+        assert_eq!(SignalConfig::default().min_consensus_user_txns, 0);
 
         // A version without the values falls back to the defaults.
         let older = ProtocolConfig::get_for_version(ProtocolVersion::new(139), Chain::Mainnet);
@@ -1633,9 +1634,9 @@ mod tests {
 
         #[test]
         fn low_volume_window_does_not_activate() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
             // Each commit has 60 excess copies over 30 unique transactions. That passes
-            // `min_excess_copies` and band 2's ratio, with 90 copies per commit.
+            // `min_excess_copies` and band 2's ratio, with 90 user transactions per commit.
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
                 assert_eq!(staggered.record(60, 30).pair(), (None, 2.0));
             }
@@ -1644,9 +1645,9 @@ mod tests {
         }
 
         #[test]
-        fn copies_floor_counts_every_kind_of_copy() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
-            // 90 copies per commit are excess or unique. Another 10 are paid or
+        fn volume_floor_counts_unique_transactions_and_every_duplicate() {
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+            // 90 user transactions per commit are excess or unique. Another 10 are paid or
             // restricted duplicates, which reach the floor once the window is full.
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS - 1 {
                 assert_eq!(staggered.record_commit(60, 30, 100).transition, None);
@@ -1656,28 +1657,29 @@ mod tests {
         }
 
         #[test]
-        fn copies_floor_is_a_window_total() {
-            // One commit that carries a full window's worth of copies passes the floor.
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
-            let unique = TEST_SIGNAL_MIN_COPIES / 3;
+        fn volume_floor_is_a_window_total() {
+            // One commit that carries a full window's worth of user transactions passes the
+            // floor.
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+            let unique = TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS / 3;
             assert_eq!(
                 staggered
                     .record_commit(
-                        TEST_SIGNAL_MIN_COPIES - unique,
+                        TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS - unique,
                         unique,
-                        TEST_SIGNAL_MIN_COPIES
+                        TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS
                     )
                     .transition,
                 Some(2)
             );
-            // One copy fewer does not.
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
+            // One transaction fewer does not.
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
             assert_eq!(
                 staggered
                     .record_commit(
-                        TEST_SIGNAL_MIN_COPIES - unique - 1,
+                        TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS - unique - 1,
                         unique,
-                        TEST_SIGNAL_MIN_COPIES - 1
+                        TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS - 1
                     )
                     .transition,
                 None
@@ -1685,17 +1687,17 @@ mod tests {
         }
 
         /// A commit that enters band 2 at a 200% ratio and carries three windows' worth
-        /// of copies.
+        /// of user transactions.
         fn enter_band2_with_burst(staggered: &StaggeredSubmission) {
             let outcome = staggered.record_commit(
-                2 * TEST_SIGNAL_MIN_COPIES,
-                TEST_SIGNAL_MIN_COPIES,
-                3 * TEST_SIGNAL_MIN_COPIES,
+                2 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
+                TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
+                3 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
             );
             assert_eq!(outcome.transition, Some(2));
         }
 
-        /// Commits at a 200% ratio and 90 copies each that it takes to turn band 2 off,
+        /// Commits at a 200% ratio and 90 user transactions each that it takes to turn band 2 off,
         /// starting right after a burst. The burst keeps the window above the floor
         /// until it leaves the window. The dwell runs from that commit.
         const LOW_VOLUME_COMMITS_TO_OFF: usize =
@@ -1703,7 +1705,7 @@ mod tests {
 
         #[test]
         fn low_volume_turns_the_signal_off_after_the_dwell() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
             enter_band2_with_burst(&staggered);
             // The ratio stays at 200%, above every exit ratio. Only the volume is low.
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
@@ -1721,7 +1723,7 @@ mod tests {
 
         #[test]
         fn volume_dip_shorter_than_the_dwell_keeps_the_band() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
             enter_band2_with_burst(&staggered);
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
                 assert_eq!(staggered.record(60, 30).transition, None);
@@ -1731,9 +1733,9 @@ mod tests {
             assert_eq!(
                 staggered
                     .record_commit(
-                        2 * TEST_SIGNAL_MIN_COPIES,
-                        TEST_SIGNAL_MIN_COPIES,
-                        3 * TEST_SIGNAL_MIN_COPIES
+                        2 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
+                        TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
+                        3 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS
                     )
                     .transition,
                 None
@@ -1747,7 +1749,7 @@ mod tests {
 
         #[test]
         fn dwell_that_ends_above_the_floor_follows_the_exit_ratios() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
             enter_band2_with_burst(&staggered);
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
                 assert_eq!(staggered.record(60, 30).transition, None);
@@ -1766,14 +1768,14 @@ mod tests {
 
         #[test]
         fn low_volume_window_does_not_escalate_an_active_band() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
             // A 7% burst with enough volume enters band 1.
             assert_eq!(
                 staggered
                     .record_commit(
-                        7 * TEST_SIGNAL_MIN_COPIES / 100,
-                        TEST_SIGNAL_MIN_COPIES,
-                        2 * TEST_SIGNAL_MIN_COPIES
+                        7 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS / 100,
+                        TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
+                        2 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS
                     )
                     .transition,
                 Some(1)
